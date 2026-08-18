@@ -95,17 +95,20 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
         }
     };
 
-    TU_MATCH_HDRA( ((*curTy)), { )
-    default:
+    switch ((*curTy).tag()) {
+default:
         BUG(sp, "Unknown receiver type - " << curTy);
-        TU_ARMA(Generic, te) {
+        case HIRTypeData::TAG_Generic: {
+            auto& te = (*curTy).as_Generic();
             if (te.isSelf()) {
                 byvalue.insert(sp, impl);
             } else {
                 BUG(sp, "Receiver generic not `Self` - " << curTy);
             }
+            break;
         }
-        TU_ARMA(Borrow, te) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& te = (*curTy).as_Borrow();
             switch (te.type) {
                 case HIRBorrowType::Shared:
                     H::insertInner(sp, te.inner, impl, ref);
@@ -117,8 +120,10 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
                     H::insertInner(sp, te.inner, impl, refMove);
                     break;
             }
+            break;
         }
-        TU_ARMA(Pointer, te) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& te = (*curTy).as_Pointer();
             switch (te.type) {
                 case HIRBorrowType::Shared:
                     H::insertInner(sp, te.inner, impl, ptr);
@@ -130,8 +135,10 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
                     H::insertInner(sp, te.inner, impl, ptrMove);
                     break;
             }
+            break;
         }
-        TU_ARMA(Path, te) {
+        case HIRTypeData::TAG_Path: {
+            auto& te = (*curTy).as_Path();
             ASSERT_BUG(sp, te.path.data.is_Generic(), "Receiver path not a generic path - " << curTy);
             const auto& gp = te.path.data.as_Generic();
             if (gp.params.types.empty()) {
@@ -141,6 +148,7 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
             }
             DEBUG("m_path[" << gp.path << "] += " << gp.params.types.at(0) << " impl" << impl.params.fmtArgs() << " " << impl.type);
             path[gp.path].insert(sp, gp.params.types.at(0), impl);
+            break;
         }
     }
 }
@@ -152,11 +160,12 @@ void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct,
 
     const Inner* inner = nullptr;
     const HIRTypeData* innerTy = nullptr;
-    TU_MATCH_HDRA( ((*curTy)), { )
-    default:
+    switch ((*curTy).tag()) {
+default:
         // No recursion possible
         break;
-        TU_ARMA(Borrow, te) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& te = (*curTy).as_Borrow();
             innerTy = te.inner;
             switch (te.type) {
                 case HIRBorrowType::Shared:
@@ -169,8 +178,10 @@ void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct,
                     inner = refMove.get();
                     break;
             }
+            break;
         }
-        TU_ARMA(Pointer, te) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& te = (*curTy).as_Pointer();
             innerTy = te.inner;
             switch (te.type) {
                 case HIRBorrowType::Shared:
@@ -183,8 +194,10 @@ void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct,
                     inner = ptrMove.get();
                     break;
             }
+            break;
         }
-        TU_ARMA(Path, te) {
+        case HIRTypeData::TAG_Path: {
+            auto& te = (*curTy).as_Path();
             if (te.path.data.is_Generic()) {
                 const auto& gp = te.path.data.as_Generic();
                 auto ci = concrete.find(gp.path);
@@ -201,6 +214,7 @@ void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct,
                     }
                 }
             }
+            break;
         }
     }
 

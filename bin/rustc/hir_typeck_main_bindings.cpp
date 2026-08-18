@@ -231,51 +231,113 @@ namespace {
 
             auto savedParams = std::make_pair(curParams, curParamsLevel);
 
-            TU_MATCH_HDRA((data), {)
-            TU_ARMA(Infer, e) {
+            switch (data.tag()) {
+                case HIRTypeData::TAG_Infer: {
+                    auto& e = data.as_Infer();
+                    (void)e;
+                    break;
                 }
-                TU_ARMA(Diverge, e) {
+                case HIRTypeData::TAG_Diverge: {
+                    auto& e = data.as_Diverge();
+                    (void)e;
+                    break;
                 }
-                TU_ARMA(Primitive, e) {
+                case HIRTypeData::TAG_Primitive: {
+                    auto& e = data.as_Primitive();
+                    (void)e;
+                    break;
                 }
-                TU_ARMA(Generic, e) {
+                case HIRTypeData::TAG_Generic: {
+                    auto& e = data.as_Generic();
+                    (void)e;
+                    break;
                 }
-                TU_ARMA(Path, e) this->visitPath(e.path, HIRVisitor::PathContext::TYPE);
-                TU_ARMA(TraitObject, e) {
+                case HIRTypeData::TAG_Path: {
+                    auto& e = data.as_Path();
+                    this->visitPath(e.path, HIRVisitor::PathContext::TYPE);
+                    break;
+                }
+                case HIRTypeData::TAG_TraitObject: {
+                    auto& e = data.as_TraitObject();
                     if (e.trait.path != HIRSimplePath()) {
                         this->visitTraitPath(e.trait);
                     }
                     for (auto& marker : e.markers) {
                         this->visitGenericPath(marker, HIRVisitor::PathContext::TYPE);
                     }
+                    break;
                 }
-                TU_ARMA(ErasedType, e) {
-                TU_MATCH_HDRA((e.inner), {)
-                TU_ARMA(Known, inner) this->visitType(inner);
-                        TU_ARMA(Alias, inner) this->visitPathParams(inner.params);
-                        TU_ARMA(Fcn, inner) if (inner.origin != HIRSimplePath()) this->visitPath(inner.origin, HIRVisitor::PathContext::VALUE);
+                case HIRTypeData::TAG_ErasedType: {
+                    auto& e = data.as_ErasedType();
+                    {
+                        auto& tuMatch = e.inner;
+                        switch (tuMatch.tag()) {
+                            case TypeDataErasedTypeInner::TAG_Known: {
+                                auto& inner = tuMatch.as_Known();
+                                this->visitType(inner);
+                                break;
+                            }
+                            case TypeDataErasedTypeInner::TAG_Alias: {
+                                auto& inner = tuMatch.as_Alias();
+                                this->visitPathParams(inner.params);
+                                break;
+                            }
+                            case TypeDataErasedTypeInner::TAG_Fcn: {
+                                auto& inner = tuMatch.as_Fcn();
+                                if (inner.origin != HIRSimplePath()) this->visitPath(inner.origin, HIRVisitor::PathContext::VALUE);
+                                break;
+                            }
+                        }
+                    }
+                    this->visitPathParams(e.use);
+                    for (auto& trait : e.traits) this->visitTraitPath(trait);
+                    break;
                 }
-                this->visitPathParams(e.use);
-                for (auto& trait : e.traits) this->visitTraitPath(trait);
-                }
-                TU_ARMA(Array, e) {
+                case HIRTypeData::TAG_Array: {
+                    auto& e = data.as_Array();
                     this->visitType(e.inner);
                     if (auto* size = e.size.opt_Unevaluated()) {
                         this->visitConstgeneric(*size);
                     }
+                    break;
                 }
-                TU_ARMA(Slice, e) this->visitType(e.inner);
-                TU_ARMA(Tuple, e) for (auto& inner : e) this->visitType(inner);
-                TU_ARMA(Borrow, e) this->visitType(e.inner);
-                TU_ARMA(Pointer, e) this->visitType(e.inner);
-                TU_ARMA(NamedFunction, e) this->visitPath(e.path, HIRVisitor::PathContext::VALUE);
-                TU_ARMA(Function, e) {
+                case HIRTypeData::TAG_Slice: {
+                    auto& e = data.as_Slice();
+                    this->visitType(e.inner);
+                    break;
+                }
+                case HIRTypeData::TAG_Tuple: {
+                    auto& e = data.as_Tuple();
+                    for (auto& inner : e) this->visitType(inner);
+                    break;
+                }
+                case HIRTypeData::TAG_Borrow: {
+                    auto& e = data.as_Borrow();
+                    this->visitType(e.inner);
+                    break;
+                }
+                case HIRTypeData::TAG_Pointer: {
+                    auto& e = data.as_Pointer();
+                    this->visitType(e.inner);
+                    break;
+                }
+                case HIRTypeData::TAG_NamedFunction: {
+                    auto& e = data.as_NamedFunction();
+                    this->visitPath(e.path, HIRVisitor::PathContext::VALUE);
+                    break;
+                }
+                case HIRTypeData::TAG_Function: {
+                    auto& e = data.as_Function();
                     for (auto& arg : e.argTypes) {
                         this->visitType(arg);
                     }
                     this->visitType(e.rettype);
+                    break;
                 }
-                TU_ARMA(NodeType, e) {
+                case HIRTypeData::TAG_NodeType: {
+                    auto& e = data.as_NodeType();
+                    (void)e;
+                    break;
                 }
             }
 
@@ -569,20 +631,20 @@ namespace {
             }
 
             for (auto& bound : params.bounds) {
-                TU_MATCH_HDRA( (bound), {)
-                TU_ARMA(TraitBound, e) {
+                switch (bound.tag()) {
+                    case HIRGenericBound::TAG_TraitBound: {
+                        auto& e = bound.as_TraitBound();
                         this->visitType(e.type);
                         selfTypes.push_back(e.type);
                         this->visitTraitPath(e.trait);
                         selfTypes.pop_back();
+                        break;
                     }
-                    //(NotTrait, e) {
-                    //    ::HIR::ASTType*  type;
-                    //    ::HIR::GenricPath    trait;
-                    //    }),
-                    TU_ARMA(TypeEquality, e) {
+                    case HIRGenericBound::TAG_TypeEquality: {
+                        auto& e = bound.as_TypeEquality();
                         this->visitType(e.type);
                         this->visitType(e.otherType);
+                        break;
                     }
                 }
             }

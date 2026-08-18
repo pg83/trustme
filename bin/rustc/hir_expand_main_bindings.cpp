@@ -211,25 +211,36 @@ namespace {
         void visit(HIRExprNodeAsm2& node) override {
             auto _ = this->pushUsage(HIRValueUsage::Move);
             for (auto& v : node.params) {
-                TU_MATCH_HDRA( (v), { )
-                TU_ARMA(Const, e) {
+                switch (v.tag()) {
+                    case HIRAsmParam::TAG_Const: {
+                        auto& e = v.as_Const();
                         visitNodePtr(e);
+                        break;
                     }
-                    TU_ARMA(Sym, e) {
+                    case HIRAsmParam::TAG_Sym: {
+                        auto& e = v.as_Sym();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Label, e) {
+                    case HIRAsmParam::TAG_Label: {
+                        auto& e = v.as_Label();
                         visitNodePtr(e.code);
+                        break;
                     }
-                    TU_ARMA(RegSingle, e) {
+                    case HIRAsmParam::TAG_RegSingle: {
+                        auto& e = v.as_RegSingle();
                         visitNodePtr(e.val);
+                        break;
                     }
-                    TU_ARMA(Reg, e) {
+                    case HIRAsmParam::TAG_Reg: {
+                        auto& e = v.as_Reg();
                         if (e.valIn) {
                             visitNodePtr(e.valIn);
                         }
                         if (e.valOut) {
                             visitNodePtr(e.valOut);
                         }
+                        break;
                     }
                 }
             }
@@ -925,13 +936,21 @@ namespace {
         void addVarDef(const Span& sp, unsigned int slot) {
             assert(closureStack.size() > 0);
             auto& ent = closureStack.back();
-            TU_MATCH_HDRA( (ent), {)
-            TU_ARMA(None, e) throw "";
-                TU_ARMA(Closure, e) {
-                    addVarDefClosure(sp, e, slot);
+            switch (ent.tag()) {
+                case Scope::TAG_None: {
+                    auto& e = ent.as_None();
+                    (void)e;
+                    throw "";
                 }
-                TU_ARMA(Coroutine, e) {
+                case Scope::TAG_Closure: {
+                    auto& e = ent.as_Closure();
+                    addVarDefClosure(sp, e, slot);
+                    break;
+                }
+                case Scope::TAG_Coroutine: {
+                    auto& e = ent.as_Coroutine();
                     addVarDefGenerator(sp, e, slot);
+                    break;
                 }
             }
         }
@@ -943,41 +962,63 @@ namespace {
             }
 
             // Recurse
-            TU_MATCH_HDRA((pat.data), {)
-            TU_ARMA(Any, e) {
+            switch (pat.data.tag()) {
+                case HIRPatternData::TAG_Any: {
+                    auto& e = pat.data.as_Any();
+                    (void)e;
+                    break;
                 }
-                TU_ARMA(Value, e) {
+                case HIRPatternData::TAG_Value: {
+                    auto& e = pat.data.as_Value();
+                    (void)e;
+                    break;
                 }
-                TU_ARMA(Range, e) {
+                case HIRPatternData::TAG_Range: {
+                    auto& e = pat.data.as_Range();
+                    (void)e;
+                    break;
                 }
-                TU_ARMA(Box, e) {
+                case HIRPatternData::TAG_Box: {
+                    auto& e = pat.data.as_Box();
                     addClosureDefFromPattern(sp, *e.sub);
+                    break;
                 }
-                TU_ARMA(Deref, e) {
+                case HIRPatternData::TAG_Deref: {
+                    auto& e = pat.data.as_Deref();
                     addClosureDefFromPattern(sp, *e.sub);
+                    break;
                 }
-                TU_ARMA(Ref, e) {
+                case HIRPatternData::TAG_Ref: {
+                    auto& e = pat.data.as_Ref();
                     addClosureDefFromPattern(sp, *e.sub);
+                    break;
                 }
-                TU_ARMA(Tuple, e) {
+                case HIRPatternData::TAG_Tuple: {
+                    auto& e = pat.data.as_Tuple();
                     for (const auto& subpat : e.subPatterns) {
                         addClosureDefFromPattern(sp, subpat);
                     }
+                    break;
                 }
-                TU_ARMA(SplitTuple, e) {
+                case HIRPatternData::TAG_SplitTuple: {
+                    auto& e = pat.data.as_SplitTuple();
                     for (const auto& subpat : e.leading) {
                         addClosureDefFromPattern(sp, subpat);
                     }
                     for (const auto& subpat : e.trailing) {
                         addClosureDefFromPattern(sp, subpat);
                     }
+                    break;
                 }
-                TU_ARMA(Slice, e) {
+                case HIRPatternData::TAG_Slice: {
+                    auto& e = pat.data.as_Slice();
                     for (const auto& sub : e.subPatterns) {
                         addClosureDefFromPattern(sp, sub);
                     }
+                    break;
                 }
-                TU_ARMA(SplitSlice, e) {
+                case HIRPatternData::TAG_SplitSlice: {
+                    auto& e = pat.data.as_SplitSlice();
                     for (const auto& sub : e.leading) {
                         addClosureDefFromPattern(sp, sub);
                     }
@@ -987,28 +1028,35 @@ namespace {
                     if (e.extraBind.isValid()) {
                         addVarDef(sp, e.extraBind.slot);
                     }
+                    break;
                 }
-
-                // - Enums/Structs
-                TU_ARMA(PathValue, e) {
+                case HIRPatternData::TAG_PathValue: {
+                    auto& e = pat.data.as_PathValue();
+                    (void)e;
+                    break;
                 }
-                TU_ARMA(PathTuple, e) {
+                case HIRPatternData::TAG_PathTuple: {
+                    auto& e = pat.data.as_PathTuple();
                     for (const auto& field : e.leading) {
                         addClosureDefFromPattern(sp, field);
                     }
                     for (const auto& field : e.trailing) {
                         addClosureDefFromPattern(sp, field);
                     }
+                    break;
                 }
-                TU_ARMA(PathNamed, e) {
+                case HIRPatternData::TAG_PathNamed: {
+                    auto& e = pat.data.as_PathNamed();
                     for (auto& fieldPat : e.subPatterns) {
                         addClosureDefFromPattern(sp, fieldPat.second);
                     }
+                    break;
                 }
-
-                TU_ARMA(Or, e) {
+                case HIRPatternData::TAG_Or: {
+                    auto& e = pat.data.as_Or();
                     assert(e.size() > 0);
                     addClosureDefFromPattern(sp, e.front());
+                    break;
                 }
             }
         }
@@ -1061,26 +1109,32 @@ namespace {
                 return HIRValueUsage::Borrow;
             }
 
-            TU_MATCH_HDRA( (pat.data), {)
-            TU_ARMA(Any, pe) {
+            switch (pat.data.tag()) {
+                case HIRPatternData::TAG_Any: {
+                    auto& pe = pat.data.as_Any();
+                    (void)pe;
                     return HIRValueUsage::Borrow;
                 }
-                TU_ARMA(Box, pe) {
+                case HIRPatternData::TAG_Box: {
+                    auto& pe = pat.data.as_Box();
                     // NOTE: Specific to `owned_box`
                     const auto& sty = ty->as_Path().path.data.as_Generic().params.types.at(0);
                     return getUsageForPattern(sp, *pe.sub, sty);
                 }
-                TU_ARMA(Deref, pe) {
+                case HIRPatternData::TAG_Deref: {
+                    auto& pe = pat.data.as_Deref();
                     ASSERT_BUG(sp, pe.kind != HIRPattern::DerefKind::Unknown && pe.targetType, "Untyped deref pattern");
                     if (pe.kind == HIRPattern::DerefKind::Box) {
                         return getUsageForPattern(sp, *pe.sub, pe.targetType);
                     }
                     return pe.kind == HIRPattern::DerefKind::Unique ? HIRValueUsage::Mutate : HIRValueUsage::Borrow;
                 }
-                TU_ARMA(Ref, pe) {
+                case HIRPatternData::TAG_Ref: {
+                    auto& pe = pat.data.as_Ref();
                     return getUsageForPattern(sp, *pe.sub, ty->as_Borrow().inner);
                 }
-                TU_ARMA(Tuple, pe) {
+                case HIRPatternData::TAG_Tuple: {
+                    auto& pe = pat.data.as_Tuple();
                     ASSERT_BUG(sp, ty->is_Tuple(), "Tuple pattern with non-tuple type - " << ty);
                     const auto& subtys = ty->as_Tuple();
                     assert(pe.subPatterns.size() == subtys.size());
@@ -1090,7 +1144,8 @@ namespace {
                     }
                     return rv;
                 }
-                TU_ARMA(SplitTuple, pe) {
+                case HIRPatternData::TAG_SplitTuple: {
+                    auto& pe = pat.data.as_SplitTuple();
                     ASSERT_BUG(sp, ty->is_Tuple(), "SplitTuple pattern with non-tuple type - " << ty);
                     const auto& subtys = ty->as_Tuple();
                     assert(pe.leading.size() + pe.trailing.size() <= subtys.size());
@@ -1103,10 +1158,13 @@ namespace {
                     }
                     return rv;
                 }
-                TU_ARMA(PathValue, pe) {
+                case HIRPatternData::TAG_PathValue: {
+                    auto& pe = pat.data.as_PathValue();
+                    (void)pe;
                     return HIRValueUsage::Borrow;
                 }
-                TU_ARMA(PathTuple, pe) {
+                case HIRPatternData::TAG_PathTuple: {
+                    auto& pe = pat.data.as_PathTuple();
                     assert(!pe.binding.is_Unbound());
 
                     const auto& flds = patternGetTuple(sp, pe.path, pe.binding);
@@ -1132,7 +1190,8 @@ namespace {
                     }
                     return rv;
                 }
-                TU_ARMA(PathNamed, pe) {
+                case HIRPatternData::TAG_PathNamed: {
+                    auto& pe = pat.data.as_PathNamed();
                     assert(!pe.binding.is_Unbound());
 
                     if (pe.isWildcard()) {
@@ -1157,13 +1216,18 @@ namespace {
                     }
                     return rv;
                 }
-                TU_ARMA(Value, pe) {
+                case HIRPatternData::TAG_Value: {
+                    auto& pe = pat.data.as_Value();
+                    (void)pe;
                     return HIRValueUsage::Borrow;
                 }
-                TU_ARMA(Range, pe) {
+                case HIRPatternData::TAG_Range: {
+                    auto& pe = pat.data.as_Range();
+                    (void)pe;
                     return HIRValueUsage::Borrow;
                 }
-                TU_ARMA(Slice, pe) {
+                case HIRPatternData::TAG_Slice: {
+                    auto& pe = pat.data.as_Slice();
                     const auto& innerTy = (ty->is_Array() ? ty->as_Array().inner : ty->as_Slice().inner);
                     auto rv = HIRValueUsage::Borrow;
                     for (const auto& pat : pe.subPatterns) {
@@ -1171,7 +1235,8 @@ namespace {
                     }
                     return rv;
                 }
-                TU_ARMA(SplitSlice, pe) {
+                case HIRPatternData::TAG_SplitSlice: {
+                    auto& pe = pat.data.as_SplitSlice();
                     const auto& innerTy = (ty->is_Array() ? ty->as_Array().inner : ty->as_Slice().inner);
                     auto rv = HIRValueUsage::Borrow;
                     for (const auto& pat : pe.leading) {
@@ -1185,7 +1250,8 @@ namespace {
                     }
                     return rv;
                 }
-                TU_ARMA(Or, pe) {
+                case HIRPatternData::TAG_Or: {
+                    auto& pe = pat.data.as_Or();
                     auto rv = HIRValueUsage::Borrow;
                     for (const auto& pat : pe) {
                         rv = ::std::max(rv, getUsageForPattern(sp, pat, ty));
@@ -1331,13 +1397,21 @@ namespace {
         void markUsedVariable(const Span& sp, unsigned int slot, std::vector<RcString> fields, HIRValueUsage usage) {
             assert(closureStack.size() > 0);
             auto& ent = closureStack.back();
-            TU_MATCH_HDRA( (ent), {)
-            TU_ARMA(None, e) throw "";
-                TU_ARMA(Closure, e) {
-                    markUsedVariableClosure(sp, e, slot, fields, usage);
+            switch (ent.tag()) {
+                case Scope::TAG_None: {
+                    auto& e = ent.as_None();
+                    (void)e;
+                    throw "";
                 }
-                TU_ARMA(Coroutine, e) {
+                case Scope::TAG_Closure: {
+                    auto& e = ent.as_Closure();
+                    markUsedVariableClosure(sp, e, slot, fields, usage);
+                    break;
+                }
+                case Scope::TAG_Coroutine: {
+                    auto& e = ent.as_Coroutine();
                     markUsedVariableGenerator(sp, e, slot, fields, usage);
+                    break;
                 }
             }
         }
@@ -1946,22 +2020,25 @@ namespace {
 
                 HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer) const override {
                     if (const auto* e = ty->opt_NodeType()) {
-                        TU_MATCH_HDRA((*e), {)
-                        TU_ARMA(Closure, nodeP) {
+                        switch ((*e).tag()) {
+                            case HIRTypeDataNodeType::TAG_Closure: {
+                                auto& nodeP = (*e).as_Closure();
                                 DEBUG("Closure: " << nodeP->objPathBase); // TODO: Why does this use the `_base`
                                 auto path = monomorphiser.monomorphGenericpath(sp, nodeP->objPathBase, false);
                                 const auto& str = *nodeP->objPtr;
                                 DEBUG(ty << " -> " << path);
                                 return types.path(mv$(path), HIRTypePathBinding::make_Struct(&str));
                             }
-                            TU_ARMA(Generator, nodeP) {
+                            case HIRTypeDataNodeType::TAG_Generator: {
+                                auto& nodeP = (*e).as_Generator();
                                 DEBUG("Generator: " << nodeP->objPathBase);
                                 auto path = monomorphiser.monomorphGenericpath(sp, nodeP->objPathBase, false);
                                 const auto& str = *nodeP->objPtr;
                                 DEBUG(ty << " -> " << path);
                                 return types.path(mv$(path), HIRTypePathBinding::make_Struct(&str));
                             }
-                            TU_ARMA(Async, nodeP) {
+                            case HIRTypeDataNodeType::TAG_Async: {
+                                auto& nodeP = (*e).as_Async();
                                 DEBUG("Async: " << nodeP->objPathBase);
                                 auto path = monomorphiser.monomorphGenericpath(sp, nodeP->objPathBase, false);
                                 const auto& str = *nodeP->objPtr;
@@ -2234,8 +2311,9 @@ namespace {
             }
 
             bool boundNeeded(const Span& sp, const HIRGenericBound& b) const {
-                TU_MATCH_HDRA( (b), {)
-                TU_ARMA(TraitBound, e) {
+                switch (b.tag()) {
+                    case HIRGenericBound::TAG_TraitBound: {
+                        auto& e = b.as_TraitBound();
                         //if( type_bound_needed(sp, e.type) != TypeNeed::Required )
                         // Allows more complex type bounds
                         // e.g. `ty::Predicate<'tcx>: LowerInto<'tcx, std::option::Option<T>>,` (from 1.54 compiler/rustc_traits/src/chalk/db.rs:54)
@@ -2245,8 +2323,11 @@ namespace {
                         // Check for an unused type omitted: `V: FromIterator<A>` `I: IntoIterator<Item=A>` - `A` is only used in the bounds.
                         return true;
                     }
-                    TU_ARMA(TypeEquality, e) {
+                    case HIRGenericBound::TAG_TypeEquality: {
+                        auto& e = b.as_TypeEquality();
+                        (void)e;
                         TODO(sp, "");
+                        break;
                     }
                 }
                 throw "";
@@ -6178,8 +6259,9 @@ namespace {
                         return false;
                     };
                     for (auto& vi : tr.values) {
-                        TU_MATCH_HDRA( (vi.second), {)
-                        TU_ARMA(Function, ve) {
+                        switch (vi.second.tag()) {
+                            case HIRTraitValueItem::TAG_Function: {
+                                auto& ve = vi.second.as_Function();
                                 if (ve.receiver == HIRFunction::Receiver::Free) {
                                     DEBUG("- '" << vi.first << "' Skip free function"); // ?
                                     break;
@@ -6225,14 +6307,21 @@ namespace {
                                 traitPtr->valueIndexes.insert(::std::make_pair(vi.first, ::std::make_pair(static_cast<unsigned int>(fields.size()), traitPath.clone())));
                                 DEBUG("- '" << vi.first << "' is @" << fields.size());
                                 fields.push_back(HIRStructField{vi.first, HIRPublicity::newGlobal(), mv$(fcnType), {}});
+                                break;
                             }
-                            TU_ARMA(Static, ve) {
+                            case HIRTraitValueItem::TAG_Static: {
+                                auto& ve = vi.second.as_Static();
+                                (void)ve;
                                 if (vi.first != "vtable#") {
                                     TODO(Span(), "Associated static in vtable");
                                 }
+                                break;
                             }
-                            TU_ARMA(Constant, ve) {
+                            case HIRTraitValueItem::TAG_Constant: {
+                                auto& ve = vi.second.as_Constant();
+                                (void)ve;
                                 //TODO(Span(), "Associated const in vtable");
+                                break;
                             }
                         }
                     }

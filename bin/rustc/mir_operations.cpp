@@ -256,13 +256,15 @@ namespace {
 
 MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mutator, EncodedLiteralSlice lit, HIRTypeRef ty, const MonomorphState& params, HIRPath path) {
     TRACE_FUNCTION_F(ty << " <= " << lit);
-    TU_MATCH_HDRA( (*ty), {)
-    default:
+    switch ((*ty).tag()) {
+default:
         if( path == HIRGenericPath() )
             MIR_TODO(state, "Literal of type " << ty << " - " << lit);
         DEBUG("Unknown type " << ty << ", but a path was provided - Return ItemAddr " << path);
         return MIRConstant::make_ItemAddr(box$(path));
-        TU_ARMA(Tuple, te) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& te = (*ty).as_Tuple();
+            (void)te;
             auto* repr = TargetGetTypeRepr(state.sp, state.resolve, ty);
             MIR_ASSERT(state, repr, "No type repr, but encoded value available? " << ty);
 
@@ -276,7 +278,8 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
 
             return MIRRValue::make_Tuple({mv$(lvals)});
         }
-        TU_ARMA(Array, te) {
+        case HIRTypeData::TAG_Array: {
+            auto& te = (*ty).as_Array();
             size_t size = 0;
             MIR_ASSERT(state, TargetGetSizeOf(state.sp, state.resolve, te.inner, size), "No size, but encoded value available? " << ty);
             auto count = te.size.as_Known();
@@ -316,8 +319,10 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
 
                 return MIRRValue::make_Array({mv$(lvals)});
             }
+            break;
         }
-        TU_ARMA(Path, te) {
+        case HIRTypeData::TAG_Path: {
+            auto& te = (*ty).as_Path();
             auto* repr = TargetGetTypeRepr(state.sp, state.resolve, ty);
             MIR_ASSERT(state, repr, "No type repr, but encoded value available? " << ty);
 
@@ -440,8 +445,10 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
             } else {
                 MIR_BUG(state, "Unexpected type for literal from " << path << " - " << ty << " (lit = " << lit << ")");
             }
+            break;
         }
-        TU_ARMA(Primitive, te) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& te = (*ty).as_Primitive();
             switch (te) {
                 case HIRCoreType::Char:
                     return MIRConstant::make_Uint({lit.readUint(4), te});
@@ -487,10 +494,12 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
             }
             throw "";
         }
-        TU_ARMA(Pattern, te) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& te = (*ty).as_Pattern();
             return MIRCleanupLiteralToRValue(state, mutator, lit, te.inner, params, mv$(path));
         }
-        TU_ARMA(Pointer, te) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& te = (*ty).as_Pointer();
             if (lit.getReloc()) {
                 // Share logic with `Borrow` below, but wrap returned value in a cast op
                 auto tyBorrow = state.crate.types.borrow(te.type, te.inner);
@@ -514,8 +523,10 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
                 auto lval = mutator.inTemporary(state.crate.types.primitive(HIRCoreType::Usize), MIRRValue(MIRConstant::make_Uint({v, HIRCoreType::Usize})));
                 return MIRRValue::make_Cast({mv$(lval), mv$(ty)});
             }
+            break;
         }
-        TU_ARMA(Borrow, te) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& te = (*ty).as_Borrow();
             const auto* dataReloc = lit.getReloc();
             const auto data_ptr = lit.readUint(TargetGetPointerBits() / 8);
             MIR_ASSERT(state, dataReloc ? data_ptr >= EncodedLiteral::PTR_BASE : data_ptr != 0,
@@ -640,15 +651,19 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
                     return MIRRValue::make_Borrow({HIRBorrowType::Shared, false, MIRLValue::newDeref(mv$(lval2))});
                 }
             }
+            break;
         }
-        TU_ARMA(NamedFunction, te) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& te = (*ty).as_NamedFunction();
             // Function items are zero-sized: their identity is carried by
             // the NamedFunction type, not by bytes or a relocation in the
             // evaluated literal.  Reconstruct the ZST function value instead
             // of treating the lifted inline constant itself as addressable.
             return MIRConstant::make_Function({box$(te.path.clone())});
         }
-        TU_ARMA(Function, te) {
+        case HIRTypeData::TAG_Function: {
+            auto& te = (*ty).as_Function();
+            (void)te;
             const auto* dataReloc = lit.getReloc();
             MIR_ASSERT(state, dataReloc, "Function with no relocation?!");
             MIR_ASSERT(state, dataReloc->p, "");
@@ -702,10 +717,14 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
                     return MonomorphStatePtr(state.crate.types, ty, &tyPath.params, nullptr).monomorphType(state.sp, t);
                 };
                 ::std::vector<MIRParam> vals;
-                TU_MATCH_HDRA( (str.data), {)
-                TU_ARMA(Unit, se) {
+                switch (str.data.tag()) {
+                    case HIRStructData::TAG_Unit: {
+                        auto& se = str.data.as_Unit();
+                        (void)se;
+                        break;
                     }
-                    TU_ARMA(Tuple, se) {
+                    case HIRStructData::TAG_Tuple: {
+                        auto& se = str.data.as_Tuple();
                         for (unsigned int i = 0; i < se.size(); i++) {
                             auto val = MIRLValue::newField((i == se.size() - 1 ? mv$(lv) : lv.clone()), i);
                             if (i == str.structMarkings.coerceUnsizedIndex) {
@@ -714,8 +733,10 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
                                 vals.push_back(mv$(val));
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(Named, se) {
+                    case HIRStructData::TAG_Named: {
+                        auto& se = str.data.as_Named();
                         for (unsigned int i = 0; i < se.size(); i++) {
                             auto val = MIRLValue::newField((i == se.size() - 1 ? mv$(lv) : lv.clone()), i);
                             if (i == str.structMarkings.coerceUnsizedIndex) {
@@ -724,6 +745,7 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
                                 vals.push_back(mv$(val));
                             }
                         }
+                        break;
                     }
                 }
 
@@ -768,53 +790,63 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
 }
 
 bool MIRCleanupUnsizeGetMetadata(const MIRTypeResolve& state, MirMutator& mutator, const HIRTypeData* dstTy, const HIRTypeData* srcTy, const MIRLValue& ptrValue, MIRParam& outMetaVal, HIRTypeRef& outMetaTy, bool& outSrcIsDst) {
-    TU_MATCH_HDRA( (*dstTy), { )
-    default:
+    switch ((*dstTy).tag()) {
+default:
         MIR_TODO(state, "Obtain metadata converting to " << dstTy);
-        TU_ARMA(Generic, de) {
+        case HIRTypeData::TAG_Generic: {
+            auto& de = (*dstTy).as_Generic();
+            (void)de;
             // TODO: What should be returned to indicate "no conversion"
             return false;
         }
-        TU_ARMA(Path, de) {
+        case HIRTypeData::TAG_Path: {
+            auto& de = (*dstTy).as_Path();
             // Source must be Path and Unsize
-            if (de.binding.is_Opaque()) {
-                return false;
-            }
-
-            MIR_ASSERT(state, srcTy->is_Path(), "Unsize to path from non-path - " << srcTy);
-            const auto& se = srcTy->as_Path();
-            MIR_ASSERT(state, de.binding.tag() == se.binding.tag(), "Unsize between mismatched types - " << dstTy << " and " << srcTy);
-            MIR_ASSERT(state, de.binding.is_Struct(), "Unsize to non-struct - " << dstTy);
-            MIR_ASSERT(state, de.binding.as_Struct() == se.binding.as_Struct(), "Unsize between mismatched types - " << dstTy << " and " << srcTy);
-            const auto& str = *de.binding.as_Struct();
-            MIR_ASSERT(state, str.structMarkings.unsizedField != ~0u, "Unsize on type that doesn't implement have a ?Sized field - " << dstTy);
-
-            auto monomorphCbD = MonomorphStatePtr(state.crate.types, dstTy, &de.path.data.as_Generic().params, nullptr);
-            auto monomorphCbS = MonomorphStatePtr(state.crate.types, srcTy, &se.path.data.as_Generic().params, nullptr);
-
-            // Return GetMetadata on the inner type
-        TU_MATCH_HDRA( (str.data), {)
-        TU_ARMA(Unit, se) {
-                    MIR_BUG(state, "Unit-like struct Unsize is impossible - " << srcTy);
+                if (de.binding.is_Opaque()) {
+                    return false;
                 }
-                TU_ARMA(Tuple, se) {
+
+                MIR_ASSERT(state, srcTy->is_Path(), "Unsize to path from non-path - " << srcTy);
+                const auto& se = srcTy->as_Path();
+                MIR_ASSERT(state, de.binding.tag() == se.binding.tag(), "Unsize between mismatched types - " << dstTy << " and " << srcTy);
+                MIR_ASSERT(state, de.binding.is_Struct(), "Unsize to non-struct - " << dstTy);
+                MIR_ASSERT(state, de.binding.as_Struct() == se.binding.as_Struct(), "Unsize between mismatched types - " << dstTy << " and " << srcTy);
+                const auto& str = *de.binding.as_Struct();
+                MIR_ASSERT(state, str.structMarkings.unsizedField != ~0u, "Unsize on type that doesn't implement have a ?Sized field - " << dstTy);
+
+                auto monomorphCbD = MonomorphStatePtr(state.crate.types, dstTy, &de.path.data.as_Generic().params, nullptr);
+                auto monomorphCbS = MonomorphStatePtr(state.crate.types, srcTy, &se.path.data.as_Generic().params, nullptr);
+
+                // Return GetMetadata on the inner type
+            switch (str.data.tag()) {
+                case HIRStructData::TAG_Unit: {
+                    auto& se = str.data.as_Unit();
+                    (void)se;
+                    MIR_BUG(state, "Unit-like struct Unsize is impossible - " << srcTy);
+                    break;
+                }
+                case HIRStructData::TAG_Tuple: {
+                    auto& se = str.data.as_Tuple();
                     const auto& tyTpl = se.at(str.structMarkings.unsizedField).ent;
                     auto tyD = monomorphCbD.monomorphType(state.sp, tyTpl, false);
                     auto tyS = monomorphCbS.monomorphType(state.sp, tyTpl, false);
 
                     return MIRCleanupUnsizeGetMetadata(state, mutator, tyD, tyS, ptrValue, outMetaVal, outMetaTy, outSrcIsDst);
                 }
-                TU_ARMA(Named, se) {
+                case HIRStructData::TAG_Named: {
+                    auto& se = str.data.as_Named();
                     const auto& tyTpl = se.at(str.structMarkings.unsizedField).ty;
                     auto tyD = monomorphCbD.monomorphType(state.sp, tyTpl, false);
                     auto tyS = monomorphCbS.monomorphType(state.sp, tyTpl, false);
 
                     return MIRCleanupUnsizeGetMetadata(state, mutator, tyD, tyS, ptrValue, outMetaVal, outMetaTy, outSrcIsDst);
                 }
+            }
+            throw "";
         }
-        throw "";
-        }
-        TU_ARMA(Slice, de) {
+        case HIRTypeData::TAG_Slice: {
+            auto& de = (*dstTy).as_Slice();
+            (void)de;
             // Source must be an array (or generic)
             if (srcTy->is_Array()) {
                 const auto& inArray = srcTy->as_Array();
@@ -831,8 +863,10 @@ bool MIRCleanupUnsizeGetMetadata(const MIRTypeResolve& state, MirMutator& mutato
             } else {
                 MIR_BUG(state, "Unsize to slice from non-array - " << srcTy);
             }
+            break;
         }
-        TU_ARMA(TraitObject, de) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& de = (*dstTy).as_TraitObject();
             // Obtain vtable type `::"path"::to::Trait#vtable`
             auto vtableTy = de.trait.path != HIRSimplePath() ? de.trait.traitPtr->getVtableType(state.sp, state.crate, de) : state.crate.types.unit();
             outMetaTy = state.crate.types.pointer(HIRBorrowType::Shared, vtableTy);
@@ -913,11 +947,15 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
 
         // - Destructure and restrucure with the unsized fields
         ::std::vector<MIRParam> ents;
-        TU_MATCH_HDRA( (str.data), {)
-        TU_ARMA(Unit, se) {
+        switch (str.data.tag()) {
+            case HIRStructData::TAG_Unit: {
+                auto& se = str.data.as_Unit();
+                (void)se;
                 MIR_BUG(state, "Unit-like struct CoerceUnsized is impossible - " << srcTy);
+                break;
             }
-            TU_ARMA(Tuple, se) {
+            case HIRStructData::TAG_Tuple: {
+                auto& se = str.data.as_Tuple();
                 ents.reserve(se.size());
                 for (unsigned int i = 0; i < se.size(); i++) {
                     if (i == str.structMarkings.coerceUnsizedIndex) {
@@ -939,8 +977,10 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
                         ents.push_back(MIRLValue::newField(value.clone(), i));
                     }
                 }
+                break;
             }
-            TU_ARMA(Named, se) {
+            case HIRStructData::TAG_Named: {
+                auto& se = str.data.as_Named();
                 ents.reserve(se.size());
                 for (unsigned int i = 0; i < se.size(); i++) {
                     if (i == str.structMarkings.coerceUnsizedIndex) {
@@ -963,6 +1003,7 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
                         ents.push_back(MIRLValue::newField(value.clone(), i));
                     }
                 }
+                break;
             }
         }
         return MIRRValue::make_Struct({ dte.path.data.as_Generic().clone(), mv$(ents) });
@@ -1003,14 +1044,26 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
 }
 
 void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& lval) {
-    TU_MATCH_HDRA( (lval.root), {)
-    TU_ARMA(Return, le) {
+    switch (lval.root.tag()) {
+        case MIRLValue::Storage::TAG_Return: {
+            decltype(lval.root.as_Return()) le = lval.root.as_Return();
+            (void)le;
+            break;
         }
-        TU_ARMA(Argument, le) {
+        case MIRLValue::Storage::TAG_Argument: {
+            decltype(lval.root.as_Argument()) le = lval.root.as_Argument();
+            (void)le;
+            break;
         }
-        TU_ARMA(Local, le) {
+        case MIRLValue::Storage::TAG_Local: {
+            decltype(lval.root.as_Local()) le = lval.root.as_Local();
+            (void)le;
+            break;
         }
-        TU_ARMA(Static, le) {
+        case MIRLValue::Storage::TAG_Static: {
+            decltype(lval.root.as_Static()) le = lval.root.as_Static();
+            (void)le;
+            break;
         }
     }
 
@@ -1036,17 +1089,24 @@ void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValu
                 MIR_ASSERT(state, te.binding.is_Struct(), "Box contained a non-struct");
                 const auto& str = *te.binding.as_Struct();
                 const HIRTypeData* tyTpl = nullptr;
-                TU_MATCH_HDRA( (str.data), {)
-                TU_ARMA(Unit, se) {
+                switch (str.data.tag()) {
+                    case HIRStructData::TAG_Unit: {
+                        auto& se = str.data.as_Unit();
+                        (void)se;
                         MIR_BUG(state, "Box contained a unit-like struct");
+                        break;
                     }
-                    TU_ARMA(Tuple, se) {
+                    case HIRStructData::TAG_Tuple: {
+                        auto& se = str.data.as_Tuple();
                         MIR_ASSERT(state, se.size() > 0, "Box contained an empty tuple struct");
                         tyTpl = se[0].ent;
+                        break;
                     }
-                    TU_ARMA(Named, se) {
+                    case HIRStructData::TAG_Named: {
+                        auto& se = str.data.as_Named();
                         MIR_ASSERT(state, se.size() > 0, "Box contained an empty named struct");
                         tyTpl = se[0].ty;
+                        break;
                     }
                 }
                 tmp = MonomorphStatePtr(state.crate.types, typ, &te.path.data.as_Generic().params, nullptr).monomorphType(state.sp, tyTpl);
@@ -1083,15 +1143,21 @@ void MIRCleanupConstant(const MIRTypeResolve& state, MirMutator& mutator, MIRCon
 }
 
 void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam& p) {
-    TU_MATCH_HDRA( (p), { )
-    TU_ARMA(LValue, e) {
+    switch (p.tag()) {
+        case MIRParam::TAG_LValue: {
+            auto& e = p.as_LValue();
             MIRCleanupLValue(state, mutator, e);
+            break;
         }
-        TU_ARMA(Borrow, e) {
+        case MIRParam::TAG_Borrow: {
+            auto& e = p.as_Borrow();
             MIRCleanupLValue(state, mutator, e.val);
+            break;
         }
-        TU_ARMA(Constant, e) {
+        case MIRParam::TAG_Constant: {
+            auto& e = p.as_Constant();
             MIRCleanupConstant(state, mutator, e);
+            break;
         }
     }
 
@@ -1149,71 +1215,112 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
             }
             // >> Elaborate Box dereferences in all LValues
             DEBUG(state << stmt);
-            TU_MATCH_HDRA( (stmt), { )
-            TU_ARMA(SetDropFlag, se) {
+            switch (stmt.tag()) {
+                case MIRStatement::TAG_SetDropFlag: {
+                    auto& se = stmt.as_SetDropFlag();
+                    (void)se;
+                    break;
                 }
-                TU_ARMA(SaveDropFlag, se) {
+                case MIRStatement::TAG_SaveDropFlag: {
+                    auto& se = stmt.as_SaveDropFlag();
                     MIRCleanupLValue(state, mutator, se.slot);
+                    break;
                 }
-                TU_ARMA(LoadDropFlag, se) {
+                case MIRStatement::TAG_LoadDropFlag: {
+                    auto& se = stmt.as_LoadDropFlag();
                     MIRCleanupLValue(state, mutator, se.slot);
+                    break;
                 }
-                TU_ARMA(ScopeEnd, se) {
+                case MIRStatement::TAG_ScopeEnd: {
+                    auto& se = stmt.as_ScopeEnd();
+                    (void)se;
+                    break;
                 }
-                TU_ARMA(Asm, se) {
+                case MIRStatement::TAG_Asm: {
+                    auto& se = stmt.as_Asm();
                     for (auto& v : se.inputs) {
                         MIRCleanupLValue(state, mutator, v.second);
                     }
                     for (auto& v : se.outputs) {
                         MIRCleanupLValue(state, mutator, v.second);
                     }
+                    break;
                 }
-                TU_ARMA(Asm2, e) {
+                case MIRStatement::TAG_Asm2: {
+                    auto& e = stmt.as_Asm2();
                     for (auto& p : e.params) {
-                    TU_MATCH_HDRA( (p), { )
-                    TU_ARMA(Const, v) {
+                    switch (p.tag()) {
+                        case MIRAsmParam::TAG_Const: {
+                            auto& v = p.as_Const();
+                            (void)v;
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Sym: {
+                            auto& v = p.as_Sym();
+                            (void)v;
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Reg: {
+                            auto& v = p.as_Reg();
+                            if (v.input) {
+                                MIRCleanupParam(state, mutator, *v.input);
                             }
-                            TU_ARMA(Sym, v) {
+                            if (v.output) {
+                                MIRCleanupLValue(state, mutator, *v.output);
                             }
-                            TU_ARMA(Reg, v) {
-                                if (v.input) {
-                                    MIRCleanupParam(state, mutator, *v.input);
-                                }
-                                if (v.output) {
-                                    MIRCleanupLValue(state, mutator, *v.output);
-                                }
-                            }
-                            TU_ARMA(Label, v) {
-                            }
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Label: {
+                            auto& v = p.as_Label();
+                            (void)v;
+                            break;
+                        }
                     }
                     }
+                    break;
                 }
-                TU_ARMA(Assign, se) {
+                case MIRStatement::TAG_Assign: {
+                    auto& se = stmt.as_Assign();
                     MIRCleanupLValue(state, mutator, se.dst);
-                TU_MATCH_HDRA( (se.src), {)
-                TU_ARMA(Use, re) {
+                    switch (se.src.tag()) {
+                        case MIRRValue::TAG_Use: {
+                            auto& re = se.src.as_Use();
                             MIRCleanupLValue(state, mutator, re);
+                            break;
                         }
-                        TU_ARMA(Constant, re) {
+                        case MIRRValue::TAG_Constant: {
+                            auto& re = se.src.as_Constant();
                             MIRCleanupConstant(state, mutator, re);
+                            break;
                         }
-                        TU_ARMA(SizedArray, re) {
+                        case MIRRValue::TAG_SizedArray: {
+                            auto& re = se.src.as_SizedArray();
                             MIRCleanupParam(state, mutator, re.val);
+                            break;
                         }
-                        TU_ARMA(Borrow, re) {
+                        case MIRRValue::TAG_Borrow: {
+                            auto& re = se.src.as_Borrow();
                             MIRCleanupLValue(state, mutator, re.val);
+                            break;
                         }
-                        TU_ARMA(Cast, re) {
+                        case MIRRValue::TAG_Cast: {
+                            auto& re = se.src.as_Cast();
                             MIRCleanupLValue(state, mutator, re.val);
+                            break;
                         }
-                        TU_ARMA(BinOp, re) {
+                        case MIRRValue::TAG_BinOp: {
+                            auto& re = se.src.as_BinOp();
                             MIRCleanupParam(state, mutator, re.valL);
                             MIRCleanupParam(state, mutator, re.valR);
+                            break;
                         }
-                        TU_ARMA(UniOp, re) {
+                        case MIRRValue::TAG_UniOp: {
+                            auto& re = se.src.as_UniOp();
                             MIRCleanupLValue(state, mutator, re.val);
+                            break;
                         }
-                        TU_ARMA(DstMeta, re) {
+                        case MIRRValue::TAG_DstMeta: {
+                            auto& re = se.src.as_DstMeta();
                             HIRTypeRef tmp;
                             const auto& ty = state.getLvalueType(tmp, re.val);
 
@@ -1263,8 +1370,10 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             } else {
                                 BUG(Span(), "Unexpected input type for DstMeta - " << cleanedTy);
                             }
+                            break;
                         }
-                        TU_ARMA(DstPtr, re) {
+                        case MIRRValue::TAG_DstPtr: {
+                            auto& re = se.src.as_DstPtr();
                             HIRTypeRef tmp;
                             const auto& ty = state.getLvalueType(tmp, re.val);
                             if (!state.resolve.typeIsSized(state.sp, ty)) {
@@ -1297,35 +1406,49 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                                 BUG(Span(), "Unexpected input type for DstMeta - " << cleanedTy);
                             }
                             (void)ityP; // TODO: What is this needed for?
+                            break;
                         }
-                        TU_ARMA(MakeDst, re) {
+                        case MIRRValue::TAG_MakeDst: {
+                            auto& re = se.src.as_MakeDst();
                             MIRCleanupParam(state, mutator, re.ptrVal);
                             MIRCleanupParam(state, mutator, re.metaVal);
+                            break;
                         }
-                        TU_ARMA(Tuple, re) {
+                        case MIRRValue::TAG_Tuple: {
+                            auto& re = se.src.as_Tuple();
                             for (auto& lv : re.vals) {
                                 MIRCleanupParam(state, mutator, lv);
                             }
+                            break;
                         }
-                        TU_ARMA(Array, re) {
+                        case MIRRValue::TAG_Array: {
+                            auto& re = se.src.as_Array();
                             for (auto& lv : re.vals) {
                                 MIRCleanupParam(state, mutator, lv);
                             }
+                            break;
                         }
-                        TU_ARMA(UnionVariant, re) {
+                        case MIRRValue::TAG_UnionVariant: {
+                            auto& re = se.src.as_UnionVariant();
                             MIRCleanupParam(state, mutator, re.val);
+                            break;
                         }
-                        TU_ARMA(EnumVariant, re) {
+                        case MIRRValue::TAG_EnumVariant: {
+                            auto& re = se.src.as_EnumVariant();
                             for (auto& lv : re.vals) {
                                 MIRCleanupParam(state, mutator, lv);
                             }
+                            break;
                         }
-                        TU_ARMA(Struct, re) {
+                        case MIRRValue::TAG_Struct: {
+                            auto& re = se.src.as_Struct();
                             for (auto& lv : re.vals) {
                                 MIRCleanupParam(state, mutator, lv);
                             }
+                            break;
                         }
-                }
+                    }
+                    break;
                 }
             }
 
@@ -1380,32 +1503,59 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
 
         mutator.updateState(state);
 
-        TU_MATCH_HDRA( (block.terminator), {)
-        TU_ARMA(Incomplete, e) {
+        switch (block.terminator.tag()) {
+            case MIRTerminator::TAG_Incomplete: {
+                auto& e = block.terminator.as_Incomplete();
+                (void)e;
+                break;
             }
-            TU_ARMA(Return, e) {
+            case MIRTerminator::TAG_Return: {
+                auto& e = block.terminator.as_Return();
+                (void)e;
+                break;
             }
-            TU_ARMA(UnwindResume, e) {
+            case MIRTerminator::TAG_UnwindResume: {
+                auto& e = block.terminator.as_UnwindResume();
+                (void)e;
+                break;
             }
-            TU_ARMA(UnwindTerminate, e) {
+            case MIRTerminator::TAG_UnwindTerminate: {
+                auto& e = block.terminator.as_UnwindTerminate();
+                (void)e;
+                break;
             }
-            TU_ARMA(Unreachable, e) {
+            case MIRTerminator::TAG_Unreachable: {
+                auto& e = block.terminator.as_Unreachable();
+                (void)e;
+                break;
             }
-            TU_ARMA(Goto, e) {
+            case MIRTerminator::TAG_Goto: {
+                auto& e = block.terminator.as_Goto();
+                (void)e;
+                break;
             }
-            TU_ARMA(If, e) {
+            case MIRTerminator::TAG_If: {
+                auto& e = block.terminator.as_If();
                 MIRCleanupLValue(state, mutator, e.cond);
+                break;
             }
-            TU_ARMA(Switch, e) {
+            case MIRTerminator::TAG_Switch: {
+                auto& e = block.terminator.as_Switch();
                 MIRCleanupLValue(state, mutator, e.val);
+                break;
             }
-            TU_ARMA(SwitchValue, e) {
+            case MIRTerminator::TAG_SwitchValue: {
+                auto& e = block.terminator.as_SwitchValue();
                 MIRCleanupLValue(state, mutator, e.val);
+                break;
             }
-            TU_ARMA(Drop, e) {
+            case MIRTerminator::TAG_Drop: {
+                auto& e = block.terminator.as_Drop();
                 MIRCleanupLValue(state, mutator, e.slot);
+                break;
             }
-            TU_ARMA(Call, e) {
+            case MIRTerminator::TAG_Call: {
+                auto& e = block.terminator.as_Call();
                 MIRCleanupLValue(state, mutator, e.retVal);
                 if (e.fcn.is_Value()) {
                     MIRCleanupLValue(state, mutator, e.fcn.as_Value());
@@ -1413,16 +1563,20 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 for (auto& lv : e.args) {
                     MIRCleanupParam(state, mutator, lv);
                 }
+                break;
             }
-            TU_ARMA(TailCall, e) {
+            case MIRTerminator::TAG_TailCall: {
+                auto& e = block.terminator.as_TailCall();
                 if (e.fcn.is_Value()) {
                     MIRCleanupLValue(state, mutator, e.fcn.as_Value());
                 }
                 for (auto& param : e.args) {
                     MIRCleanupParam(state, mutator, param);
                 }
+                break;
             }
-            TU_ARMA(Asm2, e) {
+            case MIRTerminator::TAG_Asm2: {
+                auto& e = block.terminator.as_Asm2();
                 for (auto& p : e.params) {
                     if (auto* reg = p.opt_Reg()) {
                         if (reg->input) {
@@ -1433,6 +1587,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         }
                     }
                 }
+                break;
             }
         }
 
@@ -1495,19 +1650,27 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         for (unsigned int i = 0; i < nArgs; i++) {
                             e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
                         }
-                        TU_MATCH_HDRA( (fcnTy.def), {)
-                        TU_ARMA(Function, ve) {
+                        switch (fcnTy.def.tag()) {
+                            case HIRTypeDataNamedFunctionTy::TAG_Function: {
+                                auto& ve = fcnTy.def.as_Function();
+                                (void)ve;
                                 e.fcn = fcnTy.path.clone();
+                                break;
                             }
-                            TU_ARMA(StructConstructor, ve) {
+                            case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
+                                auto& ve = fcnTy.def.as_StructConstructor();
+                                (void)ve;
                                 block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRRValue::make_Struct({fcnTy.path.data.as_Generic().clone(), std::move(e.args)})}));
                                 block.terminator = MIRTerminator::make_Goto(e.retBlock);
+                                break;
                             }
-                            TU_ARMA(EnumConstructor, ve) {
+                            case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
+                                auto& ve = fcnTy.def.as_EnumConstructor();
                                 auto enmPath = fcnTy.path.data.as_Generic().clone();
                                 enmPath.path.popComponent();
                                 block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRRValue::make_EnumVariant({std::move(enmPath), static_cast<unsigned>(ve.v), std::move(e.args)})}));
                                 block.terminator = MIRTerminator::make_Goto(e.retBlock);
+                                break;
                             }
                         }
                     }
@@ -1573,15 +1736,24 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         for (unsigned int i = 0; i < nArgs; i++) {
                             e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
                         }
-                        TU_MATCH_HDRA((fcnTy.def), {)
-                        TU_ARMA(Function, _) {
+                        switch (fcnTy.def.tag()) {
+                            case HIRTypeDataNamedFunctionTy::TAG_Function: {
+                                auto& _ = fcnTy.def.as_Function();
+                                (void)_;
                                 e.fcn = fcnTy.path.clone();
+                                break;
                             }
-                            TU_ARMA(StructConstructor, _) {
+                            case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
+                                auto& _ = fcnTy.def.as_StructConstructor();
+                                (void)_;
                                 MIR_BUG(state, "Struct constructor used as an explicit tail-call target");
+                                break;
                             }
-                            TU_ARMA(EnumConstructor, _) {
+                            case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
+                                auto& _ = fcnTy.def.as_EnumConstructor();
+                                (void)_;
                                 MIR_BUG(state, "Enum constructor used as an explicit tail-call target");
+                                break;
                             }
                         }
                     }
@@ -1951,60 +2123,91 @@ namespace {
 
     bool optVisitMirLvaluesMut(MIRRValue& rval, ::std::function<bool(MIRLValue&, MIRValUsage)> cb) {
         bool rv = false;
-        TU_MATCH_HDRA( (rval), {)
-        TU_ARMA(Use, se) {
+        switch (rval.tag()) {
+            case MIRRValue::TAG_Use: {
+                auto& se = rval.as_Use();
                 rv |= visitMirLvalueRawMut(se, MIRValUsage::Move, cb); // Can move
+                break;
             }
-            TU_ARMA(Constant, se) {
+            case MIRRValue::TAG_Constant: {
+                auto& se = rval.as_Constant();
+                (void)se;
+                break;
             }
-            TU_ARMA(SizedArray, se) {
+            case MIRRValue::TAG_SizedArray: {
+                auto& se = rval.as_SizedArray();
                 rv |= visitMirLvalueMut(se.val, MIRValUsage::Read, cb); // Has to be Read
+                break;
             }
-            TU_ARMA(Borrow, se) {
+            case MIRRValue::TAG_Borrow: {
+                auto& se = rval.as_Borrow();
                 rv |= visitMirLvalueRawMut(se.val, MIRValUsage::Borrow, cb);
+                break;
             }
-            TU_ARMA(Cast, se) {
+            case MIRRValue::TAG_Cast: {
+                auto& se = rval.as_Cast();
                 rv |= visitMirLvalueRawMut(se.val, MIRValUsage::Read, cb); // Also has to be read
+                break;
             }
-            TU_ARMA(BinOp, se) {
+            case MIRRValue::TAG_BinOp: {
+                auto& se = rval.as_BinOp();
                 rv |= visitMirLvalueMut(se.valL, MIRValUsage::Read, cb); // Same
                 rv |= visitMirLvalueMut(se.valR, MIRValUsage::Read, cb);
+                break;
             }
-            TU_ARMA(UniOp, se) {
+            case MIRRValue::TAG_UniOp: {
+                auto& se = rval.as_UniOp();
                 rv |= visitMirLvalueRawMut(se.val, MIRValUsage::Read, cb);
+                break;
             }
-            TU_ARMA(DstMeta, se) {
+            case MIRRValue::TAG_DstMeta: {
+                auto& se = rval.as_DstMeta();
                 rv |= visitMirLvalueRawMut(se.val, MIRValUsage::Read, cb); // Reads
+                break;
             }
-            TU_ARMA(DstPtr, se) {
+            case MIRRValue::TAG_DstPtr: {
+                auto& se = rval.as_DstPtr();
                 rv |= visitMirLvalueRawMut(se.val, MIRValUsage::Read, cb);
+                break;
             }
-            TU_ARMA(MakeDst, se) {
+            case MIRRValue::TAG_MakeDst: {
+                auto& se = rval.as_MakeDst();
                 rv |= visitMirLvalueMut(se.ptrVal, MIRValUsage::Move, cb);
                 rv |= visitMirLvalueMut(se.metaVal, MIRValUsage::Read, cb); // Note, metadata has to be Copy
+                break;
             }
-            TU_ARMA(Tuple, se) {
+            case MIRRValue::TAG_Tuple: {
+                auto& se = rval.as_Tuple();
                 for (auto& v : se.vals) {
                     rv |= visitMirLvalueMut(v, MIRValUsage::Move, cb);
                 }
+                break;
             }
-            TU_ARMA(Array, se) {
+            case MIRRValue::TAG_Array: {
+                auto& se = rval.as_Array();
                 for (auto& v : se.vals) {
                     rv |= visitMirLvalueMut(v, MIRValUsage::Move, cb);
                 }
+                break;
             }
-            TU_ARMA(UnionVariant, se) {
+            case MIRRValue::TAG_UnionVariant: {
+                auto& se = rval.as_UnionVariant();
                 rv |= visitMirLvalueMut(se.val, MIRValUsage::Move, cb);
+                break;
             }
-            TU_ARMA(EnumVariant, se) {
+            case MIRRValue::TAG_EnumVariant: {
+                auto& se = rval.as_EnumVariant();
                 for (auto& v : se.vals) {
                     rv |= visitMirLvalueMut(v, MIRValUsage::Move, cb);
                 }
+                break;
             }
-            TU_ARMA(Struct, se) {
+            case MIRRValue::TAG_Struct: {
+                auto& se = rval.as_Struct();
                 for (auto& v : se.vals) {
                     rv |= visitMirLvalueMut(v, MIRValUsage::Move, cb);
                 }
+                break;
             }
         }
         return rv;
@@ -2018,48 +2221,75 @@ namespace {
 
     bool optVisitMirLvaluesMut(MIRStatement& stmt, ::std::function<bool(MIRLValue&, MIRValUsage)> cb) {
         bool rv = false;
-        TU_MATCH_HDRA( (stmt), {)
-        TU_ARMA(Assign, e) {
+        switch (stmt.tag()) {
+            case MIRStatement::TAG_Assign: {
+                auto& e = stmt.as_Assign();
                 rv |= optVisitMirLvaluesMut(e.src, cb);
                 rv |= visitMirLvalueRawMut(e.dst, MIRValUsage::Write, cb);
+                break;
             }
-            TU_ARMA(Asm, e) {
+            case MIRStatement::TAG_Asm: {
+                auto& e = stmt.as_Asm();
                 for (auto& v : e.inputs) {
                     rv |= visitMirLvalueRawMut(v.second, MIRValUsage::Read, cb);
                 }
                 for (auto& v : e.outputs) {
                     rv |= visitMirLvalueRawMut(v.second, MIRValUsage::Write, cb);
                 }
+                break;
             }
-            TU_ARMA(Asm2, e) {
+            case MIRStatement::TAG_Asm2: {
+                auto& e = stmt.as_Asm2();
                 for (auto& p : e.params) {
-                TU_MATCH_HDRA( (p), { )
-                TU_ARMA(Const, v) {
+                switch (p.tag()) {
+                    case MIRAsmParam::TAG_Const: {
+                        auto& v = p.as_Const();
+                        (void)v;
+                        break;
+                    }
+                    case MIRAsmParam::TAG_Sym: {
+                        auto& v = p.as_Sym();
+                        (void)v;
+                        break;
+                    }
+                    case MIRAsmParam::TAG_Reg: {
+                        auto& v = p.as_Reg();
+                        if (v.input) {
+                            rv |= visitMirLvalueMut(*v.input, MIRValUsage::Read, cb);
                         }
-                        TU_ARMA(Sym, v) {
+                        if (v.output) {
+                            rv |= visitMirLvalueRawMut(*v.output, MIRValUsage::Write, cb);
                         }
-                        TU_ARMA(Reg, v) {
-                            if (v.input) {
-                                rv |= visitMirLvalueMut(*v.input, MIRValUsage::Read, cb);
-                            }
-                            if (v.output) {
-                                rv |= visitMirLvalueRawMut(*v.output, MIRValUsage::Write, cb);
-                            }
-                        }
-                        TU_ARMA(Label, v) {
-                        }
+                        break;
+                    }
+                    case MIRAsmParam::TAG_Label: {
+                        auto& v = p.as_Label();
+                        (void)v;
+                        break;
+                    }
                 }
                 }
+                break;
             }
-            TU_ARMA(SetDropFlag, e) {
+            case MIRStatement::TAG_SetDropFlag: {
+                auto& e = stmt.as_SetDropFlag();
+                (void)e;
+                break;
             }
-            TU_ARMA(SaveDropFlag, e) {
+            case MIRStatement::TAG_SaveDropFlag: {
+                auto& e = stmt.as_SaveDropFlag();
                 rv |= visitMirLvalueRawMut(e.slot, MIRValUsage::Write, cb);
+                break;
             }
-            TU_ARMA(LoadDropFlag, e) {
+            case MIRStatement::TAG_LoadDropFlag: {
+                auto& e = stmt.as_LoadDropFlag();
                 rv |= visitMirLvalueRawMut(e.slot, MIRValUsage::Read, cb);
+                break;
             }
-            TU_ARMA(ScopeEnd, e) {
+            case MIRStatement::TAG_ScopeEnd: {
+                auto& e = stmt.as_ScopeEnd();
+                (void)e;
+                break;
             }
         }
         return rv;
@@ -2073,32 +2303,59 @@ namespace {
 
     bool optVisitMirLvaluesMut(MIRTerminator& term, ::std::function<bool(MIRLValue&, MIRValUsage)> cb) {
         bool rv = false;
-        TU_MATCH_HDRA( (term), {)
-        TU_ARMA(Incomplete, e) {
+        switch (term.tag()) {
+            case MIRTerminator::TAG_Incomplete: {
+                auto& e = term.as_Incomplete();
+                (void)e;
+                break;
             }
-            TU_ARMA(Return, e) {
+            case MIRTerminator::TAG_Return: {
+                auto& e = term.as_Return();
+                (void)e;
+                break;
             }
-            TU_ARMA(UnwindResume, e) {
+            case MIRTerminator::TAG_UnwindResume: {
+                auto& e = term.as_UnwindResume();
+                (void)e;
+                break;
             }
-            TU_ARMA(UnwindTerminate, e) {
+            case MIRTerminator::TAG_UnwindTerminate: {
+                auto& e = term.as_UnwindTerminate();
+                (void)e;
+                break;
             }
-            TU_ARMA(Unreachable, e) {
+            case MIRTerminator::TAG_Unreachable: {
+                auto& e = term.as_Unreachable();
+                (void)e;
+                break;
             }
-            TU_ARMA(Goto, e) {
+            case MIRTerminator::TAG_Goto: {
+                auto& e = term.as_Goto();
+                (void)e;
+                break;
             }
-            TU_ARMA(If, e) {
+            case MIRTerminator::TAG_If: {
+                auto& e = term.as_If();
                 rv |= visitMirLvalueRawMut(e.cond, MIRValUsage::Read, cb);
+                break;
             }
-            TU_ARMA(Switch, e) {
+            case MIRTerminator::TAG_Switch: {
+                auto& e = term.as_Switch();
                 rv |= visitMirLvalueRawMut(e.val, MIRValUsage::Read, cb);
+                break;
             }
-            TU_ARMA(SwitchValue, e) {
+            case MIRTerminator::TAG_SwitchValue: {
+                auto& e = term.as_SwitchValue();
                 rv |= visitMirLvalueRawMut(e.val, MIRValUsage::Read, cb);
+                break;
             }
-            TU_ARMA(Drop, e) {
+            case MIRTerminator::TAG_Drop: {
+                auto& e = term.as_Drop();
                 rv |= visitMirLvalueRawMut(e.slot, MIRValUsage::Move, cb);
+                break;
             }
-            TU_ARMA(Call, e) {
+            case MIRTerminator::TAG_Call: {
+                auto& e = term.as_Call();
                 if (e.fcn.is_Value()) {
                     rv |= visitMirLvalueRawMut(e.fcn.as_Value(), MIRValUsage::Read, cb);
                 }
@@ -2106,16 +2363,20 @@ namespace {
                     rv |= visitMirLvalueMut(v, MIRValUsage::Move, cb);
                 }
                 rv |= visitMirLvalueRawMut(e.retVal, MIRValUsage::Write, cb);
+                break;
             }
-            TU_ARMA(TailCall, e) {
+            case MIRTerminator::TAG_TailCall: {
+                auto& e = term.as_TailCall();
                 if (e.fcn.is_Value()) {
                     rv |= visitMirLvalueRawMut(e.fcn.as_Value(), MIRValUsage::Read, cb);
                 }
                 for (auto& v : e.args) {
                     rv |= visitMirLvalueMut(v, MIRValUsage::Move, cb);
                 }
+                break;
             }
-            TU_ARMA(Asm2, e) {
+            case MIRTerminator::TAG_Asm2: {
+                auto& e = term.as_Asm2();
                 for (auto& p : e.params) {
                     if (auto* reg = p.opt_Reg()) {
                         if (reg->input) {
@@ -2126,6 +2387,7 @@ namespace {
                         }
                     }
                 }
+                break;
             }
         }
         return rv;
@@ -2244,31 +2506,46 @@ namespace {
             }
         }
 
-        TU_MATCH_HDRA( (path.data), {)
-        TU_ARMA(Generic, pe) {
+        switch (path.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                auto& pe = path.data.as_Generic();
+                (void)pe;
                 params.selfTy = nullptr;
+                break;
             }
-            TU_ARMA(UfcsKnown, pe) {
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& pe = path.data.as_UfcsKnown();
                 params.selfTy = pe.type;
+                break;
             }
-            TU_ARMA(UfcsInherent, pe) {
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& pe = path.data.as_UfcsInherent();
                 params.selfTy = pe.type;
+                break;
             }
-            TU_ARMA(UfcsUnknown, pe) {
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& pe = path.data.as_UfcsUnknown();
+                (void)pe;
                 MIR_BUG(state, "UfcsUnknown hit - " << path);
+                break;
             }
         }
 
-        TU_MATCH_HDRA( (e), { )
-        default:
+        switch (e.tag()) {
+default:
             MIR_BUG(state, "MIR Call of " << e.tagStr() << " - " << path);
-            TU_ARMA(NotFound, _) {
+            case TypeckValuePtr::TAG_NotFound: {
+                auto& _ = e.as_NotFound();
+                (void)_;
                 return nullptr;
             }
-            TU_ARMA(NotYetKnown, _) {
+            case TypeckValuePtr::TAG_NotYetKnown: {
+                auto& _ = e.as_NotYetKnown();
+                (void)_;
                 return nullptr;
             }
-            TU_ARMA(Function, f) {
+            case TypeckValuePtr::TAG_Function: {
+                auto& f = e.as_Function();
                 params.fcnParamsDef = &f->params;
                 return f->code.getMirOpt();
             }
@@ -2307,14 +2584,17 @@ namespace {
 
     /// Convert a MIR::Param into a MIR::RValue
     MIRRValue paramToRvalue(MIRParam param) {
-        TU_MATCH_HDRA( (param), { )
-        TU_ARMA(LValue, lv) {
+        switch (param.tag()) {
+            case MIRParam::TAG_LValue: {
+                auto& lv = param.as_LValue();
                 return mv$(lv);
             }
-            TU_ARMA(Borrow, e) {
+            case MIRParam::TAG_Borrow: {
+                auto& e = param.as_Borrow();
                 return MIRRValue::make_Borrow({e.type, false, mv$(e.val)});
             }
-            TU_ARMA(Constant, c) {
+            case MIRParam::TAG_Constant: {
+                auto& c = param.as_Constant();
                 return mv$(c);
             }
         }
@@ -3247,18 +3527,24 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
                     // destination not dependent on any statements between the two, move.
                     if (slot.setLoc.stmtIdx < setBb.statements.size()) {
                         auto& setStmt = setBb.statements[slot.setLoc.stmtIdx];
-                        TU_MATCH_HDRA( (setStmt), {)
-                        TU_ARMA(Assign, se) {
+                        switch (setStmt.tag()) {
+                            case MIRStatement::TAG_Assign: {
+                                auto& se = setStmt.as_Assign();
                                 MIR_ASSERT(state, se.dst == MIRLValue::newLocal(varIdx), "Impossibility: Value set but isn't destination in " << setStmt);
                                 DEBUG("Move destination " << dst << " from " << useBb.statements[slot.useLoc.stmtIdx] << " to " << setStmt);
                                 se.dst = dst.clone();
                                 useBb.statements[slot.useLoc.stmtIdx] = MIRStatement();
                                 changed = true;
+                                break;
                             }
-                            TU_ARMA(Asm, se) {
+                            case MIRStatement::TAG_Asm: {
+                                auto& se = setStmt.as_Asm();
+                                (void)se;
                                 // Initialised from an ASM statement, find the variable in the output parameters
+                                break;
                             }
-                            TU_ARMA(Asm2, se) {
+                            case MIRStatement::TAG_Asm2: {
+                                auto& se = setStmt.as_Asm2();
                                 // Initialised from an ASM statement, find the variable in the output parameters
                                 // TODO: Replace the output variable
                                 for (auto& e : se.params) {
@@ -3277,8 +3563,9 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
                                 if (!changed) {
                                     MIR_BUG(state, "Failed to find usage of _" << varIdx << " in asm! statement");
                                 }
+                                break;
                             }
-                            break;
+break;
                             default:
                                 MIR_BUG(state, "Impossibility: Value set in " << setStmt);
                         }
@@ -3577,8 +3864,8 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
                 break;
             }
 
-            TU_MATCH_HDRA( (curBb.terminator), { )
-            default:
+            switch (curBb.terminator.tag()) {
+default:
                 stop = true;
                 break;
                 // TODO: History is needed to avoid infinite loops from triggering infinite looping here.
@@ -4265,79 +4552,104 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
                 if (a.statements[i].tag() != b.statements[i].tag()) {
                     return false;
                 }
-                TU_MATCH_HDRA( (a.statements[i], b.statements[i]), {)
-                TU_ARMA(Assign, ae, be) {
-                        if (ae.dst != be.dst) {
-                            return false;
+                {
+                    auto& tuMatch = a.statements[i];
+                    auto& tuMatch2 = b.statements[i];
+                    switch (tuMatch.tag()) {
+                        case MIRStatement::TAG_Assign: {
+                            auto& ae = tuMatch.as_Assign();
+                            auto& be = tuMatch2.as_Assign();
+                            if (ae.dst != be.dst) {
+                                return false;
+                            }
+                            if (ae.src != be.src) {
+                                return false;
+                            }
+                            break;
                         }
-                        if (ae.src != be.src) {
-                            return false;
+                        case MIRStatement::TAG_Asm: {
+                            auto& ae = tuMatch.as_Asm();
+                            auto& be = tuMatch2.as_Asm();
+                            if (ae.tpl != be.tpl) {
+                                return false;
+                            }
+                            if (ae.outputs != be.outputs) {
+                                return false;
+                            }
+                            if (ae.inputs != be.inputs) {
+                                return false;
+                            }
+                            if (ae.clobbers != be.clobbers) {
+                                return false;
+                            }
+                            if (ae.flags != be.flags) {
+                                return false;
+                            }
+                            break;
                         }
-                    }
-                    TU_ARMA(Asm, ae, be) {
-                        if (ae.tpl != be.tpl) {
-                            return false;
+                        case MIRStatement::TAG_Asm2: {
+                            auto& ae = tuMatch.as_Asm2();
+                            auto& be = tuMatch2.as_Asm2();
+                            if (ae.lines != be.lines) {
+                                return false;
+                            }
+                            if (!(ae.options == be.options)) {
+                                return false;
+                            }
+                            if (ae.params != be.params) {
+                                return false;
+                            }
+                            break;
                         }
-                        if (ae.outputs != be.outputs) {
-                            return false;
+                        case MIRStatement::TAG_SetDropFlag: {
+                            auto& ae = tuMatch.as_SetDropFlag();
+                            auto& be = tuMatch2.as_SetDropFlag();
+                            if (ae.idx != be.idx) {
+                                return false;
+                            }
+                            if (ae.newVal != be.newVal) {
+                                return false;
+                            }
+                            if (ae.other != be.other) {
+                                return false;
+                            }
+                            break;
                         }
-                        if (ae.inputs != be.inputs) {
-                            return false;
+                        case MIRStatement::TAG_LoadDropFlag: {
+                            auto& ae = tuMatch.as_LoadDropFlag();
+                            auto& be = tuMatch2.as_LoadDropFlag();
+                            if (ae.idx != be.idx) {
+                                return false;
+                            }
+                            if (ae.slot != be.slot) {
+                                return false;
+                            }
+                            if (ae.bitIndex != be.bitIndex) {
+                                return false;
+                            }
+                            break;
                         }
-                        if (ae.clobbers != be.clobbers) {
-                            return false;
+                        case MIRStatement::TAG_SaveDropFlag: {
+                            auto& ae = tuMatch.as_SaveDropFlag();
+                            auto& be = tuMatch2.as_SaveDropFlag();
+                            if (ae.idx != be.idx) {
+                                return false;
+                            }
+                            if (ae.slot != be.slot) {
+                                return false;
+                            }
+                            if (ae.bitIndex != be.bitIndex) {
+                                return false;
+                            }
+                            break;
                         }
-                        if (ae.flags != be.flags) {
-                            return false;
-                        }
-                    }
-                    TU_ARMA(Asm2, ae, be) {
-                        if (ae.lines != be.lines) {
-                            return false;
-                        }
-                        if (!(ae.options == be.options)) {
-                            return false;
-                        }
-                        if (ae.params != be.params) {
-                            return false;
-                        }
-                    }
-                    TU_ARMA(SetDropFlag, ae, be) {
-                        if (ae.idx != be.idx) {
-                            return false;
-                        }
-                        if (ae.newVal != be.newVal) {
-                            return false;
-                        }
-                        if (ae.other != be.other) {
-                            return false;
-                        }
-                    }
-                    TU_ARMA(LoadDropFlag, ae, be) {
-                        if (ae.idx != be.idx) {
-                            return false;
-                        }
-                        if (ae.slot != be.slot) {
-                            return false;
-                        }
-                        if (ae.bitIndex != be.bitIndex) {
-                            return false;
-                        }
-                    }
-                    TU_ARMA(SaveDropFlag, ae, be) {
-                        if (ae.idx != be.idx) {
-                            return false;
-                        }
-                        if (ae.slot != be.slot) {
-                            return false;
-                        }
-                        if (ae.bitIndex != be.bitIndex) {
-                            return false;
-                        }
-                    }
-                    TU_ARMA(ScopeEnd, ae, be) {
-                        if (ae.slots != be.slots) {
-                            return false;
+                        case MIRStatement::TAG_ScopeEnd: {
+                            auto& ae = tuMatch.as_ScopeEnd();
+                            auto& be = tuMatch2.as_ScopeEnd();
+                            if (ae.slots != be.slots) {
+                                return false;
+                            }
+                            break;
                         }
                     }
                 }
@@ -4885,8 +5197,9 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                     }
                 };
 
-                TU_MATCH_HDRA( (e->src), {)
-                TU_ARMA(Use, se) {
+                switch (e->src.tag()) {
+                    case MIRRValue::TAG_Use: {
+                        auto& se = e->src.as_Use();
                         auto nv = checkLv(se);
                         if (nv.is_ItemAddr() && !nv.as_ItemAddr()) {
                             // ItemAddr with a nullptr inner means "no expansion"
@@ -4894,14 +5207,21 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             e->src = MIRRValue::make_Constant(mv$(nv));
                             changed = true;
                         }
+                        break;
                     }
-                    TU_ARMA(Constant, se) {
+                    case MIRRValue::TAG_Constant: {
+                        auto& se = e->src.as_Constant();
+                        (void)se;
                         // Ignore (knowledge done below)
+                        break;
                     }
-                    TU_ARMA(SizedArray, se) {
+                    case MIRRValue::TAG_SizedArray: {
+                        auto& se = e->src.as_SizedArray();
                         checkParam(se.val);
+                        break;
                     }
-                    TU_ARMA(Borrow, se) {
+                    case MIRRValue::TAG_Borrow: {
+                        auto& se = e->src.as_Borrow();
                         // Shared borrows of statics can be better represented with the ItemAddr constant
                         if (se.type == HIRBorrowType::Shared && se.val.wrappers.empty() && se.val.root.is_Static()) {
                             e->src = MIRRValue::make_Constant(MIRConstant::make_ItemAddr({box$(se.val.root.as_Static())}));
@@ -4910,8 +5230,10 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             knownValues.erase(se.val);
                             knownValuesVar.erase(se.val);
                         }
+                        break;
                     }
-                    TU_ARMA(Cast, se) {
+                    case MIRRValue::TAG_Cast: {
+                        auto& se = e->src.as_Cast();
                         MIRConstant newValue;
 
                         // If casting a number to a number, do the cast and
@@ -5050,8 +5372,10 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             e->src = mv$(newValue);
                             changed = true;
                         }
+                        break;
                     }
-                    TU_ARMA(BinOp, se) {
+                    case MIRRValue::TAG_BinOp: {
+                        auto& se = e->src.as_BinOp();
                         checkParam(se.valL);
                         checkParam(se.valR);
 
@@ -5101,212 +5425,297 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
 
                                     case MIRBinOp::ADD:
                                         MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::ADD - " << valL << " + " << valR);
-                                TU_MATCH_HDRA( (valL, valR), {)
-                                default:
+                                switch (valL.tag()) {
+default:
                                     break;
-                                            TU_ARMA(Float, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " / " << valR);
-                                                newValue = makeFloatArithmeticResult(le.v + re.v, le.t);
-                                            }
-                                            TU_ARMA(Int, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " + " << valR);
-                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v + re.v), le.t});
-                                            }
-                                            TU_ARMA(Uint, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " + " << valR);
-                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v + re.v), le.t});
-                                            }
+                                    case MIRConstant::TAG_Float: {
+                                        auto& le = valL.as_Float();
+                                        auto& re = valR.as_Float();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " / " << valR);
+                                        newValue = makeFloatArithmeticResult(le.v + re.v, le.t);
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Int: {
+                                        auto& le = valL.as_Int();
+                                        auto& re = valR.as_Int();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " + " << valR);
+                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v + re.v), le.t});
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Uint: {
+                                        auto& le = valL.as_Uint();
+                                        auto& re = valR.as_Uint();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " + " << valR);
+                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v + re.v), le.t});
+                                        break;
+                                    }
                                 }
                                 break;
                             case MIRBinOp::SUB:
                                 MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::SUB - " << valL << " + " << valR);
-                                TU_MATCH_HDRA( (valL, valR), {)
-                                default:
+                                switch (valL.tag()) {
+default:
                                     break;
-                                            TU_ARMA(Float, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " / " << valR);
-                                                newValue = makeFloatArithmeticResult(le.v - re.v, le.t);
-                                            }
-                                            TU_ARMA(Int, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " - " << valR);
-                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v - re.v), le.t});
-                                            }
-                                            TU_ARMA(Uint, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " - " << valR);
-                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v - re.v), le.t});
-                                            }
+                                    case MIRConstant::TAG_Float: {
+                                        auto& le = valL.as_Float();
+                                        auto& re = valR.as_Float();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " / " << valR);
+                                        newValue = makeFloatArithmeticResult(le.v - re.v, le.t);
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Int: {
+                                        auto& le = valL.as_Int();
+                                        auto& re = valR.as_Int();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " - " << valR);
+                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v - re.v), le.t});
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Uint: {
+                                        auto& le = valL.as_Uint();
+                                        auto& re = valR.as_Uint();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " - " << valR);
+                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v - re.v), le.t});
+                                        break;
+                                    }
                                 }
                                 break;
                             case MIRBinOp::MUL:
                                 MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::MUL - " << valL << " * " << valR);
-                                TU_MATCH_HDRA( (valL, valR), {)
-                                default:
+                                switch (valL.tag()) {
+default:
                                     break;
-                                            TU_ARMA(Float, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " / " << valR);
-                                                newValue = makeFloatArithmeticResult(le.v * re.v, le.t);
-                                            }
-                                            TU_ARMA(Int, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " * " << valR);
-                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v * re.v), le.t});
-                                            }
-                                            TU_ARMA(Uint, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " * " << valR);
-                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v * re.v), le.t});
-                                            }
+                                    case MIRConstant::TAG_Float: {
+                                        auto& le = valL.as_Float();
+                                        auto& re = valR.as_Float();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " / " << valR);
+                                        newValue = makeFloatArithmeticResult(le.v * re.v, le.t);
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Int: {
+                                        auto& le = valL.as_Int();
+                                        auto& re = valR.as_Int();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " * " << valR);
+                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v * re.v), le.t});
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Uint: {
+                                        auto& le = valL.as_Uint();
+                                        auto& re = valR.as_Uint();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " * " << valR);
+                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v * re.v), le.t});
+                                        break;
+                                    }
                                 }
                                 break;
                             case MIRBinOp::DIV:
                                 MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
-                                TU_MATCH_HDRA( (valL, valR), {)
-                                default:
+                                switch (valL.tag()) {
+default:
                                     break;
-                                            TU_ARMA(Float, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
-                                                newValue = makeFloatArithmeticResult(le.v / re.v, le.t);
-                                            }
-                                            TU_ARMA(Int, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
-                                                if (re.v == 0) {
-                                                    DEBUG(state << "Const eval error: Constant division by zero");
-                                                } else {
-                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v / re.v), le.t});
-                                                }
-                                            }
-                                            TU_ARMA(Uint, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
-                                                if (re.v == 0) {
-                                                    DEBUG(state << "Const eval error: Constant division by zero");
-                                                } else {
-                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v / re.v), le.t});
-                                                }
-                                            }
+                                    case MIRConstant::TAG_Float: {
+                                        auto& le = valL.as_Float();
+                                        auto& re = valR.as_Float();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
+                                        newValue = makeFloatArithmeticResult(le.v / re.v, le.t);
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Int: {
+                                        auto& le = valL.as_Int();
+                                        auto& re = valR.as_Int();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
+                                        if (re.v == 0) {
+                                            DEBUG(state << "Const eval error: Constant division by zero");
+                                        } else {
+                                            newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v / re.v), le.t});
+                                        }
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Uint: {
+                                        auto& le = valL.as_Uint();
+                                        auto& re = valR.as_Uint();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
+                                        if (re.v == 0) {
+                                            DEBUG(state << "Const eval error: Constant division by zero");
+                                        } else {
+                                            newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v / re.v), le.t});
+                                        }
+                                        break;
+                                    }
                                 }
                                 break;
                             case MIRBinOp::MOD:
                                 MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::MOD - " << valL << " % " << valR);
-                                TU_MATCH_HDRA( (valL, valR), {)
-                                default:
+                                switch (valL.tag()) {
+default:
                                     break;
-                                            TU_ARMA(Int, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MOD - " << valL << " % " << valR);
-                                                MIR_ASSERT(state, re.v != 0, "Const eval error: Constant division by zero");
-                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v % re.v), le.t});
-                                            }
-                                            TU_ARMA(Uint, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MOD - " << valL << " % " << valR);
-                                                MIR_ASSERT(state, re.v != 0, "Const eval error: Constant division by zero");
-                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v % re.v), le.t});
-                                            }
+                                    case MIRConstant::TAG_Int: {
+                                        auto& le = valL.as_Int();
+                                        auto& re = valR.as_Int();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MOD - " << valL << " % " << valR);
+                                        MIR_ASSERT(state, re.v != 0, "Const eval error: Constant division by zero");
+                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v % re.v), le.t});
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Uint: {
+                                        auto& le = valL.as_Uint();
+                                        auto& re = valR.as_Uint();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MOD - " << valL << " % " << valR);
+                                        MIR_ASSERT(state, re.v != 0, "Const eval error: Constant division by zero");
+                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v % re.v), le.t});
+                                        break;
+                                    }
                                 }
                                 break;
 
                             case MIRBinOp::BIT_AND:
                                 MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::BIT_AND - " << valL << " & " << valR);
-                                TU_MATCH_HDRA( (valL, valR), {)
-                                default:
+                                switch (valL.tag()) {
+default:
                                     break;
-                                            TU_ARMA(Bool, le, re) {
-                                                newValue = MIRConstant::make_Bool({le.v && re.v});
-                                            }
-                                            TU_ARMA(Int, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_AND - " << valL << " ^ " << valR);
-                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v & re.v), le.t});
-                                            }
-                                            TU_ARMA(Uint, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_AND - " << valL << " ^ " << valR);
-                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v & re.v), le.t});
-                                            }
+                                    case MIRConstant::TAG_Bool: {
+                                        auto& le = valL.as_Bool();
+                                        auto& re = valR.as_Bool();
+                                        newValue = MIRConstant::make_Bool({le.v && re.v});
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Int: {
+                                        auto& le = valL.as_Int();
+                                        auto& re = valR.as_Int();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_AND - " << valL << " ^ " << valR);
+                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v & re.v), le.t});
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Uint: {
+                                        auto& le = valL.as_Uint();
+                                        auto& re = valR.as_Uint();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_AND - " << valL << " ^ " << valR);
+                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v & re.v), le.t});
+                                        break;
+                                    }
                                 }
                                 break;
                             case MIRBinOp::BIT_OR:
                                 MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::BIT_OR - " << valL << " | " << valR);
-                                TU_MATCH_HDRA( (valL, valR), {)
-                                default:
+                                switch (valL.tag()) {
+default:
                                     break;
-                                            TU_ARMA(Bool, le, re) {
-                                                newValue = MIRConstant::make_Bool({le.v || re.v});
-                                            }
-                                            TU_ARMA(Int, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_OR - " << valL << " | " << valR);
-                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v | re.v), le.t});
-                                            }
-                                            TU_ARMA(Uint, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_OR - " << valL << " | " << valR);
-                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v | re.v), le.t});
-                                            }
+                                    case MIRConstant::TAG_Bool: {
+                                        auto& le = valL.as_Bool();
+                                        auto& re = valR.as_Bool();
+                                        newValue = MIRConstant::make_Bool({le.v || re.v});
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Int: {
+                                        auto& le = valL.as_Int();
+                                        auto& re = valR.as_Int();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_OR - " << valL << " | " << valR);
+                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v | re.v), le.t});
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Uint: {
+                                        auto& le = valL.as_Uint();
+                                        auto& re = valR.as_Uint();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_OR - " << valL << " | " << valR);
+                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v | re.v), le.t});
+                                        break;
+                                    }
                                 }
                                 break;
                             case MIRBinOp::BIT_XOR:
                                 MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::BIT_XOR - " << valL << " ^ " << valR);
-                                TU_MATCH_HDRA( (valL, valR), {)
-                                default:
+                                switch (valL.tag()) {
+default:
                                     break;
-                                            TU_ARMA(Bool, le, re) {
-                                                newValue = MIRConstant::make_Bool({le.v != re.v});
-                                            }
-                                            TU_ARMA(Int, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_XOR - " << valL << " ^ " << valR);
-                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v ^ re.v), le.t});
-                                            }
-                                            TU_ARMA(Uint, le, re) {
-                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_XOR - " << valL << " ^ " << valR);
-                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v ^ re.v), le.t});
-                                            }
+                                    case MIRConstant::TAG_Bool: {
+                                        auto& le = valL.as_Bool();
+                                        auto& re = valR.as_Bool();
+                                        newValue = MIRConstant::make_Bool({le.v != re.v});
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Int: {
+                                        auto& le = valL.as_Int();
+                                        auto& re = valR.as_Int();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_XOR - " << valL << " ^ " << valR);
+                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v ^ re.v), le.t});
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Uint: {
+                                        auto& le = valL.as_Uint();
+                                        auto& re = valR.as_Uint();
+                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_XOR - " << valL << " ^ " << valR);
+                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v ^ re.v), le.t});
+                                        break;
+                                    }
                                 }
                                 break;
 
                             // --- Bit Shifts ---
                             case MIRBinOp::BIT_SHL: {
                                             U128 shiftLenR;
-                                TU_MATCH_HDRA( (valR), {)
-                                default:
+                                switch (valR.tag()) {
+default:
                                     MIR_BUG(state, "Mismatched types for eBinOp::BIT_SHL - " << valL << " >> " << valR);
                                                 break;
-                                                TU_ARMA(Int, re) {
-                                                    shiftLenR = re.v.getInner();
-                                                }
-                                                TU_ARMA(Uint, re) {
-                                                    shiftLenR = re.v;
-                                                }
+                                    case MIRConstant::TAG_Int: {
+                                        auto& re = valR.as_Int();
+                                        shiftLenR = re.v.getInner();
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Uint: {
+                                        auto& re = valR.as_Uint();
+                                        shiftLenR = re.v;
+                                        break;
+                                    }
                                 }
                                 MIR_ASSERT(state, shiftLenR <= 128, "Const eval error: Over-sized eBinOp::BIT_SHL - " << valL << " << " << valR);
                                 auto shiftLen = shiftLenR.truncateU64();
-                                TU_MATCH_HDRA( (valL), {)
-                                default:
+                                switch (valL.tag()) {
+default:
                                     break;
-                                                TU_ARMA(Int, le) {
-                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v << shiftLen), le.t});
-                                                }
-                                                TU_ARMA(Uint, le) {
-                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v << shiftLen), le.t});
-                                                }
+                                    case MIRConstant::TAG_Int: {
+                                        auto& le = valL.as_Int();
+                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v << shiftLen), le.t});
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Uint: {
+                                        auto& le = valL.as_Uint();
+                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v << shiftLen), le.t});
+                                        break;
+                                    }
                                 }
                                 } break;
                             case MIRBinOp::BIT_SHR:{
                                             U128 shiftLenR;
-                                TU_MATCH_HDRA( (valR), {)
-                                default:
+                                switch (valR.tag()) {
+default:
                                     MIR_BUG(state, "Mismatched types for eBinOp::BIT_SHR - " << valL << " >> " << valR);
                                                 break;
-                                                TU_ARMA(Int, re) {
-                                                    shiftLenR = re.v.getInner();
-                                                }
-                                                TU_ARMA(Uint, re) {
-                                                    shiftLenR = re.v;
-                                                }
+                                    case MIRConstant::TAG_Int: {
+                                        auto& re = valR.as_Int();
+                                        shiftLenR = re.v.getInner();
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Uint: {
+                                        auto& re = valR.as_Uint();
+                                        shiftLenR = re.v;
+                                        break;
+                                    }
                                 }
                                 MIR_ASSERT(state, shiftLenR <= 128, "Const eval error: Over-sized shift - " << valL << " >> " << valR);
                                 auto shiftLen = shiftLenR.truncateU64();
-                                TU_MATCH_HDRA( (valL), {)
-                                default:
+                                switch (valL.tag()) {
+default:
                                     break;
-                                                TU_ARMA(Int, le) {
-                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v >> shiftLen), le.t});
-                                                }
-                                                TU_ARMA(Uint, le) {
-                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v >> shiftLen), le.t});
-                                                }
+                                    case MIRConstant::TAG_Int: {
+                                        auto& le = valL.as_Int();
+                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v >> shiftLen), le.t});
+                                        break;
+                                    }
+                                    case MIRConstant::TAG_Uint: {
+                                        auto& le = valL.as_Uint();
+                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v >> shiftLen), le.t});
+                                        break;
+                                    }
                                 }
                                 } break;
                             // TODO: Other binary operations
@@ -5374,16 +5783,30 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             }
                             if (newValue != MIRParam()) {
                                 DEBUG(state << " " << e->src << " = " << newValue);
-                            TU_MATCH_HDRA( (newValue), {)
-                            TU_ARMA(LValue, v)   e->src = mv$(v);
-                                    TU_ARMA(Borrow, _) throw "";
-                                    TU_ARMA(Constant, v) e->src = mv$(v);
+                            switch (newValue.tag()) {
+                                case MIRParam::TAG_LValue: {
+                                    auto& v = newValue.as_LValue();
+                                    e->src = mv$(v);
+                                    break;
+                                }
+                                case MIRParam::TAG_Borrow: {
+                                    auto& _ = newValue.as_Borrow();
+                                    (void)_;
+                                    throw "";
+                                }
+                                case MIRParam::TAG_Constant: {
+                                    auto& v = newValue.as_Constant();
+                                    e->src = mv$(v);
+                                    break;
+                                }
                             }
                             changed = true;
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(UniOp, se) {
+                    case MIRRValue::TAG_UniOp: {
+                        auto& se = e->src.as_UniOp();
                         auto it = knownValues.find(se.val);
                         if (it != knownValues.end()) {
                             const auto& val = it->second;
@@ -5391,80 +5814,110 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             bool replace = false;
                             switch (se.op) {
                                 case MIRUniOp::INV:
-                            TU_MATCH_HDRA( (val), {)
-                            TU_ARMA(Uint, ve) {
-                                            auto val = ve.v;
+                            switch (val.tag()) {
+                                case MIRConstant::TAG_Uint: {
+                                    auto& ve = val.as_Uint();
+                                    auto val = ve.v;
+                                    replace = true;
+                                    switch (ve.t) {
+                                        case HIRCoreType::U8:
+                                        case HIRCoreType::U16:
+                                        case HIRCoreType::U32:
+                                        case HIRCoreType::Usize:
+                                        case HIRCoreType::U64:
+                                            val = H::truncateU(ve.t, ~val);
+                                            break;
+                                        case HIRCoreType::U128:
+                                            replace = false;
+                                            break;
+                                        case HIRCoreType::Char:
+                                            MIR_BUG(state, "Invalid use of ! on char");
+                                            break;
+                                        default:
+                                            // Invalid type for Uint literal
+                                            replace = false;
+                                            break;
+                                    }
+                                    newValue = MIRConstant::make_Uint({val, ve.t});
+                                    break;
+                                }
+                                case MIRConstant::TAG_Int: {
+                                    auto& ve = val.as_Int();
+                                    // ! is valid on Int, it inverts bits the same way as an uint
+                                    auto val = ve.v;
+                                    switch (ve.t) {
+                                        case HIRCoreType::I8:
+                                        case HIRCoreType::I16:
+                                        case HIRCoreType::I32:
+                                        case HIRCoreType::Isize:
+                                        case HIRCoreType::I64:
+                                            val = H::truncateS(ve.t, ~val);
                                             replace = true;
-                                            switch (ve.t) {
-                                                case HIRCoreType::U8:
-                                                case HIRCoreType::U16:
-                                                case HIRCoreType::U32:
-                                                case HIRCoreType::Usize:
-                                                case HIRCoreType::U64:
-                                                    val = H::truncateU(ve.t, ~val);
-                                                    break;
-                                                case HIRCoreType::U128:
-                                                    replace = false;
-                                                    break;
-                                                case HIRCoreType::Char:
-                                                    MIR_BUG(state, "Invalid use of ! on char");
-                                                    break;
-                                                default:
-                                                    // Invalid type for Uint literal
-                                                    replace = false;
-                                                    break;
-                                            }
-                                            newValue = MIRConstant::make_Uint({val, ve.t});
-                                        }
-                                        TU_ARMA(Int, ve) {
-                                            // ! is valid on Int, it inverts bits the same way as an uint
-                                            auto val = ve.v;
-                                            switch (ve.t) {
-                                                case HIRCoreType::I8:
-                                                case HIRCoreType::I16:
-                                                case HIRCoreType::I32:
-                                                case HIRCoreType::Isize:
-                                                case HIRCoreType::I64:
-                                                    val = H::truncateS(ve.t, ~val);
-                                                    replace = true;
-                                                    break;
-                                                case HIRCoreType::I128:
-                                                    // TODO: Are there any cases where sign extension stops being correct here?
-                                                    val = H::truncateS(ve.t, ~val);
-                                                    replace = true;
-                                                    break;
-                                                case HIRCoreType::Char:
-                                                    MIR_BUG(state, "Invalid use of ! on char");
-                                                    break;
-                                                default:
-                                                    // Invalid type for Uint literal
-                                                    replace = false;
-                                                    break;
-                                            }
-                                            newValue = MIRConstant::make_Int({val, ve.t});
-                                        }
-                                        TU_ARMA(Float, ve) {
-                                            // Not valid?
-                                        }
-                                        TU_ARMA(Bool, ve) {
-                                            newValue = MIRConstant::make_Bool({!ve.v});
+                                            break;
+                                        case HIRCoreType::I128:
+                                            // TODO: Are there any cases where sign extension stops being correct here?
+                                            val = H::truncateS(ve.t, ~val);
                                             replace = true;
-                                        }
-                                        TU_ARMA(Bytes, ve) {
-                                        }
-                                        TU_ARMA(StaticString, ve) {
-                                        }
-                                        TU_ARMA(Encoded, ve) {
-                                        }
-                                        TU_ARMA(Const, ve) {
-                                            // TODO:
-                                        }
-                                        TU_ARMA(Generic, ve) {
-                                        }
-                                        TU_ARMA(Function, ve) {
-                                        }
-                                        TU_ARMA(ItemAddr, ve) {
-                                        }
+                                            break;
+                                        case HIRCoreType::Char:
+                                            MIR_BUG(state, "Invalid use of ! on char");
+                                            break;
+                                        default:
+                                            // Invalid type for Uint literal
+                                            replace = false;
+                                            break;
+                                    }
+                                    newValue = MIRConstant::make_Int({val, ve.t});
+                                    break;
+                                }
+                                case MIRConstant::TAG_Float: {
+                                    auto& ve = val.as_Float();
+                                    (void)ve;
+                                    // Not valid?
+                                    break;
+                                }
+                                case MIRConstant::TAG_Bool: {
+                                    auto& ve = val.as_Bool();
+                                    newValue = MIRConstant::make_Bool({!ve.v});
+                                    replace = true;
+                                    break;
+                                }
+                                case MIRConstant::TAG_Bytes: {
+                                    auto& ve = val.as_Bytes();
+                                    (void)ve;
+                                    break;
+                                }
+                                case MIRConstant::TAG_StaticString: {
+                                    auto& ve = val.as_StaticString();
+                                    (void)ve;
+                                    break;
+                                }
+                                case MIRConstant::TAG_Encoded: {
+                                    auto& ve = val.as_Encoded();
+                                    (void)ve;
+                                    break;
+                                }
+                                case MIRConstant::TAG_Const: {
+                                    auto& ve = val.as_Const();
+                                    (void)ve;
+                                    // TODO:
+                                    break;
+                                }
+                                case MIRConstant::TAG_Generic: {
+                                    auto& ve = val.as_Generic();
+                                    (void)ve;
+                                    break;
+                                }
+                                case MIRConstant::TAG_Function: {
+                                    auto& ve = val.as_Function();
+                                    (void)ve;
+                                    break;
+                                }
+                                case MIRConstant::TAG_ItemAddr: {
+                                    auto& ve = val.as_ItemAddr();
+                                    (void)ve;
+                                    break;
+                                }
                             }
                             break;
                         case MIRUniOp::NEG:
@@ -5540,12 +5993,20 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                                 changed = true;
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(DstMeta, se) {
+                    case MIRRValue::TAG_DstMeta: {
+                        auto& se = e->src.as_DstMeta();
+                        (void)se;
+                        break;
                     }
-                    TU_ARMA(DstPtr, se) {
+                    case MIRRValue::TAG_DstPtr: {
+                        auto& se = e->src.as_DstPtr();
+                        (void)se;
+                        break;
                     }
-                    TU_ARMA(MakeDst, se) {
+                    case MIRRValue::TAG_MakeDst: {
+                        auto& se = e->src.as_MakeDst();
                         // NOTE: This disables any checks if the metadata isn't populated.
                         // This avoids issues with cleanup when optimise is run first
                         if ((se.metaVal.is_Constant() && se.metaVal.as_Constant().is_ItemAddr() && se.metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
@@ -5553,29 +6014,40 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             checkParam(se.ptrVal);
                             checkParam(se.metaVal);
                         }
+                        break;
                     }
-                    TU_ARMA(Tuple, se) {
+                    case MIRRValue::TAG_Tuple: {
+                        auto& se = e->src.as_Tuple();
                         for (auto& p : se.vals) {
                             checkParam(p);
                         }
+                        break;
                     }
-                    TU_ARMA(Array, se) {
+                    case MIRRValue::TAG_Array: {
+                        auto& se = e->src.as_Array();
                         for (auto& p : se.vals) {
                             checkParam(p);
                         }
+                        break;
                     }
-                    TU_ARMA(UnionVariant, se) {
+                    case MIRRValue::TAG_UnionVariant: {
+                        auto& se = e->src.as_UnionVariant();
                         checkParam(se.val);
+                        break;
                     }
-                    TU_ARMA(EnumVariant, se) {
+                    case MIRRValue::TAG_EnumVariant: {
+                        auto& se = e->src.as_EnumVariant();
                         for (auto& p : se.vals) {
                             checkParam(p);
                         }
+                        break;
                     }
-                    TU_ARMA(Struct, se) {
+                    case MIRRValue::TAG_Struct: {
+                        auto& se = e->src.as_Struct();
                         for (auto& p : se.vals) {
                             checkParam(p);
                         }
+                        break;
                     }
                 }
             } else if (const auto* se = stmt.opt_SetDropFlag()) {
@@ -6928,8 +7400,10 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
                 continue;
             }
             {
-                TU_MATCH_HDRA( (srcBb.terminator), { )
-                TU_ARMA(Goto, e) {
+                switch (srcBb.terminator.tag()) {
+                    case MIRTerminator::TAG_Goto: {
+                        auto& e = srcBb.terminator.as_Goto();
+                        (void)e;
                         if (srcBb.statements.empty()) {
                             DEBUG(state << "BB" << bbIdx << " empty");
                         } else if ((srcBb.statements.back().is_Assign() && (srcBb.statements.back().as_Assign().dst == src))) {
@@ -6938,8 +7412,10 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
                         } else {
                             DEBUG("BB" << bbIdx << "/" << srcBb.statements.size() << " " << srcBb.statements.back() << " - Doesn't write");
                         }
+                        break;
                     }
-                    TU_ARMA(Call, e) {
+                    case MIRTerminator::TAG_Call: {
+                        auto& e = srcBb.terminator.as_Call();
                         if (e.retBlock != state.getCurBlock()) {
                             DEBUG(state << "BB" << bbIdx << "/TERM " << srcBb.terminator << " - Not return block");
                         } else if (e.retVal != src) {
@@ -6947,8 +7423,9 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
                         } else {
                             numUsed += 1;
                         }
+                        break;
                     }
-                    break;
+break;
                     default:
                         DEBUG(state << "BB" << bbIdx << "/TERM " << srcBb.terminator << " - Wrong terminator type");
                         break;

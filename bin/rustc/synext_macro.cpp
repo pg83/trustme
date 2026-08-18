@@ -900,21 +900,34 @@ public:
         auto globalAsm = ASTGlobalAsm{std::move(nodeA.lines), {}, nodeA.options};
         globalAsm.operands.reserve(nodeA.params.size());
         for (auto& param : nodeA.params) {
-            TU_MATCH_HDRA((param), {)
-            TU_ARMA(Const, expr) {
+            switch (param.tag()) {
+                case ASTAsmParam::TAG_Const: {
+                    auto& expr = param.as_Const();
                     globalAsm.operands.push_back(ASTGlobalAsm::Operand::make_Const(std::move(expr)));
+                    break;
                 }
-                TU_ARMA(Sym, path) {
+                case ASTAsmParam::TAG_Sym: {
+                    auto& path = param.as_Sym();
                     globalAsm.operands.push_back(ASTGlobalAsm::Operand::make_Sym(std::move(path)));
+                    break;
                 }
-                TU_ARMA(Label, _param) {
+                case ASTAsmParam::TAG_Label: {
+                    auto& _param = param.as_Label();
+                    (void)_param;
                     ERROR(sp, E0000, "`label` is not allowed in `global_asm!`");
+                    break;
                 }
-                TU_ARMA(RegSingle, _param) {
+                case ASTAsmParam::TAG_RegSingle: {
+                    auto& _param = param.as_RegSingle();
+                    (void)_param;
                     ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
+                    break;
                 }
-                TU_ARMA(Reg, _param) {
+                case ASTAsmParam::TAG_Reg: {
+                    auto& _param = param.as_Reg();
+                    (void)_param;
                     ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
+                    break;
                 }
             }
         }

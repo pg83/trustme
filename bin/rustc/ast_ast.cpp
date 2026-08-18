@@ -454,12 +454,16 @@ ASTGlobalAsm ASTGlobalAsm::clone() const {
     std::vector<Operand> clonedOperands;
     clonedOperands.reserve(operands.size());
     for (const auto& operand : operands) {
-        TU_MATCH_HDRA((operand), {)
-        TU_ARMA(Const, expr) {
+        switch (operand.tag()) {
+            case ASTGlobalAsmOperand::TAG_Const: {
+                auto& expr = operand.as_Const();
                 clonedOperands.push_back(Operand::make_Const(expr->clone()));
+                break;
             }
-            TU_ARMA(Sym, path) {
+            case ASTGlobalAsmOperand::TAG_Sym: {
+                auto& path = operand.as_Sym();
                 clonedOperands.push_back(Operand::make_Sym(path));
+                break;
             }
         }
     }
@@ -641,31 +645,52 @@ ASTItem ASTItem::clone() const {
 }
 
 std::ostream& operator<<(std::ostream& os, const GenericParam& x) {
-    TU_MATCH_HDRA( (x), {)
-    TU_ARMA(None, e)
-        os << "/*-*/";
-        TU_ARMA(Lifetime, e)
-        os << e;
-        TU_ARMA(Type, e)
-        os << e;
-        TU_ARMA(Value, e)
-        os << e;
+    switch (x.tag()) {
+        case GenericParam::TAG_None: {
+            auto& e = x.as_None();
+            (void)e;
+            os << "/*-*/";
+            break;
+        }
+        case GenericParam::TAG_Lifetime: {
+            auto& e = x.as_Lifetime();
+            os << e;
+            break;
+        }
+        case GenericParam::TAG_Type: {
+            auto& e = x.as_Type();
+            os << e;
+            break;
+        }
+        case GenericParam::TAG_Value: {
+            auto& e = x.as_Value();
+            os << e;
+            break;
+        }
     }
     return os;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTGenericBound& x) {
-    TU_MATCH_HDRA( (x), {)
-    TU_ARMA(None, ent) {
+    switch (x.tag()) {
+        case ASTGenericBound::TAG_None: {
+            auto& ent = x.as_None();
+            (void)ent;
             os << "/*-*/";
+            break;
         }
-        TU_ARMA(Lifetime, ent) {
+        case ASTGenericBound::TAG_Lifetime: {
+            auto& ent = x.as_Lifetime();
             os << ent.test << ": " << ent.bound;
+            break;
         }
-        TU_ARMA(TypeLifetime, ent) {
+        case ASTGenericBound::TAG_TypeLifetime: {
+            auto& ent = x.as_TypeLifetime();
             os << ent.type << ": " << ent.bound;
+            break;
         }
-        TU_ARMA(IsTrait, ent) {
+        case ASTGenericBound::TAG_IsTrait: {
+            auto& ent = x.as_IsTrait();
             os << ent.outerHrbs << ent.type << ": ";
             if (ent.constness == ASTBoundConstness::Always) {
                 os << "const ";
@@ -673,15 +698,22 @@ std::ostream& operator<<(std::ostream& os, const GenericParam& x) {
                 os << "[const] ";
             }
             os << ent.innerHrbs << ent.trait;
+            break;
         }
-        TU_ARMA(MaybeTrait, ent) {
+        case ASTGenericBound::TAG_MaybeTrait: {
+            auto& ent = x.as_MaybeTrait();
             os << ent.type << ": ?" << ent.trait;
+            break;
         }
-        TU_ARMA(NotTrait, ent) {
+        case ASTGenericBound::TAG_NotTrait: {
+            auto& ent = x.as_NotTrait();
             os << ent.type << ": !" << ent.trait;
+            break;
         }
-        TU_ARMA(Equality, ent) {
+        case ASTGenericBound::TAG_Equality: {
+            auto& ent = x.as_Equality();
             os << ent.type << " = " << ent.replacement;
+            break;
         }
     }
     return os;

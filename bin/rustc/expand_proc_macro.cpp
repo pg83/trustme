@@ -937,32 +937,42 @@ namespace {
                 }
                 pmi.sendSymbol("@");
             }
-            TU_MATCH_HDRA( (pat.data()), { )
-            default:
+            switch (pat.data().tag()) {
+default:
                 TODO(sp, "visit_pattern " << pat.data().tagStr() << " - " << pat);
-                TU_ARMA(Any, e) {
+                case ASTPatternData::TAG_Any: {
+                    auto& e = pat.data().as_Any();
+                    (void)e;
                     pmi.sendRword("_");
+                    break;
                 }
-                TU_ARMA(MaybeBind, e) {
+                case ASTPatternData::TAG_MaybeBind: {
+                    auto& e = pat.data().as_MaybeBind();
                     if (e.name == "self") {
                         pmi.sendRword("self");
                     } else {
                         pmi.sendIdent(e.name);
                     }
+                    break;
                 }
-                TU_ARMA(Tuple, e) {
+                case ASTPatternData::TAG_Tuple: {
+                    auto& e = pat.data().as_Tuple();
                     pmi.sendSymbol("(");
                     visitTuplePattern(e);
                     pmi.sendSymbol(")");
+                    break;
                 }
-                TU_ARMA(Deref, e) {
+                case ASTPatternData::TAG_Deref: {
+                    auto& e = pat.data().as_Deref();
                     pmi.sendIdent(Ident({}, "deref"));
                     pmi.sendSymbol("!");
                     pmi.sendSymbol("(");
                     visitPattern(*e.sub);
                     pmi.sendSymbol(")");
+                    break;
                 }
-                TU_ARMA(Struct, e) {
+                case ASTPatternData::TAG_Struct: {
+                    auto& e = pat.data().as_Struct();
                     this->visitPath(e.path);
                     pmi.sendSymbol("{");
                     for (const auto& spe : e.subPatterns) {
@@ -976,6 +986,7 @@ namespace {
                         pmi.sendSymbol("...");
                     }
                     pmi.sendSymbol("}");
+                    break;
                 }
             }
         }
@@ -1179,30 +1190,42 @@ namespace {
                 }
                 pmi.sendSymbol("<");
                 for (const auto& ent : e.args().entries) {
-                    TU_MATCH_HDRA( (ent), {)
-                    TU_ARMA(Null, _) {
+                    switch (ent.tag()) {
+                        case ASTPathParamEnt::TAG_Null: {
+                            auto& _ = ent.as_Null();
+                            (void)_;
+                            break;
                         }
-                        TU_ARMA(Lifetime, l) {
+                        case ASTPathParamEnt::TAG_Lifetime: {
+                            auto& l = ent.as_Lifetime();
                             pmi.sendLifetime(l.name().name.c_str());
                             pmi.sendSymbol(",");
+                            break;
                         }
-                        TU_ARMA(Type, t) {
+                        case ASTPathParamEnt::TAG_Type: {
+                            auto& t = ent.as_Type();
                             this->visitType(t);
                             pmi.sendSymbol(",");
+                            break;
                         }
-                        TU_ARMA(Value, n) {
+                        case ASTPathParamEnt::TAG_Value: {
+                            auto& n = ent.as_Value();
                             pmi.sendSymbol("{");
                             this->visitNode(*n);
                             pmi.sendSymbol("}");
                             pmi.sendSymbol(",");
+                            break;
                         }
-                        TU_ARMA(AssociatedTyEqual, a) {
+                        case ASTPathParamEnt::TAG_AssociatedTyEqual: {
+                            auto& a = ent.as_AssociatedTyEqual();
                             visitPathNode(a.first, false);
                             pmi.sendSymbol("=");
                             this->visitType(a.second);
                             pmi.sendSymbol(",");
+                            break;
                         }
-                        TU_ARMA(AssociatedTyBound, a) {
+                        case ASTPathParamEnt::TAG_AssociatedTyBound: {
+                            auto& a = ent.as_AssociatedTyBound();
                             visitPathNode(a.first, false);
                             pmi.sendSymbol(":");
                             for (const auto& p : a.second) {
@@ -1214,6 +1237,7 @@ namespace {
                                 this->visitPath(*p.path);
                             }
                             pmi.sendSymbol(",");
+                            break;
                         }
                     }
                 }
@@ -1223,25 +1247,35 @@ namespace {
 
         void visitPath(const ASTPath& path, bool isExpr = false) {
             const ::std::vector<ASTPathNode>* nodes = nullptr;
-            TU_MATCH_HDRA( (path.cls), {)
-            TU_ARMA(Invalid, pe) {
+            switch (path.cls.tag()) {
+                case ASTPathClass::TAG_Invalid: {
+                    auto& pe = path.cls.as_Invalid();
+                    (void)pe;
                     BUG(sp, "Invalid path");
+                    break;
                 }
-                TU_ARMA(Local, pe) {
+                case ASTPathClass::TAG_Local: {
+                    auto& pe = path.cls.as_Local();
                     pmi.sendIdent(pe.name.c_str());
+                    break;
                 }
-                TU_ARMA(Relative, pe) {
+                case ASTPathClass::TAG_Relative: {
+                    auto& pe = path.cls.as_Relative();
                     // TODO: Send hygiene information
                     nodes = &pe.nodes;
+                    break;
                 }
-                TU_ARMA(Self, pe) {
+                case ASTPathClass::TAG_Self: {
+                    auto& pe = path.cls.as_Self();
                     pmi.sendRword("self");
                     if (!pe.nodes.empty()) {
                         pmi.sendSymbol("::");
                     }
                     nodes = &pe.nodes;
+                    break;
                 }
-                TU_ARMA(Super, pe) {
+                case ASTPathClass::TAG_Super: {
+                    auto& pe = path.cls.as_Super();
                     assert(pe.count > 0);
                     for (unsigned i = 0; i < pe.count; i++) {
                         if (i > 0) {
@@ -1253,8 +1287,10 @@ namespace {
                         pmi.sendSymbol("::");
                     }
                     nodes = &pe.nodes;
+                    break;
                 }
-                TU_ARMA(Absolute, pe) {
+                case ASTPathClass::TAG_Absolute: {
+                    auto& pe = path.cls.as_Absolute();
                     if (pe.crate == "") {
                         pmi.sendRword("crate");
                     } else {
@@ -1264,8 +1300,10 @@ namespace {
                     }
                     pmi.sendSymbol("::");
                     nodes = &pe.nodes;
+                    break;
                 }
-                TU_ARMA(UFCS, pe) {
+                case ASTPathClass::TAG_UFCS: {
+                    auto& pe = path.cls.as_UFCS();
                     pmi.sendSymbol("<");
                     this->visitType(pe.type);
                     if (pe.trait) {
@@ -1275,6 +1313,7 @@ namespace {
                     pmi.sendSymbol(">");
                     pmi.sendSymbol("::");
                     nodes = &pe.nodes;
+                    break;
                 }
             }
             bool first = true;
@@ -1296,12 +1335,16 @@ namespace {
                     if (!isFirst) {
                         pmi.sendSymbol(",");
                     }
-                    TU_MATCH_HDRA( (param), {)
-                    TU_ARMA(None, p) {
+                    switch (param.tag()) {
+                        case GenericParam::TAG_None: {
+                            auto& p = param.as_None();
+                            (void)p;
                             // Uh... oops?
                             BUG(sp, "Enountered GenericParam::None");
+                            break;
                         }
-                        TU_ARMA(Lifetime, p) {
+                        case GenericParam::TAG_Lifetime: {
+                            auto& p = param.as_Lifetime();
                             pmi.sendLifetime(p.name().name.c_str());
                             bool first = true;
                             for (size_t i = param.boundsStart; i < param.boundsEnd; i++) {
@@ -1323,8 +1366,10 @@ namespace {
                                     }
                             }
                             }
+                            break;
                         }
-                        TU_ARMA(Type, p) {
+                        case GenericParam::TAG_Type: {
+                            auto& p = param.as_Type();
                             this->visitAttrs(p.attrs());
                             pmi.sendIdent(p.name().c_str());
                             bool first = true;
@@ -1337,40 +1382,55 @@ namespace {
                                         pmi.sendSymbol("+");
                                     }
                                 }
-                            TU_MATCH_HDRA((params.bounds[i]), {)
-                            default:
+                            {
+                                auto& tuMatch = params.bounds[i];
+                                switch (tuMatch.tag()) {
+default:
                                 BUG(sp, "Unhandled bound type - " << params.bounds[i]);
-                                    TU_ARMA(None, be) {
+                                    case ASTGenericBound::TAG_None: {
+                                        auto& be = tuMatch.as_None();
+                                        (void)be;
+                                        break;
                                     }
-                                    TU_ARMA(TypeLifetime, be) {
+                                    case ASTGenericBound::TAG_TypeLifetime: {
+                                        auto& be = tuMatch.as_TypeLifetime();
                                         pmi.sendLifetime(be.bound.name().name.c_str());
+                                        break;
                                     }
-                                    TU_ARMA(IsTrait, be) {
+                                    case ASTGenericBound::TAG_IsTrait: {
+                                        auto& be = tuMatch.as_IsTrait();
                                         assert(be.outerHrbs.empty()); // Shouldn't be possible in this position
                                         if (!be.innerHrbs.empty()) {
                                             TODO(sp, "be.inner_hrbs");
                                         }
                                         visitBoundConstness(be.constness);
                                         visitPath(be.trait);
+                                        break;
                                     }
-                                    TU_ARMA(MaybeTrait, be) {
+                                    case ASTGenericBound::TAG_MaybeTrait: {
+                                        auto& be = tuMatch.as_MaybeTrait();
                                         pmi.sendSymbol("?");
                                         visitPath(be.trait);
+                                        break;
                                     }
+                                }
                             }
                             }
                             if (!p.getDefault()->isWildcard()) {
                                 pmi.sendSymbol("=");
                                 this->visitType(p.getDefault());
                             }
+                            break;
                         }
-                        TU_ARMA(Value, p) {
+                        case GenericParam::TAG_Value: {
+                            auto& p = param.as_Value();
                             this->visitAttrs(p.attrs());
                             pmi.sendRword("const");
                             pmi.sendIdent(p.name().name.c_str());
                             pmi.sendSymbol(":");
                             visitType(p.type());
                             assert(param.boundsStart == param.boundsEnd);
+                            break;
                         }
                     }
                     isFirst = false;
@@ -1414,42 +1474,58 @@ namespace {
                         pmi.sendRword("where");
                         whereSent = true;
                     }
-                    TU_MATCH_HDRA((e), {)
-                    TU_ARMA(None, be)   continue;
-                        TU_ARMA(Lifetime, be) {
+                    switch (e.tag()) {
+                        case ASTGenericBound::TAG_None: {
+                            auto& be = e.as_None();
+                            (void)be;
+                            continue;
+                        }
+                        case ASTGenericBound::TAG_Lifetime: {
+                            auto& be = e.as_Lifetime();
                             pmi.sendLifetime(be.bound.name().name.c_str());
                             pmi.sendSymbol(":");
                             pmi.sendLifetime(be.test.name().name.c_str());
+                            break;
                         }
-                        TU_ARMA(TypeLifetime, be) {
+                        case ASTGenericBound::TAG_TypeLifetime: {
+                            auto& be = e.as_TypeLifetime();
                             visitType(be.type);
                             pmi.sendSymbol(":");
                             pmi.sendLifetime(be.bound.name().name.c_str());
+                            break;
                         }
-                        TU_ARMA(IsTrait, be) {
+                        case ASTGenericBound::TAG_IsTrait: {
+                            auto& be = e.as_IsTrait();
                             visitHrbs(be.outerHrbs);
                             visitType(be.type);
                             pmi.sendSymbol(":");
                             visitHrbs(be.innerHrbs);
                             visitBoundConstness(be.constness);
                             visitPath(be.trait);
+                            break;
                         }
-                        TU_ARMA(MaybeTrait, be) {
+                        case ASTGenericBound::TAG_MaybeTrait: {
+                            auto& be = e.as_MaybeTrait();
                             visitType(be.type);
                             pmi.sendSymbol(":");
                             pmi.sendSymbol("?");
                             visitPath(be.trait);
+                            break;
                         }
-                        TU_ARMA(NotTrait, be) {
+                        case ASTGenericBound::TAG_NotTrait: {
+                            auto& be = e.as_NotTrait();
                             visitType(be.type);
                             pmi.sendSymbol(":");
                             pmi.sendSymbol("!");
                             visitPath(be.trait);
+                            break;
                         }
-                        TU_ARMA(Equality, be) {
+                        case ASTGenericBound::TAG_Equality: {
+                            auto& be = e.as_Equality();
                             visitType(be.type);
                             pmi.sendSymbol("=");
                             visitType(be.replacement);
+                            break;
                         }
                     }
                     pmi.sendSymbol(",");
@@ -1581,12 +1657,16 @@ namespace {
             pmi.sendRword("struct");
             pmi.sendIdent(name.c_str());
             this->visitParams(str.params());
-            TU_MATCH_HDRA((str.data), {)
-            TU_ARMA(Unit, se) {
+            switch (str.data.tag()) {
+                case ASTStructData::TAG_Unit: {
+                    auto& se = str.data.as_Unit();
+                    (void)se;
                     this->visitBounds(str.params());
                     pmi.sendSymbol(";");
+                    break;
                 }
-                TU_ARMA(Tuple, se) {
+                case ASTStructData::TAG_Tuple: {
+                    auto& se = str.data.as_Tuple();
                     pmi.sendSymbol("(");
                     for (const auto& si : se.ents) {
                         this->visitAttrs(si.attrs);
@@ -1597,8 +1677,10 @@ namespace {
                     pmi.sendSymbol(")");
                     this->visitBounds(str.params());
                     pmi.sendSymbol(";");
+                    break;
                 }
-                TU_ARMA(Struct, se) {
+                case ASTStructData::TAG_Struct: {
+                    auto& se = str.data.as_Struct();
                     this->visitBounds(str.params());
                     pmi.sendSymbol("{");
 
@@ -1615,6 +1697,7 @@ namespace {
                         pmi.sendSymbol(",");
                     }
                     pmi.sendSymbol("}");
+                    break;
                 }
             }
         }
@@ -1630,10 +1713,14 @@ namespace {
             for (const auto& v : enm.variants()) {
                 this->visitAttrs(v.attrs);
                 pmi.sendIdent(v.name.c_str());
-                TU_MATCH_HDRA( (v.data), { )
-                TU_ARMA(Unit, e) {
+                switch (v.data.tag()) {
+                    case ASTEnumVariantData::TAG_Unit: {
+                        auto& e = v.data.as_Unit();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Tuple, e) {
+                    case ASTEnumVariantData::TAG_Tuple: {
+                        auto& e = v.data.as_Tuple();
                         pmi.sendSymbol("(");
                         for (const auto& f : e.items) {
                             this->visitAttrs(f.attrs);
@@ -1641,8 +1728,10 @@ namespace {
                             pmi.sendSymbol(",");
                         }
                         pmi.sendSymbol(")");
+                        break;
                     }
-                    TU_ARMA(Struct, e) {
+                    case ASTEnumVariantData::TAG_Struct: {
+                        auto& e = v.data.as_Struct();
                         pmi.sendSymbol("{");
                         for (const auto& f : e.fields) {
                             this->visitAttrs(f.attrs);
@@ -1652,6 +1741,7 @@ namespace {
                             pmi.sendSymbol(",");
                         }
                         pmi.sendSymbol("}");
+                        break;
                     }
                 }
                 if( v.discriminantValue)
@@ -1804,18 +1894,22 @@ namespace {
             const auto itemVis = ASTVisibility::makeBarePrivate();
             for (const auto& i : trait.items()) {
                 this->visitAttrs(i.attrs);
-                TU_MATCH_HDRA((i.data), {)
-                default:
+                switch (i.data.tag()) {
+default:
                     TODO(i.span, "visit_trait item - " << i.data.tagStr());
                     break;
-                    TU_ARMA(Function, e) {
+                    case ASTItem::TAG_Function: {
+                        auto& e = i.data.as_Function();
                         this->visitFunction(i.name, itemVis, e);
+                        break;
                     }
-                    TU_ARMA(Static, e) {
+                    case ASTItem::TAG_Static: {
+                        auto& e = i.data.as_Static();
                         this->visitStatic(i.name, itemVis, e);
+                        break;
                     }
-                    // An associated type. Bounds live in `m_self_bounds` encoded as `Self: ...`, not the shape needed here, so only the un-bounded form is emitted.
-                    TU_ARMA(Type, e) {
+                    case ASTItem::TAG_Type: {
+                        auto& e = i.data.as_Type();
                         if (!e.selfBounds.bounds.empty()) {
                             TODO(i.span, "visit_trait - associated type with bounds - " << i.name);
                         }
@@ -1828,6 +1922,7 @@ namespace {
                             this->visitType(e.type_);
                         }
                         pmi.sendSymbol(";");
+                        break;
                     }
                 }
             }
@@ -1840,15 +1935,19 @@ namespace {
             for (const auto& i : impl.items()) {
                 const auto& sp = i.sp;
                 const auto& item = *i.data;
-                TU_MATCH_HDRA((item), {)
-                default:
+                switch (item.tag()) {
+default:
                     TODO(sp, "Item " << item.tagStr());
                     break;
-                    TU_ARMA(Function, e) {
+                    case ASTItem::TAG_Function: {
+                        auto& e = item.as_Function();
                         visitFunction(i.name.c_str(), i.vis, e);
+                        break;
                     }
-                    TU_ARMA(Static, e) {
+                    case ASTItem::TAG_Static: {
+                        auto& e = item.as_Static();
                         visitStatic(i.name.c_str(), i.vis, e);
+                        break;
                     }
                 }
             }
@@ -1856,33 +1955,44 @@ namespace {
         }
 
         void visitItem(const RcString& name, const ASTVisibility& vis, const ASTItem& item) {
-            TU_MATCH_HDRA((item), {)
-            default:
+            switch (item.tag()) {
+default:
                 TODO(sp, "visit_item - " << item.tagStr());
                 break;
-                TU_ARMA(Impl, e) {
+                case ASTItem::TAG_Impl: {
+                    auto& e = item.as_Impl();
                     visitImpl(e);
+                    break;
                 }
-                TU_ARMA(Use, e) {
+                case ASTItem::TAG_Use: {
+                    auto& e = item.as_Use();
                     visitUse(name, vis, e);
+                    break;
                 }
-                // Types
-                TU_ARMA(Struct, e) {
+                case ASTItem::TAG_Struct: {
+                    auto& e = item.as_Struct();
                     visitStruct(name, vis, e);
+                    break;
                 }
-                TU_ARMA(Enum, e) {
+                case ASTItem::TAG_Enum: {
+                    auto& e = item.as_Enum();
                     visitEnum(name, vis, e);
+                    break;
                 }
-                TU_ARMA(Union, e) {
+                case ASTItem::TAG_Union: {
+                    auto& e = item.as_Union();
                     visitUnion(name, vis, e);
+                    break;
                 }
-                TU_ARMA(Trait, e) {
+                case ASTItem::TAG_Trait: {
+                    auto& e = item.as_Trait();
                     visitTrait(name, vis, e);
+                    break;
                 }
-
-                // Values
-                TU_ARMA(Function, e) {
+                case ASTItem::TAG_Function: {
+                    auto& e = item.as_Function();
                     visitFunction(name, vis, e);
+                    break;
                 }
             }
         }

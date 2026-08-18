@@ -274,25 +274,38 @@ namespace {
 
             HIRVisitor::visitPattern(pat);
 
-            TU_MATCH_HDRA( (pat.data), {)
-            default:
+            switch (pat.data.tag()) {
+default:
                 // Nothing
-            TU_ARMA(Value, e) {
+                case HIRPatternData::TAG_Value: {
+                    auto& e = pat.data.as_Value();
                     this->visitPatternValue(sp, pat, e.val);
+                    break;
                 }
-                TU_ARMA(Range, e) {
+                case HIRPatternData::TAG_Range: {
+                    auto& e = pat.data.as_Range();
                     if (e.start) {
                         this->visitPatternValue(sp, pat, *e.start);
                     }
                     if (e.end) {
                         this->visitPatternValue(sp, pat, *e.end);
                     }
+                    break;
                 }
-                TU_ARMA(PathValue, e) {
+                case HIRPatternData::TAG_PathValue: {
+                    auto& e = pat.data.as_PathValue();
+                    (void)e;
+                    break;
                 }
-                TU_ARMA(PathTuple, e) {
+                case HIRPatternData::TAG_PathTuple: {
+                    auto& e = pat.data.as_PathTuple();
+                    (void)e;
+                    break;
                 }
-                TU_ARMA(PathNamed, e) {
+                case HIRPatternData::TAG_PathNamed: {
+                    auto& e = pat.data.as_PathNamed();
+                    (void)e;
+                    break;
                 }
             }
         }
@@ -354,8 +367,9 @@ namespace {
             bool dataVisited = false;
 
             if (auto* e = data.opt_Path()) {
-                TU_MATCH_HDRA( (e->path.data), {)
-                TU_ARMA(Generic, pe) {
+                switch (e->path.data.tag()) {
+                    case HIRPathData::TAG_Generic: {
+                        auto& pe = e->path.data.as_Generic();
                         if (!doBind) {
                             break;
                         }
@@ -400,13 +414,21 @@ namespace {
                                 break;
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(UfcsUnknown, pe) {
+                    case HIRPathData::TAG_UfcsUnknown: {
+                        auto& pe = e->path.data.as_UfcsUnknown();
+                        (void)pe;
                         //TODO(sp, "Should UfcsKnown be encountered here?");
+                        break;
                     }
-                    TU_ARMA(UfcsInherent, pe) {
+                    case HIRPathData::TAG_UfcsInherent: {
+                        auto& pe = e->path.data.as_UfcsInherent();
+                        (void)pe;
+                        break;
                     }
-                    TU_ARMA(UfcsKnown, pe) {
+                    case HIRPathData::TAG_UfcsKnown: {
+                        auto& pe = e->path.data.as_UfcsKnown();
                         const auto& trait = crate.getTraitByPath(sp, pe.trait.path);
                         fixParamCount(crate.types, sp, pe.trait, trait.params, pe.trait.params, /*fill_infer=*/false, pe.type);
 
@@ -421,6 +443,7 @@ namespace {
                             //}
                             //TODO(sp, "Resolve known UfcsKnown - " << ty);
                         }
+                        break;
                     }
                 }
             } else if (auto* te = data.opt_ErasedType()) {
@@ -445,20 +468,28 @@ namespace {
                         HIRPathParams params = fcnPtr->params.makeNopParams(crate.types, 1);
                         // Populate with function path
                         ee->origin = fcnPath->getFullPath();
-                        TU_MATCH_HDRA( (ee->origin.data), {)
-                        TU_ARMA(Generic, e2) {
+                        switch (ee->origin.data.tag()) {
+                            case HIRPathData::TAG_Generic: {
+                                auto& e2 = ee->origin.data.as_Generic();
                                 e2.params = mv$(params);
+                                break;
                             }
-                            TU_ARMA(UfcsInherent, e2) {
+                            case HIRPathData::TAG_UfcsInherent: {
+                                auto& e2 = ee->origin.data.as_UfcsInherent();
                                 e2.params = mv$(params);
                                 // Impl params, just directly references the parameters.
                                 // - Downstream monomorph will fix that
                                 e2.implParams = ms.implGenerics->makeNopParams(crate.types, 0);
+                                break;
                             }
-                            TU_ARMA(UfcsKnown, e2) {
+                            case HIRPathData::TAG_UfcsKnown: {
+                                auto& e2 = ee->origin.data.as_UfcsKnown();
                                 e2.params = mv$(params);
+                                break;
                             }
-                            TU_ARMA(UfcsUnknown, e2) {
+                            case HIRPathData::TAG_UfcsUnknown: {
+                                auto& e2 = ee->origin.data.as_UfcsUnknown();
+                                (void)e2;
                                 throw "";
                             }
                         }
@@ -1108,17 +1139,23 @@ namespace {
                     MonomorphState unusedMs(crate.types);
                     const auto& v = resolve.getValue(sp, te->path, unusedMs, true);
 
-                    TU_MATCH_HDRA( (v), {)
-                    default:
+                    switch (v.tag()) {
+default:
                         TODO(sp, "Resolve external NamedFunction type - " << te->path << " : " << v.tagStr());
-                        TU_ARMA(Function, e) {
+                        case HIRTypeDataNamedFunctionTy::TAG_Function: {
+                            auto& e = v.as_Function();
                             te->def = e;
+                            break;
                         }
-                        TU_ARMA(StructConstructor, e) {
+                        case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
+                            auto& e = v.as_StructConstructor();
                             te->def = e.s;
+                            break;
                         }
-                        TU_ARMA(EnumConstructor, e) {
+                        case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
+                            auto& e = v.as_EnumConstructor();
                             te->def = HIRTypeDataNamedFunctionTy::make_EnumConstructor({e.e, e.v});
+                            break;
                         }
                     }
                 }
@@ -1802,26 +1839,31 @@ public:
 
         HIRVisitor::visitPattern(pat);
 
-        TU_MATCH_HDRA( (pat.data), {)
-        default:
+        switch (pat.data.tag()) {
+default:
             break;
-            TU_ARMA(PathValue, e) {
+            case HIRPatternData::TAG_PathValue: {
+                auto& e = pat.data.as_PathValue();
                 auto newPath = expandAliasPath(sp, e.path);
                 if (newPath != HIRGenericPath()) {
                     DEBUG("Replacing " << e.path << " with " << newPath);
                     e.path = mv$(newPath);
                 }
                 e.binding = visitPatternPathBinding(sp, e.path);
+                break;
             }
-            TU_ARMA(PathTuple, e) {
+            case HIRPatternData::TAG_PathTuple: {
+                auto& e = pat.data.as_PathTuple();
                 auto newPath = expandAliasPath(sp, e.path);
                 if (newPath != HIRGenericPath()) {
                     DEBUG("Replacing " << e.path << " with " << newPath);
                     e.path = mv$(newPath);
                 }
                 e.binding = visitPatternPathBinding(sp, e.path);
+                break;
             }
-            TU_ARMA(PathNamed, e) {
+            case HIRPatternData::TAG_PathNamed: {
+                auto& e = pat.data.as_PathNamed();
                 auto newPath = expandAliasPath(sp, e.path);
                 if (newPath != HIRGenericPath()) {
                     DEBUG("Replacing " << e.path << " with " << newPath);
@@ -1829,6 +1871,7 @@ public:
                 }
                 e.binding = visitPatternPathBinding(sp, e.path);
                 // TODO: If this is an empty/wildcard AND it's poiting at a value/tuple entry, change to PathValue/PathTuple
+                break;
             }
         }
     }
@@ -2387,26 +2430,33 @@ namespace {
         }
 
         HIRStructMarkings::DstType getStructDstType(const HIRStruct& str, const HIRGenericParams& def, const HIRPathParams* params) {
-        TU_MATCH_HDRA( (str.data), {)
-        TU_ARMA(Unit, se) {
+        switch (str.data.tag()) {
+            case HIRStructData::TAG_Unit: {
+                auto& se = str.data.as_Unit();
+                (void)se;
+                break;
+            }
+            case HIRStructData::TAG_Tuple: {
+                auto& se = str.data.as_Tuple();
+                // TODO: Ensure that only the last field is ?Sized
+                if (se.size() > 0) {
+                    return getFieldDstType(se.back().ent, str.params, def, params);
                 }
-                TU_ARMA(Tuple, se) {
-                    // TODO: Ensure that only the last field is ?Sized
-                    if (se.size() > 0) {
-                        return getFieldDstType(se.back().ent, str.params, def, params);
-                    }
-                }
-                TU_ARMA(Named, se) {
-                    // Check the last field in the struct.
-                    // - If it is Sized, leave as-is (struct is marked as Sized)
-                    // - If it is known unsized, record the type
-                    // - If it is a ?Sized parameter, mark as possible and record index for MIR
+                break;
+            }
+            case HIRStructData::TAG_Named: {
+                auto& se = str.data.as_Named();
+                // Check the last field in the struct.
+                // - If it is Sized, leave as-is (struct is marked as Sized)
+                // - If it is known unsized, record the type
+                // - If it is a ?Sized parameter, mark as possible and record index for MIR
 
-                    // TODO: Ensure that only the last field is ?Sized
-                    if (se.size() > 0) {
-                        return getFieldDstType(se.back().ty, str.params, def, params);
-                    }
+                // TODO: Ensure that only the last field is ?Sized
+                if (se.size() > 0) {
+                    return getFieldDstType(se.back().ty, str.params, def, params);
                 }
+                break;
+            }
         }
         return HIRStructMarkings::DstType::None;
         }
@@ -2465,45 +2515,52 @@ namespace {
                         auto monomorphCbL = MonomorphStatePtr(crate.types, nullptr, &dstTe.path.data.as_Generic().params, nullptr);
                         auto monomorphCbR = MonomorphStatePtr(crate.types, nullptr, &te.path.data.as_Generic().params, nullptr);
 
-                    TU_MATCH_HDRA( (str->data), {)
-                    TU_ARMA(Unit, se) {
-                            }
-                            TU_ARMA(Tuple, se) {
-                                for (unsigned int i = 0; i < se.size(); i++) {
-                                    // If the data is PhantomData, ignore it.
-                                    if (((*se[i].ent).is_Path() && (*se[i].ent).as_Path().path.data.is_Generic() && (*se[i].ent).as_Path().path.data.as_Generic().path == langPhantomData_)) {
-                                        continue;
-                                    }
-                                    if (monomorphiseTypeNeeded(se[i].ent)) {
-                                        auto tyL = monomorphCbL.monomorphType(sp, se[i].ent, false);
-                                        auto tyR = monomorphCbR.monomorphType(sp, se[i].ent, false);
-                                        if (tyL != tyR) {
-                                            if (field != ~0u) {
-                                                ERROR(sp, E0000, "CoerceUnsized impls can only differ by one field");
-                                            }
-                                            field = i;
+                    switch (str->data.tag()) {
+                        case HIRStructData::TAG_Unit: {
+                            auto& se = str->data.as_Unit();
+                            (void)se;
+                            break;
+                        }
+                        case HIRStructData::TAG_Tuple: {
+                            auto& se = str->data.as_Tuple();
+                            for (unsigned int i = 0; i < se.size(); i++) {
+                                // If the data is PhantomData, ignore it.
+                                if (((*se[i].ent).is_Path() && (*se[i].ent).as_Path().path.data.is_Generic() && (*se[i].ent).as_Path().path.data.as_Generic().path == langPhantomData_)) {
+                                    continue;
+                                }
+                                if (monomorphiseTypeNeeded(se[i].ent)) {
+                                    auto tyL = monomorphCbL.monomorphType(sp, se[i].ent, false);
+                                    auto tyR = monomorphCbR.monomorphType(sp, se[i].ent, false);
+                                    if (tyL != tyR) {
+                                        if (field != ~0u) {
+                                            ERROR(sp, E0000, "CoerceUnsized impls can only differ by one field");
                                         }
+                                        field = i;
                                     }
                                 }
                             }
-                            TU_ARMA(Named, se) {
-                                for (unsigned int i = 0; i < se.size(); i++) {
-                                    // If the data is PhantomData, ignore it.
-                                    if (((*se[i].ty).is_Path() && (*se[i].ty).as_Path().path.data.is_Generic() && (*se[i].ty).as_Path().path.data.as_Generic().path == langPhantomData_)) {
-                                        continue;
-                                    }
-                                    if (monomorphiseTypeNeeded(se[i].ty)) {
-                                        auto tyL = monomorphCbL.monomorphType(sp, se[i].ty, false);
-                                        auto tyR = monomorphCbR.monomorphType(sp, se[i].ty, false);
-                                        if (tyL != tyR) {
-                                            if (field != ~0u) {
-                                                ERROR(sp, E0000, "CoerceUnsized impls can only differ by one field");
-                                            }
-                                            field = i;
+                            break;
+                        }
+                        case HIRStructData::TAG_Named: {
+                            auto& se = str->data.as_Named();
+                            for (unsigned int i = 0; i < se.size(); i++) {
+                                // If the data is PhantomData, ignore it.
+                                if (((*se[i].ty).is_Path() && (*se[i].ty).as_Path().path.data.is_Generic() && (*se[i].ty).as_Path().path.data.as_Generic().path == langPhantomData_)) {
+                                    continue;
+                                }
+                                if (monomorphiseTypeNeeded(se[i].ty)) {
+                                    auto tyL = monomorphCbL.monomorphType(sp, se[i].ty, false);
+                                    auto tyR = monomorphCbR.monomorphType(sp, se[i].ty, false);
+                                    if (tyL != tyR) {
+                                        if (field != ~0u) {
+                                            ERROR(sp, E0000, "CoerceUnsized impls can only differ by one field");
                                         }
+                                        field = i;
                                     }
                                 }
                             }
+                            break;
+                        }
                     }
                     if( field == ~0u )
                         ERROR(sp, E0000, "CoerceUnsized requires a field to differ between source and destination");
@@ -3576,36 +3633,46 @@ public:
 
         HIRVisitor::visitPattern(pat);
 
-            TU_MATCH_HDRA( (pat.data), {)
-            default:
+            switch (pat.data.tag()) {
+default:
                 break;
-            TU_ARMA(Value, e) {
-                this->visitPatternValue(sp, pat, e.val);
-                if (e.val.is_Named() && e.val.as_Named().path.data.is_Generic() && e.val.as_Named().path.data.as_Generic().path.components().size() > 1) {
-                    auto& gp = e.val.as_Named().path.data.as_Generic();
-                    if (const auto* enmP = crate.getTypeitemByPath(sp, gp.path, false, true).opt_Enum()) {
-                        unsigned idx = enmP->findVariant(gp.path.components().back());
-                        pat.data = HIRPattern::Data::make_PathValue({mv$(gp), HIRPattern::PathBinding::make_Enum({enmP, idx})});
+                case HIRPatternData::TAG_Value: {
+                    auto& e = pat.data.as_Value();
+                    this->visitPatternValue(sp, pat, e.val);
+                    if (e.val.is_Named() && e.val.as_Named().path.data.is_Generic() && e.val.as_Named().path.data.as_Generic().path.components().size() > 1) {
+                        auto& gp = e.val.as_Named().path.data.as_Generic();
+                        if (const auto* enmP = crate.getTypeitemByPath(sp, gp.path, false, true).opt_Enum()) {
+                            unsigned idx = enmP->findVariant(gp.path.components().back());
+                            pat.data = HIRPattern::Data::make_PathValue({mv$(gp), HIRPattern::PathBinding::make_Enum({enmP, idx})});
+                        }
                     }
+                    break;
                 }
-            }
-            TU_ARMA(Range, e) {
-                if (e.start) {
-                    this->visitPatternValue(sp, pat, *e.start);
+                case HIRPatternData::TAG_Range: {
+                    auto& e = pat.data.as_Range();
+                    if (e.start) {
+                        this->visitPatternValue(sp, pat, *e.start);
+                    }
+                    if (e.end) {
+                        this->visitPatternValue(sp, pat, *e.end);
+                    }
+                    break;
                 }
-                if (e.end) {
-                    this->visitPatternValue(sp, pat, *e.end);
+                case HIRPatternData::TAG_PathValue: {
+                    auto& e = pat.data.as_PathValue();
+                    this->resolvePatternBinding(sp, e.path, e.binding);
+                    break;
                 }
-            }
-            TU_ARMA(PathValue, e) {
-                this->resolvePatternBinding(sp, e.path, e.binding);
-            }
-            TU_ARMA(PathTuple, e) {
-                this->resolvePatternBinding(sp, e.path, e.binding);
-            }
-            TU_ARMA(PathNamed, e) {
-                this->resolvePatternBinding(sp, e.path, e.binding);
-            }
+                case HIRPatternData::TAG_PathTuple: {
+                    auto& e = pat.data.as_PathTuple();
+                    this->resolvePatternBinding(sp, e.path, e.binding);
+                    break;
+                }
+                case HIRPatternData::TAG_PathNamed: {
+                    auto& e = pat.data.as_PathNamed();
+                    this->resolvePatternBinding(sp, e.path, e.binding);
+                    break;
+                }
             }
     }
 
@@ -3636,40 +3703,51 @@ public:
         if (auto* vep = val.opt_Named()) {
             auto& ve = *vep;
             TRACE_FUNCTION_F(ve.path);
-                TU_MATCH_HDRA( (ve.path.data), {)
-                TU_ARMA(Generic, pe) {
-                    // Already done
-                }
-                TU_ARMA(UfcsUnknown, pe) {
-                    BUG(sp, "UfcsUnknown still in pattern value - " << pat);
-                }
-                TU_ARMA(UfcsInherent, pe) {
-                    bool rv = crate.findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
-                        DEBUG("- matched inherent impl" << impl.params.fmtArgs() << " " << impl.type);
-                        // Search for item in this block
-                        auto it = impl.constants.find(pe.item);
-                        if (it != impl.constants.end()) {
-                            ve.binding = &it->second.data;
-                            return true;
+                switch (ve.path.data.tag()) {
+                    case HIRPathData::TAG_Generic: {
+                        auto& pe = ve.path.data.as_Generic();
+                        (void)pe;
+                        // Already done
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsUnknown: {
+                        auto& pe = ve.path.data.as_UfcsUnknown();
+                        (void)pe;
+                        BUG(sp, "UfcsUnknown still in pattern value - " << pat);
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsInherent: {
+                        auto& pe = ve.path.data.as_UfcsInherent();
+                        bool rv = crate.findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
+                            DEBUG("- matched inherent impl" << impl.params.fmtArgs() << " " << impl.type);
+                            // Search for item in this block
+                            auto it = impl.constants.find(pe.item);
+                            if (it != impl.constants.end()) {
+                                ve.binding = &it->second.data;
+                                return true;
+                            }
+                            return false;
+                        });
+                        if (!rv) {
+                            ERROR(sp, E0000, "Constant " << ve.path << " couldn't be found");
                         }
-                        return false;
-                    });
-                    if (!rv) {
-                        ERROR(sp, E0000, "Constant " << ve.path << " couldn't be found");
+                        break;
                     }
-                }
-                TU_ARMA(UfcsKnown, pe) {
-                    // The pattern's expected type participates in selecting `Self` for a
-                    // trait-associated constant.  Keep the trait declaration here instead of
-                    // committing to the first fuzzy impl before expression type checking.
-                    MonomorphState params(crate.types);
-                    auto value = resolve_.getValue(sp, ve.path, params, /*signatureOnly=*/true);
-                    if (const auto* constant = value.opt_Constant()) {
-                        ve.binding = *constant;
-                    } else {
-                        ERROR(sp, E0000, "Constant " << ve.path << " couldn't be found");
+                    case HIRPathData::TAG_UfcsKnown: {
+                        auto& pe = ve.path.data.as_UfcsKnown();
+                        (void)pe;
+                        // The pattern's expected type participates in selecting `Self` for a
+                        // trait-associated constant.  Keep the trait declaration here instead of
+                        // committing to the first fuzzy impl before expression type checking.
+                        MonomorphState params(crate.types);
+                        auto value = resolve_.getValue(sp, ve.path, params, /*signatureOnly=*/true);
+                        if (const auto* constant = value.opt_Constant()) {
+                            ve.binding = *constant;
+                        } else {
+                            ERROR(sp, E0000, "Constant " << ve.path << " couldn't be found");
+                        }
+                        break;
                     }
-                }
                 }
         }
     }

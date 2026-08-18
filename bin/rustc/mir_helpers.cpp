@@ -103,23 +103,28 @@ const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValu
 }
 
 const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLValue::Wrapper& w, const HIRTypeData* ty) const {
-    TU_MATCH_HDRA( (w), {)
-    TU_ARMA(Field, fieldIndex) {
-        TU_MATCH_HDRA( ((*ty)), {)
-        default:
-            MIR_BUG(*this, "Field access on unexpected type - " << ty);
-                // Array and Slice use LValue::Field when the index is constant and known-good
-                TU_ARMA(Array, te) {
+    switch (w.tag()) {
+        case MIRLValue::Wrapper::TAG_Field: {
+            decltype(w.as_Field()) fieldIndex = w.as_Field();
+            switch ((*ty).tag()) {
+default:
+                MIR_BUG(*this, "Field access on unexpected type - " << ty);
+                    // Array and Slice use LValue::Field when the index is constant and known-good
+                case HIRTypeData::TAG_Array: {
+                    auto& te = (*ty).as_Array();
                     return te.inner;
                 }
-                TU_ARMA(Slice, te) {
+                case HIRTypeData::TAG_Slice: {
+                    auto& te = (*ty).as_Slice();
                     return te.inner;
                 }
-                TU_ARMA(Tuple, te) {
+                case HIRTypeData::TAG_Tuple: {
+                    auto& te = (*ty).as_Tuple();
                     MIR_ASSERT(*this, fieldIndex < te.size(), "Field index out of range in tuple " << fieldIndex << " >= " << te.size());
                     return te[fieldIndex];
                 }
-                TU_ARMA(Path, te) {
+                case HIRTypeData::TAG_Path: {
+                    auto& te = (*ty).as_Path();
                     // TODO: Cache result (to avoid needing to re-monomorph)
                     if (const auto* tep = te.binding.opt_Struct()) {
                         const auto& str = **tep;
@@ -154,45 +159,62 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
                     } else {
                         MIR_BUG(*this, "Field access on invalid type - " << ty);
                     }
+                    break;
                 }
+            }
+            break;
         }
-        }
-        TU_ARMA(Deref, _e) {
-        TU_MATCH_HDRA( ((*ty)), {)
-        default:
-            MIR_BUG(*this, "Deref on unexpected type - " << ty);
-                TU_ARMA(Path, te) {
+        case MIRLValue::Wrapper::TAG_Deref: {
+            decltype(w.as_Deref()) _e = w.as_Deref();
+            (void)_e;
+            switch ((*ty).tag()) {
+default:
+                MIR_BUG(*this, "Deref on unexpected type - " << ty);
+                case HIRTypeData::TAG_Path: {
+                    auto& te = (*ty).as_Path();
+                    (void)te;
                     if (const auto* innerPtr = this->isTypeOwnedBox(ty)) {
                         return innerPtr;
                     } else {
                         MIR_BUG(*this, "Deref on unexpected type - " << ty);
                     }
+                    break;
                 }
-                TU_ARMA(Pointer, te) {
+                case HIRTypeData::TAG_Pointer: {
+                    auto& te = (*ty).as_Pointer();
                     return te.inner;
                 }
-                TU_ARMA(Borrow, te) {
+                case HIRTypeData::TAG_Borrow: {
+                    auto& te = (*ty).as_Borrow();
                     return te.inner;
                 }
+            }
+            break;
         }
-        }
-        TU_ARMA(Index, indexLocal) {
-        TU_MATCH_HDRA( ((*ty)), { )
-        default:
-            MIR_BUG(*this, "Index on unexpected type - " << ty);
-                TU_ARMA(Slice, te) {
+        case MIRLValue::Wrapper::TAG_Index: {
+            decltype(w.as_Index()) indexLocal = w.as_Index();
+            (void)indexLocal;
+            switch ((*ty).tag()) {
+default:
+                MIR_BUG(*this, "Index on unexpected type - " << ty);
+                case HIRTypeData::TAG_Slice: {
+                    auto& te = (*ty).as_Slice();
                     return te.inner;
                 }
-                TU_ARMA(Array, te) {
+                case HIRTypeData::TAG_Array: {
+                    auto& te = (*ty).as_Array();
                     return te.inner;
                 }
+            }
+            break;
         }
-        }
-        TU_ARMA(Downcast, variantIndex) {
-        TU_MATCH_HDRA( ((*ty)), {)
-        default:
-            MIR_BUG(*this, "Downcast on unexpected type - " << ty);
-                TU_ARMA(Path, te) {
+        case MIRLValue::Wrapper::TAG_Downcast: {
+            decltype(w.as_Downcast()) variantIndex = w.as_Downcast();
+            switch ((*ty).tag()) {
+default:
+                MIR_BUG(*this, "Downcast on unexpected type - " << ty);
+                case HIRTypeData::TAG_Path: {
+                    auto& te = (*ty).as_Path();
                     MIR_ASSERT(*this, te.binding.is_Enum() || te.binding.is_Union(), "Downcast on non-Enum");
                     if (te.binding.is_Enum()) {
                         const auto& enm = *te.binding.as_Enum();
@@ -211,22 +233,27 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
 
                         return resolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                     }
+                    break;
                 }
-        }
+            }
+            break;
         }
     }
     throw "";
 }
 
 const HIRTypeData* MIRTypeResolve::getParamType(HIRTypeRef& tmp, const MIRParam& val) const {
-    TU_MATCH_HDRA((val), {)
-    TU_ARMA(LValue, e) {
+    switch (val.tag()) {
+        case MIRParam::TAG_LValue: {
+            auto& e = val.as_LValue();
             return getLvalueType(tmp, e);
         }
-        TU_ARMA(Constant, e) {
+        case MIRParam::TAG_Constant: {
+            auto& e = val.as_Constant();
             return tmp = getConstType(e);
         }
-        TU_ARMA(Borrow, e) {
+        case MIRParam::TAG_Borrow: {
+            auto& e = val.as_Borrow();
             HIRTypeRef tmp2;
             return tmp = crate.types.borrow(e.type, getLvalueType(tmp2, e.val));
         }
@@ -235,29 +262,39 @@ const HIRTypeData* MIRTypeResolve::getParamType(HIRTypeRef& tmp, const MIRParam&
 }
 
 HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
-    TU_MATCH_HDRA( (c), {)
-    TU_ARMA(Int, e) {
+    switch (c.tag()) {
+        case MIRConstant::TAG_Int: {
+            auto& e = c.as_Int();
             return crate.types.primitive(e.t);
         }
-        TU_ARMA(Uint, e) {
+        case MIRConstant::TAG_Uint: {
+            auto& e = c.as_Uint();
             return crate.types.primitive(e.t);
         }
-        TU_ARMA(Float, e) {
+        case MIRConstant::TAG_Float: {
+            auto& e = c.as_Float();
             return crate.types.primitive(e.t);
         }
-        TU_ARMA(Bool, e) {
+        case MIRConstant::TAG_Bool: {
+            auto& e = c.as_Bool();
+            (void)e;
             return crate.types.primitive(HIRCoreType::Bool);
         }
-        TU_ARMA(Bytes, e) {
+        case MIRConstant::TAG_Bytes: {
+            auto& e = c.as_Bytes();
             return crate.types.borrow(HIRBorrowType::Shared, crate.types.array(crate.types.primitive(HIRCoreType::U8), e.size()));
         }
-        TU_ARMA(StaticString, e) {
+        case MIRConstant::TAG_StaticString: {
+            auto& e = c.as_StaticString();
+            (void)e;
             return crate.types.borrow(HIRBorrowType::Shared, crate.types.primitive(HIRCoreType::Str));
         }
-        TU_ARMA(Encoded, e) {
+        case MIRConstant::TAG_Encoded: {
+            auto& e = c.as_Encoded();
             return e.type;
         }
-        TU_ARMA(Const, e) {
+        case MIRConstant::TAG_Const: {
+            auto& e = c.as_Const();
             MonomorphState p(crate.types);
             auto v = resolve.getValue(this->sp, *e.p, p, /*signature_only=*/true);
             if (const auto* ve = v.opt_Constant()) {
@@ -272,39 +309,55 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
             } else {
                 MIR_BUG(*this, "get_const_type - Not a constant " << *e.p);
             }
+            break;
         }
-        TU_ARMA(Generic, e) {
+        case MIRConstant::TAG_Generic: {
+            auto& e = c.as_Generic();
             return resolve.getConstParamType(this->sp, e.binding);
         }
-        TU_ARMA(Function, e) {
+        case MIRConstant::TAG_Function: {
+            auto& e = c.as_Function();
             MonomorphState p(crate.types);
-            auto v = resolve.getValue(this->sp, *e.p, p, /*signature_only=*/true);
-        TU_MATCH_HDRA( (v), {)
-        default:
-            MIR_BUG(*this, "get_const_type - Function points to bad type: " << v.tagStr() << " - " << c);
-                TU_ARMA(NotFound, ve) {
+                auto v = resolve.getValue(this->sp, *e.p, p, /*signature_only=*/true);
+            switch (v.tag()) {
+default:
+                MIR_BUG(*this, "get_const_type - Function points to bad type: " << v.tagStr() << " - " << c);
+                case TypeckValuePtr::TAG_NotFound: {
+                    auto& ve = v.as_NotFound();
+                    (void)ve;
                     MIR_BUG(*this, "get_const_type - ItemAddr points to unknown value - " << c);
+                    break;
                 }
-                TU_ARMA(Function, ve) {
+                case TypeckValuePtr::TAG_Function: {
+                    auto& ve = v.as_Function();
                     return crate.types.intern(HIRTypeData::make_NamedFunction({e.p->clone(), ve}));
                 }
-                TU_ARMA(EnumConstructor, ve) {
+                case TypeckValuePtr::TAG_EnumConstructor: {
+                    auto& ve = v.as_EnumConstructor();
                     return crate.types.intern(HIRTypeData::make_NamedFunction({e.p->clone(), HIRTypeDataNamedFunctionTy::make_EnumConstructor({ve.e, ve.v})}));
                 }
-                TU_ARMA(StructConstructor, ve) {
+                case TypeckValuePtr::TAG_StructConstructor: {
+                    auto& ve = v.as_StructConstructor();
                     return crate.types.intern(HIRTypeData::make_NamedFunction({e.p->clone(), ve.s}));
                 }
+            }
+            break;
         }
-        }
-        TU_ARMA(ItemAddr, e) {
+        case MIRConstant::TAG_ItemAddr: {
+            auto& e = c.as_ItemAddr();
             MonomorphState p(crate.types);
-            ASSERT_BUG(sp, e, "get_const_type - " << c);
-            auto v = resolve.getValue(this->sp, *e, p, /*signature_only=*/true);
-        TU_MATCH_HDRA( (v), {)
-        TU_ARMA(NotFound, ve) {
+                ASSERT_BUG(sp, e, "get_const_type - " << c);
+                auto v = resolve.getValue(this->sp, *e, p, /*signature_only=*/true);
+            switch (v.tag()) {
+                case TypeckValuePtr::TAG_NotFound: {
+                    auto& ve = v.as_NotFound();
+                    (void)ve;
                     MIR_BUG(*this, "get_const_type - ItemAddr points to unknown value - " << c);
+                    break;
                 }
-                TU_ARMA(NotYetKnown, ve) {
+                case TypeckValuePtr::TAG_NotYetKnown: {
+                    auto& ve = v.as_NotYetKnown();
+                    (void)ve;
                     if (e->data.is_UfcsKnown()) {
                         const auto& pe = e->data.as_UfcsKnown();
                         if (pe.item == "vtable#" && pe.trait.path == HIRSimplePath()) {
@@ -316,8 +369,10 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                         }
                     }
                     MIR_BUG(*this, "get_const_type - get_value returned NotYetKnown with signature_only=true");
+                    break;
                 }
-                TU_ARMA(Constant, ve) {
+                case TypeckValuePtr::TAG_Constant: {
+                    auto& ve = v.as_Constant();
                     const auto& ty = ve->type;
                     HIRTypeRef rv;
                     if (monomorphiseTypeNeeded(ty)) {
@@ -328,7 +383,8 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                     }
                     return crate.types.borrow(HIRBorrowType::Shared, rv);
                 }
-                TU_ARMA(Static, ve) {
+                case TypeckValuePtr::TAG_Static: {
+                    auto& ve = v.as_Static();
                     const auto& ty = ve->type;
                     HIRTypeRef rv;
                     if (monomorphiseTypeNeeded(ty)) {
@@ -339,28 +395,38 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                     }
                     return crate.types.borrow(HIRBorrowType::Shared, rv);
                 }
-                TU_ARMA(Function, ve) {
+                case TypeckValuePtr::TAG_Function: {
+                    auto& ve = v.as_Function();
                     auto rv = crate.types.function((HIRTypeData::Data_NamedFunction{e->clone(), ve}).decay(crate.types, this->sp));
                     resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
-                TU_ARMA(EnumValue, ve) {
+                case TypeckValuePtr::TAG_EnumValue: {
+                    auto& ve = v.as_EnumValue();
+                    (void)ve;
                     MIR_BUG(*this, "get_const_type - ItemAddr points to an enum value - " << c);
+                    break;
                 }
-                TU_ARMA(EnumConstructor, ve) {
+                case TypeckValuePtr::TAG_EnumConstructor: {
+                    auto& ve = v.as_EnumConstructor();
                     auto rv = crate.types.function((HIRTypeData::Data_NamedFunction{e->clone(), HIRTypeDataNamedFunctionTy::make_EnumConstructor({ve.e, ve.v})}).decay(crate.types, this->sp));
                     resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
-                TU_ARMA(StructConstant, ve) {
+                case TypeckValuePtr::TAG_StructConstant: {
+                    auto& ve = v.as_StructConstant();
+                    (void)ve;
                     MIR_BUG(*this, c << " pointing to a struct constant");
+                    break;
                 }
-                TU_ARMA(StructConstructor, ve) {
+                case TypeckValuePtr::TAG_StructConstructor: {
+                    auto& ve = v.as_StructConstructor();
                     auto rv = crate.types.function((HIRTypeData::Data_NamedFunction{e->clone(), ve.s}).decay(crate.types, this->sp));
                     resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
-        }
+            }
+            break;
         }
     }
     throw "";
@@ -381,57 +447,74 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vec
     for (size_t i = 0; i < values.size(); i++) {
         MIR_ASSERT(*this, values[i].is_Constant(), "Arguments to `offset_of` must be constants");
         size_t idx = 0;
-        TU_MATCH_HDRA( (values[i].as_Constant()), { )
-        default:
+        {
+            auto& tuMatch = values[i].as_Constant();
+            switch (tuMatch.tag()) {
+default:
             MIR_TODO(*this, "offset_of: field " << values[i]);
-            TU_ARMA(Int, fieldIdx) {
-                MIR_ASSERT(*this, fieldIdx.v.isI64() && fieldIdx.v >= S128(0), "Invalid tuple field index " << fieldIdx.v);
-                idx = static_cast<size_t>(fieldIdx.v.truncateI64());
-            }
-            TU_ARMA(Uint, fieldIdx) {
-                MIR_ASSERT(*this, fieldIdx.v.isU64() && fieldIdx.v <= U128(SIZE_MAX), "Invalid tuple field index " << fieldIdx.v);
-                idx = static_cast<size_t>(fieldIdx.v.truncateU64());
-            }
-            TU_ARMA(StaticString, fieldName) {
-                char* end = nullptr;
-                auto numericIdx = ::std::strtoul(fieldName.c_str(), &end, 10);
-                if (end != fieldName.c_str() && *end == '\0') {
-                    MIR_ASSERT(*this, numericIdx <= SIZE_MAX, "Invalid tuple field index " << fieldName);
-                    idx = static_cast<size_t>(numericIdx);
-                } else if (const auto* tyPath = curTy->opt_Path()) {
-                    if (const auto* bep = tyPath->binding.opt_Struct()) {
-                        const auto& str = **bep;
-                    TU_MATCH_HDRA((str.data), {)
-                    TU_ARMA(Named, fields) {
+                case MIRConstant::TAG_Int: {
+                    auto& fieldIdx = tuMatch.as_Int();
+                    MIR_ASSERT(*this, fieldIdx.v.isI64() && fieldIdx.v >= S128(0), "Invalid tuple field index " << fieldIdx.v);
+                    idx = static_cast<size_t>(fieldIdx.v.truncateI64());
+                    break;
+                }
+                case MIRConstant::TAG_Uint: {
+                    auto& fieldIdx = tuMatch.as_Uint();
+                    MIR_ASSERT(*this, fieldIdx.v.isU64() && fieldIdx.v <= U128(SIZE_MAX), "Invalid tuple field index " << fieldIdx.v);
+                    idx = static_cast<size_t>(fieldIdx.v.truncateU64());
+                    break;
+                }
+                case MIRConstant::TAG_StaticString: {
+                    auto& fieldName = tuMatch.as_StaticString();
+                    char* end = nullptr;
+                    auto numericIdx = ::std::strtoul(fieldName.c_str(), &end, 10);
+                    if (end != fieldName.c_str() && *end == '\0') {
+                        MIR_ASSERT(*this, numericIdx <= SIZE_MAX, "Invalid tuple field index " << fieldName);
+                        idx = static_cast<size_t>(numericIdx);
+                    } else if (const auto* tyPath = curTy->opt_Path()) {
+                        if (const auto* bep = tyPath->binding.opt_Struct()) {
+                            const auto& str = **bep;
+                        switch (str.data.tag()) {
+                            case HIRStructData::TAG_Named: {
+                                auto& fields = str.data.as_Named();
                                 idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
                                     return x.name == fieldName;
                                 }) - fields.begin();
+                                break;
                             }
-                            TU_ARMA(Tuple, fields) {
+                            case HIRStructData::TAG_Tuple: {
+                                auto& fields = str.data.as_Tuple();
+                                (void)fields;
                                 MIR_BUG(*this, "Named field on tuple struct: " << curTy << " ." << fieldName);
+                                break;
                             }
-                            TU_ARMA(Unit, _) {
+                            case HIRStructData::TAG_Unit: {
+                                auto& _ = str.data.as_Unit();
+                                (void)_;
                                 MIR_BUG(*this, "Empty struct: " << curTy << " ." << fieldName);
+                                break;
                             }
-                    }
-                    } else if (const auto* bep = tyPath->binding.opt_Union()) {
-                        const auto& unm = **bep;
-                        const auto& fields = unm.variants;
-                        idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
-                            return x.name == fieldName;
-                        }) - fields.begin();
-                    } else if (const auto* bep = tyPath->binding.opt_Enum()) {
-                        const auto& enm = **bep;
-                        MIR_ASSERT(*this, enm.data.is_Data(), "Non-Data enum: " << curTy << " ." << fieldName);
-                        const auto& fields = enm.data.as_Data();
-                        idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
-                            return x.name == fieldName;
-                        }) - fields.begin();
+                        }
+                        } else if (const auto* bep = tyPath->binding.opt_Union()) {
+                            const auto& unm = **bep;
+                            const auto& fields = unm.variants;
+                            idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
+                                return x.name == fieldName;
+                            }) - fields.begin();
+                        } else if (const auto* bep = tyPath->binding.opt_Enum()) {
+                            const auto& enm = **bep;
+                            MIR_ASSERT(*this, enm.data.is_Data(), "Non-Data enum: " << curTy << " ." << fieldName);
+                            const auto& fields = enm.data.as_Data();
+                            idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
+                                return x.name == fieldName;
+                            }) - fields.begin();
+                        } else {
+                            MIR_TODO(*this, "offset_of: named field/variant - " << fieldName);
+                        }
                     } else {
                         MIR_TODO(*this, "offset_of: named field/variant - " << fieldName);
                     }
-                } else {
-                    MIR_TODO(*this, "offset_of: named field/variant - " << fieldName);
+                    break;
                 }
             }
         }
@@ -974,16 +1057,19 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     return;
                 }
 
-                TU_MATCH_HDRA( (stmt), {)
-                TU_ARMA(Assign, se) {
+                switch (stmt.tag()) {
+                    case MIRStatement::TAG_Assign: {
+                        auto& se = stmt.as_Assign();
                         if (se.dst == lv) {
                             DEBUG(mirRes << "- Assigned to, return");
                             // Value assigned, just apply
                             state.finalise(stmtIdx);
                             return;
                         }
+                        break;
                     }
-                    TU_ARMA(Asm, se) {
+                    case MIRStatement::TAG_Asm: {
+                        auto& se = stmt.as_Asm();
                         for (const auto& e : se.outputs) {
                             if (e.second == lv) {
                                 // Assigned, just apply
@@ -992,40 +1078,66 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                                 return;
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(Asm2, se) {
+                    case MIRStatement::TAG_Asm2: {
+                        auto& se = stmt.as_Asm2();
                         for (const auto& p : se.params) {
-                        TU_MATCH_HDRA( (p), {)
-                        TU_ARMA(Const, v) {
-                                }
-                                TU_ARMA(Sym, v) {
-                                }
-                                TU_ARMA(Reg, v) {
-                                    if (v.output) {
-                                        if (*v.output == lv) {
-                                            // Assigned, just apply
-                                            DEBUG(mirRes << "- Assigned (asm!), return");
-                                            state.finalise(stmtIdx);
-                                            return;
-                                        }
+                        switch (p.tag()) {
+                            case MIRAsmParam::TAG_Const: {
+                                auto& v = p.as_Const();
+                                (void)v;
+                                break;
+                            }
+                            case MIRAsmParam::TAG_Sym: {
+                                auto& v = p.as_Sym();
+                                (void)v;
+                                break;
+                            }
+                            case MIRAsmParam::TAG_Reg: {
+                                auto& v = p.as_Reg();
+                                if (v.output) {
+                                    if (*v.output == lv) {
+                                        // Assigned, just apply
+                                        DEBUG(mirRes << "- Assigned (asm!), return");
+                                        state.finalise(stmtIdx);
+                                        return;
                                     }
                                 }
-                                TU_ARMA(Label, v) {
-                                }
+                                break;
+                            }
+                            case MIRAsmParam::TAG_Label: {
+                                auto& v = p.as_Label();
+                                (void)v;
+                                break;
+                            }
                         }
                         }
+                        break;
                     }
-                    TU_ARMA(SetDropFlag, se) {
+                    case MIRStatement::TAG_SetDropFlag: {
+                        auto& se = stmt.as_SetDropFlag();
+                        (void)se;
                         // Ignore
+                        break;
                     }
-                    TU_ARMA(SaveDropFlag, se) {
+                    case MIRStatement::TAG_SaveDropFlag: {
+                        auto& se = stmt.as_SaveDropFlag();
+                        (void)se;
                         // Ignore
+                        break;
                     }
-                    TU_ARMA(LoadDropFlag, se) {
+                    case MIRStatement::TAG_LoadDropFlag: {
+                        auto& se = stmt.as_LoadDropFlag();
+                        (void)se;
                         // Ignore
+                        break;
                     }
-                    TU_ARMA(ScopeEnd, se) {
+                    case MIRStatement::TAG_ScopeEnd: {
+                        auto& se = stmt.as_ScopeEnd();
+                        (void)se;
                         // Ignore
+                        break;
                     }
                 }
             }
@@ -1045,50 +1157,74 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             }
 
             // Terminator
-            TU_MATCH_HDRA( (bb.terminator), {)
-            TU_ARMA(Incomplete, te) {
+            switch (bb.terminator.tag()) {
+                case MIRTerminator::TAG_Incomplete: {
+                    auto& te = bb.terminator.as_Incomplete();
+                    (void)te;
                     // TODO: Isn't this a bug?
                     DEBUG(mirRes << "Incomplete");
                     state.finalise(stmtIdx);
+                    break;
                 }
-                TU_ARMA(Return, te) {
+                case MIRTerminator::TAG_Return: {
+                    auto& te = bb.terminator.as_Return();
+                    (void)te;
                     DEBUG(mirRes << "Return");
                     state.finalise(stmtIdx);
+                    break;
                 }
-                TU_ARMA(UnwindResume, te) {
+                case MIRTerminator::TAG_UnwindResume: {
+                    auto& te = bb.terminator.as_UnwindResume();
+                    (void)te;
                     DEBUG(mirRes << "UnwindResume");
                     state.finalise(stmtIdx);
+                    break;
                 }
-                TU_ARMA(UnwindTerminate, te) {
+                case MIRTerminator::TAG_UnwindTerminate: {
+                    auto& te = bb.terminator.as_UnwindTerminate();
+                    (void)te;
                     DEBUG(mirRes << "UnwindTerminate");
                     state.finalise(stmtIdx);
+                    break;
                 }
-                TU_ARMA(Unreachable, te) {
+                case MIRTerminator::TAG_Unreachable: {
+                    auto& te = bb.terminator.as_Unreachable();
+                    (void)te;
                     DEBUG(mirRes << "Unreachable");
                     state.finalise(stmtIdx);
+                    break;
                 }
-                TU_ARMA(Goto, te) {
+                case MIRTerminator::TAG_Goto: {
+                    auto& te = bb.terminator.as_Goto();
                     statesToDo.push_back(::std::make_pair(te, mv$(state)));
+                    break;
                 }
-                TU_ARMA(If, te) {
+                case MIRTerminator::TAG_If: {
+                    auto& te = bb.terminator.as_If();
                     statesToDo.push_back(::std::make_pair(te.bbTrue, state.clone()));
                     statesToDo.push_back(::std::make_pair(te.bbFalse, mv$(state)));
+                    break;
                 }
-                TU_ARMA(Switch, te) {
+                case MIRTerminator::TAG_Switch: {
+                    auto& te = bb.terminator.as_Switch();
                     for (size_t i = 0; i < te.targets.size(); i++) {
                         statesToDo.push_back(::std::make_pair(te.targets[i], state.clone()));
                     }
                     if (te.validFlag != ~0u) {
                         statesToDo.push_back(::std::make_pair(te.invalidTarget, mv$(state)));
                     }
+                    break;
                 }
-                TU_ARMA(SwitchValue, te) {
+                case MIRTerminator::TAG_SwitchValue: {
+                    auto& te = bb.terminator.as_SwitchValue();
                     for (size_t i = 0; i < te.targets.size(); i++) {
                         statesToDo.push_back(::std::make_pair(te.targets[i], state.clone()));
                     }
                     statesToDo.push_back(::std::make_pair(te.defTarget, mv$(state)));
+                    break;
                 }
-                TU_ARMA(Drop, te) {
+                case MIRTerminator::TAG_Drop: {
+                    auto& te = bb.terminator.as_Drop();
                     if (te.slot == lv) {
                         DEBUG(mirRes << "Dropped, return");
                         state.markRead(stmtIdx);
@@ -1100,8 +1236,10 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                         statesToDo.push_back(::std::make_pair(target, state.clone()));
                     }
                     statesToDo.push_back(::std::make_pair(te.target, mv$(state)));
+                    break;
                 }
-                TU_ARMA(Call, te) {
+                case MIRTerminator::TAG_Call: {
+                    auto& te = bb.terminator.as_Call();
                     if (te.retVal == lv) {
                         DEBUG(mirRes << "Assigned (Call), return");
                         // Value assigned, just apply
@@ -1113,11 +1251,16 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                         statesToDo.push_back(::std::make_pair(target, state.clone()));
                     }
                     statesToDo.push_back(::std::make_pair(te.retBlock, mv$(state)));
+                    break;
                 }
-                TU_ARMA(TailCall, te) {
+                case MIRTerminator::TAG_TailCall: {
+                    auto& te = bb.terminator.as_TailCall();
+                    (void)te;
                     state.finalise(stmtIdx);
+                    break;
                 }
-                TU_ARMA(Asm2, te) {
+                case MIRTerminator::TAG_Asm2: {
+                    auto& te = bb.terminator.as_Asm2();
                     for (const auto& p : te.params) {
                         if (const auto* reg = p.opt_Reg()) {
                             if (reg->output && *reg->output == lv) {
@@ -1140,6 +1283,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     if (!hasTarget) {
                         state.finalise(stmtIdx);
                     }
+                    break;
                 }
             }
         }

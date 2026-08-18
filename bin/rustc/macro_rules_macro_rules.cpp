@@ -242,14 +242,17 @@ CapturedVal& ParameterMappings::getCap(const Span& sp, const ::std::vector<unsig
     }
 
     for (const auto iter : iterations) {
-        TU_MATCH_HDRA( (*layer), { )
-        TU_ARMA(Vals, e) {
+        switch ((*layer).tag()) {
+            case CaptureLayer::TAG_Vals: {
+                auto& e = (*layer).as_Vals();
                 ASSERT_BUG(sp, iter < e.size(), "Iteration index " << iter << " outside of range " << e.size() << " (values)");
                 return e.at(iter);
             }
-            TU_ARMA(Nested, e) {
+            case CaptureLayer::TAG_Nested: {
+                auto& e = (*layer).as_Nested();
                 ASSERT_BUG(sp, iter < e.size(), "Iteration index " << iter << " outside of range " << e.size() << " (nest)");
                 layer = &e.at(iter);
+                break;
             }
         }
     }
@@ -325,14 +328,17 @@ unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::ve
     }
 
     for (const auto iter : iterations) {
-        TU_MATCH_HDRA( (*layer), { )
-        TU_ARMA(Vals, e) {
+        switch ((*layer).tag()) {
+            case CaptureLayer::TAG_Vals: {
+                auto& e = (*layer).as_Vals();
                 ASSERT_BUG(sp, iter < e.size(), "Iteration index " << iter << " outside of range " << e.size() << " (values)");
                 return 1;
             }
-            TU_ARMA(Nested, e) {
+            case CaptureLayer::TAG_Nested: {
+                auto& e = (*layer).as_Nested();
                 ASSERT_BUG(sp, iter < e.size(), "Iteration index " << iter << " outside of range " << e.size() << " (nest)");
                 layer = &e.at(iter);
+                break;
             }
         }
     }
@@ -392,26 +398,40 @@ const SimplePatEnt& MacroPatternStream::next() {
             continue;
         }
         curPos_ += 1;
-        TU_MATCH_HDRA( (curEnt), {)
-        default:
+        switch (curEnt.tag()) {
+default:
             if( curEnt.is_If() )
             {
                 lastWasCond = true;
                 conditionMet = false;
             }
             return curEnt;
-            TU_ARMA(End, _e)
-            BUG(Span(), "Unexpected End");
-            TU_ARMA(Jump, e)
-            curPos_ = e.jumpTarget;
-            TU_ARMA(LoopStart, e) {
+            case SimplePatEnt::TAG_End: {
+                auto& _e = curEnt.as_End();
+                (void)_e;
+                BUG(Span(), "Unexpected End");
+                break;
+            }
+            case SimplePatEnt::TAG_Jump: {
+                auto& e = curEnt.as_Jump();
+                curPos_ = e.jumpTarget;
+                break;
+            }
+            case SimplePatEnt::TAG_LoopStart: {
+                auto& e = curEnt.as_LoopStart();
                 currentLoops.push_back(e.index);
                 loopIterations.push_back(0);
+                break;
             }
-            TU_ARMA(LoopNext, _e) {
+            case SimplePatEnt::TAG_LoopNext: {
+                auto& _e = curEnt.as_LoopNext();
+                (void)_e;
                 loopIterations.back() += 1;
+                break;
             }
-            TU_ARMA(LoopEnd, _e) {
+            case SimplePatEnt::TAG_LoopEnd: {
+                auto& _e = curEnt.as_LoopEnd();
+                (void)_e;
                 assert(!loopIterations.empty());
                 assert(!currentLoops.empty());
                 auto loopIndex = currentLoops.back();
@@ -423,6 +443,7 @@ const SimplePatEnt& MacroPatternStream::next() {
                 if (conditionReplay) {
                     loopCounts[loopIndex].insert(std::make_pair(loopIterations, numIter));
                 }
+                break;
             }
         }
     }
@@ -2401,12 +2422,19 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::ve
 
     while (const auto* entPtr = state.nextEnt()) {
         DEBUG(*entPtr);
-        TU_MATCH_HDRA( (*entPtr), { )
-        TU_ARMA(Token, e) {
+        switch ((*entPtr).tag()) {
+            case MacroExpansionEnt::TAG_Token: {
+                auto& e = (*entPtr).as_Token();
+                (void)e;
+                break;
             }
-            TU_ARMA(Loop, e) {
+            case MacroExpansionEnt::TAG_Loop: {
+                auto& e = (*entPtr).as_Loop();
+                (void)e;
+                break;
             }
-            TU_ARMA(NamedValue, e) {
+            case MacroExpansionEnt::TAG_NamedValue: {
+                auto& e = (*entPtr).as_NamedValue();
                 switch (e & ~NAMEDVALUE_VALMASK) {
                     case 0:
                         // Increment a counter in `bound_tts`
@@ -2419,26 +2447,34 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::ve
                     default:
                         break;
                 }
+                break;
             }
-            TU_ARMA(Concat, ccEnts) {
+            case MacroExpansionEnt::TAG_Concat: {
+                auto& ccEnts = (*entPtr).as_Concat();
                 for (const auto& ccEnt : ccEnts) {
-                TU_MATCH_HDRA((ccEnt), {)
-                TU_ARMA(Ident, e) {
+                switch (ccEnt.tag()) {
+                    case MacroExpansionConcatEnt::TAG_Ident: {
+                        auto& e = ccEnt.as_Ident();
+                        (void)e;
+                        break;
+                    }
+                    case MacroExpansionConcatEnt::TAG_Named: {
+                        auto& e = ccEnt.as_Named();
+                        switch (e & ~NAMEDVALUE_VALMASK) {
+                            case 0:
+                            case NAMEDVALUE_TY_IGNORE:
+                                // Increment a counter in `bound_tts`
+                                boundTts.incCount(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
+                                break;
+                            case NAMEDVALUE_TY_MAGIC:
+                            default:
+                                break;
                         }
-                        TU_ARMA(Named, e) {
-                            switch (e & ~NAMEDVALUE_VALMASK) {
-                                case 0:
-                                case NAMEDVALUE_TY_IGNORE:
-                                    // Increment a counter in `bound_tts`
-                                    boundTts.incCount(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
-                                    break;
-                                case NAMEDVALUE_TY_MAGIC:
-                                default:
-                                    break;
-                            }
-                        }
+                        break;
+                    }
                 }
                 }
+                break;
             }
         }
     }
@@ -2485,8 +2521,9 @@ Token MacroExpander::realGetToken() {
     // Loop to handle case where $crate expands to nothing
     while (const auto* nextEntPtr = state.nextEnt()) {
         const auto& ent = *nextEntPtr;
-        TU_MATCH_HDRA( (ent), {)
-        TU_ARMA(Token, e) {
+        switch (ent.tag()) {
+            case MacroExpansionEnt::TAG_Token: {
+                auto& e = ent.as_Token();
                 switch (e.type()) {
                     case TOK_IDENT:
                     case TOK_LIFETIME: {
@@ -2513,8 +2550,10 @@ Token MacroExpander::realGetToken() {
                         DEBUG("[" << logIndex << "] Raw token: " << e);
                         return e.clone();
                 }
+                break;
             }
-            TU_ARMA(NamedValue, e) {
+            case MacroExpansionEnt::TAG_NamedValue: {
+                auto& e = ent.as_NamedValue();
                 switch (e & ~NAMEDVALUE_VALMASK) {
                     default:
                         BUG(this->pointSpan(), "Unknown macro metavar - 0x" << std::hex << e);
@@ -2584,42 +2623,49 @@ Token MacroExpander::realGetToken() {
                         }
                     } break;
                 }
+                break;
             }
-            TU_ARMA(Concat, e) {
+            case MacroExpansionEnt::TAG_Concat: {
+                auto& e = ent.as_Concat();
                 std::string newIdent;
                 for (const auto& ent : e) {
-                TU_MATCH_HDRA( (ent), { )
-                TU_ARMA(Named, v) {
-                            bool canSteal = (mappings_.decCount(this->pointSpan(), state.iterations(), v) == false);
-                            auto* frag = mappings_.get(this->pointSpan(), state.iterations(), v);
-                            ASSERT_BUG(this->pointSpan(), frag, "Cannot find '" << v << "' for " << state.iterations());
-                            Token tok;
-                            if (frag->type == InterpolatedFragment::TT) {
-                                auto resTt = canSteal ? mv$(frag->asTt()) : frag->asTt().clone();
-                                TTStreamO tts(this->outerSpan(), ParseState(), std::move(resTt));
-                                tok = tts.getToken();
-                                tts.getTokenCheck(TOK_EOF);
-                            } else {
-                                tok = canSteal ? Token(Token::TagTakeIP(), mv$(*frag)) : Token(*frag);
-                            }
-                            // A string literal contributes its contents, the
-                            // same as a literal spelled in the `concat`.
-                            if (tok == TOK_STRING) {
-                                newIdent += tok.str();
-                            } else if (tok == TOK_IDENT) {
-                                newIdent += tok.ident().name.c_str();
-                            } else {
-                                ERROR(this->pointSpan(), E0000, "concat with non-ident: " << tok);
-                            }
+                switch (ent.tag()) {
+                    case MacroExpansionConcatEnt::TAG_Named: {
+                        auto& v = ent.as_Named();
+                        bool canSteal = (mappings_.decCount(this->pointSpan(), state.iterations(), v) == false);
+                        auto* frag = mappings_.get(this->pointSpan(), state.iterations(), v);
+                        ASSERT_BUG(this->pointSpan(), frag, "Cannot find '" << v << "' for " << state.iterations());
+                        Token tok;
+                        if (frag->type == InterpolatedFragment::TT) {
+                            auto resTt = canSteal ? mv$(frag->asTt()) : frag->asTt().clone();
+                            TTStreamO tts(this->outerSpan(), ParseState(), std::move(resTt));
+                            tok = tts.getToken();
+                            tts.getTokenCheck(TOK_EOF);
+                        } else {
+                            tok = canSteal ? Token(Token::TagTakeIP(), mv$(*frag)) : Token(*frag);
                         }
-                        TU_ARMA(Ident, v) {
-                            newIdent += v.name.c_str();
+                        // A string literal contributes its contents, the
+                        // same as a literal spelled in the `concat`.
+                        if (tok == TOK_STRING) {
+                            newIdent += tok.str();
+                        } else if (tok == TOK_IDENT) {
+                            newIdent += tok.ident().name.c_str();
+                        } else {
+                            ERROR(this->pointSpan(), E0000, "concat with non-ident: " << tok);
                         }
+                        break;
+                    }
+                    case MacroExpansionConcatEnt::TAG_Ident: {
+                        auto& v = ent.as_Ident();
+                        newIdent += v.name.c_str();
+                        break;
+                    }
                 }
                 }
                 return Token(TOK_IDENT, Ident(realGetHygiene(), RcString::newInterned(newIdent)));
             }
-            TU_ARMA(Loop, e) {
+            case MacroExpansionEnt::TAG_Loop: {
+                auto& e = ent.as_Loop();
                 DEBUG("[" << logIndex << "] Loop joiner " << e.joiner);
                 return e.joiner;
             }
@@ -2643,17 +2689,24 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
         if (idx < ents.size()) {
             // - If not, just handle the next entry
             const auto& ent = ents[idx];
-            TU_MATCH_HDRA( (ent), {)
-            TU_ARMA(Token, e) {
+            switch (ent.tag()) {
+                case MacroExpansionEnt::TAG_Token: {
+                    auto& e = ent.as_Token();
+                    (void)e;
                     return &ent;
                 }
-                TU_ARMA(NamedValue, e) {
+                case MacroExpansionEnt::TAG_NamedValue: {
+                    auto& e = ent.as_NamedValue();
+                    (void)e;
                     return &ent;
                 }
-                TU_ARMA(Concat, e) {
+                case MacroExpansionEnt::TAG_Concat: {
+                    auto& e = ent.as_Concat();
+                    (void)e;
                     return &ent;
                 }
-                TU_ARMA(Loop, e) {
+                case MacroExpansionEnt::TAG_Loop: {
+                    auto& e = ent.as_Loop();
                     assert(!e.controllingInputLoops.empty());
                     unsigned int numRepeats = mappings_.getLoopRepeats(Span(), iterations_, *e.controllingInputLoops.begin());
                     for (auto loopIdent : e.controllingInputLoops) {
@@ -2674,6 +2727,7 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
                         iterations_.push_back(0);
                         curEnts = getCurLayer();
                     }
+                    break;
                 }
             }
             // Fall through for loop
@@ -3028,21 +3082,47 @@ MacroRulesPtr::~MacroRulesPtr() {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const SimplePatEnt& x) {
-    TU_MATCH_HDRA( (x), { )
-    TU_ARMA(End, _e) os << "End";
-        TU_ARMA(LoopStart, e) os << "LoopStart(" << e.index << ")";
-        TU_ARMA(LoopNext, _e) os << "LoopNext";
-        TU_ARMA(LoopEnd, _e) os << "LoopEnd";
-        TU_ARMA(Jump, e) {
+    switch (x.tag()) {
+        case SimplePatEnt::TAG_End: {
+            auto& _e = x.as_End();
+            (void)_e;
+            os << "End";
+            break;
+        }
+        case SimplePatEnt::TAG_LoopStart: {
+            auto& e = x.as_LoopStart();
+            os << "LoopStart(" << e.index << ")";
+            break;
+        }
+        case SimplePatEnt::TAG_LoopNext: {
+            auto& _e = x.as_LoopNext();
+            (void)_e;
+            os << "LoopNext";
+            break;
+        }
+        case SimplePatEnt::TAG_LoopEnd: {
+            auto& _e = x.as_LoopEnd();
+            (void)_e;
+            os << "LoopEnd";
+            break;
+        }
+        case SimplePatEnt::TAG_Jump: {
+            auto& e = x.as_Jump();
             os << "Jump(->" << e.jumpTarget << ")";
+            break;
         }
-        TU_ARMA(ExpectTok, e) {
+        case SimplePatEnt::TAG_ExpectTok: {
+            auto& e = x.as_ExpectTok();
             os << "Expect(" << e << ")";
+            break;
         }
-        TU_ARMA(ExpectPat, e) {
+        case SimplePatEnt::TAG_ExpectPat: {
+            auto& e = x.as_ExpectPat();
             os << "Expect($" << e.idx << " = " << e.type << ")";
+            break;
         }
-        TU_ARMA(If, e) {
+        case SimplePatEnt::TAG_If: {
+            auto& e = x.as_If();
             os << "If(" << (e.isEqual ? "=" : "!=") << "[";
             for (const auto& p : e.ents) {
                 if (p.ty == MacroPatEnt::PAT_TOKEN) {
@@ -3053,17 +3133,21 @@ MacroRulesPtr::~MacroRulesPtr() {
                 os << ", ";
             }
             os << "] ->" << e.jumpTarget << ")";
+            break;
         }
     }
     return os;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const MacroExpansionEnt& x) {
-    TU_MATCH_HDRA( (x), {)
-    TU_ARMA(Token, e) {
+    switch (x.tag()) {
+        case MacroExpansionEnt::TAG_Token: {
+            auto& e = x.as_Token();
             os << "=" << e;
+            break;
         }
-        TU_ARMA(NamedValue, e) {
+        case MacroExpansionEnt::TAG_NamedValue: {
+            auto& e = x.as_NamedValue();
             switch (e & ~NAMEDVALUE_VALMASK) {
                 case 0:
                     os << "$" << e;
@@ -3074,12 +3158,18 @@ MacroRulesPtr::~MacroRulesPtr() {
                 default:
                     os << "$?" << e;
             }
+            break;
         }
-        TU_ARMA(Concat, e) {
+        case MacroExpansionEnt::TAG_Concat: {
+            auto& e = x.as_Concat();
+            (void)e;
             os << "${concat(...)}";
+            break;
         }
-        TU_ARMA(Loop, e) {
+        case MacroExpansionEnt::TAG_Loop: {
+            auto& e = x.as_Loop();
             os << "${" << e.controllingInputLoops << "}(" << e.entries << ") " << e.joiner;
+            break;
         }
     }
     return os;
@@ -3431,11 +3521,13 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
         }
 
         void emitType(ASTType*& type) {
-            TU_MATCH_HDRA((type->data), {)
-            default:
+            switch (type->data.tag()) {
+default:
                 TODO(Span(), "Convert interpolated macro fragment: " << type);
-            TU_ARMA(Path, p) {
+                case TypeData::TAG_Path: {
+                    auto& p = type->data.as_Path();
                     emitPath(*p);
+                    break;
                 }
             }
         }
@@ -4321,14 +4413,21 @@ namespace {
         }
 
         for (size_t i = levelStart; i < rv.size(); i++) {
-            TU_MATCH_HDRA( (rv[i]), { )
-            default:
+            {
+                auto& tuMatch = rv[i];
+                switch (tuMatch.tag()) {
+default:
                 // Ignore
-            TU_ARMA(If, e) {
-                    ASSERT_BUG(sp, e.jumpTarget < rv.size(), "If target out of bounds, " << e.jumpTarget << " >= " << rv.size());
-                }
-                TU_ARMA(Jump, e) {
-                    ASSERT_BUG(sp, e.jumpTarget < rv.size(), "Jump target out of bounds, " << e.jumpTarget << " >= " << rv.size());
+                    case SimplePatEnt::TAG_If: {
+                        auto& e = tuMatch.as_If();
+                        ASSERT_BUG(sp, e.jumpTarget < rv.size(), "If target out of bounds, " << e.jumpTarget << " >= " << rv.size());
+                        break;
+                    }
+                    case SimplePatEnt::TAG_Jump: {
+                        auto& e = tuMatch.as_Jump();
+                        ASSERT_BUG(sp, e.jumpTarget < rv.size(), "Jump target out of bounds, " << e.jumpTarget << " >= " << rv.size());
+                        break;
+                    }
                 }
             }
         }

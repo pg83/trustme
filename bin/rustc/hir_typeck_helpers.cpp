@@ -293,47 +293,71 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
         // TODO: ATYs?
     };
     auto printPath = [&](const HIRPath& path) {
-        TU_MATCH_HDRA( (path.data), {)
-        TU_ARMA(Generic, pe) {
+        switch (path.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                auto& pe = path.data.as_Generic();
                 this->printGenericpath(os, pe, stack);
+                break;
             }
-            TU_ARMA(UfcsKnown, pe) {
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& pe = path.data.as_UfcsKnown();
                 os << "<";
                 this->printType(os, pe.type, stack);
                 os << " as ";
                 this->printGenericpath(os, pe.trait, stack);
                 os << ">::" << pe.item;
                 this->printPathparams(os, pe.params, stack);
+                break;
             }
-            TU_ARMA(UfcsInherent, pe) {
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& pe = path.data.as_UfcsInherent();
                 os << "<";
                 this->printType(os, pe.type, stack);
                 os << ">::" << pe.item;
                 this->printPathparams(os, pe.params, stack);
+                break;
             }
-            TU_ARMA(UfcsUnknown, pe) {
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& pe = path.data.as_UfcsUnknown();
+                (void)pe;
                 BUG(Span(), "UfcsUnknown");
+                break;
             }
         }
     };
 
-    TU_MATCH_HDRA( (*ty), {)
-    TU_ARMA(Infer, e) {
+    switch ((*ty).tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*ty).as_Infer();
+            (void)e;
             os << ty;
+            break;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*ty).as_Primitive();
+            (void)e;
             os << ty;
+            break;
         }
-        TU_ARMA(Diverge, e) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = (*ty).as_Diverge();
+            (void)e;
             os << ty;
+            break;
         }
-        TU_ARMA(Generic, e) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*ty).as_Generic();
+            (void)e;
             os << ty;
+            break;
         }
-        TU_ARMA(Path, e) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*ty).as_Path();
             printPath(e.path);
+            break;
         }
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*ty).as_Borrow();
             os << "&";
             switch (e.type) {
                 case HIRBorrowType::Shared:
@@ -347,8 +371,10 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
                     break;
             }
             this->printType(os, e.inner, stack);
+            break;
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*ty).as_Pointer();
             switch (e.type) {
                 case HIRBorrowType::Shared:
                     os << "*const ";
@@ -361,26 +387,35 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
                     break;
             }
             this->printType(os, e.inner, stack);
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*ty).as_Slice();
             os << "[";
             this->printType(os, e.inner, stack);
             os << "]";
+            break;
         }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*ty).as_Array();
             os << "[";
             this->printType(os, e.inner, stack);
             os << "; " << e.size << "]";
+            break;
         }
-        TU_ARMA(Pattern, e) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = (*ty).as_Pattern();
             this->printType(os, e.inner, stack);
             os << " is ";
             e.pattern.fmt(os);
+            break;
         }
-        TU_ARMA(NodeType, e) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*ty).as_NodeType();
             e.fmt(os);
-        TU_MATCH_HDRA((e), {)
-        TU_ARMA(Closure, nodeP) {
+            switch (e.tag()) {
+                case HIRTypeDataNodeType::TAG_Closure: {
+                    auto& nodeP = e.as_Closure();
                     os << "(";
                     for (const auto& arg : nodeP->args) {
                         this->printType(os, arg.second, stack);
@@ -388,19 +423,30 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
                     }
                     os << ")->";
                     this->printType(os, nodeP->returnType, stack);
+                    break;
                 }
-                TU_ARMA(Generator, nodeP) {
+                case HIRTypeDataNodeType::TAG_Generator: {
+                    auto& nodeP = e.as_Generator();
+                    (void)nodeP;
+                    break;
                 }
-                TU_ARMA(Async, nodeP) {
+                case HIRTypeDataNodeType::TAG_Async: {
+                    auto& nodeP = e.as_Async();
+                    (void)nodeP;
+                    break;
                 }
+            }
+            break;
         }
-        }
-        TU_ARMA(NamedFunction, e) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = (*ty).as_NamedFunction();
             os << "fn{";
             printPath(e.path);
             os << "}";
+            break;
         }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*ty).as_Function();
             if (e.isUnsafe) {
                 os << "unsafe ";
             }
@@ -414,8 +460,10 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
             }
             os << ")->";
             this->printType(os, e.rettype, stack);
+            break;
         }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*ty).as_TraitObject();
             os << "dyn (";
             printTraitpath(e.trait);
             for (const auto& marker : e.markers) {
@@ -423,39 +471,51 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
                 this->printGenericpath(os, marker, stack);
             }
             os << ")";
+            break;
         }
-        TU_ARMA(ErasedType, e) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*ty).as_ErasedType();
             os << "impl ";
-            for (const auto& tr : e.traits) {
-                if (&tr != &e.traits[0]) {
-                    os << "+";
+                for (const auto& tr : e.traits) {
+                    if (&tr != &e.traits[0]) {
+                        os << "+";
+                    }
+                    printTraitpath(tr);
                 }
-                printTraitpath(tr);
-            }
-            os << "+use";
-            this->printPathparams(os, e.use, outerStack);
-            os << "/*";
-        TU_MATCH_HDRA( (e.inner), {)
-        TU_ARMA(Fcn, ee) {
+                os << "+use";
+                this->printPathparams(os, e.use, outerStack);
+                os << "/*";
+            switch (e.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    auto& ee = e.inner.as_Fcn();
                     os << "fn ";
                     printPath(ee.origin);
                     os << "#" << ee.index;
+                    break;
                 }
-                TU_ARMA(Known, ee) {
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    auto& ee = e.inner.as_Known();
                     printType(os, ee, stack);
+                    break;
                 }
-                TU_ARMA(Alias, ee) {
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    auto& ee = e.inner.as_Alias();
+                    (void)ee;
+                    break;
                 }
+            }
+            os << "*/";
+            break;
         }
-        os << "*/";
-        }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*ty).as_Tuple();
             os << "(";
             for (const auto& st : e) {
                 this->printType(os, st, stack);
                 os << ",";
             }
             os << ")";
+            break;
         }
     }
 }
@@ -534,49 +594,79 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
         }
     };
 
-    TU_MATCH_HDRA( (data), {)
-    TU_ARMA(Infer, e) {
+    switch (data.tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = data.as_Infer();
+            (void)e;
+            break;
         }
-        TU_ARMA(Diverge, e) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = data.as_Diverge();
+            (void)e;
+            break;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = data.as_Primitive();
+            (void)e;
+            break;
         }
-        TU_ARMA(Path, e) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = data.as_Path();
             // Iterate all arguments
             H::expandIvarsPath(*this, e.path);
+            break;
         }
-        TU_ARMA(Generic, e) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = data.as_Generic();
+            (void)e;
+            break;
         }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = data.as_TraitObject();
             this->expandIvarsTraitPath(e.trait);
             for (auto& marker : e.markers) {
                 this->expandIvarsParams(marker.params);
             }
+            break;
         }
-        TU_ARMA(ErasedType, e) {
-        TU_MATCH_HDRA( (e.inner), {)
-        TU_ARMA(Fcn, ee) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = data.as_ErasedType();
+            switch (e.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    auto& ee = e.inner.as_Fcn();
                     H::expandIvarsPath(*this, ee.origin);
+                    break;
                 }
-                TU_ARMA(Known, ee) {
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    auto& ee = e.inner.as_Known();
                     this->expandIvars(ee);
+                    break;
                 }
-                TU_ARMA(Alias, ee) {
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    auto& ee = e.inner.as_Alias();
+                    (void)ee;
+                    break;
                 }
+            }
+            for(auto& trait : e.traits)
+            {
+                    this->expandIvarsParams(trait.path.params);
+                    // TODO: Associated types
+            }
+            break;
         }
-        for(auto& trait : e.traits)
-        {
-                this->expandIvarsParams(trait.path.params);
-                // TODO: Associated types
-        }
-        }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = data.as_Array();
             this->expandIvars(e.inner);
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = data.as_Slice();
             this->expandIvars(e.inner);
+            break;
         }
-        TU_ARMA(Pattern, e) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = data.as_Pattern();
             this->expandIvars(e.inner);
             for (auto& range : e.pattern.alternatives) {
                 HIRConstGeneric* values[] = {range.hasStart ? &range.start : nullptr, range.hasEnd ? &range.end : nullptr};
@@ -587,28 +677,42 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
                     }
                 }
             }
+            break;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = data.as_Tuple();
             for (auto& ty : e) {
                 this->expandIvars(ty);
             }
+            break;
         }
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = data.as_Borrow();
             this->expandIvars(e.inner);
+            break;
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = data.as_Pointer();
             this->expandIvars(e.inner);
+            break;
         }
-        TU_ARMA(NamedFunction, e) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = data.as_NamedFunction();
             H::expandIvarsPath(*this, e.path);
+            break;
         }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = data.as_Function();
             this->expandIvars(e.rettype);
             for (auto& ty : e.argTypes) {
                 this->expandIvars(ty);
             }
+            break;
         }
-        TU_ARMA(NodeType, e) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = data.as_NodeType();
+            (void)e;
+            break;
         }
     }
     type = types.intern(std::move(data));
@@ -667,14 +771,24 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
     }
 
     auto data = type->cloneData();
-    TU_MATCH_HDRA( (data), {)
-    TU_ARMA(Infer, e) {
+    switch (data.tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = data.as_Infer();
+            (void)e;
+            break;
         }
-        TU_ARMA(Diverge, e) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = data.as_Diverge();
+            (void)e;
+            break;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = data.as_Primitive();
+            (void)e;
+            break;
         }
-        TU_ARMA(Path, e) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = data.as_Path();
             // Iterate all arguments
             switch (e.path.data.tag()) {
                 case HIRPath::Data::TAG_Generic: {
@@ -698,60 +812,89 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
                     break;
                 }
             }
+            break;
         }
-        TU_ARMA(Generic, e) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = data.as_Generic();
+            (void)e;
+            break;
         }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = data.as_TraitObject();
             // Iterate all paths
             this->addIvarsTraitPath(e.trait);
             for (auto& marker : e.markers) {
                 this->addIvarsParams(marker.params);
             }
+            break;
         }
-        TU_ARMA(ErasedType, e) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = data.as_ErasedType();
+            (void)e;
             if (typeContainsIvars(type, /*only_unbound=*/true)) {
                 BUG(Span(), "ErasedType getting ivars added - " << type);
             }
+            break;
         }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = data.as_Array();
             addIvars(e.inner);
             if (e.size.is_Unevaluated()) {
                 addIvars(e.size.as_Unevaluated());
             }
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = data.as_Slice();
             addIvars(e.inner);
+            break;
         }
-        TU_ARMA(Pattern, e) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = data.as_Pattern();
             addIvars(e.inner);
             for (auto& range : e.pattern.alternatives) {
                 if (range.hasStart) addIvars(range.start);
                 if (range.hasEnd) addIvars(range.end);
             }
+            break;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = data.as_Tuple();
             for (auto& ty : e) {
                 addIvars(ty);
             }
+            break;
         }
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = data.as_Borrow();
             addIvars(e.inner);
+            break;
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = data.as_Pointer();
             addIvars(e.inner);
+            break;
         }
-        TU_ARMA(NamedFunction, e) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = data.as_NamedFunction();
+            (void)e;
             // Shouldn't be possible?
             // Even if it is seen, it shouldn't have any empty ivars
+            break;
         }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = data.as_Function();
             addIvars(e.rettype);
             for (auto& ty : e.argTypes) {
                 addIvars(ty);
             }
+            break;
         }
-        TU_ARMA(NodeType, e) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = data.as_NodeType();
+            (void)e;
             // Shouldn't be possible
+            break;
         }
     }
     type = types.intern(std::move(data));
@@ -1211,18 +1354,20 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
         }
         case HIRTypeData::TAG_ErasedType: {
             auto& e = (*ty).as_ErasedType();
-            TU_MATCH_HDRA( (e.inner), {)
-                    TU_ARMA(Fcn, ee) {
-                        return pathContainsIvars(ee.origin, onlyUnbound);
-            }
-
-            TU_ARMA(Known, ee) {
-                return typeContainsIvars(ee, onlyUnbound);
-            }
-
-            TU_ARMA(Alias, ee) {
-                return false;
-            }
+            switch (e.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    auto& ee = e.inner.as_Fcn();
+                    return pathContainsIvars(ee.origin, onlyUnbound);
+                }
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    auto& ee = e.inner.as_Known();
+                    return typeContainsIvars(ee, onlyUnbound);
+                }
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    auto& ee = e.inner.as_Alias();
+                    (void)ee;
+                    return false;
+                }
             }
             break;
         }
@@ -1415,23 +1560,27 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             auto& re = (*r).as_ErasedType();
             if( le.inner.tag() != re.inner.tag() )
                 return false;
-            TU_MATCH_HDRA( (le.inner, re.inner), {)
-            TU_ARMA(Fcn, l,r) {
-                ASSERT_BUG(Span(), l.origin != HIRSimplePath(), "Erased type with unset origin");
-                ASSERT_BUG(Span(), r.origin != HIRSimplePath(), "Erased type with unset origin");
-                return H::comparePath(*this, l.origin, r.origin);
-            }
-
-            TU_ARMA(Known, l, r) {
-                return typesEqual(l, r);
-            }
-
-            TU_ARMA(Alias, l, r) {
-                if (l.inner->path != r.inner->path) {
-                    return false;
+            switch (le.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    auto& l = le.inner.as_Fcn();
+                    auto& r = re.inner.as_Fcn();
+                    ASSERT_BUG(Span(), l.origin != HIRSimplePath(), "Erased type with unset origin");
+                    ASSERT_BUG(Span(), r.origin != HIRSimplePath(), "Erased type with unset origin");
+                    return H::comparePath(*this, l.origin, r.origin);
                 }
-                return pathparamsEqual(l.params, r.params);
-            }
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    auto& l = le.inner.as_Known();
+                    auto& r = re.inner.as_Known();
+                    return typesEqual(l, r);
+                }
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    auto& l = le.inner.as_Alias();
+                    auto& r = re.inner.as_Alias();
+                    if (l.inner->path != r.inner->path) {
+                        return false;
+                    }
+                    return pathparamsEqual(l.params, r.params);
+                }
             }
             break;
         }
@@ -1923,13 +2072,14 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
         return callback(ImplRef(type, mv$(actualParams), mv$(assoc)), cmp);
     };
 
-    TU_MATCH_HDRA( (*type), {)
-    default:
+    switch ((*type).tag()) {
+default:
         break;
-        TU_ARMA(NodeType, e) {
-        TU_MATCH_HDRA((e), {)
-        // Magic impls of the Fn* traits for closure types
-        TU_ARMA(Closure, nodeP) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*type).as_NodeType();
+            switch (e.tag()) {
+                case HIRTypeDataNodeType::TAG_Closure: {
+                    auto& nodeP = e.as_Closure();
                     if (isAsyncCallableTrait) {
                         bool supportsShared = true;
                         bool supportsMutable = true;
@@ -1985,8 +2135,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                             return false;
                         }
                     }
+                    break;
                 }
-                TU_ARMA(Generator, nodeP) {
+                case HIRTypeDataNodeType::TAG_Generator: {
+                    auto& nodeP = e.as_Generator();
                     if (trait == langGenerator()) {
                         static const RcString rcstringYield = RcString::newInterned("Yield");
                         static const RcString rcstringReturn = RcString::newInterned("Return");
@@ -1997,8 +2149,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                         params.types.push_back(nodeP->resumeTy);
                         return callback(ImplRef(type, mv$(params), mv$(assoc)), HIRCompare::Equal);
                     }
+                    break;
                 }
-                TU_ARMA(Async, nodeP) {
+                case HIRTypeDataNodeType::TAG_Async: {
+                    auto& nodeP = e.as_Async();
                     if (nodeP->isAsyncGen) {
                         // An `async gen` block is an AsyncIterator, not a Future.
                         if (trait == langAsyncIterator()) {
@@ -2013,11 +2167,13 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                         assoc.insert(::std::make_pair(rcstringOutput, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->returnType}));
                         return callback(ImplRef(type, {}, mv$(assoc)), HIRCompare::Equal);
                     }
+                    break;
                 }
+            }
+            break;
         }
-        }
-        // Magic Fn* trait impls for function pointers
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*type).as_Function();
             if (isAsyncCallableTrait) {
                 if (e.abi != ABI_RUST || e.isUnsafe) {
                     return false;
@@ -2058,9 +2214,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, e.rettype}));
                 return callback(ImplRef(type, mv$(pp), mv$(types)), cmp);
             }
+            break;
         }
-        // Magic Fn* trait impls for function pointers
-        TU_ARMA(NamedFunction, realE) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& realE = (*type).as_NamedFunction();
             if (isAsyncCallableTrait) {
                 auto e = realE.decay(crate.types, sp);
                 if (e.abi != ABI_RUST || e.isUnsafe) {
@@ -2109,10 +2266,12 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, e.rettype}));
                 return callback(ImplRef(type, mv$(pp), mv$(types)), cmp);
             }
+            break;
         }
-        // Magic index and unsize impls for Arrays
-        // NOTE: The index impl for [T] is in libcore.
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*type).as_Array();
+            (void)e;
+            break;
         }
     }
     return false;
@@ -2145,12 +2304,13 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             }
 
             // Trait impls from complex bounds
-    TU_MATCH_HDRA( (*type), {)
-    default:
+    switch ((*type).tag()) {
+default:
         break;
         // Trait objects automatically implement their own traits
         // - IF object safe (TODO)
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*type).as_TraitObject();
             if (trait == e.trait.path.path) {
                 auto cmp = comparePp(sp, e.trait.path.params, params);
                 if (cmp != HIRCompare::Unequal) {
@@ -2200,8 +2360,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return rv;
                 }
             }
-        } // TU_ARMA(TraitObject, e)
-        TU_ARMA(ErasedType, e) {
+            break;
+        }
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*type).as_ErasedType();
             for (const auto& traitPath : e.traits) {
                 if (trait == traitPath.path.path) {
                     auto cmp = comparePp(sp, traitPath.path.params, params);
@@ -2247,17 +2409,19 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return rv;
                 }
             }
-        } // TU_ARMA(ErasedType)
-        // If the type in question is a magic placeholder, return a placeholder impl :)
-        TU_ARMA(Generic, e) {
+            break;
+        }
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*type).as_Generic();
             if ((e.binding >> 8) == 2) {
                 // TODO: This is probably going to break something in the future.
                 DEBUG("- Magic impl for placeholder type");
                 return callback(ImplRef(type, &nullParams, &nullAssoc), HIRCompare::Fuzzy);
             }
-        } // TU_ARMA(Generic)
-        // If this type is an opaque UfcsKnown - check bounds
-        TU_ARMA(Path, e) {
+            break;
+        }
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*type).as_Path();
             if (e.binding.is_Opaque()) {
                 ASSERT_BUG(sp, e.path.data.is_UfcsKnown(), "Opaque bound type wasn't UfcsKnown - " << type);
                 const auto& pe = e.path.data.as_UfcsKnown();
@@ -2337,7 +2501,8 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return true;
                 }
             }
-        } // TU_ARMA(Path)
+            break;
+        }
     } // TU_MATCH_HDRA
 
     // 1. Search generic params
@@ -3642,95 +3807,100 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return solveGoal(trait, params, inner, nullptr);
                 };
 
-            TU_MATCH_HDRA((*type), {)
-            default:
+            switch ((*type).tag()) {
+default:
                 return Certainty::Proven;
-            TU_ARMA(Path, e) {
-                if (const auto* pe = e.path.data.opt_Generic()) {
-                    HIRTypeRef tmp;
-                    auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe->params, nullptr);
-                    auto evaluateField = [&](const HIRTypeData* field) {
-                        const auto& fieldType = monomorphiseTypeNeeded(field) ? (tmp = resolve_.expandAssociatedTypes(span(), monomorph.monomorphType(span(), field))) : field;
-                        return evaluateInner(fieldType);
-                    };
+                case HIRTypeData::TAG_Path: {
+                    auto& e = (*type).as_Path();
+                    if (const auto* pe = e.path.data.opt_Generic()) {
+                        HIRTypeRef tmp;
+                        auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe->params, nullptr);
+                        auto evaluateField = [&](const HIRTypeData* field) {
+                            const auto& fieldType = monomorphiseTypeNeeded(field) ? (tmp = resolve_.expandAssociatedTypes(span(), monomorph.monomorphType(span(), field))) : field;
+                            return evaluateInner(fieldType);
+                        };
 
-                    if (e.binding.is_Unbound() || e.binding.is_Opaque()) {
-                        return Certainty::Ambiguous;
-                    }
-                    Certainty result = Certainty::Proven;
-                    if (const auto* strPtr = e.binding.opt_Struct()) {
-                        const auto& str = **strPtr;
-                        switch (str.data.tag()) {
-                            case HIRStruct::Data::TAG_Unit: {
-                                auto& se = str.data.as_Unit();
-                                (void)se;
-                                break;
-                            }
-                            case HIRStruct::Data::TAG_Tuple: {
-                                auto& se = str.data.as_Tuple();
-                                for (const auto& field : se) {
-                                    combine(result, evaluateField(field.ent));
-                                    if (result == Certainty::NoSolution) {
-                                        return result;
-                                    }
-                                }
-                                break;
-                            }
-                            case HIRStruct::Data::TAG_Named: {
-                                auto& se = str.data.as_Named();
-                                for (const auto& field : se) {
-                                    combine(result, evaluateField(field.ty));
-                                    if (result == Certainty::NoSolution) {
-                                        return result;
-                                    }
-                                }
-                                break;
-                            }
+                        if (e.binding.is_Unbound() || e.binding.is_Opaque()) {
+                            return Certainty::Ambiguous;
                         }
-                    } else if (const auto* enmPtr = e.binding.opt_Enum()) {
-                        const auto& enm = **enmPtr;
-                        if (const auto* variants = enm.data.opt_Data()) {
-                            for (const auto& variant : *variants) {
-                                combine(result, evaluateField(variant.type));
+                        Certainty result = Certainty::Proven;
+                        if (const auto* strPtr = e.binding.opt_Struct()) {
+                            const auto& str = **strPtr;
+                            switch (str.data.tag()) {
+                                case HIRStruct::Data::TAG_Unit: {
+                                    auto& se = str.data.as_Unit();
+                                    (void)se;
+                                    break;
+                                }
+                                case HIRStruct::Data::TAG_Tuple: {
+                                    auto& se = str.data.as_Tuple();
+                                    for (const auto& field : se) {
+                                        combine(result, evaluateField(field.ent));
+                                        if (result == Certainty::NoSolution) {
+                                            return result;
+                                        }
+                                    }
+                                    break;
+                                }
+                                case HIRStruct::Data::TAG_Named: {
+                                    auto& se = str.data.as_Named();
+                                    for (const auto& field : se) {
+                                        combine(result, evaluateField(field.ty));
+                                        if (result == Certainty::NoSolution) {
+                                            return result;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        } else if (const auto* enmPtr = e.binding.opt_Enum()) {
+                            const auto& enm = **enmPtr;
+                            if (const auto* variants = enm.data.opt_Data()) {
+                                for (const auto& variant : *variants) {
+                                    combine(result, evaluateField(variant.type));
+                                    if (result == Certainty::NoSolution) {
+                                        return result;
+                                    }
+                                }
+                            }
+                        } else if (const auto* unnPtr = e.binding.opt_Union()) {
+                            const auto& unn = **unnPtr;
+                            for (const auto& field : unn.variants) {
+                                combine(result, evaluateField(field.ty));
                                 if (result == Certainty::NoSolution) {
                                     return result;
                                 }
                             }
+                        } else if (e.binding.is_ExternType()) {
+                            return Certainty::NoSolution;
                         }
-                    } else if (const auto* unnPtr = e.binding.opt_Union()) {
-                        const auto& unn = **unnPtr;
-                        for (const auto& field : unn.variants) {
-                            combine(result, evaluateField(field.ty));
-                            if (result == Certainty::NoSolution) {
-                                return result;
-                            }
+                        return result;
+                    }
+                    if (e.path.data.is_UfcsKnown() && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
+                        return Certainty::Ambiguous;
+                    }
+                    return Certainty::Ambiguous;
+                }
+                case HIRTypeData::TAG_Generic: {
+                    auto& e = (*type).as_Generic();
+                    (void)e;
+                    return evaluateInner(type);
+                }
+                case HIRTypeData::TAG_Tuple: {
+                    auto& e = (*type).as_Tuple();
+                    Certainty result = Certainty::Proven;
+                    for (const auto& field : e) {
+                        combine(result, evaluateInner(field));
+                        if (result == Certainty::NoSolution) {
+                            return result;
                         }
-                    } else if (e.binding.is_ExternType()) {
-                        return Certainty::NoSolution;
                     }
                     return result;
                 }
-                if (e.path.data.is_UfcsKnown() && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
-                    return Certainty::Ambiguous;
+                case HIRTypeData::TAG_Array: {
+                    auto& e = (*type).as_Array();
+                    return evaluateInner(e.inner);
                 }
-                return Certainty::Ambiguous;
-            }
-            TU_ARMA(Generic, e) {
-                return evaluateInner(type);
-            }
-            TU_ARMA(Tuple, e) {
-                Certainty result = Certainty::Proven;
-                for (const auto& field : e) {
-                    combine(result, evaluateInner(field));
-                    if (result == Certainty::NoSolution) {
-                        return result;
-                    }
-                }
-                return result;
-            }
-            TU_ARMA(Array, e) {
-                return evaluateInner(e.inner);
-            }
             }
             throw "";
             }
@@ -4822,21 +4992,28 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 }
             };
 
-    TU_MATCH_HDRA( (*input), {)
-    TU_ARMA(Infer, e) {
+    switch ((*input).tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*input).as_Infer();
+            (void)e;
             const auto& ty = this->ivars.getType(input);
             if (ty != input) {
                 return this->hasAssociatedType(ty);
             }
             return false;
         }
-        TU_ARMA(Diverge, e) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = (*input).as_Diverge();
+            (void)e;
             return false;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*input).as_Primitive();
+            (void)e;
             return false;
         }
-        TU_ARMA(Path, e) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*input).as_Path();
             // Both states still need projection normalisation. `Opaque` means
             // that no rule was available at the previous attempt, not that
             // the projection can never become known.
@@ -4845,10 +5022,13 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             }
             return H::checkPath(*this, e.path);
         }
-        TU_ARMA(Generic, e) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*input).as_Generic();
+            (void)e;
             return false;
         }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*input).as_TraitObject();
             // Recurse?
             if (H::checkPathparams(*this, e.trait.path.params)) {
                 return true;
@@ -4860,58 +5040,77 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             }
             return false;
         }
-        TU_ARMA(ErasedType, e) {
-        TU_MATCH_HDRA( (e.inner), {)
-        TU_ARMA(Fcn, ee) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*input).as_ErasedType();
+            switch (e.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    auto& ee = e.inner.as_Fcn();
                     if (H::checkPath(*this, ee.origin)) {
                         return true;
                     }
+                    break;
                 }
-                TU_ARMA(Known, ee) {
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    auto& ee = e.inner.as_Known();
                     if (hasAssociatedType(ee)) {
                         return true;
                     }
+                    break;
                 }
-                TU_ARMA(Alias, ee) {
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    auto& ee = e.inner.as_Alias();
+                    (void)ee;
+                    break;
                 }
+            }
+            for(const auto& m : e.traits) {
+                    if (H::checkPathparams(*this, m.path.params)) {
+                        return true;
+                    }
+            }
+            return false;
         }
-        for(const auto& m : e.traits) {
-                if (H::checkPathparams(*this, m.path.params)) {
-                    return true;
-                }
-        }
-        return false;
-        }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*input).as_Array();
             return hasAssociatedType(e.inner);
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*input).as_Slice();
             return hasAssociatedType(e.inner);
         }
-        TU_ARMA(Pattern, e) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = (*input).as_Pattern();
             return hasAssociatedType(e.inner);
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*input).as_Tuple();
             bool rv = false;
             for (const auto& sub : e) {
                 rv |= hasAssociatedType(sub);
             }
             return rv;
         }
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*input).as_Borrow();
             return hasAssociatedType(e.inner);
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*input).as_Pointer();
             return hasAssociatedType(e.inner);
         }
-        TU_ARMA(NamedFunction, e) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = (*input).as_NamedFunction();
             return H::checkPath(*this, e.path);
         }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*input).as_Function();
+            (void)e;
             // Recurse?
             return false;
         }
-        TU_ARMA(NodeType, e) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*input).as_NodeType();
+            (void)e;
             // Recurse?
             return false;
         }
@@ -4949,26 +5148,39 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 }
             }
             auto data = input->cloneData();
-    TU_MATCH_HDRA( (data), {)
-    TU_ARMA(Infer, e) {
+    switch (data.tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = data.as_Infer();
+            (void)e;
             const auto* ty = this->ivars.getType(input);
             if (ty != input) {
                 input = ty;
                 expandAssociatedTypesInplace(sp, input, stack);
                 return;
             }
+            break;
         }
-        TU_ARMA(Diverge, e) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = data.as_Diverge();
+            (void)e;
+            break;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = data.as_Primitive();
+            (void)e;
+            break;
         }
-        TU_ARMA(Path, e) {
-        TU_MATCH_HDRA( (e.path.data), {)
-        TU_ARMA(Generic, pe) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = data.as_Path();
+            switch (e.path.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& pe = e.path.data.as_Generic();
                     ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, e.binding.getGenerics(), pe.params);
                     H::expandAssociatedTypesParams(sp, *this, pe.params, stack);
+                    break;
                 }
-                TU_ARMA(UfcsInherent, pe) {
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& pe = e.path.data.as_UfcsInherent();
                     expandAssociatedTypesInplace(sp, pe.type, stack);
                     H::expandAssociatedTypesParams(sp, *this, pe.params, stack);
                     H::expandAssociatedTypesParams(sp, *this, pe.implParams, stack);
@@ -4978,7 +5190,8 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     }
                     return;
                 }
-                TU_ARMA(UfcsKnown, pe) {
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& pe = e.path.data.as_UfcsKnown();
                     struct D {
                         const TraitResolution& tr;
                         D(const TraitResolution& tr, HIRTypeRef v)
@@ -5033,31 +5246,48 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     }
                     return;
                 }
-                TU_ARMA(UfcsUnknown, pe) {
+                case HIRPathData::TAG_UfcsUnknown: {
+                    auto& pe = e.path.data.as_UfcsUnknown();
+                    (void)pe;
                     BUG(sp, "Encountered UfcsUnknown");
+                    break;
                 }
+            }
+            break;
         }
+        case HIRTypeData::TAG_Generic: {
+            auto& e = data.as_Generic();
+            (void)e;
+            break;
         }
-        TU_ARMA(Generic, e) {
-        }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = data.as_TraitObject();
             // Recurse?
             H::expandAssociatedTypesTp(sp, *this, e.trait, stack);
             for (auto& m : e.markers) {
                 H::expandAssociatedTypesParams(sp, *this, m.params, stack);
             }
+            break;
         }
-        TU_ARMA(ErasedType, e) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = data.as_ErasedType();
+            (void)e;
             // Recurse?
+            break;
         }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = data.as_Array();
             ConvertHIRConstantEvaluateArraySize(sp, this->wb, crate, visPath, e.size);
             expandAssociatedTypesInplace(sp, e.inner, stack);
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = data.as_Slice();
             expandAssociatedTypesInplace(sp, e.inner, stack);
+            break;
         }
-        TU_ARMA(Pattern, e) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = data.as_Pattern();
             expandAssociatedTypesInplace(sp, e.inner, stack);
             for (auto& range : e.pattern.alternatives) {
                 HIRConstGeneric* values[] = {range.hasStart ? &range.start : nullptr, range.hasEnd ? &range.end : nullptr};
@@ -5065,46 +5295,69 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     if (value) ConvertHIRConstantEvaluateConstGeneric(sp, this->wb, crate, e.inner, *value);
                 }
             }
+            break;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = data.as_Tuple();
             for (auto& sub : e) {
                 expandAssociatedTypesInplace(sp, sub, stack);
             }
+            break;
         }
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = data.as_Borrow();
             expandAssociatedTypesInplace(sp, e.inner, stack);
+            break;
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = data.as_Pointer();
             expandAssociatedTypesInplace(sp, e.inner, stack);
+            break;
         }
-        TU_ARMA(NamedFunction, e) {
-        TU_MATCH_HDRA( (e.path.data), {)
-        TU_ARMA(Generic, pe) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = data.as_NamedFunction();
+            switch (e.path.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& pe = e.path.data.as_Generic();
                     H::expandAssociatedTypesParams(sp, *this, pe.params, stack);
+                    break;
                 }
-                TU_ARMA(UfcsInherent, pe) {
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& pe = e.path.data.as_UfcsInherent();
                     expandAssociatedTypesInplace(sp, pe.type, stack);
                     H::expandAssociatedTypesParams(sp, *this, pe.params, stack);
+                    break;
                 }
-                TU_ARMA(UfcsKnown, pe) {
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& pe = e.path.data.as_UfcsKnown();
                     expandAssociatedTypesInplace(sp, pe.type, stack);
                     H::expandAssociatedTypesParams(sp, *this, pe.params, stack);
                     H::expandAssociatedTypesParams(sp, *this, pe.trait.params, stack);
+                    break;
                 }
-                TU_ARMA(UfcsUnknown, pe) {
+                case HIRPathData::TAG_UfcsUnknown: {
+                    auto& pe = e.path.data.as_UfcsUnknown();
+                    (void)pe;
                     BUG(sp, "Encountered UfcsUnknown");
+                    break;
                 }
+            }
+            // TODO: Should this re-populate `def`? Not right now, assuming it's set once only
+            break;
         }
-        // TODO: Should this re-populate `def`? Not right now, assuming it's set once only
-        }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = data.as_Function();
             for (auto& ty : e.argTypes) {
                 expandAssociatedTypesInplace(sp, ty, stack);
             }
             expandAssociatedTypesInplace(sp, e.rettype, stack);
+            break;
         }
-        TU_ARMA(NodeType, e) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = data.as_NodeType();
+            (void)e;
             // Recurse? Nah.
+            break;
         }
     }
             input = crate.types.intern(mv$(data));
@@ -5240,13 +5493,14 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             };
 
             // Special type-specific rules
-    TU_MATCH_HDRA( (*pe.type), {)
-    default:
+    switch ((*pe.type).tag()) {
+default:
         // No special handling
-    TU_ARMA(NodeType, te) {
-        TU_MATCH_HDRA((te), {)
-        // - If it's a closure, then the only trait impls are those generated by typeck
-        TU_ARMA(Closure, nodeP) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& te = (*pe.type).as_NodeType();
+            switch (te.tag()) {
+                case HIRTypeDataNodeType::TAG_Closure: {
+                    auto& nodeP = te.as_Closure();
                     if (pe.trait.path == langAsyncFn() || pe.trait.path == langAsyncFnMut() || pe.trait.path == langAsyncFnOnce()) {
                         if (expandAsyncCallableAssociated(nodeP->returnType)) {
                             return;
@@ -5261,8 +5515,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                         }
                     }
                     // TODO: Fall through? Maybe there's a generic impl that could match.
+                    break;
                 }
-                TU_ARMA(Generator, nodeP) {
+                case HIRTypeDataNodeType::TAG_Generator: {
+                    auto& nodeP = te.as_Generator();
                     if (pe.trait.path == this->langGenerator()) {
                         if (pe.item == "Return") {
                             input = nodeP->returnType;
@@ -5275,13 +5531,19 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                         }
                     }
                     // Fall through for generic impls
+                    break;
                 }
-                TU_ARMA(Async, nodeP) {
+                case HIRTypeDataNodeType::TAG_Async: {
+                    auto& nodeP = te.as_Async();
+                    (void)nodeP;
                     // TODO: `Future` impl
+                    break;
                 }
+            }
+            break;
         }
-        }
-        TU_ARMA(Function, te) {
+        case HIRTypeData::TAG_Function: {
+            auto& te = (*pe.type).as_Function();
             if (te.abi == ABI_RUST && !te.isUnsafe) {
                 if (pe.trait.path == langAsyncFn() || pe.trait.path == langAsyncFnMut() || pe.trait.path == langAsyncFnOnce()) {
                     if (expandAsyncCallableAssociated(te.rettype)) {
@@ -5297,9 +5559,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     }
                 }
             }
+            break;
         }
-        // If it's a TraitObject, then maybe we're asking for a bound
-        TU_ARMA(TraitObject, te) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& te = (*pe.type).as_TraitObject();
             const auto& dataTrait = te.trait.path;
             if (pe.trait.path == dataTrait.path) {
                 auto cmp = HIRCompare::Equal;
@@ -5351,9 +5614,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             if (isSupertrait) {
                 return;
             }
+            break;
         }
-        // If it's a ErasedType, then maybe we're asking for a bound
-        TU_ARMA(ErasedType, te) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& te = (*pe.type).as_ErasedType();
             DEBUG("- ErasedType");
             for (const auto& trait : te.traits) {
                 const auto& traitGp = trait.path;
@@ -5416,6 +5680,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return;
                 }
             }
+            break;
         }
     }
 
@@ -6144,33 +6409,43 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             };
 
             // - If the type is a path (struct/enum/...), search for impls for all contained types.
-    TU_MATCH_HDRA( (*type), { )
-    default:
+    switch ((*type).tag()) {
+default:
         // Otherwise, there's no negative so it must be positive
         return HIRCompare::Equal;
-        TU_ARMA(Path, e) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*type).as_Path();
             HIRCompare res = HIRCompare::Equal;
-        TU_MATCH_HDRA( (e.path.data), {)
-        TU_ARMA(Generic, pe) { //(
-                    HIRTypeRef tmp;
-                    auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe.params, nullptr);
-                    // HELPER: Get a possibily monomorphised version of the input type (stored in `tmp` if needed)
-                    auto monomorphGet = [&](const auto& ty) -> const HIRTypeData* {
-                        if (monomorphiseTypeNeeded(ty)) {
-                            return (tmp = this->expandAssociatedTypes(sp, monomorph.monomorphType(sp, ty)));
-                        } else {
-                            return ty;
-                        }
-                    };
+            switch (e.path.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& pe = e.path.data.as_Generic();
+                    //(
+                            HIRTypeRef tmp;
+                            auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe.params, nullptr);
+                            // HELPER: Get a possibily monomorphised version of the input type (stored in `tmp` if needed)
+                            auto monomorphGet = [&](const auto& ty) -> const HIRTypeData* {
+                                if (monomorphiseTypeNeeded(ty)) {
+                                    return (tmp = this->expandAssociatedTypes(sp, monomorph.monomorphType(sp, ty)));
+                                } else {
+                                    return ty;
+                                }
+                            };
 
-            TU_MATCH_HDRA( (e.binding), {)
-            TU_ARMA(Opaque, tpb) {
+                    switch (e.binding.tag()) {
+                        case HIRTypePathBinding::TAG_Opaque: {
+                            auto& tpb = e.binding.as_Opaque();
+                            (void)tpb;
                             BUG(sp, "Opaque binding on generic path - " << type);
+                            break;
                         }
-                        TU_ARMA(Unbound, tpb) {
+                        case HIRTypePathBinding::TAG_Unbound: {
+                            auto& tpb = e.binding.as_Unbound();
+                            (void)tpb;
                             BUG(sp, "Unbound binding on generic path - " << type);
+                            break;
                         }
-                        TU_ARMA(Struct, tpb) {
+                        case HIRTypePathBinding::TAG_Struct: {
+                            auto& tpb = e.binding.as_Struct();
                             const auto& str = *tpb;
 
                             // TODO: Somehow store a ruleset for auto traits on the type
@@ -6209,8 +6484,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                                     break;
                                 }
                             }
+                            break;
                         }
-                        TU_ARMA(Enum, tpb) {
+                        case HIRTypePathBinding::TAG_Enum: {
+                            auto& tpb = e.binding.as_Enum();
                             if (const auto* e = tpb->data.opt_Data()) {
                                 for (const auto& var : *e) {
                                     const auto& fldTyMono = monomorphGet(var.type);
@@ -6221,8 +6498,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                                     }
                                 }
                             }
+                            break;
                         }
-                        TU_ARMA(Union, tpb) {
+                        case HIRTypePathBinding::TAG_Union: {
+                            auto& tpb = e.binding.as_Union();
                             for (const auto& fld : tpb->variants) {
                                 const auto& fldTyMono = monomorphGet(fld.ty);
                                 DEBUG("Union '" << fld.name << "' " << fldTyMono);
@@ -6231,17 +6510,26 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                                     return HIRCompare::Unequal;
                                 }
                             }
+                            break;
                         }
-                        TU_ARMA(ExternType, tpb) {
+                        case HIRTypePathBinding::TAG_ExternType: {
+                            auto& tpb = e.binding.as_ExternType();
+                            (void)tpb;
                             TODO(sp, "Check auto trait destructure on extern type " << type);
+                            break;
                         }
-            }
-            DEBUG("- Nothing failed, calling callback");
+                    }
+                    DEBUG("- Nothing failed, calling callback");
+                    break;
                 }
-                TU_ARMA(UfcsUnknown, pe) {
+                case HIRPathData::TAG_UfcsUnknown: {
+                    auto& pe = e.path.data.as_UfcsUnknown();
+                    (void)pe;
                     BUG(sp, "UfcsUnknown in typeck - " << type);
+                    break;
                 }
-                TU_ARMA(UfcsKnown, pe) {
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& pe = e.path.data.as_UfcsKnown();
                     // If unbound, use Fuzzy {
                     if (e.binding.is_Unbound()) {
                         DEBUG("- Unbound UfcsKnown, returning Fuzzy");
@@ -6253,14 +6541,20 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                         return HIRCompare::Fuzzy;
                     }
                     TODO(sp, "Check trait bounds for bound on " << type);
+                    break;
                 }
-                TU_ARMA(UfcsInherent, pe) {
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& pe = e.path.data.as_UfcsInherent();
+                    (void)pe;
                     TODO(sp, "Auto trait lookup on UFCS Inherent type");
+                    break;
                 }
+            }
+            return res;
         }
-        return res;
-        }
-        TU_ARMA(Generic, e) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*type).as_Generic();
+            (void)e;
             auto lRes = HIRCompare::Unequal;
             this->findTraitImpls(sp, trait, *paramsPtr, type, [&](auto, auto cmp) {
                 lRes = cmp;
@@ -6268,7 +6562,8 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             });
             return lRes;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*type).as_Tuple();
             HIRCompare res = HIRCompare::Equal;
             for (const auto& sty : e) {
                 res &= typeImplsTrait(sty);
@@ -6278,7 +6573,8 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             }
             return res;
         }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*type).as_Array();
             return typeImplsTrait(e.inner);
         }
     }
@@ -6607,8 +6903,9 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 // Check bounds for this impl
                 // - If a bound fails, then this can't be a valid impl
                 for (const auto& bound : implParamsDef.bounds) {
-            TU_MATCH_HDRA( (bound), {)
-            TU_ARMA(TraitBound, be) {
+            switch (bound.tag()) {
+                case HIRGenericBound::TAG_TraitBound: {
+                    auto& be = bound.as_TraitBound();
                     DEBUG("Check bound " << be.type << " : " << be.trait);
                     auto realType = matcher.monomorphType(sp, be.type, false);
                     auto realTrait = matcher.monomorphTraitpath(sp, be.trait, false);
@@ -6746,9 +7043,12 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     }
 
                     //}
+                    break;
                 }
-                TU_ARMA(TypeEquality, be) {
+                case HIRGenericBound::TAG_TypeEquality: {
+                    auto& be = bound.as_TypeEquality();
                     TODO(sp, "Check bound " << be.type << " = " << be.otherType);
+                    break;
                 }
             }
                 }
@@ -6866,10 +7166,11 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             } else {
             }
 
-    TU_MATCH_HDRA( (*type), {)
-    default:
+    switch ((*type).tag()) {
+default:
         // Any unknown - it's sized
-    TU_ARMA(Infer, e) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*type).as_Infer();
             switch (e.tyClass) {
                 case HIRInferClass::Integer:
                 case HIRInferClass::Float:
@@ -6877,16 +7178,22 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 default:
                     return HIRCompare::Fuzzy;
             }
+            break;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*type).as_Primitive();
             if (e == HIRCoreType::Str) {
                 return HIRCompare::Unequal;
             }
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*type).as_Slice();
+            (void)e;
             return HIRCompare::Unequal;
         }
-        TU_ARMA(Path, e) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*type).as_Path();
             // TODO: Check that only ?Sized parameters are !Sized
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
@@ -6934,8 +7241,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     break;
                 }
             }
+            break;
         }
-        TU_ARMA(Generic, e) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*type).as_Generic();
             switch (e.group()) {
                 case 0:
                     return this->implGenerics_->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
@@ -6945,11 +7254,15 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     // Assume sized for anything else?
                     return HIRCompare::Equal;
             }
+            break;
         }
-        TU_ARMA(ErasedType, e) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*type).as_ErasedType();
             return e.isSized ? HIRCompare::Equal : HIRCompare::Unequal;
         }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*type).as_TraitObject();
+            (void)e;
             return HIRCompare::Unequal;
         }
     }
@@ -6958,8 +7271,8 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
 
         HIRCompare TraitResolution::typeIsCopy(const Span& sp, const HIRTypeData* ty) const {
             const auto& type = this->ivars.getType(ty);
-    TU_MATCH_HDRA( (*type), {)
-    default: {
+    switch ((*type).tag()) {
+default: {
             bool isFuzzy = false;
             bool hasEq = findTraitImpls(sp, langCopy(), HIRPathParams{}, ty, [&](auto, auto c) -> bool {
                 switch (c) {
@@ -6984,7 +7297,8 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 return HIRCompare::Unequal;
             }
         }
-        TU_ARMA(Infer, e) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*type).as_Infer();
             switch (e.tyClass) {
                 case HIRInferClass::Integer:
                 case HIRInferClass::Float:
@@ -6993,8 +7307,11 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     DEBUG("Fuzzy Copy impl for ivar?");
                     return HIRCompare::Fuzzy;
             }
+            break;
         }
-        TU_ARMA(Generic, e) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*type).as_Generic();
+            (void)e;
             // TODO: Store this result - or even pre-calculate it.
             return this->iterateBoundsTraits(
                        sp,
@@ -7006,40 +7323,55 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                    )
                        ? HIRCompare::Equal
                        : HIRCompare::Unequal;
+            break;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*type).as_Primitive();
             if (e == HIRCoreType::Str) {
                 return HIRCompare::Unequal;
             }
             return HIRCompare::Equal;
         }
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*type).as_Borrow();
             return e.type == HIRBorrowType::Shared ? HIRCompare::Equal : HIRCompare::Unequal;
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*type).as_Pointer();
+            (void)e;
             return HIRCompare::Equal;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*type).as_Tuple();
             auto rv = HIRCompare::Equal;
             for (const auto& sty : e) {
                 rv &= typeIsCopy(sp, sty);
             }
             return rv;
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*type).as_Slice();
+            (void)e;
             return HIRCompare::Unequal;
         }
-        TU_ARMA(NamedFunction, e) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = (*type).as_NamedFunction();
+            (void)e;
             return HIRCompare::Equal;
         }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*type).as_Function();
+            (void)e;
             return HIRCompare::Equal;
         }
-        TU_ARMA(NodeType, e) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*type).as_NodeType();
+            (void)e;
             // NOTE: This isn't strictly true, we're leaving the actual checking up to the validate pass
             return HIRCompare::Equal;
         }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*type).as_Array();
             return typeIsCopy(sp, e.inner);
         }
     }
@@ -7049,8 +7381,8 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
         HIRCompare TraitResolution::typeIsClone(const Span& sp, const HIRTypeData* ty) const {
             TRACE_FUNCTION_F(ty);
             const auto& type = this->ivars.getType(ty);
-    TU_MATCH_HDRA( (*type), {)
-    default: {
+    switch ((*type).tag()) {
+default: {
             if (type->is_Path() && type->as_Path().isClosure()) {
                 // If it was a closure, assume true (later code can check)
                 return HIRCompare::Equal;
@@ -7076,7 +7408,8 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 return HIRCompare::Unequal;
             }
         }
-        TU_ARMA(Infer, e) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*type).as_Infer();
             switch (e.tyClass) {
                 case HIRInferClass::Integer:
                 case HIRInferClass::Float:
@@ -7085,8 +7418,11 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     DEBUG("Fuzzy Clone impl for ivar?");
                     return HIRCompare::Fuzzy;
             }
+            break;
         }
-        TU_ARMA(Generic, e) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*type).as_Generic();
+            (void)e;
             // TODO: Store this result - or even pre-calculate it.
             return this->iterateBoundsTraits(
                        sp,
@@ -7098,41 +7434,56 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                    )
                        ? HIRCompare::Equal
                        : HIRCompare::Unequal;
+            break;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*type).as_Primitive();
             if (e == HIRCoreType::Str) {
                 return HIRCompare::Unequal;
             }
             return HIRCompare::Equal;
         }
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*type).as_Borrow();
             return e.type == HIRBorrowType::Shared ? HIRCompare::Equal : HIRCompare::Unequal;
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*type).as_Pointer();
+            (void)e;
             return HIRCompare::Equal;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*type).as_Tuple();
             auto rv = HIRCompare::Equal;
             for (const auto& sty : e) {
                 rv &= typeIsClone(sp, sty);
             }
             return rv;
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*type).as_Slice();
+            (void)e;
             return HIRCompare::Unequal;
         }
-        TU_ARMA(NamedFunction, e) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = (*type).as_NamedFunction();
+            (void)e;
             return HIRCompare::Equal;
         }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*type).as_Function();
+            (void)e;
             return HIRCompare::Equal;
         }
-        TU_ARMA(NodeType, e) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*type).as_NodeType();
+            (void)e;
             // NOTE: This isn't strictly true, we're leaving the actual checking up to the validate pass
             // TODO: Determine captures earlier and check captures here
             return HIRCompare::Equal;
         }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*type).as_Array();
             return typeIsClone(sp, e.inner);
         }
     }
@@ -8350,24 +8701,35 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
 
         bool TraitResolution::findField(const Span& sp, const HIRTypeData* ty, const RcString& name, /* Out -> */ HIRTypeRef& fieldTy) const {
             if (const auto* e = ty->opt_Path()) {
-        TU_MATCH_HDRA( (e->binding), {)
-        TU_ARMA(Unbound, be) {
+        switch (e->binding.tag()) {
+            case HIRTypePathBinding::TAG_Unbound: {
+                auto& be = e->binding.as_Unbound();
+                (void)be;
                 // Wut?
                 TODO(sp, "Handle TypePathBinding::Unbound - " << ty);
+                break;
             }
-            TU_ARMA(Opaque, be) {
+            case HIRTypePathBinding::TAG_Opaque: {
+                auto& be = e->binding.as_Opaque();
+                (void)be;
                 // Ignore, no fields on an opaque
+                break;
             }
-            TU_ARMA(Struct, be) {
+            case HIRTypePathBinding::TAG_Struct: {
+                auto& be = e->binding.as_Struct();
                 // Has fields!
-                const auto& str = *be;
-                const auto& params = e->path.data.as_Generic().params;
-                auto monomorph = MonomorphStatePtr(crate.types, ty, &params, nullptr);
-            TU_MATCH_HDRA( (str.data), {)
-            TU_ARMA(Unit, se) {
+                    const auto& str = *be;
+                    const auto& params = e->path.data.as_Generic().params;
+                    auto monomorph = MonomorphStatePtr(crate.types, ty, &params, nullptr);
+                switch (str.data.tag()) {
+                    case HIRStructData::TAG_Unit: {
+                        auto& se = str.data.as_Unit();
+                        (void)se;
                         // No fields on a unit struct
+                        break;
                     }
-                    TU_ARMA(Tuple, se) {
+                    case HIRStructData::TAG_Tuple: {
+                        auto& se = str.data.as_Tuple();
                         for (unsigned int i = 0; i < se.size(); i++) {
                             DEBUG(i << ": " << se[i].publicity << ", " << this->visPath << " : " << se[i].ent);
                             if (se[i].publicity.isVisible(this->visPath) && FMT(i) == name) {
@@ -8375,8 +8737,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                                 return true;
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(Named, se) {
+                    case HIRStructData::TAG_Named: {
+                        auto& se = str.data.as_Named();
                         for (const auto& fld : se) {
                             DEBUG(fld.name << ": " << fld.vis << ", " << this->visPath << " : " << fld.ty);
                             if (fld.vis.isVisible(this->visPath) && fld.name == name) {
@@ -8384,16 +8748,25 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                                 return true;
                             }
                         }
+                        break;
                     }
+                }
+                break;
             }
-            }
-            TU_ARMA(Enum, be) {
+            case HIRTypePathBinding::TAG_Enum: {
+                auto& be = e->binding.as_Enum();
+                (void)be;
                 // No fields on enums either
+                break;
             }
-            TU_ARMA(ExternType, be) {
+            case HIRTypePathBinding::TAG_ExternType: {
+                auto& be = e->binding.as_ExternType();
+                (void)be;
                 // No fields on extern types
+                break;
             }
-            TU_ARMA(Union, be) {
+            case HIRTypePathBinding::TAG_Union: {
+                auto& be = e->binding.as_Union();
                 const auto& unm = *be;
                 const auto& params = e->path.data.as_Generic().params;
                 auto monomorph = MonomorphStatePtr(crate.types, ty, &params, nullptr);
@@ -8404,6 +8777,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                         return true;
                     }
                 }
+                break;
             }
         }
             } else if (const auto* e = ty->opt_Tuple()) {

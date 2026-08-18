@@ -46,88 +46,125 @@ namespace {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<HIRTypeRef>& x) {
-        TU_MATCH_HDRA( (*x.e), {)
-        TU_ARMA(Infer, te)  BUG(Span(), "" << x.e);
-            TU_ARMA(Diverge, te) {
-                os << "!";
-            }
-            TU_ARMA(Primitive, te) {
-                os << te;
-            }
-            TU_ARMA(Path, te) {
-                os << TransMangle(te.path);
-            }
-            TU_ARMA(Generic, te) {
-                BUG(Span(), "" << x.e);
-            }
-            TU_ARMA(TraitObject, te) {
-                auto path = te.trait.path.clone();
-                os << "dyn " << TransMangle(path);
-            }
-            TU_ARMA(ErasedType, te) {
-                BUG(Span(), "" << x.e);
-            }
-            TU_ARMA(Array, te) {
-                os << "[" << fmt(te.inner) << "; " << te.size << "]";
-            }
-            TU_ARMA(Slice, te) {
-                os << "[" << fmt(te.inner) << "]";
-            }
-            TU_ARMA(Tuple, te) {
-                if (te.empty()) {
-                    os << "()";
-                } else {
-                    os << TransMangle(x.e);
+        {
+            auto& tuMatch = (*x.e);
+            switch (tuMatch.tag()) {
+                case HIRTypeData::TAG_Infer: {
+                    auto& te = tuMatch.as_Infer();
+                    (void)te;
+                    BUG(Span(), "" << x.e);
+                    break;
                 }
-            }
-            TU_ARMA(Borrow, te) {
-                switch (te.type) {
-                    case HIRBorrowType::Shared:
-                        os << "&";
-                        break;
-                    case HIRBorrowType::Unique:
-                        os << "&mut ";
-                        break;
-                    case HIRBorrowType::Owned:
-                        os << "&move ";
-                        break;
+                case HIRTypeData::TAG_Diverge: {
+                    auto& te = tuMatch.as_Diverge();
+                    (void)te;
+                    os << "!";
+                    break;
                 }
-                os << fmt(te.inner);
-            }
-            TU_ARMA(Pointer, te) {
-                switch (te.type) {
-                    case HIRBorrowType::Shared:
-                        os << "*const ";
-                        break;
-                    case HIRBorrowType::Unique:
-                        os << "*mut ";
-                        break;
-                    case HIRBorrowType::Owned:
-                        os << "*move ";
-                        break;
+                case HIRTypeData::TAG_Primitive: {
+                    auto& te = tuMatch.as_Primitive();
+                    os << te;
+                    break;
                 }
-                os << fmt(te.inner);
-            }
-            TU_ARMA(NamedFunction, te) {
-                os << "fn " << TransMangle(te.path);
-            }
-            TU_ARMA(Function, e) {
-                if (e.isUnsafe) {
-                    os << "unsafe ";
+                case HIRTypeData::TAG_Path: {
+                    auto& te = tuMatch.as_Path();
+                    os << TransMangle(te.path);
+                    break;
                 }
-                if (e.abi != "") {
-                    os << "extern \"" << e.abi << "\" ";
+                case HIRTypeData::TAG_Generic: {
+                    auto& te = tuMatch.as_Generic();
+                    (void)te;
+                    BUG(Span(), "" << x.e);
+                    break;
                 }
-                os << "fn(";
-                for (const auto& t : e.argTypes) {
-                    os << fmt(t) << ", ";
+                case HIRTypeData::TAG_TraitObject: {
+                    auto& te = tuMatch.as_TraitObject();
+                    auto path = te.trait.path.clone();
+                    os << "dyn " << TransMangle(path);
+                    break;
                 }
-                os << ") -> " << fmt(e.rettype);
-            }
-            break;
+                case HIRTypeData::TAG_ErasedType: {
+                    auto& te = tuMatch.as_ErasedType();
+                    (void)te;
+                    BUG(Span(), "" << x.e);
+                    break;
+                }
+                case HIRTypeData::TAG_Array: {
+                    auto& te = tuMatch.as_Array();
+                    os << "[" << fmt(te.inner) << "; " << te.size << "]";
+                    break;
+                }
+                case HIRTypeData::TAG_Slice: {
+                    auto& te = tuMatch.as_Slice();
+                    os << "[" << fmt(te.inner) << "]";
+                    break;
+                }
+                case HIRTypeData::TAG_Tuple: {
+                    auto& te = tuMatch.as_Tuple();
+                    if (te.empty()) {
+                        os << "()";
+                    } else {
+                        os << TransMangle(x.e);
+                    }
+                    break;
+                }
+                case HIRTypeData::TAG_Borrow: {
+                    auto& te = tuMatch.as_Borrow();
+                    switch (te.type) {
+                        case HIRBorrowType::Shared:
+                            os << "&";
+                            break;
+                        case HIRBorrowType::Unique:
+                            os << "&mut ";
+                            break;
+                        case HIRBorrowType::Owned:
+                            os << "&move ";
+                            break;
+                    }
+                    os << fmt(te.inner);
+                    break;
+                }
+                case HIRTypeData::TAG_Pointer: {
+                    auto& te = tuMatch.as_Pointer();
+                    switch (te.type) {
+                        case HIRBorrowType::Shared:
+                            os << "*const ";
+                            break;
+                        case HIRBorrowType::Unique:
+                            os << "*mut ";
+                            break;
+                        case HIRBorrowType::Owned:
+                            os << "*move ";
+                            break;
+                    }
+                    os << fmt(te.inner);
+                    break;
+                }
+                case HIRTypeData::TAG_NamedFunction: {
+                    auto& te = tuMatch.as_NamedFunction();
+                    os << "fn " << TransMangle(te.path);
+                    break;
+                }
+                case HIRTypeData::TAG_Function: {
+                    auto& e = tuMatch.as_Function();
+                    if (e.isUnsafe) {
+                        os << "unsafe ";
+                    }
+                    if (e.abi != "") {
+                        os << "extern \"" << e.abi << "\" ";
+                    }
+                    os << "fn(";
+                    for (const auto& t : e.argTypes) {
+                        os << fmt(t) << ", ";
+                    }
+                    os << ") -> " << fmt(e.rettype);
+                    break;
+                }
+break;
             case HIRTypeData::TAG_NodeType:
                 BUG(Span(), "Unexpected type in trans: " << x.e);
                 break;
+            }
         }
         return os;
     }
@@ -1019,28 +1056,38 @@ namespace {
                                 }
                                 for (const auto& p : se.params) {
                                     of << ", ";
-                            TU_MATCH_HDRA((p), {)
-                            TU_ARMA(Const, v)
-                                of << "const " << fmt(v);
-                                        TU_ARMA(Sym, v)
-                                        of << "sym " << fmt(v);
-                                        TU_ARMA(Reg, v) {
-                                            of << "reg(" << v.dir << " " << v.spec << ") ";
-                                            if (v.input) {
-                                                of << fmt(*v.input);
-                                            } else {
-                                                of << "_";
-                                            }
-                                            of << " => ";
-                                            if (v.output) {
-                                                of << fmt(*v.output);
-                                            } else {
-                                                of << "_";
-                                            }
-                                        }
-                                        TU_ARMA(Label, v) {
-                                            of << "label " << v;
-                                        }
+                            switch (p.tag()) {
+                                case MIRAsmParam::TAG_Const: {
+                                    auto& v = p.as_Const();
+                                    of << "const " << fmt(v);
+                                    break;
+                                }
+                                case MIRAsmParam::TAG_Sym: {
+                                    auto& v = p.as_Sym();
+                                    of << "sym " << fmt(v);
+                                    break;
+                                }
+                                case MIRAsmParam::TAG_Reg: {
+                                    auto& v = p.as_Reg();
+                                    of << "reg(" << v.dir << " " << v.spec << ") ";
+                                    if (v.input) {
+                                        of << fmt(*v.input);
+                                    } else {
+                                        of << "_";
+                                    }
+                                    of << " => ";
+                                    if (v.output) {
+                                        of << fmt(*v.output);
+                                    } else {
+                                        of << "_";
+                                    }
+                                    break;
+                                }
+                                case MIRAsmParam::TAG_Label: {
+                                    auto& v = p.as_Label();
+                                    of << "label " << v;
+                                    break;
+                                }
                             }
                                 }
                                 of << ", ";

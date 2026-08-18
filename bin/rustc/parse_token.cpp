@@ -201,23 +201,37 @@ Token::Token(const Token& t)
     , isDocComment_(t.isDocComment_)
 {
     assert(!t.data_.isDead());
-    TU_MATCH_HDRA( (t.data_), {)
-    TU_ARMA(None, e) {
+    switch (t.data_.tag()) {
+        case TokenData::TAG_None: {
+            auto& e = t.data_.as_None();
+            (void)e;
+            break;
         }
-        TU_ARMA(Ident, e) {
+        case TokenData::TAG_Ident: {
+            auto& e = t.data_.as_Ident();
             data_ = Data::make_Ident(e);
+            break;
         }
-        TU_ARMA(String, e) {
+        case TokenData::TAG_String: {
+            auto& e = t.data_.as_String();
             data_ = Data::make_String(e);
+            break;
         }
-        TU_ARMA(Integer, e) {
+        case TokenData::TAG_Integer: {
+            auto& e = t.data_.as_Integer();
             data_ = Data::make_Integer(e);
+            break;
         }
-        TU_ARMA(Float, e) {
+        case TokenData::TAG_Float: {
+            auto& e = t.data_.as_Float();
             data_ = Data::make_Float(e);
+            break;
         }
-        TU_ARMA(Fragment, e) {
+        case TokenData::TAG_Fragment: {
+            auto& e = t.data_.as_Fragment();
+            (void)e;
             BUG(Span(Span(), t.pos), "Attempted to copy a fragment - " << t);
+            break;
         }
     }
 }

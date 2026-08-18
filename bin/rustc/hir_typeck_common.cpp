@@ -50,17 +50,21 @@ struct TyVisitor {
     }
 
     virtual bool visitPath(typename W<HIRPath>::T& path) {
-        TU_MATCH_HDRA((path.data), {)
-        TU_ARMA(Generic, e) {
+        switch (path.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                auto& e = path.data.as_Generic();
                 return visitPathParams(e.params);
             }
-            TU_ARMA(UfcsInherent, e) {
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& e = path.data.as_UfcsInherent();
                 return visitType(e.type) || visitPathParams(e.params);
             }
-            TU_ARMA(UfcsKnown, e) {
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& e = path.data.as_UfcsKnown();
                 return visitType(e.type) || visitPathParams(e.trait.params) || visitPathParams(e.params);
             }
-            TU_ARMA(UfcsUnknown, e) {
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& e = path.data.as_UfcsUnknown();
                 return visitType(e.type) || visitPathParams(e.params);
             }
         }
@@ -93,89 +97,124 @@ struct TyVisitor {
             }
         } h(curRecurseStack, ty);
 
-        TU_MATCH_HDRA( (this->getTyData(ty)), {)
-        TU_ARMA(Infer, e) {
-            }
-            TU_ARMA(Diverge, e) {
-            }
-            TU_ARMA(Primitive, e) {
-            }
-            TU_ARMA(Generic, e) {
-            }
-            TU_ARMA(Path, e) {
-                return visitPath(e.path);
-            }
-            TU_ARMA(TraitObject, e) {
-                if (visitTraitPath(e.trait)) {
-                    return true;
+        {
+            auto& tuMatch = (this->getTyData(ty));
+            switch (tuMatch.tag()) {
+                case HIRTypeData::TAG_Infer: {
+                    auto& e = tuMatch.as_Infer();
+                    (void)e;
+                    break;
                 }
-                for (auto& trait : e.markers) {
-                    if (visitPathParams(trait.params)) {
+                case HIRTypeData::TAG_Diverge: {
+                    auto& e = tuMatch.as_Diverge();
+                    (void)e;
+                    break;
+                }
+                case HIRTypeData::TAG_Primitive: {
+                    auto& e = tuMatch.as_Primitive();
+                    (void)e;
+                    break;
+                }
+                case HIRTypeData::TAG_Generic: {
+                    auto& e = tuMatch.as_Generic();
+                    (void)e;
+                    break;
+                }
+                case HIRTypeData::TAG_Path: {
+                    auto& e = tuMatch.as_Path();
+                    return visitPath(e.path);
+                }
+                case HIRTypeData::TAG_TraitObject: {
+                    auto& e = tuMatch.as_TraitObject();
+                    if (visitTraitPath(e.trait)) {
                         return true;
                     }
-                }
-                return false;
-            }
-            TU_ARMA(ErasedType, e) {
-                for (auto& trait : e.traits) {
-                    if (visitTraitPath(trait)) {
-                        return true;
-                    }
-                }
-                visitPathParams(e.use);
-            TU_MATCH_HDRA( (e.inner), {)
-            TU_ARMA(Fcn, ee) {
-                        if (visitPath(ee.origin)) {
+                    for (auto& trait : e.markers) {
+                        if (visitPathParams(trait.params)) {
                             return true;
                         }
                     }
-                    TU_ARMA(Known, ee) {
-                        if (visitType(ee)) {
+                    return false;
+                }
+                case HIRTypeData::TAG_ErasedType: {
+                    auto& e = tuMatch.as_ErasedType();
+                    for (auto& trait : e.traits) {
+                            if (visitTraitPath(trait)) {
+                                return true;
+                            }
+                        }
+                        visitPathParams(e.use);
+                    switch (e.inner.tag()) {
+                        case TypeDataErasedTypeInner::TAG_Fcn: {
+                            auto& ee = e.inner.as_Fcn();
+                            if (visitPath(ee.origin)) {
+                                return true;
+                            }
+                            break;
+                        }
+                        case TypeDataErasedTypeInner::TAG_Known: {
+                            auto& ee = e.inner.as_Known();
+                            if (visitType(ee)) {
+                                return true;
+                            }
+                            break;
+                        }
+                        case TypeDataErasedTypeInner::TAG_Alias: {
+                            auto& ee = e.inner.as_Alias();
+                            visitPathParams(ee.params);
+                            break;
+                        }
+                    }
+                    return false;
+                }
+                case HIRTypeData::TAG_Array: {
+                    auto& e = tuMatch.as_Array();
+                    return visitType(e.inner);
+                }
+                case HIRTypeData::TAG_Slice: {
+                    auto& e = tuMatch.as_Slice();
+                    return visitType(e.inner);
+                }
+                case HIRTypeData::TAG_Pattern: {
+                    auto& e = tuMatch.as_Pattern();
+                    return visitType(e.inner);
+                }
+                case HIRTypeData::TAG_Tuple: {
+                    auto& e = tuMatch.as_Tuple();
+                    for (auto& ty : e) {
+                        if (visitType(ty)) {
                             return true;
                         }
                     }
-                    TU_ARMA(Alias, ee) {
-                        visitPathParams(ee.params);
-                    }
-            }
-            return false;
-            }
-            TU_ARMA(Array, e) {
-                return visitType(e.inner);
-            }
-            TU_ARMA(Slice, e) {
-                return visitType(e.inner);
-            }
-            TU_ARMA(Pattern, e) {
-                return visitType(e.inner);
-            }
-            TU_ARMA(Tuple, e) {
-                for (auto& ty : e) {
-                    if (visitType(ty)) {
-                        return true;
-                    }
+                    return false;
                 }
-                return false;
-            }
-            TU_ARMA(Borrow, e) {
-                return visitType(e.inner);
-            }
-            TU_ARMA(Pointer, e) {
-                return visitType(e.inner);
-            }
-            TU_ARMA(NamedFunction, e) {
-                return visitPath(e.path);
-            }
-            TU_ARMA(Function, e) {
-                for (auto& ty : e.argTypes) {
-                    if (visitType(ty)) {
-                        return true;
-                    }
+                case HIRTypeData::TAG_Borrow: {
+                    auto& e = tuMatch.as_Borrow();
+                    return visitType(e.inner);
                 }
-                return visitType(e.rettype);
-            }
-            TU_ARMA(NodeType, e) {
-                // These just have a node pointer, no visiting
+                case HIRTypeData::TAG_Pointer: {
+                    auto& e = tuMatch.as_Pointer();
+                    return visitType(e.inner);
+                }
+                case HIRTypeData::TAG_NamedFunction: {
+                    auto& e = tuMatch.as_NamedFunction();
+                    return visitPath(e.path);
+                }
+                case HIRTypeData::TAG_Function: {
+                    auto& e = tuMatch.as_Function();
+                    for (auto& ty : e.argTypes) {
+                        if (visitType(ty)) {
+                            return true;
+                        }
+                    }
+                    return visitType(e.rettype);
+                }
+                case HIRTypeData::TAG_NodeType: {
+                    auto& e = tuMatch.as_NodeType();
+                    (void)e;
+                    // These just have a node pointer, no visiting
+                    break;
+                }
             }
         }
         return false;
@@ -253,11 +292,23 @@ namespace {
         }
 
         bool rewritePath(HIRPath& path) {
-            TU_MATCH_HDRA((path.data), {)
-            TU_ARMA(Generic, e) return rewritePathParams(e.params);
-                TU_ARMA(UfcsInherent, e) return rewriteType(e.type) || rewritePathParams(e.params) || rewritePathParams(e.implParams);
-                TU_ARMA(UfcsKnown, e) return rewriteType(e.type) || rewritePathParams(e.trait.params) || rewritePathParams(e.params);
-                TU_ARMA(UfcsUnknown, e) return rewriteType(e.type) || rewritePathParams(e.params);
+            switch (path.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& e = path.data.as_Generic();
+                    return rewritePathParams(e.params);
+                }
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& e = path.data.as_UfcsInherent();
+                    return rewriteType(e.type) || rewritePathParams(e.params) || rewritePathParams(e.implParams);
+                }
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& e = path.data.as_UfcsKnown();
+                    return rewriteType(e.type) || rewritePathParams(e.trait.params) || rewritePathParams(e.params);
+                }
+                case HIRPathData::TAG_UfcsUnknown: {
+                    auto& e = path.data.as_UfcsUnknown();
+                    return rewriteType(e.type) || rewritePathParams(e.params);
+                }
             }
             throw "";
         }
@@ -278,25 +329,44 @@ namespace {
             stack.push_back(original);
             bool childStop = false;
             if (!stop) {
-                TU_MATCH_HDRA((data), {)
-                TU_ARMA(Infer, e) {
+                switch (data.tag()) {
+                    case HIRTypeData::TAG_Infer: {
+                        auto& e = data.as_Infer();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Diverge, e) {
+                    case HIRTypeData::TAG_Diverge: {
+                        auto& e = data.as_Diverge();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Primitive, e) {
+                    case HIRTypeData::TAG_Primitive: {
+                        auto& e = data.as_Primitive();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Generic, e) {
+                    case HIRTypeData::TAG_Generic: {
+                        auto& e = data.as_Generic();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Path, e) childStop = rewritePath(e.path);
-                    TU_ARMA(TraitObject, e) {
+                    case HIRTypeData::TAG_Path: {
+                        auto& e = data.as_Path();
+                        childStop = rewritePath(e.path);
+                        break;
+                    }
+                    case HIRTypeData::TAG_TraitObject: {
+                        auto& e = data.as_TraitObject();
                         childStop = rewriteTraitPath(e.trait);
                         for (auto& marker : e.markers) {
                             if (!childStop) {
                                 childStop = rewritePathParams(marker.params);
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(ErasedType, e) {
+                    case HIRTypeData::TAG_ErasedType: {
+                        auto& e = data.as_ErasedType();
                         for (auto& trait : e.traits) {
                             if (!childStop) {
                                 childStop = rewriteTraitPath(trait);
@@ -306,21 +376,66 @@ namespace {
                             childStop = rewritePathParams(e.use);
                         }
                         if (!childStop) {
-                        TU_MATCH_HDRA((e.inner), {)
-                        TU_ARMA(Fcn, inner) childStop = rewritePath(inner.origin);
-                                TU_ARMA(Known, inner) childStop = rewriteType(inner);
-                                TU_ARMA(Alias, inner) childStop = rewritePathParams(inner.params);
+                        {
+                            auto& tuMatch = e.inner;
+                            switch (tuMatch.tag()) {
+                                case TypeDataErasedTypeInner::TAG_Fcn: {
+                                    auto& inner = tuMatch.as_Fcn();
+                                    childStop = rewritePath(inner.origin);
+                                    break;
+                                }
+                                case TypeDataErasedTypeInner::TAG_Known: {
+                                    auto& inner = tuMatch.as_Known();
+                                    childStop = rewriteType(inner);
+                                    break;
+                                }
+                                case TypeDataErasedTypeInner::TAG_Alias: {
+                                    auto& inner = tuMatch.as_Alias();
+                                    childStop = rewritePathParams(inner.params);
+                                    break;
+                                }
+                            }
                         }
                         }
+                        break;
                     }
-                    TU_ARMA(Array, e) childStop = rewriteType(e.inner);
-                    TU_ARMA(Slice, e) childStop = rewriteType(e.inner);
-                    TU_ARMA(Pattern, e) childStop = rewriteType(e.inner);
-                    TU_ARMA(Tuple, e) for (auto& inner : e) if (!childStop) childStop = rewriteType(inner);
-                    TU_ARMA(Borrow, e) childStop = rewriteType(e.inner);
-                    TU_ARMA(Pointer, e) childStop = rewriteType(e.inner);
-                    TU_ARMA(NamedFunction, e) childStop = rewritePath(e.path);
-                    TU_ARMA(Function, e) {
+                    case HIRTypeData::TAG_Array: {
+                        auto& e = data.as_Array();
+                        childStop = rewriteType(e.inner);
+                        break;
+                    }
+                    case HIRTypeData::TAG_Slice: {
+                        auto& e = data.as_Slice();
+                        childStop = rewriteType(e.inner);
+                        break;
+                    }
+                    case HIRTypeData::TAG_Pattern: {
+                        auto& e = data.as_Pattern();
+                        childStop = rewriteType(e.inner);
+                        break;
+                    }
+                    case HIRTypeData::TAG_Tuple: {
+                        auto& e = data.as_Tuple();
+                        for (auto& inner : e) if (!childStop) childStop = rewriteType(inner);
+                        break;
+                    }
+                    case HIRTypeData::TAG_Borrow: {
+                        auto& e = data.as_Borrow();
+                        childStop = rewriteType(e.inner);
+                        break;
+                    }
+                    case HIRTypeData::TAG_Pointer: {
+                        auto& e = data.as_Pointer();
+                        childStop = rewriteType(e.inner);
+                        break;
+                    }
+                    case HIRTypeData::TAG_NamedFunction: {
+                        auto& e = data.as_NamedFunction();
+                        childStop = rewritePath(e.path);
+                        break;
+                    }
+                    case HIRTypeData::TAG_Function: {
+                        auto& e = data.as_Function();
                         for (auto& arg : e.argTypes) {
                             if (!childStop) {
                                 childStop = rewriteType(arg);
@@ -329,8 +444,12 @@ namespace {
                         if (!childStop) {
                             childStop = rewriteType(e.rettype);
                         }
+                        break;
                     }
-                    TU_ARMA(NodeType, e) {
+                    case HIRTypeData::TAG_NodeType: {
+                        auto& e = data.as_NodeType();
+                        (void)e;
+                        break;
                     }
                 }
             }
@@ -396,25 +515,34 @@ bool monomorphiseTypeNeeded(const HIRTypeData* tpl) {
 }
 
 HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer /*=true*/) const {
-    TU_MATCH_HDRA( (*tpl), {)
-    TU_ARMA(Infer, e) {
+    switch ((*tpl).tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*tpl).as_Infer();
+            (void)e;
             ASSERT_BUG(sp, allowInfer, "Unexpected ivar seen - " << tpl);
             return tpl;
         }
-        TU_ARMA(Diverge, e) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = (*tpl).as_Diverge();
+            (void)e;
             return tpl;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*tpl).as_Primitive();
+            (void)e;
             return tpl;
         }
-        TU_ARMA(Path, e) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*tpl).as_Path();
             auto binding = e.binding.is_Opaque() ? HIRTypePathBinding() : e.binding.clone();
             return types.intern(HIRTypeData::make_Path({this->monomorphPath(sp, e.path, allowInfer), mv$(binding)}));
         }
-        TU_ARMA(Generic, e) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*tpl).as_Generic();
             return this->getType(sp, e);
         }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*tpl).as_TraitObject();
             HIRTypeData::Data_TraitObject to;
             {
                 to.trait = this->monomorphTraitpath(sp, e.trait, allowInfer);
@@ -424,41 +552,51 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
             }
             return types.intern(HIRTypeData::make_TraitObject(mv$(to)));
         }
-        TU_ARMA(ErasedType, e) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*tpl).as_ErasedType();
             ::std::vector<HIRTraitPath> traits;
-            traits.reserve(e.traits.size());
-            for (const auto& trait : e.traits) {
-                traits.push_back(this->monomorphTraitpath(sp, trait, allowInfer));
+                traits.reserve(e.traits.size());
+                for (const auto& trait : e.traits) {
+                    traits.push_back(this->monomorphTraitpath(sp, trait, allowInfer));
+                }
+
+                TypeDataErasedTypeInner inner;
+            switch (e.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    auto& ee = e.inner.as_Fcn();
+                    inner = TypeDataErasedTypeInner::Data_Fcn{this->monomorphPath(sp, ee.origin, allowInfer), ee.index};
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    auto& ee = e.inner.as_Alias();
+                    inner = TypeDataErasedTypeInner::Data_Alias{this->monomorphPathParams(sp, ee.params, allowInfer), ee.inner};
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    auto& ee = e.inner.as_Known();
+                    inner = this->monomorphType(sp, ee, allowInfer);
+                    break;
+                }
             }
 
-            TypeDataErasedTypeInner inner;
-        TU_MATCH_HDRA( (e.inner), {)
-        TU_ARMA(Fcn, ee) {
-                    inner = TypeDataErasedTypeInner::Data_Fcn{this->monomorphPath(sp, ee.origin, allowInfer), ee.index};
-                }
-                TU_ARMA(Alias, ee) {
-                    inner = TypeDataErasedTypeInner::Data_Alias{this->monomorphPathParams(sp, ee.params, allowInfer), ee.inner};
-                }
-                TU_ARMA(Known, ee) {
-                    inner = this->monomorphType(sp, ee, allowInfer);
-                }
+            return types.intern(HIRTypeData::make_ErasedType(HIRTypeData::Data_ErasedType {
+                e.isSized,
+                mv$(traits),
+                mv$(inner),
+                this->monomorphPathParams(sp, e.use, allowInfer),
+                e.usePresent
+                }));
         }
-
-        return types.intern(HIRTypeData::make_ErasedType(HIRTypeData::Data_ErasedType {
-            e.isSized,
-            mv$(traits),
-            mv$(inner),
-            this->monomorphPathParams(sp, e.use, allowInfer),
-            e.usePresent
-            }));
-        }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*tpl).as_Array();
             return types.intern(HIRTypeData::make_Array({this->monomorphType(sp, e.inner, allowInfer), this->monomorphArraysize(sp, e.size)}));
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*tpl).as_Slice();
             return types.slice(this->monomorphType(sp, e.inner, allowInfer));
         }
-        TU_ARMA(Pattern, e) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = (*tpl).as_Pattern();
             HIRTypePattern pattern;
             pattern.alternatives.reserve(e.pattern.alternatives.size());
             for (const auto& range : e.pattern.alternatives) {
@@ -473,20 +611,24 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
             }
             return types.intern(HIRTypeData::make_Pattern({this->monomorphType(sp, e.inner, allowInfer), mv$(pattern)}));
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*tpl).as_Tuple();
             ::std::vector<HIRTypeRef> types;
             for (const auto& ty : e) {
                 types.push_back(this->monomorphType(sp, ty, allowInfer));
             }
             return this->types.tuple(mv$(types));
         }
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*tpl).as_Borrow();
             return types.borrow(e.type, this->monomorphType(sp, e.inner, allowInfer));
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*tpl).as_Pointer();
             return types.pointer(e.type, this->monomorphType(sp, e.inner, allowInfer));
         }
-        TU_ARMA(NamedFunction, e) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = (*tpl).as_NamedFunction();
             return types.intern(
                 HIRTypeData::make_NamedFunction(
                     HIRTypeData::Data_NamedFunction{
@@ -496,7 +638,8 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
                 )
             );
         }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*tpl).as_Function();
             HIRTypeDataFunctionPointer ft;
             ft.isUnsafe = e.isUnsafe;
             ft.isVariadic = e.isVariadic;
@@ -508,8 +651,9 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
             }
             return types.function(mv$(ft));
         }
-        // Closures and generators are just passed through, needed for hackery in type checking (erasing HRLs)
-        TU_ARMA(NodeType, e) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*tpl).as_NodeType();
+            (void)e;
             return tpl;
         }
     }
@@ -517,18 +661,22 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
 }
 
 HIRPath Monomorphiser::monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer /*=true*/) const {
-    TU_MATCH_HDRA( (tpl.data), {)
-    TU_ARMA(Generic, e2) {
+    switch (tpl.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            auto& e2 = tpl.data.as_Generic();
             return HIRPath(this->monomorphGenericpath(sp, e2, allowInfer));
         }
-        TU_ARMA(UfcsKnown, e2) {
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& e2 = tpl.data.as_UfcsKnown();
             auto rv = HIRPath(HIRPath::Data::make_UfcsKnown({this->monomorphType(sp, e2.type, allowInfer), this->monomorphGenericpath(sp, e2.trait, allowInfer), e2.item, this->monomorphPathParams(sp, e2.params, allowInfer)}));
             return rv;
         }
-        TU_ARMA(UfcsUnknown, e2) {
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& e2 = tpl.data.as_UfcsUnknown();
             return HIRPath::Data::make_UfcsUnknown({this->monomorphType(sp, e2.type, allowInfer), e2.item, this->monomorphPathParams(sp, e2.params, allowInfer)});
         }
-        TU_ARMA(UfcsInherent, e2) {
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& e2 = tpl.data.as_UfcsInherent();
             return HIRPath::Data::make_UfcsInherent({this->monomorphType(sp, e2.type, allowInfer), e2.item, this->monomorphPathParams(sp, e2.params, allowInfer), this->monomorphPathParams(sp, e2.implParams, allowInfer)});
         }
     }

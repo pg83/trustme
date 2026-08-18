@@ -74,18 +74,32 @@ class CMacroUseHandler: public ExpandDecorator {
                     continue;
                 }
                 bool rv;
-                TU_MATCH_HDRA( (imp.ref, mr), {)
-                TU_ARMA(None, a,b) {
+                switch (imp.ref.tag()) {
+                    case MacroRef::TAG_None: {
+                        auto& a = imp.ref.as_None();
+                        (void)a;
+                        auto& b = mr.as_None();
+                        (void)b;
                         rv = true;
+                        break;
                     }
-                    TU_ARMA(MacroRules, a, b) {
+                    case MacroRef::TAG_MacroRules: {
+                        auto& a = imp.ref.as_MacroRules();
+                        auto& b = mr.as_MacroRules();
                         rv = (a == b);
+                        break;
                     }
-                    TU_ARMA(BuiltinProcMacro, a, b) {
+                    case MacroRef::TAG_BuiltinProcMacro: {
+                        auto& a = imp.ref.as_BuiltinProcMacro();
+                        auto& b = mr.as_BuiltinProcMacro();
                         rv = (a == b);
+                        break;
                     }
-                    TU_ARMA(ExternalProcMacro, a, b) {
+                    case MacroRef::TAG_ExternalProcMacro: {
+                        auto& a = imp.ref.as_ExternalProcMacro();
+                        auto& b = mr.as_ExternalProcMacro();
                         rv = (a == b);
+                        break;
                     }
                 }
                 if(rv) {
@@ -137,15 +151,21 @@ class CMacroUseHandler: public ExpandDecorator {
                 }
 
                 MacroRef mr;
-                TU_MATCH_HDRA( (e->ent), { )
-                TU_ARMA(Import, imp) {
+                switch (e->ent.tag()) {
+                    case HIRMacroItem::TAG_Import: {
+                        auto& imp = e->ent.as_Import();
+                        (void)imp;
                         throw "Unexpected";
                     }
-                    TU_ARMA(MacroRules, macPtr) {
+                    case HIRMacroItem::TAG_MacroRules: {
+                        auto& macPtr = e->ent.as_MacroRules();
                         mr = &*macPtr;
+                        break;
                     }
-                    TU_ARMA(ProcMacro, p) {
+                    case HIRMacroItem::TAG_ProcMacro: {
+                        auto& p = e->ent.as_ProcMacro();
                         mr = &p;
+                        break;
                     }
                 }
                 if(!exists(name, mr))

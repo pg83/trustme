@@ -272,15 +272,22 @@ namespace {
                 return;
             }
 
-            TU_MATCH_HDRA( (*tgtTy), {)
-            TU_ARMA(Infer, e) {
+            switch ((*tgtTy).tag()) {
+                case HIRTypeData::TAG_Infer: {
+                    auto& e = (*tgtTy).as_Infer();
+                    (void)e;
                     // Can't know anything
                     DEBUG("- Target type is still _");
+                    break;
                 }
-                TU_ARMA(Diverge, e) {
+                case HIRTypeData::TAG_Diverge: {
+                    auto& e = (*tgtTy).as_Diverge();
+                    (void)e;
                     BUG(sp, "");
+                    break;
                 }
-                TU_ARMA(Primitive, e) {
+                case HIRTypeData::TAG_Primitive: {
+                    auto& e = (*tgtTy).as_Primitive();
                     // Don't have anything to contribute
                     // EXCEPT: `char` can only be casted from `u8` (but what about no-op casts?)
                     // - Hint the input (default) to be `u8`
@@ -296,22 +303,36 @@ namespace {
                     } else {
                         this->completed = true;
                     }
+                    break;
                 }
-                TU_ARMA(Path, e) {
+                case HIRTypeData::TAG_Path: {
+                    auto& e = (*tgtTy).as_Path();
+                    (void)e;
                     this->context.equateTypesCoerce(sp, tgtTy, node.value);
                     this->completed = true;
                     return;
                 }
-                TU_ARMA(Generic, e) {
+                case HIRTypeData::TAG_Generic: {
+                    auto& e = (*tgtTy).as_Generic();
+                    (void)e;
                     TODO(sp, "_Cast Generic");
+                    break;
                 }
-                TU_ARMA(TraitObject, e) {
+                case HIRTypeData::TAG_TraitObject: {
+                    auto& e = (*tgtTy).as_TraitObject();
+                    (void)e;
                     bad_cast(sp, srcTy, tgtTy, "dst");
+                    break;
                 }
-                TU_ARMA(ErasedType, e) {
+                case HIRTypeData::TAG_ErasedType: {
+                    auto& e = (*tgtTy).as_ErasedType();
+                    (void)e;
                     bad_cast(sp, srcTy, tgtTy, "dst");
+                    break;
                 }
-                TU_ARMA(Array, e) {
+                case HIRTypeData::TAG_Array: {
+                    auto& e = (*tgtTy).as_Array();
+                    (void)e;
                     // A cast is a coercion site.  In particular, its target
                     // supplies the otherwise unconstrained element type of
                     // an empty array literal and the element coercion for a
@@ -320,16 +341,27 @@ namespace {
                     this->completed = true;
                     return;
                 }
-                TU_ARMA(Slice, e) {
+                case HIRTypeData::TAG_Slice: {
+                    auto& e = (*tgtTy).as_Slice();
+                    (void)e;
                     bad_cast(sp, srcTy, tgtTy, "dst");
+                    break;
                 }
-                TU_ARMA(Pattern, e) {
+                case HIRTypeData::TAG_Pattern: {
+                    auto& e = (*tgtTy).as_Pattern();
+                    (void)e;
                     bad_cast(sp, srcTy, tgtTy, "dst");
+                    break;
                 }
-                TU_ARMA(Tuple, e) {
+                case HIRTypeData::TAG_Tuple: {
+                    auto& e = (*tgtTy).as_Tuple();
+                    (void)e;
                     bad_cast(sp, srcTy, tgtTy, "dst");
+                    break;
                 }
-                TU_ARMA(Borrow, e) {
+                case HIRTypeData::TAG_Borrow: {
+                    auto& e = (*tgtTy).as_Borrow();
+                    (void)e;
                     // An `as &[T]` cast is an unsizing operation on the
                     // already-typed source.  Do not let its destination pick
                     // the type of an otherwise pending source variable: that
@@ -343,155 +375,167 @@ namespace {
                     this->completed = true;
                     return;
                 }
-                TU_ARMA(Pointer, e) {
+                case HIRTypeData::TAG_Pointer: {
+                    auto& e = (*tgtTy).as_Pointer();
                     const auto& ity = this->context.getType(e.inner);
-                TU_MATCH_HDRA( (*srcTy), {)
-                default:
-                    ERROR(sp, E0000, "Invalid cast to pointer from " << srcTy);
-                        case HIRTypeData::TAG_Function:
-                        case HIRTypeData::TAG_NamedFunction:
-                            // TODO: What is the valid set? *const () and *const u8 at least are allowed
-                            if (ity == context.crate.types.unit() || ity == HIRCoreType::U8 || ity == HIRCoreType::I8) {
-                                this->completed = true;
-                            } else if (ity->is_Infer()) {
-                                // Keep around.
-                            } else {
-                                // TODO: Only allow thin pointers? `c_void` is used in 1.74 libstd
-                                this->completed = true;
-                            }
-                            TU_ARMA(Primitive, sE) {
-                                switch (sE) {
-                                    case HIRCoreType::Bool:
-                                    case HIRCoreType::Char:
-                                    case HIRCoreType::Str:
-                                    case HIRCoreType::F32:
-                                    case HIRCoreType::F64:
-                                        ERROR(sp, E0000, "Invalid cast to pointer from " << srcTy);
-                                    default:
-                                        break;
-                                }
-                                // NOTE: Can't be to a fat pointer though - This is checked by the later pass (once all types are known and thus sized-ness is known)
-                                this->completed = true;
-                            }
-                            TU_ARMA(Infer, sE) {
-                                switch (sE.tyClass) {
-                                    case HIRInferClass::Float:
-                                        ERROR(sp, E0000, "Invalid cast to pointer from floating point literal");
-                                    case HIRInferClass::Integer:
-                                        this->context.equateTypes(sp, srcTy, context.crate.types.primitive(HIRCoreType::Usize));
-                                        this->completed = true;
-                                        break;
-                                    case HIRInferClass::None:
-                                        break;
-                                }
-                            }
-                            TU_ARMA(Borrow, sE) {
-                                // Check class (destination must be weaker) and type
-                                if (!(sE.type >= e.type)) {
-                                    ERROR(sp, E0000, "Invalid cast from " << srcTy << " to " << tgtTy);
-                                }
-                                const auto& srcInner = this->context.getType(sE.inner);
-
-                                // This is also a semi-coercion point, so need to run the same sort of rules
-
-                                // If either the source or the destination inner tyes are infer - add back rules
-                                if (const auto* sEI = srcInner->opt_Infer()) {
-                                    this->context.possibleEquateIvar(sp, sEI->index, ity, Context::PossibleTypeSource::UnsizeTo);
-                                }
-                                if (const auto* dEI = ity->opt_Infer()) {
-                                    this->context.possibleEquateIvar(sp, dEI->index, sE.inner, Context::PossibleTypeSource::UnsizeFrom);
-                                    if (!this->isFallback) {
-                                        // `&value as *const _` may get its pointee
-                                        // type from the surrounding expression.  Keep
-                                        // the source pointee as the final fallback
-                                        // instead of selecting it before that context
-                                        // has been resolved.
-                                        this->context.possibleEquateIvarUnknown(sp, dEI->index, Context::IvarUnknownType::From);
-                                    }
-                                }
-
-                                // If this looks like `&mut [?; N]` -> `*mut ?` then do a possible equate between the two types
-                                if (srcInner->is_Array()) {
-                                    if (const auto* sEI = this->context.getType(srcInner->as_Array().inner)->opt_Infer()) {
-                                        this->context.possibleEquateIvar(sp, sEI->index, ity, Context::PossibleTypeSource::UnsizeTo);
-                                        return;
-                                    }
-                                }
-
-                                // NOTE: &mut T -> *mut U where T: Unsize<U> is allowed
-                                // TODO: Wouldn't this be better served by a coercion point?
-
-                                if (srcInner->is_Infer() || ity->is_Infer()) {
-                                    // Either side is infer, keep going
-                                }
-                                // - NOTE: Crude, and likely to break if ether inner isn't known.
-                                else if (srcInner->is_Array() && srcInner->as_Array().inner == ity) {
-                                    // Allow &[T; n] -> *const T - Convert into two casts
-                                    auto ty = context.crate.types.pointer(e.type, srcInner);
-                                    node.value = NEWNODE(ty, sp, Cast, mv$(node.value), ty);
+                    switch ((*srcTy).tag()) {
+default:
+                        ERROR(sp, E0000, "Invalid cast to pointer from " << srcTy);
+                            case HIRTypeData::TAG_Function:
+                            case HIRTypeData::TAG_NamedFunction:
+                                // TODO: What is the valid set? *const () and *const u8 at least are allowed
+                                if (ity == context.crate.types.unit() || ity == HIRCoreType::U8 || ity == HIRCoreType::I8) {
                                     this->completed = true;
+                                } else if (ity->is_Infer()) {
+                                    // Keep around.
                                 } else {
-                                    bool found = !this->context.resolve.langUnsize().components().empty() && this->context.resolve.findTraitImpls(sp, this->context.resolve.langUnsize(), HIRPathParams(e.inner), sE.inner, [](auto, auto) {
-                                        return true;
-                                    });
-                                    if (found) {
-                                        auto ty = context.crate.types.borrow(e.type, e.inner);
-                                        node.value = NEWNODE(ty, sp, Unsize, mv$(node.value), ty);
-                                        this->context.addTraitBound(sp, sE.inner, this->context.resolve.langUnsize(), HIRPathParams(e.inner));
-                                    } else {
-                                        this->context.equateTypes(sp, e.inner, sE.inner);
-                                    }
+                                    // TODO: Only allow thin pointers? `c_void` is used in 1.74 libstd
                                     this->completed = true;
                                 }
+                        case HIRTypeData::TAG_Primitive: {
+                            auto& sE = (*srcTy).as_Primitive();
+                            switch (sE) {
+                                case HIRCoreType::Bool:
+                                case HIRCoreType::Char:
+                                case HIRCoreType::Str:
+                                case HIRCoreType::F32:
+                                case HIRCoreType::F64:
+                                    ERROR(sp, E0000, "Invalid cast to pointer from " << srcTy);
+                                default:
+                                    break;
                             }
-                            TU_ARMA(Pointer, sE) {
-                                // Allow with no link?
-                                // TODO: In some rare cases, this ivar could be completely
-                                // unrestricted. If in fallback mode
-                                const auto& dstInner = this->context.getType(e.inner);
-                                const auto& srcInner = this->context.getType(sE.inner);
-                                if (dstInner->is_Infer()) {
-                                    // NOTE: Don't equate on fallback, to avoid cast chains breaking
-                                    // - Instead, leave the bounds present (which will hopefully get used by ivar_poss)
+                            // NOTE: Can't be to a fat pointer though - This is checked by the later pass (once all types are known and thus sized-ness is known)
+                            this->completed = true;
+                            break;
+                        }
+                        case HIRTypeData::TAG_Infer: {
+                            auto& sE = (*srcTy).as_Infer();
+                            switch (sE.tyClass) {
+                                case HIRInferClass::Float:
+                                    ERROR(sp, E0000, "Invalid cast to pointer from floating point literal");
+                                case HIRInferClass::Integer:
+                                    this->context.equateTypes(sp, srcTy, context.crate.types.primitive(HIRCoreType::Usize));
+                                    this->completed = true;
+                                    break;
+                                case HIRInferClass::None:
+                                    break;
+                            }
+                            break;
+                        }
+                        case HIRTypeData::TAG_Borrow: {
+                            auto& sE = (*srcTy).as_Borrow();
+                            // Check class (destination must be weaker) and type
+                            if (!(sE.type >= e.type)) {
+                                ERROR(sp, E0000, "Invalid cast from " << srcTy << " to " << tgtTy);
+                            }
+                            const auto& srcInner = this->context.getType(sE.inner);
+
+                            // This is also a semi-coercion point, so need to run the same sort of rules
+
+                            // If either the source or the destination inner tyes are infer - add back rules
+                            if (const auto* sEI = srcInner->opt_Infer()) {
+                                this->context.possibleEquateIvar(sp, sEI->index, ity, Context::PossibleTypeSource::UnsizeTo);
+                            }
+                            if (const auto* dEI = ity->opt_Infer()) {
+                                this->context.possibleEquateIvar(sp, dEI->index, sE.inner, Context::PossibleTypeSource::UnsizeFrom);
+                                if (!this->isFallback) {
+                                    // `&value as *const _` may get its pointee
+                                    // type from the surrounding expression.  Keep
+                                    // the source pointee as the final fallback
+                                    // instead of selecting it before that context
+                                    // has been resolved.
+                                    this->context.possibleEquateIvarUnknown(sp, dEI->index, Context::IvarUnknownType::From);
+                                }
+                            }
+
+                            // If this looks like `&mut [?; N]` -> `*mut ?` then do a possible equate between the two types
+                            if (srcInner->is_Array()) {
+                                if (const auto* sEI = this->context.getType(srcInner->as_Array().inner)->opt_Infer()) {
+                                    this->context.possibleEquateIvar(sp, sEI->index, ity, Context::PossibleTypeSource::UnsizeTo);
+                                    return;
+                                }
+                            }
+
+                            // NOTE: &mut T -> *mut U where T: Unsize<U> is allowed
+                            // TODO: Wouldn't this be better served by a coercion point?
+
+                            if (srcInner->is_Infer() || ity->is_Infer()) {
+                                // Either side is infer, keep going
+                            }
+                            // - NOTE: Crude, and likely to break if ether inner isn't known.
+                            else if (srcInner->is_Array() && srcInner->as_Array().inner == ity) {
+                                // Allow &[T; n] -> *const T - Convert into two casts
+                                auto ty = context.crate.types.pointer(e.type, srcInner);
+                                node.value = NEWNODE(ty, sp, Cast, mv$(node.value), ty);
+                                this->completed = true;
+                            } else {
+                                bool found = !this->context.resolve.langUnsize().components().empty() && this->context.resolve.findTraitImpls(sp, this->context.resolve.langUnsize(), HIRPathParams(e.inner), sE.inner, [](auto, auto) {
+                                    return true;
+                                });
+                                if (found) {
+                                    auto ty = context.crate.types.borrow(e.type, e.inner);
+                                    node.value = NEWNODE(ty, sp, Unsize, mv$(node.value), ty);
+                                    this->context.addTraitBound(sp, sE.inner, this->context.resolve.langUnsize(), HIRPathParams(e.inner));
+                                } else {
+                                    this->context.equateTypes(sp, e.inner, sE.inner);
+                                }
+                                this->completed = true;
+                            }
+                            break;
+                        }
+                        case HIRTypeData::TAG_Pointer: {
+                            auto& sE = (*srcTy).as_Pointer();
+                            // Allow with no link?
+                            // TODO: In some rare cases, this ivar could be completely
+                            // unrestricted. If in fallback mode
+                            const auto& dstInner = this->context.getType(e.inner);
+                            const auto& srcInner = this->context.getType(sE.inner);
+                            if (dstInner->is_Infer()) {
+                                // NOTE: Don't equate on fallback, to avoid cast chains breaking
+                                // - Instead, leave the bounds present (which will hopefully get used by ivar_poss)
+                                ::std::vector<HIRTypeRef> tys;
+                                tys.push_back(dstInner);
+                                tys.push_back(srcInner);
+                                this->context.possibleEquateIvarBounds(sp, dstInner->as_Infer().index, std::move(tys));
+                                return;
+                            } else if (srcInner->is_Infer()) {
+                                if (!this->isFallback) {
                                     ::std::vector<HIRTypeRef> tys;
                                     tys.push_back(dstInner);
                                     tys.push_back(srcInner);
-                                    this->context.possibleEquateIvarBounds(sp, dstInner->as_Infer().index, std::move(tys));
+                                    this->context.possibleEquateIvarBounds(sp, srcInner->as_Infer().index, std::move(tys));
                                     return;
-                                } else if (srcInner->is_Infer()) {
-                                    if (!this->isFallback) {
-                                        ::std::vector<HIRTypeRef> tys;
-                                        tys.push_back(dstInner);
-                                        tys.push_back(srcInner);
-                                        this->context.possibleEquateIvarBounds(sp, srcInner->as_Infer().index, std::move(tys));
+                                }
+                                // A pointer cast doesn't constrain its source. If a real *coercion*
+                                // is still pending on this ivar, defer so the later ivar_poss passes
+                                // can resolve it instead of us forcing the cast target (bytemuck's
+                                // checked slice casts). Bounds-only ivars (e.g. `p as *mut _ as *mut
+                                // u8` in alloc's rc.rs) have no coercion to wait on, so equate now -
+                                // deferring those leaves spare rules and aborts typecheck.
+                                auto srcIdx = srcInner->as_Infer().index;
+                                if (srcIdx < this->context.possibleIvarVals.size()) {
+                                    const auto& poss = this->context.possibleIvarVals[srcIdx];
+                                    if (!poss.typesCoerceTo.empty() || !poss.typesCoerceFrom.empty()) {
                                         return;
                                     }
-                                    // A pointer cast doesn't constrain its source. If a real *coercion*
-                                    // is still pending on this ivar, defer so the later ivar_poss passes
-                                    // can resolve it instead of us forcing the cast target (bytemuck's
-                                    // checked slice casts). Bounds-only ivars (e.g. `p as *mut _ as *mut
-                                    // u8` in alloc's rc.rs) have no coercion to wait on, so equate now -
-                                    // deferring those leaves spare rules and aborts typecheck.
-                                    auto srcIdx = srcInner->as_Infer().index;
-                                    if (srcIdx < this->context.possibleIvarVals.size()) {
-                                        const auto& poss = this->context.possibleIvarVals[srcIdx];
-                                        if (!poss.typesCoerceTo.empty() || !poss.typesCoerceFrom.empty()) {
-                                            return;
-                                        }
-                                    }
-                                    this->context.equateTypes(sp, dstInner, srcInner);
-                                } else {
                                 }
-                                this->completed = true;
+                                this->context.equateTypes(sp, dstInner, srcInner);
+                            } else {
                             }
+                            this->completed = true;
+                            break;
+                        }
+                    }
+                    break;
                 }
-                }
-                TU_ARMA(Function, e) {
+                case HIRTypeData::TAG_Function: {
+                    auto& e = (*tgtTy).as_Function();
                     // NOTE: Valid if it's causing a fn item -> fn pointer coercion
-                TU_MATCH_HDRA( (*srcTy), {)
-                default:
-                    bad_cast(sp, srcTy, tgtTy, "fcn src");
-                        TU_ARMA(Infer, sE) {
+                    switch ((*srcTy).tag()) {
+default:
+                        bad_cast(sp, srcTy, tgtTy, "fcn src");
+                        case HIRTypeData::TAG_Infer: {
+                            auto& sE = (*srcTy).as_Infer();
                             if (sE.tyClass != HIRInferClass::None) {
                                 bad_cast(sp, srcTy, tgtTy, "fcn src");
                             }
@@ -499,8 +543,10 @@ namespace {
                                 this->context.equateTypes(sp, srcTy, tgtTy);
                                 this->completed = true;
                             }
+                            break;
                         }
-                        TU_ARMA(NodeType, sE) {
+                        case HIRTypeData::TAG_NodeType: {
+                            auto& sE = (*srcTy).as_NodeType();
                             if (const auto* const* snPp = sE.opt_Closure()) {
                                 // Valid cast here, downstream code will check if its a non-capturing closure
                                 if ((*snPp)->args.size() != e.argTypes.size()) {
@@ -514,16 +560,20 @@ namespace {
                             } else {
                                 bad_cast(sp, srcTy, tgtTy, "fcn src");
                             }
+                            break;
                         }
-                        TU_ARMA(Function, sE) {
+                        case HIRTypeData::TAG_Function: {
+                            auto& sE = (*srcTy).as_Function();
                             // Check that the ABI and unsafety is correct
                             if (sE.abi != e.abi || (sE.isUnsafe && sE.isUnsafe != e.isUnsafe) || sE.argTypes.size() != e.argTypes.size()) {
                                 bad_cast(sp, srcTy, tgtTy, "fcn nargs");
                             }
                             equateFunctionSignature(sp, e, sE);
                             this->completed = true;
+                            break;
                         }
-                        TU_ARMA(NamedFunction, f) {
+                        case HIRTypeData::TAG_NamedFunction: {
+                            auto& f = (*srcTy).as_NamedFunction();
                             auto ft = context.resolve.expandAssociatedTypes(sp, context.crate.types.function(f.decay(context.crate.types, sp)));
                             const auto& sE = ft->as_Function();
                             // Check that the ABI and unsafety is correct
@@ -532,14 +582,22 @@ namespace {
                             }
                             equateFunctionSignature(sp, e, sE);
                             this->completed = true;
+                            break;
                         }
+                    }
+                    break;
                 }
-                }
-                TU_ARMA(NamedFunction, e) {
+                case HIRTypeData::TAG_NamedFunction: {
+                    auto& e = (*tgtTy).as_NamedFunction();
+                    (void)e;
                     BUG(sp, "Attempting to cast to a named-function type - impossible");
+                    break;
                 }
-                TU_ARMA(NodeType, e) {
+                case HIRTypeData::TAG_NodeType: {
+                    auto& e = (*tgtTy).as_NodeType();
+                    (void)e;
                     BUG(sp, "Attempting to cast to a magic type type - impossible");
+                    break;
                 }
             }
         }
@@ -679,8 +737,8 @@ namespace {
                 this->context.equateTypesAssoc(node.span(), node.resType, opTrait, {}, node.value->resType, "Target", {}, true, TypeckPrimitiveOperator::Deref);
             };
 
-            TU_MATCH_HDRA( (*ty), {)
-            default: {
+            switch ((*ty).tag()) {
+default: {
                     if (const auto* inner = this->context.resolve.typeIsOwnedBox(node.span(), ty)) {
                         useBuiltin(inner);
                     } else {
@@ -688,17 +746,23 @@ namespace {
                         useTrait();
                     }
                 }
-                TU_ARMA(Infer, e) {
+                case HIRTypeData::TAG_Infer: {
+                    auto& e = (*ty).as_Infer();
+                    (void)e;
                     // Keep trying
                     this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::From);
                     return;
                 }
-                TU_ARMA(Borrow, e) {
+                case HIRTypeData::TAG_Borrow: {
+                    auto& e = (*ty).as_Borrow();
                     useBuiltin(e.inner);
+                    break;
                 }
-                TU_ARMA(Pointer, e) {
+                case HIRTypeData::TAG_Pointer: {
+                    auto& e = (*ty).as_Pointer();
                     // TODO: Figure out if this node is in an unsafe block.
                     useBuiltin(e.inner);
+                    break;
                 }
             }
             this->completed = true;
@@ -1594,31 +1658,41 @@ namespace {
                 ASSERT_BUG(sp, deref->targetType, "Untyped deref pattern");
                 this->checkTypeResolvedTop(sp, deref->targetType);
             }
-            TU_MATCH_HDRA( (pat.data), { )
-            default:
+            switch (pat.data.tag()) {
+default:
                 break;
-                TU_ARMA(Value, e) {
+                case HIRPatternData::TAG_Value: {
+                    auto& e = pat.data.as_Value();
                     if (e.val.is_Named()) {
                         auto& ve = e.val.as_Named();
                         this->checkTypeResolvedPath(sp, ve.path);
                     }
+                    break;
                 }
-                TU_ARMA(Range, e) {
+                case HIRPatternData::TAG_Range: {
+                    auto& e = pat.data.as_Range();
                     if (e.start && e.start->is_Named()) {
                         this->checkTypeResolvedPath(sp, e.start->as_Named().path);
                     }
                     if (e.end && e.end->is_Named()) {
                         this->checkTypeResolvedPath(sp, e.end->as_Named().path);
                     }
+                    break;
                 }
-                TU_ARMA(PathValue, e) {
+                case HIRPatternData::TAG_PathValue: {
+                    auto& e = pat.data.as_PathValue();
                     this->checkTypeResolvedPath(sp, e.path);
+                    break;
                 }
-                TU_ARMA(PathTuple, e) {
+                case HIRPatternData::TAG_PathTuple: {
+                    auto& e = pat.data.as_PathTuple();
                     this->checkTypeResolvedPath(sp, e.path);
+                    break;
                 }
-                TU_ARMA(PathNamed, e) {
+                case HIRPatternData::TAG_PathNamed: {
+                    auto& e = pat.data.as_PathNamed();
                     this->checkTypeResolvedPath(sp, e.path);
+                    break;
                 }
             }
             HIRExprVisitorDef::visitPattern(sp, pat);
@@ -1765,47 +1839,65 @@ namespace {
             const auto& ty = node.resType;
             ASSERT_BUG(sp, ty->is_Path(), "Result type of _StructLiteral isn't Path");
             const tStructFields* fieldsPtr = nullptr;
-            TU_MATCH_HDRA( (ty->as_Path().binding), {)
-            TU_ARMA(Unbound, e) {
-                }
-                TU_ARMA(Opaque, e) {
-                }
-                TU_ARMA(Enum, e) {
-                    const auto& varName = tyPath.path.components().back();
-                    const auto& enm = *e;
-                    auto idx = enm.findVariant(varName);
-                    ASSERT_BUG(sp, idx != SIZE_MAX, "");
-                    ASSERT_BUG(sp, enm.data.is_Data(), "");
-                    const auto& var = enm.data.as_Data()[idx];
-
-                    const auto& str = *var.type->as_Path().binding.as_Struct();
-                    ASSERT_BUG(sp, var.isStruct, "Struct literal for enum on non-struct variant");
-                    fieldsPtr = &str.data.as_Named();
-                }
-                TU_ARMA(Union, e) {
-                    fieldsPtr = &e->variants;
-                    ASSERT_BUG(node.span(), node.values.size() > 0, "Union with no values");
-                    ASSERT_BUG(node.span(), node.values.size() == 1, "Union with multiple values");
-                    ASSERT_BUG(node.span(), !node.baseValue, "Union can't have a base value");
-                }
-                TU_ARMA(ExternType, e) {
-                    BUG(sp, "ExternType in StructLiteral");
-                }
-                TU_ARMA(Struct, e) {
-                    if (e->data.is_Unit()) {
-                        ASSERT_BUG(node.span(), node.values.size() == 0, "Values provided for unit-like struct");
-                        ASSERT_BUG(node.span(), !node.baseValue, "Values provided for unit-like struct");
-                        return;
+            {
+                auto& tuMatch = ty->as_Path().binding;
+                switch (tuMatch.tag()) {
+                    case HIRTypePathBinding::TAG_Unbound: {
+                        auto& e = tuMatch.as_Unbound();
+                        (void)e;
+                        break;
                     }
-                    if (e->data.is_Tuple()) {
-                        // `S { 0: a, ..base }` names the tuple fields by index.
-                        ASSERT_BUG(node.span(), node.baseValue, "Tuple struct literal has no values or base");
-                        HIRExprVisitorDef::visit(node);
-                        return;
+                    case HIRTypePathBinding::TAG_Opaque: {
+                        auto& e = tuMatch.as_Opaque();
+                        (void)e;
+                        break;
                     }
+                    case HIRTypePathBinding::TAG_Enum: {
+                        auto& e = tuMatch.as_Enum();
+                        const auto& varName = tyPath.path.components().back();
+                        const auto& enm = *e;
+                        auto idx = enm.findVariant(varName);
+                        ASSERT_BUG(sp, idx != SIZE_MAX, "");
+                        ASSERT_BUG(sp, enm.data.is_Data(), "");
+                        const auto& var = enm.data.as_Data()[idx];
 
-                    ASSERT_BUG(node.span(), e->data.is_Named(), "StructLiteral not pointing to a braced struct, instead " << e->data.tagStr() << " - " << ty);
-                    fieldsPtr = &e->data.as_Named();
+                        const auto& str = *var.type->as_Path().binding.as_Struct();
+                        ASSERT_BUG(sp, var.isStruct, "Struct literal for enum on non-struct variant");
+                        fieldsPtr = &str.data.as_Named();
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_Union: {
+                        auto& e = tuMatch.as_Union();
+                        fieldsPtr = &e->variants;
+                        ASSERT_BUG(node.span(), node.values.size() > 0, "Union with no values");
+                        ASSERT_BUG(node.span(), node.values.size() == 1, "Union with multiple values");
+                        ASSERT_BUG(node.span(), !node.baseValue, "Union can't have a base value");
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_ExternType: {
+                        auto& e = tuMatch.as_ExternType();
+                        (void)e;
+                        BUG(sp, "ExternType in StructLiteral");
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_Struct: {
+                        auto& e = tuMatch.as_Struct();
+                        if (e->data.is_Unit()) {
+                            ASSERT_BUG(node.span(), node.values.size() == 0, "Values provided for unit-like struct");
+                            ASSERT_BUG(node.span(), !node.baseValue, "Values provided for unit-like struct");
+                            return;
+                        }
+                        if (e->data.is_Tuple()) {
+                            // `S { 0: a, ..base }` names the tuple fields by index.
+                            ASSERT_BUG(node.span(), node.baseValue, "Tuple struct literal has no values or base");
+                            HIRExprVisitorDef::visit(node);
+                            return;
+                        }
+
+                        ASSERT_BUG(node.span(), e->data.is_Named(), "StructLiteral not pointing to a braced struct, instead " << e->data.tagStr() << " - " << ty);
+                        fieldsPtr = &e->data.as_Named();
+                        break;
+                    }
                 }
             }
             ASSERT_BUG(node.span(), fieldsPtr, "Didn't get field for path in _StructLiteral - " << ty);
@@ -2628,35 +2720,47 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                 if (l.data.tag() != r.data.tag()) {
                     return false;
                 }
-                TU_MATCH_HDRA( (l.data, r.data), {)
-                TU_ARMA(Generic, lpe, rpe) {
+                switch (l.data.tag()) {
+                    case HIRPathData::TAG_Generic: {
+                        auto& lpe = l.data.as_Generic();
+                        auto& rpe = r.data.as_Generic();
                         if (lpe.path != rpe.path) {
                             return false;
                         }
                         equalityTypeparams(lpe.params, rpe.params);
+                        break;
                     }
-                    TU_ARMA(UfcsInherent, lpe, rpe) {
+                    case HIRPathData::TAG_UfcsInherent: {
+                        auto& lpe = l.data.as_UfcsInherent();
+                        auto& rpe = r.data.as_UfcsInherent();
                         equalityTypeparams(lpe.params, rpe.params);
                         if (lpe.item != rpe.item) {
                             return false;
                         }
                         this->equateTypesInner(sp, lpe.type, rpe.type);
+                        break;
                     }
-                    TU_ARMA(UfcsKnown, lpe, rpe) {
+                    case HIRPathData::TAG_UfcsKnown: {
+                        auto& lpe = l.data.as_UfcsKnown();
+                        auto& rpe = r.data.as_UfcsKnown();
                         if (lpe.trait.path != rpe.trait.path || lpe.item != rpe.item) {
                             return false;
                         }
                         equalityTypeparams(lpe.trait.params, rpe.trait.params);
                         equalityTypeparams(lpe.params, rpe.params);
                         this->equateTypesInner(sp, lpe.type, rpe.type);
+                        break;
                     }
-                    TU_ARMA(UfcsUnknown, lpe, rpe) {
+                    case HIRPathData::TAG_UfcsUnknown: {
+                        auto& lpe = l.data.as_UfcsUnknown();
+                        auto& rpe = r.data.as_UfcsUnknown();
                         // TODO: If the type is fully known, locate a suitable trait item
                         equalityTypeparams(lpe.params, rpe.params);
                         if (lpe.item != rpe.item) {
                             return false;
                         }
                         this->equateTypesInner(sp, lpe.type, rpe.type);
+                        break;
                     }
                 }
                 return true;
@@ -2679,29 +2783,49 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
             if (lT->tag() != rT->tag()) {
                 ERROR(sp, E0000, "Type mismatch between " << this->ivars.fmtType(lT) << " and " << this->ivars.fmtType(rT));
             }
-            TU_MATCH_HDRA( (*lT, *rT), {)
-            TU_ARMA(Infer, lE, rE) {
+            switch ((*lT).tag()) {
+                case HIRTypeData::TAG_Infer: {
+                    auto& lE = (*lT).as_Infer();
+                    (void)lE;
+                    auto& rE = (*rT).as_Infer();
+                    (void)rE;
                     throw "";
                 }
-                TU_ARMA(Diverge, lE, rE) {
+                case HIRTypeData::TAG_Diverge: {
+                    auto& lE = (*lT).as_Diverge();
+                    (void)lE;
+                    auto& rE = (*rT).as_Diverge();
+                    (void)rE;
                     // ignore?
+                    break;
                 }
-                TU_ARMA(Primitive, lE, rE) {
+                case HIRTypeData::TAG_Primitive: {
+                    auto& lE = (*lT).as_Primitive();
+                    auto& rE = (*rT).as_Primitive();
                     if (lE != rE) {
                         ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT);
                     }
+                    break;
                 }
-                TU_ARMA(Path, lE, rE) {
+                case HIRTypeData::TAG_Path: {
+                    auto& lE = (*lT).as_Path();
+                    auto& rE = (*rT).as_Path();
                     if (!equalityPath(lE.path, rE.path)) {
                         ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT);
                     }
+                    break;
                 }
-                TU_ARMA(Generic, lE, rE) {
+                case HIRTypeData::TAG_Generic: {
+                    auto& lE = (*lT).as_Generic();
+                    auto& rE = (*rT).as_Generic();
                     if (lE.binding != rE.binding) {
                         ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT);
                     }
+                    break;
                 }
-                TU_ARMA(TraitObject, lE, rE) {
+                case HIRTypeData::TAG_TraitObject: {
+                    auto& lE = (*lT).as_TraitObject();
+                    auto& rE = (*rT).as_TraitObject();
                     if (lE.trait.path.path != rE.trait.path.path) {
                         ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT);
                     }
@@ -2725,31 +2849,46 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                         equalityTypeparams(lP.params, rP.params);
                     }
                     // NOTE: Lifetime is ignored
+                    break;
                 }
-                TU_ARMA(ErasedType, lE, rE) {
+                case HIRTypeData::TAG_ErasedType: {
+                    auto& lE = (*lT).as_ErasedType();
+                    auto& rE = (*rT).as_ErasedType();
                     if (lE.inner.tag() != rE.inner.tag()) {
-                        ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT << " - different erased class");
-                    }
-                TU_MATCH_HDRA( (lE.inner, rE.inner), {)
-                TU_ARMA(Fcn, lee, ree) {
+                            ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT << " - different erased class");
+                        }
+                    switch (lE.inner.tag()) {
+                        case TypeDataErasedTypeInner::TAG_Fcn: {
+                            auto& lee = lE.inner.as_Fcn();
+                            auto& ree = rE.inner.as_Fcn();
                             ASSERT_BUG(sp, lee.origin != HIRSimplePath(), "ErasedType " << lT << " wasn't bound to its origin");
                             ASSERT_BUG(sp, ree.origin != HIRSimplePath(), "ErasedType " << rT << " wasn't bound to its origin");
                             if (!equalityPath(lee.origin, ree.origin)) {
                                 ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT << " - different source");
                             }
+                            break;
                         }
-                        TU_ARMA(Alias, lee, ree) {
+                        case TypeDataErasedTypeInner::TAG_Alias: {
+                            auto& lee = lE.inner.as_Alias();
+                            auto& ree = rE.inner.as_Alias();
                             if (lee.inner != ree.inner) {
                                 ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT << " - different source");
                             }
                             equalityTypeparams(lee.params, ree.params);
+                            break;
                         }
-                        TU_ARMA(Known, lee, ree) {
+                        case TypeDataErasedTypeInner::TAG_Known: {
+                            auto& lee = lE.inner.as_Known();
+                            auto& ree = rE.inner.as_Known();
                             equateTypesInner(sp, lee, ree);
+                            break;
                         }
+                    }
+                    break;
                 }
-                }
-                TU_ARMA(Array, lE, rE) {
+                case HIRTypeData::TAG_Array: {
+                    auto& lE = (*lT).as_Array();
+                    auto& rE = (*rT).as_Array();
                     this->equateTypesInner(sp, lE.inner, rE.inner);
                     if (lE.size != rE.size) {
                         if (lE.size.is_Unevaluated() || rE.size.is_Unevaluated()) {
@@ -2769,11 +2908,17 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                             ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT << " - sizes differ");
                         }
                     }
+                    break;
                 }
-                TU_ARMA(Slice, lE, rE) {
+                case HIRTypeData::TAG_Slice: {
+                    auto& lE = (*lT).as_Slice();
+                    auto& rE = (*rT).as_Slice();
                     this->equateTypesInner(sp, lE.inner, rE.inner);
+                    break;
                 }
-                TU_ARMA(Pattern, lE, rE) {
+                case HIRTypeData::TAG_Pattern: {
+                    auto& lE = (*lT).as_Pattern();
+                    auto& rE = (*rT).as_Pattern();
                     if (lE.pattern.alternatives.size() != rE.pattern.alternatives.size()) {
                         ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT << " - pattern alternative counts differ");
                     }
@@ -2787,33 +2932,48 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                         if (left.hasEnd) this->equateValues(sp, left.end, right.end);
                     }
                     this->equateTypesInner(sp, lE.inner, rE.inner);
+                    break;
                 }
-                TU_ARMA(Tuple, lE, rE) {
+                case HIRTypeData::TAG_Tuple: {
+                    auto& lE = (*lT).as_Tuple();
+                    auto& rE = (*rT).as_Tuple();
                     if (lE.size() != rE.size()) {
                         ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT << " - Tuples are of different length");
                     }
                     for (unsigned int i = 0; i < lE.size(); i++) {
                         this->equateTypesInner(sp, lE[i], rE[i]);
                     }
+                    break;
                 }
-                TU_ARMA(Borrow, lE, rE) {
+                case HIRTypeData::TAG_Borrow: {
+                    auto& lE = (*lT).as_Borrow();
+                    auto& rE = (*rT).as_Borrow();
                     if (lE.type != rE.type) {
                         ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT << " - Borrow classes differ");
                     }
                     this->equateTypesInner(sp, lE.inner, rE.inner);
+                    break;
                 }
-                TU_ARMA(Pointer, lE, rE) {
+                case HIRTypeData::TAG_Pointer: {
+                    auto& lE = (*lT).as_Pointer();
+                    auto& rE = (*rT).as_Pointer();
                     if (lE.type != rE.type) {
                         ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT << " - Pointer mutability differs");
                     }
                     this->equateTypesInner(sp, lE.inner, rE.inner);
+                    break;
                 }
-                TU_ARMA(NamedFunction, lE, rE) {
+                case HIRTypeData::TAG_NamedFunction: {
+                    auto& lE = (*lT).as_NamedFunction();
+                    auto& rE = (*rT).as_NamedFunction();
                     if (!equalityPath(lE.path, rE.path)) {
                         ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT);
                     }
+                    break;
                 }
-                TU_ARMA(Function, lE, rE) {
+                case HIRTypeData::TAG_Function: {
+                    auto& lE = (*lT).as_Function();
+                    auto& rE = (*rT).as_Function();
                     if (lE.isUnsafe != rE.isUnsafe || lE.isVariadic != rE.isVariadic || lE.trackCaller != rE.trackCaller || lE.abi != rE.abi || lE.argTypes.size() != rE.argTypes.size()) {
                         ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT);
                     }
@@ -2822,11 +2982,15 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     for (unsigned int i = 0; i < lE.argTypes.size(); i++) {
                         this->equateTypesInner(sp, lE.argTypes[i], rE.argTypes[i]);
                     }
+                    break;
                 }
-                TU_ARMA(NodeType, lE, rE) {
+                case HIRTypeData::TAG_NodeType: {
+                    auto& lE = (*lT).as_NodeType();
+                    auto& rE = (*rT).as_NodeType();
                     if (lE != rE) {
                         ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT);
                     }
+                    break;
                 }
             }
         }
@@ -2893,13 +3057,37 @@ namespace {
             if (left.data.tag() != right.data.tag()) {
                 return false;
             }
-            TU_MATCH_HDRA( (left.data, right.data), {)
-            TU_ARMA(Integer, l, r) return l.type == r.type && l.value == r.value;
-                TU_ARMA(Float, l, r) return l.type == r.type && l.value == r.value;
-                TU_ARMA(Boolean, l, r) return l == r;
-                TU_ARMA(String, l, r) return l == r;
-                TU_ARMA(CString, l, r) return l.v == r.v;
-                TU_ARMA(ByteString, l, r) return l == r;
+            switch (left.data.tag()) {
+                case HIRExprLiteral::TAG_Integer: {
+                    auto& l = left.data.as_Integer();
+                    auto& r = right.data.as_Integer();
+                    return l.type == r.type && l.value == r.value;
+                }
+                case HIRExprLiteral::TAG_Float: {
+                    auto& l = left.data.as_Float();
+                    auto& r = right.data.as_Float();
+                    return l.type == r.type && l.value == r.value;
+                }
+                case HIRExprLiteral::TAG_Boolean: {
+                    auto& l = left.data.as_Boolean();
+                    auto& r = right.data.as_Boolean();
+                    return l == r;
+                }
+                case HIRExprLiteral::TAG_String: {
+                    auto& l = left.data.as_String();
+                    auto& r = right.data.as_String();
+                    return l == r;
+                }
+                case HIRExprLiteral::TAG_CString: {
+                    auto& l = left.data.as_CString();
+                    auto& r = right.data.as_CString();
+                    return l.v == r.v;
+                }
+                case HIRExprLiteral::TAG_ByteString: {
+                    auto& l = left.data.as_ByteString();
+                    auto& r = right.data.as_ByteString();
+                    return l == r;
+                }
             }
             throw "";
         }
@@ -2965,25 +3153,33 @@ namespace {
             if (leftPath.data.tag() != rightPath.data.tag()) {
                 return false;
             }
-            TU_MATCH_HDRA((leftPath.data, rightPath.data), {)
-            TU_ARMA(Generic, l, r) {
+            switch (leftPath.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& l = leftPath.data.as_Generic();
+                    auto& r = rightPath.data.as_Generic();
                     return l.path == r.path && equateParams(l.params, r.params);
                 }
-                TU_ARMA(UfcsInherent, l, r) {
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& l = leftPath.data.as_UfcsInherent();
+                    auto& r = rightPath.data.as_UfcsInherent();
                     if (l.item != r.item || !equateParams(l.params, r.params)) {
                         return false;
                     }
                     context.equateTypesInner(sp, l.type, r.type);
                     return true;
                 }
-                TU_ARMA(UfcsKnown, l, r) {
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& l = leftPath.data.as_UfcsKnown();
+                    auto& r = rightPath.data.as_UfcsKnown();
                     if (l.trait.path != r.trait.path || l.item != r.item || !equateParams(l.trait.params, r.trait.params) || !equateParams(l.params, r.params)) {
                         return false;
                     }
                     context.equateTypesInner(sp, l.type, r.type);
                     return true;
                 }
-                TU_ARMA(UfcsUnknown, l, r) {
+                case HIRPathData::TAG_UfcsUnknown: {
+                    auto& l = leftPath.data.as_UfcsUnknown();
+                    auto& r = rightPath.data.as_UfcsUnknown();
                     if (l.item != r.item || !equateParams(l.params, r.params)) {
                         return false;
                     }
@@ -3217,74 +3413,104 @@ namespace {
     }
 
     void fixupPatternValuePaths(Context& context, const Span& sp, HIRPattern& pat) {
-        TU_MATCH_HDRA( (pat.data), {)
-        TU_ARMA(Any, e) {
+        switch (pat.data.tag()) {
+            case HIRPatternData::TAG_Any: {
+                auto& e = pat.data.as_Any();
+                (void)e;
+                break;
             }
-            TU_ARMA(Box, e) {
+            case HIRPatternData::TAG_Box: {
+                auto& e = pat.data.as_Box();
                 fixupPatternValuePaths(context, sp, *e.sub);
+                break;
             }
-            TU_ARMA(Deref, e) {
+            case HIRPatternData::TAG_Deref: {
+                auto& e = pat.data.as_Deref();
                 fixupPatternValuePaths(context, sp, *e.sub);
+                break;
             }
-            TU_ARMA(Ref, e) {
+            case HIRPatternData::TAG_Ref: {
+                auto& e = pat.data.as_Ref();
                 fixupPatternValuePaths(context, sp, *e.sub);
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case HIRPatternData::TAG_Tuple: {
+                auto& e = pat.data.as_Tuple();
                 for (auto& subpat : e.subPatterns) {
                     fixupPatternValuePaths(context, sp, subpat);
                 }
+                break;
             }
-            TU_ARMA(SplitTuple, e) {
+            case HIRPatternData::TAG_SplitTuple: {
+                auto& e = pat.data.as_SplitTuple();
                 for (auto& subpat : e.leading) {
                     fixupPatternValuePaths(context, sp, subpat);
                 }
                 for (auto& subpat : e.trailing) {
                     fixupPatternValuePaths(context, sp, subpat);
                 }
+                break;
             }
-            TU_ARMA(PathValue, e) {
+            case HIRPatternData::TAG_PathValue: {
+                auto& e = pat.data.as_PathValue();
+                (void)e;
+                break;
             }
-            TU_ARMA(PathTuple, e) {
+            case HIRPatternData::TAG_PathTuple: {
+                auto& e = pat.data.as_PathTuple();
                 for (auto& subpat : e.leading) {
                     fixupPatternValuePaths(context, sp, subpat);
                 }
                 for (auto& subpat : e.trailing) {
                     fixupPatternValuePaths(context, sp, subpat);
                 }
+                break;
             }
-            TU_ARMA(PathNamed, e) {
+            case HIRPatternData::TAG_PathNamed: {
+                auto& e = pat.data.as_PathNamed();
                 for (auto& subpat : e.subPatterns) {
                     fixupPatternValuePaths(context, sp, subpat.second);
                 }
+                break;
             }
-            TU_ARMA(Or, e) {
+            case HIRPatternData::TAG_Or: {
+                auto& e = pat.data.as_Or();
                 for (auto& subpat : e) {
                     fixupPatternValuePaths(context, sp, subpat);
                 }
+                break;
             }
-            TU_ARMA(Value, e) {
+            case HIRPatternData::TAG_Value: {
+                auto& e = pat.data.as_Value();
                 fixupPatternValuePaths(context, sp, e.val);
+                break;
             }
-            TU_ARMA(Range, e) {
+            case HIRPatternData::TAG_Range: {
+                auto& e = pat.data.as_Range();
                 if (e.start) {
                     fixupPatternValuePaths(context, sp, *e.start);
                 }
                 if (e.end) {
                     fixupPatternValuePaths(context, sp, *e.end);
                 }
+                break;
             }
-            TU_ARMA(Slice, e) {
+            case HIRPatternData::TAG_Slice: {
+                auto& e = pat.data.as_Slice();
                 for (auto& subpat : e.subPatterns) {
                     fixupPatternValuePaths(context, sp, subpat);
                 }
+                break;
             }
-            TU_ARMA(SplitSlice, e) {
+            case HIRPatternData::TAG_SplitSlice: {
+                auto& e = pat.data.as_SplitSlice();
                 for (auto& subpat : e.leading) {
                     fixupPatternValuePaths(context, sp, subpat);
                 }
                 for (auto& subpat : e.trailing) {
                     fixupPatternValuePaths(context, sp, subpat);
                 }
+                break;
             }
         }
     }
@@ -3366,30 +3592,36 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
             }
 
             ::std::optional<HIRTypeRef> getPossibleTypeVal(Context& context, HIRPattern::Value& pv) const {
-                TU_MATCH_HDR( (pv), {)
-                TU_ARM(pv, Integer, ve) {
+                switch (pv.tag()) {
+                    case HIRPatternValue::TAG_Integer: {
+                        auto& ve = pv.as_Integer();
                         if (ve.type == HIRCoreType::Str) {
                             return context.ivars.newIvarTr(HIRInferClass::Integer);
                         }
                         return context.crate.types.primitive(ve.type);
                     }
-                    TU_ARM(pv, Float, ve) {
+                    case HIRPatternValue::TAG_Float: {
+                        auto& ve = pv.as_Float();
                         if (ve.type == HIRCoreType::Str) {
                             return context.ivars.newIvarTr(HIRInferClass::Float);
                         }
                         return context.crate.types.primitive(ve.type);
                     }
-                    TU_ARM(pv, String, ve) {
+                    case HIRPatternValue::TAG_String: {
+                        auto& ve = pv.as_String();
+                        (void)ve;
                         return context.crate.types.borrow(HIRBorrowType::Shared, context.crate.types.primitive(HIRCoreType::Str));
                     }
-                    TU_ARM(pv, ByteString, ve) {
+                    case HIRPatternValue::TAG_ByteString: {
+                        auto& ve = pv.as_ByteString();
                         // This is the default literal type. A known &[u8]
                         // scrutinee is still accepted by the pattern handler.
                         return context.crate.types.borrow(
                             HIRBorrowType::Shared,
                             context.crate.types.array(context.crate.types.primitive(HIRCoreType::U8), ve.v.size()));
                     }
-                    TU_ARM(pv, Named, ve) {
+                    case HIRPatternValue::TAG_Named: {
+                        auto& ve = pv.as_Named();
                         DEBUG("TODO: Look up the path and get the type: " << ve.path);
                         if (ve.binding) {
                             if (ve.path.data.is_UfcsKnown()) {
@@ -3405,6 +3637,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         } else {
                             return ::std::nullopt;
                         }
+                        break;
                     }
                 }
                 throw "";
@@ -3414,14 +3647,20 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 ::std::optional<HIRTypeRef> possibleType;
                 // Get a potential type from the pattern, and set as a possibility.
                 // - Note, this is only if no derefs were applied
-                TU_MATCH_HDR( (pattern.data), { )
-                TU_ARM(pattern.data, Any, pe) {
+                switch (pattern.data.tag()) {
+                    case HIRPatternData::TAG_Any: {
+                        auto& pe = pattern.data.as_Any();
+                        (void)pe;
                         // No type information.
+                        break;
                     }
-                    TU_ARM(pattern.data, Value, pe) {
+                    case HIRPatternData::TAG_Value: {
+                        auto& pe = pattern.data.as_Value();
                         possibleType = getPossibleTypeVal(context, pe.val);
+                        break;
                     }
-                    TU_ARM(pattern.data, Range, pe) {
+                    case HIRPatternData::TAG_Range: {
+                        auto& pe = pattern.data.as_Range();
                         if (pe.start) {
                             possibleType = getPossibleTypeVal(context, *pe.start);
                         }
@@ -3432,20 +3671,31 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         } else {
                             // TODO: Check that the type from .end matches .start
                         }
+                        break;
                     }
-                    TU_ARM(pattern.data, Box, pe) {
+                    case HIRPatternData::TAG_Box: {
+                        auto& pe = pattern.data.as_Box();
+                        (void)pe;
                         // TODO: Get type info (Box<_>) ?
                         // - Is this possible? Shouldn't a box pattern disable ergonomics?
+                        break;
                     }
-                    TU_ARM(pattern.data, Deref, pe) {
+                    case HIRPatternData::TAG_Deref: {
+                        auto& pe = pattern.data.as_Deref();
+                        (void)pe;
                         // The inner pattern constrains `Deref::Target`, not the
                         // smart-pointer source itself.  It cannot be used as a
                         // fallback type for the outer scrutinee.
+                        break;
                     }
-                    TU_ARM(pattern.data, Ref, pe) {
+                    case HIRPatternData::TAG_Ref: {
+                        auto& pe = pattern.data.as_Ref();
+                        (void)pe;
                         BUG(sp, "Match ergonomics - & pattern");
+                        break;
                     }
-                    TU_ARM(pattern.data, Tuple, e) {
+                    case HIRPatternData::TAG_Tuple: {
+                        auto& e = pattern.data.as_Tuple();
                         // Get type info `(T, U, ...)`
                         if (tempIvars.size() != e.subPatterns.size()) {
                             for (size_t i = 0; i < e.subPatterns.size(); i++) {
@@ -3457,98 +3707,144 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             tuple.push_back(ty);
                         }
                         possibleType = context.crate.types.tuple(::std::move(tuple));
+                        break;
                     }
-                    TU_ARM(pattern.data, SplitTuple, pe) {
+                    case HIRPatternData::TAG_SplitTuple: {
+                        auto& pe = pattern.data.as_SplitTuple();
+                        (void)pe;
                         // Can't get type information, tuple size is unkown
+                        break;
                     }
-                    TU_ARM(pattern.data, Slice, e) {
+                    case HIRPatternData::TAG_Slice: {
+                        auto& e = pattern.data.as_Slice();
                         // Can be either a [T] or [T; n]. Can't provide a hint
                         // - Can provide the hint if not behind a borrow.
                         possibleType = context.crate.types.array(context.ivars.newIvarTr(), e.subPatterns.size());
+                        break;
                     }
-                    TU_ARM(pattern.data, SplitSlice, pe) {
+                    case HIRPatternData::TAG_SplitSlice: {
+                        auto& pe = pattern.data.as_SplitSlice();
+                        (void)pe;
                         // Can be either a [T] or [T; n]. Can't provide a hint
+                        break;
                     }
-                    TU_ARM(pattern.data, PathValue, e) {
-                    TU_MATCH_HDRA( (e.binding), {)
-                    TU_ARMA(Unbound, _)
-                        BUG(sp, "");
-                            TU_ARMA(Struct, be) {
+                    case HIRPatternData::TAG_PathValue: {
+                        auto& e = pattern.data.as_PathValue();
+                        switch (e.binding.tag()) {
+                            case HIRPatternPathBinding::TAG_Unbound: {
+                                auto& _ = e.binding.as_Unbound();
+                                (void)_;
+                                BUG(sp, "");
+                                break;
+                            }
+                            case HIRPatternPathBinding::TAG_Struct: {
+                                auto& be = e.binding.as_Struct();
                                 auto& p = e.path.data.as_Generic();
                                 assert(be);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
+                                break;
                             }
-                            TU_ARMA(Union, be) {
+                            case HIRPatternPathBinding::TAG_Union: {
+                                auto& be = e.binding.as_Union();
                                 auto& p = e.path.data.as_Generic();
                                 assert(be);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
+                                break;
                             }
-                            TU_ARMA(Enum, be) {
+                            case HIRPatternPathBinding::TAG_Enum: {
+                                auto& be = e.binding.as_Enum();
                                 auto& p = e.path.data.as_Generic();
                                 assert(be.ptr);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(getParentPath(p), HIRTypePathBinding(be.ptr));
+                                break;
                             }
+                        }
+                        break;
                     }
-                    }
-                    TU_ARM(pattern.data, PathTuple, e) {
-                    TU_MATCH_HDRA( (e.binding), {)
-                    TU_ARMA(Unbound, _)
-                        BUG(sp, "");
-                            TU_ARMA(Struct, be) {
+                    case HIRPatternData::TAG_PathTuple: {
+                        auto& e = pattern.data.as_PathTuple();
+                        switch (e.binding.tag()) {
+                            case HIRPatternPathBinding::TAG_Unbound: {
+                                auto& _ = e.binding.as_Unbound();
+                                (void)_;
+                                BUG(sp, "");
+                                break;
+                            }
+                            case HIRPatternPathBinding::TAG_Struct: {
+                                auto& be = e.binding.as_Struct();
                                 auto& p = e.path.data.as_Generic();
                                 assert(be);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
+                                break;
                             }
-                            TU_ARMA(Union, be) {
+                            case HIRPatternPathBinding::TAG_Union: {
+                                auto& be = e.binding.as_Union();
                                 auto& p = e.path.data.as_Generic();
                                 assert(be);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
+                                break;
                             }
-                            TU_ARMA(Enum, be) {
+                            case HIRPatternPathBinding::TAG_Enum: {
+                                auto& be = e.binding.as_Enum();
                                 auto& p = e.path.data.as_Generic();
                                 assert(be.ptr);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(getParentPath(p), HIRTypePathBinding(be.ptr));
+                                break;
                             }
+                        }
+                        break;
                     }
-                    }
-                    TU_ARM(pattern.data, PathNamed, e) {
-                    TU_MATCH_HDRA( (e.binding), {)
-                    TU_ARMA(Unbound, _)
-                        BUG(sp, "");
-                            TU_ARMA(Struct, be) {
+                    case HIRPatternData::TAG_PathNamed: {
+                        auto& e = pattern.data.as_PathNamed();
+                        switch (e.binding.tag()) {
+                            case HIRPatternPathBinding::TAG_Unbound: {
+                                auto& _ = e.binding.as_Unbound();
+                                (void)_;
+                                BUG(sp, "");
+                                break;
+                            }
+                            case HIRPatternPathBinding::TAG_Struct: {
+                                auto& be = e.binding.as_Struct();
                                 auto& p = e.path.data.as_Generic();
                                 assert(be);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
+                                break;
                             }
-                            TU_ARMA(Union, be) {
+                            case HIRPatternPathBinding::TAG_Union: {
+                                auto& be = e.binding.as_Union();
                                 auto& p = e.path.data.as_Generic();
                                 assert(be);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(p.clone(), HIRTypePathBinding(be));
+                                break;
                             }
-                            TU_ARMA(Enum, be) {
+                            case HIRPatternPathBinding::TAG_Enum: {
+                                auto& be = e.binding.as_Enum();
                                 auto& p = e.path.data.as_Generic();
                                 assert(be.ptr);
                                 context.addIvarsParams(p.params);
                                 possibleType = context.crate.types.path(getParentPath(p), HIRTypePathBinding(be.ptr));
+                                break;
                             }
+                        }
+                        break;
                     }
-                    }
-
-                    TU_ARM(pattern.data, Or, e) {
+                    case HIRPatternData::TAG_Or: {
+                        auto& e = pattern.data.as_Or();
                         for (auto& subpat : e) {
                             possibleType = getPossibleTypeInner(context, subpat);
                             if (possibleType) {
                                 break;
                             }
                         }
+                        break;
                     }
                 }
                 return possibleType;
@@ -3566,21 +3862,74 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 for (const auto& binding : pattern.bindings) {
                     if (binding.type == HIRPatternBinding::Type::MutRef) return true;
                 }
-                TU_MATCH_HDRA((pattern.data), {)
-                TU_ARMA(Any, e) return false;
-                TU_ARMA(Value, e) return false;
-                TU_ARMA(Range, e) return false;
-                TU_ARMA(Box, e) return hasMutableBinding(*e.sub);
-                TU_ARMA(Deref, e) return hasMutableBinding(*e.sub);
-                TU_ARMA(Ref, e) return hasMutableBinding(*e.sub);
-                TU_ARMA(Tuple, e) { for (const auto& sub : e.subPatterns) if (hasMutableBinding(sub)) return true; return false; }
-                TU_ARMA(SplitTuple, e) { for (const auto& sub : e.leading) if (hasMutableBinding(sub)) return true; for (const auto& sub : e.trailing) if (hasMutableBinding(sub)) return true; return false; }
-                TU_ARMA(PathValue, e) return false;
-                TU_ARMA(PathTuple, e) { for (const auto& sub : e.leading) if (hasMutableBinding(sub)) return true; for (const auto& sub : e.trailing) if (hasMutableBinding(sub)) return true; return false; }
-                TU_ARMA(PathNamed, e) { for (const auto& sub : e.subPatterns) if (hasMutableBinding(sub.second)) return true; return false; }
-                TU_ARMA(Slice, e) { for (const auto& sub : e.subPatterns) if (hasMutableBinding(sub)) return true; return false; }
-                TU_ARMA(SplitSlice, e) { if (e.extraBind.type == HIRPatternBinding::Type::MutRef) return true; for (const auto& sub : e.leading) if (hasMutableBinding(sub)) return true; for (const auto& sub : e.trailing) if (hasMutableBinding(sub)) return true; return false; }
-                TU_ARMA(Or, e) { for (const auto& sub : e) if (hasMutableBinding(sub)) return true; return false; }
+                switch (pattern.data.tag()) {
+                    case HIRPatternData::TAG_Any: {
+                        auto& e = pattern.data.as_Any();
+                        (void)e;
+                        return false;
+                    }
+                    case HIRPatternData::TAG_Value: {
+                        auto& e = pattern.data.as_Value();
+                        (void)e;
+                        return false;
+                    }
+                    case HIRPatternData::TAG_Range: {
+                        auto& e = pattern.data.as_Range();
+                        (void)e;
+                        return false;
+                    }
+                    case HIRPatternData::TAG_Box: {
+                        auto& e = pattern.data.as_Box();
+                        return hasMutableBinding(*e.sub);
+                    }
+                    case HIRPatternData::TAG_Deref: {
+                        auto& e = pattern.data.as_Deref();
+                        return hasMutableBinding(*e.sub);
+                    }
+                    case HIRPatternData::TAG_Ref: {
+                        auto& e = pattern.data.as_Ref();
+                        return hasMutableBinding(*e.sub);
+                    }
+                    case HIRPatternData::TAG_Tuple: {
+                        auto& e = pattern.data.as_Tuple();
+                        for (const auto& sub : e.subPatterns) if (hasMutableBinding(sub)) return true; return false;
+                        break;
+                    }
+                    case HIRPatternData::TAG_SplitTuple: {
+                        auto& e = pattern.data.as_SplitTuple();
+                        for (const auto& sub : e.leading) if (hasMutableBinding(sub)) return true; for (const auto& sub : e.trailing) if (hasMutableBinding(sub)) return true; return false;
+                        break;
+                    }
+                    case HIRPatternData::TAG_PathValue: {
+                        auto& e = pattern.data.as_PathValue();
+                        (void)e;
+                        return false;
+                    }
+                    case HIRPatternData::TAG_PathTuple: {
+                        auto& e = pattern.data.as_PathTuple();
+                        for (const auto& sub : e.leading) if (hasMutableBinding(sub)) return true; for (const auto& sub : e.trailing) if (hasMutableBinding(sub)) return true; return false;
+                        break;
+                    }
+                    case HIRPatternData::TAG_PathNamed: {
+                        auto& e = pattern.data.as_PathNamed();
+                        for (const auto& sub : e.subPatterns) if (hasMutableBinding(sub.second)) return true; return false;
+                        break;
+                    }
+                    case HIRPatternData::TAG_Slice: {
+                        auto& e = pattern.data.as_Slice();
+                        for (const auto& sub : e.subPatterns) if (hasMutableBinding(sub)) return true; return false;
+                        break;
+                    }
+                    case HIRPatternData::TAG_SplitSlice: {
+                        auto& e = pattern.data.as_SplitSlice();
+                        if (e.extraBind.type == HIRPatternBinding::Type::MutRef) return true; for (const auto& sub : e.leading) if (hasMutableBinding(sub)) return true; for (const auto& sub : e.trailing) if (hasMutableBinding(sub)) return true; return false;
+                        break;
+                    }
+                    case HIRPatternData::TAG_Or: {
+                        auto& e = pattern.data.as_Or();
+                        for (const auto& sub : e) if (hasMutableBinding(sub)) return true; return false;
+                        break;
+                    }
                 }
                 throw "";
             }
@@ -3594,27 +3943,76 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     return binding.is_Enum() ? actualPath == getParentPath(patternGeneric).path
                                              : actualPath == patternGeneric.path;
                 };
-                TU_MATCH_HDRA((pattern.data), {)
-                TU_ARMA(Any, e) return true;
-                TU_ARMA(Deref, e) return true;
-                TU_ARMA(Box, e) return type->is_Path();
-                TU_ARMA(Ref, e) return type->is_Borrow();
-                TU_ARMA(Tuple, e) return type->is_Tuple();
-                TU_ARMA(SplitTuple, e) return type->is_Tuple();
-                TU_ARMA(Slice, e) return type->is_Array() || type->is_Slice();
-                TU_ARMA(SplitSlice, e) return type->is_Array() || type->is_Slice();
-                TU_ARMA(PathValue, e) return matchesPath(e.path, e.binding);
-                TU_ARMA(PathTuple, e) return matchesPath(e.path, e.binding);
-                TU_ARMA(PathNamed, e) return matchesPath(e.path, e.binding);
-                TU_ARMA(Range, e) return type->is_Primitive();
-                TU_ARMA(Value, e) {
-                    if (e.val.is_Named()) return true;
-                    if (e.val.is_String()) return type->is_Primitive() && type->as_Primitive() == HIRCoreType::Str;
-                    if (e.val.is_ByteString()) return type->is_Array() || type->is_Slice();
-                    if (e.val.is_Integer() || e.val.is_Float()) return type->is_Primitive();
-                    return false;
-                }
-                TU_ARMA(Or, e) return !e.empty() && directlyMatches(e.front(), type);
+                switch (pattern.data.tag()) {
+                    case HIRPatternData::TAG_Any: {
+                        auto& e = pattern.data.as_Any();
+                        (void)e;
+                        return true;
+                    }
+                    case HIRPatternData::TAG_Deref: {
+                        auto& e = pattern.data.as_Deref();
+                        (void)e;
+                        return true;
+                    }
+                    case HIRPatternData::TAG_Box: {
+                        auto& e = pattern.data.as_Box();
+                        (void)e;
+                        return type->is_Path();
+                    }
+                    case HIRPatternData::TAG_Ref: {
+                        auto& e = pattern.data.as_Ref();
+                        (void)e;
+                        return type->is_Borrow();
+                    }
+                    case HIRPatternData::TAG_Tuple: {
+                        auto& e = pattern.data.as_Tuple();
+                        (void)e;
+                        return type->is_Tuple();
+                    }
+                    case HIRPatternData::TAG_SplitTuple: {
+                        auto& e = pattern.data.as_SplitTuple();
+                        (void)e;
+                        return type->is_Tuple();
+                    }
+                    case HIRPatternData::TAG_Slice: {
+                        auto& e = pattern.data.as_Slice();
+                        (void)e;
+                        return type->is_Array() || type->is_Slice();
+                    }
+                    case HIRPatternData::TAG_SplitSlice: {
+                        auto& e = pattern.data.as_SplitSlice();
+                        (void)e;
+                        return type->is_Array() || type->is_Slice();
+                    }
+                    case HIRPatternData::TAG_PathValue: {
+                        auto& e = pattern.data.as_PathValue();
+                        return matchesPath(e.path, e.binding);
+                    }
+                    case HIRPatternData::TAG_PathTuple: {
+                        auto& e = pattern.data.as_PathTuple();
+                        return matchesPath(e.path, e.binding);
+                    }
+                    case HIRPatternData::TAG_PathNamed: {
+                        auto& e = pattern.data.as_PathNamed();
+                        return matchesPath(e.path, e.binding);
+                    }
+                    case HIRPatternData::TAG_Range: {
+                        auto& e = pattern.data.as_Range();
+                        (void)e;
+                        return type->is_Primitive();
+                    }
+                    case HIRPatternData::TAG_Value: {
+                        auto& e = pattern.data.as_Value();
+                        if (e.val.is_Named()) return true;
+                        if (e.val.is_String()) return type->is_Primitive() && type->as_Primitive() == HIRCoreType::Str;
+                        if (e.val.is_ByteString()) return type->is_Array() || type->is_Slice();
+                        if (e.val.is_Integer() || e.val.is_Float()) return type->is_Primitive();
+                        return false;
+                    }
+                    case HIRPatternData::TAG_Or: {
+                        auto& e = pattern.data.as_Or();
+                        return !e.empty() && directlyMatches(e.front(), type);
+                    }
                 }
                 throw "";
             }
@@ -3812,18 +4210,28 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 }
 
                 bool rv = false;
-                TU_MATCH_HDR( (pattern.data), { )
-                TU_ARM(pattern.data, Ref, pe) {
+                switch (pattern.data.tag()) {
+                    case HIRPatternData::TAG_Ref: {
+                        auto& pe = pattern.data.as_Ref();
+                        (void)pe;
                         BUG(sp, "Match ergonomics - `&` pattern already handled");
+                        break;
                     }
-                    TU_ARM(pattern.data, Or, pe) {
+                    case HIRPatternData::TAG_Or: {
+                        auto& pe = pattern.data.as_Or();
+                        (void)pe;
                         BUG(sp, "Match ergonomics - `|` pattern already handled");
+                        break;
                     }
-                    TU_ARM(pattern.data, Any, pe) {
+                    case HIRPatternData::TAG_Any: {
+                        auto& pe = pattern.data.as_Any();
+                        (void)pe;
                         // no-op
                         rv = true;
+                        break;
                     }
-                    TU_ARM(pattern.data, Value, pe) {
+                    case HIRPatternData::TAG_Value: {
+                        auto& pe = pattern.data.as_Value();
                         if (pe.val.is_String()) {
                             if (!(ty->is_Primitive() && ty->as_Primitive() == HIRCoreType::Str)) {
                                 ASSERT_BUG(sp, pattern.implicitDerefCount >= 1, "");
@@ -3844,12 +4252,17 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             }
                         }
                         rv = true;
+                        break;
                     }
-                    TU_ARM(pattern.data, Range, pe) {
+                    case HIRPatternData::TAG_Range: {
+                        auto& pe = pattern.data.as_Range();
+                        (void)pe;
                         // no-op?
                         rv = true;
+                        break;
                     }
-                    TU_ARM(pattern.data, Box, pe) {
+                    case HIRPatternData::TAG_Box: {
+                        auto& pe = pattern.data.as_Box();
                         // Box<T>
                         if (((*ty).is_Path() && (*ty).as_Path().path.data.is_Generic() && (*ty).as_Path().path.data.as_Generic().path == context.langBox)) {
                             const auto& path = ty->as_Path().path.data.as_Generic();
@@ -3859,8 +4272,10 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             TODO(sp, "Match ergonomics - box pattern - Non Box<T> type: " << ty);
                             //::HIR::GenericPath  path { m_lang_Box, ::HIR::PathParams(mv$(inner)) };
                         }
+                        break;
                     }
-                    TU_ARM(pattern.data, Deref, pe) {
+                    case HIRPatternData::TAG_Deref: {
+                        auto& pe = pattern.data.as_Deref();
                         if (const auto* inner = context.resolve.typeIsOwnedBox(sp, ty)) {
                             pe.kind = HIRPattern::DerefKind::Box;
                             pe.targetType = inner;
@@ -3884,8 +4299,10 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         pe.kind = unique ? HIRPattern::DerefKind::Unique : HIRPattern::DerefKind::Shared;
                         pe.targetType = target;
                         rv = this->revisitInner(context, *pe.sub, target, bindingMode);
+                        break;
                     }
-                    TU_ARM(pattern.data, Tuple, e) {
+                    case HIRPatternData::TAG_Tuple: {
+                        auto& e = pattern.data.as_Tuple();
                         if (!ty->is_Tuple()) {
                             ERROR(sp, E0000, "Matching a non-tuple with a tuple pattern - " << ty);
                         }
@@ -3898,8 +4315,10 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         for (unsigned int i = 0; i < e.subPatterns.size(); i++) {
                             rv &= this->revisitInner(context, e.subPatterns[i], te[i], bindingMode);
                         }
+                        break;
                     }
-                    TU_ARM(pattern.data, SplitTuple, pe) {
+                    case HIRPatternData::TAG_SplitTuple: {
+                        auto& pe = pattern.data.as_SplitTuple();
                         if (!ty->is_Tuple()) {
                             ERROR(sp, E0000, "Matching a non-tuple with a tuple pattern - " << ty);
                         }
@@ -3915,8 +4334,10 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         for (size_t i = 0; i < pe.trailing.size(); i++) {
                             rv &= this->revisitInner(context, pe.trailing[i], te[te.size() - pe.trailing.size() + i], bindingMode);
                         }
+                        break;
                     }
-                    TU_ARM(pattern.data, Slice, e) {
+                    case HIRPatternData::TAG_Slice: {
+                        auto& e = pattern.data.as_Slice();
                         const HIRTypeData* sliceInner;
                         if (const auto* te = ty->opt_Slice()) {
                             sliceInner = te->inner;
@@ -3931,8 +4352,10 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         for (auto& sub : e.subPatterns) {
                             rv |= this->revisitInner(context, sub, sliceInner, bindingMode);
                         }
+                        break;
                     }
-                    TU_ARM(pattern.data, SplitSlice, pe) {
+                    case HIRPatternData::TAG_SplitSlice: {
+                        auto& pe = pattern.data.as_SplitSlice();
                         const HIRTypeData* sliceInner;
                         if (const auto* te = ty->opt_Slice()) {
                             sliceInner = te->inner;
@@ -3975,33 +4398,48 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         for (auto& sub : pe.trailing) {
                             rv |= this->revisitInner(context, sub, sliceInner, bindingMode);
                         }
+                        break;
                     }
-                    TU_ARM(pattern.data, PathValue, e) {
+                    case HIRPatternData::TAG_PathValue: {
+                        auto& e = pattern.data.as_PathValue();
                         auto possibleType = getPossibleTypeInner(context, pattern);
-                        ASSERT_BUG(sp, possibleType, "No type for path pattern " << pattern);
-                        context.equateTypes(sp, ty, *possibleType);
+                            ASSERT_BUG(sp, possibleType, "No type for path pattern " << pattern);
+                            context.equateTypes(sp, ty, *possibleType);
 
-                    TU_MATCH_HDRA( (e.binding), { )
-                    TU_ARMA(Unbound, be)    throw "";
-                            TU_ARMA(Struct, be) {
+                        switch (e.binding.tag()) {
+                            case HIRPatternPathBinding::TAG_Unbound: {
+                                auto& be = e.binding.as_Unbound();
+                                (void)be;
+                                throw "";
+                            }
+                            case HIRPatternPathBinding::TAG_Struct: {
+                                auto& be = e.binding.as_Struct();
                                 const auto& str = *be;
                                 ASSERT_BUG(sp, str.data.is_Unit(), "PathValue used on non-unit struct variant");
+                                break;
                             }
-                            TU_ARMA(Union, be) {
+                            case HIRPatternPathBinding::TAG_Union: {
+                                auto& be = e.binding.as_Union();
+                                (void)be;
                                 BUG(sp, "PathValue used for union");
+                                break;
                             }
-                            TU_ARMA(Enum, be) {
+                            case HIRPatternPathBinding::TAG_Enum: {
+                                auto& be = e.binding.as_Enum();
                                 const auto& enm = *be.ptr;
                                 if (const auto* ee = enm.data.opt_Data()) {
                                     ASSERT_BUG(sp, be.varIdx < ee->size(), "");
                                     const auto& var = (*ee)[be.varIdx];
                                     ASSERT_BUG(sp, var.type == context.crate.types.unit(), "EnumValue used on non-value enum variant");
                                 }
+                                break;
                             }
+                        }
+                        rv = true;
+                        break;
                     }
-                    rv = true;
-                    }
-                    TU_ARM(pattern.data, PathTuple, e) {
+                    case HIRPatternData::TAG_PathTuple: {
+                        auto& e = pattern.data.as_PathTuple();
                         auto possibleType = getPossibleTypeInner(context, pattern);
                         ASSERT_BUG(sp, possibleType, "No type for tuple path pattern " << pattern);
                         context.equateTypes(sp, ty, *possibleType);
@@ -4027,8 +4465,10 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             const auto& varTy = maybeMonomorph(sd[sd.size() - e.trailing.size() + i].ent);
                             rv &= this->revisitInner(context, subPat, varTy, bindingMode);
                         }
+                        break;
                     }
-                    TU_ARM(pattern.data, PathNamed, e) {
+                    case HIRPatternData::TAG_PathNamed: {
+                        auto& e = pattern.data.as_PathNamed();
                         auto possibleType = getPossibleTypeInner(context, pattern);
                         ASSERT_BUG(sp, possibleType, "No type for named path pattern " << pattern);
                         context.equateTypes(sp, ty, *possibleType);
@@ -4058,6 +4498,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                                 rv &= this->revisitInner(context, fieldPat.second, fieldType, bindingMode);
                             }
                         }
+                        break;
                     }
                 }
                 return rv;
@@ -4069,41 +4510,63 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         context.possibleEquateTypeUnknown(sp, context.getVar(sp, pb.slot), Context::IvarUnknownType::Bound);
                     }
                 }
-                TU_MATCH_HDRA( (pat.data), {)
-                TU_ARMA(Any, e) {
+                switch (pat.data.tag()) {
+                    case HIRPatternData::TAG_Any: {
+                        auto& e = pat.data.as_Any();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Value, e) {
+                    case HIRPatternData::TAG_Value: {
+                        auto& e = pat.data.as_Value();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Range, e) {
+                    case HIRPatternData::TAG_Range: {
+                        auto& e = pat.data.as_Range();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Box, e) {
+                    case HIRPatternData::TAG_Box: {
+                        auto& e = pat.data.as_Box();
                         disablePossibilitiesOnBindings(sp, context, *e.sub);
+                        break;
                     }
-                    TU_ARMA(Deref, e) {
+                    case HIRPatternData::TAG_Deref: {
+                        auto& e = pat.data.as_Deref();
                         disablePossibilitiesOnBindings(sp, context, *e.sub);
+                        break;
                     }
-                    TU_ARMA(Ref, e) {
+                    case HIRPatternData::TAG_Ref: {
+                        auto& e = pat.data.as_Ref();
                         disablePossibilitiesOnBindings(sp, context, *e.sub);
+                        break;
                     }
-                    TU_ARMA(Tuple, e) {
+                    case HIRPatternData::TAG_Tuple: {
+                        auto& e = pat.data.as_Tuple();
                         for (auto& subpat : e.subPatterns) {
                             disablePossibilitiesOnBindings(sp, context, subpat);
                         }
+                        break;
                     }
-                    TU_ARMA(SplitTuple, e) {
+                    case HIRPatternData::TAG_SplitTuple: {
+                        auto& e = pat.data.as_SplitTuple();
                         for (auto& subpat : e.leading) {
                             disablePossibilitiesOnBindings(sp, context, subpat);
                         }
                         for (auto& subpat : e.trailing) {
                             disablePossibilitiesOnBindings(sp, context, subpat);
                         }
+                        break;
                     }
-                    TU_ARMA(Slice, e) {
+                    case HIRPatternData::TAG_Slice: {
+                        auto& e = pat.data.as_Slice();
                         for (auto& sub : e.subPatterns) {
                             disablePossibilitiesOnBindings(sp, context, sub);
                         }
+                        break;
                     }
-                    TU_ARMA(SplitSlice, e) {
+                    case HIRPatternData::TAG_SplitSlice: {
+                        auto& e = pat.data.as_SplitSlice();
                         for (auto& sub : e.leading) {
                             disablePossibilitiesOnBindings(sp, context, sub);
                         }
@@ -4113,29 +4576,36 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         for (auto& sub : e.trailing) {
                             disablePossibilitiesOnBindings(sp, context, sub);
                         }
+                        break;
                     }
-
-                    // - Enums/Structs
-                    TU_ARMA(PathValue, e) {
+                    case HIRPatternData::TAG_PathValue: {
+                        auto& e = pat.data.as_PathValue();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(PathTuple, e) {
+                    case HIRPatternData::TAG_PathTuple: {
+                        auto& e = pat.data.as_PathTuple();
                         for (auto& subpat : e.leading) {
                             disablePossibilitiesOnBindings(sp, context, subpat);
                         }
                         for (auto& subpat : e.trailing) {
                             disablePossibilitiesOnBindings(sp, context, subpat);
                         }
+                        break;
                     }
-                    TU_ARMA(PathNamed, e) {
+                    case HIRPatternData::TAG_PathNamed: {
+                        auto& e = pat.data.as_PathNamed();
                         for (auto& fieldPat : e.subPatterns) {
                             disablePossibilitiesOnBindings(sp, context, fieldPat.second);
                         }
+                        break;
                     }
-
-                    TU_ARMA(Or, e) {
+                    case HIRPatternData::TAG_Or: {
+                        auto& e = pat.data.as_Or();
                         for (auto& subpat : e) {
                             disablePossibilitiesOnBindings(sp, context, subpat);
                         }
+                        break;
                     }
                 }
             }
@@ -4147,41 +4617,63 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     // - I'll leave the option open, MIR generation should handle cases where there's multiple borrows
                     //   or moves.
                 }
-                TU_MATCH_HDRA( (pat.data), { )
-                TU_ARMA(Any, e) {
+                switch (pat.data.tag()) {
+                    case HIRPatternData::TAG_Any: {
+                        auto& e = pat.data.as_Any();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Value, e) {
+                    case HIRPatternData::TAG_Value: {
+                        auto& e = pat.data.as_Value();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Range, e) {
+                    case HIRPatternData::TAG_Range: {
+                        auto& e = pat.data.as_Range();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Box, e) {
+                    case HIRPatternData::TAG_Box: {
+                        auto& e = pat.data.as_Box();
                         createBindings(sp, context, *e.sub);
+                        break;
                     }
-                    TU_ARMA(Deref, e) {
+                    case HIRPatternData::TAG_Deref: {
+                        auto& e = pat.data.as_Deref();
                         createBindings(sp, context, *e.sub);
+                        break;
                     }
-                    TU_ARMA(Ref, e) {
+                    case HIRPatternData::TAG_Ref: {
+                        auto& e = pat.data.as_Ref();
                         createBindings(sp, context, *e.sub);
+                        break;
                     }
-                    TU_ARMA(Tuple, e) {
+                    case HIRPatternData::TAG_Tuple: {
+                        auto& e = pat.data.as_Tuple();
                         for (auto& subpat : e.subPatterns) {
                             createBindings(sp, context, subpat);
                         }
+                        break;
                     }
-                    TU_ARMA(SplitTuple, e) {
+                    case HIRPatternData::TAG_SplitTuple: {
+                        auto& e = pat.data.as_SplitTuple();
                         for (auto& subpat : e.leading) {
                             createBindings(sp, context, subpat);
                         }
                         for (auto& subpat : e.trailing) {
                             createBindings(sp, context, subpat);
                         }
+                        break;
                     }
-                    TU_ARMA(Slice, e) {
+                    case HIRPatternData::TAG_Slice: {
+                        auto& e = pat.data.as_Slice();
                         for (auto& sub : e.subPatterns) {
                             createBindings(sp, context, sub);
                         }
+                        break;
                     }
-                    TU_ARMA(SplitSlice, e) {
+                    case HIRPatternData::TAG_SplitSlice: {
+                        auto& e = pat.data.as_SplitSlice();
                         for (auto& sub : e.leading) {
                             createBindings(sp, context, sub);
                         }
@@ -4192,29 +4684,36 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         for (auto& sub : e.trailing) {
                             createBindings(sp, context, sub);
                         }
+                        break;
                     }
-
-                    // - Enums/Structs
-                    TU_ARMA(PathValue, e) {
+                    case HIRPatternData::TAG_PathValue: {
+                        auto& e = pat.data.as_PathValue();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(PathTuple, e) {
+                    case HIRPatternData::TAG_PathTuple: {
+                        auto& e = pat.data.as_PathTuple();
                         for (auto& subpat : e.leading) {
                             createBindings(sp, context, subpat);
                         }
                         for (auto& subpat : e.trailing) {
                             createBindings(sp, context, subpat);
                         }
+                        break;
                     }
-                    TU_ARMA(PathNamed, e) {
+                    case HIRPatternData::TAG_PathNamed: {
+                        auto& e = pat.data.as_PathNamed();
                         for (auto& fieldPat : e.subPatterns) {
                             createBindings(sp, context, fieldPat.second);
                         }
+                        break;
                     }
-
-                    TU_ARMA(Or, e) {
+                    case HIRPatternData::TAG_Or: {
+                        auto& e = pat.data.as_Or();
                         assert(e.size() > 0);
                         createBindings(sp, context, e[0]);
                         // TODO: Ensure that the other arms have the same binding set
+                        break;
                     }
                 }
             }
@@ -4291,22 +4790,29 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
         }
 
         static HIRTypeRef getPathType(Context& context, const Span& sp, HIRPath& path, const HIRPattern::PathBinding& binding) {
-            TU_MATCH_HDRA( (binding), {)
-            TU_ARMA(Unbound, _)
-                BUG(sp, "");
-                TU_ARMA(Struct, be) {
+            switch (binding.tag()) {
+                case HIRPatternPathBinding::TAG_Unbound: {
+                    auto& _ = binding.as_Unbound();
+                    (void)_;
+                    BUG(sp, "");
+                    break;
+                }
+                case HIRPatternPathBinding::TAG_Struct: {
+                    auto& be = binding.as_Struct();
                     auto& p = path.data.as_Generic();
                     assert(be);
                     context.addIvarsParams(p.params);
                     return context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                 }
-                TU_ARMA(Union, be) {
+                case HIRPatternPathBinding::TAG_Union: {
+                    auto& be = binding.as_Union();
                     auto& p = path.data.as_Generic();
                     assert(be);
                     context.addIvarsParams(p.params);
                     return context.crate.types.path(p.clone(), HIRTypePathBinding(be));
                 }
-                TU_ARMA(Enum, be) {
+                case HIRPatternPathBinding::TAG_Enum: {
+                    auto& be = binding.as_Enum();
                     auto& p = path.data.as_Generic();
                     assert(be.ptr);
                     context.addIvarsParams(p.params);
@@ -4317,22 +4823,30 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
         }
     };
 
-    TU_MATCH_HDRA( (pat.data), {)
-    TU_ARMA(Any, e) {
+    switch (pat.data.tag()) {
+        case HIRPatternData::TAG_Any: {
+            auto& e = pat.data.as_Any();
+            (void)e;
             // Just leave it, the pattern says nothing
+            break;
         }
-        TU_ARMA(Value, e) {
+        case HIRPatternData::TAG_Value: {
+            auto& e = pat.data.as_Value();
             H::handleValue(*this, sp, type, e.val);
+            break;
         }
-        TU_ARMA(Range, e) {
+        case HIRPatternData::TAG_Range: {
+            auto& e = pat.data.as_Range();
             if (e.start) {
                 H::handleValue(*this, sp, type, *e.start);
             }
             if (e.end) {
                 H::handleValue(*this, sp, type, *e.end);
             }
+            break;
         }
-        TU_ARMA(Box, e) {
+        case HIRPatternData::TAG_Box: {
+            auto& e = pat.data.as_Box();
             if (langBox == HIRSimplePath()) {
                 ERROR(sp, E0000, "Use of `box` pattern without the `owned_box` lang item");
             }
@@ -4355,8 +4869,10 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
             this->handlePatternDirectInner(sp, *e.sub, inner);
             HIRGenericPath path{langBox, HIRPathParams(mv$(inner))};
             this->equateTypes(sp, type, crate.types.path(mv$(path), HIRTypePathBinding(&crate.getStructByPath(sp, langBox))));
+            break;
         }
-        TU_ARMA(Deref, e) {
+        case HIRPatternData::TAG_Deref: {
+            auto& e = pat.data.as_Deref();
             const auto* ty = this->getType(type);
             if (const auto* inner = resolve.typeIsOwnedBox(sp, ty)) {
                 e.kind = HIRPattern::DerefKind::Box;
@@ -4376,8 +4892,10 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
             e.kind = HIRPattern::DerefKind::Shared;
             e.targetType = target;
             this->handlePatternDirectInner(sp, *e.sub, target);
+            break;
         }
-        TU_ARMA(Ref, e) {
+        case HIRPatternData::TAG_Ref: {
+            auto& e = pat.data.as_Ref();
             const auto& ty = this->getType(type);
             if (const auto* te = ty->opt_Borrow()) {
                 if (te->type != e.type) {
@@ -4389,8 +4907,10 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                 this->handlePatternDirectInner(sp, *e.sub, inner);
                 this->equateTypes(sp, type, crate.types.borrow(e.type, inner));
             }
+            break;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRPatternData::TAG_Tuple: {
+            auto& e = pat.data.as_Tuple();
             const auto& ty = this->getType(type);
             if (const auto* tep = ty->opt_Tuple()) {
                 const auto& te = *tep;
@@ -4409,8 +4929,10 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                 }
                 this->equateTypes(sp, ty, crate.types.tuple(mv$(subTypes)));
             }
+            break;
         }
-        TU_ARMA(SplitTuple, e) {
+        case HIRPatternData::TAG_SplitTuple: {
+            auto& e = pat.data.as_SplitTuple();
             const auto& ty = this->getType(type);
             if (const auto* tep = ty->opt_Tuple()) {
                 const auto& te = *tep;
@@ -4495,23 +5017,30 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                 // Register a revisit and wait until the tuple is known - then bind through.
                 this->addRevisitAdv(box$((SplitTuplePatRevisit{sp, ty, mv$(leadingTys), mv$(trailingTys), e.totalSize})));
             }
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case HIRPatternData::TAG_Slice: {
+            auto& e = pat.data.as_Slice();
             const auto& ty = this->getType(type);
-        TU_MATCH_HDRA( (*ty), {)
-        default:
-            ERROR(sp, E0000, "Slice pattern on non-array/-slice - " << ty);
-                TU_ARMA(Slice, te) {
+            switch ((*ty).tag()) {
+default:
+                ERROR(sp, E0000, "Slice pattern on non-array/-slice - " << ty);
+                case HIRTypeData::TAG_Slice: {
+                    auto& te = (*ty).as_Slice();
                     for (auto& sub : e.subPatterns) {
                         this->handlePatternDirectInner(sp, sub, te.inner);
                     }
+                    break;
                 }
-                TU_ARMA(Array, te) {
+                case HIRTypeData::TAG_Array: {
+                    auto& te = (*ty).as_Array();
                     for (auto& sub : e.subPatterns) {
                         this->handlePatternDirectInner(sp, sub, te.inner);
                     }
+                    break;
                 }
-                TU_ARMA(Infer, te) {
+                case HIRTypeData::TAG_Infer: {
+                    auto& te = (*ty).as_Infer();
                     auto inner = this->ivars.newIvarTr();
                     for (auto& sub : e.subPatterns) {
                         this->handlePatternDirectInner(sp, sub, inner);
@@ -4539,47 +5068,57 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                         }
                         bool revisit(Context& context, bool isFallback) override {
                             const auto& ty = context.getType(type);
-                    TU_MATCH_HDRA( (*ty), {)
-                    default:
+                    switch ((*ty).tag()) {
+default:
                         ERROR(sp, E0000, "Slice pattern on non-array/-slice - " << ty);
-                                TU_ARMA(Infer, te) {
-                                    return false;
-                                }
-                                TU_ARMA(Slice, te) {
-                                    context.equateTypes(sp, te.inner, inner);
-                                    return true;
-                                }
-                                TU_ARMA(Array, te) {
-                                    if (te.size.as_Known() != size) {
-                                        ERROR(sp, E0000, "Slice pattern on an array if differing size");
-                                    }
-                                    context.equateTypes(sp, te.inner, inner);
-                                    return true;
-                                }
+                        case HIRTypeData::TAG_Infer: {
+                            auto& te = (*ty).as_Infer();
+                            (void)te;
+                            return false;
+                        }
+                        case HIRTypeData::TAG_Slice: {
+                            auto& te = (*ty).as_Slice();
+                            context.equateTypes(sp, te.inner, inner);
+                            return true;
+                        }
+                        case HIRTypeData::TAG_Array: {
+                            auto& te = (*ty).as_Array();
+                            if (te.size.as_Known() != size) {
+                                ERROR(sp, E0000, "Slice pattern on an array if differing size");
+                            }
+                            context.equateTypes(sp, te.inner, inner);
+                            return true;
+                        }
                     }
                     throw "unreachable"; //UNREACHABLE();
                         }
                     };
                     this->addRevisitAdv(box$((SlicePatRevisit{sp, mv$(inner), ty, static_cast<unsigned int>(e.subPatterns.size())})));
+                    break;
                 }
+            }
+            break;
         }
-        }
-        TU_ARMA(SplitSlice, e) {
+        case HIRPatternData::TAG_SplitSlice: {
+            auto& e = pat.data.as_SplitSlice();
             HIRTypeRef inner;
-            unsigned int minLen = e.leading.size() + e.trailing.size();
-            const auto& ty = this->getType(type);
-        TU_MATCH_HDRA( (*ty), {)
-        default:
-            ERROR(sp, E0000, "SplitSlice pattern on non-array/-slice - " << ty);
-                TU_ARMA(Slice, te) {
+                unsigned int minLen = e.leading.size() + e.trailing.size();
+                const auto& ty = this->getType(type);
+            switch ((*ty).tag()) {
+default:
+                ERROR(sp, E0000, "SplitSlice pattern on non-array/-slice - " << ty);
+                case HIRTypeData::TAG_Slice: {
+                    auto& te = (*ty).as_Slice();
                     // Slice - Fetch inner and set new variable also be a slice
                     // - TODO: Better new variable handling.
                     inner = te.inner;
                     if (e.extraBind.isValid()) {
                         this->addBindingInner(sp, e.extraBind, ty);
                     }
+                    break;
                 }
-                TU_ARMA(Array, te) {
+                case HIRTypeData::TAG_Array: {
+                    auto& te = (*ty).as_Array();
                     inner = te.inner;
                     if (te.size.as_Known() < minLen) {
                         ERROR(sp, E0000, "Slice pattern on an array smaller than the pattern");
@@ -4589,8 +5128,10 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     if (e.extraBind.isValid()) {
                         this->addBindingInner(sp, e.extraBind, crate.types.array(inner, extra_len));
                     }
+                    break;
                 }
-                TU_ARMA(Infer, te) {
+                case HIRTypeData::TAG_Infer: {
+                    auto& te = (*ty).as_Infer();
                     inner = this->ivars.newIvarTr();
                     HIRTypeRef varTy;
                     if (e.extraBind.isValid()) {
@@ -4625,59 +5166,76 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                         }
                         bool revisit(Context& context, bool isFallback) override {
                             const auto& ty = context.getType(this->type);
-                    TU_MATCH_HDRA( (*ty), {)
-                    default:
+                    switch ((*ty).tag()) {
+default:
                         ERROR(sp, E0000, "Slice pattern on non-array/-slice - " << ty);
-                                TU_ARMA(Infer, te) {
-                                    return false;
-                                }
-                                TU_ARMA(Slice, te) {
-                                    // Slice - Equate inners
-                                    context.equateTypes(this->sp, this->inner, te.inner);
-                                    if (this->varTy != HIRTypeRef()) {
-                                        context.equateTypes(this->sp, this->varTy, ty);
-                                    }
-                                }
-                                TU_ARMA(Array, te) {
-                                    // Array - Equate inners and check size
-                                    context.equateTypes(this->sp, this->inner, te.inner);
-                                    if (te.size.as_Known() < this->minSize) {
-                                        ERROR(sp, E0000, "Slice pattern on an array smaller than the pattern");
-                                    }
-                                    unsigned extra_len = te.size.as_Known() - this->minSize;
+                        case HIRTypeData::TAG_Infer: {
+                            auto& te = (*ty).as_Infer();
+                            (void)te;
+                            return false;
+                        }
+                        case HIRTypeData::TAG_Slice: {
+                            auto& te = (*ty).as_Slice();
+                            // Slice - Equate inners
+                            context.equateTypes(this->sp, this->inner, te.inner);
+                            if (this->varTy != HIRTypeRef()) {
+                                context.equateTypes(this->sp, this->varTy, ty);
+                            }
+                            break;
+                        }
+                        case HIRTypeData::TAG_Array: {
+                            auto& te = (*ty).as_Array();
+                            // Array - Equate inners and check size
+                            context.equateTypes(this->sp, this->inner, te.inner);
+                            if (te.size.as_Known() < this->minSize) {
+                                ERROR(sp, E0000, "Slice pattern on an array smaller than the pattern");
+                            }
+                            unsigned extra_len = te.size.as_Known() - this->minSize;
 
-                                    if (this->varTy != HIRTypeRef()) {
-                                        context.equateTypes(this->sp, this->varTy, context.crate.types.array(this->inner, extra_len));
-                                    }
-                                }
+                            if (this->varTy != HIRTypeRef()) {
+                                context.equateTypes(this->sp, this->varTy, context.crate.types.array(this->inner, extra_len));
+                            }
+                            break;
+                        }
                     }
                     return true;
                         }
                     };
                     // Callback
                     this->addRevisitAdv(box$((SplitSlicePatRevisit{sp, inner, ty, mv$(varTy), minLen})));
+                    break;
                 }
-        }
+            }
 
-        for(auto& sub : e.leading)
-            this->handlePatternDirectInner( sp, sub, inner );
-        for(auto& sub : e.trailing)
-            this->handlePatternDirectInner( sp, sub, inner );
+            for(auto& sub : e.leading)
+                this->handlePatternDirectInner( sp, sub, inner );
+            for(auto& sub : e.trailing)
+                this->handlePatternDirectInner( sp, sub, inner );
+            break;
         }
-
-        // - Enums/Structs
-        TU_ARMA(PathValue, e) {
+        case HIRPatternData::TAG_PathValue: {
+            auto& e = pat.data.as_PathValue();
             this->equateTypes(sp, type, H::getPathType(*this, sp, e.path, e.binding));
-        TU_MATCH_HDRA( (e.binding), {)
-        TU_ARMA(Unbound, _)
-            BUG(sp, "");
-                TU_ARMA(Struct, str) {
+            switch (e.binding.tag()) {
+                case HIRPatternPathBinding::TAG_Unbound: {
+                    auto& _ = e.binding.as_Unbound();
+                    (void)_;
+                    BUG(sp, "");
+                    break;
+                }
+                case HIRPatternPathBinding::TAG_Struct: {
+                    auto& str = e.binding.as_Struct();
                     assert(str->data.is_Unit());
+                    break;
                 }
-                TU_ARMA(Union, unn) {
+                case HIRPatternPathBinding::TAG_Union: {
+                    auto& unn = e.binding.as_Union();
+                    (void)unn;
                     BUG(sp, "PathValue used for union");
+                    break;
                 }
-                TU_ARMA(Enum, be) {
+                case HIRPatternPathBinding::TAG_Enum: {
+                    auto& be = e.binding.as_Enum();
                     if (const auto* ee = be.ptr->data.opt_Data()) {
                         ASSERT_BUG(sp, be.varIdx < ee->size(), "");
                         const auto& var = (*ee)[be.varIdx];
@@ -4687,10 +5245,13 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                             // TODO: Error here due to invalid variant type
                         }
                     }
+                    break;
                 }
+            }
+            break;
         }
-        }
-        TU_ARMA(PathTuple, e) {
+        case HIRPatternData::TAG_PathTuple: {
+            auto& e = pat.data.as_PathTuple();
             this->equateTypes(sp, type, H::getPathType(*this, sp, e.path, e.binding));
 
             const auto& sd = patternGetTuple(sp, e.path, e.binding);
@@ -4720,8 +5281,10 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                 /*const*/ auto& subPat = e.trailing[i];
                 this->handlePatternDirectInner(sp, subPat, maybeMonomorph(sd[sd.size() - e.trailing.size() + i].ent));
             }
+            break;
         }
-        TU_ARMA(PathNamed, e) {
+        case HIRPatternData::TAG_PathNamed: {
+            auto& e = pat.data.as_PathNamed();
             this->equateTypes(sp, type, H::getPathType(*this, sp, e.path, e.binding));
 
             if (e.isWildcard()) {
@@ -4747,12 +5310,14 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     this->handlePatternDirectInner(sp, fieldPat.second, fieldType);
                 }
             }
+            break;
         }
-
-        TU_ARMA(Or, e) {
+        case HIRPatternData::TAG_Or: {
+            auto& e = pat.data.as_Or();
             for (auto& subpat : e) {
                 this->handlePatternDirectInner(sp, subpat, type);
             }
+            break;
         }
     }
 }
@@ -4781,45 +5346,64 @@ void Context::equateTypesCoerce(const Span& sp, const HIRTypeData* l, HIRExprNod
 }
 
 void Context::possibleEquateTypeUnknown(const Span& sp, const HIRTypeData* ty, Context::IvarUnknownType src) {
-    TU_MATCH_HDRA( (*this->getType(ty)), {)
-    default:
+    {
+        auto& tuMatch = (*this->getType(ty));
+        switch (tuMatch.tag()) {
+default:
         // TODO: Shadow sub-types too
-    TU_ARMA(Path, e) {
-        TU_MATCH_HDRA( (e.path.data), {)
-        default:
-            // TODO: Ufcs?
-        TU_ARMA(Generic, pe) {
-                    for (const auto& sty : pe.params.types) {
-                        this->possibleEquateTypeUnknown(sp, sty, src);
+            case HIRTypeData::TAG_Path: {
+                auto& e = tuMatch.as_Path();
+                switch (e.path.data.tag()) {
+default:
+                    // TODO: Ufcs?
+                    case HIRPathData::TAG_Generic: {
+                        auto& pe = e.path.data.as_Generic();
+                        for (const auto& sty : pe.params.types) {
+                            this->possibleEquateTypeUnknown(sp, sty, src);
+                        }
+                        break;
                     }
                 }
-        }
-        }
-        TU_ARMA(Tuple, e) {
-            for (const auto& sty : e) {
-                this->possibleEquateTypeUnknown(sp, sty, src);
+                break;
             }
-        }
-        TU_ARMA(Borrow, e) {
-            this->possibleEquateTypeUnknown(sp, e.inner, src);
-        }
-        TU_ARMA(Array, e) {
-            this->possibleEquateTypeUnknown(sp, e.inner, src);
-        }
-        TU_ARMA(Slice, e) {
-            this->possibleEquateTypeUnknown(sp, e.inner, src);
-        }
-        TU_ARMA(NodeType, e) {
-            if (e.is_Closure()) {
-                auto* nodeP = e.as_Closure();
-                for (const auto& aty : nodeP->args) {
-                    this->possibleEquateTypeUnknown(sp, aty.second, src);
+            case HIRTypeData::TAG_Tuple: {
+                auto& e = tuMatch.as_Tuple();
+                for (const auto& sty : e) {
+                    this->possibleEquateTypeUnknown(sp, sty, src);
                 }
-                this->possibleEquateTypeUnknown(sp, nodeP->returnType, src);
+                break;
             }
-        }
-        TU_ARMA(Infer, e) {
-            this->possibleEquateIvarUnknown(sp, e.index, src);
+            case HIRTypeData::TAG_Borrow: {
+                auto& e = tuMatch.as_Borrow();
+                this->possibleEquateTypeUnknown(sp, e.inner, src);
+                break;
+            }
+            case HIRTypeData::TAG_Array: {
+                auto& e = tuMatch.as_Array();
+                this->possibleEquateTypeUnknown(sp, e.inner, src);
+                break;
+            }
+            case HIRTypeData::TAG_Slice: {
+                auto& e = tuMatch.as_Slice();
+                this->possibleEquateTypeUnknown(sp, e.inner, src);
+                break;
+            }
+            case HIRTypeData::TAG_NodeType: {
+                auto& e = tuMatch.as_NodeType();
+                if (e.is_Closure()) {
+                    auto* nodeP = e.as_Closure();
+                    for (const auto& aty : nodeP->args) {
+                        this->possibleEquateTypeUnknown(sp, aty.second, src);
+                    }
+                    this->possibleEquateTypeUnknown(sp, nodeP->returnType, src);
+                }
+                break;
+            }
+            case HIRTypeData::TAG_Infer: {
+                auto& e = tuMatch.as_Infer();
+                this->possibleEquateIvarUnknown(sp, e.index, src);
+                break;
+            }
         }
     }
 }
@@ -6466,23 +7050,25 @@ namespace {
         const auto& e = *ep;
         assert(e.impl);
         for (const auto& bound : e.impl->params.bounds) {
-        TU_MATCH_HDRA((bound), {)
-        default:
+        switch (bound.tag()) {
+default:
             break;
-                TU_ARMA(TraitBound, be) {
-                    DEBUG("New bound (pre-mono) " << bound);
-                    auto ms = implRef.getCbMonomorphTraitimpl(context.crate.types, sp, {});
-                    auto bTyMono = ms.monomorphType(sp, be.type);
-                    auto bTpMono = ms.monomorphTraitpath(sp, be.trait, true);
-                    DEBUG("- " << bTyMono << " : " << bTpMono);
-                    if (bTpMono.typeBounds.size() > 0) {
-                        for (const auto& atyBound : bTpMono.typeBounds) {
-                            context.equateTypesAssoc(sp, atyBound.second.type, bTpMono.path.path, bTpMono.path.params.clone(), bTyMono, atyBound.first.c_str(), atyBound.second.atyParams, false);
-                        }
-                    } else {
-                        context.addTraitBound(sp, bTyMono, bTpMono.path.path, bTpMono.path.params.clone());
+            case HIRGenericBound::TAG_TraitBound: {
+                auto& be = bound.as_TraitBound();
+                DEBUG("New bound (pre-mono) " << bound);
+                auto ms = implRef.getCbMonomorphTraitimpl(context.crate.types, sp, {});
+                auto bTyMono = ms.monomorphType(sp, be.type);
+                auto bTpMono = ms.monomorphTraitpath(sp, be.trait, true);
+                DEBUG("- " << bTyMono << " : " << bTpMono);
+                if (bTpMono.typeBounds.size() > 0) {
+                    for (const auto& atyBound : bTpMono.typeBounds) {
+                        context.equateTypesAssoc(sp, atyBound.second.type, bTpMono.path.path, bTpMono.path.params.clone(), bTyMono, atyBound.first.c_str(), atyBound.second.atyParams, false);
                     }
+                } else {
+                    context.addTraitBound(sp, bTyMono, bTpMono.path.path, bTpMono.path.params.clone());
                 }
+                break;
+            }
         }
         }
     }
@@ -6515,10 +7101,11 @@ namespace {
 
         struct H {
             static bool typeIsNum(const HIRTypeData* t) {
-                TU_MATCH_HDRA( (*t), {)
-                default:
+                switch ((*t).tag()) {
+default:
                     return false;
-                    TU_ARMA(Primitive, e) {
+                    case HIRTypeData::TAG_Primitive: {
+                        auto& e = (*t).as_Primitive();
                         switch (e) {
                             case HIRCoreType::Str:
                             case HIRCoreType::Char:
@@ -6526,8 +7113,10 @@ namespace {
                             default:
                                 return true;
                         }
+                        break;
                     }
-                    TU_ARMA(Infer, e) {
+                    case HIRTypeData::TAG_Infer: {
+                        auto& e = (*t).as_Infer();
                         return e.isLit();
                     }
                 }
@@ -7893,23 +8482,29 @@ namespace {
             if (ty->tag() != ptrTpl->tag()) {
                 return nullptr;
             }
-            TU_MATCH_HDRA( (*ty), { )
-            TU_ARMA(Borrow, te) {
+            switch ((*ty).tag()) {
+                case HIRTypeData::TAG_Borrow: {
+                    auto& te = (*ty).as_Borrow();
                     if (te.type == ptrTpl->as_Borrow().type) {
                         return te.inner;
                     }
+                    break;
                 }
-                TU_ARMA(Pointer, te) {
+                case HIRTypeData::TAG_Pointer: {
+                    auto& te = (*ty).as_Pointer();
                     if (te.type == ptrTpl->as_Pointer().type) {
                         return te.inner;
                     }
+                    break;
                 }
-                TU_ARMA(Path, te) {
+                case HIRTypeData::TAG_Path: {
+                    auto& te = (*ty).as_Path();
                     if (te.binding == ptrTpl->as_Path().binding) {
                         // TODO: Get inner
                     }
+                    break;
                 }
-                break;
+break;
                 default:
                     break;
             }
@@ -7919,10 +8514,11 @@ namespace {
         /// Helper for `get_ordering_ty` - ordering of the type vs an infer type
         static Ordering getOrderingInfer(const Span& sp, const HIRTypeData* r) {
             // For infer, only concrete types are more restrictive
-            TU_MATCH_HDRA( (*r), { )
-            default:
+            switch ((*r).tag()) {
+default:
                 return OrdLess;
-                TU_ARMA(Path, te) {
+                case HIRTypeData::TAG_Path: {
+                    auto& te = (*r).as_Path();
                     if (te.binding.is_Opaque()) {
                         return OrdLess;
                     }
@@ -7932,12 +8528,21 @@ namespace {
                     // TODO: Check if the type is concrete? (Check an unsizing param if present)
                     return OrdLess;
                 }
-                TU_ARMA(Borrow, _)
-                return OrdEqual;
-                TU_ARMA(Infer, _)
-                return OrdEqual;
-                TU_ARMA(Pointer, _)
-                return OrdEqual;
+                case HIRTypeData::TAG_Borrow: {
+                    auto& _ = (*r).as_Borrow();
+                    (void)_;
+                    return OrdEqual;
+                }
+                case HIRTypeData::TAG_Infer: {
+                    auto& _ = (*r).as_Infer();
+                    (void)_;
+                    return OrdEqual;
+                }
+                case HIRTypeData::TAG_Pointer: {
+                    auto& _ = (*r).as_Pointer();
+                    (void)_;
+                    return OrdEqual;
+                }
             }
             throw "";
         }
@@ -7968,19 +8573,22 @@ namespace {
                 // - If Opaque, then search for a CoerceUnsized/Unsize bound?
                 // - If Struct, look for ^ tag
                 // - Else, more/equal specific
-                TU_MATCH_HDRA( (*r), { )
-                default:
+                switch ((*r).tag()) {
+default:
                     // An ivar is less restrictive?
                     if( teL.binding.is_Unbound() )
                         return OrdLess;
                     outUnordered = true;
                     return OrdEqual;
                     //TODO(sp, l << " with " << r << " - LHS is Path, RHS is " << r->tag_str());
-                    TU_ARMA(Slice, teR) {
+                    case HIRTypeData::TAG_Slice: {
+                        auto& teR = (*r).as_Slice();
+                        (void)teR;
                         // Paths can deref to a slice (well, to any type) - so `slice < path` in restrictiveness
                         return OrdGreater;
                     }
-                    TU_ARMA(Path, teR) {
+                    case HIRTypeData::TAG_Path: {
+                        auto& teR = (*r).as_Path();
                         // If both are unbound, assume equal (effectively an ivar)
                         if (teL.binding.is_Unbound() && teR.binding.is_Unbound()) {
                             return OrdEqual;
@@ -7997,6 +8605,7 @@ namespace {
                         } else {
                             return OrdEqual;
                         }
+                        break;
                     }
                 }
             }
@@ -8073,44 +8682,60 @@ namespace {
                 if (l == r) {
                     return OrdEqual;
                 }
-                TU_MATCH_HDRA( (*l), { )
-                default:
+                switch ((*l).tag()) {
+default:
                     BUG(sp, "Unexpected type class " << l << " in get_ordering_ty (" << r << ")");
                     break;
-                    TU_ARMA(Generic, _te_l) {
+                    case HIRTypeData::TAG_Generic: {
+                        auto& _te_l = (*l).as_Generic();
+                        (void)_te_l;
                         cmp = OrdEqual;
+                        break;
                     }
-                    TU_ARMA(NamedFunction, teL) {
+                    case HIRTypeData::TAG_NamedFunction: {
+                        auto& teL = (*l).as_NamedFunction();
+                        (void)teL;
                         cmp = OrdEqual;
+                        break;
                     }
-                    TU_ARMA(Path, teL) {
+                    case HIRTypeData::TAG_Path: {
+                        auto& teL = (*l).as_Path();
+                        (void)teL;
                         // TODO: Prevent this rule from applying?
                         return OrdEqual;
                     }
-                    TU_ARMA(NodeType, teL) {
+                    case HIRTypeData::TAG_NodeType: {
+                        auto& teL = (*l).as_NodeType();
+                        (void)teL;
                         // Does this need to care about the different types?
                         outUnordered = true;
                         return OrdEqual;
                     }
-                    TU_ARMA(ErasedType, teL) {
+                    case HIRTypeData::TAG_ErasedType: {
+                        auto& teL = (*l).as_ErasedType();
+                        (void)teL;
                         // Two erased types say nothing about each other: neither
                         // is the more restrictive coercion target.
                         outUnordered = true;
                         return OrdEqual;
                     }
-                    TU_ARMA(Borrow, teL) {
+                    case HIRTypeData::TAG_Borrow: {
+                        auto& teL = (*l).as_Borrow();
                         const auto& teR = r->as_Borrow();
                         cmp = ord((int)teL.type, (int)teR.type); // Unique>Shared in the listing, and Unique is more restrictive than Shared
                         if (cmp == OrdEqual && deep) {
                             cmp = getOrderingTy(sp, context, context.ivars.getType(teL.inner), context.ivars.getType(teR.inner), outUnordered);
                         }
+                        break;
                     }
-                    TU_ARMA(Pointer, teL) {
+                    case HIRTypeData::TAG_Pointer: {
+                        auto& teL = (*l).as_Pointer();
                         const auto& teR = r->as_Pointer();
                         cmp = ord((int)teR.type, (int)teL.type); // Note, reversed ordering because we want Unique>Shared
                         if (cmp == OrdEqual && deep) {
                             cmp = getOrderingTy(sp, context, context.ivars.getType(teL.inner), context.ivars.getType(teR.inner), outUnordered);
                         }
+                        break;
                     }
                 }
             }
@@ -8170,16 +8795,20 @@ namespace {
             if (tyL->tag() != tyR->tag()) {
                 return Incompatible;
             }
-            TU_MATCH_HDRA( (*tyL, *tyR), {)
-            default:
+            switch ((*tyL).tag()) {
+default:
                 return Incompatible;
-                TU_ARMA(NodeType, le, re) {
+                case HIRTypeData::TAG_NodeType: {
+                    auto& le = (*tyL).as_NodeType();
+                    auto& re = (*tyR).as_NodeType();
                     if (le != re) {
                         return Incompatible;
                     }
                     return Same;
                 }
-                TU_ARMA(Tuple, le, re) {
+                case HIRTypeData::TAG_Tuple: {
+                    auto& le = (*tyL).as_Tuple();
+                    auto& re = (*tyR).as_Tuple();
                     if (le.size() != re.size()) {
                         return Incompatible;
                     }
@@ -9715,11 +10344,28 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
 
             void evaluateConstantParams(const Span& sp, HIRPath& path) {
                 HIRPathParams* params = nullptr;
-                TU_MATCH_HDRA((path.data), {)
-                TU_ARMA(Generic, e) params = &e.params;
-                TU_ARMA(UfcsKnown, e) params = &e.params;
-                TU_ARMA(UfcsInherent, e) params = &e.params;
-                TU_ARMA(UfcsUnknown, e) BUG(sp, "Unresolved constant path " << path);
+                switch (path.data.tag()) {
+                    case HIRPathData::TAG_Generic: {
+                        auto& e = path.data.as_Generic();
+                        params = &e.params;
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsKnown: {
+                        auto& e = path.data.as_UfcsKnown();
+                        params = &e.params;
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsInherent: {
+                        auto& e = path.data.as_UfcsInherent();
+                        params = &e.params;
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsUnknown: {
+                        auto& e = path.data.as_UfcsUnknown();
+                        (void)e;
+                        BUG(sp, "Unresolved constant path " << path);
+                        break;
+                    }
                 }
 
                 const bool hasUnevaluated = ::std::any_of(params->values.begin(), params->values.end(), [](const HIRConstGeneric& value) {
@@ -9751,20 +10397,24 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
 
             void visitPattern(const Span& sp, HIRPattern& pattern) override {
                 HIRExprVisitorDef::visitPattern(sp, pattern);
-                TU_MATCH_HDRA((pattern.data), {)
-                default:
+                switch (pattern.data.tag()) {
+default:
                     break;
-                TU_ARMA(Value, e) {
-                    visitPatternValue(sp, e.val);
-                }
-                TU_ARMA(Range, e) {
-                    if (e.start) {
-                        visitPatternValue(sp, *e.start);
+                    case HIRPatternData::TAG_Value: {
+                        auto& e = pattern.data.as_Value();
+                        visitPatternValue(sp, e.val);
+                        break;
                     }
-                    if (e.end) {
-                        visitPatternValue(sp, *e.end);
+                    case HIRPatternData::TAG_Range: {
+                        auto& e = pattern.data.as_Range();
+                        if (e.start) {
+                            visitPatternValue(sp, *e.start);
+                        }
+                        if (e.end) {
+                            visitPatternValue(sp, *e.end);
+                        }
+                        break;
                     }
-                }
                 }
             }
 
@@ -9772,11 +10422,28 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                 HIRExprVisitorDef::visit(node);
 
                 HIRPathParams* paramsPtr = nullptr;
-                TU_MATCH_HDRA( (node.path.data), {)
-                TU_ARMA(Generic, pe) paramsPtr = &pe.params;
-                    TU_ARMA(UfcsKnown, pe) paramsPtr = &pe.params;
-                    TU_ARMA(UfcsInherent, pe) paramsPtr = &pe.params;
-                    TU_ARMA(UfcsUnknown, _pe) BUG(node.span(), "Unresolved call path " << node.path);
+                switch (node.path.data.tag()) {
+                    case HIRPathData::TAG_Generic: {
+                        auto& pe = node.path.data.as_Generic();
+                        paramsPtr = &pe.params;
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsKnown: {
+                        auto& pe = node.path.data.as_UfcsKnown();
+                        paramsPtr = &pe.params;
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsInherent: {
+                        auto& pe = node.path.data.as_UfcsInherent();
+                        paramsPtr = &pe.params;
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsUnknown: {
+                        auto& _pe = node.path.data.as_UfcsUnknown();
+                        (void)_pe;
+                        BUG(node.span(), "Unresolved call path " << node.path);
+                        break;
+                    }
                 }
 
                 const bool hasUnevaluated = ::std::any_of(paramsPtr->values.begin(), paramsPtr->values.end(), [](const HIRConstGeneric& value) {
@@ -9798,11 +10465,29 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                 HIRExprVisitorDef::visit(node);
 
                 HIRPathParams* paramsPtr = nullptr;
-                TU_MATCH_HDRA( (node.methodPath.data), {)
-                TU_ARMA(Generic, _pe)   BUG(node.span(), "");
-                    TU_ARMA(UfcsUnknown, _pe) BUG(node.span(), "");
-                    TU_ARMA(UfcsKnown, pe) paramsPtr = &pe.params;
-                    TU_ARMA(UfcsInherent, pe) paramsPtr = &pe.params;
+                switch (node.methodPath.data.tag()) {
+                    case HIRPathData::TAG_Generic: {
+                        auto& _pe = node.methodPath.data.as_Generic();
+                        (void)_pe;
+                        BUG(node.span(), "");
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsUnknown: {
+                        auto& _pe = node.methodPath.data.as_UfcsUnknown();
+                        (void)_pe;
+                        BUG(node.span(), "");
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsKnown: {
+                        auto& pe = node.methodPath.data.as_UfcsKnown();
+                        paramsPtr = &pe.params;
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsInherent: {
+                        auto& pe = node.methodPath.data.as_UfcsInherent();
+                        paramsPtr = &pe.params;
+                        break;
+                    }
                 }
                 assert(paramsPtr);
 
@@ -9965,19 +10650,23 @@ void applyBoundsAsRulesTrait(Context& context, const Span& sp, const HIRTypeData
 void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams& paramsDef, const Monomorphiser& ms, bool isImplLevel) {
     TRACE_FUNCTION;
     for (const auto& bound : paramsDef.bounds) {
-            TU_MATCH_HDRA( (bound), {)
-            TU_ARMA(TraitBound, be) {
-                DEBUG("Bound " << be.type << ":  " << be.trait);
-                auto realType = ms.monomorphType(sp, be.type);
-                auto realTrait = ms.monomorphTraitpath(sp, be.trait, false);
-                DEBUG("= (" << realType << ": " << realTrait << ")");
-                applyBoundsAsRulesTrait(context, sp, realType, realTrait);
-            }
-            TU_ARMA(TypeEquality, be) {
-                auto realTypeLeft = context.resolve.expandAssociatedTypes(sp, ms.monomorphType(sp, be.type));
-                auto realTypeRight = context.resolve.expandAssociatedTypes(sp, ms.monomorphType(sp, be.otherType));
-                context.equateTypes(sp, realTypeLeft, realTypeRight);
-            }
+            switch (bound.tag()) {
+                case HIRGenericBound::TAG_TraitBound: {
+                    auto& be = bound.as_TraitBound();
+                    DEBUG("Bound " << be.type << ":  " << be.trait);
+                    auto realType = ms.monomorphType(sp, be.type);
+                    auto realTrait = ms.monomorphTraitpath(sp, be.trait, false);
+                    DEBUG("= (" << realType << ": " << realTrait << ")");
+                    applyBoundsAsRulesTrait(context, sp, realType, realTrait);
+                    break;
+                }
+                case HIRGenericBound::TAG_TypeEquality: {
+                    auto& be = bound.as_TypeEquality();
+                    auto realTypeLeft = context.resolve.expandAssociatedTypes(sp, ms.monomorphType(sp, be.type));
+                    auto realTypeRight = context.resolve.expandAssociatedTypes(sp, ms.monomorphType(sp, be.otherType));
+                    context.equateTypes(sp, realTypeLeft, realTypeRight);
+                    break;
+                }
             }
     }
 
@@ -10057,91 +10746,101 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
     };
 
     cache.topParams = nullptr;
-        TU_MATCH_HDRA( (path.data), {)
-        TU_ARMA(Generic, e) {
-            const auto& fcn = context.crate.getFunctionByPath(sp, e.path);
-            fixParamCount(sp, context, HIRTypeRef(), false, path, fcn.params, e.params);
-            fcnPtr = &fcn;
-            cache.fcnParams = &fcn.params;
+        switch (path.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                auto& e = path.data.as_Generic();
+                const auto& fcn = context.crate.getFunctionByPath(sp, e.path);
+                fixParamCount(sp, context, HIRTypeRef(), false, path, fcn.params, e.params);
+                fcnPtr = &fcn;
+                cache.fcnParams = &fcn.params;
 
-            const auto& pathParams = e.params;
-            cache.monomorph.reset(new Monomorph(context, nullptr, nullptr, pathParams, {}));
-        }
-        TU_ARMA(UfcsKnown, e) {
-            const auto& trait = context.crate.getTraitByPath(sp, e.trait.path);
-            fixParamCount(sp, context, e.type, true, path, trait.params, e.trait.params);
-            if (trait.values.count(e.item) == 0) {
-                BUG(sp, "Method '" << e.item << "' of trait " << e.trait.path << " doesn't exist");
+                const auto& pathParams = e.params;
+                cache.monomorph.reset(new Monomorph(context, nullptr, nullptr, pathParams, {}));
+                break;
             }
-            const auto& fcn = trait.values.at(e.item).as_Function();
-            fixParamCount(sp, context, e.type, false, path, fcn.params, e.params);
-            cache.fcnParams = &fcn.params;
-            cache.topParams = &trait.params;
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& e = path.data.as_UfcsKnown();
+                const auto& trait = context.crate.getTraitByPath(sp, e.trait.path);
+                fixParamCount(sp, context, e.type, true, path, trait.params, e.trait.params);
+                if (trait.values.count(e.item) == 0) {
+                    BUG(sp, "Method '" << e.item << "' of trait " << e.trait.path << " doesn't exist");
+                }
+                const auto& fcn = trait.values.at(e.item).as_Function();
+                fixParamCount(sp, context, e.type, false, path, fcn.params, e.params);
+                cache.fcnParams = &fcn.params;
+                cache.topParams = &trait.params;
 
-            // Add a bound requiring the Self type impl the trait
-            context.addTraitBound(sp, e.type, e.trait.path, e.trait.params.clone());
+                // Add a bound requiring the Self type impl the trait
+                context.addTraitBound(sp, e.type, e.trait.path, e.trait.params.clone());
 
-            fcnPtr = &fcn;
-            const HIRPathParams* implParams = &e.trait.params;
-            HIRPathParams selectedImplParams;
+                fcnPtr = &fcn;
+                const HIRPathParams* implParams = &e.trait.params;
+                HIRPathParams selectedImplParams;
 
-            if (!monomorphiseTypeNeeded(e.type) && !monomorphisePathparamsNeeded(e.trait.params) && !context.resolve.typeContainsIvars(e.type) && !context.resolve.paramsContainIvars(e.trait.params)) {
-                std::vector<ImplRef> impls;
-                context.resolve.findTraitImpls(sp, e.trait.path, e.trait.params, e.type, [&](ImplRef impl, HIRCompare cmp) {
-                    if (cmp == HIRCompare::Equal && !impl.isAmbiguousIdentity() && impl.data.is_TraitImpl()) {
-                        const auto* traitImpl = impl.data.as_TraitImpl().impl;
-                        if (traitImpl->methods.find(e.item) == traitImpl->methods.end()) {
-                            return false;
+                if (!monomorphiseTypeNeeded(e.type) && !monomorphisePathparamsNeeded(e.trait.params) && !context.resolve.typeContainsIvars(e.type) && !context.resolve.paramsContainIvars(e.trait.params)) {
+                    std::vector<ImplRef> impls;
+                    context.resolve.findTraitImpls(sp, e.trait.path, e.trait.params, e.type, [&](ImplRef impl, HIRCompare cmp) {
+                        if (cmp == HIRCompare::Equal && !impl.isAmbiguousIdentity() && impl.data.is_TraitImpl()) {
+                            const auto* traitImpl = impl.data.as_TraitImpl().impl;
+                            if (traitImpl->methods.find(e.item) == traitImpl->methods.end()) {
+                                return false;
+                            }
+                            const bool seen = std::any_of(impls.begin(), impls.end(), [&](const ImplRef& other) {
+                                return other.data.as_TraitImpl().impl == traitImpl;
+                            });
+                            if (!seen) {
+                                impls.push_back(std::move(impl));
+                            }
                         }
-                        const bool seen = std::any_of(impls.begin(), impls.end(), [&](const ImplRef& other) {
-                            return other.data.as_TraitImpl().impl == traitImpl;
-                        });
-                        if (!seen) {
-                            impls.push_back(std::move(impl));
-                        }
-                    }
-                    return false;
-                });
-
-                ImplRef* selected = nullptr;
-                for (auto& candidate : impls) {
-                    const bool dominated = std::any_of(impls.begin(), impls.end(), [&](const ImplRef& other) {
-                        return &candidate != &other && other.moreSpecificThan(context.crate.types, candidate);
+                        return false;
                     });
-                    if (!dominated) {
-                        if (selected) {
-                            selected = nullptr;
-                            break;
+
+                    ImplRef* selected = nullptr;
+                    for (auto& candidate : impls) {
+                        const bool dominated = std::any_of(impls.begin(), impls.end(), [&](const ImplRef& other) {
+                            return &candidate != &other && other.moreSpecificThan(context.crate.types, candidate);
+                        });
+                        if (!dominated) {
+                            if (selected) {
+                                selected = nullptr;
+                                break;
+                            }
+                            selected = &candidate;
                         }
-                        selected = &candidate;
+                    }
+
+                    if (selected) {
+                        auto& implData = selected->data.as_TraitImpl();
+                        auto method = implData.impl->methods.find(e.item);
+                        if (method != implData.impl->methods.end() && method->second.data.traitReturnType) {
+                            fcnPtr = &method->second.data;
+                            cache.fcnParams = &fcnPtr->params;
+                            cache.topParams = &implData.impl->params;
+                            selectedImplParams = implData.implParams.clone();
+                            implParams = &selectedImplParams;
+                        }
                     }
                 }
 
-                if (selected) {
-                    auto& implData = selected->data.as_TraitImpl();
-                    auto method = implData.impl->methods.find(e.item);
-                    if (method != implData.impl->methods.end() && method->second.data.traitReturnType) {
-                        fcnPtr = &method->second.data;
-                        cache.fcnParams = &fcnPtr->params;
-                        cache.topParams = &implData.impl->params;
-                        selectedImplParams = implData.implParams.clone();
-                        implParams = &selectedImplParams;
-                    }
+                cache.monomorph.reset(new Monomorph(context, e.type, implParams, e.params, {}));
+                break;
+            }
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& e = path.data.as_UfcsUnknown();
+                (void)e;
+                // TODO: Eventually, the HIR `Resolve UFCS` pass will be removed, leaving this code responsible for locating the item.
+                TODO(sp, "Hit a UfcsUnknown (" << path << ") - Is this an error?");
+                break;
+            }
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& e = path.data.as_UfcsInherent();
+                (void)e;
+                // NOTE: This case is kinda long, so it's refactored out into a helper
+                if (!visitCallPopulateCacheUfcsInherent(context, sp, path, cache, fcnPtr)) {
+                    return false;
                 }
+                break;
             }
-
-            cache.monomorph.reset(new Monomorph(context, e.type, implParams, e.params, {}));
-        }
-        TU_ARMA(UfcsUnknown, e) {
-            // TODO: Eventually, the HIR `Resolve UFCS` pass will be removed, leaving this code responsible for locating the item.
-            TODO(sp, "Hit a UfcsUnknown (" << path << ") - Is this an error?");
-        }
-        TU_ARMA(UfcsInherent, e) {
-            // NOTE: This case is kinda long, so it's refactored out into a helper
-            if (!visitCallPopulateCacheUfcsInherent(context, sp, path, cache, fcnPtr)) {
-                return false;
-            }
-        }
         }
 
         assert( fcnPtr );
@@ -10344,16 +11043,37 @@ public:
                 if (te->path.data.is_Generic()) {
                     auto& params = te->path.data.as_Generic().params;
                     const HIRGenericParams* paramDefs = nullptr;
-                        TU_MATCH_HDRA( (te->binding), { )
-                        TU_ARMA(Struct, pbe)    paramDefs = &pbe->params;
-                        TU_ARMA(Enum, pbe) paramDefs = &pbe->params;
-                        TU_ARMA(Union, pbe) paramDefs = &pbe->params;
-                        TU_ARMA(ExternType, pbe) {
-                        }
-                        TU_ARMA(Opaque, pbe) {
-                        }
-                        TU_ARMA(Unbound, pbe) {
-                        }
+                        switch (te->binding.tag()) {
+                            case HIRTypePathBinding::TAG_Struct: {
+                                auto& pbe = te->binding.as_Struct();
+                                paramDefs = &pbe->params;
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Enum: {
+                                auto& pbe = te->binding.as_Enum();
+                                paramDefs = &pbe->params;
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Union: {
+                                auto& pbe = te->binding.as_Union();
+                                paramDefs = &pbe->params;
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_ExternType: {
+                                auto& pbe = te->binding.as_ExternType();
+                                (void)pbe;
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Opaque: {
+                                auto& pbe = te->binding.as_Opaque();
+                                (void)pbe;
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Unbound: {
+                                auto& pbe = te->binding.as_Unbound();
+                                (void)pbe;
+                                break;
+                            }
                         }
                         if(paramDefs)
                         {
@@ -10599,37 +11319,48 @@ public:
         bool hasLabel = false;
         this->pushInnerCoerce(false);
         for (auto& v : node.params) {
-                TU_MATCH_HDRA( (v), { )
-                TU_ARMA(Const, e) {
-                    this->context.addIvars(e->resType);
-                    visitNodePtr(e);
-                    this->inheritDivergence(node, *e);
-                }
-                TU_ARMA(Sym, e) {
-                }
-                TU_ARMA(Label, e) {
-                    hasLabel = true;
-                    this->context.addIvars(e.code->resType);
-                    visitNodePtr(e.code);
-                    this->context.equateTypes(e.code->span(), e.code->resType, this->context.crate.types.unit());
-                }
-                TU_ARMA(RegSingle, e) {
-                    this->context.addIvars(e.val->resType);
-                    visitNodePtr(e.val);
-                    this->inheritDivergence(node, *e.val);
-                }
-                TU_ARMA(Reg, e) {
-                    if (e.valIn) {
-                        this->context.addIvars(e.valIn->resType);
-                        visitNodePtr(e.valIn);
-                        this->inheritDivergence(node, *e.valIn);
+                switch (v.tag()) {
+                    case HIRAsmParam::TAG_Const: {
+                        auto& e = v.as_Const();
+                        this->context.addIvars(e->resType);
+                        visitNodePtr(e);
+                        this->inheritDivergence(node, *e);
+                        break;
                     }
-                    if (e.valOut) {
-                        this->context.addIvars(e.valOut->resType);
-                        visitNodePtr(e.valOut);
-                        this->inheritDivergence(node, *e.valOut);
+                    case HIRAsmParam::TAG_Sym: {
+                        auto& e = v.as_Sym();
+                        (void)e;
+                        break;
                     }
-                }
+                    case HIRAsmParam::TAG_Label: {
+                        auto& e = v.as_Label();
+                        hasLabel = true;
+                        this->context.addIvars(e.code->resType);
+                        visitNodePtr(e.code);
+                        this->context.equateTypes(e.code->span(), e.code->resType, this->context.crate.types.unit());
+                        break;
+                    }
+                    case HIRAsmParam::TAG_RegSingle: {
+                        auto& e = v.as_RegSingle();
+                        this->context.addIvars(e.val->resType);
+                        visitNodePtr(e.val);
+                        this->inheritDivergence(node, *e.val);
+                        break;
+                    }
+                    case HIRAsmParam::TAG_Reg: {
+                        auto& e = v.as_Reg();
+                        if (e.valIn) {
+                            this->context.addIvars(e.valIn->resType);
+                            visitNodePtr(e.valIn);
+                            this->inheritDivergence(node, *e.valIn);
+                        }
+                        if (e.valOut) {
+                            this->context.addIvars(e.valOut->resType);
+                            visitNodePtr(e.valOut);
+                            this->inheritDivergence(node, *e.valOut);
+                        }
+                        break;
+                    }
                 }
         }
         this->popInnerCoerce();
@@ -11340,35 +12071,54 @@ public:
 
         const tTupleFields* fieldsPtr = nullptr;
         const HIRGenericParams* generics = nullptr;
-            TU_MATCH_HDRA( (ty->as_Path().binding), {)
-            TU_ARMA(Unbound, e) {
-            }
-            TU_ARMA(Opaque, e) {
-            }
-            TU_ARMA(Enum, e) {
-                const auto& varName = node.path.path.components().back();
-                const auto& enm = *e;
-                generics = &enm.params;
-                size_t idx = enm.findVariant(varName);
-                ASSERT_BUG(sp, idx < enm.data.as_Data().size(), "Unknown variant - " << node.path);
-                const auto& varTy = enm.data.as_Data()[idx].type;
-                ASSERT_BUG(sp, varTy->as_Path().binding.is_Struct(), "Pointed variant of TupleVariant (" << node.path << ") isn't a Tuple");
-                ASSERT_BUG(sp, varTy->as_Path().binding.as_Struct() != nullptr, "Pointed variant of TupleVariant (" << node.path << ") isn't a Tuple");
-                const auto& str = *varTy->as_Path().binding.as_Struct();
-                ASSERT_BUG(sp, str.data.is_Tuple(), "Pointed variant of TupleVariant (" << node.path << ") isn't a Tuple");
-                fieldsPtr = &str.data.as_Tuple();
-            }
-            TU_ARMA(Struct, e) {
-                ASSERT_BUG(sp, e->data.is_Tuple(), "Pointed struct in TupleVariant (" << node.path << ") isn't a Tuple");
-                fieldsPtr = &e->data.as_Tuple();
-                generics = &e->params;
-            }
-            TU_ARMA(Union, e) {
-                BUG(sp, "TupleVariant pointing to a union");
-            }
-            TU_ARMA(ExternType, e) {
-                BUG(sp, "TupleVariant pointing to a extern type");
-            }
+            {
+                auto& tuMatch = ty->as_Path().binding;
+                switch (tuMatch.tag()) {
+                    case HIRTypePathBinding::TAG_Unbound: {
+                        auto& e = tuMatch.as_Unbound();
+                        (void)e;
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_Opaque: {
+                        auto& e = tuMatch.as_Opaque();
+                        (void)e;
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_Enum: {
+                        auto& e = tuMatch.as_Enum();
+                        const auto& varName = node.path.path.components().back();
+                        const auto& enm = *e;
+                        generics = &enm.params;
+                        size_t idx = enm.findVariant(varName);
+                        ASSERT_BUG(sp, idx < enm.data.as_Data().size(), "Unknown variant - " << node.path);
+                        const auto& varTy = enm.data.as_Data()[idx].type;
+                        ASSERT_BUG(sp, varTy->as_Path().binding.is_Struct(), "Pointed variant of TupleVariant (" << node.path << ") isn't a Tuple");
+                        ASSERT_BUG(sp, varTy->as_Path().binding.as_Struct() != nullptr, "Pointed variant of TupleVariant (" << node.path << ") isn't a Tuple");
+                        const auto& str = *varTy->as_Path().binding.as_Struct();
+                        ASSERT_BUG(sp, str.data.is_Tuple(), "Pointed variant of TupleVariant (" << node.path << ") isn't a Tuple");
+                        fieldsPtr = &str.data.as_Tuple();
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_Struct: {
+                        auto& e = tuMatch.as_Struct();
+                        ASSERT_BUG(sp, e->data.is_Tuple(), "Pointed struct in TupleVariant (" << node.path << ") isn't a Tuple");
+                        fieldsPtr = &e->data.as_Tuple();
+                        generics = &e->params;
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_Union: {
+                        auto& e = tuMatch.as_Union();
+                        (void)e;
+                        BUG(sp, "TupleVariant pointing to a union");
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_ExternType: {
+                        auto& e = tuMatch.as_ExternType();
+                        (void)e;
+                        BUG(sp, "TupleVariant pointing to a extern type");
+                        break;
+                    }
+                }
             }
             assert(fieldsPtr);
             assert(generics);
@@ -11460,66 +12210,84 @@ public:
         // braced literal. Without a base it is the tuple constructor and never
         // reaches here.
         tStructFields tupleFields;
-            TU_MATCH_HDRA( (ty->as_Path().binding), {)
-            TU_ARMA(Unbound, e) {
-            }
-            TU_ARMA(Opaque, e) {
-            }
-            TU_ARMA(ExternType, e) {
-            } // Error?
-            TU_ARMA(Enum, e) {
-                const auto& varName = tyPath.path.components().back();
-                const auto& enm = *e;
-                auto idx = enm.findVariant(varName);
-                ASSERT_BUG(sp, idx != SIZE_MAX, "");
-                ASSERT_BUG(sp, enm.data.is_Data(), "");
-                const auto& var = enm.data.as_Data()[idx];
-                if (var.type == this->context.crate.types.unit()) {
-                    ASSERT_BUG(node.span(), node.values.size() == 0, "Values provided for unit-like variant");
-                    ASSERT_BUG(node.span(), !node.baseValue, "Values provided for unit-like variant");
-                    return;
-                }
-                const auto& str = *var.type->as_Path().binding.as_Struct();
-
-                ASSERT_BUG(sp, var.isStruct, "Struct literal for enum on non-struct variant");
-                fieldsPtr = &str.data.as_Named();
-                generics = &enm.params;
-            }
-            TU_ARMA(Union, e) {
-                fieldsPtr = &e->variants;
-                generics = &e->params;
-                // Errors are done here, as from_ast may not know yet
-                if (node.baseValue) {
-                    ERROR(node.span(), E0000, "Union can't have a base value");
-                }
-                ASSERT_BUG(node.span(), node.values.size() > 0, "Union literal with no values");
-                ASSERT_BUG(node.span(), node.values.size() == 1, "Union literal with multiple values");
-            }
-            TU_ARMA(Struct, e) {
-                if (e->data.is_Tuple() && !node.values.empty()) {
-                    const auto& tuple = e->data.as_Tuple();
-                    for (size_t i = 0; i < tuple.size(); i++) {
-                        tupleFields.push_back(HIRStructField{RcString::newInterned(FMT(i)), tuple[i].publicity, tuple[i].ent, nullptr});
+            {
+                auto& tuMatch = ty->as_Path().binding;
+                switch (tuMatch.tag()) {
+                    case HIRTypePathBinding::TAG_Unbound: {
+                        auto& e = tuMatch.as_Unbound();
+                        (void)e;
+                        break;
                     }
-                    fieldsPtr = &tupleFields;
-                    generics = &e->params;
-                    break;
-                }
-                if (e->data.is_Unit() || e->data.is_Tuple()) {
-                    ASSERT_BUG(node.span(), node.values.size() == 0, "Values provided for " << e->data.tagStr() << "-like struct");
-
-                    if (node.baseValue) {
-                        auto _ = this->pushInnerCoerceScoped(false);
-                        node.baseValue->visit(*this);
-                        this->inheritDivergence(node, *node.baseValue);
+                    case HIRTypePathBinding::TAG_Opaque: {
+                        auto& e = tuMatch.as_Opaque();
+                        (void)e;
+                        break;
                     }
-                    return;
-                }
+                    case HIRTypePathBinding::TAG_ExternType: {
+                        auto& e = tuMatch.as_ExternType();
+                        (void)e;
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_Enum: {
+                        auto& e = tuMatch.as_Enum();
+                        const auto& varName = tyPath.path.components().back();
+                        const auto& enm = *e;
+                        auto idx = enm.findVariant(varName);
+                        ASSERT_BUG(sp, idx != SIZE_MAX, "");
+                        ASSERT_BUG(sp, enm.data.is_Data(), "");
+                        const auto& var = enm.data.as_Data()[idx];
+                        if (var.type == this->context.crate.types.unit()) {
+                            ASSERT_BUG(node.span(), node.values.size() == 0, "Values provided for unit-like variant");
+                            ASSERT_BUG(node.span(), !node.baseValue, "Values provided for unit-like variant");
+                            return;
+                        }
+                        const auto& str = *var.type->as_Path().binding.as_Struct();
 
-                ASSERT_BUG(node.span(), e->data.is_Named(), "StructLiteral not pointing to a braced struct, instead " << e->data.tagStr() << " - " << ty);
-                fieldsPtr = &e->data.as_Named();
-                generics = &e->params;
-            }
+                        ASSERT_BUG(sp, var.isStruct, "Struct literal for enum on non-struct variant");
+                        fieldsPtr = &str.data.as_Named();
+                        generics = &enm.params;
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_Union: {
+                        auto& e = tuMatch.as_Union();
+                        fieldsPtr = &e->variants;
+                        generics = &e->params;
+                        // Errors are done here, as from_ast may not know yet
+                        if (node.baseValue) {
+                            ERROR(node.span(), E0000, "Union can't have a base value");
+                        }
+                        ASSERT_BUG(node.span(), node.values.size() > 0, "Union literal with no values");
+                        ASSERT_BUG(node.span(), node.values.size() == 1, "Union literal with multiple values");
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_Struct: {
+                        auto& e = tuMatch.as_Struct();
+                        if (e->data.is_Tuple() && !node.values.empty()) {
+                            const auto& tuple = e->data.as_Tuple();
+                            for (size_t i = 0; i < tuple.size(); i++) {
+                                tupleFields.push_back(HIRStructField{RcString::newInterned(FMT(i)), tuple[i].publicity, tuple[i].ent, nullptr});
+                            }
+                            fieldsPtr = &tupleFields;
+                            generics = &e->params;
+                            break;
+                        }
+                        if (e->data.is_Unit() || e->data.is_Tuple()) {
+                            ASSERT_BUG(node.span(), node.values.size() == 0, "Values provided for " << e->data.tagStr() << "-like struct");
+
+                            if (node.baseValue) {
+                                auto _ = this->pushInnerCoerceScoped(false);
+                                node.baseValue->visit(*this);
+                                this->inheritDivergence(node, *node.baseValue);
+                            }
+                            return;
+                        }
+
+                        ASSERT_BUG(node.span(), e->data.is_Named(), "StructLiteral not pointing to a braced struct, instead " << e->data.tagStr() << " - " << ty);
+                        fieldsPtr = &e->data.as_Named();
+                        generics = &e->params;
+                        break;
+                    }
+                }
             }
             ASSERT_BUG(node.span(), fieldsPtr, "");
             assert(generics);
@@ -11576,21 +12344,40 @@ public:
         this->context.equateTypes(node.span(), node.resType, ty);
 
         const HIRGenericParams* generics = nullptr;
-        TU_MATCH_HDRA((ty->as_Path().binding), {)
-        TU_ARMA(Unbound, e) {
-        }
-        TU_ARMA(Opaque, e) {
-        }
-        TU_ARMA(Enum, e) {
-            generics = &e->params;
-        }
-        TU_ARMA(Union, e) {
-        }
-        TU_ARMA(ExternType, e) {
-        }
-        TU_ARMA(Struct, e) {
-            generics = &e->params;
-        }
+        {
+            auto& tuMatch = ty->as_Path().binding;
+            switch (tuMatch.tag()) {
+                case HIRTypePathBinding::TAG_Unbound: {
+                    auto& e = tuMatch.as_Unbound();
+                    (void)e;
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Opaque: {
+                    auto& e = tuMatch.as_Opaque();
+                    (void)e;
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Enum: {
+                    auto& e = tuMatch.as_Enum();
+                    generics = &e->params;
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Union: {
+                    auto& e = tuMatch.as_Union();
+                    (void)e;
+                    break;
+                }
+                case HIRTypePathBinding::TAG_ExternType: {
+                    auto& e = tuMatch.as_ExternType();
+                    (void)e;
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Struct: {
+                    auto& e = tuMatch.as_Struct();
+                    generics = &e->params;
+                    break;
+                }
+            }
         }
         ASSERT_BUG(node.span(), generics, "Unit variant has invalid type " << ty);
         auto monomorph = MonomorphStatePtr(this->context.crate.types, ty, &node.path.params, nullptr);
@@ -11864,43 +12651,57 @@ public:
 
     void visit(HIRExprNodeLiteral& node) override {
         HIRTypeRef ty;
-            TU_MATCH_HDRA( (node.data), {)
-            TU_ARMA(Integer, e) {
-                DEBUG("_Literal (: " << e.type << " = " << e.value << ")");
-                if (e.type != HIRCoreType::Str) {
-                    ty = this->context.crate.types.primitive(e.type);
-                } else {
-                    ty = this->context.crate.types.infer(~0, HIRInferClass::Integer);
+            switch (node.data.tag()) {
+                case HIRExprLiteral::TAG_Integer: {
+                    auto& e = node.data.as_Integer();
+                    DEBUG("_Literal (: " << e.type << " = " << e.value << ")");
+                    if (e.type != HIRCoreType::Str) {
+                        ty = this->context.crate.types.primitive(e.type);
+                    } else {
+                        ty = this->context.crate.types.infer(~0, HIRInferClass::Integer);
+                    }
+                    break;
                 }
-            }
-            TU_ARMA(Float, e) {
-                DEBUG("_Literal (: " << node.resType << " = " << e.value << ")");
-                if (e.type != HIRCoreType::Str) {
-                    ty = this->context.crate.types.primitive(e.type);
-                } else {
-                    ty = this->context.crate.types.infer(~0, HIRInferClass::Float);
+                case HIRExprLiteral::TAG_Float: {
+                    auto& e = node.data.as_Float();
+                    DEBUG("_Literal (: " << node.resType << " = " << e.value << ")");
+                    if (e.type != HIRCoreType::Str) {
+                        ty = this->context.crate.types.primitive(e.type);
+                    } else {
+                        ty = this->context.crate.types.infer(~0, HIRInferClass::Float);
+                    }
+                    break;
                 }
-            }
-            TU_ARMA(Boolean, e) {
-                DEBUG("_Literal ( " << (e ? "true" : "false") << ")");
-                ty = this->context.crate.types.primitive(HIRCoreType::Bool);
-            }
-            TU_ARMA(String, e) {
-                // TODO: &'static
-                DEBUG("_Literal (&str)");
-                ty = this->context.crate.types.borrow(HIRBorrowType::Shared, this->context.crate.types.primitive(HIRCoreType::Str));
-            }
-            TU_ARMA(ByteString, e) {
-                // TODO: &'static
-                DEBUG("_Literal (&[u8])");
-                ty = this->context.crate.types.borrow(HIRBorrowType::Shared, this->context.crate.types.array(this->context.crate.types.primitive(HIRCoreType::U8), e.size()));
-            }
-            TU_ARMA(CString, e) {
-                DEBUG("_Literal (&CStr)");
-                auto p = context.crate.getLangItemPath(node.span(), "CStr");
-                ty = this->context.crate.types.path(p, &context.crate.getStructByPath(node.span(), p));
-                ty = this->context.crate.types.borrow(HIRBorrowType::Shared, ty);
-            }
+                case HIRExprLiteral::TAG_Boolean: {
+                    auto& e = node.data.as_Boolean();
+                    DEBUG("_Literal ( " << (e ? "true" : "false") << ")");
+                    ty = this->context.crate.types.primitive(HIRCoreType::Bool);
+                    break;
+                }
+                case HIRExprLiteral::TAG_String: {
+                    auto& e = node.data.as_String();
+                    (void)e;
+                    // TODO: &'static
+                    DEBUG("_Literal (&str)");
+                    ty = this->context.crate.types.borrow(HIRBorrowType::Shared, this->context.crate.types.primitive(HIRCoreType::Str));
+                    break;
+                }
+                case HIRExprLiteral::TAG_ByteString: {
+                    auto& e = node.data.as_ByteString();
+                    // TODO: &'static
+                    DEBUG("_Literal (&[u8])");
+                    ty = this->context.crate.types.borrow(HIRBorrowType::Shared, this->context.crate.types.array(this->context.crate.types.primitive(HIRCoreType::U8), e.size()));
+                    break;
+                }
+                case HIRExprLiteral::TAG_CString: {
+                    auto& e = node.data.as_CString();
+                    (void)e;
+                    DEBUG("_Literal (&CStr)");
+                    auto p = context.crate.getLangItemPath(node.span(), "CStr");
+                    ty = this->context.crate.types.path(p, &context.crate.getStructByPath(node.span(), p));
+                    ty = this->context.crate.types.borrow(HIRBorrowType::Shared, ty);
+                    break;
+                }
             }
             this->context.addIvars(ty);
             this->context.equateTypes(node.span(), node.resType, ty);
@@ -11913,203 +12714,218 @@ public:
 
         this->addIvarsPath(node.span(), node.path);
 
-            TU_MATCH_HDRA( (node.path.data), {)
-            TU_ARMA(Generic, e) {
-                switch (node.target) {
-                    case HIRExprNodePathValue::UNKNOWN:
-                        BUG(sp, "_PathValue with target=UNKNOWN and a Generic path - " << e.path);
-                    case HIRExprNodePathValue::FUNCTION: {
-                        const auto& f = this->context.crate.getFunctionByPath(sp, e.path);
-                        fixParamCount(sp, this->context, HIRTypeRef(), false, e, f.params, e.params);
+            switch (node.path.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& e = node.path.data.as_Generic();
+                    switch (node.target) {
+                        case HIRExprNodePathValue::UNKNOWN:
+                            BUG(sp, "_PathValue with target=UNKNOWN and a Generic path - " << e.path);
+                        case HIRExprNodePathValue::FUNCTION: {
+                            const auto& f = this->context.crate.getFunctionByPath(sp, e.path);
+                            fixParamCount(sp, this->context, HIRTypeRef(), false, e, f.params, e.params);
 
-                        auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, nullptr, &e.params);
-                        auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), &f}));
+                            auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, nullptr, &e.params);
+                            auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), &f}));
 
-                        // Apply bounds
-                        applyBoundsAsRules(this->context, sp, f.params, ms, /*is_impl_level=*/false);
+                            // Apply bounds
+                            applyBoundsAsRules(this->context, sp, f.params, ms, /*is_impl_level=*/false);
 
-                        DEBUG("> " << node.path << " = " << ty);
-                        this->context.equateTypes(sp, node.resType, ty);
-                    } break;
-                    case HIRExprNodePathValue::STRUCT_CONSTR: {
-                        const auto& s = this->context.crate.getStructByPath(sp, e.path);
-                        fixParamCount(sp, this->context, HIRTypeRef(), false, e, s.params, e.params);
+                            DEBUG("> " << node.path << " = " << ty);
+                            this->context.equateTypes(sp, node.resType, ty);
+                        } break;
+                        case HIRExprNodePathValue::STRUCT_CONSTR: {
+                            const auto& s = this->context.crate.getStructByPath(sp, e.path);
+                            fixParamCount(sp, this->context, HIRTypeRef(), false, e, s.params, e.params);
 
-                        auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, &e.params, nullptr);
-                        auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), &s}));
+                            auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, &e.params, nullptr);
+                            auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), &s}));
 
-                        applyBoundsAsRules(this->context, sp, s.params, ms, /*is_impl_level=*/true);
-                        this->context.equateTypes(sp, node.resType, ty);
-                    } break;
-                    case HIRExprNodePathValue::ENUM_VAR_CONSTR: {
-                        const auto& varName = e.path.components().back();
-                        auto enumPath = getRuleParentPath(e.path);
-                        const auto& enm = this->context.crate.getEnumByPath(sp, enumPath);
-                        fixParamCount(sp, this->context, HIRTypeRef(), false, e, enm.params, e.params);
-                        size_t idx = enm.findVariant(varName);
-                        ASSERT_BUG(sp, idx != SIZE_MAX, "Missing variant - " << e.path);
-                        ASSERT_BUG(sp, enm.data.is_Data(), "Enum " << enumPath << " isn't a data-holding enum");
+                            applyBoundsAsRules(this->context, sp, s.params, ms, /*is_impl_level=*/true);
+                            this->context.equateTypes(sp, node.resType, ty);
+                        } break;
+                        case HIRExprNodePathValue::ENUM_VAR_CONSTR: {
+                            const auto& varName = e.path.components().back();
+                            auto enumPath = getRuleParentPath(e.path);
+                            const auto& enm = this->context.crate.getEnumByPath(sp, enumPath);
+                            fixParamCount(sp, this->context, HIRTypeRef(), false, e, enm.params, e.params);
+                            size_t idx = enm.findVariant(varName);
+                            ASSERT_BUG(sp, idx != SIZE_MAX, "Missing variant - " << e.path);
+                            ASSERT_BUG(sp, enm.data.is_Data(), "Enum " << enumPath << " isn't a data-holding enum");
 
-                        auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, &e.params, nullptr);
-                        auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), HIRTypeDataNamedFunctionTy::make_EnumConstructor({&enm, idx})}));
-                        applyBoundsAsRules(this->context, sp, enm.params, ms, /*is_impl_level=*/true);
-                        this->context.equateTypes(sp, node.resType, ty);
-                    } break;
-                    case HIRExprNodePathValue::STATIC: {
-                        const auto& v = this->context.crate.getStaticByPath(sp, e.path);
-                        DEBUG("static v.m_type = " << v.type);
-                        this->context.equateTypes(sp, node.resType, v.type);
-                    } break;
-                    case HIRExprNodePathValue::CONSTANT: {
-                        const auto& v = this->context.crate.getConstantByPath(sp, e.path);
-                        DEBUG("const" << v.params.fmtArgs() << " v.m_type = " << v.type);
-                        fixParamCount(sp, this->context, HIRTypeRef(), false, e, v.params, e.params);
+                            auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, &e.params, nullptr);
+                            auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), HIRTypeDataNamedFunctionTy::make_EnumConstructor({&enm, idx})}));
+                            applyBoundsAsRules(this->context, sp, enm.params, ms, /*is_impl_level=*/true);
+                            this->context.equateTypes(sp, node.resType, ty);
+                        } break;
+                        case HIRExprNodePathValue::STATIC: {
+                            const auto& v = this->context.crate.getStaticByPath(sp, e.path);
+                            DEBUG("static v.m_type = " << v.type);
+                            this->context.equateTypes(sp, node.resType, v.type);
+                        } break;
+                        case HIRExprNodePathValue::CONSTANT: {
+                            const auto& v = this->context.crate.getConstantByPath(sp, e.path);
+                            DEBUG("const" << v.params.fmtArgs() << " v.m_type = " << v.type);
+                            fixParamCount(sp, this->context, HIRTypeRef(), false, e, v.params, e.params);
 
-                        auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, nullptr, &e.params);
-                        applyBoundsAsRules(this->context, sp, v.params, ms, /*is_impl_level=*/false);
+                            auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, nullptr, &e.params);
+                            applyBoundsAsRules(this->context, sp, v.params, ms, /*is_impl_level=*/false);
+
+                            HIRTypeRef tmp;
+                            const auto& ty = ms.maybeMonomorphType(sp, tmp, v.type);
+                            this->context.equateTypes(sp, node.resType, ty);
+                        } break;
+                    }
+                    break;
+                }
+                case HIRPathData::TAG_UfcsUnknown: {
+                    auto& e = node.path.data.as_UfcsUnknown();
+                    (void)e;
+                    BUG(sp, "Encountered UfcsUnknown");
+                    break;
+                }
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& e = node.path.data.as_UfcsKnown();
+                    const auto& trait = this->context.crate.getTraitByPath(sp, e.trait.path);
+                    fixParamCount(sp, this->context, e.type, true, e.trait, trait.params, e.trait.params);
+
+                    // 1. Add trait bound to be checked.
+                    this->context.addTraitBound(sp, e.type, e.trait.path, e.trait.params.clone());
+
+                    // 2. Locate this item in the trait
+                    // - If it's an associated `const`, will have to revisit
+                    auto it = trait.values.find(e.item);
+                    if (it == trait.values.end()) {
+                        ERROR(sp, E0000, "`" << e.item << "` is not a value member of trait " << e.trait.path);
+                    }
+                    switch (it->second.tag()) {
+                        case HIRTraitValueItem::TAG_Constant: {
+                            auto& ie = it->second.as_Constant();
+                            fixParamCount(sp, this->context, e.type, false, node.path, ie.params, e.params);
+
+                            auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.params, &e.params);
+                            applyBoundsAsRules(this->context, sp, ie.params, ms, /*is_impl_level=*/false);
+
+                            HIRTypeRef tmp;
+                            const auto& ty = ms.maybeMonomorphType(sp, tmp, ie.type);
+                            this->context.equateTypes(sp, node.resType, ty);
+                            break;
+                        }
+                        case HIRTraitValueItem::TAG_Static: {
+                            auto& ie = it->second.as_Static();
+                            TODO(sp, "Monomorpise associated static type - " << ie.type);
+                            break;
+                        }
+                        case HIRTraitValueItem::TAG_Function: {
+                            auto& ie = it->second.as_Function();
+                            fixParamCount(sp, this->context, e.type, false, node.path, ie.params, e.params);
+
+                            auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.params, &e.params);
+                            applyBoundsAsRules(this->context, sp, ie.params, ms, /*is_impl_level=*/false);
+
+                            auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), &ie}));
+                            this->context.equateTypes(node.span(), node.resType, ty);
+                            break;
+                        }
+                    }
+                    break;
+                }
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& e = node.path.data.as_UfcsInherent();
+                    // TODO: Share code with visit_call_populate_cache
+
+                    // - Locate function (and impl block)
+                    const HIRFunction* fcnPtr = nullptr;
+                    const HIRConstant* constPtr = nullptr;
+                    const HIRTypeImpl* implPtr = nullptr;
+                    // TODO: Support mutiple matches here (if there's a fuzzy match) and retry if so
+                    unsigned int count = 0;
+                    this->context.crate.findTypeImpls(e.type, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
+                        DEBUG("- impl" << impl.params.fmtArgs() << " " << impl.type);
+                        {
+                            auto it = impl.methods.find(e.item);
+                            if (it != impl.methods.end()) {
+                                fcnPtr = &it->second.data;
+                                implPtr = &impl;
+                                count += 1;
+                                return false;
+                            }
+                        }
+                        {
+                            auto it = impl.constants.find(e.item);
+                            if (it != impl.constants.end()) {
+                                constPtr = &it->second.data;
+                                implPtr = &impl;
+                                count += 1;
+                                return false;
+                            }
+                        }
+                        return false;
+                    });
+                    if (count == 0) {
+                        ERROR(sp, E0000, "Failed to locate associated value " << node.path);
+                    }
+                    if (count > 1) {
+                        TODO(sp, "Revisit _PathValue when UfcsInherent has multiple options - " << node.path);
+                    }
+
+                    assert(fcnPtr || constPtr);
+                    assert(implPtr);
+
+                    if (fcnPtr) {
+                        fixParamCount(sp, this->context, e.type, false, node.path, fcnPtr->params, e.params);
+                    } else {
+                        fixParamCount(sp, this->context, e.type, false, node.path, constPtr->params, e.params);
+                    }
+
+                    // If the impl block has parameters, figure out what types they map to
+                    // - The function params are already mapped (from fix_param_count)
+                    auto& implParams = e.implParams;
+                    if (implPtr->params.isGeneric()) {
+                        while (implParams.types.size() < implPtr->params.types.size()) {
+                            implParams.types.push_back(this->context.crate.types.infer());
+                        }
+                        implParams.values.resize(implPtr->params.values.size());
+                        OwnedImplMatcher matcher(implParams);
+                        // NOTE: Could be fuzzy.
+                        bool r = implPtr->type->matchTestGenerics(sp, e.type, this->context.ivars.callbackResolveInfer(), matcher);
+                        for (auto& ty : implParams.types) {
+                            // Create new ivars if there's holes
+                            if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
+                                this->context.addIvars(ty);
+                            }
+                        }
+                        if (!r) {
+                            auto t = MonomorphStatePtr(this->context.crate.types, nullptr, &implParams, nullptr).monomorphType(sp, implPtr->type);
+                            this->context.equateTypes(node.span(), t, e.type);
+                        }
+                    }
+
+                    if (fcnPtr) {
+                        // Create monomorphise callback
+                        const auto& fcnParams = e.params;
+                        // TODO: call `context.get_type` in this?
+                        auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &implParams, &fcnParams);
+
+                        // Bounds (both impl and fn)
+                        applyBoundsAsRules(this->context, sp, implPtr->params, ms, /*is_impl_level=*/true);
+                        applyBoundsAsRules(this->context, sp, fcnPtr->params, ms, /*is_impl_level=*/false);
+
+                        auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), fcnPtr}));
+                        this->context.equateTypes(node.span(), node.resType, ty);
+                    } else // !fcn_ptr, ergo const_ptr
+                    {
+                        assert(constPtr);
+                        auto monomorphCb = MonomorphStatePtr(this->context.crate.types, e.type, &implParams, &e.params);
 
                         HIRTypeRef tmp;
-                        const auto& ty = ms.maybeMonomorphType(sp, tmp, v.type);
-                        this->context.equateTypes(sp, node.resType, ty);
-                    } break;
-                }
-            }
-            TU_ARMA(UfcsUnknown, e) {
-                BUG(sp, "Encountered UfcsUnknown");
-            }
-            TU_ARMA(UfcsKnown, e) {
-                const auto& trait = this->context.crate.getTraitByPath(sp, e.trait.path);
-                fixParamCount(sp, this->context, e.type, true, e.trait, trait.params, e.trait.params);
+                        const auto& ty = monomorphCb.maybeMonomorphType(sp, tmp, constPtr->type);
 
-                // 1. Add trait bound to be checked.
-                this->context.addTraitBound(sp, e.type, e.trait.path, e.trait.params.clone());
-
-                // 2. Locate this item in the trait
-                // - If it's an associated `const`, will have to revisit
-                auto it = trait.values.find(e.item);
-                if (it == trait.values.end()) {
-                    ERROR(sp, E0000, "`" << e.item << "` is not a value member of trait " << e.trait.path);
-                }
-                TU_MATCH_HDRA( (it->second), {)
-                TU_ARMA(Constant, ie) {
-                        fixParamCount(sp, this->context, e.type, false, node.path, ie.params, e.params);
-
-                        auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.params, &e.params);
-                        applyBoundsAsRules(this->context, sp, ie.params, ms, /*is_impl_level=*/false);
-
-                        HIRTypeRef tmp;
-                        const auto& ty = ms.maybeMonomorphType(sp, tmp, ie.type);
-                        this->context.equateTypes(sp, node.resType, ty);
-                    }
-                    TU_ARMA(Static, ie) {
-                        TODO(sp, "Monomorpise associated static type - " << ie.type);
-                    }
-                    TU_ARMA(Function, ie) {
-                        fixParamCount(sp, this->context, e.type, false, node.path, ie.params, e.params);
-
-                        auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.params, &e.params);
-                        applyBoundsAsRules(this->context, sp, ie.params, ms, /*is_impl_level=*/false);
-
-                        auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), &ie}));
+                        applyBoundsAsRules(this->context, sp, implPtr->params, monomorphCb, /*is_impl_level=*/true);
+                        applyBoundsAsRules(this->context, sp, constPtr->params, monomorphCb, /*is_impl_level=*/false);
                         this->context.equateTypes(node.span(), node.resType, ty);
                     }
+                    break;
                 }
-            }
-            TU_ARMA(UfcsInherent, e) {
-                // TODO: Share code with visit_call_populate_cache
-
-                // - Locate function (and impl block)
-                const HIRFunction* fcnPtr = nullptr;
-                const HIRConstant* constPtr = nullptr;
-                const HIRTypeImpl* implPtr = nullptr;
-                // TODO: Support mutiple matches here (if there's a fuzzy match) and retry if so
-                unsigned int count = 0;
-                this->context.crate.findTypeImpls(e.type, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
-                    DEBUG("- impl" << impl.params.fmtArgs() << " " << impl.type);
-                    {
-                        auto it = impl.methods.find(e.item);
-                        if (it != impl.methods.end()) {
-                            fcnPtr = &it->second.data;
-                            implPtr = &impl;
-                            count += 1;
-                            return false;
-                        }
-                    }
-                    {
-                        auto it = impl.constants.find(e.item);
-                        if (it != impl.constants.end()) {
-                            constPtr = &it->second.data;
-                            implPtr = &impl;
-                            count += 1;
-                            return false;
-                        }
-                    }
-                    return false;
-                });
-                if (count == 0) {
-                    ERROR(sp, E0000, "Failed to locate associated value " << node.path);
-                }
-                if (count > 1) {
-                    TODO(sp, "Revisit _PathValue when UfcsInherent has multiple options - " << node.path);
-                }
-
-                assert(fcnPtr || constPtr);
-                assert(implPtr);
-
-                if (fcnPtr) {
-                    fixParamCount(sp, this->context, e.type, false, node.path, fcnPtr->params, e.params);
-                } else {
-                    fixParamCount(sp, this->context, e.type, false, node.path, constPtr->params, e.params);
-                }
-
-                // If the impl block has parameters, figure out what types they map to
-                // - The function params are already mapped (from fix_param_count)
-                auto& implParams = e.implParams;
-                if (implPtr->params.isGeneric()) {
-                    while (implParams.types.size() < implPtr->params.types.size()) {
-                        implParams.types.push_back(this->context.crate.types.infer());
-                    }
-                    implParams.values.resize(implPtr->params.values.size());
-                    OwnedImplMatcher matcher(implParams);
-                    // NOTE: Could be fuzzy.
-                    bool r = implPtr->type->matchTestGenerics(sp, e.type, this->context.ivars.callbackResolveInfer(), matcher);
-                    for (auto& ty : implParams.types) {
-                        // Create new ivars if there's holes
-                        if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
-                            this->context.addIvars(ty);
-                        }
-                    }
-                    if (!r) {
-                        auto t = MonomorphStatePtr(this->context.crate.types, nullptr, &implParams, nullptr).monomorphType(sp, implPtr->type);
-                        this->context.equateTypes(node.span(), t, e.type);
-                    }
-                }
-
-                if (fcnPtr) {
-                    // Create monomorphise callback
-                    const auto& fcnParams = e.params;
-                    // TODO: call `context.get_type` in this?
-                    auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &implParams, &fcnParams);
-
-                    // Bounds (both impl and fn)
-                    applyBoundsAsRules(this->context, sp, implPtr->params, ms, /*is_impl_level=*/true);
-                    applyBoundsAsRules(this->context, sp, fcnPtr->params, ms, /*is_impl_level=*/false);
-
-                    auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.path.clone(), fcnPtr}));
-                    this->context.equateTypes(node.span(), node.resType, ty);
-                } else // !fcn_ptr, ergo const_ptr
-                {
-                    assert(constPtr);
-                    auto monomorphCb = MonomorphStatePtr(this->context.crate.types, e.type, &implParams, &e.params);
-
-                    HIRTypeRef tmp;
-                    const auto& ty = monomorphCb.maybeMonomorphType(sp, tmp, constPtr->type);
-
-                    applyBoundsAsRules(this->context, sp, implPtr->params, monomorphCb, /*is_impl_level=*/true);
-                    applyBoundsAsRules(this->context, sp, constPtr->params, monomorphCb, /*is_impl_level=*/false);
-                    this->context.equateTypes(node.span(), node.resType, ty);
-                }
-            }
             }
     }
 

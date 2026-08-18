@@ -6,6 +6,7 @@ Applied in phases; each invocation rewrites one macro family in place:
     dev/tu_match_rewrite.py iflet FILE...   # TU_IFLET
     dev/tu_match_rewrite.py test FILE...    # TU_TEST1 / TU_TEST2 / TU_OPT1
     dev/tu_match_rewrite.py match FILE...   # TU_MATCH / TU_MATCHA / TU_MATCH_DEF
+    dev/tu_match_rewrite.py hdr FILE...     # TU_MATCH_HDR(A) / TU_ARM(A)
 
 For TU_MATCHA the union type behind the case labels is inferred from the
 .tu descriptions: the set of arm tags is matched against every union's
@@ -117,7 +118,9 @@ def code_mask(text):
 
 
 def in_mask(spans, pos):
-    return any(a <= pos < b for a, b in spans)
+    import bisect
+    idx = bisect.bisect_right(spans, (pos, float("inf"))) - 1
+    return idx >= 0 and spans[idx][0] <= pos < spans[idx][1]
 
 
 def line_indent(text, pos):
@@ -232,15 +235,52 @@ def load_union_specs():
     return specs
 
 
-def infer_class(specs, tags, where):
+def infer_class(specs, tags, where, subjects=()):
     exact = [name for name, variants in specs.items() if variants == tags]
     if len(exact) == 1:
         return exact[0]
     superset = [name for name, variants in specs.items() if tags <= variants]
     if len(superset) == 1:
         return superset[0]
+    candidates = set(exact or superset)
+    hint = " ".join(subjects)
+    if candidates == {"ASTEnumVariantData", "ASTStructData"}:
+        if "str" in hint:
+            return "ASTStructData"
+        if "var" in hint or "enm" in hint or re.search(r"\bv\b", hint):
+            return "ASTEnumVariantData"
+    base = pathlib.Path(str(where)).name
+
+    def sideOf(name):
+        if name.startswith("AST") or name in ("TypeData", "TypeDataErasedTypeInner", "Ent"):
+            return "ast"
+        if name.startswith(("HIR", "MIR", "Typeck", "ImplRef")) or name == "PatternRule":
+            return "hir"
+        return None
+
+    if base.startswith(("ast_", "synext_", "expand_", "resolve_", "parse_", "macro_")):
+        file_side = "ast"
+    elif base.startswith(("hir_", "mir_", "trans_")):
+        file_side = "hir"
+    else:
+        file_side = None
+    if file_side:
+        filtered = [c for c in candidates if sideOf(c) in (file_side, None)]
+        if len(filtered) == 1:
+            return filtered[0]
+        if filtered:
+            candidates = set(filtered)
+    # Try matching a suffix of the subject's identifiers against the
+    # candidate names ("path.data" -> HIRPathData).
+    idents = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", hint)
+    for k in range(len(idents), 0, -1):
+        key = "".join(idents[-k:]).lower()
+        matched = [c for c in candidates if key in c.lower()]
+        if len(matched) == 1:
+            return matched[0]
     print(f"{where}: cannot infer union for tags {sorted(tags)}:"
-          f" candidates {exact or superset} - left for hand conversion")
+          f" candidates {sorted(candidates)} subjects {list(subjects)}"
+          " - left for hand conversion")
     return None
 
 
@@ -366,6 +406,188 @@ def rewrite_match(text, specs, where):
         text = text[:m.start()] + "\n".join(lines) + text[tail:]
 
 
+BIND_SIMPLE = re.compile(
+    r"\**[A-Za-z_][A-Za-z0-9_]*(?:(?:\.|->)[A-Za-z_][A-Za-z0-9_]*)*\Z"
+)
+
+
+def block_end(text, open_brace, mask):
+    """Index just past the '}' matching the '{' at open_brace, honouring
+    literals and comments."""
+    depth = 0
+    i = open_brace
+    n = len(text)
+    while i < n:
+        if in_mask(mask, i):
+            i += 1
+            continue
+        c = text[i]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    raise SystemExit("unbalanced block")
+
+
+def skip_blank(text, i, mask):
+    n = len(text)
+    while i < n:
+        if text[i] in " \t\n":
+            i += 1
+        elif text.startswith("//", i) or text.startswith("/*", i):
+            for a, b in mask:
+                if a == i:
+                    i = b
+                    break
+            else:
+                break
+        else:
+            break
+    return i
+
+
+def rewrite_hdr(text, specs, where):
+    offset = 0
+    while True:
+        m = re.compile(r"\bTU_MATCH_HDRA?\(").search(text, offset)
+        if not m:
+            return text
+        mask = code_mask(text)
+        if in_mask(mask, m.start()):
+            offset = m.end()
+            continue
+        args, end = scan_args(text, m.end() - 1)
+        subjects_raw = args[0].strip()
+        if subjects_raw.startswith("(") and subjects_raw.endswith(")"):
+            parts, endp = scan_args(subjects_raw, 0)
+            subjects = [subject(p) for p in parts] if endp == len(subjects_raw) \
+                else [subject(subjects_raw)]
+        else:
+            subjects = [subject(subjects_raw)]
+
+        # Collect the arms that follow, up to the construct's closing brace.
+        arms = []
+        i = end
+        ok = True
+        while True:
+            i = skip_blank(text, i, mask)
+            if text.startswith("}", i):
+                i += 1
+                break
+            am = re.compile(r"TU_ARMA?\(").match(text, i)
+            if not am:
+                # Hand-written switch content mixed between arms (a raw
+                # `default:` or extra case labels): splice it verbatim.
+                depth = 0
+                k = i
+                while k < len(text):
+                    if in_mask(mask, k):
+                        k += 1
+                        continue
+                    c = text[k]
+                    if c == "{":
+                        depth += 1
+                    elif c == "}":
+                        if depth == 0:
+                            break
+                        depth -= 1
+                    elif depth == 0 and re.compile(r"TU_ARMA?\(").match(text, k):
+                        break
+                    k += 1
+                arms.append((None, None, text[i:k].rstrip()))
+                i = k
+                continue
+            arm_args, arm_end = scan_args(text, am.end() - 1)
+            if am.group(0) == "TU_ARM(":
+                names = [arm_args[2].strip()]
+                tag = arm_args[1].strip()
+            else:
+                tag = arm_args[0].strip()
+                names = [a.strip() for a in arm_args[1:]]
+            j = skip_blank(text, arm_end, mask)
+            if text.startswith("{", j):
+                k = block_end(text, j, mask)
+                arms.append((tag, names, text[j + 1:k - 1]))
+                i = k
+                continue
+            # A braceless arm holds exactly one statement, up to its `;`.
+            depth = 0
+            k = j
+            while k < len(text):
+                if in_mask(mask, k):
+                    k += 1
+                    continue
+                c = text[k]
+                if c in "([{":
+                    depth += 1
+                elif c in ")]}":
+                    depth -= 1
+                elif c == ";" and depth == 0:
+                    break
+                k += 1
+            stmt = text[j:k + 1]
+            if "{" in stmt:
+                print(f"{where}: braceless arm with a block at offset {j}"
+                      " - left for hand conversion")
+                ok = False
+                break
+            arms.append((tag, names, stmt))
+            i = k + 1
+        if not ok:
+            offset = m.end()
+            continue
+
+        cls = infer_class(specs,
+                          frozenset(tag for tag, _, _ in arms
+                                    if tag is not None), where, subjects)
+        if cls is None:
+            offset = m.end()
+            continue
+
+        indent = line_indent(text, m.start())
+        lines = []
+        arm_names = {n for _, names, _ in arms if names for n in names}
+        collides = any(re.search(r"\b%s\b" % re.escape(n), sub)
+                       for n in arm_names for sub in subjects)
+        scoped = collides or any(not BIND_SIMPLE.match(sub.strip("()"))
+                                 for sub in subjects)
+        if scoped:
+            lines.append("{")
+            bound = []
+            for pos, sub in enumerate(subjects):
+                name = "tuMatch" if pos == 0 else f"tuMatch{pos + 1}"
+                lines.append(f"{indent}    auto& {name} = {sub};")
+                bound.append(name)
+            subjects = bound
+            inner_indent = indent + "    "
+            lines.append(f"{inner_indent}switch ({subjects[0]}.tag()) {{")
+        else:
+            inner_indent = indent
+            lines.append(f"switch ({subjects[0]}.tag()) {{")
+        for tag, names, body in arms:
+            if tag is None:
+                for raw in body.splitlines():
+                    lines.append(raw.rstrip())
+                continue
+            body_lines = body.splitlines()
+            if body_lines and not body_lines[0].strip():
+                body_lines = body_lines[1:]
+            code = "\n".join(body_lines)
+            rest = [bl for bl in body_lines if bl.strip()]
+            common = min((len(bl) - len(bl.lstrip()) for bl in rest), default=0)
+            code = "\n".join(bl[common:].rstrip() if bl.strip() else ""
+                             for bl in body_lines)
+            emit_arm(lines, inner_indent, f"{cls}::TAG_{tag}", subjects, names,
+                     code)
+        lines.append(f"{inner_indent}}}")
+        if scoped:
+            lines.append(f"{indent}}}")
+        text = text[:m.start()] + "\n".join(lines) + text[i:]
+
+
 def main():
     if len(sys.argv) < 3:
         raise SystemExit(__doc__)
@@ -379,6 +601,8 @@ def main():
             text = rewrite_iflet(text)
         elif mode == "match":
             text = rewrite_match(text, load_union_specs(), path)
+        elif mode == "hdr":
+            text = rewrite_hdr(text, load_union_specs(), path)
         else:
             raise SystemExit(f"unknown mode {mode}")
         p.write_text(text, encoding="utf-8")

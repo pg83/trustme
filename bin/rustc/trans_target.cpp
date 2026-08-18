@@ -536,19 +536,24 @@ namespace {
 }
 
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign) {
-    TU_MATCH_HDRA( (*ty), {)
-        TU_ARMA(Infer, te) {
+    switch ((*ty).tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& te = (*ty).as_Infer();
+            (void)te;
             // Layout queries are also used while relating unevaluated generic
             // constants.  An inference variable has no layout yet; report the
             // query as deferred, just like a generic or unresolved opaque type.
             return false;
         }
-        TU_ARMA(Diverge, te) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& te = (*ty).as_Diverge();
+            (void)te;
             outSize = 0;
             outAlign = 1;
             return true;
         }
-        TU_ARMA(Primitive, te) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& te = (*ty).as_Primitive();
             switch (te) {
                 case HIRCoreType::Bool:
                 case HIRCoreType::U8:
@@ -609,8 +614,10 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     outAlign = 1;
                     return true;
             }
+            break;
         }
-        TU_ARMA(Path, te) {
+        case HIRTypeData::TAG_Path: {
+            auto& te = (*ty).as_Path();
             if (te.binding.is_Opaque()) {
                 return false;
             }
@@ -629,21 +636,29 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             outAlign = repr->align;
             return true;
         }
-        TU_ARMA(Generic, te) {
+        case HIRTypeData::TAG_Generic: {
+            auto& te = (*ty).as_Generic();
+            (void)te;
             // Unknown - return false
             DEBUG("No repr for Generic - " << ty);
             return false;
         }
-        TU_ARMA(TraitObject, te) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& te = (*ty).as_TraitObject();
+            (void)te;
             outAlign = 0;
             outSize = SIZE_MAX;
             DEBUG("sizeof on a trait object - unsized");
             return true;
         }
-        TU_ARMA(ErasedType, te) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& te = (*ty).as_ErasedType();
+            (void)te;
             BUG(sp, "sizeof on an erased type - shouldn't exist");
+            break;
         }
-        TU_ARMA(Array, te) {
+        case HIRTypeData::TAG_Array: {
+            auto& te = (*ty).as_Array();
             if (!TargetGetSizeAndAlignOf(sp, resolve, te.inner, outSize, outAlign)) {
                 return false;
             }
@@ -668,7 +683,8 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             }
             return true;
         }
-        TU_ARMA(Slice, te) {
+        case HIRTypeData::TAG_Slice: {
+            auto& te = (*ty).as_Slice();
             if (!TargetGetAlignOf(sp, resolve, te.inner, outAlign)) {
                 return false;
             }
@@ -676,7 +692,9 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             DEBUG("sizeof on a slice - unsized");
             return true;
         }
-        TU_ARMA(Tuple, te) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& te = (*ty).as_Tuple();
+            (void)te;
             const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
             if (!repr) {
                 DEBUG("Cannot get type repr for " << ty);
@@ -686,7 +704,8 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             outAlign = repr->align;
             return true;
         }
-        TU_ARMA(Borrow, te) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& te = (*ty).as_Borrow();
             // - Alignment is machine native
             outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             // - Size depends on Sized-nes of the parameter
@@ -705,7 +724,8 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             }
             return true;
         }
-        TU_ARMA(Pointer, te) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& te = (*ty).as_Pointer();
             // - Alignment is machine native
             outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             // - Size depends on Sized-nes of the parameter
@@ -723,19 +743,24 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             }
             return true;
         }
-        TU_ARMA(NamedFunction, te) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& te = (*ty).as_NamedFunction();
+            (void)te;
             // Zero size
             outSize = 0;
             outAlign = 1;
             return true;
         }
-        TU_ARMA(Function, te) {
+        case HIRTypeData::TAG_Function: {
+            auto& te = (*ty).as_Function();
+            (void)te;
             // Pointer size
             outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             return true;
         }
-        TU_ARMA(NodeType, te) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& te = (*ty).as_NodeType();
             if (const auto* closure = te.opt_Closure(); closure && closureHasNoCaptures(resolve, **closure)) {
                 outSize = 0;
                 outAlign = 1;
@@ -743,7 +768,8 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             }
             return false;
         }
-        TU_ARMA(Pattern, te) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& te = (*ty).as_Pattern();
             return TargetGetSizeAndAlignOf(sp, resolve, te.inner, outSize, outAlign);
         }
     }
@@ -805,10 +831,14 @@ namespace {
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorphExpand(sp, tpl, monomorphCb);
         };
-        TU_MATCH_HDRA( (str.data), {)
-        TU_ARMA(Unit, se) {
+        switch (str.data.tag()) {
+            case HIRStructData::TAG_Unit: {
+                auto& se = str.data.as_Unit();
+                (void)se;
+                break;
             }
-            TU_ARMA(Tuple, se) {
+            case HIRStructData::TAG_Tuple: {
+                auto& se = str.data.as_Tuple();
                 unsigned int idx = 0;
                 for (const auto& e : se) {
                     Ent ent;
@@ -819,8 +849,10 @@ namespace {
                     idx++;
                     ents.push_back(mv$(ent));
                 }
+                break;
             }
-            TU_ARMA(Named, se) {
+            case HIRStructData::TAG_Named: {
+                auto& se = str.data.as_Named();
                 unsigned int idx = 0;
                 for (const auto& e : se) {
                     Ent ent;
@@ -831,6 +863,7 @@ namespace {
                     idx++;
                     ents.push_back(mv$(ent));
                 }
+                break;
             }
         }
         return true;
@@ -1354,133 +1387,141 @@ namespace {
                         return false;
                     }
 
-                TU_MATCH_HDRA( (r->variants), { )
-                TU_ARMA(None, ve) {
-                            // If there is no discriminator, recurse into the only field
-                            if (r->fields.empty()) {
-                                return false;
-                            } else {
-                                if (getVariantNichePath(sp, resolve, r->fields[0].ty, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
-                                    outPath.subFields.push_back(0);
-                                    return true;
-                                }
-                                return false;
+                switch (r->variants.tag()) {
+                    case TypeReprVariantMode::TAG_None: {
+                        auto& ve = r->variants.as_None();
+                        (void)ve;
+                        // If there is no discriminator, recurse into the only field
+                        if (r->fields.empty()) {
+                            return false;
+                        } else {
+                            if (getVariantNichePath(sp, resolve, r->fields[0].ty, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
+                                outPath.subFields.push_back(0);
+                                return true;
                             }
+                            return false;
                         }
-                        TU_ARMA(Linear, ve) {
-                            if (ve.usesNiche()) {
-                                // The inner enum made its niche values valid,
-                                // but the scalar carrying the tag can still
-                                // have another invalid range.  Search the
-                                // populated variant again while reserving the
-                                // values consumed by this enum.  For example,
-                                // Option<Scalar<1..=100>> consumes zero and
-                                // Option<Option<Scalar<1..=100>>> uses 101.
-                                const auto& field = r->fields.at(ve.field.index);
-                                const size_t fieldSize = getSizeOrZero(sp, resolve, field.ty);
-                                if (field.offset < maxOffset && field.offset + fieldSize > minOffset) {
-                                    const size_t occupiedCount = ve.nicheVariantCount();
-                                    if (requiredCount <= SIZE_MAX - occupiedCount) {
-                                        TypeRepr::FieldPath candidate;
-                                        size_t candidateStart = 0;
-                                        if (getVariantNichePath(
-                                                sp,
-                                                resolve,
-                                                field.ty,
-                                                field.offset < minOffset ? minOffset - field.offset : 0,
-                                                maxOffset - field.offset,
-                                                requiredCount + occupiedCount,
-                                                candidate,
-                                                candidateStart)) {
-                                            auto candidateSubFields = candidate.subFields;
-                                            ::std::reverse(candidateSubFields.begin(), candidateSubFields.end());
-                                            const bool sameScalar = candidate.size == ve.field.size && candidateSubFields == ve.field.subFields;
-                                            if (sameScalar) {
-                                                const size_t candidateEnd = candidateStart + requiredCount + occupiedCount - 1;
-                                                const size_t occupiedStart = ve.offset;
-                                                const size_t occupiedEnd = occupiedStart + occupiedCount - 1;
-                                                if (!(candidateEnd < occupiedStart || occupiedEnd < candidateStart)) {
-                                                    const size_t beforeCount = occupiedStart > candidateStart ? occupiedStart - candidateStart : 0;
-                                                    const size_t afterStart = occupiedEnd == SIZE_MAX ? SIZE_MAX : ::std::max(candidateStart, occupiedEnd + 1);
-                                                    const size_t afterCount = occupiedEnd == SIZE_MAX || candidateEnd < afterStart ? 0 : candidateEnd - afterStart + 1;
-                                                    if (requiredCount <= beforeCount) {
-                                                        // The requested values fit before the
-                                                        // range used by the inner enum.
-                                                    } else if (requiredCount <= afterCount) {
-                                                        candidateStart = afterStart;
-                                                    } else {
-                                                        return false;
-                                                    }
+                        break;
+                    }
+                    case TypeReprVariantMode::TAG_Linear: {
+                        auto& ve = r->variants.as_Linear();
+                        if (ve.usesNiche()) {
+                            // The inner enum made its niche values valid,
+                            // but the scalar carrying the tag can still
+                            // have another invalid range.  Search the
+                            // populated variant again while reserving the
+                            // values consumed by this enum.  For example,
+                            // Option<Scalar<1..=100>> consumes zero and
+                            // Option<Option<Scalar<1..=100>>> uses 101.
+                            const auto& field = r->fields.at(ve.field.index);
+                            const size_t fieldSize = getSizeOrZero(sp, resolve, field.ty);
+                            if (field.offset < maxOffset && field.offset + fieldSize > minOffset) {
+                                const size_t occupiedCount = ve.nicheVariantCount();
+                                if (requiredCount <= SIZE_MAX - occupiedCount) {
+                                    TypeRepr::FieldPath candidate;
+                                    size_t candidateStart = 0;
+                                    if (getVariantNichePath(
+                                            sp,
+                                            resolve,
+                                            field.ty,
+                                            field.offset < minOffset ? minOffset - field.offset : 0,
+                                            maxOffset - field.offset,
+                                            requiredCount + occupiedCount,
+                                            candidate,
+                                            candidateStart)) {
+                                        auto candidateSubFields = candidate.subFields;
+                                        ::std::reverse(candidateSubFields.begin(), candidateSubFields.end());
+                                        const bool sameScalar = candidate.size == ve.field.size && candidateSubFields == ve.field.subFields;
+                                        if (sameScalar) {
+                                            const size_t candidateEnd = candidateStart + requiredCount + occupiedCount - 1;
+                                            const size_t occupiedStart = ve.offset;
+                                            const size_t occupiedEnd = occupiedStart + occupiedCount - 1;
+                                            if (!(candidateEnd < occupiedStart || occupiedEnd < candidateStart)) {
+                                                const size_t beforeCount = occupiedStart > candidateStart ? occupiedStart - candidateStart : 0;
+                                                const size_t afterStart = occupiedEnd == SIZE_MAX ? SIZE_MAX : ::std::max(candidateStart, occupiedEnd + 1);
+                                                const size_t afterCount = occupiedEnd == SIZE_MAX || candidateEnd < afterStart ? 0 : candidateEnd - afterStart + 1;
+                                                if (requiredCount <= beforeCount) {
+                                                    // The requested values fit before the
+                                                    // range used by the inner enum.
+                                                } else if (requiredCount <= afterCount) {
+                                                    candidateStart = afterStart;
+                                                } else {
+                                                    return false;
                                                 }
                                             }
-                                            candidate.subFields.push_back(ve.field.index);
-                                            outPath = ::std::move(candidate);
-                                            nicheStart = candidateStart;
-                                            return true;
                                         }
+                                        candidate.subFields.push_back(ve.field.index);
+                                        outPath = ::std::move(candidate);
+                                        nicheStart = candidateStart;
+                                        return true;
                                     }
                                 }
+                            }
+                            return false;
+                        }
+                        // Check that the offset of this tag field is >= min_offset
+                        auto ofs = getOffset(sp, resolve, r, ve.field);
+                        DEBUG("Linear - Tag offset: " << ofs);
+                        if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t)) {
+                            const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
+                            const size_t validEnd = ve.offset + ve.numVariants - 1;
+                            if (validEnd >= scalarMax || requiredCount > scalarMax - validEnd) {
                                 return false;
                             }
-                            // Check that the offset of this tag field is >= min_offset
-                            auto ofs = getOffset(sp, resolve, r, ve.field);
-                            DEBUG("Linear - Tag offset: " << ofs);
-                            if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t)) {
-                                const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
-                                const size_t validEnd = ve.offset + ve.numVariants - 1;
-                                if (validEnd >= scalarMax || requiredCount > scalarMax - validEnd) {
-                                    return false;
+                            outPath.size = ve.field.size;
+                            outPath.subFields.clear();
+                            outPath.subFields.insert(outPath.subFields.begin(), ve.field.subFields.rbegin(), ve.field.subFields.rend());
+                            outPath.subFields.push_back(ve.field.index);
+                            nicheStart = validEnd + 1;
+                            return true;
+                        }
+                        break;
+                    }
+                    case TypeReprVariantMode::TAG_Values: {
+                        auto& ve = r->variants.as_Values();
+                        auto ofs = getOffset(sp, resolve, r, ve.field);
+                        DEBUG("Values - Tag offset: " << ofs);
+                        if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t) && !ve.values.empty()) {
+                            const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
+                            std::vector<size_t> values;
+                            values.reserve(ve.values.size());
+                            for (const auto& value : ve.values) {
+                                values.push_back(value.truncateU64() & scalarMax);
+                            }
+                            std::sort(values.begin(), values.end());
+                            values.erase(std::unique(values.begin(), values.end()), values.end());
+
+                            size_t bestStart = 0;
+                            size_t bestCount = values.front();
+                            for (size_t i = 1; i < values.size(); i++) {
+                                const size_t count = values[i] - values[i - 1] - 1;
+                                if (count > bestCount) {
+                                    bestStart = values[i - 1] + 1;
+                                    bestCount = count;
                                 }
+                            }
+                            const size_t trailingCount = scalarMax - values.back();
+                            if (trailingCount > bestCount) {
+                                bestStart = values.back() + 1;
+                                bestCount = trailingCount;
+                            }
+                            if (requiredCount <= bestCount) {
                                 outPath.size = ve.field.size;
                                 outPath.subFields.clear();
                                 outPath.subFields.insert(outPath.subFields.begin(), ve.field.subFields.rbegin(), ve.field.subFields.rend());
                                 outPath.subFields.push_back(ve.field.index);
-                                nicheStart = validEnd + 1;
+                                nicheStart = bestStart;
                                 return true;
                             }
                         }
-                        TU_ARMA(Values, ve) {
-                            auto ofs = getOffset(sp, resolve, r, ve.field);
-                            DEBUG("Values - Tag offset: " << ofs);
-                            if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t) && !ve.values.empty()) {
-                                const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
-                                std::vector<size_t> values;
-                                values.reserve(ve.values.size());
-                                for (const auto& value : ve.values) {
-                                    values.push_back(value.truncateU64() & scalarMax);
-                                }
-                                std::sort(values.begin(), values.end());
-                                values.erase(std::unique(values.begin(), values.end()), values.end());
-
-                                size_t bestStart = 0;
-                                size_t bestCount = values.front();
-                                for (size_t i = 1; i < values.size(); i++) {
-                                    const size_t count = values[i] - values[i - 1] - 1;
-                                    if (count > bestCount) {
-                                        bestStart = values[i - 1] + 1;
-                                        bestCount = count;
-                                    }
-                                }
-                                const size_t trailingCount = scalarMax - values.back();
-                                if (trailingCount > bestCount) {
-                                    bestStart = values.back() + 1;
-                                    bestCount = trailingCount;
-                                }
-                                if (requiredCount <= bestCount) {
-                                    outPath.size = ve.field.size;
-                                    outPath.subFields.clear();
-                                    outPath.subFields.insert(outPath.subFields.begin(), ve.field.subFields.rbegin(), ve.field.subFields.rend());
-                                    outPath.subFields.push_back(ve.field.index);
-                                    nicheStart = bestStart;
-                                    return true;
-                                }
-                            }
-                            return false;
-                        }
-                        TU_ARMA(NonZero, _ve) {
-                            DEBUG("Non-zero enum, can't niche");
-                            return false;
-                        }
+                        return false;
+                    }
+                    case TypeReprVariantMode::TAG_NonZero: {
+                        auto& _ve = r->variants.as_NonZero();
+                        (void)_ve;
+                        DEBUG("Non-zero enum, can't niche");
+                        return false;
+                    }
                 }
                 }
             }
@@ -2093,18 +2134,27 @@ namespace {
             rv.userAlign = true;
         }
 
-        TU_MATCH_HDRA( (rv.variants), { )
-        TU_ARMA(None, e) {
+        switch (rv.variants.tag()) {
+            case TypeReprVariantMode::TAG_None: {
+                auto& e = rv.variants.as_None();
+                (void)e;
                 DEBUG("rv.variants = None");
+                break;
             }
-            TU_ARMA(Linear, e) {
+            case TypeReprVariantMode::TAG_Linear: {
+                auto& e = rv.variants.as_Linear();
                 DEBUG("rv.variants = Linear {" << " field=" << e.field << " value " << e.offset << "+" << e.numVariants << " }");
+                break;
             }
-            TU_ARMA(Values, e) {
+            case TypeReprVariantMode::TAG_Values: {
+                auto& e = rv.variants.as_Values();
                 DEBUG("rv.variants = Values {" << " field=" << e.field << " values " << e.values << " }");
+                break;
             }
-            TU_ARMA(NonZero, e) {
+            case TypeReprVariantMode::TAG_NonZero: {
+                auto& e = rv.variants.as_NonZero();
                 DEBUG("rv.variants = NonZero {" << " field=" << e.field << " zero_variant=" << e.zeroVariant << " }");
+                break;
             }
         }
 
@@ -2375,10 +2425,14 @@ unsigned TypeRepr::VariantMode::Data_Linear::decodeTag(U128 tag) const {
 std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticTraitResolve& resolve, const EncodedLiteralSlice& lit) const {
     unsigned varIdx = 0;
     bool subHasTag = false;
-    TU_MATCH_HDRA( (this->variants), {)
-    TU_ARMA(None, ve) {
+    switch (this->variants.tag()) {
+        case TypeReprVariantMode::TAG_None: {
+            auto& ve = this->variants.as_None();
+            (void)ve;
+            break;
         }
-        TU_ARMA(Linear, ve) {
+        case TypeReprVariantMode::TAG_Linear: {
+            auto& ve = this->variants.as_Linear();
             auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).readUint(ve.field.size);
             varIdx = ve.decodeTag(v);
             if (ve.isNiche(varIdx)) {
@@ -2388,8 +2442,10 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
                 subHasTag = true;
                 DEBUG("VariantMode::Linear - Other #" << varIdx);
             }
+            break;
         }
-        TU_ARMA(Values, ve) {
+        case TypeReprVariantMode::TAG_Values: {
+            auto& ve = this->variants.as_Values();
             auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).readUint(ve.field.size);
             const U128 mask = ve.field.size >= 16
                 ? U128::max()
@@ -2400,8 +2456,10 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
             ASSERT_BUG(sp, it != ve.values.end(), "Invalid enum tag: " << v);
             varIdx = it - ve.values.begin();
             DEBUG("VariantMode::Values - #" << varIdx);
+            break;
         }
-        TU_ARMA(NonZero, ve) {
+        case TypeReprVariantMode::TAG_NonZero: {
+            auto& ve = this->variants.as_NonZero();
             size_t ofs = this->getOffset(sp, resolve, ve.field);
             bool isNonzero = false;
             for (size_t i = 0; i < ve.field.size; i++) {
@@ -2413,6 +2471,7 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
 
             varIdx = (isNonzero ? 1 - ve.zeroVariant : ve.zeroVariant);
             DEBUG("VariantMode::NonZero - #" << varIdx);
+            break;
         }
     }
     return std::make_pair(varIdx, subHasTag);

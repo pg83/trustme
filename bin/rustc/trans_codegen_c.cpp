@@ -951,14 +951,18 @@ namespace {
                     of << FmtGccAsm(f.before, false);
                     ASSERT_BUG(se.span, f.index < se.operands.size(), "Invalid argument reference in global assembly");
                     const auto& operand = se.operands[f.index];
-                    TU_MATCH_HDRA((operand), {)
-                    TU_ARMA(Const, value) {
+                    switch (operand.tag()) {
+                        case HIRGlobalAsmOperand::TAG_Const: {
+                            auto& value = operand.as_Const();
                             auto text = globalAsmConstant(se, value);
                             of << FmtGccAsm(text, false);
+                            break;
                         }
-                        TU_ARMA(Sym, path) {
+                        case HIRGlobalAsmOperand::TAG_Sym: {
+                            auto& path = operand.as_Sym();
                             auto text = asmSymbol(se.span, path);
                             of << FmtGccAsm(text, false);
+                            break;
                         }
                     }
                 }
@@ -987,10 +991,11 @@ namespace {
 
         void emitTypeProto(const HIRTypeData* ty) override {
             TRACE_FUNCTION_F(ty);
-            TU_MATCH_HDRA( (*ty), {)
-            default:
+            switch ((*ty).tag()) {
+default:
                 // No prototype required
-            TU_ARMA(Tuple, te) {
+                case HIRTypeData::TAG_Tuple: {
+                    auto& te = (*ty).as_Tuple();
                     if (te.size() > 0) {
                         of << "typedef struct ";
                         emitCtype(ty);
@@ -998,44 +1003,78 @@ namespace {
                         emitCtype(ty);
                         of << ";\n";
                     }
+                    break;
                 }
-                TU_ARMA(Function, te) {
+                case HIRTypeData::TAG_Function: {
+                    auto& te = (*ty).as_Function();
+                    (void)te;
                     emitTypeFn(ty);
                     of << "\n";
+                    break;
                 }
-                TU_ARMA(NamedFunction, te) {
+                case HIRTypeData::TAG_NamedFunction: {
+                    auto& te = (*ty).as_NamedFunction();
+                    (void)te;
                     of << "typedef struct ";
                     emitCtype(ty);
                     of << " ";
                     emitCtype(ty);
                     of << ";\n";
+                    break;
                 }
-                TU_ARMA(Array, te) {
+                case HIRTypeData::TAG_Array: {
+                    auto& te = (*ty).as_Array();
+                    (void)te;
                     of << "typedef struct ";
                     emitCtype(ty);
                     of << " ";
                     emitCtype(ty);
                     of << ";\n";
+                    break;
                 }
-                TU_ARMA(Path, te) {
-                TU_MATCH_HDRA( (te.binding), {)
-                TU_ARMA(Unbound, tpb) throw "";
-                        TU_ARMA(Opaque, tpb) throw "";
-                        TU_ARMA(Struct, tpb) {
+                case HIRTypeData::TAG_Path: {
+                    auto& te = (*ty).as_Path();
+                    switch (te.binding.tag()) {
+                        case HIRTypePathBinding::TAG_Unbound: {
+                            auto& tpb = te.binding.as_Unbound();
+                            (void)tpb;
+                            throw "";
+                        }
+                        case HIRTypePathBinding::TAG_Opaque: {
+                            auto& tpb = te.binding.as_Opaque();
+                            (void)tpb;
+                            throw "";
+                        }
+                        case HIRTypePathBinding::TAG_Struct: {
+                            auto& tpb = te.binding.as_Struct();
+                            (void)tpb;
                             of << "struct s_" << TransMangle(te.path) << ";\n";
+                            break;
                         }
-                        TU_ARMA(ExternType, tpb) {
+                        case HIRTypePathBinding::TAG_ExternType: {
+                            auto& tpb = te.binding.as_ExternType();
+                            (void)tpb;
                             of << "struct x_" << TransMangle(te.path) << ";\n";
+                            break;
                         }
-                        TU_ARMA(Union, tpb) {
+                        case HIRTypePathBinding::TAG_Union: {
+                            auto& tpb = te.binding.as_Union();
+                            (void)tpb;
                             of << "union u_" << TransMangle(te.path) << ";\n";
+                            break;
                         }
-                        TU_ARMA(Enum, tpb) {
+                        case HIRTypePathBinding::TAG_Enum: {
+                            auto& tpb = te.binding.as_Enum();
+                            (void)tpb;
                             of << "struct e_" << TransMangle(te.path) << ";\n";
+                            break;
                         }
+                    }
+                    break;
                 }
-                }
-                TU_ARMA(ErasedType, te) {
+                case HIRTypeData::TAG_ErasedType: {
+                    auto& te = (*ty).as_ErasedType();
+                    (void)te;
                     // TODO: Is this actually a bug?
                     return;
                 }
@@ -1246,11 +1285,12 @@ namespace {
             mirRes = &topMirRes;
 
             TRACE_FUNCTION_F(ty);
-            TU_MATCH_HDRA( (*ty), { )
-            default:
+            switch ((*ty).tag()) {
+default:
                 // Nothing to emit
                 break;
-                TU_ARMA(Tuple, te) {
+                case HIRTypeData::TAG_Tuple: {
+                    auto& te = (*ty).as_Tuple();
                     if (te.size() > 0) {
                         of << " // " << ty << "\n";
                         const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
@@ -1265,12 +1305,18 @@ namespace {
                             of << ") == " << repr->size << ") ? 1 : -1 ];\n";
                         }
                     }
+                    break;
                 }
-                TU_ARMA(Function, te) {
+                case HIRTypeData::TAG_Function: {
+                    auto& te = (*ty).as_Function();
+                    (void)te;
                     emitTypeFn(ty);
                     of << " // " << ty << "\n";
+                    break;
                 }
-                TU_ARMA(NamedFunction, te) {
+                case HIRTypeData::TAG_NamedFunction: {
+                    auto& te = (*ty).as_NamedFunction();
+                    (void)te;
                     of << "typedef struct ";
                     emitCtype(ty);
                     of << " {";
@@ -1280,8 +1326,10 @@ namespace {
                     of << "} ";
                     emitCtype(ty);
                     of << ";\n";
+                    break;
                 }
-                TU_ARMA(Array, te) {
+                case HIRTypeData::TAG_Array: {
+                    auto& te = (*ty).as_Array();
                     size_t rustSize;
                     ASSERT_BUG(sp, TargetGetSizeOf(sp, resolve_, ty, rustSize), "Unable to determine array size for " << ty);
                     const bool isZeroSized = rustSize == 0;
@@ -1314,8 +1362,11 @@ namespace {
                     emitCtype(ty);
                     of << ";";
                     of << " // " << ty << "\n";
+                    break;
                 }
-                TU_ARMA(ErasedType, te) {
+                case HIRTypeData::TAG_ErasedType: {
+                    auto& te = (*ty).as_ErasedType();
+                    (void)te;
                     // TODO: Is this actually a bug?
                     return;
                 }
@@ -2730,18 +2781,22 @@ namespace {
             ::std::set<unsigned> cleanupBlocks;
             ::std::vector<unsigned> pendingCleanupBlocks;
             for (const auto& block : code->blocks) {
-                TU_MATCH_HDRA((block.terminator), {)
-                    TU_ARMA(Drop, e) {
+                switch (block.terminator.tag()) {
+                    case MIRTerminator::TAG_Drop: {
+                        auto& e = block.terminator.as_Drop();
                         if (const auto* target = e.unwind.opt_Cleanup()) {
                             pendingCleanupBlocks.push_back(*target);
                         }
+                        break;
                     }
-                    TU_ARMA(Call, e) {
+                    case MIRTerminator::TAG_Call: {
+                        auto& e = block.terminator.as_Call();
                         if (const auto* target = e.unwind.opt_Cleanup()) {
                             pendingCleanupBlocks.push_back(*target);
                         }
+                        break;
                     }
-                    default:
+default:
                         break;
                 }
             }
@@ -2810,27 +2865,38 @@ namespace {
 
         void emitOperationWithUnwind(const MIRUnwindAction& action, unsigned indentLevel, ::std::function<void(unsigned)> emitOperation) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
-            TU_MATCH_HDRA((action), {)
-                TU_ARMA(Continue, _) {
+            switch (action.tag()) {
+                case MIRUnwindAction::TAG_Continue: {
+                    auto& _ = action.as_Continue();
+                    (void)_;
                     emitOperation(indentLevel);
+                    break;
                 }
-                TU_ARMA(Cleanup, target) {
+                case MIRUnwindAction::TAG_Cleanup: {
+                    auto& target = action.as_Cleanup();
                     of << indent << "try {\n";
                     emitOperation(indentLevel + 1);
                     of << indent << "} catch (...) {\n";
                     of << indent << "\ttry { trustme_run_cleanup(" << target << "); } catch (...) { abort(); }\n";
                     of << indent << "\tthrow;\n";
                     of << indent << "}\n";
+                    break;
                 }
-                TU_ARMA(Terminate, _) {
+                case MIRUnwindAction::TAG_Terminate: {
+                    auto& _ = action.as_Terminate();
+                    (void)_;
                     of << indent << "try {\n";
                     emitOperation(indentLevel + 1);
                     of << indent << "} catch (...) { abort(); }\n";
+                    break;
                 }
-                TU_ARMA(Unreachable, _) {
+                case MIRUnwindAction::TAG_Unreachable: {
+                    auto& _ = action.as_Unreachable();
+                    (void)_;
                     of << indent << "try {\n";
                     emitOperation(indentLevel + 1);
                     of << indent << "} catch (...) { abort(); }\n";
+                    break;
                 }
             }
         }
@@ -2840,11 +2906,16 @@ namespace {
             auto emitTarget = [&](unsigned target) {
                 of << indent << "goto " << (cleanup ? "cleanup_bb" : "bb") << target << ";\n";
             };
-            TU_MATCH_HDRA((term), {)
-                TU_ARMA(Incomplete, _) {
+            switch (term.tag()) {
+                case MIRTerminator::TAG_Incomplete: {
+                    auto& _ = term.as_Incomplete();
+                    (void)_;
                     of << indent << "abort();\n";
+                    break;
                 }
-                TU_ARMA(Return, _) {
+                case MIRTerminator::TAG_Return: {
+                    auto& _ = term.as_Return();
+                    (void)_;
                     if (cleanup) {
                         of << indent << "abort();\n";
                     } else if (localMirRes.retType == crate.types.unit()) {
@@ -2852,66 +2923,92 @@ namespace {
                     } else {
                         of << indent << "return rv;\n";
                     }
+                    break;
                 }
-                TU_ARMA(UnwindResume, _) {
+                case MIRTerminator::TAG_UnwindResume: {
+                    auto& _ = term.as_UnwindResume();
+                    (void)_;
                     if (cleanup) {
                         of << indent << "return;\n";
                     } else {
                         of << indent << "abort();\n";
                     }
+                    break;
                 }
-                TU_ARMA(UnwindTerminate, _) {
+                case MIRTerminator::TAG_UnwindTerminate: {
+                    auto& _ = term.as_UnwindTerminate();
+                    (void)_;
                     of << indent << "abort();\n";
+                    break;
                 }
-                TU_ARMA(Unreachable, _) {
+                case MIRTerminator::TAG_Unreachable: {
+                    auto& _ = term.as_Unreachable();
+                    (void)_;
                     of << indent << "abort();\n";
+                    break;
                 }
-                TU_ARMA(Goto, target) {
+                case MIRTerminator::TAG_Goto: {
+                    auto& target = term.as_Goto();
                     emitTarget(target);
+                    break;
                 }
-                TU_ARMA(If, e) {
+                case MIRTerminator::TAG_If: {
+                    auto& e = term.as_If();
                     of << indent << "if(";
                     emitLvalue(e.cond);
                     of << ") goto " << (cleanup ? "cleanup_bb" : "bb") << e.bbTrue;
                     of << "; else goto " << (cleanup ? "cleanup_bb" : "bb") << e.bbFalse << ";\n";
+                    break;
                 }
-                TU_ARMA(Switch, e) {
+                case MIRTerminator::TAG_Switch: {
+                    auto& e = term.as_Switch();
                     if (e.validFlag != ~0u) {
                         of << indent << "if(!df" << e.validFlag << ") goto " << (cleanup ? "cleanup_bb" : "bb") << e.invalidTarget << ";\n";
                     }
                     emitTermSwitch(localMirRes, e.val, e.targets.size(), indentLevel, [&](size_t idx) {
                         of << "goto " << (cleanup ? "cleanup_bb" : "bb") << e.targets[idx] << ";";
                     });
+                    break;
                 }
-                TU_ARMA(SwitchValue, e) {
+                case MIRTerminator::TAG_SwitchValue: {
+                    auto& e = term.as_SwitchValue();
                     emitTermSwitchvalue(localMirRes, e.val, e.values, indentLevel, [&](size_t idx) {
                         const auto target = idx == SIZE_MAX ? e.defTarget : e.targets[idx];
                         of << "goto " << (cleanup ? "cleanup_bb" : "bb") << target << ";";
                     });
+                    break;
                 }
-                TU_ARMA(Drop, e) {
+                case MIRTerminator::TAG_Drop: {
+                    auto& e = term.as_Drop();
                     emitOperationWithUnwind(e.unwind, indentLevel, [&](unsigned operationIndent) {
                         emitDropOperation(localMirRes, e, operationIndent);
                     });
                     emitTarget(e.target);
+                    break;
                 }
-                TU_ARMA(Call, e) {
+                case MIRTerminator::TAG_Call: {
+                    auto& e = term.as_Call();
                     emitOperationWithUnwind(e.unwind, indentLevel, [&](unsigned operationIndent) {
                         emitTermCall(localMirRes, e, operationIndent);
                     });
                     emitTarget(e.retBlock);
+                    break;
                 }
-                TU_ARMA(TailCall, e) {
+                case MIRTerminator::TAG_TailCall: {
+                    auto& e = term.as_TailCall();
                     if (cleanup) {
                         MIR_BUG(localMirRes, "Tail call in a cleanup block");
                     }
                     emitTermTailCall(localMirRes, e, indentLevel);
+                    break;
                 }
-                TU_ARMA(Asm2, e) {
+                case MIRTerminator::TAG_Asm2: {
+                    auto& e = term.as_Asm2();
                     if (cleanup) {
                         MIR_BUG(localMirRes, "asm goto in a cleanup block");
                     }
                     emitAsm2Gcc(localMirRes, e.options, e.lines, e.params, true, e.retBlock, indentLevel);
+                    break;
                 }
             }
             of << indent << "// ^ " << term << "\n";
@@ -3277,102 +3374,148 @@ namespace {
                         break;
                     }
 
-                TU_MATCH_HDRA( (e.src), {)
-                TU_ARMA(Use, ve) {
-                            HIRTypeRef tmp;
-                            const auto& ty = localMirRes.getLvalueType(tmp, ve);
-                            if (ty == crate.types.diverge()) {
-                                of << "abort()";
-                                break;
-                            }
+                switch (e.src.tag()) {
+                    case MIRRValue::TAG_Use: {
+                        auto& ve = e.src.as_Use();
+                        HIRTypeRef tmp;
+                        const auto& ty = localMirRes.getLvalueType(tmp, ve);
+                        if (ty == crate.types.diverge()) {
+                            of << "abort()";
+                            break;
+                        }
 
-                            if (ve.is_Field() && this->typeIsBadZst(ty)) {
-                                of << "/* ZST field */";
-                                break;
-                            }
+                        if (ve.is_Field() && this->typeIsBadZst(ty)) {
+                            of << "/* ZST field */";
+                            break;
+                        }
 
+                        emitLvalue(e.dst);
+                        of << " = ";
+                        emitLvalue(ve);
+                        break;
+                    }
+                    case MIRRValue::TAG_Constant: {
+                        auto& ve = e.src.as_Constant();
+                        emitLvalue(e.dst);
+                        of << " = static_cast<";
+                        emitCtype(ty);
+                        of << ">(";
+                        emitConstant(ve, &e.dst);
+                        of << ")";
+                        break;
+                    }
+                    case MIRRValue::TAG_SizedArray: {
+                        auto& ve = e.src.as_SizedArray();
+                        if (ve.count == 0) {
+                        } else if (ve.count == 1) {
                             emitLvalue(e.dst);
-                            of << " = ";
-                            emitLvalue(ve);
+                            of << ".DATA[0] = ";
+                            emitParam(ve.val);
+                        } else if (ve.count == 2) {
+                            emitLvalue(e.dst);
+                            of << ".DATA[0] = ";
+                            emitParam(ve.val);
+                            of << ";\n" << indent;
+                            emitLvalue(e.dst);
+                            of << ".DATA[1] = ";
+                            emitParam(ve.val);
+                        } else if (ve.count == 3) {
+                            emitLvalue(e.dst);
+                            of << ".DATA[0] = ";
+                            emitParam(ve.val);
+                            of << ";\n" << indent;
+                            emitLvalue(e.dst);
+                            of << ".DATA[1] = ";
+                            emitParam(ve.val);
+                            of << ";\n" << indent;
+                            emitLvalue(e.dst);
+                            of << ".DATA[2] = ";
+                            emitParam(ve.val);
+                        } else {
+                            of << "for(unsigned int i = 0; i < " << ve.count << "; i ++)\n";
+                            of << indent << "\t";
+                            emitLvalue(e.dst);
+                            of << ".DATA[i] = ";
+                            emitParam(ve.val);
                         }
-                        TU_ARMA(Constant, ve) {
-                            emitLvalue(e.dst);
-                            of << " = static_cast<";
-                            emitCtype(ty);
-                            of << ">(";
-                            emitConstant(ve, &e.dst);
+                        break;
+                    }
+                    case MIRRValue::TAG_Borrow: {
+                        auto& ve = e.src.as_Borrow();
+                        emitLvalue(e.dst);
+                        const HIRTypeData* pointeeTy;
+                        if (const auto* borrow = ty->opt_Borrow()) {
+                            pointeeTy = borrow->inner;
+                        } else if (const auto* pointer = ty->opt_Pointer()) {
+                            pointeeTy = pointer->inner;
+                        } else {
+                            MIR_BUG(localMirRes, "Borrow rvalue has non-pointer result type " << ty);
+                        }
+                        const auto pointerMetadata = metadataType(pointeeTy);
+                        of << (pointerMetadata == MetadataType::None || pointerMetadata == MetadataType::Zero ? " = reinterpret_cast<" : " = static_cast<");
+                        emitCtype(ty);
+                        of << ">(";
+                        if (this->typeIsBadZst(mirRes->getLvalueType(tmp, ve.val, ve.val.wrappers.size()))) {
+                            of << "(void*)&rv";
+                        } else {
+                            emitBorrow(localMirRes, ve.type, ve.val);
+                        }
+                        of << ")";
+                        break;
+                    }
+                    case MIRRValue::TAG_Cast: {
+                        auto& ve = e.src.as_Cast();
+                        emitRvalueCast(localMirRes, e.dst, ve);
+                        break;
+                    }
+                    case MIRRValue::TAG_BinOp: {
+                        auto& ve = e.src.as_BinOp();
+                        emitLvalue(e.dst);
+                        of << " = ";
+                        HIRTypeRef tmp, tmpR;
+                        const auto& ty = localMirRes.getParamType(tmp, ve.valL);
+                        const auto& tyR = localMirRes.getParamType(tmpR, ve.valR);
+                        if (ty->is_Borrow()) {
+                            of << "(slice_cmp(";
+                            emitParam(ve.valL);
+                            of << ", ";
+                            emitParam(ve.valR);
                             of << ")";
-                        }
-                        TU_ARMA(SizedArray, ve) {
-                            if (ve.count == 0) {
-                            } else if (ve.count == 1) {
-                                emitLvalue(e.dst);
-                                of << ".DATA[0] = ";
-                                emitParam(ve.val);
-                            } else if (ve.count == 2) {
-                                emitLvalue(e.dst);
-                                of << ".DATA[0] = ";
-                                emitParam(ve.val);
-                                of << ";\n" << indent;
-                                emitLvalue(e.dst);
-                                of << ".DATA[1] = ";
-                                emitParam(ve.val);
-                            } else if (ve.count == 3) {
-                                emitLvalue(e.dst);
-                                of << ".DATA[0] = ";
-                                emitParam(ve.val);
-                                of << ";\n" << indent;
-                                emitLvalue(e.dst);
-                                of << ".DATA[1] = ";
-                                emitParam(ve.val);
-                                of << ";\n" << indent;
-                                emitLvalue(e.dst);
-                                of << ".DATA[2] = ";
-                                emitParam(ve.val);
-                            } else {
-                                of << "for(unsigned int i = 0; i < " << ve.count << "; i ++)\n";
-                                of << indent << "\t";
-                                emitLvalue(e.dst);
-                                of << ".DATA[i] = ";
-                                emitParam(ve.val);
-                            }
-                        }
-                        TU_ARMA(Borrow, ve) {
-                            emitLvalue(e.dst);
-                            const HIRTypeData* pointeeTy;
-                            if (const auto* borrow = ty->opt_Borrow()) {
-                                pointeeTy = borrow->inner;
-                            } else if (const auto* pointer = ty->opt_Pointer()) {
-                                pointeeTy = pointer->inner;
-                            } else {
-                                MIR_BUG(localMirRes, "Borrow rvalue has non-pointer result type " << ty);
-                            }
-                            const auto pointerMetadata = metadataType(pointeeTy);
-                            of << (pointerMetadata == MetadataType::None || pointerMetadata == MetadataType::Zero ? " = reinterpret_cast<" : " = static_cast<");
-                            emitCtype(ty);
-                            of << ">(";
-                            if (this->typeIsBadZst(mirRes->getLvalueType(tmp, ve.val, ve.val.wrappers.size()))) {
-                                of << "(void*)&rv";
-                            } else {
-                                emitBorrow(localMirRes, ve.type, ve.val);
+                            switch (ve.op) {
+                                case MIRBinOp::EQ:
+                                    of << " == 0";
+                                    break;
+                                case MIRBinOp::NE:
+                                    of << " != 0";
+                                    break;
+                                case MIRBinOp::GT:
+                                    of << " >  0";
+                                    break;
+                                case MIRBinOp::GE:
+                                    of << " >= 0";
+                                    break;
+                                case MIRBinOp::LT:
+                                    of << " <  0";
+                                    break;
+                                case MIRBinOp::LE:
+                                    of << " <= 0";
+                                    break;
+                                default:
+                                    MIR_BUG(localMirRes, "Unknown comparison of a &-ptr - " << e.src << " with " << ty);
                             }
                             of << ")";
-                        }
-                        TU_ARMA(Cast, ve) {
-                            emitRvalueCast(localMirRes, e.dst, ve);
-                        }
-                        TU_ARMA(BinOp, ve) {
-                            emitLvalue(e.dst);
-                            of << " = ";
-                            HIRTypeRef tmp, tmpR;
-                            const auto& ty = localMirRes.getParamType(tmp, ve.valL);
-                            const auto& tyR = localMirRes.getParamType(tmpR, ve.valR);
-                            if (ty->is_Borrow()) {
-                                of << "(slice_cmp(";
+                            break;
+                        } else if (const auto* te = ty->opt_Pointer()) {
+                            if (isDst(te->inner)) {
+                                of << "(raw_fat_ptr_cmp((uintptr_t)";
                                 emitParam(ve.valL);
-                                of << ", ";
+                                of << ".PTR, (uintptr_t)";
+                                emitParam(ve.valL);
+                                of << ".META, (uintptr_t)";
                                 emitParam(ve.valR);
-                                of << ")";
+                                of << ".PTR, (uintptr_t)";
+                                emitParam(ve.valR);
+                                of << ".META)";
                                 switch (ve.op) {
                                     case MIRBinOp::EQ:
                                         of << " == 0";
@@ -3381,565 +3524,558 @@ namespace {
                                         of << " != 0";
                                         break;
                                     case MIRBinOp::GT:
-                                        of << " >  0";
+                                        of << " > 0";
                                         break;
                                     case MIRBinOp::GE:
                                         of << " >= 0";
                                         break;
                                     case MIRBinOp::LT:
-                                        of << " <  0";
+                                        of << " < 0";
                                         break;
                                     case MIRBinOp::LE:
                                         of << " <= 0";
                                         break;
                                     default:
-                                        MIR_BUG(localMirRes, "Unknown comparison of a &-ptr - " << e.src << " with " << ty);
+                                        MIR_BUG(localMirRes, "Unknown comparison of a *-ptr - " << e.src << " with " << ty);
                                 }
                                 of << ")";
-                                break;
-                            } else if (const auto* te = ty->opt_Pointer()) {
-                                if (isDst(te->inner)) {
-                                    of << "(raw_fat_ptr_cmp((uintptr_t)";
-                                    emitParam(ve.valL);
-                                    of << ".PTR, (uintptr_t)";
-                                    emitParam(ve.valL);
-                                    of << ".META, (uintptr_t)";
-                                    emitParam(ve.valR);
-                                    of << ".PTR, (uintptr_t)";
-                                    emitParam(ve.valR);
-                                    of << ".META)";
-                                    switch (ve.op) {
-                                        case MIRBinOp::EQ:
-                                            of << " == 0";
-                                            break;
-                                        case MIRBinOp::NE:
-                                            of << " != 0";
-                                            break;
-                                        case MIRBinOp::GT:
-                                            of << " > 0";
-                                            break;
-                                        case MIRBinOp::GE:
-                                            of << " >= 0";
-                                            break;
-                                        case MIRBinOp::LT:
-                                            of << " < 0";
-                                            break;
-                                        case MIRBinOp::LE:
-                                            of << " <= 0";
-                                            break;
-                                        default:
-                                            MIR_BUG(localMirRes, "Unknown comparison of a *-ptr - " << e.src << " with " << ty);
-                                    }
-                                    of << ")";
-                                } else {
-                                    const bool ordering = ve.op == MIRBinOp::GT || ve.op == MIRBinOp::GE
-                                        || ve.op == MIRBinOp::LT || ve.op == MIRBinOp::LE;
-                                    if (ordering) {
-                                        of << "reinterpret_cast<uintptr_t>(";
-                                    }
-                                    emitParam(ve.valL);
-                                    if (ordering) {
-                                        of << ")";
-                                    }
-                                    switch (ve.op) {
-                                        case MIRBinOp::EQ:
-                                            of << " == ";
-                                            break;
-                                        case MIRBinOp::NE:
-                                            of << " != ";
-                                            break;
-                                        case MIRBinOp::GT:
-                                            of << " > ";
-                                            break;
-                                        case MIRBinOp::GE:
-                                            of << " >= ";
-                                            break;
-                                        case MIRBinOp::LT:
-                                            of << " < ";
-                                            break;
-                                        case MIRBinOp::LE:
-                                            of << " <= ";
-                                            break;
-                                        default:
-                                            MIR_BUG(localMirRes, "Unknown comparison of a *-ptr - " << e.src << " with " << ty);
-                                    }
-                                    if (ordering) {
-                                        of << "reinterpret_cast<uintptr_t>(";
-                                    }
-                                    emitParam(ve.valR);
-                                    if (ordering) {
-                                        of << ")";
-                                    }
+                            } else {
+                                const bool ordering = ve.op == MIRBinOp::GT || ve.op == MIRBinOp::GE
+                                    || ve.op == MIRBinOp::LT || ve.op == MIRBinOp::LE;
+                                if (ordering) {
+                                    of << "reinterpret_cast<uintptr_t>(";
                                 }
-                                break;
-                            } else if (ve.op == MIRBinOp::MOD && (ty == HIRCoreType::F16 || ty == HIRCoreType::F32 || ty == HIRCoreType::F64)) {
-                                // Rust's `%` on floats truncates the quotient and
-                                // keeps the dividend's sign, which is `fmod`.
-                                // `remainder` rounds the quotient to nearest, so
-                                // `7.0 % 4.0` came out as -1.0 rather than 3.0.
-                                of << "__builtin_";
-                                if (ty == HIRCoreType::F64) {
-                                    of << "fmod";
-                                } else {
-                                    of << "fmodf";
-                                }
-                                of << "(";
                                 emitParam(ve.valL);
-                                of << ", ";
-                                emitParam(ve.valR);
-                                of << ")";
-                                break;
-                            } else if (ty == HIRCoreType::F128) {
+                                if (ordering) {
+                                    of << ")";
+                                }
                                 switch (ve.op) {
-                                    case MIRBinOp::ADD:
-                                        of << "f128_add";
-                                        break;
-                                    case MIRBinOp::SUB:
-                                        of << "f128_sub";
-                                        break;
-                                    case MIRBinOp::MUL:
-                                        of << "f128_mul";
-                                        break;
-                                    case MIRBinOp::DIV:
-                                        of << "f128_div";
-                                        break;
-                                    case MIRBinOp::MOD:
-                                        of << "f128_mod";
-                                        break;
                                     case MIRBinOp::EQ:
-                                        of << "f128_eq";
+                                        of << " == ";
                                         break;
                                     case MIRBinOp::NE:
-                                        of << "f128_ne";
+                                        of << " != ";
                                         break;
                                     case MIRBinOp::GT:
-                                        of << "f128_gt";
+                                        of << " > ";
                                         break;
                                     case MIRBinOp::GE:
-                                        of << "f128_ge";
+                                        of << " >= ";
                                         break;
                                     case MIRBinOp::LT:
-                                        of << "f128_lt";
+                                        of << " < ";
                                         break;
                                     case MIRBinOp::LE:
-                                        of << "f128_le";
+                                        of << " <= ";
                                         break;
                                     default:
-                                        MIR_TODO(localMirRes, "unsupported f128 binop");
+                                        MIR_BUG(localMirRes, "Unknown comparison of a *-ptr - " << e.src << " with " << ty);
                                 }
-                                of << "(";
-                                emitParam(ve.valL);
-                                of << ", ";
+                                if (ordering) {
+                                    of << "reinterpret_cast<uintptr_t>(";
+                                }
                                 emitParam(ve.valR);
-                                of << ")";
-                                break;
-                            } else if (typeIsEmulatedI128(ty)) {
-                                switch (ve.op) {
-                                    case MIRBinOp::ADD:
-                                        of << "add128";
-                                        if (0) {
-                                            case MIRBinOp::SUB:
-                                                of << "sub128";
-                                        }
-                                        if (0) {
-                                            case MIRBinOp::MUL:
-                                                of << "mul128";
-                                        }
-                                        if (0) {
-                                            case MIRBinOp::DIV:
-                                                of << "div128";
-                                        }
-                                        if (0) {
-                                            case MIRBinOp::MOD:
-                                                of << "mod128";
-                                        }
-                                        if (0) {
-                                            case MIRBinOp::BIT_OR:
-                                                of << "or128";
-                                        }
-                                        if (0) {
-                                            case MIRBinOp::BIT_AND:
-                                                of << "and128";
-                                        }
-                                        if (0) {
-                                            case MIRBinOp::BIT_XOR:
-                                                of << "xor128";
-                                        }
-                                        if (ty == HIRCoreType::I128) {
-                                            of << "s";
-                                        }
-                                        of << "(";
-                                        emitParam(ve.valL);
-                                        of << ", ";
-                                        emitParam(ve.valR);
-                                        of << ")";
-                                        break;
-                                    case MIRBinOp::BIT_SHR:
-                                        of << "shr128";
-                                        if (0) {
-                                            case MIRBinOp::BIT_SHL:
-                                                of << "shl128";
-                                        }
-                                        if (ty == HIRCoreType::I128) {
-                                            of << "s";
-                                        }
-                                        of << "(";
-                                        emitParam(ve.valL);
-                                        of << ", ";
-                                        emitParam(ve.valR);
-                                        if ((tyR == HIRCoreType::I128 || tyR == HIRCoreType::U128)) {
-                                            of << ".lo";
-                                        }
-                                        of << ")";
-                                        break;
-
-                                    case MIRBinOp::EQ:
-                                        of << "0 == ";
-                                        if (0) {
-                                            case MIRBinOp::NE:
-                                                of << "0 != ";
-                                        }
-                                        if (0) {
-                                            case MIRBinOp::GT:
-                                                of << "0 > ";
-                                        }
-                                        if (0) {
-                                            case MIRBinOp::GE:
-                                                of << "0 >= ";
-                                        }
-                                        if (0) {
-                                            case MIRBinOp::LT:
-                                                of << "0 < ";
-                                        }
-                                        if (0) {
-                                            case MIRBinOp::LE:
-                                                of << "0 <= ";
-                                        }
-                                        // NOTE: Reversed order due to reversed logic above
-                                        of << "cmp128";
-                                        if (ty == HIRCoreType::I128) {
-                                            of << "s";
-                                        }
-                                        of << "(";
-                                        emitParam(ve.valR);
-                                        of << ", ";
-                                        emitParam(ve.valL);
-                                        of << ")";
-                                        break;
-
-                                    case MIRBinOp::ADD_OV:
-                                    case MIRBinOp::SUB_OV:
-                                    case MIRBinOp::MUL_OV:
-                                    case MIRBinOp::DIV_OV:
-                                        MIR_TODO(localMirRes, "Overflowing binops for emulated i128");
-                                        break;
+                                if (ordering) {
+                                    of << ")";
                                 }
-                                break;
-                            } else {
                             }
-
+                            break;
+                        } else if (ve.op == MIRBinOp::MOD && (ty == HIRCoreType::F16 || ty == HIRCoreType::F32 || ty == HIRCoreType::F64)) {
+                            // Rust's `%` on floats truncates the quotient and
+                            // keeps the dividend's sign, which is `fmod`.
+                            // `remainder` rounds the quotient to nearest, so
+                            // `7.0 % 4.0` came out as -1.0 rather than 3.0.
+                            of << "__builtin_";
+                            if (ty == HIRCoreType::F64) {
+                                of << "fmod";
+                            } else {
+                                of << "fmodf";
+                            }
+                            of << "(";
                             emitParam(ve.valL);
+                            of << ", ";
+                            emitParam(ve.valR);
+                            of << ")";
+                            break;
+                        } else if (ty == HIRCoreType::F128) {
                             switch (ve.op) {
                                 case MIRBinOp::ADD:
-                                    of << " + ";
+                                    of << "f128_add";
                                     break;
                                 case MIRBinOp::SUB:
-                                    of << " - ";
+                                    of << "f128_sub";
                                     break;
                                 case MIRBinOp::MUL:
-                                    of << " * ";
+                                    of << "f128_mul";
                                     break;
                                 case MIRBinOp::DIV:
-                                    of << " / ";
+                                    of << "f128_div";
                                     break;
                                 case MIRBinOp::MOD:
-                                    of << " % ";
-                                    break;
-
-                                case MIRBinOp::BIT_OR:
-                                    of << " | ";
-                                    break;
-                                case MIRBinOp::BIT_AND:
-                                    of << " & ";
-                                    break;
-                                case MIRBinOp::BIT_XOR:
-                                    of << " ^ ";
-                                    break;
-                                case MIRBinOp::BIT_SHR:
-                                    of << " >> ";
-                                    break;
-                                case MIRBinOp::BIT_SHL:
-                                    of << " << ";
+                                    of << "f128_mod";
                                     break;
                                 case MIRBinOp::EQ:
-                                    of << " == ";
+                                    of << "f128_eq";
                                     break;
                                 case MIRBinOp::NE:
-                                    of << " != ";
+                                    of << "f128_ne";
                                     break;
                                 case MIRBinOp::GT:
-                                    of << " > ";
+                                    of << "f128_gt";
                                     break;
                                 case MIRBinOp::GE:
-                                    of << " >= ";
+                                    of << "f128_ge";
                                     break;
                                 case MIRBinOp::LT:
-                                    of << " < ";
+                                    of << "f128_lt";
                                     break;
                                 case MIRBinOp::LE:
-                                    of << " <= ";
+                                    of << "f128_le";
+                                    break;
+                                default:
+                                    MIR_TODO(localMirRes, "unsupported f128 binop");
+                            }
+                            of << "(";
+                            emitParam(ve.valL);
+                            of << ", ";
+                            emitParam(ve.valR);
+                            of << ")";
+                            break;
+                        } else if (typeIsEmulatedI128(ty)) {
+                            switch (ve.op) {
+                                case MIRBinOp::ADD:
+                                    of << "add128";
+                                    if (0) {
+                                        case MIRBinOp::SUB:
+                                            of << "sub128";
+                                    }
+                                    if (0) {
+                                        case MIRBinOp::MUL:
+                                            of << "mul128";
+                                    }
+                                    if (0) {
+                                        case MIRBinOp::DIV:
+                                            of << "div128";
+                                    }
+                                    if (0) {
+                                        case MIRBinOp::MOD:
+                                            of << "mod128";
+                                    }
+                                    if (0) {
+                                        case MIRBinOp::BIT_OR:
+                                            of << "or128";
+                                    }
+                                    if (0) {
+                                        case MIRBinOp::BIT_AND:
+                                            of << "and128";
+                                    }
+                                    if (0) {
+                                        case MIRBinOp::BIT_XOR:
+                                            of << "xor128";
+                                    }
+                                    if (ty == HIRCoreType::I128) {
+                                        of << "s";
+                                    }
+                                    of << "(";
+                                    emitParam(ve.valL);
+                                    of << ", ";
+                                    emitParam(ve.valR);
+                                    of << ")";
+                                    break;
+                                case MIRBinOp::BIT_SHR:
+                                    of << "shr128";
+                                    if (0) {
+                                        case MIRBinOp::BIT_SHL:
+                                            of << "shl128";
+                                    }
+                                    if (ty == HIRCoreType::I128) {
+                                        of << "s";
+                                    }
+                                    of << "(";
+                                    emitParam(ve.valL);
+                                    of << ", ";
+                                    emitParam(ve.valR);
+                                    if ((tyR == HIRCoreType::I128 || tyR == HIRCoreType::U128)) {
+                                        of << ".lo";
+                                    }
+                                    of << ")";
+                                    break;
+
+                                case MIRBinOp::EQ:
+                                    of << "0 == ";
+                                    if (0) {
+                                        case MIRBinOp::NE:
+                                            of << "0 != ";
+                                    }
+                                    if (0) {
+                                        case MIRBinOp::GT:
+                                            of << "0 > ";
+                                    }
+                                    if (0) {
+                                        case MIRBinOp::GE:
+                                            of << "0 >= ";
+                                    }
+                                    if (0) {
+                                        case MIRBinOp::LT:
+                                            of << "0 < ";
+                                    }
+                                    if (0) {
+                                        case MIRBinOp::LE:
+                                            of << "0 <= ";
+                                    }
+                                    // NOTE: Reversed order due to reversed logic above
+                                    of << "cmp128";
+                                    if (ty == HIRCoreType::I128) {
+                                        of << "s";
+                                    }
+                                    of << "(";
+                                    emitParam(ve.valR);
+                                    of << ", ";
+                                    emitParam(ve.valL);
+                                    of << ")";
                                     break;
 
                                 case MIRBinOp::ADD_OV:
                                 case MIRBinOp::SUB_OV:
                                 case MIRBinOp::MUL_OV:
                                 case MIRBinOp::DIV_OV:
-                                    MIR_TODO(localMirRes, "Overflow");
+                                    MIR_TODO(localMirRes, "Overflowing binops for emulated i128");
                                     break;
                             }
-                            emitParam(ve.valR);
-                            if (typeIsEmulatedI128(tyR)) {
-                                of << ".lo";
-                            }
+                            break;
+                        } else {
                         }
-                        TU_ARMA(UniOp, ve) {
-                            HIRTypeRef tmp;
-                            const auto& ty = localMirRes.getLvalueType(tmp, e.dst);
 
-                            if (typeIsEmulatedI128(ty)) {
-                                switch (ve.op) {
-                                    case MIRUniOp::NEG:
-                                        emitLvalue(e.dst);
-                                        of << " = neg128s(";
-                                        emitLvalue(ve.val);
-                                        of << ")";
-                                        break;
-                                    case MIRUniOp::INV:
-                                        emitLvalue(e.dst);
-                                        of << ".lo = ~";
-                                        emitLvalue(ve.val);
-                                        of << ".lo; ";
-                                        emitLvalue(e.dst);
-                                        of << ".hi = ~";
-                                        emitLvalue(ve.val);
-                                        of << ".hi";
-                                        break;
-                                }
+                        emitParam(ve.valL);
+                        switch (ve.op) {
+                            case MIRBinOp::ADD:
+                                of << " + ";
                                 break;
-                            } else if (ty == HIRCoreType::F128) {
-                                switch (ve.op) {
-                                    case MIRUniOp::NEG:
-                                        emitLvalue(e.dst);
-                                        of << " = f128_neg(";
-                                        emitLvalue(ve.val);
-                                        of << ")";
-                                        break;
-                                    case MIRUniOp::INV:
-                                        MIR_TODO(*mirRes, "f128 INV");
-                                        break;
-                                }
+                            case MIRBinOp::SUB:
+                                of << " - ";
                                 break;
-                            }
+                            case MIRBinOp::MUL:
+                                of << " * ";
+                                break;
+                            case MIRBinOp::DIV:
+                                of << " / ";
+                                break;
+                            case MIRBinOp::MOD:
+                                of << " % ";
+                                break;
 
-                            emitLvalue(e.dst);
-                            of << " = ";
+                            case MIRBinOp::BIT_OR:
+                                of << " | ";
+                                break;
+                            case MIRBinOp::BIT_AND:
+                                of << " & ";
+                                break;
+                            case MIRBinOp::BIT_XOR:
+                                of << " ^ ";
+                                break;
+                            case MIRBinOp::BIT_SHR:
+                                of << " >> ";
+                                break;
+                            case MIRBinOp::BIT_SHL:
+                                of << " << ";
+                                break;
+                            case MIRBinOp::EQ:
+                                of << " == ";
+                                break;
+                            case MIRBinOp::NE:
+                                of << " != ";
+                                break;
+                            case MIRBinOp::GT:
+                                of << " > ";
+                                break;
+                            case MIRBinOp::GE:
+                                of << " >= ";
+                                break;
+                            case MIRBinOp::LT:
+                                of << " < ";
+                                break;
+                            case MIRBinOp::LE:
+                                of << " <= ";
+                                break;
+
+                            case MIRBinOp::ADD_OV:
+                            case MIRBinOp::SUB_OV:
+                            case MIRBinOp::MUL_OV:
+                            case MIRBinOp::DIV_OV:
+                                MIR_TODO(localMirRes, "Overflow");
+                                break;
+                        }
+                        emitParam(ve.valR);
+                        if (typeIsEmulatedI128(tyR)) {
+                            of << ".lo";
+                        }
+                        break;
+                    }
+                    case MIRRValue::TAG_UniOp: {
+                        auto& ve = e.src.as_UniOp();
+                        HIRTypeRef tmp;
+                        const auto& ty = localMirRes.getLvalueType(tmp, e.dst);
+
+                        if (typeIsEmulatedI128(ty)) {
                             switch (ve.op) {
                                 case MIRUniOp::NEG:
-                                    of << "-";
+                                    emitLvalue(e.dst);
+                                    of << " = neg128s(";
+                                    emitLvalue(ve.val);
+                                    of << ")";
                                     break;
                                 case MIRUniOp::INV:
-                                    if (ty == HIRCoreType::Bool) {
-                                        of << "!";
-                                    } else {
-                                        of << "~";
-                                    }
-                                    break;
-                            }
-                            emitLvalue(ve.val);
-                        }
-                        TU_ARMA(DstMeta, ve) {
-                            emitLvalue(e.dst);
-                            // TODO: Why? Probably for getting `VTable`
-                            if (ty->is_Primitive() || ty->is_Pointer() || ty->is_Borrow()) {
-                            } else {
-                                of << "._0._0";
-                            }
-                            of << " = static_cast<decltype(";
-                            emitLvalue(e.dst);
-                            if (ty->is_Primitive() || ty->is_Pointer() || ty->is_Borrow()) {
-                            } else {
-                                of << "._0._0";
-                            }
-                            of << ")>(";
-                            emitLvalue(ve.val);
-                            of << ".META)";
-                        }
-                        TU_ARMA(DstPtr, ve) {
-                            emitLvalue(e.dst);
-                            of << " = static_cast<";
-                            emitCtype(ty);
-                            of << ">(";
-                            emitLvalue(ve.val);
-                            of << ".PTR)";
-                        }
-                        TU_ARMA(MakeDst, ve) {
-                            emitLvalue(e.dst);
-                            of << " = static_cast<";
-                            emitCtype(ty);
-                            of << ">(";
-                            auto meta = metadataType(ty->is_Pointer() ? ty->as_Pointer().inner : ty->as_Borrow().inner);
-                            switch (meta) {
-                                case MetadataType::Slice:
-                                    of << "make_sliceptr";
-                                    of << "(";
-                                    emitParam(ve.ptrVal, false);
-                                    of << ", ";
-                                    emitParam(ve.metaVal);
-                                    of << ")";
-                                    break;
-                                case MetadataType::TraitObject:
-                                    of << "make_traitobjptr";
-                                    of << "(";
-                                    emitParam(ve.ptrVal);
-                                    of << ", ";
-                                    emitTraitMetadataParam(localMirRes, ve.metaVal);
-                                    of << ")";
-                                    break;
-                                case MetadataType::Zero:
-                                case MetadataType::Unknown:
-                                case MetadataType::None:
-                                    of << "(void*)";
-                                    emitParam(ve.ptrVal);
-                                    break;
-                            }
-                            of << ")";
-                        }
-                        TU_ARMA(Tuple, ve) {
-                            emitCompositeAssign(localMirRes, [&]() {
-                                emitLvalue(e.dst);
-                            }, ve.vals, indentLevel);
-                        }
-                        TU_ARMA(Array, ve) {
-                            for (unsigned int j = 0; j < ve.vals.size(); j++) {
-                                if (j != 0) {
-                                    of << ";\n" << indent;
-                                }
-                                emitLvalue(e.dst);
-                                of << ".DATA[" << j << "] = ";
-                                emitParam(ve.vals[j]);
-                            }
-                        }
-                        TU_ARMA(UnionVariant, ve) {
-                            MIR_ASSERT(localMirRes, crate.getTypeitemByPath(sp, ve.path.path).is_Union(), "");
-                            if (!this->typeIsBadZst(mirRes->getParamType(tmp, ve.val))) {
-                                emitLvalue(e.dst);
-                                of << ".var_" << ve.index << " = ";
-                                emitParam(ve.val);
-                            }
-                        }
-                        TU_ARMA(EnumVariant, ve) {
-                            const auto& tyi = crate.getTypeitemByPath(sp, ve.path.path);
-                            MIR_ASSERT(localMirRes, tyi.is_Enum(), "");
-                            const auto* enmP = &tyi.as_Enum();
-
-                            HIRTypeRef tmp;
-                            const auto& ty = localMirRes.getLvalueType(tmp, e.dst);
-                            auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
-
-                    TU_MATCH_HDRA( (repr->variants), {)
-                    TU_ARMA(None, re) {
-                                    emitCompositeAssign(localMirRes, [&]() {
-                                        emitLvalue(e.dst);
-                                        of << ".DATA.var_0";
-                                    }, /*repr->fields[0].ty,*/ ve.vals, indentLevel);
-                                }
-                                TU_ARMA(NonZero, re) {
-                                    MIR_ASSERT(*mirRes, ve.index < 2, "");
-                                    if (ve.index == re.zeroVariant) {
-                                        // TODO: Use nonzero_path
-                                        of << "memset(&";
-                                        emitLvalue(e.dst);
-                                        of << ", 0, sizeof(";
-                                        emitCtype(ty);
-                                        of << "))";
-                                    } else {
-                                        emitCompositeAssign(localMirRes, [&]() {
-                                            emitLvalue(e.dst);
-                                            of << ".DATA.var_" << ve.index;
-                                        }, /*repr->fields[0].ty,*/ ve.vals, indentLevel, /*prepend_newline=*/false);
-                                    }
-                                }
-                                TU_ARMA(Linear, re) {
-                                    bool emitNewline = false;
-                                    if (!re.isNiche(ve.index)) {
-                                        // Each variant has its own tag field, it will be the last numbered field in that variant slot
-                                        // - Only use that if there isn't an explicit tag field in the enum
-                                        if (re.field.subFields.empty() || typeIsBadZst(repr->fields[ve.index].ty)) {
-                                            emitLvalue(e.dst);
-                                            const auto& slotTy = emitEnumPath(repr, re.field);
-                                            of << " = ";
-                                            if (slotTy->is_Pointer() || slotTy->is_Borrow() || slotTy->is_Function()) {
-                                                of << "(";
-                                                emitCtype(slotTy);
-                                                of << ")(uintptr_t)";
-                                            }
-                                            of << re.tagValue(ve.index);
-                                        } else {
-                                            auto vr = TargetGetTypeRepr(sp, resolve_, repr->fields[ve.index].ty);
-                                            emitLvalue(e.dst);
-                                            of << ".DATA.var_" << ve.index << "._" << (vr->fields.size() - 1) << " = ";
-                                            const auto& slotTy = vr->fields.back().ty;
-                                            if (slotTy->is_Pointer() || slotTy->is_Borrow() || slotTy->is_Function()) {
-                                                of << "(";
-                                                emitCtype(slotTy);
-                                                of << ")(uintptr_t)";
-                                            }
-                                            of << re.tagValue(ve.index);
-                                        }
-                                        emitNewline = true;
-                                    } else {
-                                        of << "/* Niche tag */";
-                                    }
-                                    if (enmP->isValue()) {
-                                        // Value enums have no data fields
-                                    } else {
-                                        emitCompositeAssign(localMirRes, [&]() {
-                                            emitLvalue(e.dst);
-                                            of << ".DATA.var_" << ve.index;
-                                        }, ve.vals, indentLevel, emitNewline);
-                                    }
-                                }
-                                TU_ARMA(Values, re) {
-                                    if (re.field.index == 0) {
-                                        emitLvalue(e.dst);
-                                        of << ".TAG = ";
-                                        emitEnumVariantVal(repr, ve.index);
-                                    } else {
-                                        emitLvalue(e.dst);
-                                        of << ".DATA.TAG = ";
-                                        emitEnumVariantVal(repr, ve.index);
-                                    }
-                                    if (!enmP->isValue()) {
-                                        emitCompositeAssign(localMirRes, [&]() {
-                                            emitLvalue(e.dst);
-                                            of << ".DATA.var_" << ve.index;
-                                        }, ve.vals, indentLevel, true);
-                                    }
-                                }
-                    }
-                        }
-                        TU_ARMA(Struct, ve) {
-                            if (ve.vals.empty()) {
-                                if (options.disallowEmptyStructs) {
                                     emitLvalue(e.dst);
-                                    of << "._d = 0";
+                                    of << ".lo = ~";
+                                    emitLvalue(ve.val);
+                                    of << ".lo; ";
+                                    emitLvalue(e.dst);
+                                    of << ".hi = ~";
+                                    emitLvalue(ve.val);
+                                    of << ".hi";
+                                    break;
+                            }
+                            break;
+                        } else if (ty == HIRCoreType::F128) {
+                            switch (ve.op) {
+                                case MIRUniOp::NEG:
+                                    emitLvalue(e.dst);
+                                    of << " = f128_neg(";
+                                    emitLvalue(ve.val);
+                                    of << ")";
+                                    break;
+                                case MIRUniOp::INV:
+                                    MIR_TODO(*mirRes, "f128 INV");
+                                    break;
+                            }
+                            break;
+                        }
+
+                        emitLvalue(e.dst);
+                        of << " = ";
+                        switch (ve.op) {
+                            case MIRUniOp::NEG:
+                                of << "-";
+                                break;
+                            case MIRUniOp::INV:
+                                if (ty == HIRCoreType::Bool) {
+                                    of << "!";
+                                } else {
+                                    of << "~";
                                 }
-                            } else {
+                                break;
+                        }
+                        emitLvalue(ve.val);
+                        break;
+                    }
+                    case MIRRValue::TAG_DstMeta: {
+                        auto& ve = e.src.as_DstMeta();
+                        emitLvalue(e.dst);
+                        // TODO: Why? Probably for getting `VTable`
+                        if (ty->is_Primitive() || ty->is_Pointer() || ty->is_Borrow()) {
+                        } else {
+                            of << "._0._0";
+                        }
+                        of << " = static_cast<decltype(";
+                        emitLvalue(e.dst);
+                        if (ty->is_Primitive() || ty->is_Pointer() || ty->is_Borrow()) {
+                        } else {
+                            of << "._0._0";
+                        }
+                        of << ")>(";
+                        emitLvalue(ve.val);
+                        of << ".META)";
+                        break;
+                    }
+                    case MIRRValue::TAG_DstPtr: {
+                        auto& ve = e.src.as_DstPtr();
+                        emitLvalue(e.dst);
+                        of << " = static_cast<";
+                        emitCtype(ty);
+                        of << ">(";
+                        emitLvalue(ve.val);
+                        of << ".PTR)";
+                        break;
+                    }
+                    case MIRRValue::TAG_MakeDst: {
+                        auto& ve = e.src.as_MakeDst();
+                        emitLvalue(e.dst);
+                        of << " = static_cast<";
+                        emitCtype(ty);
+                        of << ">(";
+                        auto meta = metadataType(ty->is_Pointer() ? ty->as_Pointer().inner : ty->as_Borrow().inner);
+                        switch (meta) {
+                            case MetadataType::Slice:
+                                of << "make_sliceptr";
+                                of << "(";
+                                emitParam(ve.ptrVal, false);
+                                of << ", ";
+                                emitParam(ve.metaVal);
+                                of << ")";
+                                break;
+                            case MetadataType::TraitObject:
+                                of << "make_traitobjptr";
+                                of << "(";
+                                emitParam(ve.ptrVal);
+                                of << ", ";
+                                emitTraitMetadataParam(localMirRes, ve.metaVal);
+                                of << ")";
+                                break;
+                            case MetadataType::Zero:
+                            case MetadataType::Unknown:
+                            case MetadataType::None:
+                                of << "(void*)";
+                                emitParam(ve.ptrVal);
+                                break;
+                        }
+                        of << ")";
+                        break;
+                    }
+                    case MIRRValue::TAG_Tuple: {
+                        auto& ve = e.src.as_Tuple();
+                        emitCompositeAssign(localMirRes, [&]() {
+                            emitLvalue(e.dst);
+                        }, ve.vals, indentLevel);
+                        break;
+                    }
+                    case MIRRValue::TAG_Array: {
+                        auto& ve = e.src.as_Array();
+                        for (unsigned int j = 0; j < ve.vals.size(); j++) {
+                            if (j != 0) {
+                                of << ";\n" << indent;
+                            }
+                            emitLvalue(e.dst);
+                            of << ".DATA[" << j << "] = ";
+                            emitParam(ve.vals[j]);
+                        }
+                        break;
+                    }
+                    case MIRRValue::TAG_UnionVariant: {
+                        auto& ve = e.src.as_UnionVariant();
+                        MIR_ASSERT(localMirRes, crate.getTypeitemByPath(sp, ve.path.path).is_Union(), "");
+                        if (!this->typeIsBadZst(mirRes->getParamType(tmp, ve.val))) {
+                            emitLvalue(e.dst);
+                            of << ".var_" << ve.index << " = ";
+                            emitParam(ve.val);
+                        }
+                        break;
+                    }
+                    case MIRRValue::TAG_EnumVariant: {
+                        auto& ve = e.src.as_EnumVariant();
+                        const auto& tyi = crate.getTypeitemByPath(sp, ve.path.path);
+                                MIR_ASSERT(localMirRes, tyi.is_Enum(), "");
+                                const auto* enmP = &tyi.as_Enum();
+
+                                HIRTypeRef tmp;
+                                const auto& ty = localMirRes.getLvalueType(tmp, e.dst);
+                                auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
+
+                        switch (repr->variants.tag()) {
+                            case TypeReprVariantMode::TAG_None: {
+                                auto& re = repr->variants.as_None();
+                                (void)re;
                                 emitCompositeAssign(localMirRes, [&]() {
                                     emitLvalue(e.dst);
-                                }, ve.vals, indentLevel, /*emit_newline=*/false);
+                                    of << ".DATA.var_0";
+                                }, /*repr->fields[0].ty,*/ ve.vals, indentLevel);
+                                break;
+                            }
+                            case TypeReprVariantMode::TAG_NonZero: {
+                                auto& re = repr->variants.as_NonZero();
+                                MIR_ASSERT(*mirRes, ve.index < 2, "");
+                                if (ve.index == re.zeroVariant) {
+                                    // TODO: Use nonzero_path
+                                    of << "memset(&";
+                                    emitLvalue(e.dst);
+                                    of << ", 0, sizeof(";
+                                    emitCtype(ty);
+                                    of << "))";
+                                } else {
+                                    emitCompositeAssign(localMirRes, [&]() {
+                                        emitLvalue(e.dst);
+                                        of << ".DATA.var_" << ve.index;
+                                    }, /*repr->fields[0].ty,*/ ve.vals, indentLevel, /*prepend_newline=*/false);
+                                }
+                                break;
+                            }
+                            case TypeReprVariantMode::TAG_Linear: {
+                                auto& re = repr->variants.as_Linear();
+                                bool emitNewline = false;
+                                if (!re.isNiche(ve.index)) {
+                                    // Each variant has its own tag field, it will be the last numbered field in that variant slot
+                                    // - Only use that if there isn't an explicit tag field in the enum
+                                    if (re.field.subFields.empty() || typeIsBadZst(repr->fields[ve.index].ty)) {
+                                        emitLvalue(e.dst);
+                                        const auto& slotTy = emitEnumPath(repr, re.field);
+                                        of << " = ";
+                                        if (slotTy->is_Pointer() || slotTy->is_Borrow() || slotTy->is_Function()) {
+                                            of << "(";
+                                            emitCtype(slotTy);
+                                            of << ")(uintptr_t)";
+                                        }
+                                        of << re.tagValue(ve.index);
+                                    } else {
+                                        auto vr = TargetGetTypeRepr(sp, resolve_, repr->fields[ve.index].ty);
+                                        emitLvalue(e.dst);
+                                        of << ".DATA.var_" << ve.index << "._" << (vr->fields.size() - 1) << " = ";
+                                        const auto& slotTy = vr->fields.back().ty;
+                                        if (slotTy->is_Pointer() || slotTy->is_Borrow() || slotTy->is_Function()) {
+                                            of << "(";
+                                            emitCtype(slotTy);
+                                            of << ")(uintptr_t)";
+                                        }
+                                        of << re.tagValue(ve.index);
+                                    }
+                                    emitNewline = true;
+                                } else {
+                                    of << "/* Niche tag */";
+                                }
+                                if (enmP->isValue()) {
+                                    // Value enums have no data fields
+                                } else {
+                                    emitCompositeAssign(localMirRes, [&]() {
+                                        emitLvalue(e.dst);
+                                        of << ".DATA.var_" << ve.index;
+                                    }, ve.vals, indentLevel, emitNewline);
+                                }
+                                break;
+                            }
+                            case TypeReprVariantMode::TAG_Values: {
+                                auto& re = repr->variants.as_Values();
+                                if (re.field.index == 0) {
+                                    emitLvalue(e.dst);
+                                    of << ".TAG = ";
+                                    emitEnumVariantVal(repr, ve.index);
+                                } else {
+                                    emitLvalue(e.dst);
+                                    of << ".DATA.TAG = ";
+                                    emitEnumVariantVal(repr, ve.index);
+                                }
+                                if (!enmP->isValue()) {
+                                    emitCompositeAssign(localMirRes, [&]() {
+                                        emitLvalue(e.dst);
+                                        of << ".DATA.var_" << ve.index;
+                                    }, ve.vals, indentLevel, true);
+                                }
+                                break;
                             }
                         }
+                        break;
+                    }
+                    case MIRRValue::TAG_Struct: {
+                        auto& ve = e.src.as_Struct();
+                        if (ve.vals.empty()) {
+                            if (options.disallowEmptyStructs) {
+                                emitLvalue(e.dst);
+                                of << "._d = 0";
+                            }
+                        } else {
+                            emitCompositeAssign(localMirRes, [&]() {
+                                emitLvalue(e.dst);
+                            }, ve.vals, indentLevel, /*emit_newline=*/false);
+                        }
+                        break;
+                    }
                 }
                 of << ";";
                 of << "\t// " << e.dst << " = " << e.src;
@@ -4190,8 +4326,9 @@ namespace {
                 //}
             };
 
-            TU_MATCH_HDRA( (repr->variants), {)
-            TU_ARMA(NonZero, e) {
+            switch (repr->variants.tag()) {
+                case TypeReprVariantMode::TAG_NonZero: {
+                    auto& e = repr->variants.as_NonZero();
                     MIR_ASSERT(localMirRes, nArms == 2, "NonZero optimised switch without two arms");
                     // If this is an emulated i128, check both fields
                     of << indent << "if( ";
@@ -4215,8 +4352,10 @@ namespace {
                     of << indent << "\t";
                     cb(e.zeroVariant);
                     of << "\n";
+                    break;
                 }
-                TU_ARMA(Linear, e) {
+                case TypeReprVariantMode::TAG_Linear: {
+                    auto& e = repr->variants.as_Linear();
                     const auto& tagTy = TargetGetInnerType(sp, resolve_, *repr, e.field.index, e.field.subFields);
                     const bool pointerTag = tagTy->is_Pointer() || tagTy->is_Borrow() || tagTy->is_Function();
                     if (!pointerTag) {
@@ -4285,8 +4424,10 @@ namespace {
                         of << "\n";
                         of << indent << "}\n";
                     }
+                    break;
                 }
-                TU_ARMA(Values, e) {
+                case TypeReprVariantMode::TAG_Values: {
+                    auto& e = repr->variants.as_Values();
                     const auto& tagTy = TargetGetInnerType(sp, resolve_, *repr, e.field.index, e.field.subFields);
                     bool is_signed = false;
                     switch (tagTy->as_Primitive()) {
@@ -4385,11 +4526,15 @@ namespace {
                     }
                     of << indent << "default: abort();\n";
                     of << indent << "}\n";
+                    break;
                 }
-                TU_ARMA(None, e) {
+                case TypeReprVariantMode::TAG_None: {
+                    auto& e = repr->variants.as_None();
+                    (void)e;
                     of << indent;
                     cb(0);
                     of << "\n";
+                    break;
                 }
             }
         }
@@ -4568,8 +4713,9 @@ namespace {
                 of << "return ";
             }
 
-            TU_MATCH_HDRA( (e.fcn), {)
-            TU_ARMA(Value, e2) {
+            switch (e.fcn.tag()) {
+                case MIRCallTarget::TAG_Value: {
+                    auto& e2 = e.fcn.as_Value();
                     {
                         HIRTypeRef tmp;
                         const auto& ty = localMirRes.getLvalueType(tmp, e2);
@@ -4585,49 +4731,60 @@ namespace {
                     of << "(";
                     emitLvalue(e2);
                     of << ")";
+                    break;
                 }
-                TU_ARMA(Path, e2) {
+                case MIRCallTarget::TAG_Path: {
+                    auto& e2 = e.fcn.as_Path();
                     {
-                    TU_MATCH_HDRA( (e2.data), {)
-                    TU_ARMA(Generic, pe) {
-                                const auto& fcn = crate.getFunctionByPath(sp, pe.path);
-                                omitAssign |= fcn.returnType->is_Diverge();
-                                // TODO: Monomorph.
-                            }
-                            TU_ARMA(UfcsUnknown, pe) {
-                            }
-                            TU_ARMA(UfcsInherent, pe) {
-                                // Check if the return type is !
-                                omitAssign |= resolve_.hirCrate().findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
-                                    // Associated functions
-                                    {
-                                        auto it = impl.methods.find(pe.item);
-                                        if (it != impl.methods.end()) {
-                                            return it->second.data.returnType->is_Diverge();
-                                        }
+                    switch (e2.data.tag()) {
+                        case HIRPathData::TAG_Generic: {
+                            auto& pe = e2.data.as_Generic();
+                            const auto& fcn = crate.getFunctionByPath(sp, pe.path);
+                            omitAssign |= fcn.returnType->is_Diverge();
+                            // TODO: Monomorph.
+                            break;
+                        }
+                        case HIRPathData::TAG_UfcsUnknown: {
+                            auto& pe = e2.data.as_UfcsUnknown();
+                            (void)pe;
+                            break;
+                        }
+                        case HIRPathData::TAG_UfcsInherent: {
+                            auto& pe = e2.data.as_UfcsInherent();
+                            // Check if the return type is !
+                            omitAssign |= resolve_.hirCrate().findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
+                                // Associated functions
+                                {
+                                    auto it = impl.methods.find(pe.item);
+                                    if (it != impl.methods.end()) {
+                                        return it->second.data.returnType->is_Diverge();
                                     }
-                                    // Associated static (undef)
-                                    return false;
-                                });
-                            }
-                            TU_ARMA(UfcsKnown, pe) {
-                                // Check if the return type is !
-                                const auto& tr = resolve_.hirCrate().getTraitByPath(sp, pe.trait.path);
-                                const auto& fcn = tr.values.find(pe.item)->second.as_Function();
-                                const auto& rvTpl = fcn.returnType;
-                                if (rvTpl->is_Diverge() || rvTpl == crate.types.unit()) {
-                                    omitAssign |= true;
-                                } else if (const auto* te = rvTpl->opt_Generic()) {
-                                    (void)te;
-                                    // TODO: Generic lookup
-                                } else if (const auto* te = rvTpl->opt_Path()) {
-                                    if (te->binding.is_Opaque()) {
-                                        // TODO: Associated type lookup
-                                    }
-                                } else {
-                                    // Not a ! type
                                 }
+                                // Associated static (undef)
+                                return false;
+                            });
+                            break;
+                        }
+                        case HIRPathData::TAG_UfcsKnown: {
+                            auto& pe = e2.data.as_UfcsKnown();
+                            // Check if the return type is !
+                            const auto& tr = resolve_.hirCrate().getTraitByPath(sp, pe.trait.path);
+                            const auto& fcn = tr.values.find(pe.item)->second.as_Function();
+                            const auto& rvTpl = fcn.returnType;
+                            if (rvTpl->is_Diverge() || rvTpl == crate.types.unit()) {
+                                omitAssign |= true;
+                            } else if (const auto* te = rvTpl->opt_Generic()) {
+                                (void)te;
+                                // TODO: Generic lookup
+                            } else if (const auto* te = rvTpl->opt_Path()) {
+                                if (te->binding.is_Opaque()) {
+                                    // TODO: Associated type lookup
+                                }
+                            } else {
+                                // Not a ! type
                             }
+                            break;
+                        }
                     }
                     if(!omitAssign)
                     {
@@ -4636,8 +4793,10 @@ namespace {
                     }
                     }
                     of << TransMangle(e2);
+                    break;
                 }
-                TU_ARMA(Intrinsic, e2) {
+                case MIRCallTarget::TAG_Intrinsic: {
+                    auto& e2 = e.fcn.as_Intrinsic();
                     const auto& name = e2.name;
                     const auto& params = e2.params;
                     emitIntrinsicCall(name, params, e);
@@ -4689,15 +4848,21 @@ namespace {
 
         void emitTermTailCall(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_TailCall& e, unsigned indentLevel) {
             MIRCallTarget target;
-            TU_MATCH_HDRA((e.fcn), {)
-            TU_ARMA(Value, value) {
+            switch (e.fcn.tag()) {
+                case MIRCallTarget::TAG_Value: {
+                    auto& value = e.fcn.as_Value();
                     target = MIRCallTarget::make_Value(value.clone());
+                    break;
                 }
-                TU_ARMA(Path, path) {
+                case MIRCallTarget::TAG_Path: {
+                    auto& path = e.fcn.as_Path();
                     target = MIRCallTarget::make_Path(path.clone());
+                    break;
                 }
-                TU_ARMA(Intrinsic, intrinsic) {
+                case MIRCallTarget::TAG_Intrinsic: {
+                    auto& intrinsic = e.fcn.as_Intrinsic();
                     target = MIRCallTarget::make_Intrinsic({intrinsic.name, intrinsic.params.clone()});
+                    break;
                 }
             }
             ::std::vector<MIRParam> args;
@@ -4954,23 +5119,36 @@ namespace {
         private:
             /// Get a description of the parameter's important attributes
             static std::string getParamText(const MIRAsmParam& p) {
-                TU_MATCH_HDRA( (p), {)
-                TU_ARMA(Reg, e) {
-                    TU_MATCH_HDRA( (e.spec), { )
-                    TU_ARMA(Explicit, n) {
+                switch (p.tag()) {
+                    case MIRAsmParam::TAG_Reg: {
+                        auto& e = p.as_Reg();
+                        switch (e.spec.tag()) {
+                            case AsmRegisterSpec::TAG_Explicit: {
+                                auto& n = e.spec.as_Explicit();
                                 return FMT(getDirText(e.dir) << "=" << n);
                             }
-                            TU_ARMA(Class, c) {
+                            case AsmRegisterSpec::TAG_Class: {
+                                auto& c = e.spec.as_Class();
                                 return FMT(getDirText(e.dir) << ":" << to_string(c));
                             }
+                        }
+                        break;
                     }
+                    case MIRAsmParam::TAG_Const: {
+                        auto& e = p.as_Const();
+                        (void)e;
+                        return "const";
                     }
-                    TU_ARMA(Const, e)
-                    return "const";
-                    TU_ARMA(Sym, e)
-                    return "sym";
-                    TU_ARMA(Label, e)
-                    return "label";
+                    case MIRAsmParam::TAG_Sym: {
+                        auto& e = p.as_Sym();
+                        (void)e;
+                        return "sym";
+                    }
+                    case MIRAsmParam::TAG_Label: {
+                        auto& e = p.as_Label();
+                        (void)e;
+                        return "label";
+                    }
                 }
                 throw "";
             }
@@ -5365,66 +5543,83 @@ namespace {
                         of << ",";
                     }
                     of << " ";
-                    TU_MATCH_HDRA((p), {)
-                    TU_ARMA(Reg, r) {
-                        of << "\"";
-                        if (r.output && !r.spec.is_Explicit()) {
-                            const auto it = ::std::find(outputs.begin(), outputs.end(), &r);
-                            MIR_ASSERT(localMirRes, it != outputs.end(), "Missing asm output");
-                            of << (it - outputs.begin());
-                        } else {
-                            TU_MATCH_HDRA((r.spec), {)
-                            TU_ARMA(Class, c)
-                                switch(c)
-                                {
-                                    // x86
-                                    case AsmRegisterClass::x86Reg:
+                    switch (p.tag()) {
+                        case MIRAsmParam::TAG_Reg: {
+                            auto& r = p.as_Reg();
+                            of << "\"";
+                            if (r.output && !r.spec.is_Explicit()) {
+                                const auto it = ::std::find(outputs.begin(), outputs.end(), &r);
+                                MIR_ASSERT(localMirRes, it != outputs.end(), "Missing asm output");
+                                of << (it - outputs.begin());
+                            } else {
+                                TU_MATCH_HDRA((r.spec), {)
+                                TU_ARMA(Class, c)
+                                    switch(c)
+                                    {
+                                        // x86
+                                        case AsmRegisterClass::x86Reg:
+                                            of << "r";
+                                            break;
+                                        case AsmRegisterClass::x86RegAbcd:
+                                            of << "Q";
+                                            break;
+                                        case AsmRegisterClass::x86RegByte:
+                                            of << "q";
+                                            break;
+                                        case AsmRegisterClass::x86Xmm:
+                                            of << "x";
+                                            break;
+                                        case AsmRegisterClass::x86Ymm:
+                                            of << "x";
+                                            break;
+                                        case AsmRegisterClass::x86Zmm:
+                                            of << "v";
+                                            break;
+                                        case AsmRegisterClass::x86Kreg:
+                                            of << "Yk";
+                                            break;
+                                        // riscv
+                                        case AsmRegisterClass::riscvReg:
+                                            of << "r";
+                                            break;
+                                        case AsmRegisterClass::riscvFreg:
+                                            of << "f";
+                                            break;
+                                    }
+                                TU_ARMA(Explicit, name) {
                                         of << "r";
-                                        break;
-                                    case AsmRegisterClass::x86RegAbcd:
-                                        of << "Q";
-                                        break;
-                                    case AsmRegisterClass::x86RegByte:
-                                        of << "q";
-                                        break;
-                                    case AsmRegisterClass::x86Xmm:
-                                        of << "x";
-                                        break;
-                                    case AsmRegisterClass::x86Ymm:
-                                        of << "x";
-                                        break;
-                                    case AsmRegisterClass::x86Zmm:
-                                        of << "v";
-                                        break;
-                                    case AsmRegisterClass::x86Kreg:
-                                        of << "Yk";
-                                        break;
-                                    // riscv
-                                    case AsmRegisterClass::riscvReg:
-                                        of << "r";
-                                        break;
-                                    case AsmRegisterClass::riscvFreg:
-                                        of << "f";
-                                        break;
-                                }
-                            TU_ARMA(Explicit, name) {
-                                    of << "r";
+                                    }
                                 }
                             }
+                            assert(r.input);
+                            of << "\" (";
+                            if( const auto* regnameP = p.as_Reg().spec.opt_Explicit() ) {
+                                of << "asm_" << *regnameP;
+                            }
+                            else {
+                                emitParam(*r.input);
+                            }
+                            of << ")";
+                            break;
                         }
-                        assert(r.input);
-                        of << "\" (";
-                        if( const auto* regnameP = p.as_Reg().spec.opt_Explicit() ) {
-                            of << "asm_" << *regnameP;
+                        case MIRAsmParam::TAG_Const: {
+                            auto& c = p.as_Const();
+                            (void)c;
+                            MIR_TODO(localMirRes, "Asm2 GCC - Const");
+                            break;
                         }
-                        else {
-                            emitParam(*r.input);
+                        case MIRAsmParam::TAG_Sym: {
+                            auto& c = p.as_Sym();
+                            (void)c;
+                            MIR_TODO(localMirRes, "Asm2 GCC - Sym");
+                            break;
                         }
-                        of << ")";
-                    }
-                        TU_ARMA(Const, c) MIR_TODO(localMirRes, "Asm2 GCC - Const");
-                        TU_ARMA(Sym, c) MIR_TODO(localMirRes, "Asm2 GCC - Sym");
-                        TU_ARMA(Label, c) MIR_BUG(localMirRes, "Asm label listed as an input");
+                        case MIRAsmParam::TAG_Label: {
+                            auto& c = p.as_Label();
+                            (void)c;
+                            MIR_BUG(localMirRes, "Asm label listed as an input");
+                            break;
+                        }
                     }
                 }
                 of << " :";
@@ -8233,36 +8428,63 @@ namespace {
                 return;
             }
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
-            TU_MATCH_HDRA( (*ty), {)
-            // Impossible
-            TU_ARMA(Diverge, te) {
+            switch ((*ty).tag()) {
+                case HIRTypeData::TAG_Diverge: {
+                    auto& te = (*ty).as_Diverge();
+                    (void)te;
+                    break;
                 }
-                TU_ARMA(Infer, te) {
+                case HIRTypeData::TAG_Infer: {
+                    auto& te = (*ty).as_Infer();
+                    (void)te;
+                    break;
                 }
-                TU_ARMA(ErasedType, te) {
+                case HIRTypeData::TAG_ErasedType: {
+                    auto& te = (*ty).as_ErasedType();
+                    (void)te;
+                    break;
                 }
-                TU_ARMA(NodeType, te) {
+                case HIRTypeData::TAG_NodeType: {
+                    auto& te = (*ty).as_NodeType();
+                    (void)te;
+                    break;
                 }
-                TU_ARMA(Generic, te) {
+                case HIRTypeData::TAG_Generic: {
+                    auto& te = (*ty).as_Generic();
+                    (void)te;
+                    break;
                 }
-
-                // Nothing
-                TU_ARMA(Primitive, te) {
+                case HIRTypeData::TAG_Primitive: {
+                    auto& te = (*ty).as_Primitive();
+                    (void)te;
+                    break;
                 }
-                TU_ARMA(Pointer, te) {
+                case HIRTypeData::TAG_Pointer: {
+                    auto& te = (*ty).as_Pointer();
+                    (void)te;
+                    break;
                 }
-                TU_ARMA(NamedFunction, te) {
+                case HIRTypeData::TAG_NamedFunction: {
+                    auto& te = (*ty).as_NamedFunction();
+                    (void)te;
+                    break;
                 }
-                TU_ARMA(Function, te) {
+                case HIRTypeData::TAG_Function: {
+                    auto& te = (*ty).as_Function();
+                    (void)te;
+                    break;
                 }
-                // Has drop glue/destructors
-                TU_ARMA(Borrow, te) {
+                case HIRTypeData::TAG_Borrow: {
+                    auto& te = (*ty).as_Borrow();
                     if (te.type == HIRBorrowType::Owned) {
                         // Call drop glue on inner.
                         emitDestructorCall(MIRLValue::newDeref(slot.clone()), te.inner, true, indentLevel);
                     }
+                    break;
                 }
-                TU_ARMA(Path, te) {
+                case HIRTypeData::TAG_Path: {
+                    auto& te = (*ty).as_Path();
+                    (void)te;
                     // Call drop glue
                     // - TODO: If the destructor is known to do nothing, don't call it.
                     auto p = HIRPath(ty, "#drop_glue");
@@ -8314,19 +8536,26 @@ namespace {
                             of << " );\n";
                             break;
                     }
+                    break;
                 }
-                TU_ARMA(Array, te) {
+                case HIRTypeData::TAG_Array: {
+                    auto& te = (*ty).as_Array();
                     // Emit destructors for all entries
                     if (te.size.as_Known() > 0) {
                         emitDestructorLoop(slot, te.inner, [&] {
                             of << te.size.as_Known();
                         }, indentLevel);
                     }
+                    break;
                 }
-                TU_ARMA(Tuple, te) {
+                case HIRTypeData::TAG_Tuple: {
+                    auto& te = (*ty).as_Tuple();
                     emitTupleDestructor(slot, te, unsizedValid, indentLevel);
+                    break;
                 }
-                TU_ARMA(TraitObject, te) {
+                case HIRTypeData::TAG_TraitObject: {
+                    auto& te = (*ty).as_TraitObject();
+                    (void)te;
                     MIR_ASSERT(*mirRes, unsizedValid, "Dropping TraitObject without an owned pointer");
                     // Call destructor in vtable
                     of << indent << "((VTABLE_HDR*)";
@@ -8335,8 +8564,10 @@ namespace {
                     emitDstLvaluePointer(MIRLValue::CRef(slot));
                     of << ".PTR";
                     of << ");";
+                    break;
                 }
-                TU_ARMA(Slice, te) {
+                case HIRTypeData::TAG_Slice: {
+                    auto& te = (*ty).as_Slice();
                     MIR_ASSERT(*mirRes, unsizedValid, "Dropping Slice without an owned pointer");
                     // If one element destructor unwinds, Rust still drops the
                     // unvisited tail.  A second exception during that cleanup
@@ -8345,9 +8576,12 @@ namespace {
                         emitDstLvaluePointer(MIRLValue::CRef(slot));
                         of << ".META";
                     }, indentLevel);
+                    break;
                 }
-                TU_ARMA(Pattern, te) {
+                case HIRTypeData::TAG_Pattern: {
+                    auto& te = (*ty).as_Pattern();
                     emitDestructorCall(slot, te.inner, unsizedValid, indentLevel);
+                    break;
                 }
             }
         }
@@ -8411,25 +8645,35 @@ namespace {
         }
 
         void emitLvalue(const MIRLValue::CRef& val) {
-            TU_MATCH_HDRA( (val), {)
-            TU_ARMA(Return, _e) {
+            switch (val.tag()) {
+                case MIRLValue::RefCommon::TAG_Return: {
+                    decltype(val.as_Return()) _e = val.as_Return();
+                    (void)_e;
                     of << "rv";
+                    break;
                 }
-                TU_ARMA(Argument, e) {
+                case MIRLValue::RefCommon::TAG_Argument: {
+                    decltype(val.as_Argument()) e = val.as_Argument();
                     of << "arg" << e;
+                    break;
                 }
-                TU_ARMA(Local, e) {
+                case MIRLValue::RefCommon::TAG_Local: {
+                    decltype(val.as_Local()) e = val.as_Local();
                     if (e == MIRLValue::Storage::MAX_ARG) {
                         of << "i";
                     } else {
                         of << "var" << e;
                     }
+                    break;
                 }
-                TU_ARMA(Static, e) {
+                case MIRLValue::RefCommon::TAG_Static: {
+                    decltype(val.as_Static()) e = val.as_Static();
                     of << TransMangle(e);
                     of << ".val";
+                    break;
                 }
-                TU_ARMA(Field, fieldIndex) {
+                case MIRLValue::RefCommon::TAG_Field: {
+                    decltype(val.as_Field()) fieldIndex = val.as_Field();
                     HIRTypeRef tmp;
                     auto inner = val.innerRef();
                     const auto& ty = mirRes->getLvalueType(tmp, inner);
@@ -8471,8 +8715,11 @@ namespace {
                         emitLvalue(inner);
                         of << "._" << fieldIndex;
                     }
+                    break;
                 }
-                TU_ARMA(Deref, _e) {
+                case MIRLValue::RefCommon::TAG_Deref: {
+                    decltype(val.as_Deref()) _e = val.as_Deref();
+                    (void)_e;
                     auto inner = val.innerRef();
                     HIRTypeRef tmp;
                     const auto& ty = mirRes->getLvalueType(tmp, val);
@@ -8489,8 +8736,10 @@ namespace {
                         emitLvalue(inner);
                         of << ")";
                     }
+                    break;
                 }
-                TU_ARMA(Index, indexLocal) {
+                case MIRLValue::RefCommon::TAG_Index: {
+                    decltype(val.as_Index()) indexLocal = val.as_Index();
                     auto inner = val.innerRef();
                     HIRTypeRef tmp;
                     const auto& ty = mirRes->getLvalueType(tmp, inner);
@@ -8518,8 +8767,10 @@ namespace {
                     of << ")[";
                     emitLvalue(MIRLValue::newLocal(indexLocal));
                     of << "]";
+                    break;
                 }
-                TU_ARMA(Downcast, variantIndex) {
+                case MIRLValue::RefCommon::TAG_Downcast: {
+                    decltype(val.as_Downcast()) variantIndex = val.as_Downcast();
                     auto inner = val.innerRef();
                     HIRTypeRef tmp;
                     const auto& ty = mirRes->getLvalueType(tmp, inner);
@@ -8529,6 +8780,7 @@ namespace {
                         of << ".DATA";
                     }
                     of << ".var_" << variantIndex;
+                    break;
                 }
             }
         }
@@ -8603,8 +8855,9 @@ namespace {
         }
 
         void emitConstant(const MIRConstant& ve, const MIRLValue* dstPtr = nullptr) {
-            TU_MATCH_HDRA( (ve), {)
-            TU_ARMA(Int, c) {
+            switch (ve.tag()) {
+                case MIRConstant::TAG_Int: {
+                    auto& c = ve.as_Int();
                     switch (c.t) {
                         // TODO: These should already have been truncated/reinterpreted, but just in case.
                         case HIRCoreType::I8:
@@ -8642,8 +8895,10 @@ namespace {
                             of << c.v;
                             break;
                     }
+                    break;
                 }
-                TU_ARMA(Uint, c) {
+                case MIRConstant::TAG_Uint: {
+                    auto& c = ve.as_Uint();
                     switch (c.t) {
                         case HIRCoreType::U8:
                             of << ::std::hex << "0x" << (c.v.truncateU64() & 0xFF) << ::std::dec;
@@ -8679,37 +8934,58 @@ namespace {
                         default:
                             MIR_BUG(*mirRes, "Invalid type for UInt literal - " << c.t);
                     }
+                    break;
                 }
-                TU_ARMA(Float, c) {
+                case MIRConstant::TAG_Float: {
+                    auto& c = ve.as_Float();
                     this->emitFloat(c.v, c.t);
+                    break;
                 }
-                TU_ARMA(Bool, c) {
+                case MIRConstant::TAG_Bool: {
+                    auto& c = ve.as_Bool();
                     of << (c.v ? "true" : "false");
+                    break;
                 }
-                TU_ARMA(Bytes, c) {
+                case MIRConstant::TAG_Bytes: {
+                    auto& c = ve.as_Bytes();
                     // Array borrow : Cast the C string to the array
                     // - Laziness
                     of << "(void*)";
                     this->printEscapedString(c);
+                    break;
                 }
-                TU_ARMA(StaticString, c) {
+                case MIRConstant::TAG_StaticString: {
+                    auto& c = ve.as_StaticString();
                     of << "make_sliceptr(";
                     this->printEscapedString(c);
                     of << ", " << ::std::dec << c.size() << ")";
+                    break;
                 }
-                TU_ARMA(Encoded, c) {
+                case MIRConstant::TAG_Encoded: {
+                    auto& c = ve.as_Encoded();
                     emitEncodedConstant(c.type, c.value);
+                    break;
                 }
-                TU_ARMA(Const, c) {
+                case MIRConstant::TAG_Const: {
+                    auto& c = ve.as_Const();
+                    (void)c;
                     MIR_BUG(*mirRes, "Unexpected Constant::Const - " << ve);
+                    break;
                 }
-                TU_ARMA(Generic, c) {
+                case MIRConstant::TAG_Generic: {
+                    auto& c = ve.as_Generic();
+                    (void)c;
                     MIR_BUG(*mirRes, "Generic value present at codegen");
+                    break;
                 }
-                TU_ARMA(Function, c) {
+                case MIRConstant::TAG_Function: {
+                    auto& c = ve.as_Function();
+                    (void)c;
                     MIR_TODO(*mirRes, "Constant::Function");
+                    break;
                 }
-                TU_ARMA(ItemAddr, c) {
+                case MIRConstant::TAG_ItemAddr: {
+                    auto& c = ve.as_ItemAddr();
                     const bool hasOffset = c.offset != U128(0);
                     if (hasOffset) {
                         MIR_ASSERT(*mirRes, c.offset.isU64(), "Item address offset is too large: " << c.offset);
@@ -8733,6 +9009,7 @@ namespace {
                     if (hasOffset) {
                         of << " + 0x" << ::std::hex << c.offset.truncateU64() << ::std::dec << "))";
                     }
+                    break;
                 }
             }
         }
@@ -8759,14 +9036,19 @@ namespace {
         }
 
         void emitParam(const MIRParam& p, bool typeBytes = true) {
-            TU_MATCH_HDRA( (p), {)
-            TU_ARMA(LValue, e) {
+            switch (p.tag()) {
+                case MIRParam::TAG_LValue: {
+                    auto& e = p.as_LValue();
                     emitLvalue(e);
+                    break;
                 }
-                TU_ARMA(Borrow, e) {
+                case MIRParam::TAG_Borrow: {
+                    auto& e = p.as_Borrow();
                     emitBorrow(*mirRes, e.type, e.val);
+                    break;
                 }
-                TU_ARMA(Constant, e) {
+                case MIRParam::TAG_Constant: {
+                    auto& e = p.as_Constant();
                     if (typeBytes && e.is_Bytes()) {
                         HIRTypeRef tmp;
                         of << "static_cast<";
@@ -8777,6 +9059,7 @@ namespace {
                     } else {
                         emitConstant(e);
                     }
+                    break;
                 }
             }
         }
@@ -8808,14 +9091,21 @@ namespace {
                 return;
             }
 
-            TU_MATCH_HDRA( (*ty), {)
-            TU_ARMA(Infer, te) {
+            switch ((*ty).tag()) {
+                case HIRTypeData::TAG_Infer: {
+                    auto& te = (*ty).as_Infer();
+                    (void)te;
                     of << "@" << ty << "@" << inner;
+                    break;
                 }
-                TU_ARMA(Diverge, te) {
+                case HIRTypeData::TAG_Diverge: {
+                    auto& te = (*ty).as_Diverge();
+                    (void)te;
                     of << "tBANG " << inner;
+                    break;
                 }
-                TU_ARMA(Primitive, te) {
+                case HIRTypeData::TAG_Primitive: {
+                    auto& te = (*ty).as_Primitive();
                     switch (te) {
                         case HIRCoreType::Usize:
                             of << "uintptr_t";
@@ -8877,47 +9167,84 @@ namespace {
                             MIR_BUG(*mirRes, "Raw str");
                     }
                     of << " " << inner;
+                    break;
                 }
-                TU_ARMA(Path, te) {
+                case HIRTypeData::TAG_Path: {
+                    auto& te = (*ty).as_Path();
                     //}
-                TU_MATCH_HDRA( (te.binding), { )
-                TU_ARMA(Struct, tpb) {
+                    switch (te.binding.tag()) {
+                        case HIRTypePathBinding::TAG_Struct: {
+                            auto& tpb = te.binding.as_Struct();
+                            (void)tpb;
                             of << "struct s_" << TransMangle(te.path);
+                            break;
                         }
-                        TU_ARMA(Union, tpb) {
+                        case HIRTypePathBinding::TAG_Union: {
+                            auto& tpb = te.binding.as_Union();
+                            (void)tpb;
                             of << "union u_" << TransMangle(te.path);
+                            break;
                         }
-                        TU_ARMA(Enum, tpb) {
+                        case HIRTypePathBinding::TAG_Enum: {
+                            auto& tpb = te.binding.as_Enum();
+                            (void)tpb;
                             of << "struct e_" << TransMangle(te.path);
+                            break;
                         }
-                        TU_ARMA(ExternType, tpb) {
+                        case HIRTypePathBinding::TAG_ExternType: {
+                            auto& tpb = te.binding.as_ExternType();
+                            (void)tpb;
                             of << "struct x_" << TransMangle(te.path);
+                            break;
                         }
-                        TU_ARMA(Unbound, tpb) {
+                        case HIRTypePathBinding::TAG_Unbound: {
+                            auto& tpb = te.binding.as_Unbound();
+                            (void)tpb;
                             MIR_BUG(*mirRes, "Unbound type path in trans - " << ty);
+                            break;
                         }
-                        TU_ARMA(Opaque, tpb) {
+                        case HIRTypePathBinding::TAG_Opaque: {
+                            auto& tpb = te.binding.as_Opaque();
+                            (void)tpb;
                             MIR_BUG(*mirRes, "Opaque path in trans - " << ty);
+                            break;
                         }
+                    }
+                    of << " " << inner;
+                    break;
                 }
-                of << " " << inner;
-                }
-                TU_ARMA(Generic, te) {
+                case HIRTypeData::TAG_Generic: {
+                    auto& te = (*ty).as_Generic();
+                    (void)te;
                     MIR_BUG(*mirRes, "Generic in trans - " << ty);
+                    break;
                 }
-                TU_ARMA(TraitObject, te) {
+                case HIRTypeData::TAG_TraitObject: {
+                    auto& te = (*ty).as_TraitObject();
+                    (void)te;
                     MIR_BUG(*mirRes, "Raw trait object - " << ty);
+                    break;
                 }
-                TU_ARMA(ErasedType, te) {
+                case HIRTypeData::TAG_ErasedType: {
+                    auto& te = (*ty).as_ErasedType();
+                    (void)te;
                     MIR_BUG(*mirRes, "ErasedType in trans - " << ty);
+                    break;
                 }
-                TU_ARMA(Array, te) {
+                case HIRTypeData::TAG_Array: {
+                    auto& te = (*ty).as_Array();
+                    (void)te;
                     of << "t_" << TransMangle(ty) << " " << inner;
+                    break;
                 }
-                TU_ARMA(Slice, te) {
+                case HIRTypeData::TAG_Slice: {
+                    auto& te = (*ty).as_Slice();
+                    (void)te;
                     MIR_BUG(*mirRes, "Raw slice object - " << ty);
+                    break;
                 }
-                TU_ARMA(Tuple, te) {
+                case HIRTypeData::TAG_Tuple: {
+                    auto& te = (*ty).as_Tuple();
                     if (te.size() == 0) {
                         of << "tUNIT";
                     } else {
@@ -8927,23 +9254,36 @@ namespace {
                         }
                     }
                     of << " " << inner;
+                    break;
                 }
-                TU_ARMA(Borrow, te) {
+                case HIRTypeData::TAG_Borrow: {
+                    auto& te = (*ty).as_Borrow();
                     emitCtypePtr(te.inner, inner);
+                    break;
                 }
-                TU_ARMA(Pointer, te) {
+                case HIRTypeData::TAG_Pointer: {
+                    auto& te = (*ty).as_Pointer();
                     emitCtypePtr(te.inner, inner);
+                    break;
                 }
-                TU_ARMA(NamedFunction, te) {
+                case HIRTypeData::TAG_NamedFunction: {
+                    auto& te = (*ty).as_NamedFunction();
+                    (void)te;
                     of << "t_" << TransMangle(ty) << " " << inner;
+                    break;
                 }
-                TU_ARMA(Function, te) {
+                case HIRTypeData::TAG_Function: {
+                    auto& te = (*ty).as_Function();
+                    (void)te;
                     of << "t_" << TransMangle(ty) << " " << inner;
+                    break;
                 }
-                TU_ARMA(Pattern, te) {
+                case HIRTypeData::TAG_Pattern: {
+                    auto& te = (*ty).as_Pattern();
                     emitCtype(te.inner, mv$(inner), isExternC);
+                    break;
                 }
-                break;
+break;
                 case HIRTypeData::TAG_NodeType:
                     MIR_BUG(*mirRes, "NodeType during trans - " << ty);
                     break;
@@ -8956,40 +9296,62 @@ namespace {
             } else if (ty->is_TraitObject()) {
                 return ty;
             } else if (ty->is_Path()) {
-                TU_MATCH_HDRA( (ty->as_Path().binding), {)
-                default:
+                {
+                    auto& tuMatch = ty->as_Path().binding;
+                    switch (tuMatch.tag()) {
+default:
                     MIR_BUG(*mirRes, "Unbound/opaque path in trans - " << ty);
                     throw "";
-                    TU_ARMA(ExternType, tpb) {
-                        return ty;
-                    }
-                    TU_ARMA(Struct, tpb) {
-                        switch (tpb->structMarkings.dstType) {
-                            case HIRStructMarkings::DstType::None:
-                                return HIRTypeRef();
-                            case HIRStructMarkings::DstType::Slice:
-                            case HIRStructMarkings::DstType::TraitObject:
-                            case HIRStructMarkings::DstType::Possible: {
-                                // TODO: How to figure out? Lazy way is to check the monomorpised type of the last field (structs only)
-                                const auto& path = ty->as_Path().path.data.as_Generic();
-                                const auto& str = *ty->as_Path().binding.as_Struct();
-                                auto monomorph = [&](const auto& tpl) {
-                                    return resolve_.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &path.params, nullptr));
-                                };
-                        TU_MATCH_HDRA( (str.data), { )
-                        TU_ARMA(Unit, se) MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");
-                                    TU_ARMA(Tuple, se) return getInnerUnsizedType(monomorph(se.back().ent));
-                                    TU_ARMA(Named, se) return getInnerUnsizedType(monomorph(se.back().ty));
+                        case HIRTypePathBinding::TAG_ExternType: {
+                            auto& tpb = tuMatch.as_ExternType();
+                            (void)tpb;
+                            return ty;
                         }
-                        throw "";
+                        case HIRTypePathBinding::TAG_Struct: {
+                            auto& tpb = tuMatch.as_Struct();
+                            switch (tpb->structMarkings.dstType) {
+                                case HIRStructMarkings::DstType::None:
+                                    return HIRTypeRef();
+                                case HIRStructMarkings::DstType::Slice:
+                                case HIRStructMarkings::DstType::TraitObject:
+                                case HIRStructMarkings::DstType::Possible: {
+                                    // TODO: How to figure out? Lazy way is to check the monomorpised type of the last field (structs only)
+                                    const auto& path = ty->as_Path().path.data.as_Generic();
+                                    const auto& str = *ty->as_Path().binding.as_Struct();
+                                    auto monomorph = [&](const auto& tpl) {
+                                        return resolve_.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &path.params, nullptr));
+                                    };
+                            switch (str.data.tag()) {
+                                case HIRStructData::TAG_Unit: {
+                                    auto& se = str.data.as_Unit();
+                                    (void)se;
+                                    MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");
+                                    break;
+                                }
+                                case HIRStructData::TAG_Tuple: {
+                                    auto& se = str.data.as_Tuple();
+                                    return getInnerUnsizedType(monomorph(se.back().ent));
+                                }
+                                case HIRStructData::TAG_Named: {
+                                    auto& se = str.data.as_Named();
+                                    return getInnerUnsizedType(monomorph(se.back().ty));
+                                }
                             }
+                            throw "";
+                                }
+                            }
+                            break;
                         }
-                    }
-                    TU_ARMA(Union, tpb) {
-                        return HIRTypeRef();
-                    }
-                    TU_ARMA(Enum, tpb) {
-                        return HIRTypeRef();
+                        case HIRTypePathBinding::TAG_Union: {
+                            auto& tpb = tuMatch.as_Union();
+                            (void)tpb;
+                            return HIRTypeRef();
+                        }
+                        case HIRTypePathBinding::TAG_Enum: {
+                            auto& tpb = tuMatch.as_Enum();
+                            (void)tpb;
+                            return HIRTypeRef();
+                        }
                     }
                 }
                 throw "";

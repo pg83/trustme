@@ -339,14 +339,17 @@ HIRPath::HIRPath(HIRTypeRef ty, HIRGenericPath trait, RcString item, HIRPathPara
 }
 
 HIRPath HIRPath::clone() const {
-    TU_MATCH_HDRA((data), {)
-    TU_ARMA(Generic, e) {
+    switch (data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            auto& e = data.as_Generic();
             return HIRPath(Data::make_Generic(e.clone()));
         }
-        TU_ARMA(UfcsInherent, e) {
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& e = data.as_UfcsInherent();
             return HIRPath(Data::make_UfcsInherent({e.type, e.item, e.params.clone(), e.implParams.clone()}));
         }
-        TU_ARMA(UfcsKnown, e) {
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& e = data.as_UfcsKnown();
             return HIRPath(
                 Data::make_UfcsKnown({
                     e.type,
@@ -356,7 +359,8 @@ HIRPath HIRPath::clone() const {
                 })
             );
         }
-        TU_ARMA(UfcsUnknown, e) {
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& e = data.as_UfcsUnknown();
             return HIRPath(Data::make_UfcsUnknown({e.type, e.item, e.params.clone()}));
         }
     }
@@ -542,18 +546,25 @@ HIRCompare HIRPath::compareWithPlaceholders(const Span& sp, const HIRPath& x, tC
     if (this->data.tag() != x.data.tag()) {
         return HIRCompare::Unequal;
     }
-    TU_MATCH_HDRA( (this->data, x.data), {)
-    TU_ARMA(Generic, ple, pre) {
+    switch (this->data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            auto& ple = this->data.as_Generic();
+            auto& pre = x.data.as_Generic();
             return ::compareWithPlaceholders(sp, ple, pre, resolvePlaceholder);
         }
-        TU_ARMA(UfcsUnknown, ple, pre) {
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& ple = this->data.as_UfcsUnknown();
+            auto& pre = x.data.as_UfcsUnknown();
             if (ple.item != pre.item) {
                 return HIRCompare::Unequal;
             }
 
             TODO(sp, "Path::compare_with_placeholders - UfcsUnknown");
+            break;
         }
-        TU_ARMA(UfcsInherent, ple, pre) {
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& ple = this->data.as_UfcsInherent();
+            auto& pre = x.data.as_UfcsInherent();
             if (ple.item != pre.item) {
                 return HIRCompare::Unequal;
             }
@@ -562,7 +573,9 @@ HIRCompare HIRPath::compareWithPlaceholders(const Span& sp, const HIRPath& x, tC
             CMP(rv, ::compareWithPlaceholders(sp, ple.params, pre.params, resolvePlaceholder));
             return rv;
         }
-        TU_ARMA(UfcsKnown, ple, pre) {
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& ple = this->data.as_UfcsKnown();
+            auto& pre = x.data.as_UfcsKnown();
             if (ple.item != pre.item) {
                 return HIRCompare::Unequal;
             }
@@ -611,17 +624,25 @@ bool HIRPath::equalsIgnoringRegions(const HIRPath& x) const {
     if (data.tag() != x.data.tag()) {
         return false;
     }
-    TU_MATCH_HDRA((data, x.data), {)
-    TU_ARMA(Generic, lhs, rhs) {
+    switch (data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            auto& lhs = data.as_Generic();
+            auto& rhs = x.data.as_Generic();
             return lhs.equalsIgnoringRegions(rhs);
         }
-        TU_ARMA(UfcsInherent, lhs, rhs) {
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& lhs = data.as_UfcsInherent();
+            auto& rhs = x.data.as_UfcsInherent();
             return lhs.item == rhs.item && (lhs.type == rhs.type || lhs.type->equalsIgnoringRegions(rhs.type)) && lhs.params.equalsIgnoringRegions(rhs.params) && lhs.implParams.equalsIgnoringRegions(rhs.implParams);
         }
-        TU_ARMA(UfcsKnown, lhs, rhs) {
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& lhs = data.as_UfcsKnown();
+            auto& rhs = x.data.as_UfcsKnown();
             return lhs.item == rhs.item && (lhs.type == rhs.type || lhs.type->equalsIgnoringRegions(rhs.type)) && lhs.trait.equalsIgnoringRegions(rhs.trait) && lhs.params.equalsIgnoringRegions(rhs.params);
         }
-        TU_ARMA(UfcsUnknown, lhs, rhs) {
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& lhs = data.as_UfcsUnknown();
+            auto& rhs = x.data.as_UfcsUnknown();
             return lhs.item == rhs.item && (lhs.type == rhs.type || lhs.type->equalsIgnoringRegions(rhs.type)) && lhs.params.equalsIgnoringRegions(rhs.params);
         }
     }

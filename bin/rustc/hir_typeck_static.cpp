@@ -265,12 +265,24 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
     struct H {
         static const HIRTypeData* getRootTy(const HIRTypeData* t) {
             if (const auto* e = t->opt_Path()) {
-                TU_MATCH_HDRA( (e->path.data), {)
-                TU_ARMA(Generic, ee) {
+                switch (e->path.data.tag()) {
+                    case HIRPathData::TAG_Generic: {
+                        auto& ee = e->path.data.as_Generic();
+                        (void)ee;
+                        break;
                     }
-                    TU_ARMA(UfcsKnown, ee) return getRootTy(ee.type);
-                    TU_ARMA(UfcsUnknown, ee) return getRootTy(ee.type);
-                    TU_ARMA(UfcsInherent, ee) return getRootTy(ee.type);
+                    case HIRPathData::TAG_UfcsKnown: {
+                        auto& ee = e->path.data.as_UfcsKnown();
+                        return getRootTy(ee.type);
+                    }
+                    case HIRPathData::TAG_UfcsUnknown: {
+                        auto& ee = e->path.data.as_UfcsUnknown();
+                        return getRootTy(ee.type);
+                    }
+                    case HIRPathData::TAG_UfcsInherent: {
+                        auto& ee = e->path.data.as_UfcsInherent();
+                        return getRootTy(ee.type);
+                    }
                 }
             }
             return t;
@@ -328,15 +340,19 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
 
     // --- MAGIC IMPLS ---
     // TODO: There should be quite a few more here, but laziness
-    TU_MATCH_HDRA( (*type), {)
-    default:
+    switch ((*type).tag()) {
+default:
         // Nothing magic
-    TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*type).as_Tuple();
+            (void)e;
             if (traitPath == crate.getLangItemPath(sp, "tuple_trait")) {
                 return foundCb(ImplRef(type, HIRPathParams(), HIRTraitPath::assocListT()), false);
             }
+            break;
         }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*type).as_Function();
             if (isAsyncCallableTrait) {
                 if (e.abi != ABI_RUST || e.isUnsafe) {
                     return false;
@@ -369,8 +385,10 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             if (traitPath == this->crate.getLangItemPathOpt("fn_ptr_trait")) {
                 return foundCb(ImplRef(type, {}, {}), false);
             }
+            break;
         }
-        TU_ARMA(NamedFunction, realE) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& realE = (*type).as_NamedFunction();
             if (isAsyncCallableTrait) {
                 auto e = realE.decay(crate.types, sp);
                 if (e.abi != ABI_RUST || e.isUnsafe) {
@@ -401,10 +419,13 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), params.clone()), {}, e.rettype}));
                 return foundCb(ImplRef(type, mv$(params), mv$(assoc)), false);
             }
+            break;
         }
-        TU_ARMA(NodeType, e) {
-        TU_MATCH_HDRA((e), {)
-        TU_ARMA(Closure, nodeP) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*type).as_NodeType();
+            switch (e.tag()) {
+                case HIRTypeDataNodeType::TAG_Closure: {
+                    auto& nodeP = e.as_Closure();
                     if (isAsyncCallableTrait) {
                         bool supportsShared = true;
                         bool supportsMutable = true;
@@ -455,8 +476,10 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                         assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), traitParams->clone()), {}, nodeP->returnType}));
                         return foundCb(ImplRef(type, traitParams->clone(), mv$(assoc)), false);
                     }
+                    break;
                 }
-                TU_ARMA(Generator, nodeP) {
+                case HIRTypeDataNodeType::TAG_Generator: {
+                    auto& nodeP = e.as_Generator();
                     if (traitPath == langGenerator()) {
                         HIRTraitPath::assocListT assoc;
                         assoc.insert(::std::make_pair("Yield", HIRTraitPath::AtyEqual{traitPath.clone(), {}, nodeP->yieldTy}));
@@ -465,8 +488,10 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                         params.types.push_back(nodeP->resumeTy);
                         return foundCb(ImplRef(type, mv$(params), mv$(assoc)), HIRCompare::Equal);
                     }
+                    break;
                 }
-                TU_ARMA(Async, nodeP) {
+                case HIRTypeDataNodeType::TAG_Async: {
+                    auto& nodeP = e.as_Async();
                     if (nodeP->isAsyncGen) {
                         // An `async gen` block is an AsyncIterator, not a Future.
                         if (traitPath == langAsyncIterator()) {
@@ -480,13 +505,13 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                         HIRPathParams params;
                         return foundCb(ImplRef(type, mv$(params), mv$(assoc)), HIRCompare::Equal);
                     }
+                    break;
                 }
+            }
+            break;
         }
-        }
-        // ----
-        // TraitObject traits and supertraits
-        // ----
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*type).as_TraitObject();
             if (traitPath == e.trait.path.path) {
                 if (H::checkParams(sp, e.trait.path.params, traitParams)) {
                     return foundCb(ImplRef(type, &e.trait.path.params, &e.trait.typeBounds, e.trait.constness), false);
@@ -523,9 +548,10 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             if (isSupertrait) {
                 return rv;
             }
+            break;
         }
-        // Same for ErasedType
-        TU_ARMA(ErasedType, e) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*type).as_ErasedType();
             for (const auto& trait : e.traits) {
                 bool rv = false;
                 // TODO: If `trait_params` is nullptr, this doesn't run (is that sane?)
@@ -548,12 +574,10 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     return rv;
                 }
             }
+            break;
         }
-
-        // ---
-        // If this type is an opaque UfcsKnown - check bounds
-        // ---
-        TU_ARMA(Path, e) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*type).as_Path();
             if (e.binding.is_Opaque()) {
                 ASSERT_BUG(sp, e.path.data.is_UfcsKnown(), "Opaque bound type wasn't UfcsKnown - " << type);
                 const auto& pe = e.path.data.as_UfcsKnown();
@@ -721,8 +745,8 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
 
                 DEBUG("- No bounds on trait/aty matched");
             }
+            break;
         }
-        // --- /UfcsKnown ---
     }
 
     const bool isMarker = crate.getTraitByPath(sp, traitPath).isMarker;
@@ -1352,23 +1376,31 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
     if (const auto* ep = type->opt_Path()) {
         const auto& e = *ep;
         HIRCompare res = HIRCompare::Equal;
-        TU_MATCH_HDRA( (e.path.data), {)
-        TU_ARMA(Generic, pe) {
+        switch (e.path.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                auto& pe = e.path.data.as_Generic();
                 HIRTypeRef tmp;
-                auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe.params, nullptr);
-                // HELPER: Get a possibily monomorphised version of the input type (stored in `tmp` if needed)
-                auto monomorphGet = [&](const auto& ty) -> const HIRTypeData* {
-                    return this->monomorphExpandOpt(sp, tmp, ty, monomorph);
-                };
+                    auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe.params, nullptr);
+                    // HELPER: Get a possibily monomorphised version of the input type (stored in `tmp` if needed)
+                    auto monomorphGet = [&](const auto& ty) -> const HIRTypeData* {
+                        return this->monomorphExpandOpt(sp, tmp, ty, monomorph);
+                    };
 
-            TU_MATCH_HDRA( (e.binding), {)
-            TU_ARMA(Opaque, tpb) {
+                switch (e.binding.tag()) {
+                    case HIRTypePathBinding::TAG_Opaque: {
+                        auto& tpb = e.binding.as_Opaque();
+                        (void)tpb;
                         BUG(sp, "Opaque binding on generic path - " << type);
+                        break;
                     }
-                    TU_ARMA(Unbound, tpb) {
+                    case HIRTypePathBinding::TAG_Unbound: {
+                        auto& tpb = e.binding.as_Unbound();
+                        (void)tpb;
                         BUG(sp, "Unbound binding on generic path - " << type);
+                        break;
                     }
-                    TU_ARMA(Struct, tpb) {
+                    case HIRTypePathBinding::TAG_Struct: {
+                        auto& tpb = e.binding.as_Struct();
                         const auto& str = *tpb;
 
                         // TODO: Somehow store a ruleset for auto traits on the type
@@ -1406,8 +1438,10 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
                                 break;
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(Enum, tpb) {
+                    case HIRTypePathBinding::TAG_Enum: {
+                        auto& tpb = e.binding.as_Enum();
                         if (const auto* e = tpb->data.opt_Data()) {
                             for (const auto& var : *e) {
                                 const auto& fldTyMono = monomorphGet(var.type);
@@ -1418,8 +1452,10 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
                                 }
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(Union, tpb) {
+                    case HIRTypePathBinding::TAG_Union: {
+                        auto& tpb = e.binding.as_Union();
                         for (const auto& fld : tpb->variants) {
                             const auto& fldTyMono = monomorphGet(fld.ty);
                             DEBUG("Union '" << fld.name << "' " << fldTyMono);
@@ -1428,22 +1464,36 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
                                 return HIRCompare::Unequal;
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(ExternType, tpb) {
+                    case HIRTypePathBinding::TAG_ExternType: {
+                        auto& tpb = e.binding.as_ExternType();
+                        (void)tpb;
                         TODO(sp, "Check auto trait destructure on extern type " << type);
+                        break;
                     }
+                }
+                DEBUG("- Nothing failed, calling callback");
+                break;
             }
-            DEBUG("- Nothing failed, calling callback");
-            }
-            TU_ARMA(UfcsUnknown, pe) {
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& pe = e.path.data.as_UfcsUnknown();
+                (void)pe;
                 BUG(sp, "UfcsUnknown in typeck - " << type);
+                break;
             }
-            TU_ARMA(UfcsKnown, pe) {
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& pe = e.path.data.as_UfcsKnown();
+                (void)pe;
                 return HIRCompare::Unequal;
                 //TODO(sp, "Check trait bounds for bound on UfcsKnown " << type);
+                break;
             }
-            TU_ARMA(UfcsInherent, pe) {
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& pe = e.path.data.as_UfcsInherent();
+                (void)pe;
                 TODO(sp, "Auto trait lookup on UFCS Inherent type");
+                break;
             }
         }
         return res;
@@ -1511,50 +1561,56 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
             const auto& erased = ty->as_ErasedType();
             HIRTypeRef revealed;
 
-            TU_MATCH_HDRA((erased.inner), {)
-            TU_ARMA(Fcn, e) {
-                MonomorphState monomorph(resolve.hirCrate().types);
-                auto value = resolve.getValue(sp, e.origin, monomorph);
-                if (value.is_NotYetKnown() && e.origin.data.is_UfcsKnown()) {
-                    const auto& path = e.origin.data.as_UfcsKnown();
-                    auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << path.item << "_" << e.index));
-                    revealed = resolve.hirCrate().types.path(HIRPath(path.type, path.trait.clone(), name, path.params.clone()), {});
-                } else {
-                    ASSERT_BUG(sp, value.is_Function(), "ErasedType with Fcn type doesn't point at a function: " << e.origin << ": " << value.tagStr());
-                    const auto& function = *value.as_Function();
-                    if (e.index >= function.code.erasedTypes.size()) {
-                        resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(e.origin), function);
+            switch (erased.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    auto& e = erased.inner.as_Fcn();
+                    MonomorphState monomorph(resolve.hirCrate().types);
+                    auto value = resolve.getValue(sp, e.origin, monomorph);
+                    if (value.is_NotYetKnown() && e.origin.data.is_UfcsKnown()) {
+                        const auto& path = e.origin.data.as_UfcsKnown();
+                        auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << path.item << "_" << e.index));
+                        revealed = resolve.hirCrate().types.path(HIRPath(path.type, path.trait.clone(), name, path.params.clone()), {});
+                    } else {
+                        ASSERT_BUG(sp, value.is_Function(), "ErasedType with Fcn type doesn't point at a function: " << e.origin << ": " << value.tagStr());
+                        const auto& function = *value.as_Function();
+                        if (e.index >= function.code.erasedTypes.size()) {
+                            resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(e.origin), function);
+                        }
+                        ASSERT_BUG(sp, e.index < function.code.erasedTypes.size(), "Erased type index out of range for " << e.origin << " - " << e.index << " >= " << function.code.erasedTypes.size());
+                        revealed = monomorph.monomorphType(sp, function.code.erasedTypes[e.index]);
                     }
-                    ASSERT_BUG(sp, e.index < function.code.erasedTypes.size(), "Erased type index out of range for " << e.origin << " - " << e.index << " >= " << function.code.erasedTypes.size());
-                    revealed = monomorph.monomorphType(sp, function.code.erasedTypes[e.index]);
+                    resolve.expandAssociatedTypes(sp, revealed);
+                    break;
                 }
-                resolve.expandAssociatedTypes(sp, revealed);
-            }
-            TU_ARMA(Alias, e) {
-                if (e.inner->type == HIRTypeRef()) {
-                    auto definers = resolve.hirCrate().opaqueTypeDefiners.find(e.inner->path);
-                    if (definers != resolve.hirCrate().opaqueTypeDefiners.end()) {
-                        for (const auto& path : definers->second) {
-                            MonomorphState monomorph(resolve.hirCrate().types);
-                            auto value = resolve.getValue(sp, path, monomorph);
-                            if (const auto* function = value.opt_Function()) {
-                                resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(path), **function);
-                            }
-                            if (e.inner->type != HIRTypeRef()) {
-                                break;
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    auto& e = erased.inner.as_Alias();
+                    if (e.inner->type == HIRTypeRef()) {
+                        auto definers = resolve.hirCrate().opaqueTypeDefiners.find(e.inner->path);
+                        if (definers != resolve.hirCrate().opaqueTypeDefiners.end()) {
+                            for (const auto& path : definers->second) {
+                                MonomorphState monomorph(resolve.hirCrate().types);
+                                auto value = resolve.getValue(sp, path, monomorph);
+                                if (const auto* function = value.opt_Function()) {
+                                    resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(path), **function);
+                                }
+                                if (e.inner->type != HIRTypeRef()) {
+                                    break;
+                                }
                             }
                         }
+                        if (e.inner->type == HIRTypeRef()) {
+                            ERROR(sp, E0000, "Erased type alias " << e.inner->path << " never set");
+                        }
                     }
-                    if (e.inner->type == HIRTypeRef()) {
-                        ERROR(sp, E0000, "Erased type alias " << e.inner->path << " never set");
-                    }
+                    revealed = MonomorphStatePtr(resolve.hirCrate().types, nullptr, &e.params, nullptr).monomorphType(sp, e.inner->type);
+                    resolve.expandAssociatedTypes(sp, revealed);
+                    break;
                 }
-                revealed = MonomorphStatePtr(resolve.hirCrate().types, nullptr, &e.params, nullptr).monomorphType(sp, e.inner->type);
-                resolve.expandAssociatedTypes(sp, revealed);
-            }
-            TU_ARMA(Known, e) {
-                revealed = e;
-            }
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    auto& e = erased.inner.as_Known();
+                    revealed = e;
+                    break;
+                }
             }
 
             DEBUG("> " << ty << " => " << revealed);
@@ -1601,24 +1657,32 @@ void StaticTraitResolve::revealOpaqueTypesPath(const Span& sp, HIRPath& input) c
     };
 
     expandAssociatedTypesPath(sp, input);
-    TU_MATCH_HDRA((input.data), {)
-    TU_ARMA(Generic, e) {
-        revealParams(e.params);
-    }
-    TU_ARMA(UfcsInherent, e) {
-        revealOpaqueTypes(sp, e.type);
-        revealParams(e.params);
-        revealParams(e.implParams);
-    }
-    TU_ARMA(UfcsKnown, e) {
-        revealOpaqueTypes(sp, e.type);
-        revealParams(e.trait.params);
-        revealParams(e.params);
-    }
-    TU_ARMA(UfcsUnknown, e) {
-        revealOpaqueTypes(sp, e.type);
-        revealParams(e.params);
-    }
+    switch (input.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            auto& e = input.data.as_Generic();
+            revealParams(e.params);
+            break;
+        }
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& e = input.data.as_UfcsInherent();
+            revealOpaqueTypes(sp, e.type);
+            revealParams(e.params);
+            revealParams(e.implParams);
+            break;
+        }
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& e = input.data.as_UfcsKnown();
+            revealOpaqueTypes(sp, e.type);
+            revealParams(e.trait.params);
+            revealParams(e.params);
+            break;
+        }
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& e = input.data.as_UfcsUnknown();
+            revealOpaqueTypes(sp, e.type);
+            revealParams(e.params);
+            break;
+        }
     }
     expandAssociatedTypesPath(sp, input);
 }
@@ -1639,26 +1703,34 @@ void StaticTraitResolve::evaluatePathParams(const Span& sp, HIRPathParams& param
 
 void StaticTraitResolve::expandAssociatedTypesPath(const Span& sp, HIRPath& input) const {
     TRACE_FUNCTION_FR(input, input);
-    TU_MATCH_HDRA( (input.data), { )
-    TU_ARMA(Generic, e2) {
+    switch (input.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            auto& e2 = input.data.as_Generic();
             this->expandAssociatedTypesParams(sp, e2.params);
+            break;
         }
-        TU_ARMA(UfcsInherent, e2) {
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& e2 = input.data.as_UfcsInherent();
             this->expandAssociatedTypesInner(sp, e2.type);
             this->expandAssociatedTypesParams(sp, e2.params);
             // TODO: impl params too?
             for (auto& arg : e2.implParams.types) {
                 this->expandAssociatedTypesInner(sp, arg);
             }
+            break;
         }
-        TU_ARMA(UfcsKnown, e2) {
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& e2 = input.data.as_UfcsKnown();
             this->expandAssociatedTypesInner(sp, e2.type);
             this->expandAssociatedTypesParams(sp, e2.trait.params);
             this->expandAssociatedTypesParams(sp, e2.params);
+            break;
         }
-        TU_ARMA(UfcsUnknown, e2) {
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& e2 = input.data.as_UfcsUnknown();
             this->expandAssociatedTypesInner(sp, e2.type);
             this->expandAssociatedTypesParams(sp, e2.params);
+            break;
         }
     }
 }
@@ -1725,22 +1797,35 @@ void StaticTraitResolve::expandAssociatedTypesTp(const Span& sp, HIRTraitPath& i
 
 void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& input) const {
     auto data = input->cloneData();
-    TU_MATCH_HDRA( (data), {)
-    TU_ARMA(Infer, e) {
+    switch (data.tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = data.as_Infer();
+            (void)e;
             //}
+            break;
         }
-        TU_ARMA(Diverge, e) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = data.as_Diverge();
+            (void)e;
+            break;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = data.as_Primitive();
+            (void)e;
+            break;
         }
-        TU_ARMA(Path, e) {
-        TU_MATCH_HDRA( (e.path.data), { )
-        TU_ARMA(Generic, e2) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = data.as_Path();
+            switch (e.path.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& e2 = e.path.data.as_Generic();
                     evaluatePathParams(sp, e2.params);
                     ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, e.binding.getGenerics(), e2.params);
                     expandAssociatedTypesParams(sp, e2.params);
+                    break;
                 }
-                TU_ARMA(UfcsInherent, e2) {
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& e2 = e.path.data.as_UfcsInherent();
                     this->expandAssociatedTypesInner(sp, e2.type);
                     expandAssociatedTypesParams(sp, e2.params);
                     for (auto& arg : e2.implParams.types) {
@@ -1752,7 +1837,9 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
                     }
                     return;
                 }
-                TU_ARMA(UfcsKnown, e2) {
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& e2 = e.path.data.as_UfcsKnown();
+                    (void)e2;
                     // An opaque associated type is not a resolved type. It only records
                     // that an earlier normalization attempt couldn't make progress. In a
                     // later (static) context more bounds can be available, so retry it.
@@ -1782,94 +1869,137 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
                     }
                     return;
                 }
-                TU_ARMA(UfcsUnknown, e2) {
+                case HIRPathData::TAG_UfcsUnknown: {
+                    auto& e2 = e.path.data.as_UfcsUnknown();
                     this->expandAssociatedTypesInner(sp, e2.type);
                     expandAssociatedTypesParams(sp, e2.params);
+                    break;
                 }
+            }
+            break;
         }
+        case HIRTypeData::TAG_Generic: {
+            auto& e = data.as_Generic();
+            (void)e;
+            break;
         }
-        TU_ARMA(Generic, e) {
-        }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = data.as_TraitObject();
             expandAssociatedTypesTp(sp, e.trait);
             for (auto& m : e.markers) {
                 expandAssociatedTypesParams(sp, m.params);
             }
+            break;
         }
-        TU_ARMA(ErasedType, e) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = data.as_ErasedType();
             for (auto& trait : e.traits) {
                 expandAssociatedTypesTp(sp, trait);
             }
             expandAssociatedTypesParams(sp, e.use);
-            TU_MATCH_HDRA( (e.inner), {)
-            TU_ARMA(Known, ee) {
+            switch (e.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    auto& ee = e.inner.as_Known();
                     expandAssociatedTypesInner(sp, ee);
+                    break;
                 }
-                TU_ARMA(Fcn, ee) {
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    auto& ee = e.inner.as_Fcn();
                     expandAssociatedTypesPath(sp, ee.origin);
+                    break;
                 }
-                TU_ARMA(Alias, ee) {
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    auto& ee = e.inner.as_Alias();
                     expandAssociatedTypesParams(sp, ee.params);
+                    break;
                 }
             }
+            break;
         }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = data.as_Array();
             ConvertHIRConstantEvaluateArraySize(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), e.size);
             expandAssociatedTypesInner(sp, e.inner);
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = data.as_Slice();
             expandAssociatedTypesInner(sp, e.inner);
+            break;
         }
-        TU_ARMA(Pattern, e) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = data.as_Pattern();
             expandAssociatedTypesInner(sp, e.inner);
             for (auto& range : e.pattern.alternatives) {
                 if (range.hasStart) ConvertHIRConstantEvaluateConstGeneric(sp, this->wb, crate, e.inner, range.start);
                 if (range.hasEnd) ConvertHIRConstantEvaluateConstGeneric(sp, this->wb, crate, e.inner, range.end);
             }
+            break;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = data.as_Tuple();
             for (auto& sub : e) {
                 expandAssociatedTypesInner(sp, sub);
             }
+            break;
         }
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = data.as_Borrow();
             expandAssociatedTypesInner(sp, e.inner);
+            break;
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = data.as_Pointer();
             expandAssociatedTypesInner(sp, e.inner);
+            break;
         }
-        TU_ARMA(NamedFunction, e) {
-        TU_MATCH_HDRA( (e.path.data), { )
-        TU_ARMA(Generic, e2) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = data.as_NamedFunction();
+            switch (e.path.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& e2 = e.path.data.as_Generic();
                     expandAssociatedTypesParams(sp, e2.params);
+                    break;
                 }
-                TU_ARMA(UfcsInherent, e2) {
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& e2 = e.path.data.as_UfcsInherent();
                     this->expandAssociatedTypesInner(sp, e2.type);
                     expandAssociatedTypesParams(sp, e2.params);
                     // TODO: impl params too?
                     for (auto& arg : e2.implParams.types) {
                         this->expandAssociatedTypesInner(sp, arg);
                     }
+                    break;
                 }
-                TU_ARMA(UfcsKnown, e2) {
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& e2 = e.path.data.as_UfcsKnown();
                     this->expandAssociatedTypesInner(sp, e2.type);
                     expandAssociatedTypesParams(sp, e2.trait.params);
                     expandAssociatedTypesParams(sp, e2.params);
+                    break;
                 }
-                TU_ARMA(UfcsUnknown, e2) {
+                case HIRPathData::TAG_UfcsUnknown: {
+                    auto& e2 = e.path.data.as_UfcsUnknown();
                     this->expandAssociatedTypesInner(sp, e2.type);
                     expandAssociatedTypesParams(sp, e2.params);
+                    break;
                 }
+            }
+            break;
         }
-        }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = data.as_Function();
             // Recurse?
             for (auto& ty : e.argTypes) {
                 expandAssociatedTypesInner(sp, ty);
             }
             expandAssociatedTypesInner(sp, e.rettype);
+            break;
         }
-        TU_ARMA(NodeType, e) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = data.as_NodeType();
+            (void)e;
+            break;
         }
     }
     input = crate.types.intern(std::move(data));
@@ -2035,18 +2165,21 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         return found;
     };
 
-    TU_MATCH_HDRA( (*e2.type), {)
-    default:
+    switch ((*e2.type).tag()) {
+default:
         // Nothing special
         break;
-        TU_ARMA(Infer, te) {
+        case HIRTypeData::TAG_Infer: {
+            auto& te = (*e2.type).as_Infer();
+            (void)te;
             DEBUG("Infer seen in static EAT, leaving as-is");
             return false;
         }
-        // - If it's a closure, then the only trait impls are those generated by typeck
-        TU_ARMA(NodeType, te) {
-        TU_MATCH_HDRA((te), {)
-        TU_ARMA(Closure, nodeP) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& te = (*e2.type).as_NodeType();
+            switch (te.tag()) {
+                case HIRTypeDataNodeType::TAG_Closure: {
+                    auto& nodeP = te.as_Closure();
                     if (e2.trait.path == langAsyncFn() || e2.trait.path == langAsyncFnMut() || e2.trait.path == langAsyncFnOnce()) {
                         if (expandAsyncCallableAssociated(nodeP->returnType)) {
                             return true;
@@ -2060,15 +2193,24 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
                             ERROR(sp, E0000, "No associated type " << e2.item << " for trait " << e2.trait);
                         }
                     }
+                    break;
                 }
-                TU_ARMA(Generator, nodeP) {
+                case HIRTypeDataNodeType::TAG_Generator: {
+                    auto& nodeP = te.as_Generator();
+                    (void)nodeP;
+                    break;
                 }
-                TU_ARMA(Async, nodeP) {
+                case HIRTypeDataNodeType::TAG_Async: {
+                    auto& nodeP = te.as_Async();
+                    (void)nodeP;
+                    break;
                 }
+            }
+            break;
         }
-        }
-        // If it's a TraitObject, then maybe we're asking for a bound
-        TU_ARMA(TraitObject, te) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& te = (*e2.type).as_TraitObject();
+            (void)te;
             //    if( e2.trait.m_params == data_trait.m_params )
             //    {
             //            // TODO: Mark as opaque and return.
@@ -2077,8 +2219,8 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
             //        }
             //    }
             //}
+            break;
         }
-        // TODO: ErasedType? Does that need a bounds check?
     }
 
     // 1. Bounds
@@ -2429,12 +2571,15 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
         }
     }
 
-    TU_MATCH_HDRA( (*ty), {)
-    TU_ARMA(Generic, e) {
+    switch ((*ty).tag()) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*ty).as_Generic();
+            (void)e;
             copyCache.insert(::std::make_pair(ty, false));
             return false;
         }
-        TU_ARMA(Path, e) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*ty).as_Path();
             const auto* markings = e.binding.getTraitMarkings();
             if (markings) {
                 if (!markings->isCopy) {
@@ -2455,68 +2600,94 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
             copyCache.insert(::std::make_pair(ty, rv));
             return rv;
         }
-        TU_ARMA(Diverge, e) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = (*ty).as_Diverge();
+            (void)e;
             // The ! type is kinda Copy ...
             return true;
         }
-        TU_ARMA(NodeType, e) {
-        TU_MATCH_HDRA((e), {)
-        TU_ARMA(Closure, nodeP) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*ty).as_NodeType();
+            switch (e.tag()) {
+                case HIRTypeDataNodeType::TAG_Closure: {
+                    auto& nodeP = e.as_Closure();
                     return nodeP->isCopy;
                 }
-                TU_ARMA(Generator, nodeP) {
+                case HIRTypeDataNodeType::TAG_Generator: {
+                    auto& nodeP = e.as_Generator();
+                    (void)nodeP;
                     // NOTE: Generators aren't Copy
                     return false;
                 }
-                TU_ARMA(Async, nodeP) {
+                case HIRTypeDataNodeType::TAG_Async: {
+                    auto& nodeP = e.as_Async();
+                    (void)nodeP;
                     // NOTE: Async blocks aren't Copy? Can they be?
                     return false;
                 }
+            }
+            break;
         }
-        }
-        TU_ARMA(Infer, e) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*ty).as_Infer();
+            (void)e;
             // Shouldn't be hit
             return false;
         }
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*ty).as_Borrow();
             // Only shared &-ptrs are copy
             return (e.type == HIRBorrowType::Shared);
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*ty).as_Pointer();
+            (void)e;
             // All raw pointers are Copy
             return true;
         }
-        TU_ARMA(NamedFunction, e) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = (*ty).as_NamedFunction();
+            (void)e;
             // All function pointers are Copy/Clone
             return true;
         }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*ty).as_Function();
+            (void)e;
             // All function pointers are Copy
             return true;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*ty).as_Primitive();
             // All primitives (except the unsized `str`) are Copy
             return e != HIRCoreType::Str;
         }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*ty).as_Array();
             // TODO: Why is `[T; 0]` treated as `Copy`?
             if ((e.size.is_Known() && (e.size.as_Known() == 0))) {
                 return true;
             }
             return typeIsCopy(sp, e.inner);
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*ty).as_Slice();
+            (void)e;
             // [T] isn't Sized, so isn't Copy ether
             return false;
         }
-        TU_ARMA(Pattern, e) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = (*ty).as_Pattern();
             return typeIsCopy(sp, e.inner);
         }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*ty).as_TraitObject();
+            (void)e;
             // (Trait) isn't Sized, so isn't Copy ether
             return false;
         }
-        TU_ARMA(ErasedType, e) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*ty).as_ErasedType();
             for (const auto& trait : e.traits) {
                 if (findNamedTraitInTrait(sp, langCopy(), {}, *trait.traitPtr, trait.path.path, trait.path.params, ty, [](const auto&, auto) {
                     return true;
@@ -2526,7 +2697,8 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
             }
             return false;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*ty).as_Tuple();
             for (const auto& ty : e) {
                 if (!typeIsCopy(sp, ty)) {
                     return false;
@@ -2539,8 +2711,10 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
 }
 
 bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) const {
-    TU_MATCH_HDRA( (*ty), {)
-    TU_ARMA(Generic, e) {
+    switch ((*ty).tag()) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*ty).as_Generic();
+            (void)e;
             {
                 auto it = cloneCache.find(ty);
                 if (it != cloneCache.end()) {
@@ -2554,7 +2728,8 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
             cloneCache.insert(::std::make_pair(ty, rv));
             return rv;
         }
-        TU_ARMA(Path, e) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*ty).as_Path();
             if (true) {
                 auto it = cloneCache.find(ty);
                 if (it != cloneCache.end()) {
@@ -2574,62 +2749,90 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
             cloneCache.insert(::std::make_pair(ty, rv));
             return rv;
         }
-        TU_ARMA(Diverge, e) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = (*ty).as_Diverge();
+            (void)e;
             // The ! type is kinda Copy/Clone ...
             return true;
         }
-        TU_ARMA(NodeType, e) {
-        TU_MATCH_HDRA((e), {)
-        TU_ARMA(Closure, nodeP) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*ty).as_NodeType();
+            switch (e.tag()) {
+                case HIRTypeDataNodeType::TAG_Closure: {
+                    auto& nodeP = e.as_Closure();
                     return nodeP->isCopy;
                 }
-                TU_ARMA(Generator, nodeP) {
+                case HIRTypeDataNodeType::TAG_Generator: {
+                    auto& nodeP = e.as_Generator();
+                    (void)nodeP;
                     TODO(sp, "type_is_clone - Generator");
+                    break;
                 }
-                TU_ARMA(Async, nodeP) {
+                case HIRTypeDataNodeType::TAG_Async: {
+                    auto& nodeP = e.as_Async();
+                    (void)nodeP;
                     TODO(sp, "type_is_clone - Async");
+                    break;
                 }
+            }
+            break;
         }
-        }
-        TU_ARMA(Infer, e) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*ty).as_Infer();
+            (void)e;
             // Shouldn't be hit
             return false;
         }
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*ty).as_Borrow();
             // Only shared &-ptrs are copy/clone
             return (e.type == HIRBorrowType::Shared);
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*ty).as_Pointer();
+            (void)e;
             // All raw pointers are Copy/Clone
             return true;
         }
-        TU_ARMA(NamedFunction, e) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = (*ty).as_NamedFunction();
+            (void)e;
             // All function pointers are Copy/Clone
             return true;
         }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*ty).as_Function();
+            (void)e;
             // All function pointers are Copy/Clone
             return true;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*ty).as_Primitive();
             // All primitives (except the unsized `str`) are Copy/Clone
             return e != HIRCoreType::Str;
         }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*ty).as_Array();
             return (e.size.is_Known() && e.size.as_Known() == 0) || typeIsClone(sp, e.inner);
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*ty).as_Slice();
+            (void)e;
             // [T] isn't Sized, so isn't Copy ether
             return false;
         }
-        TU_ARMA(Pattern, e) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = (*ty).as_Pattern();
             return typeIsClone(sp, e.inner);
         }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*ty).as_TraitObject();
+            (void)e;
             // (Trait) isn't Sized, so isn't Copy ether
             return false;
         }
-        TU_ARMA(ErasedType, e) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*ty).as_ErasedType();
             for (const auto& trait : e.traits) {
                 if (findNamedTraitInTrait(sp, langClone(), {}, *trait.traitPtr, trait.path.path, trait.path.params, ty, [](const auto&, auto) {
                     return true;
@@ -2639,7 +2842,8 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
             }
             return false;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*ty).as_Tuple();
             for (const auto& ty : e) {
                 if (!typeIsClone(sp, ty)) {
                     return false;
@@ -2661,109 +2865,143 @@ bool StaticTraitResolve::typeIsSized(const Span& sp, const HIRTypeData* ty) cons
 }
 
 bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRTypeData* ty) const {
-    TU_MATCH_HDRA( (*ty), {)
-        break;
+    switch ((*ty).tag()) {
+break;
         default:
             return false;
-            TU_ARMA(Diverge, _e)
+        case HIRTypeData::TAG_Diverge: {
+            auto& _e = (*ty).as_Diverge();
+            (void)_e;
             return true;
-            TU_ARMA(Path, e) {
-        TU_MATCH_HDRA( (e.binding), {)
-        TU_ARMA(Unbound, pbe) {
-                        // BUG?
-                        return false;
-                    }
-                    TU_ARMA(Opaque, pbe) {
-                        // TODO: This can only be with UfcsKnown, so check if the trait specifies ?Sized
-                        return false;
-                    }
-                    TU_ARMA(Struct, pbe) {
-                        const auto& params = e.path.data.as_Generic().params;
-                        const auto& str = *pbe;
-            TU_MATCH_HDRA( (str.data), {)
-            TU_ARMA(Unit, e)
-                return false;
-                            TU_ARMA(Tuple, e) {
-                                for (const auto& fld : e) {
-                                    HIRTypeRef tmp;
-                                    const auto& fieldTy = this->monomorphExpandOpt(sp, tmp, fld.ent, MonomorphStatePtr(crate.types, ty, &params, nullptr));
-                                    if (typeIsImpossible(sp, fieldTy)) {
-                                        return true;
-                                    }
-                                }
-                                return false;
-                            }
-                            TU_ARMA(Named, e) {
-                                for (const auto& fld : e) {
-                                    HIRTypeRef tmp;
-                                    const auto& fieldTy = this->monomorphExpandOpt(sp, tmp, fld.ty, MonomorphStatePtr(crate.types, ty, &params, nullptr));
-                                    if (typeIsImpossible(sp, fieldTy)) {
-                                        return true;
-                                    }
-                                }
-                                return false;
-                            }
-            }
-                    }
-                    TU_ARMA(Enum, pbe) {
-                        const auto& params = e.path.data.as_Generic().params;
-            TU_MATCH_HDRA( (pbe->data), { )
-            TU_ARMA(Value, e) {
-                                return e.variants.size() == 0;
-                            }
-                            TU_ARMA(Data, e) {
-                                // If all variants are impossible, then this type is impossible
-                                for (const auto& fld : e) {
-                                    const auto& tpl = fld.type;
-                                    HIRTypeRef tmp;
-                                    const auto& fieldTy = this->monomorphExpandOpt(sp, tmp, tpl, MonomorphStatePtr(crate.types, ty, &params, nullptr));
-                                    // Not impossible, ergo the enum is possible
-                                    if (!typeIsImpossible(sp, fieldTy)) {
-                                        return false;
-                                    }
-                                }
-                                return true;
-                            }
-            }
-            TODO(sp, "type_is_impossible for enum " << ty);
-                    }
-                    TU_ARMA(Union, pbe) {
-                        // TODO: Check all variants? Or just one?
-                        TODO(sp, "type_is_impossible for union " << ty);
-                    }
-                    TU_ARMA(ExternType, pbe) {
-                        // Extern types are possible, just not usable
-                        return false;
-                    }
         }
-        return true;
-            }
-            TU_ARMA(Borrow, e)
-            return typeIsImpossible(sp, e.inner);
-            TU_ARMA(Pointer, e) {
-                return false;
-            }
-            TU_ARMA(Function, e) {
-                // TODO: Check all arguments?
-                return true;
-            }
-            TU_ARMA(Array, e) {
-                return typeIsImpossible(sp, e.inner);
-            }
-            TU_ARMA(Slice, e) {
-                return typeIsImpossible(sp, e.inner);
-            }
-            TU_ARMA(Pattern, e) {
-                return typeIsImpossible(sp, e.inner);
-            }
-            TU_ARMA(Tuple, e) {
-                for (const auto& ty : e) {
-                    if (typeIsImpossible(sp, ty)) {
-                        return true;
-                    }
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*ty).as_Path();
+            switch (e.binding.tag()) {
+                case HIRTypePathBinding::TAG_Unbound: {
+                    auto& pbe = e.binding.as_Unbound();
+                    (void)pbe;
+                    // BUG?
+                    return false;
                 }
-                return false;
+                case HIRTypePathBinding::TAG_Opaque: {
+                    auto& pbe = e.binding.as_Opaque();
+                    (void)pbe;
+                    // TODO: This can only be with UfcsKnown, so check if the trait specifies ?Sized
+                    return false;
+                }
+                case HIRTypePathBinding::TAG_Struct: {
+                    auto& pbe = e.binding.as_Struct();
+                    const auto& params = e.path.data.as_Generic().params;
+                                const auto& str = *pbe;
+                    switch (str.data.tag()) {
+                        case HIRStructData::TAG_Unit: {
+                            auto& e = str.data.as_Unit();
+                            (void)e;
+                            return false;
+                        }
+                        case HIRStructData::TAG_Tuple: {
+                            auto& e = str.data.as_Tuple();
+                            for (const auto& fld : e) {
+                                HIRTypeRef tmp;
+                                const auto& fieldTy = this->monomorphExpandOpt(sp, tmp, fld.ent, MonomorphStatePtr(crate.types, ty, &params, nullptr));
+                                if (typeIsImpossible(sp, fieldTy)) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }
+                        case HIRStructData::TAG_Named: {
+                            auto& e = str.data.as_Named();
+                            for (const auto& fld : e) {
+                                HIRTypeRef tmp;
+                                const auto& fieldTy = this->monomorphExpandOpt(sp, tmp, fld.ty, MonomorphStatePtr(crate.types, ty, &params, nullptr));
+                                if (typeIsImpossible(sp, fieldTy)) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }
+                    }
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Enum: {
+                    auto& pbe = e.binding.as_Enum();
+                    const auto& params = e.path.data.as_Generic().params;
+                    switch (pbe->data.tag()) {
+                        case HIREnumClass::TAG_Value: {
+                            auto& e = pbe->data.as_Value();
+                            return e.variants.size() == 0;
+                        }
+                        case HIREnumClass::TAG_Data: {
+                            auto& e = pbe->data.as_Data();
+                            // If all variants are impossible, then this type is impossible
+                            for (const auto& fld : e) {
+                                const auto& tpl = fld.type;
+                                HIRTypeRef tmp;
+                                const auto& fieldTy = this->monomorphExpandOpt(sp, tmp, tpl, MonomorphStatePtr(crate.types, ty, &params, nullptr));
+                                // Not impossible, ergo the enum is possible
+                                if (!typeIsImpossible(sp, fieldTy)) {
+                                    return false;
+                                }
+                            }
+                            return true;
+                        }
+                    }
+                    TODO(sp, "type_is_impossible for enum " << ty);
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Union: {
+                    auto& pbe = e.binding.as_Union();
+                    (void)pbe;
+                    // TODO: Check all variants? Or just one?
+                    TODO(sp, "type_is_impossible for union " << ty);
+                    break;
+                }
+                case HIRTypePathBinding::TAG_ExternType: {
+                    auto& pbe = e.binding.as_ExternType();
+                    (void)pbe;
+                    // Extern types are possible, just not usable
+                    return false;
+                }
             }
+            return true;
+        }
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*ty).as_Borrow();
+            return typeIsImpossible(sp, e.inner);
+        }
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*ty).as_Pointer();
+            (void)e;
+            return false;
+        }
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*ty).as_Function();
+            (void)e;
+            // TODO: Check all arguments?
+            return true;
+        }
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*ty).as_Array();
+            return typeIsImpossible(sp, e.inner);
+        }
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*ty).as_Slice();
+            return typeIsImpossible(sp, e.inner);
+        }
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = (*ty).as_Pattern();
+            return typeIsImpossible(sp, e.inner);
+        }
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*ty).as_Tuple();
+            for (const auto& ty : e) {
+                if (typeIsImpossible(sp, ty)) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
     throw "";
 }
@@ -2959,40 +3197,61 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
 // Check if the passed type contains an UnsafeCell
 // Returns `Fuzzy` if generic, `Equal` if it does contain an UnsafeCell, and `Unequal` if it doesn't (shared=immutable)
 HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTypeData* ty) const {
-    TU_MATCH_HDRA( (*ty), {)
-    TU_ARMA(Infer, e) {
+    switch ((*ty).tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*ty).as_Infer();
+            (void)e;
             // Is this a bug?
             return HIRCompare::Fuzzy;
         }
-        TU_ARMA(Diverge, e) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = (*ty).as_Diverge();
+            (void)e;
             return HIRCompare::Unequal;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*ty).as_Primitive();
+            (void)e;
             return HIRCompare::Unequal;
         }
-        TU_ARMA(Path, e) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*ty).as_Path();
             auto monomorphCb = MonomorphStatePtr(crate.types, nullptr, e.path.data.is_Generic() ? &e.path.data.as_Generic().params : nullptr, nullptr);
-            HIRTypeRef tmpTy;
-            auto monomorph = [&](const auto& tpl) -> const HIRTypeData* {
-                return this->monomorphExpandOpt(sp, tmpTy, tpl, monomorphCb);
-            };
-        TU_MATCH_HDRA( (e.binding), {)
-        TU_ARMA(Unbound, pbe)
-            return HIRCompare::Fuzzy;
-                TU_ARMA(Opaque, pbe)
-                return HIRCompare::Fuzzy;
-                TU_ARMA(ExternType, pbe) // Extern types can't be interior mutable (but they also shouldn't be direct)
-                return HIRCompare::Unequal;
-
-                TU_ARMA(Struct, pbe) {
+                HIRTypeRef tmpTy;
+                auto monomorph = [&](const auto& tpl) -> const HIRTypeData* {
+                    return this->monomorphExpandOpt(sp, tmpTy, tpl, monomorphCb);
+                };
+            switch (e.binding.tag()) {
+                case HIRTypePathBinding::TAG_Unbound: {
+                    auto& pbe = e.binding.as_Unbound();
+                    (void)pbe;
+                    return HIRCompare::Fuzzy;
+                }
+                case HIRTypePathBinding::TAG_Opaque: {
+                    auto& pbe = e.binding.as_Opaque();
+                    (void)pbe;
+                    return HIRCompare::Fuzzy;
+                }
+                case HIRTypePathBinding::TAG_ExternType: {
+                    auto& pbe = e.binding.as_ExternType();
+                    (void)pbe;
+                    return HIRCompare::Unequal;
+                }
+                case HIRTypePathBinding::TAG_Struct: {
+                    auto& pbe = e.binding.as_Struct();
                     const HIRGenericPath& p = e.path.data.as_Generic();
-                    if (p.path == crate.getLangItemPath(sp, "unsafe_cell")) {
-                        return HIRCompare::Equal;
-                    }
-                    // TODO: Cache this result?
-            TU_MATCH_HDRA( (pbe->data), { )
-            TU_ARMA(Unit, _)    return HIRCompare::Unequal;
-                        TU_ARMA(Tuple, e) {
+                            if (p.path == crate.getLangItemPath(sp, "unsafe_cell")) {
+                                return HIRCompare::Equal;
+                            }
+                            // TODO: Cache this result?
+                    switch (pbe->data.tag()) {
+                        case HIRStructData::TAG_Unit: {
+                            auto& _ = pbe->data.as_Unit();
+                            (void)_;
+                            return HIRCompare::Unequal;
+                        }
+                        case HIRStructData::TAG_Tuple: {
+                            auto& e = pbe->data.as_Tuple();
                             for (const auto& v : e) {
                                 switch (this->typeIsInteriorMutable(sp, monomorph(v.ent))) {
                                     case HIRCompare::Equal:
@@ -3005,7 +3264,8 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                             }
                             return HIRCompare::Unequal;
                         }
-                        TU_ARMA(Named, e) {
+                        case HIRStructData::TAG_Named: {
+                            auto& e = pbe->data.as_Named();
                             for (const auto& v : e) {
                                 switch (this->typeIsInteriorMutable(sp, monomorph(v.ty))) {
                                     case HIRCompare::Equal:
@@ -3018,12 +3278,19 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                             }
                             return HIRCompare::Unequal;
                         }
-            }
+                    }
+                    break;
                 }
-                TU_ARMA(Enum, pbe) {
-            TU_MATCH_HDRA( (pbe->data), { )
-            TU_ARMA(Value, _)   return HIRCompare::Unequal;
-                        TU_ARMA(Data, ee) {
+                case HIRTypePathBinding::TAG_Enum: {
+                    auto& pbe = e.binding.as_Enum();
+                    switch (pbe->data.tag()) {
+                        case HIREnumClass::TAG_Value: {
+                            auto& _ = pbe->data.as_Value();
+                            (void)_;
+                            return HIRCompare::Unequal;
+                        }
+                        case HIREnumClass::TAG_Data: {
+                            auto& ee = pbe->data.as_Data();
                             for (const auto& var : ee) {
                                 switch (this->typeIsInteriorMutable(sp, monomorph(var.type))) {
                                     case HIRCompare::Equal:
@@ -3036,9 +3303,11 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                             }
                             return HIRCompare::Unequal;
                         }
-            }
+                    }
+                    break;
                 }
-                TU_ARMA(Union, pbe) {
+                case HIRTypePathBinding::TAG_Union: {
+                    auto& pbe = e.binding.as_Union();
                     for (const auto& var : pbe->variants) {
                         switch (this->typeIsInteriorMutable(sp, monomorph(var.ty))) {
                             case HIRCompare::Equal:
@@ -3051,29 +3320,40 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                     }
                     return HIRCompare::Unequal;
                 }
+            }
+            break;
         }
-        }
-        TU_ARMA(Generic, e) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*ty).as_Generic();
+            (void)e;
             return HIRCompare::Fuzzy;
         }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*ty).as_TraitObject();
+            (void)e;
             // Can't know with a trait object
             return HIRCompare::Fuzzy;
         }
-        TU_ARMA(ErasedType, e) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*ty).as_ErasedType();
+            (void)e;
             // Can't know with an erased type (effectively a generic)
             return HIRCompare::Fuzzy;
         }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*ty).as_Array();
             return this->typeIsInteriorMutable(sp, e.inner);
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*ty).as_Slice();
             return this->typeIsInteriorMutable(sp, e.inner);
         }
-        TU_ARMA(Pattern, e) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = (*ty).as_Pattern();
             return this->typeIsInteriorMutable(sp, e.inner);
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*ty).as_Tuple();
             for (const auto& t : e) {
                 auto rv = this->typeIsInteriorMutable(sp, t);
                 if (rv != HIRCompare::Unequal) {
@@ -3082,9 +3362,11 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             }
             return HIRCompare::Unequal;
         }
-        TU_ARMA(NodeType, e) {
-        TU_MATCH_HDRA((e), {)
-        TU_ARMA(Closure, nodeP) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*ty).as_NodeType();
+            switch (e.tag()) {
+                case HIRTypeDataNodeType::TAG_Closure: {
+                    auto& nodeP = e.as_Closure();
                     // Return fuzzy (i.e. might be) if the closure class is still unknown.
                     if (nodeP->cls == HIRExprNodeClosure::Class::Unknown) {
                         return HIRCompare::Fuzzy;
@@ -3103,7 +3385,8 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                     // If no capture possibly imut, then return no
                     return HIRCompare::Unequal;
                 }
-                TU_ARMA(Generator, nodeP) {
+                case HIRTypeDataNodeType::TAG_Generator: {
+                    auto& nodeP = e.as_Generator();
                     // Check all captures
                     for (const auto& c : nodeP->captures) {
                         auto rv = this->typeIsInteriorMutable(sp, c->resType);
@@ -3114,22 +3397,33 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                     // If no capture possibly imut, then return no
                     return HIRCompare::Unequal;
                 }
-                TU_ARMA(Async, nodeP) {
+                case HIRTypeDataNodeType::TAG_Async: {
+                    auto& nodeP = e.as_Async();
+                    (void)nodeP;
                     TODO(sp, "type_is_interior_mutable on async");
+                    break;
                 }
+            }
+            break;
         }
-        }
-        // Borrow and pointer are not interior mutable (they might point to something, but that doesn't matter)
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*ty).as_Borrow();
+            (void)e;
             return HIRCompare::Unequal;
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*ty).as_Pointer();
+            (void)e;
             return HIRCompare::Unequal;
         }
-        TU_ARMA(NamedFunction, e) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = (*ty).as_NamedFunction();
+            (void)e;
             return HIRCompare::Unequal;
         }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*ty).as_Function();
+            (void)e;
             return HIRCompare::Unequal;
         }
     }
@@ -3137,10 +3431,11 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
 }
 
 MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData* ty, bool errOnUnknown /*=false*/) const {
-    TU_MATCH_HDRA( (*ty), {)
-    default:
+    switch ((*ty).tag()) {
+default:
         return MetadataType::None;
-        TU_ARMA(Generic, e) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*ty).as_Generic();
             // Check for an explicit `Sized` bound
             auto pp = HIRPathParams();
             bool rv = this->findImplBounds(sp, langSized(), &pp, ty, [&](auto, bool) {
@@ -3175,25 +3470,34 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
             } else {
                 BUG(sp, "Unknown generic binding on " << ty);
             }
+            break;
         }
-        TU_ARMA(ErasedType, e) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*ty).as_ErasedType();
             if (e.isSized) {
                 return MetadataType::None;
             } else {
                 return MetadataType::Unknown;
             }
+            break;
         }
-        TU_ARMA(Path, e) {
-        TU_MATCH_HDRA( (e.binding), { )
-        TU_ARMA(Unbound, pbe) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*ty).as_Path();
+            switch (e.binding.tag()) {
+                case HIRTypePathBinding::TAG_Unbound: {
+                    auto& pbe = e.binding.as_Unbound();
+                    (void)pbe;
                     // TODO: Should this return something else?
                     return MetadataType::Unknown;
                 }
-                TU_ARMA(Opaque, pbe) {
+                case HIRTypePathBinding::TAG_Opaque: {
+                    auto& pbe = e.binding.as_Opaque();
+                    (void)pbe;
                     // TODO: This can only be with UfcsKnown, so check if the trait specifies ?Sized
                     return MetadataType::None;
                 }
-                TU_ARMA(Struct, pbe) {
+                case HIRTypePathBinding::TAG_Struct: {
+                    auto& pbe = e.binding.as_Struct();
                     switch (pbe->structMarkings.dstType) {
                         case HIRStructMarkings::DstType::Slice:
                             return MetadataType::Slice;
@@ -3223,44 +3527,65 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
                             throw "";
                         }
                     }
+                    break;
                 }
-                TU_ARMA(ExternType, pbe) {
+                case HIRTypePathBinding::TAG_ExternType: {
+                    auto& pbe = e.binding.as_ExternType();
+                    (void)pbe;
                     // Extern types aren't Sized, but have no metadata
                     return MetadataType::Zero;
                 }
-                TU_ARMA(Enum, pbe) {
+                case HIRTypePathBinding::TAG_Enum: {
+                    auto& pbe = e.binding.as_Enum();
+                    (void)pbe;
+                    break;
                 }
-                TU_ARMA(Union, pbe) {
+                case HIRTypePathBinding::TAG_Union: {
+                    auto& pbe = e.binding.as_Union();
+                    (void)pbe;
+                    break;
                 }
+            }
+            return MetadataType::None;
         }
-        return MetadataType::None;
-        }
-        TU_ARMA(Infer, e) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*ty).as_Infer();
+            (void)e;
             // Shouldn't be hit? but can early on
             return MetadataType::Unknown;
         }
-        TU_ARMA(Diverge, e) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = (*ty).as_Diverge();
+            (void)e;
             // The ! type is kinda Sized ...
             return MetadataType::None;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*ty).as_Primitive();
             // All primitives (except the unsized `str`) are Sized
             if (e == HIRCoreType::Str) {
                 return MetadataType::Slice;
             } else {
                 return MetadataType::None;
             }
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*ty).as_Slice();
+            (void)e;
             return MetadataType::Slice;
         }
-        TU_ARMA(Pattern, e) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = (*ty).as_Pattern();
             return this->metadataType(sp, e.inner, errOnUnknown);
         }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*ty).as_TraitObject();
+            (void)e;
             return MetadataType::TraitObject;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*ty).as_Tuple();
             // A tuple is unsized when its last element is, just as a struct is.
             return e.empty() ? MetadataType::None : this->metadataType(sp, e.back(), errOnUnknown);
         }
@@ -3281,12 +3606,15 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
         return false;
     }
 
-    TU_MATCH_HDRA( (*ty), {)
-    TU_ARMA(Generic, e) {
+    switch ((*ty).tag()) {
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*ty).as_Generic();
+            (void)e;
             // TODO: Is this an error?
             return true;
         }
-        TU_ARMA(Path, e) {
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*ty).as_Path();
             if (e.binding.is_Opaque()) {
                 return true;
             }
@@ -3390,53 +3718,76 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             dropCache.insert(::std::make_pair(ty, needsDropGlue));
             return needsDropGlue;
         }
-        TU_ARMA(Diverge, e) {
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = (*ty).as_Diverge();
+            (void)e;
             return false;
         }
-        TU_ARMA(NodeType, e) {
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*ty).as_NodeType();
+            (void)e;
             // All magic node types need glue
             return true;
         }
-        TU_ARMA(Infer, e) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*ty).as_Infer();
+            (void)e;
             BUG(sp, "type_needs_drop_glue on _");
             return false;
         }
-        TU_ARMA(Borrow, e) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*ty).as_Borrow();
             // &-ptrs don't have drop glue
             if (e.type != HIRBorrowType::Owned) {
                 return false;
             }
             return typeNeedsDropGlue(sp, e.inner);
         }
-        TU_ARMA(Pointer, e) {
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*ty).as_Pointer();
+            (void)e;
             return false;
         }
-        TU_ARMA(NamedFunction, e) {
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = (*ty).as_NamedFunction();
+            (void)e;
             return false;
         }
-        TU_ARMA(Function, e) {
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*ty).as_Function();
+            (void)e;
             return false;
         }
-        TU_ARMA(Primitive, e) {
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*ty).as_Primitive();
+            (void)e;
             return false;
         }
-        TU_ARMA(Array, e) {
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*ty).as_Array();
             return typeNeedsDropGlue(sp, e.inner);
         }
-        TU_ARMA(Slice, e) {
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*ty).as_Slice();
             return typeNeedsDropGlue(sp, e.inner);
         }
-        TU_ARMA(Pattern, e) {
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = (*ty).as_Pattern();
             return typeNeedsDropGlue(sp, e.inner);
         }
-        TU_ARMA(TraitObject, e) {
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*ty).as_TraitObject();
+            (void)e;
             return true;
         }
-        TU_ARMA(ErasedType, e) {
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*ty).as_ErasedType();
+            (void)e;
             // Is this an error?
             return true;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*ty).as_Tuple();
             for (const auto& ty : e) {
                 if (typeNeedsDropGlue(sp, ty)) {
                     return true;
@@ -3486,14 +3837,16 @@ const HIRTypeData* StaticTraitResolve::isTypePhantomData(const HIRTypeData* ty) 
 }
 
 HIRTypeRef StaticTraitResolve::getFieldType(const Span& sp, const HIRTypeData* ty, const RcString& name) const {
-    TU_MATCH_HDRA((*ty), {)
-    default:
+    switch ((*ty).tag()) {
+default:
         TODO(sp, "" << ty << " " << name);
-        TU_ARMA(Borrow, te) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& te = (*ty).as_Borrow();
             ASSERT_BUG(sp, name == RcString(), "get_field_type: Deref with non-empty field (`" << name << "`)");
             return te.inner;
         }
-        TU_ARMA(Tuple, te) {
+        case HIRTypeData::TAG_Tuple: {
+            auto& te = (*ty).as_Tuple();
             ::std::stringstream ss{name.c_str()};
             int idx = -1;
             ss >> idx;
@@ -3501,41 +3854,49 @@ HIRTypeRef StaticTraitResolve::getFieldType(const Span& sp, const HIRTypeData* t
             ASSERT_BUG(sp, size_t(idx) < te.size(), "Tuple index out of bounds");
             return te.at(idx);
         }
-        TU_ARMA(Path, te) {
-        TU_MATCH_HDRA( (te.binding), {)
-        default:
-            BUG(sp, "Getting field on invalid type - " << ty);
-                TU_ARMA(Struct, pbe) {
-                    MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
-            TU_MATCH_HDRA( (pbe->data), { )
-            TU_ARMA(Named, se) {
-                            for (const auto& f : se) {
-                                if (f.name == name) {
-                                    return ms.monomorphType(sp, f.ty);
-                                }
+        case HIRTypeData::TAG_Path: {
+            auto& te = (*ty).as_Path();
+            TU_MATCH_HDRA( (te.binding), {)
+            default:
+                BUG(sp, "Getting field on invalid type - " << ty);
+                    TU_ARMA(Struct, pbe) {
+                        MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
+                switch (pbe->data.tag()) {
+                    case HIRStructData::TAG_Named: {
+                        auto& se = pbe->data.as_Named();
+                        for (const auto& f : se) {
+                            if (f.name == name) {
+                                return ms.monomorphType(sp, f.ty);
                             }
-                            BUG(sp, "Unknown field `" << name << "` on " << ty);
                         }
-                        TU_ARMA(Tuple, se) {
-                            unsigned index = std::strtol(name.c_str(), nullptr, 10);
-                            ASSERT_BUG(sp, index < se.size(), "" << ty << " " << name);
-                            return ms.monomorphType(sp, se.at(index).ent);
-                        }
-                        TU_ARMA(Unit, se) {
-                            BUG(sp, "Getting field from unit-like struct - " << ty);
-                        }
-            }
-                }
-                TU_ARMA(Union, pbe) {
-                    MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
-                    for (const auto& f : pbe->variants) {
-                        if (f.name == name) {
-                            return ms.monomorphType(sp, f.ty);
-                        }
+                        BUG(sp, "Unknown field `" << name << "` on " << ty);
+                        break;
                     }
-                    BUG(sp, "Unknown field `" << name << "` on " << ty);
+                    case HIRStructData::TAG_Tuple: {
+                        auto& se = pbe->data.as_Tuple();
+                        unsigned index = std::strtol(name.c_str(), nullptr, 10);
+                        ASSERT_BUG(sp, index < se.size(), "" << ty << " " << name);
+                        return ms.monomorphType(sp, se.at(index).ent);
+                    }
+                    case HIRStructData::TAG_Unit: {
+                        auto& se = pbe->data.as_Unit();
+                        (void)se;
+                        BUG(sp, "Getting field from unit-like struct - " << ty);
+                        break;
+                    }
                 }
-        }
+                    }
+                    TU_ARMA(Union, pbe) {
+                        MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
+                        for (const auto& f : pbe->variants) {
+                            if (f.name == name) {
+                                return ms.monomorphType(sp, f.ty);
+                            }
+                        }
+                        BUG(sp, "Unknown field `" << name << "` on " << ty);
+                    }
+            }
+            break;
         }
     }
     BUG(sp, "Reached end of `get_field_type` - " << ty);
@@ -3544,8 +3905,9 @@ HIRTypeRef StaticTraitResolve::getFieldType(const Span& sp, const HIRTypeData* t
 StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const HIRPath& p, MonomorphState& outParams, bool signatureOnly /*=false*/, const HIRGenericParams** outImplParamsDef /*=nullptr*/) const {
     TRACE_FUNCTION_F(p << ", signature_only=" << signatureOnly);
     outParams = MonomorphState{crate.types};
-    TU_MATCH_HDR( (p.data), {)
-    TU_ARM(p.data, Generic, pe) {
+    switch (p.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            auto& pe = p.data.as_Generic();
             if (pe.path.components().size() > 1) {
                 const auto& ti = crate.getTypeitemByPath(sp, pe.path, /*ignore_crate_name=*/false, /*ignore_last_node=*/true);
                 if (const auto* e = ti.opt_Enum()) {
@@ -3599,7 +3961,8 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             }
             throw "";
         }
-        TU_ARM(p.data, UfcsKnown, pe) {
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& pe = p.data.as_UfcsKnown();
             if (pe.trait.path == HIRSimplePath() && pe.item == "vtable#") {
                 DEBUG("Empty trait VTable, return NotYetKnown");
                 return ValuePtr::make_NotYetKnown({});
@@ -3706,28 +4069,35 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     // If the type and impl are fully known, then look for trait provided values/bodies
                     if (!monomorphiseTypeNeeded(pe.type) && !monomorphisePathparamsNeeded(pe.trait.params)) {
                         // Look for provided bodies
-                    TU_MATCH_HDRA( (v), {)
-                    TU_ARMA(Constant, ve) {
-                                // Constants?
-                                if (ve.value || ve.valueState != HIRConstant::ValueState::Unknown) {
-                                    DEBUG("Trait provided value");
-                                    // NOTE: The parameters have already been set
-                                    return &ve;
-                                } else {
-                                    DEBUG("Trait did not provide a value");
-                                }
+                    switch (v.tag()) {
+                        case HIRTraitValueItem::TAG_Constant: {
+                            auto& ve = v.as_Constant();
+                            // Constants?
+                            if (ve.value || ve.valueState != HIRConstant::ValueState::Unknown) {
+                                DEBUG("Trait provided value");
+                                // NOTE: The parameters have already been set
+                                return &ve;
+                            } else {
+                                DEBUG("Trait did not provide a value");
                             }
-                            TU_ARMA(Static, ve) {
-                                // Statics?
+                            break;
+                        }
+                        case HIRTraitValueItem::TAG_Static: {
+                            auto& ve = v.as_Static();
+                            (void)ve;
+                            // Statics?
+                            break;
+                        }
+                        case HIRTraitValueItem::TAG_Function: {
+                            auto& ve = v.as_Function();
+                            if (ve.code || ve.code.mir) {
+                                DEBUG("Trait provided body");
+                                // NOTE: The parameters have already been set
+                                return &ve;
                             }
-                            TU_ARMA(Function, ve) {
-                                if (ve.code || ve.code.mir) {
-                                    DEBUG("Trait provided body");
-                                    // NOTE: The parameters have already been set
-                                    return &ve;
-                                }
-                                // Fall through if there's no provided body
-                            }
+                            // Fall through if there's no provided body
+                            break;
+                        }
                     }
                     } else {
                         DEBUG("No best impl, but monomorph needed - can't check trait");
@@ -3756,7 +4126,8 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             }
             throw "";
         }
-        TU_ARM(p.data, UfcsInherent, pe) {
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& pe = p.data.as_UfcsInherent();
             outParams.selfTy = pe.type;
             outParams.ppImpl = &pe.implParams;
             outParams.ppMethod = &pe.params;
@@ -3807,8 +4178,11 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             });
             return rv;
         }
-        TU_ARM(p.data, UfcsUnknown, pe) {
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& pe = p.data.as_UfcsUnknown();
+            (void)pe;
             BUG(sp, "UfcsUnknown - " << p);
+            break;
         }
     }
     throw "";

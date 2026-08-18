@@ -37,11 +37,14 @@ namespace {
                 for (const auto& stmt : block.statements) {
                     os << indent();
 
-                    TU_MATCH_HDRA( (stmt), {)
-                    TU_ARMA(Assign, e) {
+                    switch (stmt.tag()) {
+                        case MIRStatement::TAG_Assign: {
+                            auto& e = stmt.as_Assign();
                             os << FMT_M(e.dst) << " = " << FMT_M(e.src) << ";\n";
+                            break;
                         }
-                        TU_ARMA(Asm, e) {
+                        case MIRStatement::TAG_Asm: {
+                            auto& e = stmt.as_Asm();
                             os << "(";
                             for (const auto& v : e.outputs) {
                                 os << "\"" << ::FmtEscaped(v.first) << "\"=" << FMT_M(v.second) << ",";
@@ -61,46 +64,58 @@ namespace {
                                 os << " \"" << v << "\"";
                             }
                             os << ";\n";
+                            break;
                         }
-                        TU_ARMA(Asm2, e) {
+                        case MIRStatement::TAG_Asm2: {
+                            auto& e = stmt.as_Asm2();
                             os << "asm2!(";
                             for (const auto& l : e.lines) {
                                 l.fmt(os);
                             }
                             for (const auto& p : e.params) {
                                 os << ", ";
-                            TU_MATCH_HDRA( (p), { )
-                            TU_ARMA(Const, v) {
-                                        os << "const " << v;
+                            switch (p.tag()) {
+                                case MIRAsmParam::TAG_Const: {
+                                    auto& v = p.as_Const();
+                                    os << "const " << v;
+                                    break;
+                                }
+                                case MIRAsmParam::TAG_Sym: {
+                                    auto& v = p.as_Sym();
+                                    os << "sym " << v;
+                                    break;
+                                }
+                                case MIRAsmParam::TAG_Reg: {
+                                    auto& v = p.as_Reg();
+                                    os << "reg " << v.dir << " " << v.spec;
+                                    if (v.input) {
+                                        os << FMT_M(*v.input);
+                                    } else {
+                                        os << "_";
                                     }
-                                    TU_ARMA(Sym, v) {
-                                        os << "sym " << v;
+                                    os << " => ";
+                                    if (v.output) {
+                                        os << FMT_M(*v.output);
+                                    } else {
+                                        os << "_";
                                     }
-                                    TU_ARMA(Reg, v) {
-                                        os << "reg " << v.dir << " " << v.spec;
-                                        if (v.input) {
-                                            os << FMT_M(*v.input);
-                                        } else {
-                                            os << "_";
-                                        }
-                                        os << " => ";
-                                        if (v.output) {
-                                            os << FMT_M(*v.output);
-                                        } else {
-                                            os << "_";
-                                        }
-                                    }
-                                    TU_ARMA(Label, v) {
-                                        os << "label bb" << v;
-                                    }
+                                    break;
+                                }
+                                case MIRAsmParam::TAG_Label: {
+                                    auto& v = p.as_Label();
+                                    os << "label bb" << v;
+                                    break;
+                                }
                             }
                             }
                             if (e.options.any()) {
                                 e.options.fmt(os);
                             }
                             os << ")";
+                            break;
                         }
-                        TU_ARMA(SetDropFlag, e) {
+                        case MIRStatement::TAG_SetDropFlag: {
+                            auto& e = stmt.as_SetDropFlag();
                             os << "df$" << e.idx << " = ";
                             if (e.other == ~0u) {
                                 os << e.newVal;
@@ -110,19 +125,26 @@ namespace {
                                 os << "! df$" << e.other;
                             }
                             os << ";\n";
+                            break;
                         }
-                        TU_ARMA(SaveDropFlag, e) {
+                        case MIRStatement::TAG_SaveDropFlag: {
+                            auto& e = stmt.as_SaveDropFlag();
                             os << "SaveDropFlag(" << FMT_M(e.slot) << " BIT " << e.bitIndex << " = df$" << e.idx << ")";
+                            break;
                         }
-                        TU_ARMA(LoadDropFlag, e) {
+                        case MIRStatement::TAG_LoadDropFlag: {
+                            auto& e = stmt.as_LoadDropFlag();
                             os << "LoadDropFlag(df$" << e.idx << " = " << FMT_M(e.slot) << " BIT " << e.bitIndex << ")";
+                            break;
                         }
-                        TU_ARMA(ScopeEnd, e) {
+                        case MIRStatement::TAG_ScopeEnd: {
+                            auto& e = stmt.as_ScopeEnd();
                             os << "// Scope End: ";
                             for (auto idx : e.slots) {
                                 os << "_$" << idx << ",";
                             }
                             os << "\n";
+                            break;
                         }
                     }
                 }

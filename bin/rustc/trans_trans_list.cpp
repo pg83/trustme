@@ -113,13 +113,16 @@ HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPat
     TRACE_FUNCTION_F(p);
     auto rv = this->monomorphPath(sp, p, false);
 
-    TU_MATCH_HDRA( (rv.data), {)
-    TU_ARMA(Generic, e2) {
+    switch (rv.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            auto& e2 = rv.data.as_Generic();
             for (auto& arg : e2.params.types) {
                 resolve.expandAssociatedTypes(sp, arg);
             }
+            break;
         }
-        TU_ARMA(UfcsInherent, e2) {
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& e2 = rv.data.as_UfcsInherent();
             resolve.expandAssociatedTypes(sp, e2.type);
             for (auto& arg : e2.params.types) {
                 resolve.expandAssociatedTypes(sp, arg);
@@ -128,8 +131,10 @@ HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPat
             for (auto& arg : e2.implParams.types) {
                 resolve.expandAssociatedTypes(sp, arg);
             }
+            break;
         }
-        TU_ARMA(UfcsKnown, e2) {
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& e2 = rv.data.as_UfcsKnown();
             resolve.expandAssociatedTypes(sp, e2.type);
             for (auto& arg : e2.trait.params.types) {
                 resolve.expandAssociatedTypes(sp, arg);
@@ -137,9 +142,13 @@ HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPat
             for (auto& arg : e2.params.types) {
                 resolve.expandAssociatedTypes(sp, arg);
             }
+            break;
         }
-        TU_ARMA(UfcsUnknown, e2) {
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& e2 = rv.data.as_UfcsUnknown();
+            (void)e2;
             BUG(sp, "Encountered UfcsUnknown");
+            break;
         }
     }
     return rv;

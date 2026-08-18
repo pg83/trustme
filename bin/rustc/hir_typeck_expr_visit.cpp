@@ -45,16 +45,23 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
         // Trait definition
         const auto& trait = crate.getTraitByPath(sp, *ip.parent->trait);
         const auto& item = trait.values.at(ip.name);
-            TU_MATCH_HDRA( (item), { )
-            TU_ARMA(Function, e) {
-                itemGenerics = &e.params;
-            }
-            TU_ARMA(Constant, e) {
-                itemGenerics = &e.params;
-            }
-            TU_ARMA(Static, e) {
-                itemGenerics = nullptr;
-            }
+            switch (item.tag()) {
+                case HIRTraitValueItem::TAG_Function: {
+                    auto& e = item.as_Function();
+                    itemGenerics = &e.params;
+                    break;
+                }
+                case HIRTraitValueItem::TAG_Constant: {
+                    auto& e = item.as_Constant();
+                    itemGenerics = &e.params;
+                    break;
+                }
+                case HIRTraitValueItem::TAG_Static: {
+                    auto& e = item.as_Static();
+                    (void)e;
+                    itemGenerics = nullptr;
+                    break;
+                }
             }
     } else if (ip.parent->ty) {
         // Inherent impl
@@ -65,18 +72,40 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
         H::addTraitsFromMod(*this, mod);
         const auto& item = mod.valueItems.at(ip.name)->ent;
         implGenerics = nullptr;
-            TU_MATCH_HDRA( (item), { )
-            TU_ARMA(Constant, e) {
-                itemGenerics = &e.params;
-            }
-            TU_ARMA(Static, e) {
-            }
-            TU_ARMA(Function, e) {
-                itemGenerics = &e.params;
-            }
-            TU_ARMA(StructConstant, _e) BUG(sp, ip << " is StructConstant");
-            TU_ARMA(StructConstructor, _e) BUG(sp, ip << " is StructConstructor");
-            TU_ARMA(Import, _e) BUG(sp, ip << " is Import");
+            switch (item.tag()) {
+                case HIRValueItem::TAG_Constant: {
+                    auto& e = item.as_Constant();
+                    itemGenerics = &e.params;
+                    break;
+                }
+                case HIRValueItem::TAG_Static: {
+                    auto& e = item.as_Static();
+                    (void)e;
+                    break;
+                }
+                case HIRValueItem::TAG_Function: {
+                    auto& e = item.as_Function();
+                    itemGenerics = &e.params;
+                    break;
+                }
+                case HIRValueItem::TAG_StructConstant: {
+                    auto& _e = item.as_StructConstant();
+                    (void)_e;
+                    BUG(sp, ip << " is StructConstant");
+                    break;
+                }
+                case HIRValueItem::TAG_StructConstructor: {
+                    auto& _e = item.as_StructConstructor();
+                    (void)_e;
+                    BUG(sp, ip << " is StructConstructor");
+                    break;
+                }
+                case HIRValueItem::TAG_Import: {
+                    auto& _e = item.as_Import();
+                    (void)_e;
+                    BUG(sp, ip << " is Import");
+                    break;
+                }
             }
     }
 }

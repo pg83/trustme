@@ -29,22 +29,34 @@
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRConstGeneric& x) {
-        TU_MATCH_HDRA( (x), {)
-        TU_ARMA(Infer, e) {
-            os << "Infer";
-            if (e.index != ~0u) {
-                os << "(";
-                os << e.index;
-                os << ")";
+        switch (x.tag()) {
+            case HIRConstGeneric::TAG_Infer: {
+                auto& e = x.as_Infer();
+                os << "Infer";
+                if (e.index != ~0u) {
+                    os << "(";
+                    os << e.index;
+                    os << ")";
+                }
+                break;
             }
-        }
-        TU_ARMA(Unevaluated, e) {
-            os << "Unevaluated(";
-            e->fmt(os);
-            os << ")";
-        }
-        TU_ARMA(Generic, e) os << "Generic(" << e << ")";
-        TU_ARMA(Evaluated, e) os << "Evaluated(" << *e << ")";
+            case HIRConstGeneric::TAG_Unevaluated: {
+                auto& e = x.as_Unevaluated();
+                os << "Unevaluated(";
+                e->fmt(os);
+                os << ")";
+                break;
+            }
+            case HIRConstGeneric::TAG_Generic: {
+                auto& e = x.as_Generic();
+                os << "Generic(" << e << ")";
+                break;
+            }
+            case HIRConstGeneric::TAG_Evaluated: {
+                auto& e = x.as_Evaluated();
+                os << "Evaluated(" << *e << ")";
+                break;
+            }
         }
         return os;
 }
@@ -53,11 +65,27 @@ bool HIRConstGeneric::operator==(const HIRConstGeneric& x) const {
     if (this->tag() != x.tag()) {
         return false;
     }
-        TU_MATCH_HDRA( (*this, x), {)
-        TU_ARMA(Infer, te, xe) return te.index == xe.index;
-        TU_ARMA(Unevaluated, te, xe) return te->equivalent(*xe);
-        TU_ARMA(Generic, te, xe) return te == xe;
-        TU_ARMA(Evaluated, te, xe) return EncodedLiteralSlice(*te) == EncodedLiteralSlice(*xe);
+        switch ((*this).tag()) {
+            case HIRConstGeneric::TAG_Infer: {
+                auto& te = (*this).as_Infer();
+                auto& xe = x.as_Infer();
+                return te.index == xe.index;
+            }
+            case HIRConstGeneric::TAG_Unevaluated: {
+                auto& te = (*this).as_Unevaluated();
+                auto& xe = x.as_Unevaluated();
+                return te->equivalent(*xe);
+            }
+            case HIRConstGeneric::TAG_Generic: {
+                auto& te = (*this).as_Generic();
+                auto& xe = x.as_Generic();
+                return te == xe;
+            }
+            case HIRConstGeneric::TAG_Evaluated: {
+                auto& te = (*this).as_Evaluated();
+                auto& xe = x.as_Evaluated();
+                return EncodedLiteralSlice(*te) == EncodedLiteralSlice(*xe);
+            }
         }
         return true;
 }
@@ -66,28 +94,39 @@ Ordering HIRConstGeneric::ord(const HIRConstGeneric& x) const {
     if (auto cmp = ::ord(static_cast<int>(this->tag()), static_cast<int>(x.tag()))) {
         return cmp;
     }
-        TU_MATCH_HDRA( (*this, x), {)
-        TU_ARMA(Infer, te, xe) {
-            if (auto cmp = ::ord(te.index, xe.index)) {
-                return cmp;
+        switch ((*this).tag()) {
+            case HIRConstGeneric::TAG_Infer: {
+                auto& te = (*this).as_Infer();
+                auto& xe = x.as_Infer();
+                if (auto cmp = ::ord(te.index, xe.index)) {
+                    return cmp;
+                }
+                break;
             }
-        }
-        TU_ARMA(Unevaluated, te, xe) {
-            if (te->equivalent(*xe)) {
-                return OrdEqual;
+            case HIRConstGeneric::TAG_Unevaluated: {
+                auto& te = (*this).as_Unevaluated();
+                auto& xe = x.as_Unevaluated();
+                if (te->equivalent(*xe)) {
+                    return OrdEqual;
+                }
+                return te->ord(*xe);
             }
-            return te->ord(*xe);
-        }
-        TU_ARMA(Generic, te, xe) {
-            if (auto cmp = ::ord(te, xe)) {
-                return cmp;
+            case HIRConstGeneric::TAG_Generic: {
+                auto& te = (*this).as_Generic();
+                auto& xe = x.as_Generic();
+                if (auto cmp = ::ord(te, xe)) {
+                    return cmp;
+                }
+                break;
             }
-        }
-        TU_ARMA(Evaluated, te, xe) {
-            if (auto cmp = ::ord(EncodedLiteralSlice(*te), EncodedLiteralSlice(*xe))) {
-                return cmp;
+            case HIRConstGeneric::TAG_Evaluated: {
+                auto& te = (*this).as_Evaluated();
+                auto& xe = x.as_Evaluated();
+                if (auto cmp = ::ord(EncodedLiteralSlice(*te), EncodedLiteralSlice(*xe))) {
+                    return cmp;
+                }
+                break;
             }
-        }
         }
         return OrdEqual;
 }
@@ -141,13 +180,37 @@ namespace {
         if (left.data.tag() != right.data.tag()) {
             return false;
         }
-            TU_MATCH_HDRA( (left.data, right.data), {)
-            TU_ARMA(Integer, l, r) return l.type == r.type && l.value == r.value;
-            TU_ARMA(Float, l, r) return l.type == r.type && l.value == r.value;
-            TU_ARMA(Boolean, l, r) return l == r;
-            TU_ARMA(String, l, r) return l == r;
-            TU_ARMA(CString, l, r) return l.v == r.v;
-            TU_ARMA(ByteString, l, r) return l == r;
+            switch (left.data.tag()) {
+                case HIRExprLiteral::TAG_Integer: {
+                    auto& l = left.data.as_Integer();
+                    auto& r = right.data.as_Integer();
+                    return l.type == r.type && l.value == r.value;
+                }
+                case HIRExprLiteral::TAG_Float: {
+                    auto& l = left.data.as_Float();
+                    auto& r = right.data.as_Float();
+                    return l.type == r.type && l.value == r.value;
+                }
+                case HIRExprLiteral::TAG_Boolean: {
+                    auto& l = left.data.as_Boolean();
+                    auto& r = right.data.as_Boolean();
+                    return l == r;
+                }
+                case HIRExprLiteral::TAG_String: {
+                    auto& l = left.data.as_String();
+                    auto& r = right.data.as_String();
+                    return l == r;
+                }
+                case HIRExprLiteral::TAG_CString: {
+                    auto& l = left.data.as_CString();
+                    auto& r = right.data.as_CString();
+                    return l.v == r.v;
+                }
+                case HIRExprLiteral::TAG_ByteString: {
+                    auto& l = left.data.as_ByteString();
+                    auto& r = right.data.as_ByteString();
+                    return l == r;
+                }
             }
             throw "";
     }
@@ -314,11 +377,23 @@ void HIRConstGenericUnevaluated::fmt(::std::ostream& os) const {
 }
 
 HIRConstGeneric HIRConstGeneric::clone() const {
-    TU_MATCH_HDRA( (*this), {)
-    TU_ARMA(Infer, e) return e;
-        TU_ARMA(Unevaluated, e) return ::std::make_unique<HIRConstGenericUnevaluated>(e->clone());
-        TU_ARMA(Generic, e) return e;
-        TU_ARMA(Evaluated, e) return HIREncodedLiteralPtr(e->clone());
+    switch ((*this).tag()) {
+        case HIRConstGeneric::TAG_Infer: {
+            auto& e = (*this).as_Infer();
+            return e;
+        }
+        case HIRConstGeneric::TAG_Unevaluated: {
+            auto& e = (*this).as_Unevaluated();
+            return ::std::make_unique<HIRConstGenericUnevaluated>(e->clone());
+        }
+        case HIRConstGeneric::TAG_Generic: {
+            auto& e = (*this).as_Generic();
+            return e;
+        }
+        case HIRConstGeneric::TAG_Evaluated: {
+            auto& e = (*this).as_Evaluated();
+            return HIREncodedLiteralPtr(e->clone());
+        }
     }
     throw "";
 }
@@ -862,19 +937,32 @@ namespace {
             return ::OrdEqual;
         }
 
-        TU_MATCH_HDRA( ((*left)), {)
-        TU_ARMA(Generic, le)
-            throw "";
-            TU_ARMA(Infer, le) {
+        switch ((*left).tag()) {
+            case HIRTypeData::TAG_Generic: {
+                auto& le = (*left).as_Generic();
+                (void)le;
+                throw "";
+            }
+            case HIRTypeData::TAG_Infer: {
+                auto& le = (*left).as_Infer();
+                (void)le;
                 BUG(sp, "Hit infer");
+                break;
             }
-            TU_ARMA(Diverge, le) {
+            case HIRTypeData::TAG_Diverge: {
+                auto& le = (*left).as_Diverge();
+                (void)le;
                 BUG(sp, "Hit diverge");
+                break;
             }
-            TU_ARMA(NodeType, le) {
+            case HIRTypeData::TAG_NodeType: {
+                auto& le = (*left).as_NodeType();
+                (void)le;
                 BUG(sp, "Hit " << left);
+                break;
             }
-            TU_ARMA(Primitive, le) {
+            case HIRTypeData::TAG_Primitive: {
+                auto& le = (*left).as_Primitive();
                 if (const auto* re = right->opt_Primitive()) {
                     if (le != *re) {
                         BUG(sp, "Mismatched types - " << left << " and " << right);
@@ -883,8 +971,10 @@ namespace {
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
+                break;
             }
-            TU_ARMA(Path, le) {
+            case HIRTypeData::TAG_Path: {
+                auto& le = (*left).as_Path();
                 if (!right->is_Path() || le.path.data.tag() != right->as_Path().path.data.tag()) {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
@@ -918,8 +1008,10 @@ namespace {
                     }
                 }
                 TODO(sp, "Path - " << le.path << " and " << right);
+                break;
             }
-            TU_ARMA(TraitObject, le) {
+            case HIRTypeData::TAG_TraitObject: {
+                auto& le = (*left).as_TraitObject();
                 ASSERT_BUG(sp, right->is_TraitObject(), "Mismatched types - " << left << " vs " << right);
                 const auto& re = right->as_TraitObject();
                 ASSERT_BUG(sp, le.trait.path.path == re.trait.path.path, "Mismatched types - " << left << " vs " << right);
@@ -938,13 +1030,21 @@ namespace {
                 }
                 return ::OrdEqual;
             }
-            TU_ARMA(ErasedType, le) {
+            case HIRTypeData::TAG_ErasedType: {
+                auto& le = (*left).as_ErasedType();
+                (void)le;
                 TODO(sp, "ErasedType - " << left);
+                break;
             }
-            TU_ARMA(NamedFunction, le) {
+            case HIRTypeData::TAG_NamedFunction: {
+                auto& le = (*left).as_NamedFunction();
+                (void)le;
                 BUG(sp, "Hit function type");
+                break;
             }
-            TU_ARMA(Function, le) {
+            case HIRTypeData::TAG_Function: {
+                auto& le = (*left).as_Function();
+                (void)le;
                 if (/*const auto* re =*/right->opt_Function()) {
                     if (left == right) {
                         return ::OrdEqual;
@@ -953,29 +1053,37 @@ namespace {
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
+                break;
             }
-            TU_ARMA(Tuple, le) {
+            case HIRTypeData::TAG_Tuple: {
+                auto& le = (*left).as_Tuple();
                 if (const auto* re = right->opt_Tuple()) {
                     return typelistOrdSpecific(sp, le, *re);
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
+                break;
             }
-            TU_ARMA(Slice, le) {
+            case HIRTypeData::TAG_Slice: {
+                auto& le = (*left).as_Slice();
                 if (const auto* re = right->opt_Slice()) {
                     return typeOrdSpecific(sp, le.inner, re->inner);
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
+                break;
             }
-            TU_ARMA(Array, le) {
+            case HIRTypeData::TAG_Array: {
+                auto& le = (*left).as_Array();
                 if (const auto* re = right->opt_Array()) {
                     return combineSpecificity(typeOrdSpecific(sp, le.inner, re->inner), arraySizeOrdSpecific(sp, le.size, re->size));
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
+                break;
             }
-            TU_ARMA(Pointer, le) {
+            case HIRTypeData::TAG_Pointer: {
+                auto& le = (*left).as_Pointer();
                 if (const auto* re = right->opt_Pointer()) {
                     if (le.type != re->type) {
                         BUG(sp, "Mismatched types - " << left << " and " << right);
@@ -984,8 +1092,10 @@ namespace {
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
+                break;
             }
-            TU_ARMA(Borrow, le) {
+            case HIRTypeData::TAG_Borrow: {
+                auto& le = (*left).as_Borrow();
                 if (const auto* re = right->opt_Borrow()) {
                     if (le.type != re->type) {
                         BUG(sp, "Mismatched types - " << left << " and " << right);
@@ -994,6 +1104,7 @@ namespace {
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
+                break;
             }
         }
         throw "Fell off end of type_ord_specific";
@@ -1301,26 +1412,54 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
             if (a->tag() != b->tag()) {
                 return false;
             }
-            TU_MATCH_HDRA( ((*a), (*b)), {)
-            TU_ARMA(Generic, ae, be) {
+            switch ((*a).tag()) {
+                case HIRTypeData::TAG_Generic: {
+                    auto& ae = (*a).as_Generic();
+                    (void)ae;
+                    auto& be = (*b).as_Generic();
+                    (void)be;
+                    break;
                 }
-                TU_ARMA(Infer, ae, be) {
+                case HIRTypeData::TAG_Infer: {
+                    auto& ae = (*a).as_Infer();
+                    (void)ae;
+                    auto& be = (*b).as_Infer();
+                    (void)be;
+                    break;
                 }
-                TU_ARMA(Diverge, ae, be) {
+                case HIRTypeData::TAG_Diverge: {
+                    auto& ae = (*a).as_Diverge();
+                    (void)ae;
+                    auto& be = (*b).as_Diverge();
+                    (void)be;
+                    break;
                 }
-                TU_ARMA(NodeType, ae, be) {
+                case HIRTypeData::TAG_NodeType: {
+                    auto& ae = (*a).as_NodeType();
+                    (void)ae;
+                    auto& be = (*b).as_NodeType();
+                    (void)be;
                     BUG(sp, "Hit node-magic type (closure/generator/async) - " << a << " " << b);
+                    break;
                 }
-                TU_ARMA(Primitive, ae, be) {
+                case HIRTypeData::TAG_Primitive: {
+                    auto& ae = (*a).as_Primitive();
+                    auto& be = (*b).as_Primitive();
                     if (ae != be) {
                         return false;
                     }
+                    break;
                 }
-                TU_ARMA(Path, ae, be) {
+                case HIRTypeData::TAG_Path: {
+                    auto& ae = (*a).as_Path();
+                    auto& be = (*b).as_Path();
                     return typesOverlapPath(ae.path, be.path);
                     //TODO(sp, "Path - " << ae.path << " and " << be.path);
+                    break;
                 }
-                TU_ARMA(TraitObject, ae, be) {
+                case HIRTypeData::TAG_TraitObject: {
+                    auto& ae = (*a).as_TraitObject();
+                    auto& be = (*b).as_TraitObject();
                     if (ae.trait.path.path != be.trait.path.path) {
                         return false;
                     }
@@ -1341,13 +1480,22 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                     }
                     return true;
                 }
-                TU_ARMA(ErasedType, ae, be) {
+                case HIRTypeData::TAG_ErasedType: {
+                    auto& ae = (*a).as_ErasedType();
+                    (void)ae;
+                    auto& be = (*b).as_ErasedType();
+                    (void)be;
                     TODO(sp, "ErasedType - " << a);
+                    break;
                 }
-                TU_ARMA(NamedFunction, ae, be) {
+                case HIRTypeData::TAG_NamedFunction: {
+                    auto& ae = (*a).as_NamedFunction();
+                    auto& be = (*b).as_NamedFunction();
                     return typesOverlapPath(ae.path, be.path);
                 }
-                TU_ARMA(Function, ae, be) {
+                case HIRTypeData::TAG_Function: {
+                    auto& ae = (*a).as_Function();
+                    auto& be = (*b).as_Function();
                     if (ae.isUnsafe != be.isUnsafe) {
                         return false;
                     }
@@ -1365,8 +1513,11 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                     if (!H::typesOverlap(ae.rettype, be.rettype)) {
                         return false;
                     }
+                    break;
                 }
-                TU_ARMA(Tuple, ae, be) {
+                case HIRTypeData::TAG_Tuple: {
+                    auto& ae = (*a).as_Tuple();
+                    auto& be = (*b).as_Tuple();
                     if (ae.size() != be.size()) {
                         return false;
                     }
@@ -1375,23 +1526,32 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                             return false;
                         }
                     }
+                    break;
                 }
-                TU_ARMA(Slice, ae, be) {
+                case HIRTypeData::TAG_Slice: {
+                    auto& ae = (*a).as_Slice();
+                    auto& be = (*b).as_Slice();
                     return H::typesOverlap(ae.inner, be.inner);
                 }
-                TU_ARMA(Array, ae, be) {
+                case HIRTypeData::TAG_Array: {
+                    auto& ae = (*a).as_Array();
+                    auto& be = (*b).as_Array();
                     if (ae.size != be.size) {
                         return false;
                     }
                     return H::typesOverlap(ae.inner, be.inner);
                 }
-                TU_ARMA(Pointer, ae, be) {
+                case HIRTypeData::TAG_Pointer: {
+                    auto& ae = (*a).as_Pointer();
+                    auto& be = (*b).as_Pointer();
                     if (ae.type != be.type) {
                         return false;
                     }
                     return H::typesOverlap(ae.inner, be.inner);
                 }
-                TU_ARMA(Borrow, ae, be) {
+                case HIRTypeData::TAG_Borrow: {
+                    auto& ae = (*a).as_Borrow();
+                    auto& be = (*b).as_Borrow();
                     if (ae.type != be.type) {
                         return false;
                     }
@@ -1931,16 +2091,26 @@ unsigned HIRTrait::getVtableParentIndex(HIRTypeInterner& types, const Span& sp, 
 /// Helper for getting the struct associated with a pattern path
 const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIRPattern::PathBinding& binding, bool isTuple) {
     const HIRStruct* strP = nullptr;
-    TU_MATCH_HDRA( (binding), { )
-    TU_ARMA(Unbound, be)
-        BUG(sp, "Unexpected unbound named pattern - " << path);
-        TU_ARMA(Struct, be) {
+    switch (binding.tag()) {
+        case HIRPatternPathBinding::TAG_Unbound: {
+            auto& be = binding.as_Unbound();
+            (void)be;
+            BUG(sp, "Unexpected unbound named pattern - " << path);
+            break;
+        }
+        case HIRPatternPathBinding::TAG_Struct: {
+            auto& be = binding.as_Struct();
             strP = be;
+            break;
         }
-        TU_ARMA(Union, be) {
+        case HIRPatternPathBinding::TAG_Union: {
+            auto& be = binding.as_Union();
+            (void)be;
             BUG(sp, "Tuple pattern used on union " << path);
+            break;
         }
-        TU_ARMA(Enum, be) {
+        case HIRPatternPathBinding::TAG_Enum: {
+            auto& be = binding.as_Enum();
             const auto& enm = *be.ptr;
             if (isTuple) {
                 ASSERT_BUG(sp, enm.data.is_Data(), "PathTuple pattern with non-data enum - " << path);
@@ -1955,6 +2125,7 @@ const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIR
                 ASSERT_BUG(sp, enmD[be.varIdx].isStruct, "PathNamed pattern with non-brace enum variant - " << path);
             }
             strP = enmD[be.varIdx].type->as_Path().binding.as_Struct();
+            break;
         }
     }
     const auto& str = *strP;

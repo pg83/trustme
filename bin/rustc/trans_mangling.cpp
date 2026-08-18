@@ -211,26 +211,36 @@ public:
         // - Inherent: Starts with `I`
         // - Trait: Starts with `Q` (qualified)
         // - bare type: Starts with `T` (see Trans_MangleType)
-        TU_MATCH_HDRA( (p.data), {)
-        TU_ARMA(Generic, e) {
+        switch (p.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                auto& e = p.data.as_Generic();
                 os << "G";
                 this->fmtGenericPath(e);
+                break;
             }
-            TU_ARMA(UfcsInherent, e) {
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& e = p.data.as_UfcsInherent();
                 os << "I";
                 this->fmtType(e.type);
                 this->fmtName(e.item);
                 this->fmtPathParams(e.params);
+                break;
             }
-            TU_ARMA(UfcsKnown, e) {
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& e = p.data.as_UfcsKnown();
                 os << "Q";
                 this->fmtType(e.type);
                 this->fmtGenericPath(e.trait);
                 this->fmtName(e.item);
                 this->fmtPathParams(e.params);
+                break;
             }
-            TU_ARMA(UfcsUnknown, e)
-            BUG(Span(), "Non-encodable path " << p);
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& e = p.data.as_UfcsUnknown();
+                (void)e;
+                BUG(Span(), "Non-encodable path " << p);
+                break;
+            }
         }
     }
 
@@ -266,30 +276,39 @@ public:
     //   - str  : 'C' 'y'
     // - Diverge: 'C' 'z'
     void fmtType(const HIRTypeData* ty) {
-        TU_MATCH_HDRA( ((*ty)), { )
-        case HIRTypeData::TAG_Infer:
+        switch ((*ty).tag()) {
+case HIRTypeData::TAG_Infer:
         case HIRTypeData::TAG_Generic:
         case HIRTypeData::TAG_ErasedType:
         case HIRTypeData::TAG_NodeType:
             BUG(Span(), "Non-encodable type " << ty);
-            TU_ARMA(Tuple, e) {
+            case HIRTypeData::TAG_Tuple: {
+                auto& e = (*ty).as_Tuple();
                 os << "T" << e.size();
                 for (const auto& sty : e) {
                     this->fmtType(sty);
                 }
+                break;
             }
-            TU_ARMA(Slice, e) {
+            case HIRTypeData::TAG_Slice: {
+                auto& e = (*ty).as_Slice();
                 os << "S";
                 this->fmtType(e.inner);
+                break;
             }
-            TU_ARMA(Array, e) {
+            case HIRTypeData::TAG_Array: {
+                auto& e = (*ty).as_Array();
                 os << "A" << e.size.as_Known();
                 this->fmtType(e.inner);
+                break;
             }
-            TU_ARMA(Path, e) {
+            case HIRTypeData::TAG_Path: {
+                auto& e = (*ty).as_Path();
                 this->fmtPath(e.path);
+                break;
             }
-            TU_ARMA(TraitObject, e) {
+            case HIRTypeData::TAG_TraitObject: {
+                auto& e = (*ty).as_TraitObject();
                 // - TraitObject: 'D' <data:GenericPath> <naty> [<ASTType*> ...] <nmarker> [markers: <GenericPath> ...]
                 os << "D";
                 this->fmtGenericPath(e.trait.path);
@@ -302,13 +321,17 @@ public:
                 for (const auto& p : e.markers) {
                     this->fmtGenericPath(p);
                 }
+                break;
             }
-            TU_ARMA(NamedFunction, e) {
+            case HIRTypeData::TAG_NamedFunction: {
+                auto& e = (*ty).as_NamedFunction();
                 // - Named function: 'f' <path>
                 os << "f";
                 this->fmtPath(e.path);
+                break;
             }
-            TU_ARMA(Function, e) {
+            case HIRTypeData::TAG_Function: {
+                auto& e = (*ty).as_Function();
                 // - Function: 'F' <abi:RcString> <nargs> [args: <ASTType*> ...] <ret:ASTType*>
                 os << "F";
                 os << (e.isUnsafe ? "u" : ""); // Optional allowed, next is a number
@@ -322,8 +345,10 @@ public:
                     this->fmtType(t);
                 }
                 this->fmtType(e.rettype);
+                break;
             }
-            TU_ARMA(Borrow, e) {
+            case HIRTypeData::TAG_Borrow: {
+                auto& e = (*ty).as_Borrow();
                 os << "B";
                 switch (e.type) {
                     case HIRBorrowType::Shared:
@@ -337,8 +362,10 @@ public:
                         break;
                 }
                 this->fmtType(e.inner);
+                break;
             }
-            TU_ARMA(Pointer, e) {
+            case HIRTypeData::TAG_Pointer: {
+                auto& e = (*ty).as_Pointer();
                 os << "P";
                 switch (e.type) {
                     case HIRBorrowType::Shared:
@@ -352,8 +379,10 @@ public:
                         break;
                 }
                 this->fmtType(e.inner);
+                break;
             }
-            TU_ARMA(Primitive, e) {
+            case HIRTypeData::TAG_Primitive: {
+                auto& e = (*ty).as_Primitive();
                 switch (e) {
                     case HIRCoreType::U8:
                         os << 'C' << 'a';
@@ -413,11 +442,16 @@ public:
                         os << 'C' << 'y';
                         break;
                 }
+                break;
             }
-            TU_ARMA(Diverge, _e) {
+            case HIRTypeData::TAG_Diverge: {
+                auto& _e = (*ty).as_Diverge();
+                (void)_e;
                 os << 'C' << 'z';
+                break;
             }
-            TU_ARMA(Pattern, e) {
+            case HIRTypeData::TAG_Pattern: {
+                auto& e = (*ty).as_Pattern();
                 os << "Q";
                 this->fmtType(e.inner);
                 os << e.pattern.alternatives.size() << "r";
@@ -427,6 +461,7 @@ public:
                     os << (range.hasEnd ? (range.endInclusive ? 'i' : 'e') : 'n');
                     if (range.hasEnd) this->fmtConstGeneric(range.end);
                 }
+                break;
             }
         }
     }

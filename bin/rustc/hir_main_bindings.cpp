@@ -1791,8 +1791,10 @@ namespace {
 
         void visitStruct(HIRItemPath p, HIRStruct& item) override {
             os << indent() << "struct " << p.getName() << item.params.fmtArgs();
-            TU_MATCH_HDRA( (item.data), {)
-            TU_ARMA(Unit, flds) {
+            switch (item.data.tag()) {
+                case HIRStructData::TAG_Unit: {
+                    auto& flds = item.data.as_Unit();
+                    (void)flds;
                     if (item.params.bounds.empty()) {
                         os << ";\n";
                     } else {
@@ -1800,8 +1802,10 @@ namespace {
                         os << indent() << " " << item.params.fmtBounds() << "\n";
                         os << indent() << "    ;\n";
                     }
+                    break;
                 }
-                TU_ARMA(Tuple, flds) {
+                case HIRStructData::TAG_Tuple: {
+                    auto& flds = item.data.as_Tuple();
                     os << "(";
                     for (const auto& fld : flds) {
                         os << fld.publicity << " " << fld.ent << ", ";
@@ -1813,8 +1817,10 @@ namespace {
                         os << indent() << " " << item.params.fmtBounds() << "\n";
                         os << indent() << "    ;\n";
                     }
+                    break;
                 }
-                TU_ARMA(Named, flds) {
+                case HIRStructData::TAG_Named: {
+                    auto& flds = item.data.as_Named();
                     os << "\n";
                     if (!item.params.bounds.empty()) {
                         os << indent() << " " << item.params.fmtBounds() << "\n";
@@ -1830,6 +1836,7 @@ namespace {
                     }
                     decIndent();
                     os << indent() << "}\n";
+                    break;
                 }
             }
         }
@@ -2254,8 +2261,9 @@ namespace {
         }
 
         void visit(HIRExprNodeLiteral& node) override {
-            TU_MATCH_HDRA( (node.data), {)
-            TU_ARMA(Integer, e) {
+            switch (node.data.tag()) {
+                case HIRExprLiteral::TAG_Integer: {
+                    auto& e = node.data.as_Integer();
                     switch (e.type) {
                         case HIRCoreType::U8:
                             os << e.value << "_u8";
@@ -2301,8 +2309,10 @@ namespace {
                             os << e.value << "_unk";
                             break;
                     }
+                    break;
                 }
-                TU_ARMA(Float, e) {
+                case HIRExprLiteral::TAG_Float: {
+                    auto& e = node.data.as_Float();
                     switch (e.type) {
                         case HIRCoreType::F32:
                             os << e.value << "_f32";
@@ -2314,17 +2324,25 @@ namespace {
                             os << e.value << "_unk";
                             break;
                     }
+                    break;
                 }
-                TU_ARMA(Boolean, e) {
+                case HIRExprLiteral::TAG_Boolean: {
+                    auto& e = node.data.as_Boolean();
                     os << (e ? "true" : "false");
+                    break;
                 }
-                TU_ARMA(String, e) {
+                case HIRExprLiteral::TAG_String: {
+                    auto& e = node.data.as_String();
                     os << "\"" << FmtEscaped(e) << "\"";
+                    break;
                 }
-                TU_ARMA(CString, e) {
+                case HIRExprLiteral::TAG_CString: {
+                    auto& e = node.data.as_CString();
                     os << "c\"" << FmtEscaped(e.v) << "\"";
+                    break;
                 }
-                TU_ARMA(ByteString, e) {
+                case HIRExprLiteral::TAG_ByteString: {
+                    auto& e = node.data.as_ByteString();
                     os << "b\"";
                     for (auto b : e) {
                         if (b == '\\' || b == '\"') {
@@ -2338,6 +2356,7 @@ namespace {
                         }
                     }
                     os << "\"";
+                    break;
                 }
             }
         }
@@ -2690,13 +2709,17 @@ public:
 
     void serialiseArraysize(const HIRArraySize& as) {
         out.writeTag(static_cast<int>(as.tag()));
-            TU_MATCH_HDRA( (as), { )
-            TU_ARMA(Unevaluated, se) {
-                serialise(se);
-            }
-            TU_ARMA(Known, se) {
-                out.writeU64c(se);
-            }
+            switch (as.tag()) {
+                case HIRArraySize::TAG_Unevaluated: {
+                    auto& se = as.as_Unevaluated();
+                    serialise(se);
+                    break;
+                }
+                case HIRArraySize::TAG_Known: {
+                    auto& se = as.as_Known();
+                    out.writeU64c(se);
+                    break;
+                }
             }
     }
 
@@ -2719,73 +2742,105 @@ public:
 
         auto _ = out.openObject("HIR::TypeData");
         out.writeTag(ty->tag());
-            TU_MATCH_HDRA( (*ty), {)
-            TU_ARMA(Infer, e) {
-                // BAAD
-            }
-            TU_ARMA(Diverge, e) {
-            }
-            TU_ARMA(Primitive, e) {
-                out.writeTag(static_cast<int>(e));
-            }
-            TU_ARMA(Path, e) {
-                serialisePath(e.path);
-            }
-            TU_ARMA(Generic, e) {
-                serialise(e);
-            }
-            TU_ARMA(TraitObject, e) {
-                serialiseTraitpath(e.trait);
-                serialiseVec(e.markers);
-            }
-            TU_ARMA(ErasedType, e) {
-                TODO(Span(), "Serialse ErasedType?");
-
-                out.writeBool(e.isSized);
-                serialiseVec(e.traits);
-                serialisePathparams(e.use);
-            }
-            TU_ARMA(Array, e) {
-                serialiseType(e.inner);
-                serialiseArraysize(e.size);
-            }
-            TU_ARMA(Slice, e) {
-                serialiseType(e.inner);
-            }
-            TU_ARMA(Tuple, e) {
-                serialiseVec(e);
-            }
-            TU_ARMA(Borrow, e) {
-                out.writeTag(static_cast<int>(e.type));
-                serialiseType(e.inner);
-            }
-            TU_ARMA(Pointer, e) {
-                out.writeTag(static_cast<int>(e.type));
-                serialiseType(e.inner);
-            }
-            TU_ARMA(NamedFunction, e) {
-                serialisePath(e.path);
-            }
-            TU_ARMA(Function, e) {
-                out.writeBool(e.isUnsafe);
-                out.writeBool(e.isVariadic);
-                out.writeString(e.abi);
-                serialiseType(e.rettype);
-                serialiseVec(e.argTypes);
-                out.writeBool(e.trackCaller);
-            }
-            TU_ARMA(Pattern, e) {
-                serialiseType(e.inner);
-                out.writeCount(e.pattern.alternatives.size());
-                for (const auto& range : e.pattern.alternatives) {
-                    out.writeBool(range.hasStart);
-                    if (range.hasStart) serialise(range.start);
-                    out.writeBool(range.hasEnd);
-                    if (range.hasEnd) serialise(range.end);
-                    out.writeBool(range.endInclusive);
+            switch ((*ty).tag()) {
+                case HIRTypeData::TAG_Infer: {
+                    auto& e = (*ty).as_Infer();
+                    (void)e;
+                    // BAAD
+                    break;
                 }
-            }
-            break;
+                case HIRTypeData::TAG_Diverge: {
+                    auto& e = (*ty).as_Diverge();
+                    (void)e;
+                    break;
+                }
+                case HIRTypeData::TAG_Primitive: {
+                    auto& e = (*ty).as_Primitive();
+                    out.writeTag(static_cast<int>(e));
+                    break;
+                }
+                case HIRTypeData::TAG_Path: {
+                    auto& e = (*ty).as_Path();
+                    serialisePath(e.path);
+                    break;
+                }
+                case HIRTypeData::TAG_Generic: {
+                    auto& e = (*ty).as_Generic();
+                    serialise(e);
+                    break;
+                }
+                case HIRTypeData::TAG_TraitObject: {
+                    auto& e = (*ty).as_TraitObject();
+                    serialiseTraitpath(e.trait);
+                    serialiseVec(e.markers);
+                    break;
+                }
+                case HIRTypeData::TAG_ErasedType: {
+                    auto& e = (*ty).as_ErasedType();
+                    TODO(Span(), "Serialse ErasedType?");
+
+                    out.writeBool(e.isSized);
+                    serialiseVec(e.traits);
+                    serialisePathparams(e.use);
+                    break;
+                }
+                case HIRTypeData::TAG_Array: {
+                    auto& e = (*ty).as_Array();
+                    serialiseType(e.inner);
+                    serialiseArraysize(e.size);
+                    break;
+                }
+                case HIRTypeData::TAG_Slice: {
+                    auto& e = (*ty).as_Slice();
+                    serialiseType(e.inner);
+                    break;
+                }
+                case HIRTypeData::TAG_Tuple: {
+                    auto& e = (*ty).as_Tuple();
+                    serialiseVec(e);
+                    break;
+                }
+                case HIRTypeData::TAG_Borrow: {
+                    auto& e = (*ty).as_Borrow();
+                    out.writeTag(static_cast<int>(e.type));
+                    serialiseType(e.inner);
+                    break;
+                }
+                case HIRTypeData::TAG_Pointer: {
+                    auto& e = (*ty).as_Pointer();
+                    out.writeTag(static_cast<int>(e.type));
+                    serialiseType(e.inner);
+                    break;
+                }
+                case HIRTypeData::TAG_NamedFunction: {
+                    auto& e = (*ty).as_NamedFunction();
+                    serialisePath(e.path);
+                    break;
+                }
+                case HIRTypeData::TAG_Function: {
+                    auto& e = (*ty).as_Function();
+                    out.writeBool(e.isUnsafe);
+                    out.writeBool(e.isVariadic);
+                    out.writeString(e.abi);
+                    serialiseType(e.rettype);
+                    serialiseVec(e.argTypes);
+                    out.writeBool(e.trackCaller);
+                    break;
+                }
+                case HIRTypeData::TAG_Pattern: {
+                    auto& e = (*ty).as_Pattern();
+                    serialiseType(e.inner);
+                    out.writeCount(e.pattern.alternatives.size());
+                    for (const auto& range : e.pattern.alternatives) {
+                        out.writeBool(range.hasStart);
+                        if (range.hasStart) serialise(range.start);
+                        out.writeBool(range.hasEnd);
+                        if (range.hasEnd) serialise(range.end);
+                        out.writeBool(range.endInclusive);
+                    }
+                    break;
+                }
+break;
             case HIRTypeData::TAG_NodeType:
                 BUG(Span(), "Encountered invalid type when serialising - " << ty);
                 break;
@@ -2836,29 +2891,38 @@ public:
 
     void serialisePath(const HIRPath& path) {
         TRACE_FUNCTION_F("path=" << path);
-            TU_MATCH_HDRA( (path.data), {)
-            TU_ARMA(Generic, e) {
-                out.writeTag(0);
-                serialiseGenericpath(e);
-            }
-            TU_ARMA(UfcsInherent, e) {
-                out.writeTag(1);
-                serialiseType(e.type);
-                out.writeString(e.item);
-                serialisePathparams(e.params);
-                serialisePathparams(e.implParams);
-            }
-            TU_ARMA(UfcsKnown, e) {
-                out.writeTag(2);
-                serialiseType(e.type);
-                serialiseGenericpath(e.trait);
-                out.writeString(e.item);
-                serialisePathparams(e.params);
-            }
-            TU_ARMA(UfcsUnknown, e) {
-                DEBUG("-- UfcsUnknown - " << path);
-                assert(!"Unexpected UfcsUnknown");
-            }
+            switch (path.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& e = path.data.as_Generic();
+                    out.writeTag(0);
+                    serialiseGenericpath(e);
+                    break;
+                }
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& e = path.data.as_UfcsInherent();
+                    out.writeTag(1);
+                    serialiseType(e.type);
+                    out.writeString(e.item);
+                    serialisePathparams(e.params);
+                    serialisePathparams(e.implParams);
+                    break;
+                }
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& e = path.data.as_UfcsKnown();
+                    out.writeTag(2);
+                    serialiseType(e.type);
+                    serialiseGenericpath(e.trait);
+                    out.writeString(e.item);
+                    serialisePathparams(e.params);
+                    break;
+                }
+                case HIRPathData::TAG_UfcsUnknown: {
+                    auto& e = path.data.as_UfcsUnknown();
+                    (void)e;
+                    DEBUG("-- UfcsUnknown - " << path);
+                    assert(!"Unexpected UfcsUnknown");
+                    break;
+                }
             }
     }
 
@@ -2883,18 +2947,22 @@ public:
 
     void serialise(const HIRGenericBound& b) {
         TRACE_FUNCTION_F(b);
-            TU_MATCH_HDRA( (b), {)
-            TU_ARMA(TraitBound, e) {
-                out.writeTag(2);
-                serialiseType(e.type);
-                serialiseTraitpath(e.trait);
-                out.writeU8(static_cast<uint8_t>(e.constness));
-            }
-            TU_ARMA(TypeEquality, e) {
-                out.writeTag(3);
-                serialiseType(e.type);
-                serialiseType(e.otherType);
-            }
+            switch (b.tag()) {
+                case HIRGenericBound::TAG_TraitBound: {
+                    auto& e = b.as_TraitBound();
+                    out.writeTag(2);
+                    serialiseType(e.type);
+                    serialiseTraitpath(e.trait);
+                    out.writeU8(static_cast<uint8_t>(e.constness));
+                    break;
+                }
+                case HIRGenericBound::TAG_TypeEquality: {
+                    auto& e = b.as_TypeEquality();
+                    out.writeTag(3);
+                    serialiseType(e.type);
+                    serialiseType(e.otherType);
+                    break;
+                }
             }
     }
 
@@ -3117,31 +3185,50 @@ public:
 
     void serialise(const ::SimplePatEnt& pe) {
         out.writeTag(pe.tag());
-            TU_MATCH_HDRA( (pe), { )
-            TU_ARMA(End, _e) {
-            }
-            TU_ARMA(LoopStart, e) {
-                out.writeCount(e.index);
-            }
-            TU_ARMA(LoopNext, _e) {
-            }
-            TU_ARMA(LoopEnd, _e) {
-            }
-            TU_ARMA(Jump, e) {
-                out.writeCount(e.jumpTarget);
-            }
-            TU_ARMA(ExpectTok, e) {
-                serialise(e);
-            }
-            TU_ARMA(ExpectPat, e) {
-                out.writeTag(static_cast<int>(e.type));
-                out.writeCount(e.idx);
-            }
-            TU_ARMA(If, e) {
-                out.writeBool(e.isEqual);
-                out.writeCount(e.jumpTarget);
-                serialiseVec(e.ents);
-            }
+            switch (pe.tag()) {
+                case SimplePatEnt::TAG_End: {
+                    auto& _e = pe.as_End();
+                    (void)_e;
+                    break;
+                }
+                case SimplePatEnt::TAG_LoopStart: {
+                    auto& e = pe.as_LoopStart();
+                    out.writeCount(e.index);
+                    break;
+                }
+                case SimplePatEnt::TAG_LoopNext: {
+                    auto& _e = pe.as_LoopNext();
+                    (void)_e;
+                    break;
+                }
+                case SimplePatEnt::TAG_LoopEnd: {
+                    auto& _e = pe.as_LoopEnd();
+                    (void)_e;
+                    break;
+                }
+                case SimplePatEnt::TAG_Jump: {
+                    auto& e = pe.as_Jump();
+                    out.writeCount(e.jumpTarget);
+                    break;
+                }
+                case SimplePatEnt::TAG_ExpectTok: {
+                    auto& e = pe.as_ExpectTok();
+                    serialise(e);
+                    break;
+                }
+                case SimplePatEnt::TAG_ExpectPat: {
+                    auto& e = pe.as_ExpectPat();
+                    out.writeTag(static_cast<int>(e.type));
+                    out.writeCount(e.idx);
+                    break;
+                }
+                case SimplePatEnt::TAG_If: {
+                    auto& e = pe.as_If();
+                    out.writeBool(e.isEqual);
+                    out.writeCount(e.jumpTarget);
+                    serialiseVec(e.ents);
+                    break;
+                }
             }
     }
 
@@ -3152,39 +3239,51 @@ public:
     }
 
     void serialise(const ::MacroExpansionEnt& ent) {
-            TU_MATCH_HDRA( (ent), {)
-            TU_ARMA(Token, e) {
-                out.writeTag(0);
-                serialise(e);
-            }
-            TU_ARMA(NamedValue, e) {
-                out.writeTag(1);
-                out.writeU8(e >> 24);
-                out.writeCount(e & 0x00FFFFFF);
-            }
-            TU_ARMA(Loop, e) {
-                out.writeTag(2);
-                serialiseVec(e.entries);
-                serialise(e.joiner);
-                serialise(e.controllingInputLoops);
-            }
-            TU_ARMA(Concat, e) {
-                out.writeTag(3);
-                serialiseVec(e);
-            }
+            switch (ent.tag()) {
+                case MacroExpansionEnt::TAG_Token: {
+                    auto& e = ent.as_Token();
+                    out.writeTag(0);
+                    serialise(e);
+                    break;
+                }
+                case MacroExpansionEnt::TAG_NamedValue: {
+                    auto& e = ent.as_NamedValue();
+                    out.writeTag(1);
+                    out.writeU8(e >> 24);
+                    out.writeCount(e & 0x00FFFFFF);
+                    break;
+                }
+                case MacroExpansionEnt::TAG_Loop: {
+                    auto& e = ent.as_Loop();
+                    out.writeTag(2);
+                    serialiseVec(e.entries);
+                    serialise(e.joiner);
+                    serialise(e.controllingInputLoops);
+                    break;
+                }
+                case MacroExpansionEnt::TAG_Concat: {
+                    auto& e = ent.as_Concat();
+                    out.writeTag(3);
+                    serialiseVec(e);
+                    break;
+                }
             }
     }
 
     void serialise(const ::MacroExpansionConcatEnt& e) {
         out.writeTag(e.tag());
-            TU_MATCH_HDRA((e), {)
-            TU_ARMA(Ident, i) {
-                serialise(i.hygiene);
-                out.writeString(i.name);
-            }
-            TU_ARMA(Named, i) {
-                serialise(i);
-            }
+            switch (e.tag()) {
+                case MacroExpansionConcatEnt::TAG_Ident: {
+                    auto& i = e.as_Ident();
+                    serialise(i.hygiene);
+                    out.writeString(i.name);
+                    break;
+                }
+                case MacroExpansionConcatEnt::TAG_Named: {
+                    auto& i = e.as_Named();
+                    serialise(i);
+                    break;
+                }
             }
     }
 
@@ -3254,16 +3353,27 @@ public:
 
     void serialise(const HIRConstGeneric& v) {
         out.writeTag(v.tag());
-            TU_MATCH_HDRA( (v), {)
-            TU_ARMA(Infer, e) {
-            }
-            TU_ARMA(Unevaluated, e) {
-                serialise(*e);
-            }
-            TU_ARMA(Generic, e)
-            serialise(e);
-            TU_ARMA(Evaluated, e)
-            serialise(*e);
+            switch (v.tag()) {
+                case HIRConstGeneric::TAG_Infer: {
+                    auto& e = v.as_Infer();
+                    (void)e;
+                    break;
+                }
+                case HIRConstGeneric::TAG_Unevaluated: {
+                    auto& e = v.as_Unevaluated();
+                    serialise(*e);
+                    break;
+                }
+                case HIRConstGeneric::TAG_Generic: {
+                    auto& e = v.as_Generic();
+                    serialise(e);
+                    break;
+                }
+                case HIRConstGeneric::TAG_Evaluated: {
+                    auto& e = v.as_Evaluated();
+                    serialise(*e);
+                    break;
+                }
             }
     }
 
@@ -3303,40 +3413,52 @@ public:
 
     void serialise(const AsmRegisterSpec& r) {
         out.writeTag(static_cast<unsigned>(r.tag()));
-            TU_MATCH_HDRA( (r), {)
-            TU_ARMA(Class, e) {
-                out.writeTag(static_cast<unsigned>(e));
-            }
-            TU_ARMA(Explicit, e) {
-                out.writeString(e);
-            }
+            switch (r.tag()) {
+                case AsmRegisterSpec::TAG_Class: {
+                    auto& e = r.as_Class();
+                    out.writeTag(static_cast<unsigned>(e));
+                    break;
+                }
+                case AsmRegisterSpec::TAG_Explicit: {
+                    auto& e = r.as_Explicit();
+                    out.writeString(e);
+                    break;
+                }
             }
     }
 
     void serialise(const MIRAsmParam& p) {
         out.writeTag(static_cast<unsigned>(p.tag()));
-            TU_MATCH_HDRA( (p), {)
-            TU_ARMA(Sym, e) {
-                serialisePath(e);
-            }
-            TU_ARMA(Const, e) {
-                serialise(e);
-            }
-            TU_ARMA(Reg, e) {
-                out.writeTag(static_cast<unsigned>(e.dir));
-                serialise(e.spec);
-                out.writeBool(bool(e.input));
-                if (e.input) {
-                    serialise(e.input);
+            switch (p.tag()) {
+                case MIRAsmParam::TAG_Sym: {
+                    auto& e = p.as_Sym();
+                    serialisePath(e);
+                    break;
                 }
-                out.writeBool(bool(e.output));
-                if (e.output) {
-                    serialise(e.output);
+                case MIRAsmParam::TAG_Const: {
+                    auto& e = p.as_Const();
+                    serialise(e);
+                    break;
                 }
-            }
-            TU_ARMA(Label, e) {
-                out.writeCount(e);
-            }
+                case MIRAsmParam::TAG_Reg: {
+                    auto& e = p.as_Reg();
+                    out.writeTag(static_cast<unsigned>(e.dir));
+                    serialise(e.spec);
+                    out.writeBool(bool(e.input));
+                    if (e.input) {
+                        serialise(e.input);
+                    }
+                    out.writeBool(bool(e.output));
+                    if (e.output) {
+                        serialise(e.output);
+                    }
+                    break;
+                }
+                case MIRAsmParam::TAG_Label: {
+                    auto& e = p.as_Label();
+                    out.writeCount(e);
+                    break;
+                }
             }
     }
 
@@ -3359,48 +3481,62 @@ public:
 
     void serialise(const MIRStatement& stmt) {
         auto _ = out.openObject("MIR::Statement");
-            TU_MATCH_HDRA( (stmt), {)
-            TU_ARMA(Assign, e) {
-                out.writeTag(0);
-                serialise(e.dst);
-                serialise(e.src);
-            }
-            TU_ARMA(Asm, e) {
-                out.writeTag(2);
-                out.writeString(e.tpl);
-                serialiseVec(e.outputs);
-                serialiseVec(e.inputs);
-                serialiseVec(e.clobbers);
-                serialiseVec(e.flags);
-            }
-            TU_ARMA(SetDropFlag, e) {
-                out.writeTag(3);
-                out.writeCount(e.idx);
-                out.writeBool(e.newVal);
-                out.writeCount(e.other);
-            }
-            TU_ARMA(ScopeEnd, e) {
-                out.writeTag(4);
-                serialiseVec(e.slots);
-            }
-            TU_ARMA(Asm2, e) {
-                out.writeTag(5);
-                serialise(e.options);
-                serialiseVec(e.lines);
-                serialiseVec(e.params);
-            }
-            TU_ARMA(SaveDropFlag, e) {
-                out.writeTag(6);
-                serialise(e.slot);
-                out.writeCount(e.bitIndex);
-                out.writeCount(e.idx);
-            }
-            TU_ARMA(LoadDropFlag, e) {
-                out.writeTag(7);
-                out.writeCount(e.idx);
-                serialise(e.slot);
-                out.writeCount(e.bitIndex);
-            }
+            switch (stmt.tag()) {
+                case MIRStatement::TAG_Assign: {
+                    auto& e = stmt.as_Assign();
+                    out.writeTag(0);
+                    serialise(e.dst);
+                    serialise(e.src);
+                    break;
+                }
+                case MIRStatement::TAG_Asm: {
+                    auto& e = stmt.as_Asm();
+                    out.writeTag(2);
+                    out.writeString(e.tpl);
+                    serialiseVec(e.outputs);
+                    serialiseVec(e.inputs);
+                    serialiseVec(e.clobbers);
+                    serialiseVec(e.flags);
+                    break;
+                }
+                case MIRStatement::TAG_SetDropFlag: {
+                    auto& e = stmt.as_SetDropFlag();
+                    out.writeTag(3);
+                    out.writeCount(e.idx);
+                    out.writeBool(e.newVal);
+                    out.writeCount(e.other);
+                    break;
+                }
+                case MIRStatement::TAG_ScopeEnd: {
+                    auto& e = stmt.as_ScopeEnd();
+                    out.writeTag(4);
+                    serialiseVec(e.slots);
+                    break;
+                }
+                case MIRStatement::TAG_Asm2: {
+                    auto& e = stmt.as_Asm2();
+                    out.writeTag(5);
+                    serialise(e.options);
+                    serialiseVec(e.lines);
+                    serialiseVec(e.params);
+                    break;
+                }
+                case MIRStatement::TAG_SaveDropFlag: {
+                    auto& e = stmt.as_SaveDropFlag();
+                    out.writeTag(6);
+                    serialise(e.slot);
+                    out.writeCount(e.bitIndex);
+                    out.writeCount(e.idx);
+                    break;
+                }
+                case MIRStatement::TAG_LoadDropFlag: {
+                    auto& e = stmt.as_LoadDropFlag();
+                    out.writeTag(7);
+                    out.writeCount(e.idx);
+                    serialise(e.slot);
+                    out.writeCount(e.bitIndex);
+                    break;
+                }
             }
     }
 
@@ -3485,19 +3621,27 @@ public:
 
     void serialise(const MIRSwitchValues& sv) {
         out.writeTag(static_cast<int>(sv.tag()));
-            TU_MATCH_HDRA( (sv), {)
-            TU_ARMA(Unsigned, e) {
-                serialiseVec(e);
-            }
-            TU_ARMA(Signed, e) {
-                serialiseVec(e);
-            }
-            TU_ARMA(String, e) {
-                serialiseVec(e);
-            }
-            TU_ARMA(ByteString, e) {
-                serialiseVec(e);
-            }
+            switch (sv.tag()) {
+                case MIRSwitchValues::TAG_Unsigned: {
+                    auto& e = sv.as_Unsigned();
+                    serialiseVec(e);
+                    break;
+                }
+                case MIRSwitchValues::TAG_Signed: {
+                    auto& e = sv.as_Signed();
+                    serialiseVec(e);
+                    break;
+                }
+                case MIRSwitchValues::TAG_String: {
+                    auto& e = sv.as_String();
+                    serialiseVec(e);
+                    break;
+                }
+                case MIRSwitchValues::TAG_ByteString: {
+                    auto& e = sv.as_ByteString();
+                    serialiseVec(e);
+                    break;
+                }
             }
     }
 
@@ -3755,16 +3899,22 @@ public:
     void serialise(const HIRMacroItem& item) {
         auto _ = out.openObject("HIR::MacroItem");
         out.writeTag(item.tag());
-            TU_MATCH_HDRA( (item), {)
-            TU_ARMA(Import, e) {
-                serialise(e.path);
-            }
-            TU_ARMA(MacroRules, e) {
-                serialise(e);
-            }
-            TU_ARMA(ProcMacro, e) {
-                serialise(e);
-            }
+            switch (item.tag()) {
+                case HIRMacroItem::TAG_Import: {
+                    auto& e = item.as_Import();
+                    serialise(e.path);
+                    break;
+                }
+                case HIRMacroItem::TAG_MacroRules: {
+                    auto& e = item.as_MacroRules();
+                    serialise(e);
+                    break;
+                }
+                case HIRMacroItem::TAG_ProcMacro: {
+                    auto& e = item.as_ProcMacro();
+                    serialise(e);
+                    break;
+                }
             }
     }
 

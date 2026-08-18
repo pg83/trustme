@@ -17,15 +17,19 @@ void TraitResolveCommon::prepIndexes(const Span& sp) {
     traitBounds.clear();
 
     this->iterateBounds([&](const HIRGenericBound& b) -> bool {
-        TU_MATCH_HDRA( (b), { )
-        default:
+        switch (b.tag()) {
+default:
             break;
-            TU_ARMA(TraitBound, be) {
+            case HIRGenericBound::TAG_TraitBound: {
+                auto& be = b.as_TraitBound();
                 this->prepIndexesAddTraitBound(sp, be.type, be.trait.clone());
+                break;
             }
-            TU_ARMA(TypeEquality, be) {
+            case HIRGenericBound::TAG_TypeEquality: {
+                auto& be = b.as_TypeEquality();
                 DEBUG("Equality - " << be.type << " = " << be.otherType);
                 this->prepIndexesAddEquality(sp, be.type, be.otherType);
+                break;
             }
         }
         return false;

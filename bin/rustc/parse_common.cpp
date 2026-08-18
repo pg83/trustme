@@ -3791,17 +3791,23 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
             item.attrs.items.push_back(std::move(a));
         }
         // Only the kinds a trait body can hold; anything else is a loud TODO rather than silently accepted.
-        TU_MATCH_HDRA((item.data), {)
-        default:
+        switch (item.data.tag()) {
+default:
             TODO(lex.pointSpan(), "Interpolated item into trait: " << item.data.tagStr());
-            TU_ARMA(Function, e) {
+            case ASTItem::TAG_Function: {
+                auto& e = item.data.as_Function();
                 (void)e;
+                break;
             }
-            TU_ARMA(Static, e) {
+            case ASTItem::TAG_Static: {
+                auto& e = item.data.as_Static();
                 (void)e;
+                break;
             }
-            TU_ARMA(Type, e) {
+            case ASTItem::TAG_Type: {
+                auto& e = item.data.as_Type();
                 (void)e;
+                break;
             }
         }
         return item;

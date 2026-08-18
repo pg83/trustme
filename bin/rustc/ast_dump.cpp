@@ -170,23 +170,32 @@ public:
             os << ", ";
         }
         for (auto& p : n.params) {
-            TU_MATCH_HDRA((p), {)
-            TU_ARMA(Const, e) {
+            switch (p.tag()) {
+                case ASTAsmParam::TAG_Const: {
+                    auto& e = p.as_Const();
                     os << "const ";
                     ASTNodeVisitor::visit(e);
+                    break;
                 }
-                TU_ARMA(Sym, e) {
+                case ASTAsmParam::TAG_Sym: {
+                    auto& e = p.as_Sym();
                     os << "sym " << e;
+                    break;
                 }
-                TU_ARMA(Label, e) {
+                case ASTAsmParam::TAG_Label: {
+                    auto& e = p.as_Label();
                     os << "label ";
                     ASTNodeVisitor::visit(e.code);
+                    break;
                 }
-                TU_ARMA(RegSingle, e) {
+                case ASTAsmParam::TAG_RegSingle: {
+                    auto& e = p.as_RegSingle();
                     os << e.dir << "(" << e.spec << ") ";
                     ASTNodeVisitor::visit(e.val);
+                    break;
                 }
-                TU_ARMA(Reg, e) {
+                case ASTAsmParam::TAG_Reg: {
+                    auto& e = p.as_Reg();
                     os << e.dir << "(" << e.spec << ") ";
                     if (e.valIn) {
                         ASTNodeVisitor::visit(e.valIn);
@@ -197,6 +206,7 @@ public:
                     if (e.valOut) {
                         ASTNodeVisitor::visit(e.valOut);
                     }
+                    break;
                 }
             }
             os << ", ";
@@ -1157,23 +1167,35 @@ void RustPrinter::printParams(const ASTGenericParams& params) {
             if (!isFirst) {
                 os << ", ";
             }
-            TU_MATCH_HDRA( (p), {)
-            TU_ARMA(None, p) {
-                    os << "/*-*/";
-                }
-                TU_ARMA(Lifetime, p) {
-                    os << p;
-                }
-                TU_ARMA(Type, p) {
-                    os << p.attrs();
-                    os << p.name();
-                    if (!p.getDefault()->isWildcard()) {
-                        os << " = " << p.getDefault();
+            {
+                auto& tuMatch = p;
+                switch (tuMatch.tag()) {
+                    case GenericParam::TAG_None: {
+                        auto& p = tuMatch.as_None();
+                        (void)p;
+                        os << "/*-*/";
+                        break;
                     }
-                }
-                TU_ARMA(Value, p) {
-                    os << p.attrs();
-                    os << "const " << p.name() << ": " << p.type();
+                    case GenericParam::TAG_Lifetime: {
+                        auto& p = tuMatch.as_Lifetime();
+                        os << p;
+                        break;
+                    }
+                    case GenericParam::TAG_Type: {
+                        auto& p = tuMatch.as_Type();
+                        os << p.attrs();
+                        os << p.name();
+                        if (!p.getDefault()->isWildcard()) {
+                            os << " = " << p.getDefault();
+                        }
+                        break;
+                    }
+                    case GenericParam::TAG_Value: {
+                        auto& p = tuMatch.as_Value();
+                        os << p.attrs();
+                        os << "const " << p.name() << ": " << p.type();
+                        break;
+                    }
                 }
             }
             isFirst = false;

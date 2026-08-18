@@ -113,20 +113,29 @@ namespace {
                 unsigned short tyIdx = 0;
                 unsigned short valIdx = 0;
                 for (const auto& e : params.params) {
-                    TU_MATCH_HDRA( (e), {)
-                    TU_ARMA(None, param) {
+                    switch (e.tag()) {
+                        case GenericParam::TAG_None: {
+                            auto& param = e.as_None();
+                            (void)param;
+                            break;
                         }
-                        TU_ARMA(Lifetime, lft) {
+                        case GenericParam::TAG_Lifetime: {
+                            auto& lft = e.as_Lifetime();
                             data.lifetimes.push_back(NamedI<GenericSlot>{lft.name(), GenericSlot{level, lftIdx}});
                             lftIdx += 1;
+                            break;
                         }
-                        TU_ARMA(Type, tyDef) {
+                        case GenericParam::TAG_Type: {
+                            auto& tyDef = e.as_Type();
                             data.types.push_back(Named<GenericSlot>{tyDef.name(), GenericSlot{level, tyIdx}});
                             tyIdx += 1;
+                            break;
                         }
-                        TU_ARMA(Value, valDef) {
+                        case GenericParam::TAG_Value: {
+                            auto& valDef = e.as_Value();
                             data.constants.push_back(NamedI<GenericSlot>{valDef.name(), GenericSlot{level, valIdx}});
                             valIdx += 1;
+                            break;
                         }
                     }
                 }
@@ -524,15 +533,21 @@ namespace {
                                         item = &crate.externCrates.at(imp.path.crateName()).hir->getValitemByPath(sp, imp.path, true);
                                     }
                                 }
-                            TU_MATCH_HDRA( (*item), {)
-                            default:
+                            switch ((*item).tag()) {
+default:
                                 TODO(sp, "Bind value '" << name << "' for module path " << mp << " : " << item->tagStr());
-                                    TU_ARMA(Function, e) {
-                                        bindings.value.set(itemPath, ASTPathBindingValue::make_Function({nullptr}));
-                                    }
-                                    TU_ARMA(Static, e) {
-                                        bindings.value.set(itemPath, ASTPathBindingValue::make_Static({nullptr}));
-                                    }
+                                case ASTItem::TAG_Function: {
+                                    auto& e = (*item).as_Function();
+                                    (void)e;
+                                    bindings.value.set(itemPath, ASTPathBindingValue::make_Function({nullptr}));
+                                    break;
+                                }
+                                case ASTItem::TAG_Static: {
+                                    auto& e = (*item).as_Static();
+                                    (void)e;
+                                    bindings.value.set(itemPath, ASTPathBindingValue::make_Static({nullptr}));
+                                    break;
+                                }
                             }
                             }
                         } break;
@@ -557,27 +572,44 @@ namespace {
                                         item = &crate.externCrates.at(imp.path.crateName()).hir->getTypeitemByPath(sp, imp.path, true);
                                     }
                                 }
-                            TU_MATCH_HDRA( (*item), {)
-                            default:
+                            switch ((*item).tag()) {
+default:
                                 TODO(sp, "Bind type/mod '" << name << "' for module path " << mp << " : " << item->tagStr());
-                                    TU_ARMA(Module, e) {
-                                        bindings.type.set(itemPath, ASTPathBindingType::make_Module({nullptr, {&extCrate, &e}}));
-                                    }
-                                    TU_ARMA(Trait, e) {
-                                        bindings.type.set(itemPath, ASTPathBindingType::make_Trait({nullptr}));
-                                    }
-                                    TU_ARMA(TypeAlias, e) {
-                                        bindings.type.set(itemPath, ASTPathBindingType::make_TypeAlias({nullptr}));
-                                    }
-                                    TU_ARMA(Struct, e) {
-                                        bindings.type.set(itemPath, ASTPathBindingType::make_Struct({nullptr}));
-                                    }
-                                    TU_ARMA(Enum, e) {
-                                        bindings.type.set(itemPath, ASTPathBindingType::make_Enum({nullptr}));
-                                    }
-                                    TU_ARMA(Union, e) {
-                                        bindings.type.set(itemPath, ASTPathBindingType::make_Union({nullptr}));
-                                    }
+                                case ASTPathBindingType::TAG_Module: {
+                                    auto& e = (*item).as_Module();
+                                    bindings.type.set(itemPath, ASTPathBindingType::make_Module({nullptr, {&extCrate, &e}}));
+                                    break;
+                                }
+                                case ASTPathBindingType::TAG_Trait: {
+                                    auto& e = (*item).as_Trait();
+                                    (void)e;
+                                    bindings.type.set(itemPath, ASTPathBindingType::make_Trait({nullptr}));
+                                    break;
+                                }
+                                case ASTPathBindingType::TAG_TypeAlias: {
+                                    auto& e = (*item).as_TypeAlias();
+                                    (void)e;
+                                    bindings.type.set(itemPath, ASTPathBindingType::make_TypeAlias({nullptr}));
+                                    break;
+                                }
+                                case ASTPathBindingType::TAG_Struct: {
+                                    auto& e = (*item).as_Struct();
+                                    (void)e;
+                                    bindings.type.set(itemPath, ASTPathBindingType::make_Struct({nullptr}));
+                                    break;
+                                }
+                                case ASTPathBindingType::TAG_Enum: {
+                                    auto& e = (*item).as_Enum();
+                                    (void)e;
+                                    bindings.type.set(itemPath, ASTPathBindingType::make_Enum({nullptr}));
+                                    break;
+                                }
+                                case ASTPathBindingType::TAG_Union: {
+                                    auto& e = (*item).as_Union();
+                                    (void)e;
+                                    bindings.type.set(itemPath, ASTPathBindingType::make_Union({nullptr}));
+                                    break;
+                                }
                             }
                             }
                         } break;
@@ -631,15 +663,18 @@ namespace {
                 }
             }
             for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
-                TU_MATCH_HDRA( (*it), {)
-                TU_ARMA(Module, e) {
+                switch ((*it).tag()) {
+                    case Ent::TAG_Module: {
+                        auto& e = (*it).as_Module();
                         DEBUG("- Module " << e.mod->path());
                         ASTPath rv;
                         if (this->lookupInMod(*e.mod, name, mode, rv)) {
                             return rv;
                         }
+                        break;
                     }
-                    TU_ARMA(ConcreteSelf, e) {
+                    case Ent::TAG_ConcreteSelf: {
+                        auto& e = (*it).as_ConcreteSelf();
                         DEBUG("- ConcreteSelf");
                         if (name == rcstringSelf) {
                             switch (mode) {
@@ -667,8 +702,10 @@ namespace {
                                     break;
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(VarBlock, e) {
+                    case Ent::TAG_VarBlock: {
+                        auto& e = (*it).as_VarBlock();
                         DEBUG("- VarBlock");
                         assert(e.level <= blockLevel);
                         if (mode != LookupMode::Variable) {
@@ -685,13 +722,17 @@ namespace {
                                 }
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(MacroDefinition, e) {
+                    case Ent::TAG_MacroDefinition: {
+                        auto& e = (*it).as_MacroDefinition();
                         if (mode == LookupMode::Variable) {
                             lookupContext.leaveMacroDefinition(typePool(), e.definitionId, e.tokenHygiene, e.definitionHygiene);
                         }
+                        break;
                     }
-                    TU_ARMA(Generic, e) {
+                    case Ent::TAG_Generic: {
+                        auto& e = (*it).as_Generic();
                         DEBUG("- Generic");
                         switch (mode) {
                             case LookupMode::Type:
@@ -719,6 +760,7 @@ namespace {
                                 // TODO: Integer generics
                                 break;
                         }
+                        break;
                     }
                 }
             }
@@ -759,12 +801,19 @@ namespace {
 
         unsigned int lookupLocal(const Span& sp, const RcString name, LookupMode mode) {
             for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
-                TU_MATCH_HDRA( (*it), {)
-                TU_ARMA(Module, e) {
+                switch ((*it).tag()) {
+                    case Ent::TAG_Module: {
+                        auto& e = (*it).as_Module();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(ConcreteSelf, e) {
+                    case Ent::TAG_ConcreteSelf: {
+                        auto& e = (*it).as_ConcreteSelf();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(VarBlock, e) {
+                    case Ent::TAG_VarBlock: {
+                        auto& e = (*it).as_VarBlock();
                         if (mode == LookupMode::Variable) {
                             DEBUG("- VarBlock lvl" << e.level);
                             for (auto it2 = e.variables.rbegin(); it2 != e.variables.rend(); ++it2) {
@@ -775,10 +824,15 @@ namespace {
                                 }
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(MacroDefinition, e) {
+                    case Ent::TAG_MacroDefinition: {
+                        auto& e = (*it).as_MacroDefinition();
+                        (void)e;
+                        break;
                     }
-                    TU_ARMA(Generic, e) {
+                    case Ent::TAG_Generic: {
+                        auto& e = (*it).as_Generic();
                         DEBUG("- Generic");
                         switch (mode) {
                             case LookupMode::Type:
@@ -802,6 +856,7 @@ namespace {
                                 // TODO: Integer generics
                                 break;
                         }
+                        break;
                     }
                 }
             }
@@ -872,13 +927,19 @@ void ResolveAbsoluteStatic(Context& itemContext, ASTStatic& e);
 
 void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPathParams& args) {
     for (auto& ent : args.entries) {
-        TU_MATCH_HDRA( (ent), {)
-        TU_ARMA(Null, _) {
+        switch (ent.tag()) {
+            case ASTPathParamEnt::TAG_Null: {
+                auto& _ = ent.as_Null();
+                (void)_;
+                break;
             }
-            TU_ARMA(Lifetime, l) {
+            case ASTPathParamEnt::TAG_Lifetime: {
+                auto& l = ent.as_Lifetime();
                 ResolveAbsoluteLifetime(context, sp, l);
+                break;
             }
-            TU_ARMA(Type, t) {
+            case ASTPathParamEnt::TAG_Type: {
+                auto& t = ent.as_Type();
                 // A trivial path type might be refering to a generic value (e.g. `Foo<T,N>` where `N` is a const generic)
                 if (t->data.is_Path() && t->data.as_Path()->isTrivial()) {
                     auto p = t->data.as_Path()->cls.as_Relative();
@@ -903,21 +964,28 @@ void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPa
                 } else {
                     ResolveAbsoluteType(context, t);
                 }
+                break;
             }
-            TU_ARMA(Value, n) {
+            case ASTPathParamEnt::TAG_Value: {
+                auto& n = ent.as_Value();
                 ResolveAbsoluteExprNode(context, *n);
+                break;
             }
-            TU_ARMA(AssociatedTyEqual, a) {
+            case ASTPathParamEnt::TAG_AssociatedTyEqual: {
+                auto& a = ent.as_AssociatedTyEqual();
                 ResolveAbsolutePathParams(context, sp, a.first.args());
                 ResolveAbsoluteType(context, a.second);
+                break;
             }
-            TU_ARMA(AssociatedTyBound, a) {
+            case ASTPathParamEnt::TAG_AssociatedTyBound: {
+                auto& a = ent.as_AssociatedTyBound();
                 ResolveAbsolutePathParams(context, sp, a.first.args());
                 for (auto& p : a.second) {
                     context.push(p.hrbs);
                     ResolveAbsolutePath(context, sp, Context::LookupMode::Type, *p.path);
                     context.pop(p.hrbs);
                 }
+                break;
             }
         }
     }
@@ -1138,25 +1206,39 @@ namespace {
                 ERROR(sp, E0000, "Couldn't find final component of " << p);
             }
             ASTPathBindingValue pbv;
-            TU_MATCH_HDRA( (it->second->ent), {)
-            TU_ARMA(Import, e) {
+            switch (it->second->ent.tag()) {
+                case HIRValueItem::TAG_Import: {
+                    auto& e = it->second->ent.as_Import();
+                    (void)e;
                     // Wait? is this even valid?
                     BUG(sp, "HIR Import item pointed to an import");
+                    break;
                 }
-                TU_ARMA(Constant, e) {
+                case HIRValueItem::TAG_Constant: {
+                    auto& e = it->second->ent.as_Constant();
+                    (void)e;
                     pbv = ASTPathBindingValue::make_Static({nullptr, nullptr});
+                    break;
                 }
-                TU_ARMA(Static, e) {
+                case HIRValueItem::TAG_Static: {
+                    auto& e = it->second->ent.as_Static();
                     pbv = ASTPathBindingValue::make_Static({nullptr, &e});
+                    break;
                 }
-                TU_ARMA(StructConstant, e) {
+                case HIRValueItem::TAG_StructConstant: {
+                    auto& e = it->second->ent.as_StructConstant();
                     pbv = ASTPathBindingValue::make_Struct({nullptr, &extCrate.hir->getTypeitemByPath(sp, e.ty, true).as_Struct()});
+                    break;
                 }
-                TU_ARMA(Function, e) {
+                case HIRValueItem::TAG_Function: {
+                    auto& e = it->second->ent.as_Function();
                     pbv = ASTPathBindingValue::make_Function({nullptr /*, &e*/});
+                    break;
                 }
-                TU_ARMA(StructConstructor, e) {
+                case HIRValueItem::TAG_StructConstructor: {
+                    auto& e = it->second->ent.as_StructConstructor();
                     pbv = ASTPathBindingValue::make_Struct({nullptr, &extCrate.hir->getTypeitemByPath(sp, e.ty, true).as_Struct()});
+                    break;
                 }
             }
             pb.value.set( ::std::move(ap), ::std::move(pbv) );
@@ -1166,34 +1248,53 @@ namespace {
                 ERROR(sp, E0000, "Couldn't find final component of " << p);
             }
             ASTPathBindingType pbt;
-            TU_MATCH_HDRA( (it->second->ent), {)
-            TU_ARMA(Import, e) {
+            switch (it->second->ent.tag()) {
+                case HIRTypeItem::TAG_Import: {
+                    auto& e = it->second->ent.as_Import();
+                    (void)e;
                     // Wait? is this even valid?
                     BUG(sp, "HIR Import item pointed to an import");
+                    break;
                 }
-                TU_ARMA(Module, e) {
+                case HIRTypeItem::TAG_Module: {
+                    auto& e = it->second->ent.as_Module();
                     pbt = ASTPathBindingType::make_Module({nullptr, {&extCrate, &e}});
+                    break;
                 }
-                TU_ARMA(Trait, e) {
+                case HIRTypeItem::TAG_Trait: {
+                    auto& e = it->second->ent.as_Trait();
                     pbt = ASTPathBindingType::make_Trait({nullptr, &e});
+                    break;
                 }
-                TU_ARMA(TraitAlias, e) {
+                case HIRTypeItem::TAG_TraitAlias: {
+                    auto& e = it->second->ent.as_TraitAlias();
                     pbt = ASTPathBindingType::make_TraitAlias({nullptr, &e});
+                    break;
                 }
-                TU_ARMA(TypeAlias, e) {
+                case HIRTypeItem::TAG_TypeAlias: {
+                    auto& e = it->second->ent.as_TypeAlias();
                     pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
+                    break;
                 }
-                TU_ARMA(ExternType, e) {
+                case HIRTypeItem::TAG_ExternType: {
+                    auto& e = it->second->ent.as_ExternType();
                     pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
+                    break;
                 }
-                TU_ARMA(Struct, e) {
+                case HIRTypeItem::TAG_Struct: {
+                    auto& e = it->second->ent.as_Struct();
                     pbt = ASTPathBindingType::make_Struct({nullptr, &e});
+                    break;
                 }
-                TU_ARMA(Union, e) {
+                case HIRTypeItem::TAG_Union: {
+                    auto& e = it->second->ent.as_Union();
                     pbt = ASTPathBindingType::make_Union({nullptr, &e});
+                    break;
                 }
-                TU_ARMA(Enum, e) {
+                case HIRTypeItem::TAG_Enum: {
+                    auto& e = it->second->ent.as_Enum();
                     pbt = ASTPathBindingType::make_Enum({nullptr, &e});
+                    break;
                 }
             }
             pb.type.set( ::std::move(ap), ::std::move(pbt) );
@@ -1234,8 +1335,9 @@ namespace {
                 ERROR(sp, E0000, "Couldn't find path component '" << n.name() << "' of " << path);
             }
 
-            TU_MATCH_HDRA( (it->second->ent), {)
-            TU_ARMA(Import, e) {
+            switch (it->second->ent.tag()) {
+                case HIRTypeItem::TAG_Import: {
+                    auto& e = it->second->ent.as_Import();
                     DEBUG("`" << n.name() << "`: Import " << e.path);
                     // - Update path then restart
                     auto newpath = ASTPath(e.path.crateName(), {});
@@ -1256,16 +1358,21 @@ namespace {
                     ResolveAbsolutePathBindAbsolute(context, sp, mode, path);
                     return;
                 }
-                TU_ARMA(Module, e) {
+                case HIRTypeItem::TAG_Module: {
+                    auto& e = it->second->ent.as_Module();
                     hmod = &e;
+                    break;
                 }
-                TU_ARMA(TraitAlias, e) {
+                case HIRTypeItem::TAG_TraitAlias: {
+                    auto& e = it->second->ent.as_TraitAlias();
                     //for(const auto& trait_path_hir : e.m_traits)
                     //{
                     //}
                     TODO(sp, "Path referring to a trait alias - " << path);
+                    break;
                 }
-                TU_ARMA(Trait, e) {
+                case HIRTypeItem::TAG_Trait: {
+                    auto& e = it->second->ent.as_Trait();
                     ASTAbsolutePath ap(crate.name, {});
                     for (unsigned int j = start; j <= i; j++) {
                         ap.nodes.push_back(pathAbs.nodes[j].name());
@@ -1311,53 +1418,54 @@ namespace {
                     path = mv$(newPath);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
-                case HIRTypeItem::TAG_ExternType:
+case HIRTypeItem::TAG_ExternType:
                 case HIRTypeItem::TAG_TypeAlias:
                 case HIRTypeItem::TAG_Struct:
                 case HIRTypeItem::TAG_Union:
                     path = splitIntoCrate(sp, mv$(path), start, crate.name);
                     path = splitIntoUfcsTy(context.typePool(), sp, mv$(path), i - start);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
-                    TU_ARMA(Enum, e) {
-                        if (i + 1 < pathAbs.nodes.size()) {
-                            auto& nextNode = pathAbs.nodes[i + 1];
-                            // If this refers to an enum variant, return the full path
-                            // - Otherwise, assume it's an associated type?
-                            auto idx = e.findVariant(nextNode.name());
-                            if (idx != SIZE_MAX) {
-                                if (i != pathAbs.nodes.size() - 2) {
-                                    ERROR(sp, E0000, "Unexpected enum in path " << path);
-                                }
-
-                                ASTAbsolutePath ap(crate.name, {});
-                                auto traitPath = ASTPath(crate.name, {});
-                                for (unsigned int j = start; j < pathAbs.nodes.size(); j++) {
-                                    ap.nodes.push_back(pathAbs.nodes[j].name());
-                                }
-
-                                // NOTE: Type parameters for enums go after the _variant_
-                                if (!n.args().isEmpty()) {
-                                    if (nextNode.args().isEmpty()) {
-                                        DEBUG("Moving type params from on the enum to the variant");
-                                        nextNode.args() = std::move(n.args());
-                                    } else {
-                                        ERROR(sp, E0000, "Type parameters were not expected here (enum params go on the variant)");
-                                    }
-                                }
-
-                                if (e.data.is_Data() && e.data.as_Data()[idx].isStruct) {
-                                    path.bindings.type.set(ap, ASTPathBindingType::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &e}));
-                                } else {
-                                    path.bindings.value.set(ap, ASTPathBindingValue::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &e}));
-                                }
-                                path = splitIntoCrate(sp, mv$(path), start, crate.name);
-                                return;
+                case HIRTypeItem::TAG_Enum: {
+                    auto& e = it->second->ent.as_Enum();
+                    if (i + 1 < pathAbs.nodes.size()) {
+                        auto& nextNode = pathAbs.nodes[i + 1];
+                        // If this refers to an enum variant, return the full path
+                        // - Otherwise, assume it's an associated type?
+                        auto idx = e.findVariant(nextNode.name());
+                        if (idx != SIZE_MAX) {
+                            if (i != pathAbs.nodes.size() - 2) {
+                                ERROR(sp, E0000, "Unexpected enum in path " << path);
                             }
+
+                            ASTAbsolutePath ap(crate.name, {});
+                            auto traitPath = ASTPath(crate.name, {});
+                            for (unsigned int j = start; j < pathAbs.nodes.size(); j++) {
+                                ap.nodes.push_back(pathAbs.nodes[j].name());
+                            }
+
+                            // NOTE: Type parameters for enums go after the _variant_
+                            if (!n.args().isEmpty()) {
+                                if (nextNode.args().isEmpty()) {
+                                    DEBUG("Moving type params from on the enum to the variant");
+                                    nextNode.args() = std::move(n.args());
+                                } else {
+                                    ERROR(sp, E0000, "Type parameters were not expected here (enum params go on the variant)");
+                                }
+                            }
+
+                            if (e.data.is_Data() && e.data.as_Data()[idx].isStruct) {
+                                path.bindings.type.set(ap, ASTPathBindingType::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &e}));
+                            } else {
+                                path.bindings.value.set(ap, ASTPathBindingValue::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &e}));
+                            }
+                            path = splitIntoCrate(sp, mv$(path), start, crate.name);
+                            return;
                         }
-                        path = splitIntoCrate(sp, mv$(path), start, crate.name);
-                        path = splitIntoUfcsTy(context.typePool(), sp, mv$(path), i - start);
-                        return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                     }
+                    path = splitIntoCrate(sp, mv$(path), start, crate.name);
+                    path = splitIntoUfcsTy(context.typePool(), sp, mv$(path), i - start);
+                    return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
+                }
             }
         }
 
@@ -1376,35 +1484,52 @@ namespace {
                 auto v = hmod->modItems.find(name);
                 if (v != hmod->modItems.end()) {
                     ASTPathBindingType pbt;
-                    TU_MATCH_HDRA( (v->second->ent), {)
-                    TU_ARMA(Import, e) {
+                    switch (v->second->ent.tag()) {
+                        case HIRTypeItem::TAG_Import: {
+                            auto& e = v->second->ent.as_Import();
                             DEBUG("= Import " << e.path);
                             ResolveAbsolutePathBindAbsoluteHirFromImport(context, sp, false, path, e.path);
                             return;
                         }
-                        TU_ARMA(Trait, e) {
+                        case HIRTypeItem::TAG_Trait: {
+                            auto& e = v->second->ent.as_Trait();
                             pbt = ASTPathBindingType::make_Trait({nullptr, &e});
+                            break;
                         }
-                        TU_ARMA(TraitAlias, e) {
+                        case HIRTypeItem::TAG_TraitAlias: {
+                            auto& e = v->second->ent.as_TraitAlias();
                             pbt = ASTPathBindingType::make_TraitAlias({nullptr, &e});
+                            break;
                         }
-                        TU_ARMA(Module, e) {
+                        case HIRTypeItem::TAG_Module: {
+                            auto& e = v->second->ent.as_Module();
                             pbt = ASTPathBindingType::make_Module({nullptr, {&crate, &e}});
+                            break;
                         }
-                        TU_ARMA(ExternType, e) {
+                        case HIRTypeItem::TAG_ExternType: {
+                            auto& e = v->second->ent.as_ExternType();
                             pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
+                            break;
                         }
-                        TU_ARMA(TypeAlias, e) {
+                        case HIRTypeItem::TAG_TypeAlias: {
+                            auto& e = v->second->ent.as_TypeAlias();
                             pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
+                            break;
                         }
-                        TU_ARMA(Enum, e) {
+                        case HIRTypeItem::TAG_Enum: {
+                            auto& e = v->second->ent.as_Enum();
                             pbt = ASTPathBindingType::make_Enum({nullptr, &e});
+                            break;
                         }
-                        TU_ARMA(Struct, e) {
+                        case HIRTypeItem::TAG_Struct: {
+                            auto& e = v->second->ent.as_Struct();
                             pbt = ASTPathBindingType::make_Struct({nullptr, &e});
+                            break;
                         }
-                        TU_ARMA(Union, e) {
+                        case HIRTypeItem::TAG_Union: {
+                            auto& e = v->second->ent.as_Union();
                             pbt = ASTPathBindingType::make_Union({nullptr, &e});
+                            break;
                         }
                     }
                     path.bindings.type.set(::std::move(ap), ::std::move(pbt));
@@ -1417,20 +1542,24 @@ namespace {
             case Context::LookupMode::PatternValue: {
                 auto v = hmod->valueItems.find(name);
                 if (v != hmod->valueItems.end()) {
-                    TU_MATCH_HDRA( (v->second->ent), {)
-                    default:
+                    switch (v->second->ent.tag()) {
+default:
                         DEBUG("Ignore - " << v->second->ent.tagStr());
-                        TU_ARMA(StructConstant, e) {
+                        case HIRValueItem::TAG_StructConstant: {
+                            auto& e = v->second->ent.as_StructConstant();
                             auto tyPath = e.ty;
                             path.bindings.value.set(::std::move(ap), ASTPathBindingValue::make_Struct({nullptr, &crate.hir->getStructByPath(sp, tyPath)}));
                             path = splitIntoCrate(sp, mv$(path), start, crate.name);
                             return;
                         }
-                        TU_ARMA(Import, e) {
+                        case HIRValueItem::TAG_Import: {
+                            auto& e = v->second->ent.as_Import();
                             ResolveAbsolutePathBindAbsoluteHirFromImport(context, sp, true, path, e.path);
                             return;
                         }
-                        TU_ARMA(Constant, e) {
+                        case HIRValueItem::TAG_Constant: {
+                            auto& e = v->second->ent.as_Constant();
+                            (void)e;
                             // Bind and update path
                             path.bindings.value.set(::std::move(ap), ASTPathBindingValue::make_Static({nullptr, nullptr}));
                             path = splitIntoCrate(sp, mv$(path), start, crate.name);
@@ -1446,28 +1575,40 @@ namespace {
                 auto v = hmod->valueItems.find(name);
                 if (v != hmod->valueItems.end()) {
                     ASTPathBindingValue pbv;
-                    TU_MATCH_HDRA( (v->second->ent), {)
-                    TU_ARMA(Import, e) {
+                    switch (v->second->ent.tag()) {
+                        case HIRValueItem::TAG_Import: {
+                            auto& e = v->second->ent.as_Import();
                             ResolveAbsolutePathBindAbsoluteHirFromImport(context, sp, true, path, e.path);
                             return;
                         }
-                        TU_ARMA(Function, e) {
+                        case HIRValueItem::TAG_Function: {
+                            auto& e = v->second->ent.as_Function();
                             pbv = ASTPathBindingValue::make_Function({nullptr /*, &e*/});
+                            break;
                         }
-                        TU_ARMA(StructConstructor, e) {
+                        case HIRValueItem::TAG_StructConstructor: {
+                            auto& e = v->second->ent.as_StructConstructor();
                             auto tyPath = e.ty;
                             pbv = ASTPathBindingValue::make_Struct({nullptr, &crate.hir->getStructByPath(sp, tyPath)});
+                            break;
                         }
-                        TU_ARMA(StructConstant, e) {
+                        case HIRValueItem::TAG_StructConstant: {
+                            auto& e = v->second->ent.as_StructConstant();
                             auto tyPath = e.ty;
                             pbv = ASTPathBindingValue::make_Struct({nullptr, &crate.hir->getStructByPath(sp, tyPath)});
+                            break;
                         }
-                        TU_ARMA(Static, e) {
+                        case HIRValueItem::TAG_Static: {
+                            auto& e = v->second->ent.as_Static();
                             pbv = ASTPathBindingValue::make_Static({nullptr, &e});
+                            break;
                         }
-                        TU_ARMA(Constant, e) {
+                        case HIRValueItem::TAG_Constant: {
+                            auto& e = v->second->ent.as_Constant();
+                            (void)e;
                             // Bind
                             pbv = ASTPathBindingValue::make_Static({nullptr, nullptr});
+                            break;
                         }
                     }
                     path.bindings.value.set(::std::move(ap), ::std::move(pbv));
@@ -1535,18 +1676,22 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
             const auto& nameRef = it->second;
             DEBUG("#" << i << " \"" << n.name() << "\" = " << nameRef.path << (nameRef.isImport ? " (import)" : ""));
 
-            TU_MATCH_HDRA( (nameRef.path.bindings.type.binding), {)
-            default:
+            switch (nameRef.path.bindings.type.binding.tag()) {
+default:
                 ERROR(sp, E0000, "Encountered non-namespace item '" << n.name() << "' ("<<nameRef.path<<") in path " << path);
-                TU_ARMA(TypeAlias, e) {
+                case ASTPathBindingType::TAG_TypeAlias: {
+                    auto& e = nameRef.path.bindings.type.binding.as_TypeAlias();
+                    (void)e;
                     path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
-                TU_ARMA(Crate, e) {
+                case ASTPathBindingType::TAG_Crate: {
+                    auto& e = nameRef.path.bindings.type.binding.as_Crate();
                     ResolveAbsolutePathBindAbsoluteHirFrom(context, sp, mode, path, *e.crate_, i + 1);
                     return;
                 }
-                TU_ARMA(Trait, e) {
+                case ASTPathBindingType::TAG_Trait: {
+                    auto& e = nameRef.path.bindings.type.binding.as_Trait();
                     assert(e.trait_ || e.hir);
                     auto traitPath = ASTPath(nameRef.path);
                     // HACK! If this was an import, recurse on it to fix paths. (Ideally, all index entries should have the canonical path, but don't currently)
@@ -1559,16 +1704,28 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                     } else {
                         if (e.trait_) {
                             for (const auto& param : e.trait_->params().params) {
-                            TU_MATCH_HDRA( (param), {)
-                            TU_ARMA(None, e) {
-                                    }
-                                    TU_ARMA(Lifetime, e) {
-                                    }
-                                    TU_ARMA(Type, typ) {
-                                        traitPath.nodes().back().args().entries.push_back(::mkType(context.typePool(), sp));
-                                    }
-                                    TU_ARMA(Value, val) {
-                                    }
+                            switch (param.tag()) {
+                                case GenericParam::TAG_None: {
+                                    auto& e = param.as_None();
+                                    (void)e;
+                                    break;
+                                }
+                                case GenericParam::TAG_Lifetime: {
+                                    auto& e = param.as_Lifetime();
+                                    (void)e;
+                                    break;
+                                }
+                                case GenericParam::TAG_Type: {
+                                    auto& typ = param.as_Type();
+                                    (void)typ;
+                                    traitPath.nodes().back().args().entries.push_back(::mkType(context.typePool(), sp));
+                                    break;
+                                }
+                                case GenericParam::TAG_Value: {
+                                    auto& val = param.as_Value();
+                                    (void)val;
+                                    break;
+                                }
                             }
                             }
                         } else {
@@ -1617,7 +1774,8 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                     path = mv$(newPath);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
-                TU_ARMA(Enum, e) {
+                case ASTPathBindingType::TAG_Enum: {
+                    auto& e = nameRef.path.bindings.type.binding.as_Enum();
                     if (nameRef.isImport) {
                         auto newpath = nameRef.path;
                         for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
@@ -1661,16 +1819,22 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                         path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
                         return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                     }
+                    break;
                 }
-                TU_ARMA(Struct, e) {
+                case ASTPathBindingType::TAG_Struct: {
+                    auto& e = nameRef.path.bindings.type.binding.as_Struct();
+                    (void)e;
                     path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
-                TU_ARMA(Union, e) {
+                case ASTPathBindingType::TAG_Union: {
+                    auto& e = nameRef.path.bindings.type.binding.as_Union();
+                    (void)e;
                     path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
-                TU_ARMA(Module, e) {
+                case ASTPathBindingType::TAG_Module: {
+                    auto& e = nameRef.path.bindings.type.binding.as_Module();
                     if (nameRef.isImport) {
                         auto newpath = nameRef.path;
                         for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
@@ -1683,6 +1847,7 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                     } else {
                         mod = e.module_;
                     }
+                    break;
                 }
             }
         }
@@ -1711,11 +1876,15 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
 void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::LookupMode mode, ASTPath& path) {
     TRACE_FUNCTION_FR("mode = " << mode << ", path = " << path, path);
 
-    TU_MATCH_HDRA( (path.cls), {)
-    TU_ARMA(Invalid, e) {
+    switch (path.cls.tag()) {
+        case ASTPathClass::TAG_Invalid: {
+            auto& e = path.cls.as_Invalid();
+            (void)e;
             BUG(sp, "Attempted resolution of invalid path");
+            break;
         }
-        TU_ARMA(Local, e) {
+        case ASTPathClass::TAG_Local: {
+            auto& e = path.cls.as_Local();
             // Nothing to do (TODO: Check that it's valid?)
             if (mode == Context::LookupMode::Variable) {
                 auto idx = context.lookupLocal(sp, e.name, mode);
@@ -1728,8 +1897,10 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                 path.bindVariable(context.lookupLocal(sp, e.name, mode));
             } else {
             }
+            break;
         }
-        TU_ARMA(Relative, e) {
+        case ASTPathClass::TAG_Relative: {
+            auto& e = path.cls.as_Relative();
             DEBUG("- Relative");
             if (e.nodes.size() == 0) {
                 BUG(sp, "Resolve_Absolute_Path - Relative path with no nodes");
@@ -1835,8 +2006,10 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
             if (!path.isTrivial()) {
                 ResolveAbsolutePathNodes(context, sp, path.nodes());
             }
+            break;
         }
-        TU_ARMA(Self, e) {
+        case ASTPathClass::TAG_Self: {
+            auto& e = path.cls.as_Self();
             DEBUG("- Self");
             const auto& mpNodes = context.mod.path().nodes;
             // Ignore any leading anon modules
@@ -1873,8 +2046,10 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
             }
 
             path = mv$(np);
+            break;
         }
-        TU_ARMA(Super, e) {
+        case ASTPathClass::TAG_Super: {
+            auto& e = path.cls.as_Super();
             DEBUG("- Super");
             // - Determine how many components of the `self` path to use
             const auto& mpNodes = context.mod.path().nodes;
@@ -1901,8 +2076,10 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
             }
 
             path = mv$(np);
+            break;
         }
-        TU_ARMA(Absolute, e) {
+        case ASTPathClass::TAG_Absolute: {
+            auto& e = path.cls.as_Absolute();
             DEBUG("- Absolute");
             // HACK: if the crate name starts with `=` it's a 2018 absolute path (references a crate loaded with `--extern`)
             if (/*context.m_crate.m_edition >= AST::Edition::Rust2018 &&*/ e.crate.c_str()[0] == '=') {
@@ -1924,8 +2101,10 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
             }
             // Nothing to do (TODO: Bind?)
             ResolveAbsolutePathNodes(context, sp, e.nodes);
+            break;
         }
-        TU_ARMA(UFCS, e) {
+        case ASTPathClass::TAG_UFCS: {
+            auto& e = path.cls.as_UFCS();
             DEBUG("- UFCS");
             ResolveAbsoluteType(context, e.type);
             if (e.trait && *e.trait != ASTPath()) {
@@ -1933,6 +2112,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
             }
 
             ResolveAbsolutePathNodes(context, sp, e.nodes);
+            break;
         }
     }
 
@@ -1940,19 +2120,28 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
     // TODO: Should this be deferred until the HIR?
     // - Doing it here so the HIR lowering has a bit more information
     // - Also handles splitting "absolute" paths into UFCS
-    TU_MATCH_HDRA((path.cls), {)
-    default:
+    switch (path.cls.tag()) {
+default:
         BUG(sp, "Path wasn't absolutised correctly");
-        TU_ARMA(Local, e) {
+        case ASTPathClass::TAG_Local: {
+            auto& e = path.cls.as_Local();
+            (void)e;
             if (!path.bindings.hasBinding()) {
                 TODO(sp, "Bind unbound local path - " << path);
             }
+            break;
         }
-        TU_ARMA(Absolute, e) {
+        case ASTPathClass::TAG_Absolute: {
+            auto& e = path.cls.as_Absolute();
+            (void)e;
             ResolveAbsolutePathBindAbsolute(context, sp, mode, path);
+            break;
         }
-        TU_ARMA(UFCS, e) {
+        case ASTPathClass::TAG_UFCS: {
+            auto& e = path.cls.as_UFCS();
+            (void)e;
             ResolveAbsolutePathBindUFCS(context, sp, mode, path);
+            break;
         }
     }
 
@@ -2081,58 +2270,91 @@ void ResolveAbsoluteType(Context& context, ASTType*& type) {
         type->data = TypeData::make_Generic({type->data.as_Path()->asTrivial(), e.slot});
     }
 
-    TU_MATCH_HDRA( (type->data), {)
-    TU_ARMA(None, e) {
+    switch (type->data.tag()) {
+        case TypeData::TAG_None: {
+            auto& e = type->data.as_None();
+            (void)e;
             // invalid type
+            break;
         }
-        TU_ARMA(Any, e) {
+        case TypeData::TAG_Any: {
+            auto& e = type->data.as_Any();
+            (void)e;
             // _ type
+            break;
         }
-        TU_ARMA(Unit, e) {
+        case TypeData::TAG_Unit: {
+            auto& e = type->data.as_Unit();
+            (void)e;
+            break;
         }
-        TU_ARMA(Bang, e) {
+        case TypeData::TAG_Bang: {
+            auto& e = type->data.as_Bang();
+            (void)e;
             // ! type
+            break;
         }
-        TU_ARMA(Macro, e) {
+        case TypeData::TAG_Macro: {
+            auto& e = type->data.as_Macro();
+            (void)e;
             BUG(sp, "Resolve_Absolute_Type - Encountered an unexpanded macro in type - " << type);
+            break;
         }
-        TU_ARMA(Primitive, e) {
+        case TypeData::TAG_Primitive: {
+            auto& e = type->data.as_Primitive();
+            (void)e;
+            break;
         }
-        TU_ARMA(Function, e) {
+        case TypeData::TAG_Function: {
+            auto& e = type->data.as_Function();
             context.push(e.info.hrbs);
             ResolveAbsoluteType(context, e.info.rettype);
             for (auto& t : e.info.argTypes) {
                 ResolveAbsoluteType(context, t);
             }
             context.pop(e.info.hrbs);
+            break;
         }
-        TU_ARMA(Tuple, e) {
+        case TypeData::TAG_Tuple: {
+            auto& e = type->data.as_Tuple();
             for (auto& t : e.innerTypes) {
                 ResolveAbsoluteType(context, t);
             }
+            break;
         }
-        TU_ARMA(Borrow, e) {
+        case TypeData::TAG_Borrow: {
+            auto& e = type->data.as_Borrow();
             ResolveAbsoluteLifetime(context, type->span(), e.lifetime);
             ResolveAbsoluteType(context, e.inner);
+            break;
         }
-        TU_ARMA(Pointer, e) {
+        case TypeData::TAG_Pointer: {
+            auto& e = type->data.as_Pointer();
             ResolveAbsoluteType(context, e.inner);
+            break;
         }
-        TU_ARMA(Array, e) {
+        case TypeData::TAG_Array: {
+            auto& e = type->data.as_Array();
             ResolveAbsoluteType(context, e.inner);
             if (e.size) {
                 auto _h = context.enterRootblock();
                 ResolveAbsoluteExprNode(context, *e.size);
             }
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case TypeData::TAG_Slice: {
+            auto& e = type->data.as_Slice();
             ResolveAbsoluteType(context, e.inner);
+            break;
         }
-        TU_ARMA(Pattern, e) {
+        case TypeData::TAG_Pattern: {
+            auto& e = type->data.as_Pattern();
             ResolveAbsoluteType(context, e.inner);
             ResolveAbsolutePattern(context, true, *e.pattern);
+            break;
         }
-        TU_ARMA(Generic, e) {
+        case TypeData::TAG_Generic: {
+            auto& e = type->data.as_Generic();
             if (e.name == rcstringSelf) {
                 type = context.getSelf();
             } else {
@@ -2140,8 +2362,10 @@ void ResolveAbsoluteType(Context& context, ASTType*& type) {
                 // TODO: Should this be bound to the relevant index, or just leave as-is?
                 e.index = idx;
             }
+            break;
         }
-        TU_ARMA(Path, e) {
+        case TypeData::TAG_Path: {
+            auto& e = type->data.as_Path();
             ResolveAbsolutePath(context, type->span(), Context::LookupMode::Type, *e);
             if (auto* ufcs = e->cls.opt_UFCS()) {
                 if (ufcs->nodes.size() == 0 /*&& ufcs->trait && *ufcs->trait == ::AST::Path()*/) {
@@ -2160,8 +2384,10 @@ void ResolveAbsoluteType(Context& context, ASTType*& type) {
             //else if(auto* be = e->m_bindings.type.binding.opt_TypeParameter())
             //{
             //}
+            break;
         }
-        TU_ARMA(TraitObject, e) {
+        case TypeData::TAG_TraitObject: {
+            auto& e = type->data.as_TraitObject();
             for (auto& trait : e.traits) {
                 context.push(trait.hrbs);
                 ResolveAbsolutePath(context, type->span(), Context::LookupMode::Type, *trait.path);
@@ -2170,8 +2396,10 @@ void ResolveAbsoluteType(Context& context, ASTType*& type) {
             for (auto& lft : e.lifetimes) {
                 ResolveAbsoluteLifetime(context, type->span(), lft);
             }
+            break;
         }
-        TU_ARMA(ErasedType, e) {
+        case TypeData::TAG_ErasedType: {
+            auto& e = type->data.as_ErasedType();
             for (auto& trait : e->traits) {
                 context.push(trait.hrbs);
                 ResolveAbsolutePath(context, type->span(), Context::LookupMode::Type, *trait.path);
@@ -2188,6 +2416,7 @@ void ResolveAbsoluteType(Context& context, ASTType*& type) {
             if (e->use) {
                 ResolveAbsolutePathParams(context, type->span(), *e->use);
             }
+            break;
         }
     }
 }
@@ -2402,17 +2631,30 @@ void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node) {
 
 void ResolveAbsoluteGeneric(Context& context, ASTGenericParams& params) {
     for (auto& param : params.params) {
-        TU_MATCH_HDRA( (param), {)
-        TU_ARMA(None, _) {
-            }
-            TU_ARMA(Lifetime, param) {
-            }
-            TU_ARMA(Type, param) {
-                ResolveAbsoluteType(context, param.getDefault());
-            }
-            TU_ARMA(Value, param) {
-                ResolveAbsoluteType(context, param.type());
-                ResolveAbsoluteExpr(context, param.defaultValue());
+        {
+            auto& tuMatch = param;
+            switch (tuMatch.tag()) {
+                case GenericParam::TAG_None: {
+                    auto& _ = tuMatch.as_None();
+                    (void)_;
+                    break;
+                }
+                case GenericParam::TAG_Lifetime: {
+                    auto& param = tuMatch.as_Lifetime();
+                    (void)param;
+                    break;
+                }
+                case GenericParam::TAG_Type: {
+                    auto& param = tuMatch.as_Type();
+                    ResolveAbsoluteType(context, param.getDefault());
+                    break;
+                }
+                case GenericParam::TAG_Value: {
+                    auto& param = tuMatch.as_Value();
+                    ResolveAbsoluteType(context, param.type());
+                    ResolveAbsoluteExpr(context, param.defaultValue());
+                    break;
+                }
             }
         }
     }
@@ -2479,11 +2721,15 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
         DEBUG("- Binding #" << pb.slot << " '" << pb.name << "'");
     }
 
-    TU_MATCH_HDRA( (pat.data()), {)
-    TU_ARMA(Never, e) {
+    switch (pat.data().tag()) {
+        case ASTPatternData::TAG_Never: {
+            auto& e = pat.data().as_Never();
+            (void)e;
             // `!` names nothing and binds nothing.
+            break;
         }
-        TU_ARMA(MaybeBind, e) {
+        case ASTPatternData::TAG_MaybeBind: {
+            auto& e = pat.data().as_MaybeBind();
             auto name = mv$(e.name);
             // Attempt to resolve the name in the current namespace, and if it fails, it's a binding
             auto p = context.lookupOpt(name.name, name.hygiene, Context::LookupMode::PatternValue);
@@ -2497,23 +2743,37 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
                 pat.data() = ASTPattern::Data::make_Any({});
                 DEBUG("- Binding #" << pat.bindings().back().slot << " '" << pat.bindings().back().name << "' (was MaybeBind)");
             }
+            break;
         }
-        TU_ARMA(Macro, e) {
+        case ASTPatternData::TAG_Macro: {
+            auto& e = pat.data().as_Macro();
+            (void)e;
             BUG(pat.span(), "Resolve_Absolute_Pattern - Encountered Macro - " << pat);
+            break;
         }
-        TU_ARMA(Any, e) {
+        case ASTPatternData::TAG_Any: {
+            auto& e = pat.data().as_Any();
+            (void)e;
             // Ignore '_'
+            break;
         }
-        TU_ARMA(Box, e) {
+        case ASTPatternData::TAG_Box: {
+            auto& e = pat.data().as_Box();
             ResolveAbsolutePattern(context, allowRefutable, *e.sub);
+            break;
         }
-        TU_ARMA(Deref, e) {
+        case ASTPatternData::TAG_Deref: {
+            auto& e = pat.data().as_Deref();
             ResolveAbsolutePattern(context, allowRefutable, *e.sub);
+            break;
         }
-        TU_ARMA(Ref, e) {
+        case ASTPatternData::TAG_Ref: {
+            auto& e = pat.data().as_Ref();
             ResolveAbsolutePattern(context, allowRefutable, *e.sub);
+            break;
         }
-        TU_ARMA(Value, e) {
+        case ASTPatternData::TAG_Value: {
+            auto& e = pat.data().as_Value();
             // Disabled check : Some code does `let (Foo | Bar);` where those are the only options
             //if( ! allow_refutable )
             //{
@@ -2521,24 +2781,30 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
             //}
             ResolveAbsolutePatternValue(context, pat.span(), e.start);
             ResolveAbsolutePatternValue(context, pat.span(), e.end);
+            break;
         }
-        TU_ARMA(ValueLeftInc, e) {
+        case ASTPatternData::TAG_ValueLeftInc: {
+            auto& e = pat.data().as_ValueLeftInc();
             if (!allowRefutable) {
                 // TODO: If this is a single value of a unit-like struct, accept
                 BUG(pat.span(), "Resolve_Absolute_Pattern - Encountered refutable pattern where only irrefutable allowed - " << pat);
             }
             ResolveAbsolutePatternValue(context, pat.span(), e.start);
             ResolveAbsolutePatternValue(context, pat.span(), e.end);
+            break;
         }
-        TU_ARMA(Tuple, e) {
+        case ASTPatternData::TAG_Tuple: {
+            auto& e = pat.data().as_Tuple();
             for (auto& sp : e.start) {
                 ResolveAbsolutePattern(context, allowRefutable, sp);
             }
             for (auto& sp : e.end) {
                 ResolveAbsolutePattern(context, allowRefutable, sp);
             }
+            break;
         }
-        TU_ARMA(StructTuple, e) {
+        case ASTPatternData::TAG_StructTuple: {
+            auto& e = pat.data().as_StructTuple();
             ResolveAbsolutePath(context, pat.span(), Context::LookupMode::Constant, e.path);
             for (auto& sp : e.tupPat.start) {
                 ResolveAbsolutePattern(context, allowRefutable, sp);
@@ -2546,21 +2812,27 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
             for (auto& sp : e.tupPat.end) {
                 ResolveAbsolutePattern(context, allowRefutable, sp);
             }
+            break;
         }
-        TU_ARMA(Struct, e) {
+        case ASTPatternData::TAG_Struct: {
+            auto& e = pat.data().as_Struct();
             // `Struct { .. }` patterns can match anything, so switch lookup mode in that case
             ResolveAbsolutePath(context, pat.span(), e.subPatterns.empty() ? Context::LookupMode::PatternType : Context::LookupMode::Type, e.path);
             for (auto& sp : e.subPatterns) {
                 ResolveAbsolutePattern(context, allowRefutable, sp.pat);
             }
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case ASTPatternData::TAG_Slice: {
+            auto& e = pat.data().as_Slice();
             // NOTE: Can be irrefutable (if the type is array)
             for (auto& sp : e.subPats) {
                 ResolveAbsolutePattern(context, allowRefutable, sp);
             }
+            break;
         }
-        TU_ARMA(SplitSlice, e) {
+        case ASTPatternData::TAG_SplitSlice: {
+            auto& e = pat.data().as_SplitSlice();
             // NOTE: Can be irrefutable (if the type is array)
             for (auto& sp : e.leading) {
                 ResolveAbsolutePattern(context, allowRefutable, sp);
@@ -2571,8 +2843,10 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
             for (auto& sp : e.trailing) {
                 ResolveAbsolutePattern(context, allowRefutable, sp);
             }
+            break;
         }
-        TU_ARMA(Or, e) {
+        case ASTPatternData::TAG_Or: {
+            auto& e = pat.data().as_Or();
             // TODO: Need to ensure that all arms bind the same set of variables
             context.startPatbind();
             for (auto& sp : e) {
@@ -2580,6 +2854,7 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
                 context.endPatbindArm(sp.span());
             }
             context.endPatbind();
+            break;
         }
     }
 }
@@ -2588,25 +2863,97 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
 void ResolveAbsoluteImplItems(Context& itemContext, ASTNamedList<ASTItem>& items) {
     TRACE_FUNCTION_F("");
     for (auto& i : items) {
-        TU_MATCH_HDRA((i.data), {)
-        TU_ARMA(None, e) {
+        switch (i.data.tag()) {
+            case ASTItem::TAG_None: {
+                auto& e = i.data.as_None();
+                (void)e;
+                break;
             }
-            TU_ARMA(MacroInv, e) {
+            case ASTItem::TAG_MacroInv: {
+                auto& e = i.data.as_MacroInv();
+                (void)e;
+                break;
             }
-            TU_ARMA(ExternBlock, e) BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
-            TU_ARMA(Impl, e) BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
-            TU_ARMA(NegImpl, e) BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
-            TU_ARMA(GlobalAsm, e) BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
-            TU_ARMA(Macro, e) BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
-            TU_ARMA(Use, e) BUG(i.span, "Resolve_Absolute_ImplItems - Use");
-            TU_ARMA(Module, e) BUG(i.span, "Resolve_Absolute_ImplItems - Module");
-            TU_ARMA(Crate, e) BUG(i.span, "Resolve_Absolute_ImplItems - Crate");
-            TU_ARMA(Enum, e) BUG(i.span, "Resolve_Absolute_ImplItems - Enum");
-            TU_ARMA(Trait, e) BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
-            TU_ARMA(TraitAlias, e) BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
-            TU_ARMA(Struct, e) BUG(i.span, "Resolve_Absolute_ImplItems - Struct");
-            TU_ARMA(Union, e) BUG(i.span, "Resolve_Absolute_ImplItems - Union");
-            TU_ARMA(Type, e) {
+            case ASTItem::TAG_ExternBlock: {
+                auto& e = i.data.as_ExternBlock();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
+                break;
+            }
+            case ASTItem::TAG_Impl: {
+                auto& e = i.data.as_Impl();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
+                break;
+            }
+            case ASTItem::TAG_NegImpl: {
+                auto& e = i.data.as_NegImpl();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
+                break;
+            }
+            case ASTItem::TAG_GlobalAsm: {
+                auto& e = i.data.as_GlobalAsm();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
+                break;
+            }
+            case ASTItem::TAG_Macro: {
+                auto& e = i.data.as_Macro();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
+                break;
+            }
+            case ASTItem::TAG_Use: {
+                auto& e = i.data.as_Use();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - Use");
+                break;
+            }
+            case ASTItem::TAG_Module: {
+                auto& e = i.data.as_Module();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - Module");
+                break;
+            }
+            case ASTItem::TAG_Crate: {
+                auto& e = i.data.as_Crate();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - Crate");
+                break;
+            }
+            case ASTItem::TAG_Enum: {
+                auto& e = i.data.as_Enum();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - Enum");
+                break;
+            }
+            case ASTItem::TAG_Trait: {
+                auto& e = i.data.as_Trait();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
+                break;
+            }
+            case ASTItem::TAG_TraitAlias: {
+                auto& e = i.data.as_TraitAlias();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
+                break;
+            }
+            case ASTItem::TAG_Struct: {
+                auto& e = i.data.as_Struct();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - Struct");
+                break;
+            }
+            case ASTItem::TAG_Union: {
+                auto& e = i.data.as_Union();
+                (void)e;
+                BUG(i.span, "Resolve_Absolute_ImplItems - Union");
+                break;
+            }
+            case ASTItem::TAG_Type: {
+                auto& e = i.data.as_Type();
                 DEBUG("Type - " << i.name);
                 //ASSERT_BUG( i.span, e.params().m_params.size() == 0, "TODO: Generic Associated Types (Trait)" );
                 itemContext.push(e.params(), GenericSlot::Level::Method, true);
@@ -2616,14 +2963,19 @@ void ResolveAbsoluteImplItems(Context& itemContext, ASTNamedList<ASTItem>& items
                 ResolveAbsoluteType(itemContext, e.type());
 
                 itemContext.pop(e.params(), true);
+                break;
             }
-            TU_ARMA(Function, e) {
+            case ASTItem::TAG_Function: {
+                auto& e = i.data.as_Function();
                 DEBUG("Function - " << i.name);
                 ResolveAbsoluteFunction(itemContext, e, {}, true, false);
+                break;
             }
-            TU_ARMA(Static, e) {
+            case ASTItem::TAG_Static: {
+                auto& e = i.data.as_Static();
                 DEBUG("Static - " << i.name);
                 ResolveAbsoluteStatic(itemContext, e);
+                break;
             }
         }
     }
@@ -2884,21 +3236,41 @@ void ReplaceDelegatedSelf(ASTPath& path, const RcString& replacementName);
 
 void ReplaceDelegatedSelf(ASTPathParams& params, const RcString& replacementName) {
     for (auto& param : params.entries) {
-        TU_MATCH_HDRA((param), {)
-        TU_ARMA(Null, e) {}
-        TU_ARMA(Lifetime, e) {}
-        TU_ARMA(Type, e) { ReplaceDelegatedSelf(e, replacementName); }
-        TU_ARMA(Value, e) {}
-        TU_ARMA(AssociatedTyEqual, e) {
-            ReplaceDelegatedSelf(e.first.args(), replacementName);
-            ReplaceDelegatedSelf(e.second, replacementName);
-        }
-        TU_ARMA(AssociatedTyBound, e) {
-            ReplaceDelegatedSelf(e.first.args(), replacementName);
-            for (auto& trait : e.second) {
-                ReplaceDelegatedSelf(*trait.path, replacementName);
+        switch (param.tag()) {
+            case ASTPathParamEnt::TAG_Null: {
+                auto& e = param.as_Null();
+                (void)e;
+                break;
             }
-        }
+            case ASTPathParamEnt::TAG_Lifetime: {
+                auto& e = param.as_Lifetime();
+                (void)e;
+                break;
+            }
+            case ASTPathParamEnt::TAG_Type: {
+                auto& e = param.as_Type();
+                ReplaceDelegatedSelf(e, replacementName);
+                break;
+            }
+            case ASTPathParamEnt::TAG_Value: {
+                auto& e = param.as_Value();
+                (void)e;
+                break;
+            }
+            case ASTPathParamEnt::TAG_AssociatedTyEqual: {
+                auto& e = param.as_AssociatedTyEqual();
+                ReplaceDelegatedSelf(e.first.args(), replacementName);
+                ReplaceDelegatedSelf(e.second, replacementName);
+                break;
+            }
+            case ASTPathParamEnt::TAG_AssociatedTyBound: {
+                auto& e = param.as_AssociatedTyBound();
+                ReplaceDelegatedSelf(e.first.args(), replacementName);
+                for (auto& trait : e.second) {
+                    ReplaceDelegatedSelf(*trait.path, replacementName);
+                }
+                break;
+            }
         }
     }
 }
@@ -2918,31 +3290,95 @@ void ReplaceDelegatedSelf(ASTPath& path, const RcString& replacementName) {
 }
 
 void ReplaceDelegatedSelf(ASTType*& type, const RcString& replacementName) {
-    TU_MATCH_HDRA((type->data), {)
-    TU_ARMA(None, e) {}
-    TU_ARMA(Any, e) {}
-    TU_ARMA(Bang, e) {}
-    TU_ARMA(Unit, e) {}
-    TU_ARMA(Macro, e) {}
-    TU_ARMA(Primitive, e) {}
-    TU_ARMA(Function, e) {
-        ReplaceDelegatedSelf(e.info.rettype, replacementName);
-        for (auto*& arg : e.info.argTypes) { ReplaceDelegatedSelf(arg, replacementName); }
-    }
-    TU_ARMA(Tuple, e) { for (auto*& inner : e.innerTypes) { ReplaceDelegatedSelf(inner, replacementName); } }
-    TU_ARMA(Borrow, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
-    TU_ARMA(Pointer, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
-    TU_ARMA(Array, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
-    TU_ARMA(Slice, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
-    TU_ARMA(Pattern, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
-    TU_ARMA(Generic, e) { if (e.name == rcstringSelf) { e.name = replacementName; } }
-    TU_ARMA(Path, e) { ReplaceDelegatedSelf(*e, replacementName); }
-    TU_ARMA(TraitObject, e) { for (auto& trait : e.traits) { ReplaceDelegatedSelf(*trait.path, replacementName); } }
-    TU_ARMA(ErasedType, e) {
-        for (auto& trait : e->traits) { ReplaceDelegatedSelf(*trait.path, replacementName); }
-        for (auto& trait : e->maybeTraits) { ReplaceDelegatedSelf(*trait.path, replacementName); }
-        if (e->use) { ReplaceDelegatedSelf(*e->use, replacementName); }
-    }
+    switch (type->data.tag()) {
+        case TypeData::TAG_None: {
+            auto& e = type->data.as_None();
+            (void)e;
+            break;
+        }
+        case TypeData::TAG_Any: {
+            auto& e = type->data.as_Any();
+            (void)e;
+            break;
+        }
+        case TypeData::TAG_Bang: {
+            auto& e = type->data.as_Bang();
+            (void)e;
+            break;
+        }
+        case TypeData::TAG_Unit: {
+            auto& e = type->data.as_Unit();
+            (void)e;
+            break;
+        }
+        case TypeData::TAG_Macro: {
+            auto& e = type->data.as_Macro();
+            (void)e;
+            break;
+        }
+        case TypeData::TAG_Primitive: {
+            auto& e = type->data.as_Primitive();
+            (void)e;
+            break;
+        }
+        case TypeData::TAG_Function: {
+            auto& e = type->data.as_Function();
+            ReplaceDelegatedSelf(e.info.rettype, replacementName);
+            for (auto*& arg : e.info.argTypes) { ReplaceDelegatedSelf(arg, replacementName); }
+            break;
+        }
+        case TypeData::TAG_Tuple: {
+            auto& e = type->data.as_Tuple();
+            for (auto*& inner : e.innerTypes) { ReplaceDelegatedSelf(inner, replacementName); }
+            break;
+        }
+        case TypeData::TAG_Borrow: {
+            auto& e = type->data.as_Borrow();
+            ReplaceDelegatedSelf(e.inner, replacementName);
+            break;
+        }
+        case TypeData::TAG_Pointer: {
+            auto& e = type->data.as_Pointer();
+            ReplaceDelegatedSelf(e.inner, replacementName);
+            break;
+        }
+        case TypeData::TAG_Array: {
+            auto& e = type->data.as_Array();
+            ReplaceDelegatedSelf(e.inner, replacementName);
+            break;
+        }
+        case TypeData::TAG_Slice: {
+            auto& e = type->data.as_Slice();
+            ReplaceDelegatedSelf(e.inner, replacementName);
+            break;
+        }
+        case TypeData::TAG_Pattern: {
+            auto& e = type->data.as_Pattern();
+            ReplaceDelegatedSelf(e.inner, replacementName);
+            break;
+        }
+        case TypeData::TAG_Generic: {
+            auto& e = type->data.as_Generic();
+            if (e.name == rcstringSelf) { e.name = replacementName; }
+            break;
+        }
+        case TypeData::TAG_Path: {
+            auto& e = type->data.as_Path();
+            ReplaceDelegatedSelf(*e, replacementName);
+            break;
+        }
+        case TypeData::TAG_TraitObject: {
+            auto& e = type->data.as_TraitObject();
+            for (auto& trait : e.traits) { ReplaceDelegatedSelf(*trait.path, replacementName); }
+            break;
+        }
+        case TypeData::TAG_ErasedType: {
+            auto& e = type->data.as_ErasedType();
+            for (auto& trait : e->traits) { ReplaceDelegatedSelf(*trait.path, replacementName); }
+            for (auto& trait : e->maybeTraits) { ReplaceDelegatedSelf(*trait.path, replacementName); }
+            if (e->use) { ReplaceDelegatedSelf(*e->use, replacementName); }
+            break;
+        }
     }
 }
 
@@ -2952,22 +3388,66 @@ void ReplaceDelegatedSelf(ASTFunction& function, const RcString& replacementName
         ReplaceDelegatedSelf(arg.ty, replacementName);
     }
     for (auto& param : function.params().params) {
-        TU_MATCH_HDRA((param), {)
-        TU_ARMA(None, e) {}
-        TU_ARMA(Lifetime, e) {}
-        TU_ARMA(Type, e) { ReplaceDelegatedSelf(e.getDefault(), replacementName); }
-        TU_ARMA(Value, e) { ReplaceDelegatedSelf(e.type(), replacementName); }
+        switch (param.tag()) {
+            case GenericParam::TAG_None: {
+                auto& e = param.as_None();
+                (void)e;
+                break;
+            }
+            case GenericParam::TAG_Lifetime: {
+                auto& e = param.as_Lifetime();
+                (void)e;
+                break;
+            }
+            case GenericParam::TAG_Type: {
+                auto& e = param.as_Type();
+                ReplaceDelegatedSelf(e.getDefault(), replacementName);
+                break;
+            }
+            case GenericParam::TAG_Value: {
+                auto& e = param.as_Value();
+                ReplaceDelegatedSelf(e.type(), replacementName);
+                break;
+            }
         }
     }
     for (auto& bound : function.params().bounds) {
-        TU_MATCH_HDRA((bound), {)
-        TU_ARMA(None, e) {}
-        TU_ARMA(Lifetime, e) {}
-        TU_ARMA(TypeLifetime, e) { ReplaceDelegatedSelf(e.type, replacementName); }
-        TU_ARMA(IsTrait, e) { ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.trait, replacementName); }
-        TU_ARMA(MaybeTrait, e) { ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.trait, replacementName); }
-        TU_ARMA(NotTrait, e) { ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.trait, replacementName); }
-        TU_ARMA(Equality, e) { ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.replacement, replacementName); }
+        switch (bound.tag()) {
+            case ASTGenericBound::TAG_None: {
+                auto& e = bound.as_None();
+                (void)e;
+                break;
+            }
+            case ASTGenericBound::TAG_Lifetime: {
+                auto& e = bound.as_Lifetime();
+                (void)e;
+                break;
+            }
+            case ASTGenericBound::TAG_TypeLifetime: {
+                auto& e = bound.as_TypeLifetime();
+                ReplaceDelegatedSelf(e.type, replacementName);
+                break;
+            }
+            case ASTGenericBound::TAG_IsTrait: {
+                auto& e = bound.as_IsTrait();
+                ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.trait, replacementName);
+                break;
+            }
+            case ASTGenericBound::TAG_MaybeTrait: {
+                auto& e = bound.as_MaybeTrait();
+                ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.trait, replacementName);
+                break;
+            }
+            case ASTGenericBound::TAG_NotTrait: {
+                auto& e = bound.as_NotTrait();
+                ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.trait, replacementName);
+                break;
+            }
+            case ASTGenericBound::TAG_Equality: {
+                auto& e = bound.as_Equality();
+                ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.replacement, replacementName);
+                break;
+            }
         }
     }
 }
@@ -3033,74 +3513,128 @@ ASTPath HIRTraitPathToAST(Context& context, const Span& span, const HIRTraitPath
 }
 
 ASTPath HIRPathToAST(Context& context, const Span& span, const HIRPath& path) {
-    TU_MATCH_HDRA((path.data), {)
-    TU_ARMA(Generic, e) { return HIRGenericPathToAST(context, span, e); }
-    TU_ARMA(UfcsInherent, e) {
-        return ASTPath::newUfcsTy(
-            HIRTypeToAST(context, span, e.type),
-            {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))}
-        );
-    }
-    TU_ARMA(UfcsKnown, e) {
-        return ASTPath::newUfcsTrait(
-            HIRTypeToAST(context, span, e.type),
-            HIRGenericPathToAST(context, span, e.trait),
-            {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))}
-        );
-    }
-    TU_ARMA(UfcsUnknown, e) {
-        return ASTPath::newUfcsTy(
-            HIRTypeToAST(context, span, e.type),
-            {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))}
-        );
-    }
+    switch (path.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            auto& e = path.data.as_Generic();
+            return HIRGenericPathToAST(context, span, e);
+        }
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& e = path.data.as_UfcsInherent();
+            return ASTPath::newUfcsTy(
+                HIRTypeToAST(context, span, e.type),
+                {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))}
+            );
+        }
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& e = path.data.as_UfcsKnown();
+            return ASTPath::newUfcsTrait(
+                HIRTypeToAST(context, span, e.type),
+                HIRGenericPathToAST(context, span, e.trait),
+                {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))}
+            );
+        }
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& e = path.data.as_UfcsUnknown();
+            return ASTPath::newUfcsTy(
+                HIRTypeToAST(context, span, e.type),
+                {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))}
+            );
+        }
     }
     throw "";
 }
 
 ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
     auto& pool = context.typePool();
-    TU_MATCH_HDRA((*type), {)
-    TU_ARMA(Infer, e) { return mkType(pool, span); }
-    TU_ARMA(Diverge, e) { return mkType(pool, span, TypeData::make_Bang({})); }
-    TU_ARMA(Primitive, e) { return mkType(pool, span, HIRCoreTypeToAST(e)); }
-    TU_ARMA(Path, e) { return mkType(pool, span, HIRPathToAST(context, span, e.path)); }
-    TU_ARMA(Generic, e) {
-        const auto name = e.binding != GENERICSelf && e.group() == GENERICItem
-            ? RcString::newInterned(FMT("#hir-item-" << e.idx()))
-            : e.name;
-        return mkType(pool, span, name, e.binding);
-    }
-    TU_ARMA(TraitObject, e) {
-        ::std::vector<TypeTraitPath> traits;
-        traits.push_back(TypeTraitPath({}, HIRTraitPathToAST(context, span, e.trait), HIRConstnessToAST(e.trait.constness)));
-        for (const auto& marker : e.markers) {
-            traits.push_back(TypeTraitPath({}, HIRGenericPathToAST(context, span, marker)));
+    switch ((*type).tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*type).as_Infer();
+            (void)e;
+            return mkType(pool, span);
         }
-        return mkType(pool, span, mv$(traits), {});
-    }
-    TU_ARMA(ErasedType, e) { BUG(span, "Erased type in an external delegation signature"); }
-    TU_ARMA(Array, e) { BUG(span, "Array in an external delegation signature"); }
-    TU_ARMA(Slice, e) { return mkType(pool, ASTTypeTags::UnsizedArray(), span, HIRTypeToAST(context, span, e.inner)); }
-    TU_ARMA(Pattern, e) { BUG(span, "Pattern type in an external delegation signature"); }
-    TU_ARMA(Tuple, e) {
-        ::std::vector<ASTType*> types;
-        for (const auto& inner : e) { types.push_back(HIRTypeToAST(context, span, inner)); }
-        return mkType(pool, ASTTypeTags::Tuple(), span, mv$(types));
-    }
-    TU_ARMA(Borrow, e) {
-        return mkType(pool, ASTTypeTags::Reference(), span, ASTLifetimeRef(), e.type == HIRBorrowType::Unique, HIRTypeToAST(context, span, e.inner));
-    }
-    TU_ARMA(Pointer, e) {
-        return mkType(pool, ASTTypeTags::Pointer(), span, e.type == HIRBorrowType::Unique, HIRTypeToAST(context, span, e.inner));
-    }
-    TU_ARMA(NamedFunction, e) { BUG(span, "Named function type in an external delegation signature"); }
-    TU_ARMA(Function, e) {
-        ::std::vector<ASTType*> args;
-        for (const auto& arg : e.argTypes) { args.push_back(HIRTypeToAST(context, span, arg)); }
-        return mkType(pool, ASTTypeTags::Function(), span, {}, e.isUnsafe, e.abi.c_str(), mv$(args), e.isVariadic, HIRTypeToAST(context, span, e.rettype));
-    }
-    TU_ARMA(NodeType, e) { BUG(span, "Node type in an external delegation signature"); }
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = (*type).as_Diverge();
+            (void)e;
+            return mkType(pool, span, TypeData::make_Bang({}));
+        }
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*type).as_Primitive();
+            return mkType(pool, span, HIRCoreTypeToAST(e));
+        }
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*type).as_Path();
+            return mkType(pool, span, HIRPathToAST(context, span, e.path));
+        }
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*type).as_Generic();
+            const auto name = e.binding != GENERICSelf && e.group() == GENERICItem
+                ? RcString::newInterned(FMT("#hir-item-" << e.idx()))
+                : e.name;
+            return mkType(pool, span, name, e.binding);
+        }
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*type).as_TraitObject();
+            ::std::vector<TypeTraitPath> traits;
+            traits.push_back(TypeTraitPath({}, HIRTraitPathToAST(context, span, e.trait), HIRConstnessToAST(e.trait.constness)));
+            for (const auto& marker : e.markers) {
+                traits.push_back(TypeTraitPath({}, HIRGenericPathToAST(context, span, marker)));
+            }
+            return mkType(pool, span, mv$(traits), {});
+        }
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*type).as_ErasedType();
+            (void)e;
+            BUG(span, "Erased type in an external delegation signature");
+            break;
+        }
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*type).as_Array();
+            (void)e;
+            BUG(span, "Array in an external delegation signature");
+            break;
+        }
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*type).as_Slice();
+            return mkType(pool, ASTTypeTags::UnsizedArray(), span, HIRTypeToAST(context, span, e.inner));
+        }
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = (*type).as_Pattern();
+            (void)e;
+            BUG(span, "Pattern type in an external delegation signature");
+            break;
+        }
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*type).as_Tuple();
+            ::std::vector<ASTType*> types;
+            for (const auto& inner : e) { types.push_back(HIRTypeToAST(context, span, inner)); }
+            return mkType(pool, ASTTypeTags::Tuple(), span, mv$(types));
+        }
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*type).as_Borrow();
+            return mkType(pool, ASTTypeTags::Reference(), span, ASTLifetimeRef(), e.type == HIRBorrowType::Unique, HIRTypeToAST(context, span, e.inner));
+        }
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*type).as_Pointer();
+            return mkType(pool, ASTTypeTags::Pointer(), span, e.type == HIRBorrowType::Unique, HIRTypeToAST(context, span, e.inner));
+        }
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = (*type).as_NamedFunction();
+            (void)e;
+            BUG(span, "Named function type in an external delegation signature");
+            break;
+        }
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*type).as_Function();
+            ::std::vector<ASTType*> args;
+            for (const auto& arg : e.argTypes) { args.push_back(HIRTypeToAST(context, span, arg)); }
+            return mkType(pool, ASTTypeTags::Function(), span, {}, e.isUnsafe, e.abi.c_str(), mv$(args), e.isVariadic, HIRTypeToAST(context, span, e.rettype));
+        }
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*type).as_NodeType();
+            (void)e;
+            BUG(span, "Node type in an external delegation signature");
+            break;
+        }
     }
     throw "";
 }
@@ -3114,23 +3648,27 @@ ASTGenericParams HIRGenericParamsToAST(Context& context, const Span& span, const
         rv.addValueParam(span, {}, Ident(value.name), HIRTypeToAST(context, span, value.type), {});
     }
     for (const auto& bound : params.bounds) {
-        TU_MATCH_HDRA((bound), {)
-        TU_ARMA(TraitBound, e) {
-            rv.addBound(ASTGenericBound::make_IsTrait({
-                span,
-                {},
-                HIRTypeToAST(context, span, e.type),
-                {},
-                HIRTraitPathToAST(context, span, e.trait),
-                HIRConstnessToAST(e.constness)
-            }));
-        }
-        TU_ARMA(TypeEquality, e) {
-            rv.addBound(ASTGenericBound::make_Equality({
-                HIRTypeToAST(context, span, e.type),
-                HIRTypeToAST(context, span, e.otherType)
-            }));
-        }
+        switch (bound.tag()) {
+            case HIRGenericBound::TAG_TraitBound: {
+                auto& e = bound.as_TraitBound();
+                rv.addBound(ASTGenericBound::make_IsTrait({
+                    span,
+                    {},
+                    HIRTypeToAST(context, span, e.type),
+                    {},
+                    HIRTraitPathToAST(context, span, e.trait),
+                    HIRConstnessToAST(e.constness)
+                }));
+                break;
+            }
+            case HIRGenericBound::TAG_TypeEquality: {
+                auto& e = bound.as_TypeEquality();
+                rv.addBound(ASTGenericBound::make_Equality({
+                    HIRTypeToAST(context, span, e.type),
+                    HIRTypeToAST(context, span, e.otherType)
+                }));
+                break;
+            }
         }
     }
     return rv;
@@ -3218,11 +3756,27 @@ void ResolveAbsoluteFunction(
                 auto& traitArgs = traitBound.nodes().back().args().entries;
                 traitArgs.clear();
                 for (const auto& param : targetTrait->params().params) {
-                    TU_MATCH_HDRA((param), {)
-                    TU_ARMA(None, e) {}
-                    TU_ARMA(Lifetime, e) { traitArgs.push_back(ASTLifetimeRef(e.name())); }
-                    TU_ARMA(Type, e) { traitArgs.push_back(mkType(itemContext.typePool(), fcn.sp(), e.name())); }
-                    TU_ARMA(Value, e) { traitArgs.push_back(ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(e.name().name)))); }
+                    switch (param.tag()) {
+                        case GenericParam::TAG_None: {
+                            auto& e = param.as_None();
+                            (void)e;
+                            break;
+                        }
+                        case GenericParam::TAG_Lifetime: {
+                            auto& e = param.as_Lifetime();
+                            traitArgs.push_back(ASTLifetimeRef(e.name()));
+                            break;
+                        }
+                        case GenericParam::TAG_Type: {
+                            auto& e = param.as_Type();
+                            traitArgs.push_back(mkType(itemContext.typePool(), fcn.sp(), e.name()));
+                            break;
+                        }
+                        case GenericParam::TAG_Value: {
+                            auto& e = param.as_Value();
+                            traitArgs.push_back(ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(e.name().name))));
+                            break;
+                        }
                     }
                 }
                 merged.addBound(ASTGenericBound::make_IsTrait({
@@ -3433,29 +3987,48 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
     TRACE_FUNCTION_F("mod=" << mod.path());
 
     for (auto& i : mod.items) {
-        TU_MATCH_HDRA( (i->data), {)
-        TU_ARMA(None, e) {
+        switch (i->data.tag()) {
+            case ASTItem::TAG_None: {
+                auto& e = i->data.as_None();
+                (void)e;
+                break;
             }
-            TU_ARMA(MacroInv, e) {
+            case ASTItem::TAG_MacroInv: {
+                auto& e = i->data.as_MacroInv();
+                (void)e;
+                break;
             }
-            TU_ARMA(Use, e) {
+            case ASTItem::TAG_Use: {
+                auto& e = i->data.as_Use();
+                (void)e;
+                break;
             }
-            TU_ARMA(Macro, e) {
+            case ASTItem::TAG_Macro: {
+                auto& e = i->data.as_Macro();
+                (void)e;
+                break;
             }
-            TU_ARMA(GlobalAsm, e) {
+            case ASTItem::TAG_GlobalAsm: {
+                auto& e = i->data.as_GlobalAsm();
                 for (auto& operand : e.operands) {
-                    TU_MATCH_HDRA((operand), {)
-                    TU_ARMA(Const, expr) {
+                    switch (operand.tag()) {
+                        case ASTGlobalAsmOperand::TAG_Const: {
+                            auto& expr = operand.as_Const();
                             auto rootBlock = itemContext.enterRootblock();
                             ResolveAbsoluteExprNode(itemContext, *expr);
+                            break;
                         }
-                        TU_ARMA(Sym, path) {
+                        case ASTGlobalAsmOperand::TAG_Sym: {
+                            auto& path = operand.as_Sym();
                             ResolveAbsolutePath(itemContext, i->span, Context::LookupMode::Variable, path);
+                            break;
                         }
                     }
                 }
+                break;
             }
-            TU_ARMA(ExternBlock, e) {
+            case ASTItem::TAG_ExternBlock: {
+                auto& e = i->data.as_ExternBlock();
                 for (auto& i2 : e.items()) {
                     switch (i2.data.tag()) {
                         case ASTItem::TAG_None: {
@@ -3479,8 +4052,10 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
                         }
                     }
                 }
+                break;
             }
-            TU_ARMA(Impl, e) {
+            case ASTItem::TAG_Impl: {
+                auto& e = i->data.as_Impl();
                 auto& def = e.def();
                 if (!def.type()->isValid()) {
                     TRACE_FUNCTION_F("impl " << def.trait().ent << " for ..");
@@ -3521,8 +4096,10 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
                     itemContext.pop(def.params());
                     itemContext.popSelf(def.type());
                 }
+                break;
             }
-            TU_ARMA(NegImpl, e) {
+            case ASTItem::TAG_NegImpl: {
+                auto& e = i->data.as_NegImpl();
                 auto& implDef = e;
                 TRACE_FUNCTION_F("impl ! " << implDef.trait().ent << " for " << implDef.type());
                 itemContext.pushSelf(implDef.type());
@@ -3542,23 +4119,34 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
 
                 itemContext.pop(implDef.params());
                 itemContext.popSelf(implDef.type());
+                break;
             }
-            TU_ARMA(Module, e) {
+            case ASTItem::TAG_Module: {
+                auto& e = i->data.as_Module();
                 DEBUG("Module - " << i->name);
                 ResolveAbsoluteMod(itemContext.settings, itemContext.crate, e);
+                break;
             }
-            TU_ARMA(Crate, e) {
+            case ASTItem::TAG_Crate: {
+                auto& e = i->data.as_Crate();
+                (void)e;
                 // - Nothing
+                break;
             }
-            TU_ARMA(Enum, e) {
+            case ASTItem::TAG_Enum: {
+                auto& e = i->data.as_Enum();
                 DEBUG("Enum - " << i->name);
                 ResolveAbsoluteEnum(itemContext, e);
+                break;
             }
-            TU_ARMA(Trait, e) {
+            case ASTItem::TAG_Trait: {
+                auto& e = i->data.as_Trait();
                 DEBUG("Trait - " << i->name);
                 ResolveAbsoluteTrait(itemContext, e);
+                break;
             }
-            TU_ARMA(TraitAlias, e) {
+            case ASTItem::TAG_TraitAlias: {
+                auto& e = i->data.as_TraitAlias();
                 DEBUG("TraitAlias - " << i->name);
                 itemContext.push(e.params, GenericSlot::Level::Top, true);
                 ResolveAbsoluteGeneric(itemContext, e.params);
@@ -3573,8 +4161,10 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
                 }
 
                 itemContext.pop(e.params, true);
+                break;
             }
-            TU_ARMA(Type, e) {
+            case ASTItem::TAG_Type: {
+                auto& e = i->data.as_Type();
                 DEBUG("Type - " << i->name);
                 itemContext.push(e.params(), GenericSlot::Level::Top, true);
                 ResolveAbsoluteGeneric(itemContext, e.params());
@@ -3582,22 +4172,31 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
                 ResolveAbsoluteType(itemContext, e.type());
 
                 itemContext.pop(e.params(), true);
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTItem::TAG_Struct: {
+                auto& e = i->data.as_Struct();
                 DEBUG("Struct - " << i->name);
                 ResolveAbsoluteStruct(itemContext, e);
+                break;
             }
-            TU_ARMA(Union, e) {
+            case ASTItem::TAG_Union: {
+                auto& e = i->data.as_Union();
                 DEBUG("Union - " << i->name);
                 ResolveAbsoluteUnion(itemContext, e);
+                break;
             }
-            TU_ARMA(Function, e) {
+            case ASTItem::TAG_Function: {
+                auto& e = i->data.as_Function();
                 DEBUG("Function - " << i->name);
                 ResolveAbsoluteFunction(itemContext, e);
+                break;
             }
-            TU_ARMA(Static, e) {
+            case ASTItem::TAG_Static: {
+                auto& e = i->data.as_Static();
                 DEBUG("Static - " << i->name);
                 ResolveAbsoluteStatic(itemContext, e);
+                break;
             }
         }
     }
@@ -3733,34 +4332,57 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
         auto ap = mod.path() + i->name;
         auto p = ASTPath(ap);
 
-        TU_MATCH_HDRA( (i->data), {)
-        TU_ARMA(None, e) {
+        switch (i->data.tag()) {
+            case ASTItem::TAG_None: {
+                auto& e = i->data.as_None();
+                (void)e;
+                break;
             }
-            TU_ARMA(MacroInv, e) {
+            case ASTItem::TAG_MacroInv: {
+                auto& e = i->data.as_MacroInv();
+                (void)e;
+                break;
             }
-            // Unnamed
-            TU_ARMA(ExternBlock, e) {
+            case ASTItem::TAG_ExternBlock: {
+                auto& e = i->data.as_ExternBlock();
+                (void)e;
+                break;
             }
-            TU_ARMA(Impl, e) {
+            case ASTItem::TAG_Impl: {
+                auto& e = i->data.as_Impl();
+                (void)e;
+                break;
             }
-            TU_ARMA(NegImpl, e) {
+            case ASTItem::TAG_NegImpl: {
+                auto& e = i->data.as_NegImpl();
+                (void)e;
+                break;
             }
-            TU_ARMA(GlobalAsm, e) {
+            case ASTItem::TAG_GlobalAsm: {
+                auto& e = i->data.as_GlobalAsm();
+                (void)e;
+                break;
             }
-
-            TU_ARMA(Macro, e) {
+            case ASTItem::TAG_Macro: {
+                auto& e = i->data.as_Macro();
+                (void)e;
                 // Handled by `for(const auto& item : mod.macros())` below
+                break;
             }
-
-            TU_ARMA(Use, e) {
+            case ASTItem::TAG_Use: {
+                auto& e = i->data.as_Use();
+                (void)e;
                 // Skip for now
+                break;
             }
-            // - Types/modules only
-            TU_ARMA(Module, e) {
+            case ASTItem::TAG_Module: {
+                auto& e = i->data.as_Module();
                 p.bindings.type.set(ap, ASTPathBindingType::make_Module({&e}));
                 _add_item(i->span, mod, IndexName::Namespace, i->name, i->vis, mv$(p));
+                break;
             }
-            TU_ARMA(Crate, e) {
+            case ASTItem::TAG_Crate: {
+                auto& e = i->data.as_Crate();
                 if (e.name != "") {
                     ASSERT_BUG(i->span, crate.externCrates.count(e.name) > 0, "Referenced crate '" << e.name << "' isn't loaded for `extern crate`");
                     p.bindings.type.set(ap, ASTPathBindingType::make_Crate({&crate.externCrates.at(e.name)}));
@@ -3768,29 +4390,40 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
                     p.bindings.type.set(ap, ASTPathBindingType::make_Module({&crate.rootModule_}));
                 }
                 _add_item(i->span, mod, IndexName::Namespace, i->name, i->vis, mv$(p));
+                break;
             }
-            TU_ARMA(Enum, e) {
+            case ASTItem::TAG_Enum: {
+                auto& e = i->data.as_Enum();
                 p.bindings.type.set(ap, ASTPathBindingType::make_Enum({&e}));
                 _add_item_type(i->span, mod, i->name, i->vis, mv$(p));
+                break;
             }
-            TU_ARMA(Union, e) {
+            case ASTItem::TAG_Union: {
+                auto& e = i->data.as_Union();
                 p.bindings.type.set(ap, ASTPathBindingType::make_Union({&e}));
                 _add_item_type(i->span, mod, i->name, i->vis, mv$(p));
+                break;
             }
-            TU_ARMA(Trait, e) {
+            case ASTItem::TAG_Trait: {
+                auto& e = i->data.as_Trait();
                 p.bindings.type.set(ap, ASTPathBindingType::make_Trait({&e}));
                 _add_item_type(i->span, mod, i->name, i->vis, mv$(p));
+                break;
             }
-            TU_ARMA(TraitAlias, e) {
+            case ASTItem::TAG_TraitAlias: {
+                auto& e = i->data.as_TraitAlias();
                 p.bindings.type.set(ap, ASTPathBindingType::make_TraitAlias({&e}));
                 _add_item_type(i->span, mod, i->name, i->vis, mv$(p));
+                break;
             }
-            TU_ARMA(Type, e) {
+            case ASTItem::TAG_Type: {
+                auto& e = i->data.as_Type();
                 p.bindings.type.set(ap, ASTPathBindingType::make_TypeAlias({&e}));
                 _add_item_type(i->span, mod, i->name, i->vis, mv$(p));
+                break;
             }
-            // - Mixed
-            TU_ARMA(Struct, e) {
+            case ASTItem::TAG_Struct: {
+                auto& e = i->data.as_Struct();
                 p.bindings.type.set(ap, ASTPathBindingType::make_Struct({&e}));
                 // - If the struct is a tuple-like struct (or unit-like), it presents in the value namespace
                 if (!e.data.is_Struct()) {
@@ -3798,15 +4431,19 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
                     _add_item_value(i->span, mod, i->name, i->vis, p);
                 }
                 _add_item_type(i->span, mod, i->name, i->vis, mv$(p));
+                break;
             }
-            // - Values only
-            TU_ARMA(Function, e) {
+            case ASTItem::TAG_Function: {
+                auto& e = i->data.as_Function();
                 p.bindings.value.set(ap, ASTPathBindingValue::make_Function({&e}));
                 _add_item_value(i->span, mod, i->name, i->vis, mv$(p));
+                break;
             }
-            TU_ARMA(Static, e) {
+            case ASTItem::TAG_Static: {
+                auto& e = i->data.as_Static();
                 p.bindings.value.set(ap, ASTPathBindingValue::make_Static({&e}));
                 _add_item_value(i->span, mod, i->name, i->vis, mv$(p));
+                break;
             }
         }
     }
@@ -3836,68 +4473,157 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
 
                 bool allowCollide = true; // Allow collisions (`use` can import mutliple namespaces, local gets priority)
                 // - Types
-            TU_MATCH_HDRA( (pb.type.binding), {)
-            TU_ARMA(Unbound, _e) {
-                        DEBUG(iData.name << " - Not a type/module");
-                    }
-                    TU_ARMA(TypeParameter, e)
+            switch (pb.type.binding.tag()) {
+                case ASTPathBindingType::TAG_Unbound: {
+                    auto& _e = pb.type.binding.as_Unbound();
+                    (void)_e;
+                    DEBUG(iData.name << " - Not a type/module");
+                    break;
+                }
+                case ASTPathBindingType::TAG_TypeParameter: {
+                    auto& e = pb.type.binding.as_TypeParameter();
+                    (void)e;
                     BUG(sp, "Import was bound to type parameter");
-                    TU_ARMA(Primitive, e)
+                    break;
+                }
+                case ASTPathBindingType::TAG_Primitive: {
+                    auto& e = pb.type.binding.as_Primitive();
+                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    TU_ARMA(Crate, e)
+                    break;
+                }
+                case ASTPathBindingType::TAG_Crate: {
+                    auto& e = pb.type.binding.as_Crate();
+                    (void)e;
                     _add_item(sp, mod, IndexName::Namespace, iData.name, i.vis, pb.type, !allowCollide);
-                    TU_ARMA(Module, e)
+                    break;
+                }
+                case ASTPathBindingType::TAG_Module: {
+                    auto& e = pb.type.binding.as_Module();
+                    (void)e;
                     _add_item(sp, mod, IndexName::Namespace, iData.name, i.vis, pb.type, !allowCollide);
-                    TU_ARMA(Enum, e)
+                    break;
+                }
+                case ASTPathBindingType::TAG_Enum: {
+                    auto& e = pb.type.binding.as_Enum();
+                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    TU_ARMA(Union, e)
+                    break;
+                }
+                case ASTPathBindingType::TAG_Union: {
+                    auto& e = pb.type.binding.as_Union();
+                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    TU_ARMA(Trait, e)
+                    break;
+                }
+                case ASTPathBindingType::TAG_Trait: {
+                    auto& e = pb.type.binding.as_Trait();
+                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    TU_ARMA(TraitAlias, e)
+                    break;
+                }
+                case ASTPathBindingType::TAG_TraitAlias: {
+                    auto& e = pb.type.binding.as_TraitAlias();
+                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    TU_ARMA(TypeAlias, e)
+                    break;
+                }
+                case ASTPathBindingType::TAG_TypeAlias: {
+                    auto& e = pb.type.binding.as_TypeAlias();
+                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    TU_ARMA(Struct, e)
+                    break;
+                }
+                case ASTPathBindingType::TAG_Struct: {
+                    auto& e = pb.type.binding.as_Struct();
+                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    TU_ARMA(EnumVar, e)
+                    break;
+                }
+                case ASTPathBindingType::TAG_EnumVar: {
+                    auto& e = pb.type.binding.as_EnumVar();
+                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
+                    break;
+                }
             }
             // - Values
-            TU_MATCH_HDRA( (pb.value.binding), {)
-            TU_ARMA(Unbound, _e) {
-                        DEBUG(iData.name << " - Not a value");
-                    }
-                    TU_ARMA(Variable, e)
+            switch (pb.value.binding.tag()) {
+                case ASTPathBindingValue::TAG_Unbound: {
+                    auto& _e = pb.value.binding.as_Unbound();
+                    (void)_e;
+                    DEBUG(iData.name << " - Not a value");
+                    break;
+                }
+                case ASTPathBindingValue::TAG_Variable: {
+                    auto& e = pb.value.binding.as_Variable();
+                    (void)e;
                     BUG(sp, "Import was bound to a variable");
-                    TU_ARMA(Generic, e)
+                    break;
+                }
+                case ASTPathBindingValue::TAG_Generic: {
+                    auto& e = pb.value.binding.as_Generic();
+                    (void)e;
                     BUG(sp, "Import was bound to a generic value");
-                    TU_ARMA(Struct, e)
+                    break;
+                }
+                case ASTPathBindingValue::TAG_Struct: {
+                    auto& e = pb.value.binding.as_Struct();
+                    (void)e;
                     _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
-                    TU_ARMA(EnumVar, e)
+                    break;
+                }
+                case ASTPathBindingValue::TAG_EnumVar: {
+                    auto& e = pb.value.binding.as_EnumVar();
+                    (void)e;
                     _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
-                    TU_ARMA(Static, e)
+                    break;
+                }
+                case ASTPathBindingValue::TAG_Static: {
+                    auto& e = pb.value.binding.as_Static();
+                    (void)e;
                     _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
-                    TU_ARMA(Function, e)
+                    break;
+                }
+                case ASTPathBindingValue::TAG_Function: {
+                    auto& e = pb.value.binding.as_Function();
+                    (void)e;
                     _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
+                    break;
+                }
             }
             // - Macros
-            TU_MATCH_HDRA( (pb.macro.binding), {)
-            TU_ARMA(Unbound, _e) {
-                        DEBUG(iData.name << " - Not a macro");
-                    }
-                    TU_ARMA(MacroRules, e) {
-                        _add_item(sp, mod, IndexName::Macro, iData.name, i.vis, pb.macro, !allowCollide);
-                    }
-                    TU_ARMA(ProcMacro, e) {
-                        _add_item(sp, mod, IndexName::Macro, iData.name, i.vis, pb.macro, !allowCollide);
-                    }
-                    TU_ARMA(ProcMacroAttribute, e) {
-                        TODO(sp, "ProcMacroAttribute import");
-                    }
-                    TU_ARMA(ProcMacroDerive, e) {
-                        TODO(sp, "ProcMacroDerive import");
-                    }
+            switch (pb.macro.binding.tag()) {
+                case ASTPathBindingMacro::TAG_Unbound: {
+                    auto& _e = pb.macro.binding.as_Unbound();
+                    (void)_e;
+                    DEBUG(iData.name << " - Not a macro");
+                    break;
+                }
+                case ASTPathBindingMacro::TAG_MacroRules: {
+                    auto& e = pb.macro.binding.as_MacroRules();
+                    (void)e;
+                    _add_item(sp, mod, IndexName::Macro, iData.name, i.vis, pb.macro, !allowCollide);
+                    break;
+                }
+                case ASTPathBindingMacro::TAG_ProcMacro: {
+                    auto& e = pb.macro.binding.as_ProcMacro();
+                    (void)e;
+                    _add_item(sp, mod, IndexName::Macro, iData.name, i.vis, pb.macro, !allowCollide);
+                    break;
+                }
+                case ASTPathBindingMacro::TAG_ProcMacroAttribute: {
+                    auto& e = pb.macro.binding.as_ProcMacroAttribute();
+                    (void)e;
+                    TODO(sp, "ProcMacroAttribute import");
+                    break;
+                }
+                case ASTPathBindingMacro::TAG_ProcMacroDerive: {
+                    auto& e = pb.macro.binding.as_ProcMacroDerive();
+                    (void)e;
+                    TODO(sp, "ProcMacroDerive import");
+                    break;
+                }
             }
             } else {
                 if (i.vis.ty() != ASTVisibility::Ty::Private) {
@@ -3971,34 +4697,55 @@ void ResolveIndexModuleWildcardGlobInHirMod(
             } else {
                 pb.path = modAp + it.first;
             }
-            TU_MATCH_HDRA( (*vep), {)
-            TU_ARMA(Import, e) {
+            switch ((*vep).tag()) {
+                case HIRTypeItem::TAG_Import: {
+                    auto& e = (*vep).as_Import();
                     //throw "";
                     TODO(sp, "Get binding for HIR import? " << e.path);
+                    break;
                 }
-                TU_ARMA(Module, e) {
+                case HIRTypeItem::TAG_Module: {
+                    auto& e = (*vep).as_Module();
                     pb.binding = ASTPathBindingType::make_Module({nullptr, {nullptr, &e}});
+                    break;
                 }
-                TU_ARMA(Trait, e) {
+                case HIRTypeItem::TAG_Trait: {
+                    auto& e = (*vep).as_Trait();
                     pb.binding = ASTPathBindingType::make_Trait({nullptr, &e});
+                    break;
                 }
-                TU_ARMA(Struct, e) {
+                case HIRTypeItem::TAG_Struct: {
+                    auto& e = (*vep).as_Struct();
                     pb.binding = ASTPathBindingType::make_Struct({nullptr, &e});
+                    break;
                 }
-                TU_ARMA(TraitAlias, e) {
+                case HIRTypeItem::TAG_TraitAlias: {
+                    auto& e = (*vep).as_TraitAlias();
                     pb.binding = ASTPathBindingType::make_TraitAlias({nullptr, &e});
+                    break;
                 }
-                TU_ARMA(Union, e) {
+                case HIRTypeItem::TAG_Union: {
+                    auto& e = (*vep).as_Union();
                     pb.binding = ASTPathBindingType::make_Union({nullptr, &e});
+                    break;
                 }
-                TU_ARMA(Enum, e) {
+                case HIRTypeItem::TAG_Enum: {
+                    auto& e = (*vep).as_Enum();
+                    (void)e;
                     pb.binding = ASTPathBindingType::make_Enum({nullptr});
+                    break;
                 }
-                TU_ARMA(TypeAlias, e) {
+                case HIRTypeItem::TAG_TypeAlias: {
+                    auto& e = (*vep).as_TypeAlias();
+                    (void)e;
                     pb.binding = ASTPathBindingType::make_TypeAlias({nullptr});
+                    break;
                 }
-                TU_ARMA(ExternType, e) {
+                case HIRTypeItem::TAG_ExternType: {
+                    auto& e = (*vep).as_ExternType();
+                    (void)e;
                     pb.binding = ASTPathBindingType::make_TypeAlias({nullptr});
+                    break;
                 }
             }
             _add_item_type( sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude );
@@ -4038,25 +4785,39 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                 pb.path = modAp + it.first;
             }
             assert(vep);
-            TU_MATCH_HDRA( (*vep), {)
-            TU_ARMA(Import, e) {
+            switch ((*vep).tag()) {
+                case HIRValueItem::TAG_Import: {
+                    auto& e = (*vep).as_Import();
+                    (void)e;
                     throw "";
                 }
-                TU_ARMA(Constant, e) {
+                case HIRValueItem::TAG_Constant: {
+                    auto& e = (*vep).as_Constant();
+                    (void)e;
                     pb.binding = ASTPathBindingValue::make_Static({nullptr});
+                    break;
                 }
-                TU_ARMA(Static, e) {
+                case HIRValueItem::TAG_Static: {
+                    auto& e = (*vep).as_Static();
+                    (void)e;
                     pb.binding = ASTPathBindingValue::make_Static({nullptr});
+                    break;
                 }
-                // TODO: What if these refer to an enum variant?
-                TU_ARMA(StructConstant, e) {
+                case HIRValueItem::TAG_StructConstant: {
+                    auto& e = (*vep).as_StructConstant();
                     pb.binding = ASTPathBindingValue::make_Struct({nullptr, &crate.externCrates.at(e.ty.crateName()).hir->getTypeitemByPath(sp, e.ty, true).as_Struct()});
+                    break;
                 }
-                TU_ARMA(StructConstructor, e) {
+                case HIRValueItem::TAG_StructConstructor: {
+                    auto& e = (*vep).as_StructConstructor();
                     pb.binding = ASTPathBindingValue::make_Struct({nullptr, &crate.externCrates.at(e.ty.crateName()).hir->getTypeitemByPath(sp, e.ty, true).as_Struct()});
+                    break;
                 }
-                TU_ARMA(Function, e) {
+                case HIRValueItem::TAG_Function: {
+                    auto& e = (*vep).as_Function();
+                    (void)e;
                     pb.binding = ASTPathBindingValue::make_Function({nullptr});
+                    break;
                 }
             }
             _add_item_value( sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude );
@@ -4074,15 +4835,22 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                 pb.path = modAp + it.first;
             }
 
-            TU_MATCH_HDRA( (e.ent), {)
-            TU_ARMA(Import, _) {
+            switch (e.ent.tag()) {
+                case HIRMacroItem::TAG_Import: {
+                    auto& _ = e.ent.as_Import();
+                    (void)_;
                     pb.binding = ASTPathBindingMacro::make_MacroRules({nullptr, nullptr});
+                    break;
                 }
-                TU_ARMA(ProcMacro, me) {
+                case HIRMacroItem::TAG_ProcMacro: {
+                    auto& me = e.ent.as_ProcMacro();
                     pb.binding = ASTPathBindingMacro::make_ProcMacro({nullptr, me.name});
+                    break;
                 }
-                TU_ARMA(MacroRules, me) {
+                case HIRMacroItem::TAG_MacroRules: {
+                    auto& me = e.ent.as_MacroRules();
                     pb.binding = ASTPathBindingMacro::make_MacroRules({nullptr, &*me});
+                    break;
                 }
             }
             _add_item(sp, dstMod, IndexName::Macro, it.first, vis, mv$(pb), false, fromPrelude );
@@ -4393,17 +5161,22 @@ bool ResolveIndexModuleNormalisePath(const ASTCrate& crate, const Span& sp, ASTP
             path = mv$(newPath);
             return ResolveIndexModuleNormalisePath(crate, sp, path, loc);
         } else {
-            TU_MATCH_HDRA( (ie.path.bindings.type.binding), {)
-            default:
+            switch (ie.path.bindings.type.binding.tag()) {
+default:
                 BUG(sp, "Path " << path << " pointed to non-module " << ie.path);
-                TU_ARMA(Module, e) {
+                case ASTPathBindingType::TAG_Module: {
+                    auto& e = ie.path.bindings.type.binding.as_Module();
                     mod = e.module_;
+                    break;
                 }
-                TU_ARMA(Crate, e) {
+                case ASTPathBindingType::TAG_Crate: {
+                    auto& e = ie.path.bindings.type.binding.as_Crate();
                     ResolveIndexModuleNormalisePathExt(crate, sp, path, loc, *e.crate_, i + 1);
                     return false;
                 }
-                TU_ARMA(Enum, e) {
+                case ASTPathBindingType::TAG_Enum: {
+                    auto& e = ie.path.bindings.type.binding.as_Enum();
+                    (void)e;
                     // NOTE: Just assuming that if an Enum is hit, it's sane
                     return false;
                 }
@@ -4558,20 +5331,30 @@ void ResolveUse(const WireBoard& wb, ASTCrate& crate) {
 
 // - Convert self::/super:: paths into non-canonical absolute forms
 ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path) {
-    TU_MATCH_HDRA( (path.cls), {)
-    TU_ARMA(Invalid, e) {
+    switch (path.cls.tag()) {
+        case ASTPathClass::TAG_Invalid: {
+            auto& e = path.cls.as_Invalid();
+            (void)e;
             // Should never happen
             BUG(span, "Invalid path class encountered");
+            break;
         }
-        TU_ARMA(Local, e) {
+        case ASTPathClass::TAG_Local: {
+            auto& e = path.cls.as_Local();
+            (void)e;
             // Wait, how is this already known?
             BUG(span, "Local path class in use statement");
+            break;
         }
-        TU_ARMA(UFCS, e) {
+        case ASTPathClass::TAG_UFCS: {
+            auto& e = path.cls.as_UFCS();
+            (void)e;
             // Wait, how is this already known?
             BUG(span, "UFCS path class in use statement");
+            break;
         }
-        TU_ARMA(Relative, e) {
+        case ASTPathClass::TAG_Relative: {
+            auto& e = path.cls.as_Relative();
             // How can this happen?
             DEBUG("Relative " << path);
 
@@ -4664,8 +5447,11 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
             } else {
                 return basePath + path;
             }
+            break;
         }
-        TU_ARMA(Self, e) {
+        case ASTPathClass::TAG_Self: {
+            auto& e = path.cls.as_Self();
+            (void)e;
             DEBUG("Self " << path);
             // `self::super::..` leaves the module the same way a leading `super`
             // does; only the spelling puts the `super` after the `self`.
@@ -4691,8 +5477,10 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
             } else {
                 return basePath + path;
             }
+            break;
         }
-        TU_ARMA(Super, e) {
+        case ASTPathClass::TAG_Super: {
+            auto& e = path.cls.as_Super();
             DEBUG("Super " << path);
             assert(e.count >= 1);
             ASTPath np("", {});
@@ -4711,7 +5499,8 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
             np += path;
             return np;
         }
-        TU_ARMA(Absolute, e) {
+        case ASTPathClass::TAG_Absolute: {
+            auto& e = path.cls.as_Absolute();
             DEBUG("Absolute " << path);
             // HACK: if the crate name starts with `=` it's a 2018 absolute path (references a crate loaded with `--extern`)
             if (crate.edition >= ASTEdition::Rust2018 && e.crate.c_str()[0] == '=') {
@@ -4816,13 +5605,16 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
     // - NOTE: Handle anon modules by iterating code (allowing correct item mappings)
     for (auto& ip : mod.items) {
         auto& i = *ip;
-        TU_MATCH_HDRA( (i.data),  {)
-        default:
+        switch (i.data.tag()) {
+default:
             break;
-            TU_ARMA(Module, e) {
+            case ASTItem::TAG_Module: {
+                auto& e = i.data.as_Module();
                 ResolveUseMod(settings, crate, e, path + i.name);
+                break;
             }
-            TU_ARMA(Impl, e) {
+            case ASTItem::TAG_Impl: {
+                auto& e = i.data.as_Impl();
                 for (auto& i : e.items()) {
                     switch ((*i.data).tag()) {
                         case ASTItem::TAG_Function: {
@@ -4841,8 +5633,10 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
                         }
                     }
                 }
+                break;
             }
-            TU_ARMA(Trait, e) {
+            case ASTItem::TAG_Trait: {
+                auto& e = i.data.as_Trait();
                 for (auto& ti : e.items()) {
                     switch (ti.data.tag()) {
                         case ASTItem::TAG_None: {
@@ -4879,19 +5673,24 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
                         }
                     }
                 }
+                break;
             }
-            TU_ARMA(Function, e) {
+            case ASTItem::TAG_Function: {
+                auto& e = i.data.as_Function();
                 if (e.delegation() && e.delegation()->body.isValid()) {
                     e.delegation()->body.node().visit(exprIter);
                 }
                 if (e.code().isValid()) {
                     e.code().node().visit(exprIter);
                 }
+                break;
             }
-            TU_ARMA(Static, e) {
+            case ASTItem::TAG_Static: {
+                auto& e = i.data.as_Static();
                 if (e.value().isValid()) {
                     e.value().node().visit(exprIter);
                 }
+                break;
             }
         }
     }
@@ -4949,31 +5748,56 @@ ASTPath::Bindings ResolveUseGetBindingMod(
         if (item.name == desItemName) {
             auto p = mod.path() + item.name;
             DEBUG("Matching item: " << item.data.tagStr());
-            TU_MATCH_HDRA( (item.data), {)
-            TU_ARMA(None, _e) {
+            switch (item.data.tag()) {
+                case ASTItem::TAG_None: {
+                    auto& _e = item.data.as_None();
+                    (void)_e;
                     // IMPOSSIBLE - Handled above
+                    break;
                 }
-                TU_ARMA(MacroInv, e) {
+                case ASTItem::TAG_MacroInv: {
+                    auto& e = item.data.as_MacroInv();
+                    (void)e;
                     BUG(span, "Hit MacroInv in use resolution");
+                    break;
                 }
-                TU_ARMA(GlobalAsm, e) {
+                case ASTItem::TAG_GlobalAsm: {
+                    auto& e = item.data.as_GlobalAsm();
+                    (void)e;
                     BUG(span, "Hit GlobalAsm in use resolution");
+                    break;
                 }
-                TU_ARMA(Macro, e) {
+                case ASTItem::TAG_Macro: {
+                    auto& e = item.data.as_Macro();
+                    (void)e;
+                    break;
                 }
-                TU_ARMA(Use, e) {
+                case ASTItem::TAG_Use: {
+                    auto& e = item.data.as_Use();
+                    (void)e;
                     break; // Skip for now
+                    break;
                 }
-                TU_ARMA(Impl, e) {
+                case ASTItem::TAG_Impl: {
+                    auto& e = item.data.as_Impl();
+                    (void)e;
                     BUG(span, "Hit Impl in use resolution");
+                    break;
                 }
-                TU_ARMA(NegImpl, e) {
+                case ASTItem::TAG_NegImpl: {
+                    auto& e = item.data.as_NegImpl();
+                    (void)e;
                     BUG(span, "Hit NegImpl in use resolution");
+                    break;
                 }
-                TU_ARMA(ExternBlock, e) {
+                case ASTItem::TAG_ExternBlock: {
+                    auto& e = item.data.as_ExternBlock();
+                    (void)e;
                     BUG(span, "Hit Extern in use resolution");
+                    break;
                 }
-                TU_ARMA(Crate, e) {
+                case ASTItem::TAG_Crate: {
+                    auto& e = item.data.as_Crate();
                     if (!rv.type.is_Unbound()) {
                         // This is a hack for when a crate defines a module with the name `std` (or `core` with `#![no_std]`)
                         DEBUG("Ignore, already bound");
@@ -4983,38 +5807,56 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                     } else {
                         rv.type.set(ASTAbsolutePath(e.name, {}), ASTPathBindingType::make_Module({&crate.rootModule_}));
                     }
+                    break;
                 }
-                TU_ARMA(Type, e) {
+                case ASTItem::TAG_Type: {
+                    auto& e = item.data.as_Type();
                     rv.type.set(p, ASTPathBindingType::make_TypeAlias({&e}));
+                    break;
                 }
-                TU_ARMA(Trait, e) {
+                case ASTItem::TAG_Trait: {
+                    auto& e = item.data.as_Trait();
                     rv.type.set(p, ASTPathBindingType::make_Trait({&e}));
+                    break;
                 }
-                TU_ARMA(TraitAlias, e) {
+                case ASTItem::TAG_TraitAlias: {
+                    auto& e = item.data.as_TraitAlias();
                     rv.type.set(p, ASTPathBindingType::make_TraitAlias({&e}));
+                    break;
                 }
-
-                TU_ARMA(Function, e) {
+                case ASTItem::TAG_Function: {
+                    auto& e = item.data.as_Function();
                     rv.value.set(p, ASTPathBindingValue::make_Function({&e}));
+                    break;
                 }
-                TU_ARMA(Static, e) {
+                case ASTItem::TAG_Static: {
+                    auto& e = item.data.as_Static();
                     rv.value.set(p, ASTPathBindingValue::make_Static({&e}));
+                    break;
                 }
-                TU_ARMA(Struct, e) {
+                case ASTItem::TAG_Struct: {
+                    auto& e = item.data.as_Struct();
                     // TODO: What happens with name collisions?
                     if (!e.data.is_Struct()) {
                         rv.value.set(p, ASTPathBindingValue::make_Struct({&e}));
                     }
                     rv.type.set(p, ASTPathBindingType::make_Struct({&e}));
+                    break;
                 }
-                TU_ARMA(Enum, e) {
+                case ASTItem::TAG_Enum: {
+                    auto& e = item.data.as_Enum();
                     rv.type.set(p, ASTPathBindingType::make_Enum({&e}));
+                    break;
                 }
-                TU_ARMA(Union, e) {
+                case ASTItem::TAG_Union: {
+                    auto& e = item.data.as_Union();
                     rv.type.set(p, ASTPathBindingType::make_Union({&e}));
+                    break;
                 }
-                TU_ARMA(Module, e) {
+                case ASTItem::TAG_Module: {
+                    auto& e = item.data.as_Module();
                     rv.type.set(p, ASTPathBindingType::make_Module({&e}));
+                    break;
                 }
             }
         }
@@ -5060,15 +5902,26 @@ ASTPath::Bindings ResolveUseGetBindingMod(
             for (const auto& mac : checkMod.macroImports) {
                 if (mac.name == desItemName) {
                     DEBUG("Macro Import - " << mac.path);
-                    TU_MATCH_HDRA( (mac.ref), { )
-                    TU_ARMA(None, e) {
+                    switch (mac.ref.tag()) {
+                        case MacroRef::TAG_None: {
+                            auto& e = mac.ref.as_None();
+                            (void)e;
+                            break;
                         }
-                        TU_ARMA(MacroRules, e) {
+                        case MacroRef::TAG_MacroRules: {
+                            auto& e = mac.ref.as_MacroRules();
                             rv.macro.set(mac.path, ASTPathBindingMacro::make_MacroRules({nullptr, e}));
+                            break;
                         }
-                        TU_ARMA(BuiltinProcMacro, e) {
+                        case MacroRef::TAG_BuiltinProcMacro: {
+                            auto& e = mac.ref.as_BuiltinProcMacro();
+                            (void)e;
+                            break;
                         }
-                        TU_ARMA(ExternalProcMacro, e) {
+                        case MacroRef::TAG_ExternalProcMacro: {
+                            auto& e = mac.ref.as_ExternalProcMacro();
+                            (void)e;
+                            break;
                         }
                     }
                     if( ! rv.macro.is_Unbound() ) {
@@ -5181,12 +6034,15 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                 } else {
                 }
 
-                TU_MATCH_HDRA( (bindings->type.binding), {)
-                TU_ARMA(Crate, e) {
+                switch (bindings->type.binding.tag()) {
+                    case ASTPathBindingType::TAG_Crate: {
+                        auto& e = bindings->type.binding.as_Crate();
                         assert(e.crate_);
                         rv.mergeFrom(ResolveUseGetBindingExt(sp2, crate, ASTPath("", {ASTPathNode(desItemName, {})}), *e.crate_, 0));
+                        break;
                     }
-                    TU_ARMA(Module, e) {
+                    case ASTPathBindingType::TAG_Module: {
+                        auto& e = bindings->type.binding.as_Module();
                         if (e.module_) {
                             // Prevent infinite recursion - keyed by (module, name) so an
                             // in-flight search for a *different* name doesn't block this one
@@ -5206,8 +6062,10 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                         } else {
                             BUG(span, "NULL module for binding on glob of " << impE.path);
                         }
+                        break;
                     }
-                    TU_ARMA(Enum, e) {
+                    case ASTPathBindingType::TAG_Enum: {
+                        auto& e = bindings->type.binding.as_Enum();
                         assert(e.enum_ || e.hir);
                         if (e.enum_) {
                             const auto& enm = *e.enum_;
@@ -5239,8 +6097,9 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                                 break;
                             }
                         }
+                        break;
                     }
-                    break;
+break;
                     default:
                         BUG(sp2, "Wildcard import expanded to an invalid item class - " << bindings->type.binding.tagStr());
                         break;
@@ -5331,10 +6190,11 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
             ERROR(span, E0000, "Unable to find path component " << nodes[i].name() << " in " << path << " (" << ap << ")");
         }
         DEBUG(i << " : " << nodes[i].name() << " = " << it->second->ent.tagStr());
-        TU_MATCH_HDRA( (it->second->ent), {)
-        default:
+        switch (it->second->ent.tag()) {
+default:
             ERROR(span, E0000, "Unexpected item type in import " << path << " @ " << i << " - " << it->second->ent.tagStr());
-            TU_ARMA(Import, e) {
+            case HIRTypeItem::TAG_Import: {
+                auto& e = it->second->ent.as_Import();
                 // TODO: This is kinda like a duplicate of Resolve_Absolute_Path_BindAbsolute__hir_from ?
                 bool is_enum = false;
                 auto ptr = getHirModenumByPath(span, crate, e.path, is_enum);
@@ -5367,11 +6227,15 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
                     ap.nodes = e.path.componentsVec();
                     hmod = reinterpret_cast<const HIRModule*>(ptr);
                 }
+                break;
             }
-            TU_ARMA(Module, e) {
+            case HIRTypeItem::TAG_Module: {
+                auto& e = it->second->ent.as_Module();
                 hmod = &e;
+                break;
             }
-            TU_ARMA(Enum, e) {
+            case HIRTypeItem::TAG_Enum: {
+                auto& e = it->second->ent.as_Enum();
                 i += 1;
                 if (i != nodes.size() - 1) {
                     ERROR(span, E0000, "Encountered enum at unexpected location in import");
@@ -5510,27 +6374,41 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
                 }
             }
             if (rv.value.is_Unbound()) {
-                TU_MATCH_HDRA( (*itemPtr), {)
-                TU_ARMA(Import, e) {
+                switch ((*itemPtr).tag()) {
+                    case HIRValueItem::TAG_Import: {
+                        auto& e = (*itemPtr).as_Import();
                         BUG(span, "Recursive import in " << path << " - " << it->second->ent.as_Import().path << " -> " << e.path);
+                        break;
                     }
-                    TU_ARMA(Constant, e) {
+                    case HIRValueItem::TAG_Constant: {
+                        auto& e = (*itemPtr).as_Constant();
+                        (void)e;
                         rv.value.set(ap, ASTPathBindingValue::make_Static({nullptr}));
+                        break;
                     }
-                    TU_ARMA(Static, e) {
+                    case HIRValueItem::TAG_Static: {
+                        auto& e = (*itemPtr).as_Static();
+                        (void)e;
                         rv.value.set(ap, ASTPathBindingValue::make_Static({nullptr}));
+                        break;
                     }
-                    // TODO: What happens if these two refer to an enum constructor?
-                    TU_ARMA(StructConstant, e) {
+                    case HIRValueItem::TAG_StructConstant: {
+                        auto& e = (*itemPtr).as_StructConstant();
                         ASSERT_BUG(span, crate.externCrates.count(e.ty.crateName()), "Crate '" << e.ty.crateName() << "' not loaded for " << e.ty);
                         rv.value.set(ap, ASTPathBindingValue::make_Struct({nullptr, &crate.externCrates.at(e.ty.crateName()).hir->getTypeitemByPath(span, e.ty, true).as_Struct()}));
+                        break;
                     }
-                    TU_ARMA(StructConstructor, e) {
+                    case HIRValueItem::TAG_StructConstructor: {
+                        auto& e = (*itemPtr).as_StructConstructor();
                         ASSERT_BUG(span, crate.externCrates.count(e.ty.crateName()), "Crate '" << e.ty.crateName() << "' not loaded for " << e.ty);
                         rv.value.set(ap, ASTPathBindingValue::make_Struct({nullptr, &crate.externCrates.at(e.ty.crateName()).hir->getTypeitemByPath(span, e.ty, true).as_Struct()}));
+                        break;
                     }
-                    TU_ARMA(Function, e) {
+                    case HIRValueItem::TAG_Function: {
+                        auto& e = (*itemPtr).as_Function();
+                        (void)e;
                         rv.value.set(ap, ASTPathBindingValue::make_Function({nullptr}));
+                        break;
                     }
                 }
             }
@@ -5563,20 +6441,26 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
             }
 
             if (rv.macro.is_Unbound()) {
-                TU_MATCH_HDRA( (*itemPtr), {)
-                TU_ARMA(Import, e) {
+                switch ((*itemPtr).tag()) {
+                    case HIRMacroItem::TAG_Import: {
+                        auto& e = (*itemPtr).as_Import();
                         if (e.path.crateName() == rcstringCrateBuiltins)
                             ;
                         else {
                             BUG(span, "Recursive import in " << path << " - " << it->second->ent.as_Import().path << " -> " << e.path);
                         }
                         rv.macro.set(ap, ASTPathBindingMacro::make_MacroRules({nullptr, nullptr}));
+                        break;
                     }
-                    TU_ARMA(ProcMacro, e) {
+                    case HIRMacroItem::TAG_ProcMacro: {
+                        auto& e = (*itemPtr).as_ProcMacro();
                         rv.macro.set(ap, ASTPathBindingMacro::make_ProcMacro({&hcrate, e.name}));
+                        break;
                     }
-                    TU_ARMA(MacroRules, e) {
+                    case HIRMacroItem::TAG_MacroRules: {
+                        auto& e = (*itemPtr).as_MacroRules();
                         rv.macro.set(ap, ASTPathBindingMacro::make_MacroRules({nullptr, &*e}));
+                        break;
                     }
                 }
             }
@@ -5651,23 +6535,28 @@ ASTPath::Bindings ResolveUseGetBinding(
 
         assert(mod);
         auto b = ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, nodes.at(i).name(), innerParentModules, /*types_only=*/true);
-        TU_MATCH_HDRA( (b.type.binding), {)
-        default:
+        switch (b.type.binding.tag()) {
+default:
             ERROR(span, E0000, "Unexpected item type " << b.type.binding.tagStr() << " in import of " << path);
-            TU_ARMA(Unbound, e) {
+            case ASTPathBindingType::TAG_Unbound: {
+                auto& e = b.type.binding.as_Unbound();
+                (void)e;
                 // During speculative glob resolution a miss just skips the glob; the recursion
                 // guard can hide a module that a later direct resolution will find.
                 if (softFail) {
                     return ASTPath::Bindings();
                 }
                 ERROR(span, E0000, "Cannot find component " << i << " of " << path << " (" << b.type.binding << ")");
+                break;
             }
-            TU_ARMA(Crate, e) {
+            case ASTPathBindingType::TAG_Crate: {
+                auto& e = b.type.binding.as_Crate();
                 // TODO: Mangle the original path (or return a new path somehow)
                 DEBUG("Extern - Call _ext with remainder");
                 return ResolveUseGetBindingExt(span, crate, path, *e.crate_, i + 1);
             }
-            TU_ARMA(Enum, e) {
+            case ASTPathBindingType::TAG_Enum: {
+                auto& e = b.type.binding.as_Enum();
                 ASSERT_BUG(span, e.enum_ || e.hir, "nullptr enum pointer in node " << i << " of " << path);
                 ASSERT_BUG(span, e.enum_ == nullptr || e.hir == nullptr, "both AST and HIR pointers set in node " << i << " of " << path);
                 i += 1;
@@ -5686,13 +6575,18 @@ ASTPath::Bindings ResolveUseGetBinding(
                     if (idx == ~0u) {
                         ERROR(span, E0000, "Unknown enum variant " << path);
                     }
-                TU_MATCH_HDRA( (enum_.data), {)
-                TU_ARMA(Value, ve) {
-                            isValue = true;
-                        }
-                        TU_ARMA(Data, ve) {
-                            isValue = !ve[idx].isStruct;
-                        }
+                switch (enum_.data.tag()) {
+                    case HIREnumClass::TAG_Value: {
+                        auto& ve = enum_.data.as_Value();
+                        (void)ve;
+                        isValue = true;
+                        break;
+                    }
+                    case HIREnumClass::TAG_Data: {
+                        auto& ve = enum_.data.as_Data();
+                        isValue = !ve[idx].isStruct;
+                        break;
+                    }
                 }
                 DEBUG("HIR Enum variant - " << variantIndex << ", is_value=" << isValue);
                 } else {
@@ -5717,7 +6611,8 @@ ASTPath::Bindings ResolveUseGetBinding(
                 }
                 return rv;
             }
-            TU_ARMA(Module, e) {
+            case ASTPathBindingType::TAG_Module: {
+                auto& e = b.type.binding.as_Module();
                 ASSERT_BUG(span, e.module_ || e.hir.mod, "nullptr module pointer in node " << i << " of " << path);
                 if (!e.module_) {
                     assert(e.hir.crate);
@@ -5726,6 +6621,7 @@ ASTPath::Bindings ResolveUseGetBinding(
                 }
                 innerParentModules.push_back(mod);
                 mod = e.module_;
+                break;
             }
         }
     }

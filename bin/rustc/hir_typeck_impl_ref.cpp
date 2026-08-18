@@ -90,8 +90,9 @@ bool ImplRef::hasMagicParams() const {
 }
 
 bool ImplRef::typeIsSpecialisable(const char* name) const {
-    TU_MATCH_HDRA( (this->data), {)
-    TU_ARMA(TraitImpl, e) {
+    switch (this->data.tag()) {
+        case ImplRefData::TAG_TraitImpl: {
+            auto& e = this->data.as_TraitImpl();
             if (e.impl == nullptr) {
                 // No impl yet? This type is specialisable.
                 return true;
@@ -103,10 +104,14 @@ bool ImplRef::typeIsSpecialisable(const char* name) const {
             }
             return it->second.isSpecialisable;
         }
-        TU_ARMA(BoundedPtr, e) {
+        case ImplRefData::TAG_BoundedPtr: {
+            auto& e = this->data.as_BoundedPtr();
+            (void)e;
             return false;
         }
-        TU_ARMA(Bounded, E) {
+        case ImplRefData::TAG_Bounded: {
+            auto& E = this->data.as_Bounded();
+            (void)E;
             return false;
         }
     }
@@ -143,18 +148,21 @@ HIRConstGeneric ImplRef::Monomorph::getValue(const Span& sp, const HIRGenericRef
 
 HIRTypeRef ImplRef::getImplType(HIRTypeInterner& types) const {
     Span sp;
-    TU_MATCH_HDRA( (this->data), {)
-    TU_ARMA(TraitImpl, e) {
+    switch (this->data.tag()) {
+        case ImplRefData::TAG_TraitImpl: {
+            auto& e = this->data.as_TraitImpl();
             if (e.impl == nullptr) {
                 BUG(Span(), "nullptr");
             }
             return this->getCbMonomorphTraitimpl(types, sp, {}).monomorphType(sp, e.impl->type);
         }
-        TU_ARMA(BoundedPtr, e) {
+        case ImplRefData::TAG_BoundedPtr: {
+            auto& e = this->data.as_BoundedPtr();
             // HRLs needed?
             return e.type;
         }
-        TU_ARMA(Bounded, e) {
+        case ImplRefData::TAG_Bounded: {
+            auto& e = this->data.as_Bounded();
             return e.type;
         }
     }
@@ -163,17 +171,20 @@ HIRTypeRef ImplRef::getImplType(HIRTypeInterner& types) const {
 
 HIRPathParams ImplRef::getTraitParams(HIRTypeInterner& types) const {
     Span sp;
-    TU_MATCH_HDRA( (this->data), {)
-    TU_ARMA(TraitImpl, e) {
+    switch (this->data.tag()) {
+        case ImplRefData::TAG_TraitImpl: {
+            auto& e = this->data.as_TraitImpl();
             if (e.impl == nullptr) {
                 BUG(Span(), "nullptr");
             }
             return this->getCbMonomorphTraitimpl(types, sp, {}).monomorphPathParams(sp, e.impl->traitArgs, true);
         }
-        TU_ARMA(BoundedPtr, e) {
+        case ImplRefData::TAG_BoundedPtr: {
+            auto& e = this->data.as_BoundedPtr();
             return e.traitArgs->clone();
         }
-        TU_ARMA(Bounded, e) {
+        case ImplRefData::TAG_Bounded: {
+            auto& e = this->data.as_Bounded();
             return e.traitArgs.clone();
         }
     }
@@ -182,8 +193,9 @@ HIRPathParams ImplRef::getTraitParams(HIRTypeInterner& types) const {
 
 HIRTypeRef ImplRef::getTraitTyParam(HIRTypeInterner& types, unsigned int idx) const {
     Span sp;
-    TU_MATCH_HDRA( (this->data), {)
-    TU_ARMA(TraitImpl, e) {
+    switch (this->data.tag()) {
+        case ImplRefData::TAG_TraitImpl: {
+            auto& e = this->data.as_TraitImpl();
             if (e.impl == nullptr) {
                 BUG(Span(), "nullptr");
             }
@@ -192,13 +204,15 @@ HIRTypeRef ImplRef::getTraitTyParam(HIRTypeInterner& types, unsigned int idx) co
             }
             return this->getCbMonomorphTraitimpl(types, sp, {}).monomorphType(sp, e.impl->traitArgs.types[idx]);
         }
-        TU_ARMA(BoundedPtr, e) {
+        case ImplRefData::TAG_BoundedPtr: {
+            auto& e = this->data.as_BoundedPtr();
             if (idx >= e.traitArgs->types.size()) {
                 return HIRTypeRef();
             }
             return e.traitArgs->types.at(idx);
         }
-        TU_ARMA(Bounded, e) {
+        case ImplRefData::TAG_Bounded: {
+            auto& e = this->data.as_Bounded();
             if (idx >= e.traitArgs.types.size()) {
                 return HIRTypeRef();
             }
@@ -213,8 +227,9 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
         return HIRTypeRef();
     }
     static Span sp;
-    TU_MATCH_HDRA( (this->data), {)
-    TU_ARMA(TraitImpl, e) {
+    switch (this->data.tag()) {
+        case ImplRefData::TAG_TraitImpl: {
+            auto& e = this->data.as_TraitImpl();
             auto it = e.impl->types.find(name);
             if (it == e.impl->types.end()) {
                 const HIRTypeRef tySelf = types.self();
@@ -229,7 +244,8 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
             DEBUG("name=" << name << " tpl_ty=" << tplTy << " " << *this);
             return this->getCbMonomorphTraitimpl(types, sp, params).monomorphType(sp, tplTy);
         }
-        TU_ARMA(BoundedPtr, e) {
+        case ImplRefData::TAG_BoundedPtr: {
+            auto& e = this->data.as_BoundedPtr();
             auto it = e.assoc->find(name);
             if (it == e.assoc->end()) {
                 return HIRTypeRef();
@@ -237,7 +253,8 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
             ASSERT_BUG(Span(), !params.hasParams(), "TODO: BoundedPtr ATY with params?");
             return it->second.type;
         }
-        TU_ARMA(Bounded, e) {
+        case ImplRefData::TAG_Bounded: {
+            auto& e = this->data.as_Bounded();
             auto it = e.assoc.find(name);
             if (it == e.assoc.end()) {
                 return HIRTypeRef();
@@ -250,8 +267,9 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ImplRef& x) {
-    TU_MATCH_HDR( (x.data), { )
-    TU_ARM(x.data, TraitImpl, e) {
+    switch (x.data.tag()) {
+        case ImplRefData::TAG_TraitImpl: {
+            auto& e = x.data.as_TraitImpl();
             if (e.impl == nullptr) {
                 os << "none";
             } else {
@@ -285,15 +303,20 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
                 }
                 os << "}";
             }
+            break;
         }
-        TU_ARM(x.data, BoundedPtr, e) {
+        case ImplRefData::TAG_BoundedPtr: {
+            auto& e = x.data.as_BoundedPtr();
             assert(e.type);
             assert(e.traitArgs);
             assert(e.assoc);
             os << "bound (ptr) " << e.type << " : ?" << *e.traitArgs << " + {" << *e.assoc << "}";
+            break;
         }
-        TU_ARM(x.data, Bounded, e) {
+        case ImplRefData::TAG_Bounded: {
+            auto& e = x.data.as_Bounded();
             os << "bound " << e.type << " : ?" << e.traitArgs << " + {" << e.assoc << "}";
+            break;
         }
     }
     return os;

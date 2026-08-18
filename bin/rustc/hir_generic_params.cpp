@@ -112,11 +112,13 @@ HIRGenericParams HIRGenericParams::clone() const {
 }
 
 HIRGenericBound HIRGenericBound::clone() const {
-    TU_MATCH_HDRA( (*this), {)
-    TU_ARMA(TraitBound, e) {
+    switch ((*this).tag()) {
+        case HIRGenericBound::TAG_TraitBound: {
+            auto& e = (*this).as_TraitBound();
             return HIRGenericBound::make_TraitBound({e.type, e.trait.clone(), e.constness});
         }
-        TU_ARMA(TypeEquality, e) {
+        case HIRGenericBound::TAG_TypeEquality: {
+            auto& e = (*this).as_TypeEquality();
             return HIRGenericBound::make_TypeEquality({e.type, e.otherType});
         }
     }

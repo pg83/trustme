@@ -98,32 +98,51 @@
     for (const auto& pb : pat.bindings_) {
         os << pb << " @ ";
     }
-    TU_MATCH_HDRA( (pat.data_), {)
-    TU_ARMA(MaybeBind, ent) {
+    switch (pat.data_.tag()) {
+        case ASTPatternData::TAG_MaybeBind: {
+            auto& ent = pat.data_.as_MaybeBind();
             os << ent.name << "?";
+            break;
         }
-        TU_ARMA(Macro, ent) {
+        case ASTPatternData::TAG_Macro: {
+            auto& ent = pat.data_.as_Macro();
             os << *ent.inv;
+            break;
         }
-        TU_ARMA(Any, ent) {
+        case ASTPatternData::TAG_Any: {
+            auto& ent = pat.data_.as_Any();
+            (void)ent;
             os << "_";
+            break;
         }
-        TU_ARMA(Never, ent) {
+        case ASTPatternData::TAG_Never: {
+            auto& ent = pat.data_.as_Never();
+            (void)ent;
             os << "!";
+            break;
         }
-        TU_ARMA(Box, ent) {
+        case ASTPatternData::TAG_Box: {
+            auto& ent = pat.data_.as_Box();
             os << "box " << *ent.sub;
+            break;
         }
-        TU_ARMA(Guard, ent) {
+        case ASTPatternData::TAG_Guard: {
+            auto& ent = pat.data_.as_Guard();
             os << "(" << *ent.sub << " if " << *ent.cond << ")";
+            break;
         }
-        TU_ARMA(Deref, ent) {
+        case ASTPatternData::TAG_Deref: {
+            auto& ent = pat.data_.as_Deref();
             os << "deref!(" << *ent.sub << ")";
+            break;
         }
-        TU_ARMA(Ref, ent) {
+        case ASTPatternData::TAG_Ref: {
+            auto& ent = pat.data_.as_Ref();
             os << "&" << (ent.mut ? "mut " : "") << *ent.sub;
+            break;
         }
-        TU_ARMA(Value, ent) {
+        case ASTPatternData::TAG_Value: {
+            auto& ent = pat.data_.as_Value();
             // A range may have no start (`..=10`), and `..` is the rest pattern,
             // which has neither.
             if (!ent.start.is_Invalid()) {
@@ -132,21 +151,29 @@
             if (!ent.end.is_Invalid()) {
                 os << " ..= " << ent.end;
             }
+            break;
         }
-        TU_ARMA(ValueLeftInc, ent) {
+        case ASTPatternData::TAG_ValueLeftInc: {
+            auto& ent = pat.data_.as_ValueLeftInc();
             if (ent.start.is_Invalid() && ent.end.is_Invalid()) {
                 os << "..";
             } else {
                 os << ent.start << " .. " << ent.end;
             }
+            break;
         }
-        TU_ARMA(Tuple, ent) {
+        case ASTPatternData::TAG_Tuple: {
+            auto& ent = pat.data_.as_Tuple();
             os << "(" << ent << ")";
+            break;
         }
-        TU_ARMA(StructTuple, ent) {
+        case ASTPatternData::TAG_StructTuple: {
+            auto& ent = pat.data_.as_StructTuple();
             os << ent.path << " (" << ent.tupPat << ")";
+            break;
         }
-        TU_ARMA(Struct, ent) {
+        case ASTPatternData::TAG_Struct: {
+            auto& ent = pat.data_.as_Struct();
             os << ent.path << " {";
             for (const auto& e : ent.subPatterns) {
                 os << e.attrs;
@@ -157,13 +184,17 @@
             if (ent.isExhaustive) {
                 os << "..";
             }
+            break;
         }
-        TU_ARMA(Slice, ent) {
+        case ASTPatternData::TAG_Slice: {
+            auto& ent = pat.data_.as_Slice();
             os << "[";
             os << ent.subPats;
             os << "]";
+            break;
         }
-        TU_ARMA(SplitSlice, ent) {
+        case ASTPatternData::TAG_SplitSlice: {
+            auto& ent = pat.data_.as_SplitSlice();
             os << "[";
             bool needsComma = false;
             if (ent.leading.size()) {
@@ -187,13 +218,16 @@
                 os << ent.trailing;
             }
             os << "]";
+            break;
         }
-        TU_ARMA(Or, ent) {
+        case ASTPatternData::TAG_Or: {
+            auto& ent = pat.data_.as_Or();
             os << "(";
             for (const auto& e : ent) {
                 os << (&e == &ent.front() ? "" : " | ") << e;
             }
             os << ")";
+            break;
         }
     }
     return os;
@@ -218,31 +252,40 @@ bool PatternContainsNever(const ASTPattern& pat) {
         }
     };
 
-    TU_MATCH_HDRA( (pat.data()), {)
-    default:
+    switch (pat.data().tag()) {
+default:
         return false;
-        TU_ARMA(Never, e) {
+        case ASTPatternData::TAG_Never: {
+            auto& e = pat.data().as_Never();
+            (void)e;
             return true;
         }
-        TU_ARMA(Box, e) {
+        case ASTPatternData::TAG_Box: {
+            auto& e = pat.data().as_Box();
             return PatternContainsNever(*e.sub);
         }
-        TU_ARMA(Deref, e) {
+        case ASTPatternData::TAG_Deref: {
+            auto& e = pat.data().as_Deref();
             return PatternContainsNever(*e.sub);
         }
-        TU_ARMA(Ref, e) {
+        case ASTPatternData::TAG_Ref: {
+            auto& e = pat.data().as_Ref();
             return PatternContainsNever(*e.sub);
         }
-        TU_ARMA(Guard, e) {
+        case ASTPatternData::TAG_Guard: {
+            auto& e = pat.data().as_Guard();
             return PatternContainsNever(*e.sub);
         }
-        TU_ARMA(Tuple, e) {
+        case ASTPatternData::TAG_Tuple: {
+            auto& e = pat.data().as_Tuple();
             return H::tup(e);
         }
-        TU_ARMA(StructTuple, e) {
+        case ASTPatternData::TAG_StructTuple: {
+            auto& e = pat.data().as_StructTuple();
             return H::tup(e.tupPat);
         }
-        TU_ARMA(Struct, e) {
+        case ASTPatternData::TAG_Struct: {
+            auto& e = pat.data().as_Struct();
             for (const auto& sp : e.subPatterns) {
                 if (PatternContainsNever(sp.pat)) {
                     return true;
@@ -250,13 +293,16 @@ bool PatternContainsNever(const ASTPattern& pat) {
             }
             return false;
         }
-        TU_ARMA(Slice, e) {
+        case ASTPatternData::TAG_Slice: {
+            auto& e = pat.data().as_Slice();
             return H::any(e.subPats);
         }
-        TU_ARMA(SplitSlice, e) {
+        case ASTPatternData::TAG_SplitSlice: {
+            auto& e = pat.data().as_SplitSlice();
             return H::any(e.leading) || H::any(e.trailing);
         }
-        TU_ARMA(Or, e) {
+        case ASTPatternData::TAG_Or: {
+            auto& e = pat.data().as_Or();
             return H::any(e);
         }
     }
@@ -325,58 +371,90 @@ ASTPattern ASTPattern::clone() const {
         }
     };
 
-    TU_MATCH_HDRA( (data_), {)
-    TU_ARMA(Any, e) {
+    switch (data_.tag()) {
+        case ASTPatternData::TAG_Any: {
+            auto& e = data_.as_Any();
             rv.data_ = Data::make_Any(e);
+            break;
         }
-        TU_ARMA(Never, e) {
+        case ASTPatternData::TAG_Never: {
+            auto& e = data_.as_Never();
             rv.data_ = Data::make_Never(e);
+            break;
         }
-        TU_ARMA(MaybeBind, e) {
+        case ASTPatternData::TAG_MaybeBind: {
+            auto& e = data_.as_MaybeBind();
             rv.data_ = Data::make_MaybeBind(e);
+            break;
         }
-        TU_ARMA(Macro, e) {
+        case ASTPatternData::TAG_Macro: {
+            auto& e = data_.as_Macro();
             rv.data_ = Data::make_Macro({::std::make_unique<ASTMacroInvocation>(e.inv->clone())});
+            break;
         }
-        TU_ARMA(Box, e) {
+        case ASTPatternData::TAG_Box: {
+            auto& e = data_.as_Box();
             rv.data_ = Data::make_Box({H::cloneSp(e.sub)});
+            break;
         }
-        TU_ARMA(Guard, e) {
+        case ASTPatternData::TAG_Guard: {
+            auto& e = data_.as_Guard();
             rv.data_ = Data::make_Guard({H::cloneSp(e.sub), e.cond->clone()});
+            break;
         }
-        TU_ARMA(Deref, e) {
+        case ASTPatternData::TAG_Deref: {
+            auto& e = data_.as_Deref();
             rv.data_ = Data::make_Deref({H::cloneSp(e.sub)});
+            break;
         }
-        TU_ARMA(Ref, e) {
+        case ASTPatternData::TAG_Ref: {
+            auto& e = data_.as_Ref();
             rv.data_ = Data::make_Ref({e.mut, H::cloneSp(e.sub)});
+            break;
         }
-        TU_ARMA(Value, e) {
+        case ASTPatternData::TAG_Value: {
+            auto& e = data_.as_Value();
             rv.data_ = Data::make_Value({H::cloneVal(e.start), H::cloneVal(e.end)});
+            break;
         }
-        TU_ARMA(ValueLeftInc, e) {
+        case ASTPatternData::TAG_ValueLeftInc: {
+            auto& e = data_.as_ValueLeftInc();
             rv.data_ = Data::make_ValueLeftInc({H::cloneVal(e.start), H::cloneVal(e.end)});
+            break;
         }
-        TU_ARMA(Tuple, e) {
+        case ASTPatternData::TAG_Tuple: {
+            auto& e = data_.as_Tuple();
             rv.data_ = Data::make_Tuple(H::cloneTup(e));
+            break;
         }
-        TU_ARMA(StructTuple, e) {
+        case ASTPatternData::TAG_StructTuple: {
+            auto& e = data_.as_StructTuple();
             rv.data_ = Data::make_StructTuple({ASTPath(e.path), H::cloneTup(e.tupPat)});
+            break;
         }
-        TU_ARMA(Struct, e) {
+        case ASTPatternData::TAG_Struct: {
+            auto& e = data_.as_Struct();
             ::std::vector<ASTStructPatternEntry> sps;
             for (const auto& sp : e.subPatterns) {
                 sps.push_back(ASTStructPatternEntry{sp.attrs.clone(), sp.name, sp.pat.clone()});
             }
             rv.data_ = Data::make_Struct({ASTPath(e.path), mv$(sps)});
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case ASTPatternData::TAG_Slice: {
+            auto& e = data_.as_Slice();
             rv.data_ = Data::make_Slice({H::cloneList(e.subPats)});
+            break;
         }
-        TU_ARMA(SplitSlice, e) {
+        case ASTPatternData::TAG_SplitSlice: {
+            auto& e = data_.as_SplitSlice();
             rv.data_ = Data::make_SplitSlice({H::cloneList(e.leading), e.extraBind, H::cloneList(e.trailing), e.extraRest});
+            break;
         }
-        TU_ARMA(Or, e) {
+        case ASTPatternData::TAG_Or: {
+            auto& e = data_.as_Or();
             rv.data_ = Data::make_Or(H::cloneList(e));
+            break;
         }
     }
 

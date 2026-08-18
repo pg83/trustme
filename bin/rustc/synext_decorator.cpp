@@ -1025,19 +1025,26 @@ struct Deriver {
     }
 
     void iterateStructFields(const ASTStruct& str, ::std::function<void(RcString)> cb) const {
-        TU_MATCH_HDRA((str.data), {)
-        TU_ARMA(Unit, e) {
+        switch (str.data.tag()) {
+            case ASTStructData::TAG_Unit: {
+                auto& e = str.data.as_Unit();
+                (void)e;
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTStructData::TAG_Struct: {
+                auto& e = str.data.as_Struct();
                 for (const auto& fld : e.ents) {
                     cb(fld.name);
                 }
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case ASTStructData::TAG_Tuple: {
+                auto& e = str.data.as_Tuple();
                 for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
                     auto fldName = RcString::newInterned(FMT(idx));
                     cb(fldName);
                 }
+                break;
             }
         }
     }
@@ -1129,14 +1136,18 @@ struct Deriver {
             static void visitNodes(const Deriver& self, const ASTGenericParams& params, ::std::vector<ASTType*>& outList, const ::std::vector<ASTPathNode>& nodes) {
                 for (const auto& node : nodes) {
                     for (const auto& e : node.args().entries) {
-                        TU_MATCH_HDRA( (e), {)
-                        default:
+                        switch (e.tag()) {
+default:
                             break;
-                            TU_ARMA(Type, ty) {
+                            case ASTPathParamEnt::TAG_Type: {
+                                auto& ty = e.as_Type();
                                 self.addFieldBoundFromTy(params, outList, ty);
+                                break;
                             }
-                            TU_ARMA(AssociatedTyEqual, aty) {
+                            case ASTPathParamEnt::TAG_AssociatedTyEqual: {
+                                auto& aty = e.as_AssociatedTyEqual();
                                 self.addFieldBoundFromTy(params, outList, aty.second);
+                                break;
                             }
                         }
                     }
@@ -1145,53 +1156,95 @@ struct Deriver {
         };
 
         // TODO: Locate type that is directly related to the type param.
-        TU_MATCH_HDRA( (ty->data), {)
-        TU_ARMA(None, e) {
+        switch (ty->data.tag()) {
+            case TypeData::TAG_None: {
+                auto& e = ty->data.as_None();
+                (void)e;
                 // Wat?
+                break;
             }
-            TU_ARMA(Any, e) {
+            case TypeData::TAG_Any: {
+                auto& e = ty->data.as_Any();
+                (void)e;
                 // Nope.
+                break;
             }
-            TU_ARMA(Unit, e) {
+            case TypeData::TAG_Unit: {
+                auto& e = ty->data.as_Unit();
+                (void)e;
+                break;
             }
-            TU_ARMA(Bang, e) {
+            case TypeData::TAG_Bang: {
+                auto& e = ty->data.as_Bang();
+                (void)e;
+                break;
             }
-            TU_ARMA(Macro, e) {
+            case TypeData::TAG_Macro: {
+                auto& e = ty->data.as_Macro();
+                (void)e;
                 // not allowed
+                break;
             }
-            TU_ARMA(Primitive, e) {
+            case TypeData::TAG_Primitive: {
+                auto& e = ty->data.as_Primitive();
+                (void)e;
+                break;
             }
-            TU_ARMA(Function, e) {
+            case TypeData::TAG_Function: {
+                auto& e = ty->data.as_Function();
+                (void)e;
                 // TODO? Well... function types don't tend to depend on the trait?
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case TypeData::TAG_Tuple: {
+                auto& e = ty->data.as_Tuple();
                 for (const auto& sty : e.innerTypes) {
                     addFieldBoundFromTy(params, outList, sty);
                 }
+                break;
             }
-            TU_ARMA(Borrow, e) {
+            case TypeData::TAG_Borrow: {
+                auto& e = ty->data.as_Borrow();
                 addFieldBoundFromTy(params, outList, e.inner);
+                break;
             }
-            TU_ARMA(Pointer, e) {
+            case TypeData::TAG_Pointer: {
+                auto& e = ty->data.as_Pointer();
                 addFieldBoundFromTy(params, outList, e.inner);
+                break;
             }
-            TU_ARMA(Array, e) {
+            case TypeData::TAG_Array: {
+                auto& e = ty->data.as_Array();
                 addFieldBoundFromTy(params, outList, e.inner);
+                break;
             }
-            TU_ARMA(Slice, e) {
+            case TypeData::TAG_Slice: {
+                auto& e = ty->data.as_Slice();
                 addFieldBoundFromTy(params, outList, e.inner);
+                break;
             }
-            TU_ARMA(Generic, e) {
+            case TypeData::TAG_Generic: {
+                auto& e = ty->data.as_Generic();
+                (void)e;
                 // Although this is what we're looking for, it's already handled.
+                break;
             }
-            TU_ARMA(Path, e) {
-            TU_MATCH_HDRA( (e->cls), {)
-            TU_ARMA(Invalid, pe) {
+            case TypeData::TAG_Path: {
+                auto& e = ty->data.as_Path();
+                switch (e->cls.tag()) {
+                    case ASTPathClass::TAG_Invalid: {
+                        auto& pe = e->cls.as_Invalid();
+                        (void)pe;
                         // wut.
+                        break;
                     }
-                    TU_ARMA(Local, pe) {
+                    case ASTPathClass::TAG_Local: {
+                        auto& pe = e->cls.as_Local();
+                        (void)pe;
+                        break;
                     }
-                    TU_ARMA(Relative, pe) {
+                    case ASTPathClass::TAG_Relative: {
+                        auto& pe = e->cls.as_Relative();
                         if (pe.nodes.size() > 1) {
                             // Check if the first node of a relative is a generic param.
                             for (const auto& param : params.params) {
@@ -1202,22 +1255,42 @@ struct Deriver {
                             }
                         }
                         H::visitNodes(*this, params, outList, pe.nodes);
+                        break;
                     }
-                    TU_ARMA(Self, pe) {
+                    case ASTPathClass::TAG_Self: {
+                        auto& pe = e->cls.as_Self();
+                        (void)pe;
+                        break;
                     }
-                    TU_ARMA(Super, pe) {
+                    case ASTPathClass::TAG_Super: {
+                        auto& pe = e->cls.as_Super();
+                        (void)pe;
+                        break;
                     }
-                    TU_ARMA(Absolute, pe) {
+                    case ASTPathClass::TAG_Absolute: {
+                        auto& pe = e->cls.as_Absolute();
+                        (void)pe;
+                        break;
                     }
-                    TU_ARMA(UFCS, pe) {
+                    case ASTPathClass::TAG_UFCS: {
+                        auto& pe = e->cls.as_UFCS();
+                        (void)pe;
+                        break;
                     }
+                }
+                break;
             }
-            }
-            TU_ARMA(TraitObject, e) {
+            case TypeData::TAG_TraitObject: {
+                auto& e = ty->data.as_TraitObject();
+                (void)e;
                 // TODO: Should this be recursed?
+                break;
             }
-            TU_ARMA(ErasedType, e) {
+            case TypeData::TAG_ErasedType: {
+                auto& e = ty->data.as_ErasedType();
+                (void)e;
                 // TODO: Should this be recursed?
+                break;
             }
         }
     }
@@ -1284,11 +1357,15 @@ public:
             return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str),
                 callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, ::std::string(text)))));
         }
-        TU_MATCH_HDRA((str.data), {)
-        TU_ARMA(Unit, e) {
+        switch (str.data.tag()) {
+            case ASTStructData::TAG_Unit: {
+                auto& e = str.data.as_Unit();
+                (void)e;
                 node = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, name)));
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTStructData::TAG_Struct: {
+                auto& e = str.data.as_Struct();
                 std::vector<ASTExprNodeBlock::Line> nodes;
                 nodes.push_back({true, NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_struct", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, name))))});
                 for (const auto& fld : e.ents) {
@@ -1296,8 +1373,10 @@ public:
                 }
                 nodes.push_back({false, callPath(pathDebugStruct, "finish", vec$(builderRef()))});
                 node = NEWNODE(Block, mv$(nodes));
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case ASTStructData::TAG_Tuple: {
+                auto& e = str.data.as_Tuple();
                 std::vector<ASTExprNodeBlock::Line> nodes;
                 nodes.push_back({true, NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_tuple", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, name))))});
                 for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
@@ -1305,6 +1384,7 @@ public:
                 }
                 nodes.push_back({false, callPath(pathDebugTuple, "finish", vec$(builderRef()))});
                 node = NEWNODE(Block, mv$(nodes));
+                break;
             }
         }
 
@@ -1335,15 +1415,24 @@ public:
             // are not bound at all.
             if (opts.fmtDebug == Settings::FmtDebug::Shallow) {
                 code = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, v.name.c_str())));
-                TU_MATCH_HDRA((v.data), {)
-                TU_ARMA(Unit, e) {
+                switch (v.data.tag()) {
+                    case ASTEnumVariantData::TAG_Unit: {
+                        auto& e = v.data.as_Unit();
+                        (void)e;
                         patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
+                        break;
                     }
-                    TU_ARMA(Tuple, e) {
+                    case ASTEnumVariantData::TAG_Tuple: {
+                        auto& e = v.data.as_Tuple();
+                        (void)e;
                         patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, ASTPattern::TuplePat{{}, true, {}});
+                        break;
                     }
-                    TU_ARMA(Struct, e) {
+                    case ASTEnumVariantData::TAG_Struct: {
+                        auto& e = v.data.as_Struct();
+                        (void)e;
                         patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, {}, false);
+                        break;
                     }
                 }
                 ::std::vector<ASTPattern> pats;
@@ -1352,12 +1441,16 @@ public:
                 continue;
             }
 
-            TU_MATCH_HDRA( (v.data), {)
-            TU_ARMA(Unit, e) {
+            switch (v.data.tag()) {
+                case ASTEnumVariantData::TAG_Unit: {
+                    auto& e = v.data.as_Unit();
+                    (void)e;
                     code = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, v.name.c_str())));
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
+                    break;
                 }
-                TU_ARMA(Tuple, e) {
+                case ASTEnumVariantData::TAG_Tuple: {
+                    auto& e = v.data.as_Tuple();
                     ::std::vector<ASTPattern> patsA;
                     auto block = newBlock(sp);
                     block->pushStmt(NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_tuple", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, v.name.c_str())))));
@@ -1368,8 +1461,10 @@ public:
                     block->pushTailExpr(callPath(pathDebugTuple, "finish", vec$(builderRef())));
                     code = mkExprnodep(block.release());
                     patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
+                    break;
                 }
-                TU_ARMA(Struct, e) {
+                case ASTEnumVariantData::TAG_Struct: {
+                    auto& e = v.data.as_Struct();
                     ::std::vector<ASTStructPatternEntry> patsA;
                     auto block = newBlock(sp);
                     block->pushStmt(NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_struct", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, v.name.c_str())))));
@@ -1381,6 +1476,7 @@ public:
 
                     code = mkExprnodep(block.release());
                     patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsA), true);
+                    break;
                 }
             }
 
@@ -1437,13 +1533,17 @@ public:
             ASTPattern patB;
             auto variantPath = basePath + v.name;
 
-            TU_MATCH_HDRA( (v.data), {)
-            TU_ARMA(Unit, e) {
+            switch (v.data.tag()) {
+                case ASTEnumVariantData::TAG_Unit: {
+                    auto& e = v.data.as_Unit();
+                    (void)e;
                     code = this->equalValue(sp, opts.coreName);
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
                     patB = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
+                    break;
                 }
-                TU_ARMA(Tuple, e) {
+                case ASTEnumVariantData::TAG_Tuple: {
+                    auto& e = v.data.as_Tuple();
                     auto block = newBlock(sp);
                     ::std::vector<ASTPattern> patsA;
                     ::std::vector<ASTPattern> patsB;
@@ -1456,8 +1556,10 @@ public:
                     patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
                     patB = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsB));
                     code = mkExprnodep(block.release());
+                    break;
                 }
-                TU_ARMA(Struct, e) {
+                case ASTEnumVariantData::TAG_Struct: {
+                    auto& e = v.data.as_Struct();
                     auto block = newBlock(sp);
                     ::std::vector<ASTStructPatternEntry> patsA;
                     ::std::vector<ASTStructPatternEntry> patsB;
@@ -1470,6 +1572,7 @@ public:
                     patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsA), true);
                     patB = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsB), true);
                     code = mkExprnodep(block.release());
+                    break;
                 }
             }
 
@@ -1628,12 +1731,16 @@ public:
             ASTPattern patA;
             auto variantPath = basePath + v.name;
 
-            TU_MATCH_HDRA( (v.data), {)
-            TU_ARMA(Unit, e) {
+            switch (v.data.tag()) {
+                case ASTEnumVariantData::TAG_Unit: {
+                    auto& e = v.data.as_Unit();
+                    (void)e;
                     code = NEWNODE(Block);
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
+                    break;
                 }
-                TU_ARMA(Tuple, e) {
+                case ASTEnumVariantData::TAG_Tuple: {
+                    auto& e = v.data.as_Tuple();
                     auto block = newBlock(sp);
                     ::std::vector<ASTPattern> patsA;
                     makeRefpatA(sp, *block, patsA, e.items, [&](size_t idx, auto a) {
@@ -1642,8 +1749,10 @@ public:
 
                     patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
                     code = mkExprnodep(block.release());
+                    break;
                 }
-                TU_ARMA(Struct, e) {
+                case ASTEnumVariantData::TAG_Struct: {
+                    auto& e = v.data.as_Struct();
                     auto block = newBlock(sp);
                     ::std::vector<ASTStructPatternEntry> patsA;
                     makeRefpatA(sp, *block, patsA, e.fields, [&](size_t idx, auto a) {
@@ -1652,6 +1761,7 @@ public:
 
                     patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsA), true);
                     code = mkExprnodep(block.release());
+                    break;
                 }
             }
 
@@ -1779,23 +1889,30 @@ public:
         }
 
         ASTExprNodeP node;
-        TU_MATCH_HDRA( (str.data), {)
-        TU_ARMA(Unit, e) {
+        switch (str.data.tag()) {
+            case ASTStructData::TAG_Unit: {
+                auto& e = str.data.as_Unit();
+                (void)e;
                 node = NEWNODE(NamedValue, ASTPath(tyPath));
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTStructData::TAG_Struct: {
+                auto& e = str.data.as_Struct();
                 ASTExprNodeStructLiteral::tValues vals;
                 for (const auto& fld : e.ents) {
                     vals.push_back({{}, fld.name, this->cloneValRef(opts.coreName, this->field(fld.name))});
                 }
                 node = NEWNODE(StructLiteral, tyPath, nullptr, mv$(vals));
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case ASTStructData::TAG_Tuple: {
+                auto& e = str.data.as_Tuple();
                 ::std::vector<ASTExprNodeP> vals;
                 for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
                     vals.push_back(this->cloneValRef(opts.coreName, this->field(FMT(idx))));
                 }
                 node = NEWNODE(CallPath, ASTPath(tyPath), mv$(vals));
+                break;
             }
         }
 
@@ -1814,12 +1931,16 @@ public:
             ASTExprNodeP code;
             ASTPattern patA;
 
-            TU_MATCH_HDRA( (v.data), {)
-            TU_ARMA(Unit, e) {
+            switch (v.data.tag()) {
+                case ASTEnumVariantData::TAG_Unit: {
+                    auto& e = v.data.as_Unit();
+                    (void)e;
                     code = NEWNODE(NamedValue, basePath + v.name);
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(basePath + v.name));
+                    break;
                 }
-                TU_ARMA(Tuple, e) {
+                case ASTEnumVariantData::TAG_Tuple: {
+                    auto& e = v.data.as_Tuple();
                     ::std::vector<ASTPattern> patsA;
                     ::std::vector<ASTExprNodeP> nodes;
 
@@ -1831,8 +1952,10 @@ public:
 
                     patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, basePath + v.name, mv$(patsA));
                     code = NEWNODE(CallPath, basePath + v.name, mv$(nodes));
+                    break;
                 }
-                TU_ARMA(Struct, e) {
+                case ASTEnumVariantData::TAG_Struct: {
+                    auto& e = v.data.as_Struct();
                     ::std::vector<ASTStructPatternEntry> patsA;
                     ASTExprNodeStructLiteral::tValues vals;
 
@@ -1844,6 +1967,7 @@ public:
 
                     patA = ASTPattern(ASTPattern::TagStruct(), sp, basePath + v.name, mv$(patsA), true);
                     code = NEWNODE(StructLiteral, basePath + v.name, nullptr, mv$(vals));
+                    break;
                 }
             }
 
@@ -1949,11 +2073,15 @@ public:
         const ASTPath& tyPath = *type->data.as_Path();
         ASTExprNodeP node;
 
-        TU_MATCH_HDRA( (str.data), {)
-        TU_ARMA(Unit, e) {
+        switch (str.data.tag()) {
+            case ASTStructData::TAG_Unit: {
+                auto& e = str.data.as_Unit();
+                (void)e;
                 node = NEWNODE(NamedValue, ASTPath(tyPath));
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTStructData::TAG_Struct: {
+                auto& e = str.data.as_Struct();
                 ASTExprNodeStructLiteral::tValues vals;
                 bool hasDefault = false;
                 for (const auto& fld : e.ents) {
@@ -1968,13 +2096,16 @@ public:
                 } else {
                     node = NEWNODE(StructLiteral, tyPath, nullptr, mv$(vals));
                 }
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case ASTStructData::TAG_Tuple: {
+                auto& e = str.data.as_Tuple();
                 ::std::vector<ASTExprNodeP> vals;
                 for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
                     vals.push_back(this->defaultCall(*type->pool, opts.coreName));
                 }
                 node = NEWNODE(CallPath, ASTPath(tyPath), mv$(vals));
+                break;
             }
         }
 
@@ -2083,18 +2214,25 @@ public:
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         auto block = newBlock(sp);
 
-        TU_MATCH_HDRA( (str.data), {)
-        TU_ARMA(Unit, e) {
+        switch (str.data.tag()) {
+            case ASTStructData::TAG_Unit: {
+                auto& e = str.data.as_Unit();
+                (void)e;
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTStructData::TAG_Struct: {
+                auto& e = str.data.as_Struct();
                 for (const auto& fld : e.ents) {
                     block->pushStmt(this->hashValRef(opts.coreName, this->field(fld.name)));
                 }
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case ASTStructData::TAG_Tuple: {
+                auto& e = str.data.as_Tuple();
                 for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
                     block->pushStmt(this->hashValRef(opts.coreName, this->field(FMT(idx))));
                 }
+                break;
             }
         }
 
@@ -2150,23 +2288,30 @@ public:
 
             auto block = newBlock(sp);
             block->pushStmt(mv$(varIdxHash));
-            TU_MATCH_HDRA( (v.data), {)
-            TU_ARMA(Unit, e) {
+            switch (v.data.tag()) {
+                case ASTEnumVariantData::TAG_Unit: {
+                    auto& e = v.data.as_Unit();
+                    (void)e;
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(varPath));
+                    break;
                 }
-                TU_ARMA(Tuple, e) {
+                case ASTEnumVariantData::TAG_Tuple: {
+                    auto& e = v.data.as_Tuple();
                     ::std::vector<ASTPattern> patsA;
                     makeRefpatA(sp, *block, patsA, e.items, [&](size_t, auto a) {
                         return this->hashValDirect(opts.coreName, mv$(a));
                     });
                     patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, varPath, mv$(patsA));
+                    break;
                 }
-                TU_ARMA(Struct, e) {
+                case ASTEnumVariantData::TAG_Struct: {
+                    auto& e = v.data.as_Struct();
                     ::std::vector<ASTStructPatternEntry> patsA;
                     makeRefpatA(sp, *block, patsA, e.fields, [&](size_t, auto a) {
                         return this->hashValDirect(opts.coreName, mv$(a));
                     });
                     patA = ASTPattern(ASTPattern::TagStruct(), sp, varPath, mv$(patsA), true);
+                    break;
                 }
             }
 
@@ -2250,20 +2395,27 @@ public:
         ::std::string structName = type->data.as_Path()->nodes().back().name().c_str();
 
         auto block = newBlock(sp);
-        TU_MATCH_HDRA( (str.data), {)
-        TU_ARMA(Unit, e) {
+        switch (str.data.tag()) {
+            case ASTStructData::TAG_Unit: {
+                auto& e = str.data.as_Unit();
+                (void)e;
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTStructData::TAG_Struct: {
+                auto& e = str.data.as_Struct();
                 unsigned int idx = 0;
                 for (const auto& fld : e.ents) {
                     block->pushStmt(NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_struct_field", vec$(NEWNODE(NamedValue, ASTPath(rcstringS)), NEWNODE(String, fld.name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValRef(this->field(fld.name))))));
                     idx++;
                 }
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case ASTStructData::TAG_Tuple: {
+                auto& e = str.data.as_Tuple();
                 for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
                     block->pushStmt(NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_tuple_struct_arg", vec$(NEWNODE(NamedValue, ASTPath(rcstringS)), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValRef(this->field(FMT(idx)))))));
                 }
+                break;
             }
         }
 
@@ -2271,15 +2423,22 @@ public:
         auto closure = this->encClosure(*type->pool,  sp, mkExprnodep(block.release()) );
 
         ASTExprNodeP    node;
-        TU_MATCH_HDRA( (str.data), {)
-        TU_ARMA(Unit, e) {
+        switch (str.data.tag()) {
+            case ASTStructData::TAG_Unit: {
+                auto& e = str.data.as_Unit();
+                (void)e;
                 node = getValOk(opts.coreName);
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTStructData::TAG_Struct: {
+                auto& e = str.data.as_Struct();
                 node = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_struct", vec$(NEWNODE(NamedValue, ASTPath(rcstringS)), NEWNODE(String, structName), NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT), mv$(closure)));
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case ASTStructData::TAG_Tuple: {
+                auto& e = str.data.as_Tuple();
                 node = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_tuple_struct", vec$(NEWNODE(NamedValue, ASTPath(rcstringS)), NEWNODE(String, structName), NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT), mv$(closure)));
+                break;
             }
         }
 
@@ -2298,12 +2457,16 @@ public:
             ASTExprNodeP code;
             ASTPattern patA;
 
-            TU_MATCH_HDRA((v.data), {)
-            TU_ARMA(Unit, e) {
+            switch (v.data.tag()) {
+                case ASTEnumVariantData::TAG_Unit: {
+                    auto& e = v.data.as_Unit();
+                    (void)e;
                     code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(sEnt->clone(), NEWNODE(String, v.name.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(0), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->getValOk(opts.coreName))));
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(basePath + v.name));
+                    break;
                 }
-                TU_ARMA(Tuple, e) {
+                case ASTEnumVariantData::TAG_Tuple: {
+                    auto& e = v.data.as_Tuple();
                     auto block = newBlock(sp);
                     ::std::vector<ASTPattern> patsA;
                     makeRefpatA(sp, *block, patsA, e.items, [&](size_t idx, auto a) {
@@ -2313,8 +2476,10 @@ public:
 
                     code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(sEnt->clone(), NEWNODE(String, v.name.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(e.items.size()), CORETYPE_UINT), this->encClosure(*type->pool, sp, mkExprnodep(block.release()))));
                     patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, basePath + v.name, mv$(patsA));
+                    break;
                 }
-                TU_ARMA(Struct, e) {
+                case ASTEnumVariantData::TAG_Struct: {
+                    auto& e = v.data.as_Struct();
                     auto block = newBlock(sp);
                     ::std::vector<ASTStructPatternEntry> patsA;
                     makeRefpatA(sp, *block, patsA, e.fields, [&](size_t idx, auto a) {
@@ -2324,6 +2489,7 @@ public:
 
                     patA = ASTPattern(ASTPattern::TagStruct(), sp, basePath + v.name, mv$(patsA), true);
                     code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_struct_variant", vec$(sEnt->clone(), NEWNODE(String, v.name.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(e.fields.size()), CORETYPE_UINT), this->encClosure(*type->pool, sp, mkExprnodep(block.release()))));
+                    break;
                 }
             }
 
@@ -2420,10 +2586,14 @@ public:
         ::std::string structName = basePath.nodes().back().name().c_str();
 
         ASTExprNodeP nodeV;
-        TU_MATCH_HDRA((str.data), {)
-        TU_ARMA(Unit, e) {
+        switch (str.data.tag()) {
+            case ASTStructData::TAG_Unit: {
+                auto& e = str.data.as_Unit();
+                (void)e;
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTStructData::TAG_Struct: {
+                auto& e = str.data.as_Struct();
                 ASTExprNodeStructLiteral::tValues vals;
                 unsigned int idx = 0;
                 for (const auto& fld : e.ents) {
@@ -2431,13 +2601,16 @@ public:
                     idx++;
                 }
                 nodeV = NEWNODE(StructLiteral, basePath, nullptr, mv$(vals));
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case ASTStructData::TAG_Tuple: {
+                auto& e = str.data.as_Tuple();
                 ::std::vector<ASTExprNodeP> vals;
                 for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
                     vals.push_back(NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathDecoder() + "read_tuple_struct_arg", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->decClosure(*type->pool, sp, this->decVal())))));
                 }
                 nodeV = NEWNODE(CallPath, mv$(basePath), mv$(vals));
+                break;
             }
         }
 
@@ -2446,19 +2619,26 @@ public:
         auto args = vec$( NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, structName), ASTExprNodeP(), mv$(closure) );
 
         ASTExprNodeP    node;
-        TU_MATCH_HDRA((str.data), {)
-        TU_ARMA(Unit, e) {
+        switch (str.data.tag()) {
+            case ASTStructData::TAG_Unit: {
+                auto& e = str.data.as_Unit();
+                (void)e;
                 node = this->getValOk(opts.coreName, NEWNODE(NamedValue, mv$(basePath)));
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTStructData::TAG_Struct: {
+                auto& e = str.data.as_Struct();
                 assert(!args[2]);
                 args[2] = NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT);
                 node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_struct", mv$(args));
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case ASTStructData::TAG_Tuple: {
+                auto& e = str.data.as_Tuple();
                 assert(!args[2]);
                 args[2] = NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT);
                 node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_tuple_struct", mv$(args));
+                break;
             }
         }
 
@@ -2478,19 +2658,25 @@ public:
             const auto& v = enm.variants()[varIdx];
             ASTExprNodeP code;
 
-            TU_MATCH_HDRA( (v.data), {)
-            TU_ARMA(Unit, e) {
+            switch (v.data.tag()) {
+                case ASTEnumVariantData::TAG_Unit: {
+                    auto& e = v.data.as_Unit();
+                    (void)e;
                     code = NEWNODE(NamedValue, basePath + v.name);
+                    break;
                 }
-                TU_ARMA(Tuple, e) {
+                case ASTEnumVariantData::TAG_Tuple: {
+                    auto& e = v.data.as_Tuple();
                     ::std::vector<ASTExprNodeP> args;
 
                     for (unsigned int idx = 0; idx < e.items.size(); idx++) {
                         args.push_back(NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum_variant_arg", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->decClosure(*type->pool, sp, this->decVal())))));
                     }
                     code = NEWNODE(CallPath, basePath + v.name, mv$(args));
+                    break;
                 }
-                TU_ARMA(Struct, e) {
+                case ASTEnumVariantData::TAG_Struct: {
+                    auto& e = v.data.as_Struct();
                     ASTExprNodeStructLiteral::tValues vals;
 
                     unsigned int idx = 0;
@@ -2500,6 +2686,7 @@ public:
                     }
 
                     code = NEWNODE(StructLiteral, basePath + v.name, nullptr, mv$(vals));
+                    break;
                 }
             }
 
@@ -2701,21 +2888,41 @@ namespace {
     bool substitutePathParams(ASTPathParams& params, const RcString& from, ASTType* to) {
         bool changed = false;
         for (auto& param : params.entries) {
-            TU_MATCH_HDRA((param), {)
-            TU_ARMA(Null, e) {}
-            TU_ARMA(Lifetime, e) {}
-            TU_ARMA(Type, e) { changed |= substituteType(e, from, to); }
-            TU_ARMA(Value, e) {}
-            TU_ARMA(AssociatedTyEqual, e) {
-                changed |= substitutePathParams(e.first.args(), from, to);
-                changed |= substituteType(e.second, from, to);
-            }
-            TU_ARMA(AssociatedTyBound, e) {
-                changed |= substitutePathParams(e.first.args(), from, to);
-                for (auto& trait : e.second) {
-                    changed |= substitutePath(*trait.path, from, to);
+            switch (param.tag()) {
+                case ASTPathParamEnt::TAG_Null: {
+                    auto& e = param.as_Null();
+                    (void)e;
+                    break;
                 }
-            }
+                case ASTPathParamEnt::TAG_Lifetime: {
+                    auto& e = param.as_Lifetime();
+                    (void)e;
+                    break;
+                }
+                case ASTPathParamEnt::TAG_Type: {
+                    auto& e = param.as_Type();
+                    changed |= substituteType(e, from, to);
+                    break;
+                }
+                case ASTPathParamEnt::TAG_Value: {
+                    auto& e = param.as_Value();
+                    (void)e;
+                    break;
+                }
+                case ASTPathParamEnt::TAG_AssociatedTyEqual: {
+                    auto& e = param.as_AssociatedTyEqual();
+                    changed |= substitutePathParams(e.first.args(), from, to);
+                    changed |= substituteType(e.second, from, to);
+                    break;
+                }
+                case ASTPathParamEnt::TAG_AssociatedTyBound: {
+                    auto& e = param.as_AssociatedTyBound();
+                    changed |= substitutePathParams(e.first.args(), from, to);
+                    for (auto& trait : e.second) {
+                        changed |= substitutePath(*trait.path, from, to);
+                    }
+                    break;
+                }
             }
         }
         return changed;
@@ -2753,73 +2960,153 @@ namespace {
         }
 
         bool changed = false;
-        TU_MATCH_HDRA((type->data), {)
-        TU_ARMA(None, e) {}
-        TU_ARMA(Any, e) {}
-        TU_ARMA(Bang, e) {}
-        TU_ARMA(Unit, e) {}
-        TU_ARMA(Macro, e) {}
-        TU_ARMA(Primitive, e) {}
-        TU_ARMA(Function, e) {
-            changed |= substituteType(e.info.rettype, from, to);
-            for (auto*& arg : e.info.argTypes) {
-                changed |= substituteType(arg, from, to);
+        switch (type->data.tag()) {
+            case TypeData::TAG_None: {
+                auto& e = type->data.as_None();
+                (void)e;
+                break;
             }
-        }
-        TU_ARMA(Tuple, e) {
-            for (auto*& inner : e.innerTypes) {
-                changed |= substituteType(inner, from, to);
+            case TypeData::TAG_Any: {
+                auto& e = type->data.as_Any();
+                (void)e;
+                break;
             }
-        }
-        TU_ARMA(Borrow, e) { changed |= substituteType(e.inner, from, to); }
-        TU_ARMA(Pointer, e) { changed |= substituteType(e.inner, from, to); }
-        TU_ARMA(Array, e) { changed |= substituteType(e.inner, from, to); }
-        TU_ARMA(Slice, e) { changed |= substituteType(e.inner, from, to); }
-        TU_ARMA(Pattern, e) { changed |= substituteType(e.inner, from, to); }
-        TU_ARMA(Generic, e) {}
-        TU_ARMA(Path, e) { changed |= substitutePath(*e, from, to); }
-        TU_ARMA(TraitObject, e) {
-            for (auto& trait : e.traits) {
-                changed |= substitutePath(*trait.path, from, to);
+            case TypeData::TAG_Bang: {
+                auto& e = type->data.as_Bang();
+                (void)e;
+                break;
             }
-        }
-        TU_ARMA(ErasedType, e) {
-            for (auto& trait : e->traits) {
-                changed |= substitutePath(*trait.path, from, to);
+            case TypeData::TAG_Unit: {
+                auto& e = type->data.as_Unit();
+                (void)e;
+                break;
             }
-            for (auto& trait : e->maybeTraits) {
-                changed |= substitutePath(*trait.path, from, to);
+            case TypeData::TAG_Macro: {
+                auto& e = type->data.as_Macro();
+                (void)e;
+                break;
             }
-            if (e->use) {
-                changed |= substitutePathParams(*e->use, from, to);
+            case TypeData::TAG_Primitive: {
+                auto& e = type->data.as_Primitive();
+                (void)e;
+                break;
             }
-        }
+            case TypeData::TAG_Function: {
+                auto& e = type->data.as_Function();
+                changed |= substituteType(e.info.rettype, from, to);
+                for (auto*& arg : e.info.argTypes) {
+                    changed |= substituteType(arg, from, to);
+                }
+                break;
+            }
+            case TypeData::TAG_Tuple: {
+                auto& e = type->data.as_Tuple();
+                for (auto*& inner : e.innerTypes) {
+                    changed |= substituteType(inner, from, to);
+                }
+                break;
+            }
+            case TypeData::TAG_Borrow: {
+                auto& e = type->data.as_Borrow();
+                changed |= substituteType(e.inner, from, to);
+                break;
+            }
+            case TypeData::TAG_Pointer: {
+                auto& e = type->data.as_Pointer();
+                changed |= substituteType(e.inner, from, to);
+                break;
+            }
+            case TypeData::TAG_Array: {
+                auto& e = type->data.as_Array();
+                changed |= substituteType(e.inner, from, to);
+                break;
+            }
+            case TypeData::TAG_Slice: {
+                auto& e = type->data.as_Slice();
+                changed |= substituteType(e.inner, from, to);
+                break;
+            }
+            case TypeData::TAG_Pattern: {
+                auto& e = type->data.as_Pattern();
+                changed |= substituteType(e.inner, from, to);
+                break;
+            }
+            case TypeData::TAG_Generic: {
+                auto& e = type->data.as_Generic();
+                (void)e;
+                break;
+            }
+            case TypeData::TAG_Path: {
+                auto& e = type->data.as_Path();
+                changed |= substitutePath(*e, from, to);
+                break;
+            }
+            case TypeData::TAG_TraitObject: {
+                auto& e = type->data.as_TraitObject();
+                for (auto& trait : e.traits) {
+                    changed |= substitutePath(*trait.path, from, to);
+                }
+                break;
+            }
+            case TypeData::TAG_ErasedType: {
+                auto& e = type->data.as_ErasedType();
+                for (auto& trait : e->traits) {
+                    changed |= substitutePath(*trait.path, from, to);
+                }
+                for (auto& trait : e->maybeTraits) {
+                    changed |= substitutePath(*trait.path, from, to);
+                }
+                if (e->use) {
+                    changed |= substitutePathParams(*e->use, from, to);
+                }
+                break;
+            }
         }
         return changed;
     }
 
     bool substituteBound(ASTGenericBound& bound, const RcString& from, ASTType* to) {
         bool changed = false;
-        TU_MATCH_HDRA((bound), {)
-        TU_ARMA(None, e) {}
-        TU_ARMA(Lifetime, e) {}
-        TU_ARMA(TypeLifetime, e) { changed |= substituteType(e.type, from, to); }
-        TU_ARMA(IsTrait, e) {
-            changed |= substituteType(e.type, from, to);
-            changed |= substitutePath(e.trait, from, to);
-        }
-        TU_ARMA(MaybeTrait, e) {
-            changed |= substituteType(e.type, from, to);
-            changed |= substitutePath(e.trait, from, to);
-        }
-        TU_ARMA(NotTrait, e) {
-            changed |= substituteType(e.type, from, to);
-            changed |= substitutePath(e.trait, from, to);
-        }
-        TU_ARMA(Equality, e) {
-            changed |= substituteType(e.type, from, to);
-            changed |= substituteType(e.replacement, from, to);
-        }
+        switch (bound.tag()) {
+            case ASTGenericBound::TAG_None: {
+                auto& e = bound.as_None();
+                (void)e;
+                break;
+            }
+            case ASTGenericBound::TAG_Lifetime: {
+                auto& e = bound.as_Lifetime();
+                (void)e;
+                break;
+            }
+            case ASTGenericBound::TAG_TypeLifetime: {
+                auto& e = bound.as_TypeLifetime();
+                changed |= substituteType(e.type, from, to);
+                break;
+            }
+            case ASTGenericBound::TAG_IsTrait: {
+                auto& e = bound.as_IsTrait();
+                changed |= substituteType(e.type, from, to);
+                changed |= substitutePath(e.trait, from, to);
+                break;
+            }
+            case ASTGenericBound::TAG_MaybeTrait: {
+                auto& e = bound.as_MaybeTrait();
+                changed |= substituteType(e.type, from, to);
+                changed |= substitutePath(e.trait, from, to);
+                break;
+            }
+            case ASTGenericBound::TAG_NotTrait: {
+                auto& e = bound.as_NotTrait();
+                changed |= substituteType(e.type, from, to);
+                changed |= substitutePath(e.trait, from, to);
+                break;
+            }
+            case ASTGenericBound::TAG_Equality: {
+                auto& e = bound.as_Equality();
+                changed |= substituteType(e.type, from, to);
+                changed |= substituteType(e.replacement, from, to);
+                break;
+            }
         }
         return changed;
     }
@@ -2861,10 +3148,22 @@ namespace {
 
     void deriveCoercePointee(const Span& sp, const DeriveOpts& opts, ASTModule& mod, const ASTGenericParams& sourceParams, ASTType* selfType, const ASTStruct& str) {
         bool hasField = false;
-        TU_MATCH_HDRA((str.data), {)
-        TU_ARMA(Unit, e) {}
-        TU_ARMA(Struct, e) { hasField = !e.ents.empty(); }
-        TU_ARMA(Tuple, e) { hasField = !e.ents.empty(); }
+        switch (str.data.tag()) {
+            case ASTStructData::TAG_Unit: {
+                auto& e = str.data.as_Unit();
+                (void)e;
+                break;
+            }
+            case ASTStructData::TAG_Struct: {
+                auto& e = str.data.as_Struct();
+                hasField = !e.ents.empty();
+                break;
+            }
+            case ASTStructData::TAG_Tuple: {
+                auto& e = str.data.as_Tuple();
+                hasField = !e.ents.empty();
+                break;
+            }
         }
         if (!hasField) {
             ERROR(sp, E0000, "CoercePointee can only be derived for a struct with fields");
@@ -2941,13 +3240,15 @@ namespace {
 
             for (const auto& macImport : mod.macroImports) {
                 if (macImport.name == macName) {
-                    TU_MATCH_HDRA( (macImport.ref), {)
-                    default:
+                    switch (macImport.ref.tag()) {
+default:
                         break;
-                        TU_ARMA(ExternalProcMacro, pm) {
+                        case MacroRef::TAG_ExternalProcMacro: {
+                            auto& pm = macImport.ref.as_ExternalProcMacro();
                             DEBUG("proc_macro " << pm->path);
                             macPath.push_back(pm->path.crateName());
                             macPath.insert(macPath.end(), pm->path.components().begin(), pm->path.components().end());
+                            break;
                         }
                     }
                     if( !macPath.empty() ) {
@@ -2959,19 +3260,30 @@ namespace {
         if (macPath.empty()) {
             auto mac = ExpandLookupMacro(sp, wb, crate, LList<const ASTModule*>(nullptr, &mod), traitPath);
 
-            TU_MATCH_HDRA( (mac), {)
-            TU_ARMA(None, e) {
+            switch (mac.tag()) {
+                case MacroRef::TAG_None: {
+                    auto& e = mac.as_None();
+                    (void)e;
                     // Leave `mac_path` empty, triggering an error in caller
+                    break;
                 }
-                TU_ARMA(ExternalProcMacro, extProcMac) {
+                case MacroRef::TAG_ExternalProcMacro: {
+                    auto& extProcMac = mac.as_ExternalProcMacro();
                     macPath.push_back(extProcMac->path.crateName());
                     macPath.insert(macPath.end(), extProcMac->path.components().begin(), extProcMac->path.components().end());
+                    break;
                 }
-                TU_ARMA(BuiltinProcMacro, procMac) {
+                case MacroRef::TAG_BuiltinProcMacro: {
+                    auto& procMac = mac.as_BuiltinProcMacro();
+                    (void)procMac;
                     TODO(sp, "Handle builtin proc macro");
+                    break;
                 }
-                TU_ARMA(MacroRules, mrPtr) {
+                case MacroRef::TAG_MacroRules: {
+                    auto& mrPtr = mac.as_MacroRules();
+                    (void)mrPtr;
                     TODO(sp, "Custom derive using macro_rules?");
+                    break;
                 }
             }
         }
@@ -3538,14 +3850,19 @@ public:
 
     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         auto name = attr.parseEqualsString(wb, crate, mod);
-        TU_MATCH_HDRA( (i), {)
-        default:
+        switch (i.tag()) {
+default:
             TODO(sp, "Unknown item type " << i.tagStr() << " with #["<<attr<<"] attached at " << path);
             break;
-            TU_ARMA(None, e) {
+            case ASTItem::TAG_None: {
+                auto& e = i.as_None();
+                (void)e;
                 // NOTE: Can happen when #[cfg] removed this
+                break;
             }
-            TU_ARMA(Impl, e) {
+            case ASTItem::TAG_Impl: {
+                auto& e = i.as_Impl();
+                (void)e;
                 if (name == "i8") {
                 } else if (name == "u8") {
                 } else if (name == "i16") {
@@ -3590,31 +3907,52 @@ public:
 
                 // TODO: Somehow annotate these impls to allow them to provide inherents?
                 // - trustme is lazy and inefficient, so these don't matter :)
+                break;
             }
-            TU_ARMA(Function, e) {
+            case ASTItem::TAG_Function: {
+                auto& e = i.as_Function();
                 if (e.code().isValid()) {
                     handleLangItem(sp, crate, path, name, ITEM_FN, i);
                 } else {
                     handleLangItem(sp, crate, path, name, ITEM_EXTERN_FN, i);
                 }
+                break;
             }
-            TU_ARMA(Type, e) {
+            case ASTItem::TAG_Type: {
+                auto& e = i.as_Type();
+                (void)e;
                 handleLangItem(sp, crate, path, name, ITEM_TYPE_ALIAS, i);
+                break;
             }
-            TU_ARMA(Static, e) {
+            case ASTItem::TAG_Static: {
+                auto& e = i.as_Static();
+                (void)e;
                 handleLangItem(sp, crate, path, name, ITEM_STATIC, i);
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTItem::TAG_Struct: {
+                auto& e = i.as_Struct();
+                (void)e;
                 handleLangItem(sp, crate, path, name, ITEM_STRUCT, i);
+                break;
             }
-            TU_ARMA(Enum, e) {
+            case ASTItem::TAG_Enum: {
+                auto& e = i.as_Enum();
+                (void)e;
                 handleLangItem(sp, crate, path, name, ITEM_ENUM, i);
+                break;
             }
-            TU_ARMA(Union, e) {
+            case ASTItem::TAG_Union: {
+                auto& e = i.as_Union();
+                (void)e;
                 handleLangItem(sp, crate, path, name, ITEM_UNION, i);
+                break;
             }
-            TU_ARMA(Trait, e) {
+            case ASTItem::TAG_Trait: {
+                auto& e = i.as_Trait();
+                (void)e;
                 handleLangItem(sp, crate, path, name, ITEM_TRAIT, i);
+                break;
             }
         }
     }

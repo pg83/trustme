@@ -413,20 +413,29 @@ NODE(
             os << ", ";
         }
         for (const auto& p : params) {
-        TU_MATCH_HDRA( (p), {)
-        TU_ARMA(Const, e) {
+        switch (p.tag()) {
+            case ASTAsmParam::TAG_Const: {
+                auto& e = p.as_Const();
                 os << "const " << *e;
+                break;
             }
-            TU_ARMA(Sym, e) {
+            case ASTAsmParam::TAG_Sym: {
+                auto& e = p.as_Sym();
                 os << "sym " << e;
+                break;
             }
-            TU_ARMA(Label, e) {
+            case ASTAsmParam::TAG_Label: {
+                auto& e = p.as_Label();
                 os << "label " << *e.code;
+                break;
             }
-            TU_ARMA(RegSingle, e) {
+            case ASTAsmParam::TAG_RegSingle: {
+                auto& e = p.as_RegSingle();
                 os << "reg(" << e.dir << " " << e.spec << ") " << *e.val;
+                break;
             }
-            TU_ARMA(Reg, e) {
+            case ASTAsmParam::TAG_Reg: {
+                auto& e = p.as_Reg();
                 os << "reg(" << e.dir << " " << e.spec << ") ";
                 if (e.valIn) {
                     os << *e.valIn;
@@ -439,6 +448,7 @@ NODE(
                 } else {
                     os << "_";
                 }
+                break;
             }
         }
         os << ", ";
@@ -449,21 +459,31 @@ NODE(
         std::vector<Param> params;
 
         for (const auto& p : this->params) {
-        TU_MATCH_HDRA( (p), { )
-        TU_ARMA(Const, e) {
+        switch (p.tag()) {
+            case ASTAsmParam::TAG_Const: {
+                auto& e = p.as_Const();
                 params.push_back(Param::make_Const(e->clone()));
+                break;
             }
-            TU_ARMA(Sym, e) {
+            case ASTAsmParam::TAG_Sym: {
+                auto& e = p.as_Sym();
                 params.push_back(Param::make_Sym(e));
+                break;
             }
-            TU_ARMA(Label, e) {
+            case ASTAsmParam::TAG_Label: {
+                auto& e = p.as_Label();
                 params.push_back(Param::make_Label({e.code->clone()}));
+                break;
             }
-            TU_ARMA(RegSingle, e) {
+            case ASTAsmParam::TAG_RegSingle: {
+                auto& e = p.as_RegSingle();
                 params.push_back(Param::make_RegSingle({e.dir, e.spec.clone(), e.val->clone()}));
+                break;
             }
-            TU_ARMA(Reg, e) {
+            case ASTAsmParam::TAG_Reg: {
+                auto& e = p.as_Reg();
                 params.push_back(Param::make_Reg({e.dir, e.spec.clone(), e.valIn ? e.valIn->clone() : nullptr, e.valOut ? e.valOut->clone() : nullptr}));
+                break;
             }
         }
         }
@@ -1040,21 +1060,32 @@ NV(ASTExprNodeAsm, {
 })
 NV(ASTExprNodeAsm2, {
     for (auto& v : node.params) {
-        TU_MATCH_HDRA((v), {)
-        TU_ARMA(Const, e) {
+        switch (v.tag()) {
+            case ASTAsmParam::TAG_Const: {
+                auto& e = v.as_Const();
                 visit(e);
+                break;
             }
-            TU_ARMA(Sym, e) {
+            case ASTAsmParam::TAG_Sym: {
+                auto& e = v.as_Sym();
+                (void)e;
+                break;
             }
-            TU_ARMA(Label, e) {
+            case ASTAsmParam::TAG_Label: {
+                auto& e = v.as_Label();
                 visit(e.code);
+                break;
             }
-            TU_ARMA(RegSingle, e) {
+            case ASTAsmParam::TAG_RegSingle: {
+                auto& e = v.as_RegSingle();
                 visit(e.val);
+                break;
             }
-            TU_ARMA(Reg, e) {
+            case ASTAsmParam::TAG_Reg: {
+                auto& e = v.as_Reg();
                 visit(e.valIn);
                 visit(e.valOut);
+                break;
             }
         }
     }

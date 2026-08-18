@@ -91,11 +91,17 @@ bool operator==(const AsmRegisterSpec& a, const AsmRegisterSpec& b) {
     if (a.tag() != b.tag()) {
         return false;
     }
-    TU_MATCH_HDRA( (a,b), {)
-    TU_ARMA(Class, ae,be)
-        return ae == be;
-        TU_ARMA(Explicit, ae, be)
-        return ae == be;
+    switch (a.tag()) {
+        case AsmRegisterSpec::TAG_Class: {
+            auto& ae = a.as_Class();
+            auto& be = b.as_Class();
+            return ae == be;
+        }
+        case AsmRegisterSpec::TAG_Explicit: {
+            auto& ae = a.as_Explicit();
+            auto& be = b.as_Explicit();
+            return ae == be;
+        }
     }
     return true;
 }
@@ -125,12 +131,16 @@ const char* to_string(const AsmRegisterClass& c) {
 }
 
 std::ostream& operator<<(std::ostream& os, const AsmRegisterSpec& s) {
-    TU_MATCH_HDRA((s), {)
-    TU_ARMA(Class, c) {
+    switch (s.tag()) {
+        case AsmRegisterSpec::TAG_Class: {
+            auto& c = s.as_Class();
             os << to_string(c);
+            break;
         }
-        TU_ARMA(Explicit, e) {
+        case AsmRegisterSpec::TAG_Explicit: {
+            auto& e = s.as_Explicit();
             os << "\"" << e << "\"";
+            break;
         }
     }
     return os;

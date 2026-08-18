@@ -217,26 +217,33 @@ Ordering ASTPathParams::ord(const ASTPathParams& x) const {
 }
 
 ASTPathParamEnt ASTPathParamEnt::clone() const {
-    TU_MATCH_HDRA( (*this), {)
-    TU_ARMA(Null, v) {
+    switch ((*this).tag()) {
+        case ASTPathParamEnt::TAG_Null: {
+            auto& v = (*this).as_Null();
             return v;
         }
-        TU_ARMA(Lifetime, v) {
+        case ASTPathParamEnt::TAG_Lifetime: {
+            auto& v = (*this).as_Lifetime();
             return v;
         }
-        TU_ARMA(Type, v) {
+        case ASTPathParamEnt::TAG_Type: {
+            auto& v = (*this).as_Type();
             return v->clone();
         }
-        TU_ARMA(Value, v) {
+        case ASTPathParamEnt::TAG_Value: {
+            auto& v = (*this).as_Value();
             return v->clone();
         }
-        TU_ARMA(AssociatedTyEqual, v) {
+        case ASTPathParamEnt::TAG_AssociatedTyEqual: {
+            auto& v = (*this).as_AssociatedTyEqual();
             return ::std::make_pair(v.first, v.second->clone());
         }
-        TU_ARMA(AssociatedValueEqual, v) {
+        case ASTPathParamEnt::TAG_AssociatedValueEqual: {
+            auto& v = (*this).as_AssociatedValueEqual();
             return ::std::make_pair(v.first, v.second->clone());
         }
-        TU_ARMA(AssociatedTyBound, v) {
+        case ASTPathParamEnt::TAG_AssociatedTyBound: {
+            auto& v = (*this).as_AssociatedTyBound();
             return ::std::make_pair(v.first, v.second);
         }
     }
@@ -248,27 +255,43 @@ Ordering ASTPathParamEnt::ord(const ASTPathParamEnt& x) const {
         return ::ord(static_cast<int>(this->tag()), static_cast<int>(x.tag()));
     }
 
-    TU_MATCH_HDRA( (*this, x), {)
-    TU_ARMA(Null, v1, v2) {
+    switch ((*this).tag()) {
+        case ASTPathParamEnt::TAG_Null: {
+            auto& v1 = (*this).as_Null();
+            (void)v1;
+            auto& v2 = x.as_Null();
+            (void)v2;
             return ::OrdEqual;
         }
-        TU_ARMA(Lifetime, v1, v2) {
+        case ASTPathParamEnt::TAG_Lifetime: {
+            auto& v1 = (*this).as_Lifetime();
+            auto& v2 = x.as_Lifetime();
             return ::ord(v1, v2);
         }
-        TU_ARMA(Type, v1, v2) {
+        case ASTPathParamEnt::TAG_Type: {
+            auto& v1 = (*this).as_Type();
+            auto& v2 = x.as_Type();
             return ::ord(v1, v2);
         }
-        TU_ARMA(Value, v1, v2) {
+        case ASTPathParamEnt::TAG_Value: {
+            auto& v1 = (*this).as_Value();
+            auto& v2 = x.as_Value();
             return ::ord((uintptr_t)v1.get(), (uintptr_t)v2.get());
         }
-        TU_ARMA(AssociatedTyEqual, v1, v2) {
+        case ASTPathParamEnt::TAG_AssociatedTyEqual: {
+            auto& v1 = (*this).as_AssociatedTyEqual();
+            auto& v2 = x.as_AssociatedTyEqual();
             return ::ord(v1, v2);
         }
-        TU_ARMA(AssociatedValueEqual, v1, v2) {
+        case ASTPathParamEnt::TAG_AssociatedValueEqual: {
+            auto& v1 = (*this).as_AssociatedValueEqual();
+            auto& v2 = x.as_AssociatedValueEqual();
             ORD(v1.first, v2.first);
             return OrdEqual;
         }
-        TU_ARMA(AssociatedTyBound, v1, v2) {
+        case ASTPathParamEnt::TAG_AssociatedTyBound: {
+            auto& v1 = (*this).as_AssociatedTyBound();
+            auto& v2 = x.as_AssociatedTyBound();
             ORD(v1.first, v2.first);
             ORD(v1.second.size(), v2.second.size());
             for (size_t i = 0; i < v1.second.size(); i++) {
@@ -281,26 +304,40 @@ Ordering ASTPathParamEnt::ord(const ASTPathParamEnt& x) const {
 }
 
 void ASTPathParamEnt::fmt(::std::ostream& os) const {
-    TU_MATCH_HDRA( (*this), {)
-    TU_ARMA(Null, _) {
+    switch ((*this).tag()) {
+        case ASTPathParamEnt::TAG_Null: {
+            auto& _ = (*this).as_Null();
+            (void)_;
             os << "/*removed*/";
+            break;
         }
-        TU_ARMA(Lifetime, v) {
+        case ASTPathParamEnt::TAG_Lifetime: {
+            auto& v = (*this).as_Lifetime();
             os << v;
+            break;
         }
-        TU_ARMA(Type, v) {
+        case ASTPathParamEnt::TAG_Type: {
+            auto& v = (*this).as_Type();
             os << v;
+            break;
         }
-        TU_ARMA(Value, v) {
+        case ASTPathParamEnt::TAG_Value: {
+            auto& v = (*this).as_Value();
             v->print(os);
+            break;
         }
-        TU_ARMA(AssociatedTyEqual, v) {
+        case ASTPathParamEnt::TAG_AssociatedTyEqual: {
+            auto& v = (*this).as_AssociatedTyEqual();
             os << v.first << "=" << v.second;
+            break;
         }
-        TU_ARMA(AssociatedValueEqual, v) {
+        case ASTPathParamEnt::TAG_AssociatedValueEqual: {
+            auto& v = (*this).as_AssociatedValueEqual();
             os << v.first << "=" << *v.second;
+            break;
         }
-        TU_ARMA(AssociatedTyBound, v) {
+        case ASTPathParamEnt::TAG_AssociatedTyBound: {
+            auto& v = (*this).as_AssociatedTyBound();
             os << v.first << ": ";
             for (const auto& trait : v.second) {
                 if (&trait != v.second.data()) {
@@ -308,6 +345,7 @@ void ASTPathParamEnt::fmt(::std::ostream& os) const {
                 }
                 os << trait.hrbs << *trait.path;
             }
+            break;
         }
     }
 }
@@ -502,13 +540,16 @@ Ordering ASTPath::ord(const ASTPath& x) const {
 }
 
 void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) const {
-    TU_MATCH_HDRA( (cls), {)
-    TU_ARMA(Invalid, ent) {
+    switch (cls.tag()) {
+        case ASTPathClass::TAG_Invalid: {
+            auto& ent = cls.as_Invalid();
+            (void)ent;
             os << "/*inv*/";
             // NOTE: Don't print the binding for invalid paths
             return;
         }
-        TU_ARMA(Local, ent) {
+        case ASTPathClass::TAG_Local: {
+            auto& ent = cls.as_Local();
             // Only print comment if there's no binding
             if (bindings.value.is_Unbound() && bindings.type.is_Unbound()) {
                 if (isDebug) {
@@ -518,8 +559,10 @@ void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) 
                 assert(bindings.value.binding.is_Variable() || bindings.value.binding.is_Generic() || bindings.type.binding.is_TypeParameter());
             }
             os << ent.name;
+            break;
         }
-        TU_ARMA(Relative, ent) {
+        case ASTPathClass::TAG_Relative: {
+            auto& ent = cls.as_Relative();
             if (isDebug) {
                 os << ent.hygiene;
             }
@@ -529,22 +572,28 @@ void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) 
                 }
                 n.printPretty(os, isTypeContext);
             }
+            break;
         }
-        TU_ARMA(Self, ent) {
+        case ASTPathClass::TAG_Self: {
+            auto& ent = cls.as_Self();
             os << "self";
             for (const auto& n : ent.nodes) {
                 os << "::";
                 n.printPretty(os, isTypeContext);
             }
+            break;
         }
-        TU_ARMA(Super, ent) {
+        case ASTPathClass::TAG_Super: {
+            auto& ent = cls.as_Super();
             os << "super";
             for (const auto& n : ent.nodes) {
                 os << "::";
                 n.printPretty(os, isTypeContext);
             }
+            break;
         }
-        TU_ARMA(Absolute, ent) {
+        case ASTPathClass::TAG_Absolute: {
+            auto& ent = cls.as_Absolute();
             const char* cn = ent.crate.c_str();
             if (!cn[0]) {
                 os << "crate";
@@ -557,8 +606,10 @@ void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) 
                 os << "::";
                 n.printPretty(os, isTypeContext);
             }
+            break;
         }
-        TU_ARMA(UFCS, ent) {
+        case ASTPathClass::TAG_UFCS: {
+            auto& ent = cls.as_UFCS();
             if (ent.trait) {
                 os << "<" << *ent.type << " as ";
                 if (ent.trait->cls.is_Invalid()) {
@@ -574,6 +625,7 @@ void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) 
                 os << "::";
                 n.printPretty(os, isTypeContext);
             }
+            break;
         }
     }
     if( isDebug ) {
@@ -743,15 +795,17 @@ ASTPath& ASTPath::operator+=(ASTPathNode pn) {
 }
 
 const RcString& ASTPath::asTrivial() const {
-TU_MATCH_HDRA( (cls), {)
+switch (cls.tag()) {
 default:
     break;
-        TU_ARMA(Local, e) {
-            return e.name;
-        }
-        TU_ARMA(Relative, e) {
-            return e.nodes[0].name();
-        }
+    case ASTPathClass::TAG_Local: {
+        auto& e = cls.as_Local();
+        return e.name;
+    }
+    case ASTPathClass::TAG_Relative: {
+        auto& e = cls.as_Relative();
+        return e.nodes[0].name();
+    }
 }
 throw std::runtime_error("as_trivial on non-trivial path");
 }

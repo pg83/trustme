@@ -56,21 +56,30 @@ namespace {
         ResolveModuleRef getModule(const ASTPath& basePath, const ASTPath& path, bool ignoreLast, ASTAbsolutePath* outPath, bool ignoreHygiene = false) {
             TRACE_FUNCTION_F(path << " in " << basePath << (ignoreLast ? " (ignore last)" : ""));
             const auto& baseNodes = basePath.nodes();
-            TU_MATCH_HDRA( (path.cls), {)
-            TU_ARMA(Invalid, e) {
+            switch (path.cls.tag()) {
+                case ASTPathClass::TAG_Invalid: {
+                    auto& e = path.cls.as_Invalid();
+                    (void)e;
                     // Should never happen
                     BUG(sp, "Invalid path class encountered");
+                    break;
                 }
-                TU_ARMA(Local, e) {
+                case ASTPathClass::TAG_Local: {
+                    auto& e = path.cls.as_Local();
+                    (void)e;
                     // Wait, how is this already known?
                     BUG(sp, "Local path class in use statement");
+                    break;
                 }
-                TU_ARMA(UFCS, e) {
+                case ASTPathClass::TAG_UFCS: {
+                    auto& e = path.cls.as_UFCS();
+                    (void)e;
                     // Wait, how is this already known?
                     BUG(sp, "UFCS path class in use statement");
+                    break;
                 }
-
-                TU_ARMA(Relative, e) {
+                case ASTPathClass::TAG_Relative: {
+                    auto& e = path.cls.as_Relative();
                     DEBUG("Relative " << path);
                     ASSERT_BUG(sp, !e.nodes.empty(), "");
                     if (!ignoreHygiene && e.hygiene.hasModPath()) {
@@ -130,53 +139,62 @@ namespace {
 
                         // Find the top of the path in that namespace
                         auto realMod = as_Namespace(this->findItem(startMod, name, ResolveNamespace::Namespace, outPath));
-                    TU_MATCH_HDRA( (realMod), {)
-                    TU_ARMA(Ast, iData) {
-                                // TODO: What about an enum?
-                        TU_MATCH_HDRA( (*iData), {)
-                        default: {
-                                        // Ignore, keep going
-                                    }
-                                    TU_ARMA(Crate, c) {
-                                        if (outPath) {
-                                            *outPath = ASTAbsolutePath(c.name, {});
+                    switch (realMod.tag()) {
+                        case ResolveItemRefType::TAG_Ast: {
+                            auto& iData = realMod.as_Ast();
+                            // TODO: What about an enum?
+                            TU_MATCH_HDRA( (*iData), {)
+                            default: {
+                                            // Ignore, keep going
                                         }
-                                        if (c.name == "") {
-                                            return getModuleAst(crate.rootModule_, path, 1, ignoreLast, outPath);
+                                        TU_ARMA(Crate, c) {
+                                            if (outPath) {
+                                                *outPath = ASTAbsolutePath(c.name, {});
+                                            }
+                                            if (c.name == "") {
+                                                return getModuleAst(crate.rootModule_, path, 1, ignoreLast, outPath);
+                                            }
+                                            ASSERT_BUG(sp, crate.externCrates.count(c.name) > 0, "Unable to find crate `" << c.name << "`");
+                                            return getModuleHir(crate.externCrates.at(c.name).hir->rootModule, path, 1, ignoreLast, outPath);
                                         }
-                                        ASSERT_BUG(sp, crate.externCrates.count(c.name) > 0, "Unable to find crate `" << c.name << "`");
-                                        return getModuleHir(crate.externCrates.at(c.name).hir->rootModule, path, 1, ignoreLast, outPath);
-                                    }
-                                    TU_ARMA(Module, m) {
-                                        return getModuleAst(m, path, 1, ignoreLast, outPath);
-                                    }
+                                        TU_ARMA(Module, m) {
+                                            return getModuleAst(m, path, 1, ignoreLast, outPath);
+                                        }
+                            }
+                            break;
                         }
+                        case ResolveItemRefType::TAG_AstRoot: {
+                            auto& m = realMod.as_AstRoot();
+                            if (outPath) {
+                                *outPath = ASTAbsolutePath("", {});
                             }
-                            TU_ARMA(AstRoot, m) {
-                                if (outPath) {
-                                    *outPath = ASTAbsolutePath("", {});
-                                }
-                                return getModuleAst(*m, path, 1, ignoreLast, outPath);
+                            return getModuleAst(*m, path, 1, ignoreLast, outPath);
+                        }
+                        case ResolveItemRefType::TAG_HirRoot: {
+                            auto& hirCrate = realMod.as_HirRoot();
+                            return getModuleHir(hirCrate->rootModule, path, 1, ignoreLast, outPath);
+                        }
+                        case ResolveItemRefType::TAG_Hir: {
+                            auto& iEntPtr = realMod.as_Hir();
+                            ASSERT_BUG(sp, !iEntPtr->is_Import(), "");
+                            if (iEntPtr->is_Enum()) {
+                                DEBUG("Enum");
+                                return ResolveModuleRef();
                             }
-                            TU_ARMA(HirRoot, hirCrate) {
-                                return getModuleHir(hirCrate->rootModule, path, 1, ignoreLast, outPath);
-                            }
-                            TU_ARMA(Hir, iEntPtr) {
-                                ASSERT_BUG(sp, !iEntPtr->is_Import(), "");
-                                if (iEntPtr->is_Enum()) {
-                                    DEBUG("Enum");
-                                    return ResolveModuleRef();
-                                }
 
-                                //}
-                                ASSERT_BUG(sp, iEntPtr->is_Module(), "Expected Module, got " << iEntPtr->tagStr() << " for " << name << " in [" << baseNodes << "]");
-                                return getModuleHir(iEntPtr->as_Module(), path, 1, ignoreLast, outPath);
-                                //}
-                            }
-                            TU_ARMA(None, e) {
-                                // Not found in this module, keep searching
-                                DEBUG("Keep searching (" << i << "/" << baseNodes.size() << ")");
-                            }
+                            //}
+                            ASSERT_BUG(sp, iEntPtr->is_Module(), "Expected Module, got " << iEntPtr->tagStr() << " for " << name << " in [" << baseNodes << "]");
+                            return getModuleHir(iEntPtr->as_Module(), path, 1, ignoreLast, outPath);
+                            //}
+                            break;
+                        }
+                        case ResolveItemRefType::TAG_None: {
+                            auto& e = realMod.as_None();
+                            (void)e;
+                            // Not found in this module, keep searching
+                            DEBUG("Keep searching (" << i << "/" << baseNodes.size() << ")");
+                            break;
+                        }
                     }
 
                     i += 1;
@@ -209,9 +227,9 @@ namespace {
                     DEBUG("Not found");
                     return ResolveModuleRef();
                 }
-
-                // Simple logic
-                TU_ARMA(Self, e) {
+                case ASTPathClass::TAG_Self: {
+                    auto& e = path.cls.as_Self();
+                    (void)e;
                     DEBUG("Self " << path);
                     // Look up within the non-anon module
                     size_t i = 0;
@@ -221,7 +239,9 @@ namespace {
                     const auto& startMod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
                     return getModuleAst(startMod, path, 0, ignoreLast, outPath);
                 }
-                TU_ARMA(Super, e) {
+                case ASTPathClass::TAG_Super: {
+                    auto& e = path.cls.as_Super();
+                    (void)e;
                     DEBUG("Super " << path);
                     // Pop current non-anon module, then look up in anon modules
                     size_t i = 0;
@@ -233,7 +253,8 @@ namespace {
                     const auto& startMod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
                     return getModuleAst(startMod, path, 0, ignoreLast, outPath);
                 }
-                TU_ARMA(Absolute, e) {
+                case ASTPathClass::TAG_Absolute: {
+                    auto& e = path.cls.as_Absolute();
                     DEBUG("Absolute " << path);
                     if (e.crate == "" || e.crate == crate.crateNameReal) {
                         DEBUG("Current crate");
@@ -270,6 +291,7 @@ namespace {
                         }
                         return getModuleHir(ecIt->second.hir->rootModule, path, 0, ignoreLast, outPath);
                     }
+                    break;
                 }
             }
             throw "";
@@ -289,12 +311,15 @@ namespace {
                     return ResolveModuleRef();
                 }
                 const auto& r = res.as_Namespace();
-                TU_MATCH_HDRA( (r), { )
-                TU_ARMA(None, e) {
+                switch (r.tag()) {
+                    case ResolveItemRefType::TAG_None: {
+                        auto& e = r.as_None();
+                        (void)e;
                         DEBUG("Not found (Namespace::None)");
                         return ResolveModuleRef();
                     }
-                    TU_ARMA(Ast, e) {
+                    case ResolveItemRefType::TAG_Ast: {
+                        auto& e = r.as_Ast();
                         if (e->is_Module()) {
                             mod = &e->as_Module();
                         } else if (const auto* i = e->opt_Crate()) {
@@ -311,19 +336,25 @@ namespace {
                             DEBUG("Found " << e->tagStr() << ", not module");
                             return ResolveModuleRef();
                         }
+                        break;
                     }
-                    TU_ARMA(AstRoot, e) {
+                    case ResolveItemRefType::TAG_AstRoot: {
+                        auto& e = r.as_AstRoot();
                         mod = e;
+                        break;
                     }
-                    TU_ARMA(Hir, e) {
+                    case ResolveItemRefType::TAG_Hir: {
+                        auto& e = r.as_Hir();
                         if (const auto* i = e->opt_Module()) {
                             return getModuleHir(*i, path, idx + 1, ignoreLast, outPath);
                         } else {
                             DEBUG("Found HIR " << e->tagStr() << ", not module");
                             return ResolveModuleRef();
                         }
+                        break;
                     }
-                    TU_ARMA(HirRoot, e) {
+                    case ResolveItemRefType::TAG_HirRoot: {
+                        auto& e = r.as_HirRoot();
                         if (outPath) {
                             outPath->crate = e->crateName;
                             outPath->nodes.clear();
@@ -367,12 +398,14 @@ namespace {
                         outPath->nodes.push_back(name);
                     }
                 }
-                TU_MATCH_HDRA( (*ti), {)
-                default:
+                switch ((*ti).tag()) {
+default:
                     DEBUG(name << " Not Module, instead " << ti->tagStr());
                     return ResolveModuleRef();
-                    TU_ARMA(Module, m) {
+                    case ASTItem::TAG_Module: {
+                        auto& m = (*ti).as_Module();
                         mod = &m;
+                        break;
                     }
                 }
             }
@@ -493,16 +526,25 @@ namespace {
                         if (outPath) {
                             *outPath = mac.path;
                         }
-                        TU_MATCH_HDRA( (mac.ref), { )
-                        TU_ARMA(None, me) {
+                        switch (mac.ref.tag()) {
+                            case MacroRef::TAG_None: {
+                                auto& me = mac.ref.as_None();
+                                (void)me;
                                 BUG(sp, "macro_imports_res had a None entry");
+                                break;
                             }
-                            TU_ARMA(MacroRules, me)
-                            return ResolveItemRefMacro(me);
-                            TU_ARMA(BuiltinProcMacro, me)
-                            return ResolveItemRefMacro(me);
-                            TU_ARMA(ExternalProcMacro, me)
-                            return ResolveItemRefMacro(me);
+                            case MacroRef::TAG_MacroRules: {
+                                auto& me = mac.ref.as_MacroRules();
+                                return ResolveItemRefMacro(me);
+                            }
+                            case MacroRef::TAG_BuiltinProcMacro: {
+                                auto& me = mac.ref.as_BuiltinProcMacro();
+                                return ResolveItemRefMacro(me);
+                            }
+                            case MacroRef::TAG_ExternalProcMacro: {
+                                auto& me = mac.ref.as_ExternalProcMacro();
+                                return ResolveItemRefMacro(me);
+                            }
                         }
                     }
                 }
@@ -571,23 +613,32 @@ namespace {
                                 if (ns == ResolveNamespace::Namespace) {
                                     ASTAbsolutePath tmp;
                                     auto tgtMod = this->getModule(mod.path(), e.path, false, &tmp);
-                                    TU_MATCH_HDRA( (tgtMod), {)
-                                    TU_ARMA(Ast, modPtr) {
+                                    switch (tgtMod.tag()) {
+                                        case ResolveModuleRef::TAG_Ast: {
+                                            auto& modPtr = tgtMod.as_Ast();
                                             if (outPath) {
                                                 *outPath = tmp;
                                             }
                                             return ResolveItemRefType::make_AstRoot(modPtr);
                                         }
-                                        TU_ARMA(Hir, modPtr) {
+                                        case ResolveModuleRef::TAG_Hir: {
+                                            auto& modPtr = tgtMod.as_Hir();
+                                            (void)modPtr;
                                             if (outPath) {
                                                 *outPath = tmp;
                                             }
                                             return ResolveItemRefType::make_HirRoot(&*crate.externCrates.at(tmp.crate).hir);
                                         }
-                                        TU_ARMA(ImplicitPrelude, _e) {
+                                        case ResolveModuleRef::TAG_ImplicitPrelude: {
+                                            auto& _e = tgtMod.as_ImplicitPrelude();
+                                            (void)_e;
                                             TODO(sp, "ImplicitPrelude?");
+                                            break;
                                         }
-                                        TU_ARMA(None, _e) {
+                                        case ResolveModuleRef::TAG_None: {
+                                            auto& _e = tgtMod.as_None();
+                                            (void)_e;
+                                            break;
                                         }
                                     }
                                 }
@@ -598,16 +649,19 @@ namespace {
                             auto tgtMod = this->getModule(mod.path(), e.path, true, outPath);
                             DEBUG(tgtMod.tagStr());
 
-                            TU_MATCH_HDRA( (tgtMod), {)
-                            TU_ARMA(Ast, modPtr) {
+                            switch (tgtMod.tag()) {
+                                case ResolveModuleRef::TAG_Ast: {
+                                    auto& modPtr = tgtMod.as_Ast();
                                     // NOTE: Recursion
                                     auto rv = this->findItem(*modPtr, itemName, ns, outPath);
                                     if (!rv.is_None()) {
                                         DEBUG("Found in AST use");
                                         return rv;
                                     }
+                                    break;
                                 }
-                                TU_ARMA(Hir, modPtr) {
+                                case ResolveModuleRef::TAG_Hir: {
+                                    auto& modPtr = tgtMod.as_Hir();
                                     // If `get_module` provided a HIR module, then this is right?
                                     // - What if it's an alias? (not critical)
                                     auto rv = this->findItemHir(*modPtr, itemName, ns, outPath);
@@ -615,8 +669,11 @@ namespace {
                                         DEBUG("Found in HIR use");
                                         return rv;
                                     }
+                                    break;
                                 }
-                                TU_ARMA(ImplicitPrelude, _e) {
+                                case ResolveModuleRef::TAG_ImplicitPrelude: {
+                                    auto& _e = tgtMod.as_ImplicitPrelude();
+                                    (void)_e;
                                     if (ns == ResolveNamespace::Namespace) {
                                         auto ecIt = settings.implicitCrates.find(itemName);
                                         if (ecIt != settings.implicitCrates.end()) {
@@ -628,9 +685,13 @@ namespace {
                                         }
                                         TODO(sp, "ImplicitPrelude?");
                                     }
+                                    break;
                                 }
-                                TU_ARMA(None, _e) {
+                                case ResolveModuleRef::TAG_None: {
+                                    auto& _e = tgtMod.as_None();
+                                    (void)_e;
                                     // Ignore for now?
+                                    break;
                                 }
                             }
                         }
@@ -649,29 +710,38 @@ namespace {
                             // - Outer recurse
                             //  > Get the module for this path
                             auto srcMod = this->getModule(mod.path(), e.path, /*ignore_last=*/false, outPath);
-                            TU_MATCH_HDRA( (srcMod), {)
-                            TU_ARMA(None, _) {
+                            switch (srcMod.tag()) {
+                                case ResolveModuleRef::TAG_None: {
+                                    auto& _ = srcMod.as_None();
+                                    (void)_;
                                     DEBUG("Unable to find " << e.path);
                                     break;
                                 }
-                                TU_ARMA(ImplicitPrelude, _e) {
+                                case ResolveModuleRef::TAG_ImplicitPrelude: {
+                                    auto& _e = srcMod.as_ImplicitPrelude();
+                                    (void)_e;
                                     TODO(sp, "ImplicitPrelude? " << e.path);
+                                    break;
                                 }
-                                TU_ARMA(Ast, sm) {
+                                case ResolveModuleRef::TAG_Ast: {
+                                    auto& sm = srcMod.as_Ast();
                                     auto rv = findItem(*sm, name, ns, outPath);
                                     if (!rv.is_None()) {
                                         DEBUG("Found in AST glob");
                                         return rv;
                                     }
                                     // Fall through, keep searching
+                                    break;
                                 }
-                                TU_ARMA(Hir, sm) {
+                                case ResolveModuleRef::TAG_Hir: {
+                                    auto& sm = srcMod.as_Hir();
                                     auto rv = this->findItemHir(*sm, name, ns, outPath);
                                     if (!rv.is_None()) {
                                         DEBUG("Found HIR glob");
                                         return rv;
                                     }
                                     // Not found, fall through
+                                    break;
                                 }
                             }
                         }
@@ -813,16 +883,20 @@ namespace {
                                 outPath->nodes.push_back(itemName);
                             }
                         }
-                    TU_MATCH_HDRA( (*mi), {)
-                    TU_ARMA(Import, me) {
-                                BUG(sp, "Recursive macro import in HIR: " << it->second->ent.as_Import().path << " pointed to " << me.path);
-                            }
-                            TU_ARMA(MacroRules, me) {
-                                return ResolveItemRefMacro(&*me);
-                            }
-                            TU_ARMA(ProcMacro, me) {
-                                return ResolveItemRefMacro(&me);
-                            }
+                    switch ((*mi).tag()) {
+                        case HIRMacroItem::TAG_Import: {
+                            auto& me = (*mi).as_Import();
+                            BUG(sp, "Recursive macro import in HIR: " << it->second->ent.as_Import().path << " pointed to " << me.path);
+                            break;
+                        }
+                        case HIRMacroItem::TAG_MacroRules: {
+                            auto& me = (*mi).as_MacroRules();
+                            return ResolveItemRefMacro(&*me);
+                        }
+                        case HIRMacroItem::TAG_ProcMacro: {
+                            auto& me = (*mi).as_ProcMacro();
+                            return ResolveItemRefMacro(&me);
+                        }
                     }
                     }
                 } break;
@@ -852,8 +926,9 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
         const auto& baseNodes = basePath.nodes();
         mod = ResolveModuleRef(&rs.getModByTruePath(baseNodes, baseNodes.size()));
     }
-    TU_MATCH_HDRA( (mod), {)
-    TU_ARMA(Ast, modPtr) {
+    switch (mod.tag()) {
+        case ResolveModuleRef::TAG_Ast: {
+            auto& modPtr = mod.as_Ast();
             auto rv = rs.findItem(*modPtr, itemName, ResolveNamespace::Macro, outPath);
             if (rv.is_None()) {
                 return ResolveItemRefMacro::make_None({});
@@ -861,7 +936,8 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
             ASSERT_BUG(span, rv.is_Macro(), rv.tagStr());
             return std::move(rv.as_Macro());
         }
-        TU_ARMA(Hir, modPtr) {
+        case ResolveModuleRef::TAG_Hir: {
+            auto& modPtr = mod.as_Hir();
             const HIRSimplePath* visPath = nullptr;
             HIRSimplePath tmpP;
             if (path.cls.is_Relative() && path.cls.as_Relative().hygiene.hasModPath()) {
@@ -877,11 +953,15 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
             ASSERT_BUG(span, rv.is_Macro(), rv.tagStr());
             return std::move(rv.as_Macro());
         }
-        TU_ARMA(ImplicitPrelude, _e) {
+        case ResolveModuleRef::TAG_ImplicitPrelude: {
+            auto& _e = mod.as_ImplicitPrelude();
+            (void)_e;
             // This isn't a macro, so return `None`
             return ResolveItemRefMacro::make_None({});
         }
-        TU_ARMA(None, e) {
+        case ResolveModuleRef::TAG_None: {
+            auto& e = mod.as_None();
+            (void)e;
             return ResolveItemRefMacro::make_None({});
         }
     }
@@ -896,8 +976,9 @@ ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& s
     ResolveState rs(sp, settings, crate);
 
     auto mod = rs.getModule(basePath, path, true, outPath);
-    TU_MATCH_HDRA( (mod), {)
-    TU_ARMA(Ast, modPtr) {
+    switch (mod.tag()) {
+        case ResolveModuleRef::TAG_Ast: {
+            auto& modPtr = mod.as_Ast();
             ASTAbsolutePath tmp;
             if (!outPath) {
                 outPath = &tmp;
@@ -908,17 +989,25 @@ ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& s
             }
 
             TODO(sp, "");
+            break;
         }
-        TU_ARMA(Hir, modPtr) {
+        case ResolveModuleRef::TAG_Hir: {
+            auto& modPtr = mod.as_Hir();
+            (void)modPtr;
             // If `get_module` provided a HIR module, then this is right?
             // - What if it's an alias? (not critical)
             return mod;
         }
-        TU_ARMA(ImplicitPrelude, _e) {
+        case ResolveModuleRef::TAG_ImplicitPrelude: {
+            auto& _e = mod.as_ImplicitPrelude();
+            (void)_e;
             return mod;
         }
-        TU_ARMA(None, e) {
+        case ResolveModuleRef::TAG_None: {
+            auto& e = mod.as_None();
+            (void)e;
             BUG(sp, "Unable to find " << path << " (starting from " << basePath << ")");
+            break;
         }
     }
     throw "";

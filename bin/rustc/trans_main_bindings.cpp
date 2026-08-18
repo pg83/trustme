@@ -140,10 +140,11 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
         bb.terminator = MIRTerminator::make_Return({});
         mirFcn.blocks.push_back(::std::move(bb));
     } else {
-        TU_MATCH_HDRA( ((*ty)), {)
-        default:
+        switch ((*ty).tag()) {
+default:
             TODO(sp, "auto Clone for " << ty << " - Unknown and not Copy");
-            TU_ARMA(Path, te) {
+            case HIRTypeData::TAG_Path: {
+                auto& te = (*ty).as_Path();
                 if (te.isClosure()) {
                     const auto& gp = te.path.data.as_Generic();
                     const auto& str = state.resolve.hirCrate().getStructByPath(sp, gp.path);
@@ -165,8 +166,10 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
                 } else {
                     TODO(sp, "auto Clone for " << ty << " - Unknown and not Copy");
                 }
+                break;
             }
-            TU_ARMA(Array, te) {
+            case HIRTypeData::TAG_Array: {
+                auto& te = (*ty).as_Array();
                 ASSERT_BUG(sp, te.size.as_Known() < 256, "TODO: Is more than 256 elements sane for auto-generated non-Copy Clone impl? " << ty);
                 CloneCleanupState cleanup;
                 ::std::vector<MIRParam> values;
@@ -180,8 +183,10 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
                 bb.statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), MIRRValue::make_Array({mv$(values)})}));
                 bb.terminator = MIRTerminator::make_Return({});
                 appendCloneCleanup(mirFcn, cleanup);
+                break;
             }
-            TU_ARMA(Tuple, te) {
+            case HIRTypeData::TAG_Tuple: {
+                auto& te = (*ty).as_Tuple();
                 assert(te.size() > 0);
 
                 CloneCleanupState cleanup;
@@ -198,6 +203,7 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
                 bb.statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), MIRRValue::make_Tuple({mv$(values)})}));
                 bb.terminator = MIRTerminator::make_Return({});
                 appendCloneCleanup(mirFcn, cleanup);
+                break;
             }
         }
     }
@@ -386,10 +392,14 @@ namespace {
                 return MonomorphStatePtr(mutator.state.crate.types, ty, &tyPath.params, nullptr).monomorphType(sp, t);
             };
             ::std::vector<MIRParam> vals;
-            TU_MATCH_HDRA( (str.data), {)
-            TU_ARMA(Unit, se) {
+            switch (str.data.tag()) {
+                case HIRStructData::TAG_Unit: {
+                    auto& se = str.data.as_Unit();
+                    (void)se;
+                    break;
                 }
-                TU_ARMA(Tuple, se) {
+                case HIRStructData::TAG_Tuple: {
+                    auto& se = str.data.as_Tuple();
                     for (unsigned int i = 0; i < se.size(); i++) {
                         auto val = MIRLValue::newField((i == se.size() - 1 ? mv$(lv) : lv.clone()), i);
                         if (i == str.structMarkings.coerceUnsizedIndex) {
@@ -398,8 +408,10 @@ namespace {
                             vals.push_back(mv$(val));
                         }
                     }
+                    break;
                 }
-                TU_ARMA(Named, se) {
+                case HIRStructData::TAG_Named: {
+                    auto& se = str.data.as_Named();
                     for (unsigned int i = 0; i < se.size(); i++) {
                         auto val = MIRLValue::newField((i == se.size() - 1 ? mv$(lv) : lv.clone()), i);
                         if (i == str.structMarkings.coerceUnsizedIndex) {
@@ -408,6 +420,7 @@ namespace {
                             vals.push_back(mv$(val));
                         }
                     }
+                    break;
                 }
             }
 
@@ -1004,46 +1017,88 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             }
 
             if (state.resolve.typeNeedsDropGlue(sp, ty)) {
-                TU_MATCH_HDRA( ((*ty)), {)
-                TU_ARMA(Infer, _te)
-                    throw "";
-                    TU_ARMA(Generic, _te)
-                    throw "";
-                    TU_ARMA(ErasedType, _te)
-                    throw "";
-                    TU_ARMA(TraitObject, _te)
-                    TODO(sp, "Drop glue for TraitObject? " << ty);
-                    TU_ARMA(Slice, _te)
-                    TODO(sp, "Drop glue for Slice? " << ty);
-                    TU_ARMA(NodeType, _te)
-                    TODO(sp, "Drop glue for NodeType? " << ty); // Should have been converted to a named structure by this point
-                    TU_ARMA(Diverge, te) {
+                switch ((*ty).tag()) {
+                    case HIRTypeData::TAG_Infer: {
+                        auto& _te = (*ty).as_Infer();
+                        (void)_te;
+                        throw "";
+                    }
+                    case HIRTypeData::TAG_Generic: {
+                        auto& _te = (*ty).as_Generic();
+                        (void)_te;
+                        throw "";
+                    }
+                    case HIRTypeData::TAG_ErasedType: {
+                        auto& _te = (*ty).as_ErasedType();
+                        (void)_te;
+                        throw "";
+                    }
+                    case HIRTypeData::TAG_TraitObject: {
+                        auto& _te = (*ty).as_TraitObject();
+                        (void)_te;
+                        TODO(sp, "Drop glue for TraitObject? " << ty);
+                        break;
+                    }
+                    case HIRTypeData::TAG_Slice: {
+                        auto& _te = (*ty).as_Slice();
+                        (void)_te;
+                        TODO(sp, "Drop glue for Slice? " << ty);
+                        break;
+                    }
+                    case HIRTypeData::TAG_NodeType: {
+                        auto& _te = (*ty).as_NodeType();
+                        (void)_te;
+                        TODO(sp, "Drop glue for NodeType? " << ty);
+                        break;
+                    }
+                    case HIRTypeData::TAG_Diverge: {
+                        auto& te = (*ty).as_Diverge();
+                        (void)te;
                         // Exists for reasons...
                         builder.terminateBlock(MIRTerminator::make_Unreachable({}));
+                        break;
                     }
-                    TU_ARMA(Primitive, te) {
+                    case HIRTypeData::TAG_Primitive: {
+                        auto& te = (*ty).as_Primitive();
+                        (void)te;
                         // Nothing to do
+                        break;
                     }
-                    TU_ARMA(Pattern, te) {
+                    case HIRTypeData::TAG_Pattern: {
+                        auto& te = (*ty).as_Pattern();
+                        (void)te;
                         // Pattern types are restricted scalars and have no
                         // independent drop glue beyond their base type.
+                        break;
                     }
-                    TU_ARMA(NamedFunction, te) {
+                    case HIRTypeData::TAG_NamedFunction: {
+                        auto& te = (*ty).as_NamedFunction();
+                        (void)te;
                         // Nothing to do
+                        break;
                     }
-                    TU_ARMA(Function, te) {
+                    case HIRTypeData::TAG_Function: {
+                        auto& te = (*ty).as_Function();
+                        (void)te;
                         // Nothing to do
+                        break;
                     }
-                    TU_ARMA(Pointer, te) {
+                    case HIRTypeData::TAG_Pointer: {
+                        auto& te = (*ty).as_Pointer();
+                        (void)te;
                         // Nothing to do
+                        break;
                     }
-                    TU_ARMA(Borrow, te) {
+                    case HIRTypeData::TAG_Borrow: {
+                        auto& te = (*ty).as_Borrow();
                         if (te.type == HIRBorrowType::Owned) {
                             // `drop a0**`
                             builder.pushStmtDrop(MIRLValue::newDeref(MIRLValue::newDeref(builder.self.clone())));
                         }
+                        break;
                     }
-                    TU_ARMA(Tuple, te) {
+                    case HIRTypeData::TAG_Tuple: {
+                        auto& te = (*ty).as_Tuple();
                         auto self = MIRLValue::newDeref(builder.self.clone());
                         auto fldLv = MIRLValue::newField(mv$(self), 0);
                         ::std::vector<MIRLValue> fields;
@@ -1054,8 +1109,10 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                             fldLv.incField();
                         }
                         builder.pushDropSequence(mv$(fields));
+                        break;
                     }
-                    TU_ARMA(Array, te) {
+                    case HIRTypeData::TAG_Array: {
+                        auto& te = (*ty).as_Array();
                         auto size = te.size.as_Known();
                         auto self = MIRLValue::newDeref(builder.self.clone());
                         if (size > 0 && state.resolve.typeNeedsDropGlue(sp, te.inner)) {
@@ -1065,17 +1122,30 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                             // duplicate that logic and lose the tail on panic.
                             builder.pushStmtDrop(mv$(self));
                         }
+                        break;
                     }
-                    TU_ARMA(Path, te) {
+                    case HIRTypeData::TAG_Path: {
+                        auto& te = (*ty).as_Path();
                         bool hasDrop = false;
-                    TU_MATCH_HDRA( (te.binding), {)
-                    TU_ARMA(Unbound, pbe) throw "";
-                            TU_ARMA(Opaque, pbe) throw "";
-                            TU_ARMA(ExternType, pbe) {
-                                // Why is this trying to be dropped?
+                        switch (te.binding.tag()) {
+                            case HIRTypePathBinding::TAG_Unbound: {
+                                auto& pbe = te.binding.as_Unbound();
+                                (void)pbe;
+                                throw "";
                             }
-
-                            TU_ARMA(Struct, pbe) {
+                            case HIRTypePathBinding::TAG_Opaque: {
+                                auto& pbe = te.binding.as_Opaque();
+                                (void)pbe;
+                                throw "";
+                            }
+                            case HIRTypePathBinding::TAG_ExternType: {
+                                auto& pbe = te.binding.as_ExternType();
+                                (void)pbe;
+                                // Why is this trying to be dropped?
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Struct: {
+                                auto& pbe = te.binding.as_Struct();
                                 auto customDropCall = static_cast<MIRBasicBlockId>(~0u);
                                 if (pbe->markings.hasDropImpl) {
                                     customDropCall = builder.pushCallDrop(ty);
@@ -1104,26 +1174,34 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                     }
                                     builder.pushDropSequence(mv$(fields), customDropCall);
                                 }
+                                break;
                             }
-                            TU_ARMA(Union, pbe) {
+                            case HIRTypePathBinding::TAG_Union: {
+                                auto& pbe = te.binding.as_Union();
                                 if (pbe->markings.hasDropImpl) {
                                     builder.pushCallDrop(ty);
                                     hasDrop = true;
                                 }
                                 // Union requires no internal drop glue
+                                break;
                             }
-                            TU_ARMA(Enum, pbe) {
+                            case HIRTypePathBinding::TAG_Enum: {
+                                auto& pbe = te.binding.as_Enum();
                                 auto customDropCall = static_cast<MIRBasicBlockId>(~0u);
-                                if (pbe->markings.hasDropImpl) {
-                                    customDropCall = builder.pushCallDrop(ty);
-                                    hasDrop = true;
-                                }
-                                const HIREnum& enm = *pbe;
-                        TU_MATCH_HDRA( (enm.data), {)
-                        TU_ARMA(Value, ee) {
+                                        if (pbe->markings.hasDropImpl) {
+                                            customDropCall = builder.pushCallDrop(ty);
+                                            hasDrop = true;
+                                        }
+                                        const HIREnum& enm = *pbe;
+                                switch (enm.data.tag()) {
+                                    case HIREnumClass::TAG_Value: {
+                                        auto& ee = enm.data.as_Value();
+                                        (void)ee;
                                         builder.terminateBlock(MIRTerminator::make_Return({}));
+                                        break;
                                     }
-                                    TU_ARMA(Data, variants) {
+                                    case HIREnumClass::TAG_Data: {
+                                        auto& variants = enm.data.as_Data();
                                         auto self = MIRLValue::newDeref(builder.self.clone());
                                         MIRTerminator::Data_Switch sw;
                                         sw.val = self.clone();
@@ -1186,21 +1264,24 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                             builder.mir.blocks[cleanupSwitch].terminator.as_Switch().targets = mv$(cleanupTargets);
                                             builder.mir.blocks[customDropCall].terminator.as_Call().unwind = MIRUnwindAction::make_Cleanup(cleanupSwitch);
                                         }
+                                        break;
                                     }
+                                }
+                                break;
+                            }
                         }
-                            }
-                    }
-                    if( hasDrop ) {
-                            if (auto* e = transList.addFunction(crate.types, HIRPath(ty, state.resolve.langDrop(), rcstringDrop))) {
-                                MonomorphState params(crate.types);
-                                auto p = HIRPath(ty, state.resolve.langDrop(), rcstringDrop);
-                                auto fcnE = state.resolve.getValue(sp, p, /*out*/ params, /*signature_only=*/false);
-                                ASSERT_BUG(sp, fcnE.is_Function(), "Drop didn't point to a function! " << fcnE.tagStr() << " " << p);
-                                ASSERT_BUG(sp, !params.hasTypes(), "Generic drop impl encountered during auto_impls (should have been populated during enum)");
-                                e->forcePrototype = true;
-                                e->ptr = fcnE.as_Function();
-                            }
-                    }
+                        if( hasDrop ) {
+                                if (auto* e = transList.addFunction(crate.types, HIRPath(ty, state.resolve.langDrop(), rcstringDrop))) {
+                                    MonomorphState params(crate.types);
+                                    auto p = HIRPath(ty, state.resolve.langDrop(), rcstringDrop);
+                                    auto fcnE = state.resolve.getValue(sp, p, /*out*/ params, /*signature_only=*/false);
+                                    ASSERT_BUG(sp, fcnE.is_Function(), "Drop didn't point to a function! " << fcnE.tagStr() << " " << p);
+                                    ASSERT_BUG(sp, !params.hasTypes(), "Generic drop impl encountered during auto_impls (should have been populated during enum)");
+                                    e->forcePrototype = true;
+                                    e->ptr = fcnE.as_Function();
+                                }
+                        }
+                        break;
                     }
                 }
             }
@@ -1291,20 +1372,28 @@ namespace {
                 if (pathTy->binding.is_Unbound() && pathTy->path.data.is_Generic()) {
                     const auto& path = pathTy->path.data.as_Generic().path;
                     const auto& item = crate.getTypeitemByPath(Span(), path);
-                    TU_MATCH_HDRA((item), {)
-                    default:
+                    switch (item.tag()) {
+default:
                         BUG(Span(), "Nominal translation type points to " << item.tagStr() << " - " << ty);
-                        TU_ARMA(ExternType, e) {
+                        case HIRTypeItem::TAG_ExternType: {
+                            auto& e = item.as_ExternType();
                             pathTy->binding = HIRTypePathBinding::make_ExternType(&e);
+                            break;
                         }
-                        TU_ARMA(Struct, e) {
+                        case HIRTypeItem::TAG_Struct: {
+                            auto& e = item.as_Struct();
                             pathTy->binding = HIRTypePathBinding::make_Struct(&e);
+                            break;
                         }
-                        TU_ARMA(Union, e) {
+                        case HIRTypeItem::TAG_Union: {
+                            auto& e = item.as_Union();
                             pathTy->binding = HIRTypePathBinding::make_Union(&e);
+                            break;
                         }
-                        TU_ARMA(Enum, e) {
+                        case HIRTypeItem::TAG_Enum: {
+                            auto& e = item.as_Enum();
                             pathTy->binding = HIRTypePathBinding::make_Enum(&e);
+                            break;
                         }
                     }
                 }
@@ -2034,12 +2123,14 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
         MonomorphState unusedParams(state.crate.types);
         const auto& vi = state.resolve.getValue(Span(), path, unusedParams, /*signature_only=*/true);
         if (const auto* f = vi.opt_Function()) {
-            TU_MATCH_HDRA( (path.data), {)
-            default:
+            switch (path.data.tag()) {
+default:
                 break;
-                TU_ARMA(Generic, e) {
+                case HIRPathData::TAG_Generic: {
+                    auto& e = path.data.as_Generic();
+                    (void)e;
+                    break;
                 }
-                //    }
             }
         } else {
             // Statics don't have lifetime params
@@ -2366,13 +2457,17 @@ namespace {
             TRACE_FUNCTION_F(ty << " - " << (mode == Mode::Shallow ? "Shallow" : (mode == Mode::Normal ? "Normal" : "Deep")));
 
             if (mode == Mode::Shallow) {
-                TU_MATCH_HDRA( (*ty), {)
-                default:
+                switch ((*ty).tag()) {
+default:
                     break;
-                    TU_ARMA(Infer, te) {
+                    case HIRTypeData::TAG_Infer: {
+                        auto& te = (*ty).as_Infer();
+                        (void)te;
                         BUG(sp, "`_` type hit in enumeration");
+                        break;
                     }
-                    TU_ARMA(Path, te) {
+                    case HIRTypeData::TAG_Path: {
+                        auto& te = (*ty).as_Path();
                         switch (te.binding.tag()) {
                             case HIRTypePathBinding::TAG_Unbound: {
                                 auto& tpb = te.binding.as_Unbound();
@@ -2407,24 +2502,35 @@ namespace {
                                 break;
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(Array, te) {
+                    case HIRTypeData::TAG_Array: {
+                        auto& te = (*ty).as_Array();
                         ASSERT_BUG(sp, te.size.is_Known(), "Encountered unknown array size - " << ty);
+                        break;
                     }
-                    TU_ARMA(Function, te) {
+                    case HIRTypeData::TAG_Function: {
+                        auto& te = (*ty).as_Function();
                         visitType(te.rettype, Mode::Shallow);
                         for (const auto& sty : te.argTypes) {
                             visitType(sty, Mode::Shallow);
                         }
+                        break;
                     }
-                    TU_ARMA(Pointer, te) {
+                    case HIRTypeData::TAG_Pointer: {
+                        auto& te = (*ty).as_Pointer();
                         visitType(te.inner, Mode::Shallow);
+                        break;
                     }
-                    TU_ARMA(Borrow, te) {
+                    case HIRTypeData::TAG_Borrow: {
+                        auto& te = (*ty).as_Borrow();
                         visitType(te.inner, Mode::Shallow);
+                        break;
                     }
-                    TU_ARMA(Pattern, te) {
+                    case HIRTypeData::TAG_Pattern: {
+                        auto& te = (*ty).as_Pattern();
                         visitType(te.inner, Mode::Shallow);
+                        break;
                     }
                 }
             } else {
@@ -2434,26 +2540,42 @@ namespace {
                 }
                 activeSet.insert(ty);
 
-                TU_MATCH_HDRA( (*ty), {)
-                // Impossible
-                TU_ARMA(Infer, te) {
+                switch ((*ty).tag()) {
+                    case HIRTypeData::TAG_Infer: {
+                        auto& te = (*ty).as_Infer();
+                        (void)te;
                         BUG(sp, "`_` type hit in enumeration");
+                        break;
                     }
-                    TU_ARMA(Generic, te) {
+                    case HIRTypeData::TAG_Generic: {
+                        auto& te = (*ty).as_Generic();
+                        (void)te;
                         BUG(sp, "Generic type hit in enumeration - " << ty);
+                        break;
                     }
-                    TU_ARMA(ErasedType, te) {
+                    case HIRTypeData::TAG_ErasedType: {
+                        auto& te = (*ty).as_ErasedType();
+                        (void)te;
+                        break;
                     }
-                    TU_ARMA(NodeType, te) {
+                    case HIRTypeData::TAG_NodeType: {
+                        auto& te = (*ty).as_NodeType();
+                        (void)te;
                         BUG(sp, "NodeType type hit in enumeration - " << ty);
+                        break;
                     }
-                    // Nothing to do
-                    TU_ARMA(Diverge, te) {
+                    case HIRTypeData::TAG_Diverge: {
+                        auto& te = (*ty).as_Diverge();
+                        (void)te;
+                        break;
                     }
-                    TU_ARMA(Primitive, te) {
+                    case HIRTypeData::TAG_Primitive: {
+                        auto& te = (*ty).as_Primitive();
+                        (void)te;
+                        break;
                     }
-                    // Recursion!
-                    TU_ARMA(Path, te) {
+                    case HIRTypeData::TAG_Path: {
+                        auto& te = (*ty).as_Path();
                         switch (te.binding.tag()) {
                             case HIRTypePathBinding::TAG_Unbound: {
                                 auto& tpb = te.binding.as_Unbound();
@@ -2491,8 +2613,10 @@ namespace {
                                 break;
                             }
                         }
+                        break;
                     }
-                    TU_ARMA(TraitObject, te) {
+                    case HIRTypeData::TAG_TraitObject: {
+                        auto& te = (*ty).as_TraitObject();
                         static Span sp;
 
                         // If the data trait is empty, then no vtable to visit
@@ -2505,35 +2629,53 @@ namespace {
                         } else {
                             // Wait, what vtable should be used then?
                         }
+                        break;
                     }
-                    TU_ARMA(Array, te) {
+                    case HIRTypeData::TAG_Array: {
+                        auto& te = (*ty).as_Array();
                         ASSERT_BUG(sp, te.size.is_Known(), "Encountered unknown array size - " << ty);
                         visitType(te.inner, mode);
+                        break;
                     }
-                    TU_ARMA(Slice, te) {
+                    case HIRTypeData::TAG_Slice: {
+                        auto& te = (*ty).as_Slice();
                         visitType(te.inner, mode);
+                        break;
                     }
-                    TU_ARMA(Pattern, te) {
+                    case HIRTypeData::TAG_Pattern: {
+                        auto& te = (*ty).as_Pattern();
                         visitType(te.inner, mode);
+                        break;
                     }
-                    TU_ARMA(Borrow, te) {
+                    case HIRTypeData::TAG_Borrow: {
+                        auto& te = (*ty).as_Borrow();
                         visitType(te.inner, mode != Mode::Deep ? Mode::Shallow : Mode::Deep);
+                        break;
                     }
-                    TU_ARMA(Pointer, te) {
+                    case HIRTypeData::TAG_Pointer: {
+                        auto& te = (*ty).as_Pointer();
                         visitType(te.inner, mode != Mode::Deep ? Mode::Shallow : Mode::Deep);
+                        break;
                     }
-                    TU_ARMA(Tuple, te) {
+                    case HIRTypeData::TAG_Tuple: {
+                        auto& te = (*ty).as_Tuple();
                         for (const auto& sty : te) {
                             visitType(sty, mode);
                         }
+                        break;
                     }
-                    TU_ARMA(NamedFunction, te) {
+                    case HIRTypeData::TAG_NamedFunction: {
+                        auto& te = (*ty).as_NamedFunction();
+                        (void)te;
+                        break;
                     }
-                    TU_ARMA(Function, te) {
+                    case HIRTypeData::TAG_Function: {
+                        auto& te = (*ty).as_Function();
                         visitType(te.rettype, mode != Mode::Deep ? Mode::Shallow : Mode::Deep);
                         for (const auto& sty : te.argTypes) {
                             visitType(sty, mode != Mode::Deep ? Mode::Shallow : Mode::Deep);
                         }
+                        break;
                     }
                 }
                 activeSet.erase(ty);
@@ -2641,45 +2783,51 @@ namespace {
                             const HIRTypeData* ty = nullptr;
                             ;
                             // Recurse, if Deref get the type and add it to the visitor
-                            TU_MATCH_HDRA( (lv.root), {)
-                            TU_ARMA(Return, e) {
-                                MIR_TODO(localMirRes, "Get return type for MIR type enumeration");
-                        }
-
-                        TU_ARMA(Argument, e) {
-                            ty = monomorphOuter(fcn.args[e].second);
-                        }
-
-                        TU_ARMA(Local, e) {
-                            if (&localMirRes.fcn == &*fcn.code.mir) {
-                                ty = monomorphOuter(fcn.code.mir->locals[e]);
-                            } else {
-                                ty = localMirRes.fcn.locals[e];
-                            }
-                        }
-
-                        TU_ARMA(Static, e) {
-                            // TODO: Monomorphise the path then hand to MIR::TypeResolve?
-                            const auto& path = e;
-                            switch (path.data.tag()) {
-                                case HIRPathData::TAG_Generic: {
-                                    auto& pe = path.data.as_Generic();
-                                    MIR_ASSERT(localMirRes, pe.params.types.empty(), "Path params on static - " << path);
-                                    const auto& s = tv.resolve.hirCrate().getStaticByPath(localMirRes.sp, pe.path);
-                                    ty = s.type;
+                            switch (lv.root.tag()) {
+                                case MIRLValue::Storage::TAG_Return: {
+                                    decltype(lv.root.as_Return()) e = lv.root.as_Return();
+                                    (void)e;
+                                    MIR_TODO(localMirRes, "Get return type for MIR type enumeration");
                                     break;
                                 }
-                                case HIRPathData::TAG_UfcsKnown: {
-                                    MIR_TODO(localMirRes, "LValue::Static - UfcsKnown - " << path);
+                                case MIRLValue::Storage::TAG_Argument: {
+                                    decltype(lv.root.as_Argument()) e = lv.root.as_Argument();
+                                    ty = monomorphOuter(fcn.args[e].second);
+                                    break;
                                 }
-                                case HIRPathData::TAG_UfcsUnknown: {
-                                    MIR_BUG(localMirRes, "Encountered UfcsUnknown in LValue::Static - " << path);
+                                case MIRLValue::Storage::TAG_Local: {
+                                    decltype(lv.root.as_Local()) e = lv.root.as_Local();
+                                    if (&localMirRes.fcn == &*fcn.code.mir) {
+                                        ty = monomorphOuter(fcn.code.mir->locals[e]);
+                                    } else {
+                                        ty = localMirRes.fcn.locals[e];
+                                    }
+                                    break;
                                 }
-                                case HIRPathData::TAG_UfcsInherent: {
-                                    MIR_TODO(localMirRes, "LValue::Static - UfcsInherent - " << path);
+                                case MIRLValue::Storage::TAG_Static: {
+                                    decltype(lv.root.as_Static()) e = lv.root.as_Static();
+                                    // TODO: Monomorphise the path then hand to MIR::TypeResolve?
+                                    const auto& path = e;
+                                    switch (path.data.tag()) {
+                                        case HIRPathData::TAG_Generic: {
+                                            auto& pe = path.data.as_Generic();
+                                            MIR_ASSERT(localMirRes, pe.params.types.empty(), "Path params on static - " << path);
+                                            const auto& s = tv.resolve.hirCrate().getStaticByPath(localMirRes.sp, pe.path);
+                                            ty = s.type;
+                                            break;
+                                        }
+                                        case HIRPathData::TAG_UfcsKnown: {
+                                            MIR_TODO(localMirRes, "LValue::Static - UfcsKnown - " << path);
+                                        }
+                                        case HIRPathData::TAG_UfcsUnknown: {
+                                            MIR_BUG(localMirRes, "Encountered UfcsUnknown in LValue::Static - " << path);
+                                        }
+                                        case HIRPathData::TAG_UfcsInherent: {
+                                            MIR_TODO(localMirRes, "LValue::Static - UfcsInherent - " << path);
+                                        }
+                                    }
+                                    break;
                                 }
-                            }
-                        }
                             }
                             assert(ty);
 
@@ -2938,10 +3086,14 @@ namespace {
     void evaluateTranslationImplAndTraitParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, HIRPath& path, TransParams& pp) {
         evaluateTranslationParams(sp, wb, crate, pp.gdefImpl, pp.ppImpl);
 
-        TU_MATCH_HDRA((path.data), {)
-        TU_ARMA(Generic, _pe) {
+        switch (path.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                auto& _pe = path.data.as_Generic();
+                (void)_pe;
+                break;
             }
-            TU_ARMA(UfcsKnown, pe) {
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& pe = path.data.as_UfcsKnown();
                 // An empty trait path is the marker-only vtable sentinel. It
                 // has no trait parameters to evaluate; the vtable enumerator
                 // handles this representation directly.
@@ -2949,12 +3101,18 @@ namespace {
                     const auto& trait = crate.getTraitByPath(sp, pe.trait.path);
                     evaluateTranslationParams(sp, wb, crate, &trait.params, pe.trait.params);
                 }
+                break;
             }
-            TU_ARMA(UfcsInherent, pe) {
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& pe = path.data.as_UfcsInherent();
                 evaluateTranslationParams(sp, wb, crate, pp.gdefImpl, pe.implParams);
+                break;
             }
-            TU_ARMA(UfcsUnknown, _pe) {
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& _pe = path.data.as_UfcsUnknown();
+                (void)_pe;
                 BUG(sp, "UfcsUnknown at translation: " << path);
+                break;
             }
         }
     }
@@ -2962,18 +3120,27 @@ namespace {
     void evaluateTranslationItemParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams& defs, HIRPath& path, TransParams& pp) {
         evaluateTranslationParams(sp, wb, crate, &defs, pp.ppMethod);
 
-        TU_MATCH_HDRA((path.data), {)
-        TU_ARMA(Generic, pe) {
+        switch (path.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                auto& pe = path.data.as_Generic();
                 evaluateTranslationParams(sp, wb, crate, &defs, pe.params);
+                break;
             }
-            TU_ARMA(UfcsKnown, pe) {
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& pe = path.data.as_UfcsKnown();
                 evaluateTranslationParams(sp, wb, crate, &defs, pe.params);
+                break;
             }
-            TU_ARMA(UfcsInherent, pe) {
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& pe = path.data.as_UfcsInherent();
                 evaluateTranslationParams(sp, wb, crate, &defs, pe.params);
+                break;
             }
-            TU_ARMA(UfcsUnknown, _pe) {
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& _pe = path.data.as_UfcsUnknown();
+                (void)_pe;
                 BUG(sp, "UfcsUnknown at translation: " << path);
+                break;
             }
         }
     }
@@ -2989,20 +3156,29 @@ namespace {
     void enumerateConstRelocations(EnumState& state, const HIRPath& path, const TransParams& params) {
         enumerateConstRelocations(state, params.ppImpl);
         enumerateConstRelocations(state, params.ppMethod);
-        TU_MATCH_HDRA((path.data), {)
-        TU_ARMA(Generic, pe) {
-            enumerateConstRelocations(state, pe.params);
-        }
-        TU_ARMA(UfcsKnown, pe) {
-            enumerateConstRelocations(state, pe.trait.params);
-            enumerateConstRelocations(state, pe.params);
-        }
-        TU_ARMA(UfcsInherent, pe) {
-            enumerateConstRelocations(state, pe.params);
-            enumerateConstRelocations(state, pe.implParams);
-        }
-        TU_ARMA(UfcsUnknown, pe) {
-        }
+        switch (path.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                auto& pe = path.data.as_Generic();
+                enumerateConstRelocations(state, pe.params);
+                break;
+            }
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& pe = path.data.as_UfcsKnown();
+                enumerateConstRelocations(state, pe.trait.params);
+                enumerateConstRelocations(state, pe.params);
+                break;
+            }
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& pe = path.data.as_UfcsInherent();
+                enumerateConstRelocations(state, pe.params);
+                enumerateConstRelocations(state, pe.implParams);
+                break;
+            }
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& pe = path.data.as_UfcsUnknown();
+                (void)pe;
+                break;
+            }
         }
     }
 
@@ -3024,10 +3200,12 @@ namespace {
             }
         }
         DEBUG(path << " = " << ent.tagStr() << " w/ impl" << params.ppImpl);
-        TU_MATCH_HDRA( (ent), {)
-        default:
+        switch (ent.tag()) {
+default:
             TODO(sp, path << " was " << ent.tagStr());
-            TU_ARMA(NotYetKnown, _e) {
+            case TypeckValuePtr::TAG_NotYetKnown: {
+                auto& _e = ent.as_NotYetKnown();
+                (void)_e;
                 const auto* pe = &path.data.as_UfcsKnown();
                 // Options:
                 // - VTable
@@ -3054,7 +3232,8 @@ namespace {
                 DEBUG("NotYetKnown -> NotFound");
                 return EntPtr();
             }
-            TU_ARMA(Function, f) {
+            case TypeckValuePtr::TAG_Function: {
+                auto& f = ent.as_Function();
                 // Check for trait provided bodies
                 // - They need a little hack to ensure that monomorph is run
                 if (const auto* pe = path.data.opt_UfcsKnown()) {
@@ -3068,16 +3247,22 @@ namespace {
                 }
                 return EntPtr{f};
             }
-            TU_ARMA(Static, f) {
+            case TypeckValuePtr::TAG_Static: {
+                auto& f = ent.as_Static();
                 return EntPtr{f};
             }
-            TU_ARMA(Constant, f) {
+            case TypeckValuePtr::TAG_Constant: {
+                auto& f = ent.as_Constant();
                 return EntPtr{f};
             }
-            TU_ARMA(StructConstructor, _) {
+            case TypeckValuePtr::TAG_StructConstructor: {
+                auto& _ = ent.as_StructConstructor();
+                (void)_;
                 return EntPtr::make_AutoGenerate({});
             }
-            TU_ARMA(EnumConstructor, _) {
+            case TypeckValuePtr::TAG_EnumConstructor: {
+                auto& _ = ent.as_EnumConstructor();
+                (void)_;
                 return EntPtr::make_AutoGenerate({});
             }
         }
@@ -3102,21 +3287,30 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
     }
 
     TransParams subPp(state.crate.types, sp);
-    TU_MATCH_HDRA( (pathMono.data), { )
-    TU_ARMA(Generic, pe) {
+    switch (pathMono.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            auto& pe = pathMono.data.as_Generic();
             subPp.ppMethod = pe.params.clone();
+            break;
         }
-        TU_ARMA(UfcsKnown, pe) {
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& pe = pathMono.data.as_UfcsKnown();
             subPp.ppMethod = pe.params.clone();
             subPp.selfType = pe.type;
+            break;
         }
-        TU_ARMA(UfcsInherent, pe) {
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& pe = pathMono.data.as_UfcsInherent();
             subPp.ppMethod = pe.params.clone();
             subPp.ppImpl = pe.implParams.clone();
             subPp.selfType = pe.type;
+            break;
         }
-        TU_ARMA(UfcsUnknown, pe) {
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& pe = pathMono.data.as_UfcsUnknown();
+            (void)pe;
             BUG(sp, "UfcsUnknown - " << pathMono);
+            break;
         }
     }
 
@@ -3161,11 +3355,16 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
     } activePathGuard{state.activePaths, activePath.first};
 
     enumerateConstRelocations(state, pathMono, subPp);
-    TU_MATCH_HDRA( (itemRef), {)
-    TU_ARMA(NotFound, e) {
+    switch (itemRef.tag()) {
+        case EntPtr::TAG_NotFound: {
+            auto& e = itemRef.as_NotFound();
+            (void)e;
             BUG(sp, "Item not found for " << pathMono);
+            break;
         }
-        TU_ARMA(AutoGenerate, e) {
+        case EntPtr::TAG_AutoGenerate: {
+            auto& e = itemRef.as_AutoGenerate();
+            (void)e;
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG("> Already enumerated after const evaluation");
                 return;
@@ -3243,8 +3442,10 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             } else {
                 BUG(sp, "AutoGenerate returned for unknown path type - " << pathMono);
             }
+            break;
         }
-        TU_ARMA(Function, e) {
+        case EntPtr::TAG_Function: {
+            auto& e = itemRef.as_Function();
             evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, e->params, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG("> Already enumerated after const evaluation");
@@ -3252,8 +3453,10 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             }
             // Add this path (monomorphised) to the queue
             state.enumFcn(mv$(pathMono), *e, mv$(subPp));
+            break;
         }
-        TU_ARMA(Static, e) {
+        case EntPtr::TAG_Static: {
+            auto& e = itemRef.as_Static();
             evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, e->params, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG("> Already enumerated after const evaluation");
@@ -3262,8 +3465,10 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             if (auto* ptr = state.rv.addStatic(state.crate.types, mv$(pathMono))) {
                 TransEnumerateFillFromStatic(state, *e, *ptr, mv$(subPp));
             }
+            break;
         }
-        TU_ARMA(Constant, e) {
+        case EntPtr::TAG_Constant: {
+            auto& e = itemRef.as_Constant();
             evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, e->params, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG("> Already enumerated after const evaluation");
@@ -3285,6 +3490,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                     TransEnumerateFillFromLiteral(state, e->valueRes, subPp);
                     break;
             }
+            break;
         }
     }
 }
@@ -3389,8 +3595,9 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
     }
     for (const auto& bb : code.blocks) {
         for (const auto& stmt : bb.statements) {
-            TU_MATCH_HDRA((stmt), {)
-            TU_ARMA(Assign, se) {
+            switch (stmt.tag()) {
+                case MIRStatement::TAG_Assign: {
+                    auto& se = stmt.as_Assign();
                     DEBUG("- " << se.dst << " = " << se.src);
                     TransEnumerateFillFromMIRLValue(state, se.dst);
                     switch (se.src.tag()) {
@@ -3470,26 +3677,43 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
                             break;
                         }
                     }
+                    break;
                 }
-                TU_ARMA(Asm2, e) {
+                case MIRStatement::TAG_Asm2: {
+                    auto& e = stmt.as_Asm2();
                     for (auto& p : e.params) {
-                    TU_MATCH_HDRA( (p), { )
-                    TU_ARMA(Const, v) TransEnumerateFillFromMIRConstant(state, v);
-                            TU_ARMA(Sym, v) state.insertPath(v);
-                            TU_ARMA(Reg, v) {
-                                if (v.input) {
-                                    TransEnumerateFillFromMIRParam(state, *v.input);
-                                }
-                                if (v.output) {
-                                    TransEnumerateFillFromMIRLValue(state, *v.output);
-                                }
+                    switch (p.tag()) {
+                        case MIRAsmParam::TAG_Const: {
+                            auto& v = p.as_Const();
+                            TransEnumerateFillFromMIRConstant(state, v);
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Sym: {
+                            auto& v = p.as_Sym();
+                            state.insertPath(v);
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Reg: {
+                            auto& v = p.as_Reg();
+                            if (v.input) {
+                                TransEnumerateFillFromMIRParam(state, *v.input);
                             }
-                            TU_ARMA(Label, v) {
+                            if (v.output) {
+                                TransEnumerateFillFromMIRLValue(state, *v.output);
                             }
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Label: {
+                            auto& v = p.as_Label();
+                            (void)v;
+                            break;
+                        }
                     }
                     }
+                    break;
                 }
-                TU_ARMA(Asm, se) {
+                case MIRStatement::TAG_Asm: {
+                    auto& se = stmt.as_Asm();
                     DEBUG("- llvm_asm! ...");
                     for (const auto& v : se.inputs) {
                         TransEnumerateFillFromMIRLValue(state, v.second);
@@ -3497,16 +3721,27 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
                     for (const auto& v : se.outputs) {
                         TransEnumerateFillFromMIRLValue(state, v.second);
                     }
+                    break;
                 }
-                TU_ARMA(SetDropFlag, se) {
+                case MIRStatement::TAG_SetDropFlag: {
+                    auto& se = stmt.as_SetDropFlag();
+                    (void)se;
+                    break;
                 }
-                TU_ARMA(SaveDropFlag, se) {
+                case MIRStatement::TAG_SaveDropFlag: {
+                    auto& se = stmt.as_SaveDropFlag();
                     TransEnumerateFillFromMIRLValue(state, se.slot);
+                    break;
                 }
-                TU_ARMA(LoadDropFlag, se) {
+                case MIRStatement::TAG_LoadDropFlag: {
+                    auto& se = stmt.as_LoadDropFlag();
                     TransEnumerateFillFromMIRLValue(state, se.slot);
+                    break;
                 }
-                TU_ARMA(ScopeEnd, se) {
+                case MIRStatement::TAG_ScopeEnd: {
+                    auto& se = stmt.as_ScopeEnd();
+                    (void)se;
+                    break;
                 }
             }
         }

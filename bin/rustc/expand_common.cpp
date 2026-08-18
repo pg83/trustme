@@ -406,15 +406,24 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
     // Resolve the path, following use statements (if required)
     // - Only mr_ptr matters, as proc_mac is about builtins
     auto rv = ResolveLookupMacro(miSpan, *wb.settings, crate, modstack.item->path(), path, /*out_path=*/nullptr);
-    TU_MATCH_HDRA( (rv), { )
-    TU_ARMA(None, _e)
-        return MacroRef();
-        TU_ARMA(InternalMacro, pm)
-        return pm;
-        TU_ARMA(ProcMacro, pm)
-        return pm;
-        TU_ARMA(MacroRules, p)
-        return p;
+    switch (rv.tag()) {
+        case ResolveItemRefMacro::TAG_None: {
+            auto& _e = rv.as_None();
+            (void)_e;
+            return MacroRef();
+        }
+        case ResolveItemRefMacro::TAG_InternalMacro: {
+            auto& pm = rv.as_InternalMacro();
+            return pm;
+        }
+        case ResolveItemRefMacro::TAG_ProcMacro: {
+            auto& pm = rv.as_ProcMacro();
+            return pm;
+        }
+        case ResolveItemRefMacro::TAG_MacroRules: {
+            auto& p = rv.as_MacroRules();
+            return p;
+        }
     }
     return MacroRef();
 }
@@ -441,22 +450,29 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
     }
 
     ::std::unique_ptr<TokenStream> rv;
-    TU_MATCH_HDRA( (mac), {)
-    TU_ARMA(None, e) {
+    switch (mac.tag()) {
+        case MacroRef::TAG_None: {
+            auto& e = mac.as_None();
+            (void)e;
             DEBUG("Unknown macro " << path);
             return ::std::unique_ptr<TokenStream>();
         }
-        TU_ARMA(ExternalProcMacro, procMac) {
+        case MacroRef::TAG_ExternalProcMacro: {
+            auto& procMac = mac.as_ExternalProcMacro();
             ::std::vector<RcString> macPath;
             macPath.push_back(procMac->path.crateName());
             macPath.insert(macPath.end(), procMac->path.components().begin(), procMac->path.components().end());
             rv = ProcMacroInvoke(miSpan, wb, crate, macPath, inputTt);
+            break;
         }
-        TU_ARMA(BuiltinProcMacro, procMac) {
+        case MacroRef::TAG_BuiltinProcMacro: {
+            auto& procMac = mac.as_BuiltinProcMacro();
             ASSERT_BUG(miSpan, procMac, "null BuiltinProcMacro? " << path);
             rv = inputIdent == "" ? procMac->expand(miSpan, wb, crate, inputTt, mod) : procMac->expandIdent(miSpan, wb, crate, inputIdent, inputTt, mod);
+            break;
         }
-        TU_ARMA(MacroRules, mrPtr) {
+        case MacroRef::TAG_MacroRules: {
+            auto& mrPtr = mac.as_MacroRules();
             if (inputIdent != "") {
                 ERROR(miSpan, E0000, "macro_rules! macros can't take an ident");
             }
@@ -464,6 +480,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
             DEBUG("Invoking macro_rules " << path << " " << mrPtr);
             rv = MacroInvokeRules(path.isTrivial() ? path.asTrivial() : RcString::newInterned(FMT(path).c_str()), *mrPtr, miSpan, wb, mv$(inputTt), crate, mod);
             inputTt = TokenTree();
+            break;
         }
     }
     ASSERT_BUG(miSpan, rv, "Macro invocation returned null tokentree");
@@ -494,12 +511,19 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
 }
 
 void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool isRefutable) {
-    TU_MATCH_HDRA( (pat.data()), {)
-    TU_ARMA(MaybeBind, e) {
+    switch (pat.data().tag()) {
+        case ASTPatternData::TAG_MaybeBind: {
+            auto& e = pat.data().as_MaybeBind();
+            (void)e;
+            break;
         }
-        TU_ARMA(Never, e) {
+        case ASTPatternData::TAG_Never: {
+            auto& e = pat.data().as_Never();
+            (void)e;
+            break;
         }
-        TU_ARMA(Macro, e) {
+        case ASTPatternData::TAG_Macro: {
+            auto& e = pat.data().as_Macro();
             const auto span = e.inv->span();
 
             auto tt = ExpandMacro(es, mod, *e.inv);
@@ -522,42 +546,65 @@ void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool 
                 pat = mv$(newpat);
                 ExpandPattern(es, mod, pat, isRefutable);
             }
+            break;
         }
-        TU_ARMA(Any, e) {
+        case ASTPatternData::TAG_Any: {
+            auto& e = pat.data().as_Any();
+            (void)e;
+            break;
         }
-        TU_ARMA(Box, e) {
+        case ASTPatternData::TAG_Box: {
+            auto& e = pat.data().as_Box();
             ExpandPattern(es, mod, *e.sub, isRefutable);
+            break;
         }
-        TU_ARMA(Guard, e) {
+        case ASTPatternData::TAG_Guard: {
+            auto& e = pat.data().as_Guard();
             ExpandPattern(es, mod, *e.sub, isRefutable);
+            break;
         }
-        TU_ARMA(Deref, e) {
+        case ASTPatternData::TAG_Deref: {
+            auto& e = pat.data().as_Deref();
             ExpandPattern(es, mod, *e.sub, isRefutable);
+            break;
         }
-        TU_ARMA(Ref, e) {
+        case ASTPatternData::TAG_Ref: {
+            auto& e = pat.data().as_Ref();
             ExpandPattern(es, mod, *e.sub, isRefutable);
+            break;
         }
-        TU_ARMA(Value, e) {
+        case ASTPatternData::TAG_Value: {
+            auto& e = pat.data().as_Value();
+            (void)e;
+            break;
         }
-        TU_ARMA(ValueLeftInc, e) {
+        case ASTPatternData::TAG_ValueLeftInc: {
+            auto& e = pat.data().as_ValueLeftInc();
+            (void)e;
+            break;
         }
-        TU_ARMA(Tuple, e) {
+        case ASTPatternData::TAG_Tuple: {
+            auto& e = pat.data().as_Tuple();
             for (auto& sp : e.start) {
                 ExpandPattern(es, mod, sp, isRefutable);
             }
             for (auto& sp : e.end) {
                 ExpandPattern(es, mod, sp, isRefutable);
             }
+            break;
         }
-        TU_ARMA(StructTuple, e) {
+        case ASTPatternData::TAG_StructTuple: {
+            auto& e = pat.data().as_StructTuple();
             for (auto& sp : e.tupPat.start) {
                 ExpandPattern(es, mod, sp, isRefutable);
             }
             for (auto& sp : e.tupPat.end) {
                 ExpandPattern(es, mod, sp, isRefutable);
             }
+            break;
         }
-        TU_ARMA(Struct, e) {
+        case ASTPatternData::TAG_Struct: {
+            auto& e = pat.data().as_Struct();
             for (auto& subpat : e.subPatterns) {
                 if (!ExpandAttrsCfgOnly(es, subpat.attrs)) {
                     subpat.name = RcString();
@@ -570,24 +617,31 @@ void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool 
                 return e.name == "";
             });
             e.subPatterns.erase(newEnd, e.subPatterns.end());
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case ASTPatternData::TAG_Slice: {
+            auto& e = pat.data().as_Slice();
             for (auto& sp : e.subPats) {
                 ExpandPattern(es, mod, sp, isRefutable);
             }
+            break;
         }
-        TU_ARMA(SplitSlice, e) {
+        case ASTPatternData::TAG_SplitSlice: {
+            auto& e = pat.data().as_SplitSlice();
             for (auto& sp : e.leading) {
                 ExpandPattern(es, mod, sp, isRefutable);
             }
             for (auto& sp : e.trailing) {
                 ExpandPattern(es, mod, sp, isRefutable);
             }
+            break;
         }
-        TU_ARMA(Or, e) {
+        case ASTPatternData::TAG_Or: {
+            auto& e = pat.data().as_Or();
             for (auto& sp : e) {
                 ExpandPattern(es, mod, sp, isRefutable);
             }
+            break;
         }
     }
 }
@@ -617,16 +671,29 @@ static void ExpandAsyncCallableTrait(const ExpandState& es, TypeTraitPath& tp) {
 }
 
 void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
-    TU_MATCH_HDRA( (ty->data), {)
-    TU_ARMA(None, e) {
+    switch (ty->data.tag()) {
+        case TypeData::TAG_None: {
+            auto& e = ty->data.as_None();
+            (void)e;
+            break;
         }
-        TU_ARMA(Any, e) {
+        case TypeData::TAG_Any: {
+            auto& e = ty->data.as_Any();
+            (void)e;
+            break;
         }
-        TU_ARMA(Unit, e) {
+        case TypeData::TAG_Unit: {
+            auto& e = ty->data.as_Unit();
+            (void)e;
+            break;
         }
-        TU_ARMA(Bang, e) {
+        case TypeData::TAG_Bang: {
+            auto& e = ty->data.as_Bang();
+            (void)e;
+            break;
         }
-        TU_ARMA(Macro, e) {
+        case TypeData::TAG_Macro: {
+            auto& e = ty->data.as_Macro();
             auto tt = ExpandMacro(es, mod, *e.inv);
             if (tt) {
                 ASTType* newTy;
@@ -642,22 +709,31 @@ void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
 
                 ExpandType(es, mod, ty);
             }
+            break;
         }
-        TU_ARMA(Primitive, e) {
+        case TypeData::TAG_Primitive: {
+            auto& e = ty->data.as_Primitive();
+            (void)e;
+            break;
         }
-        TU_ARMA(Function, e) {
+        case TypeData::TAG_Function: {
+            auto& e = ty->data.as_Function();
             TypeFunction& tf = e.info;
             ExpandType(es, mod, tf.rettype);
             for (auto& st : tf.argTypes) {
                 ExpandType(es, mod, st);
             }
+            break;
         }
-        TU_ARMA(Tuple, e) {
+        case TypeData::TAG_Tuple: {
+            auto& e = ty->data.as_Tuple();
             for (auto& st : e.innerTypes) {
                 ExpandType(es, mod, st);
             }
+            break;
         }
-        TU_ARMA(Borrow, e) {
+        case TypeData::TAG_Borrow: {
+            auto& e = ty->data.as_Borrow();
             ExpandType(es, mod, e.inner);
             if (e.isPin) {
                 // `&pin mut T` is `Pin<&mut T>`; the core crate is known now.
@@ -666,36 +742,53 @@ void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
                 path.nodes().back().args().entries.push_back(reference);
                 ty = mkType(*es.crate.pool, ASTTypeTags::Path(), ty->span(), mv$(path));
             }
+            break;
         }
-        TU_ARMA(Pointer, e) {
+        case TypeData::TAG_Pointer: {
+            auto& e = ty->data.as_Pointer();
             ExpandType(es, mod, e.inner);
+            break;
         }
-        TU_ARMA(Array, e) {
+        case TypeData::TAG_Array: {
+            auto& e = ty->data.as_Array();
             ExpandType(es, mod, e.inner);
             if (e.size) {
                 ExpandExpr(es, e.size);
             }
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case TypeData::TAG_Slice: {
+            auto& e = ty->data.as_Slice();
             ExpandType(es, mod, e.inner);
+            break;
         }
-        TU_ARMA(Pattern, e) {
+        case TypeData::TAG_Pattern: {
+            auto& e = ty->data.as_Pattern();
             ExpandType(es, mod, e.inner);
             ExpandPattern(es, mod, *e.pattern, true);
+            break;
         }
-        TU_ARMA(Generic, e) {
+        case TypeData::TAG_Generic: {
+            auto& e = ty->data.as_Generic();
+            (void)e;
+            break;
         }
-        TU_ARMA(Path, e) {
+        case TypeData::TAG_Path: {
+            auto& e = ty->data.as_Path();
             ExpandPath(es, mod, *e);
+            break;
         }
-        TU_ARMA(TraitObject, e) {
+        case TypeData::TAG_TraitObject: {
+            auto& e = ty->data.as_TraitObject();
             for (auto& p : e.traits) {
                 // TODO: p.hrbs? Not needed until types are in those
                 ExpandAsyncCallableTrait(es, p);
                 ExpandPath(es, mod, *p.path);
             }
+            break;
         }
-        TU_ARMA(ErasedType, e) {
+        case TypeData::TAG_ErasedType: {
+            auto& e = ty->data.as_ErasedType();
             for (auto& p : e->traits) {
                 // TODO: p.hrbs?
                 ExpandAsyncCallableTrait(es, p);
@@ -708,32 +801,47 @@ void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
             if (e->use) {
                 ExpandPathParams(es, mod, *e->use);
             }
+            break;
         }
     }
 }
 
 void ExpandPathParams(const ExpandState& es, ASTModule& mod, ASTPathParams& params) {
     for (auto& e : params.entries) {
-        TU_MATCH_HDRA( (e), {)
-        TU_ARMA(Null, _) {
+        switch (e.tag()) {
+            case ASTPathParamEnt::TAG_Null: {
+                auto& _ = e.as_Null();
+                (void)_;
+                break;
             }
-            TU_ARMA(Lifetime, _) {
+            case ASTPathParamEnt::TAG_Lifetime: {
+                auto& _ = e.as_Lifetime();
+                (void)_;
+                break;
             }
-            TU_ARMA(Type, typ) {
+            case ASTPathParamEnt::TAG_Type: {
+                auto& typ = e.as_Type();
                 ExpandType(es, mod, typ);
+                break;
             }
-            TU_ARMA(Value, node) {
+            case ASTPathParamEnt::TAG_Value: {
+                auto& node = e.as_Value();
                 ExpandExpr(es, node);
+                break;
             }
-            TU_ARMA(AssociatedTyEqual, aty) {
+            case ASTPathParamEnt::TAG_AssociatedTyEqual: {
+                auto& aty = e.as_AssociatedTyEqual();
                 ExpandPathParams(es, mod, aty.first.args());
                 ExpandType(es, mod, aty.second);
+                break;
             }
-            TU_ARMA(AssociatedTyBound, aty) {
+            case ASTPathParamEnt::TAG_AssociatedTyBound: {
+                auto& aty = e.as_AssociatedTyBound();
                 ExpandPathParams(es, mod, aty.first.args());
                 for (auto& p : aty.second) {
                     ExpandPath(es, mod, *p.path);
                 }
+                break;
             }
         }
     }
@@ -746,29 +854,45 @@ void ExpandPath(const ExpandState& es, ASTModule& mod, ASTPath& p) {
         }
     };
 
-    TU_MATCH_HDRA( (p.cls), {)
-    TU_ARMA(Invalid, pe) {
+    switch (p.cls.tag()) {
+        case ASTPathClass::TAG_Invalid: {
+            auto& pe = p.cls.as_Invalid();
+            (void)pe;
+            break;
         }
-        TU_ARMA(Local, pe) {
+        case ASTPathClass::TAG_Local: {
+            auto& pe = p.cls.as_Local();
+            (void)pe;
+            break;
         }
-        TU_ARMA(Relative, pe) {
+        case ASTPathClass::TAG_Relative: {
+            auto& pe = p.cls.as_Relative();
             expandNodes(pe.nodes);
+            break;
         }
-        TU_ARMA(Self, pe) {
+        case ASTPathClass::TAG_Self: {
+            auto& pe = p.cls.as_Self();
             expandNodes(pe.nodes);
+            break;
         }
-        TU_ARMA(Super, pe) {
+        case ASTPathClass::TAG_Super: {
+            auto& pe = p.cls.as_Super();
             expandNodes(pe.nodes);
+            break;
         }
-        TU_ARMA(Absolute, pe) {
+        case ASTPathClass::TAG_Absolute: {
+            auto& pe = p.cls.as_Absolute();
             expandNodes(pe.nodes);
+            break;
         }
-        TU_ARMA(UFCS, pe) {
+        case ASTPathClass::TAG_UFCS: {
+            auto& pe = p.cls.as_UFCS();
             ExpandType(es, mod, pe.type);
             if (pe.trait) {
                 ExpandPath(es, mod, *pe.trait);
             }
             expandNodes(pe.nodes);
+            break;
         }
     }
 }
@@ -1113,22 +1237,32 @@ struct CExpandExpr: public ASTNodeVisitor {
 
     void visit(ASTExprNodeAsm2& node) override {
         for (auto& v : node.params) {
-            TU_MATCH_HDRA((v), {)
-            TU_ARMA(Const, e) {
+            switch (v.tag()) {
+                case ASTAsmParam::TAG_Const: {
+                    auto& e = v.as_Const();
                     this->visitNodelete(node, e);
+                    break;
                 }
-                TU_ARMA(Sym, e) {
+                case ASTAsmParam::TAG_Sym: {
+                    auto& e = v.as_Sym();
                     ExpandPath(this->expandState, this->curMod(), e);
+                    break;
                 }
-                TU_ARMA(Label, e) {
+                case ASTAsmParam::TAG_Label: {
+                    auto& e = v.as_Label();
                     this->visitNodelete(node, e.code);
+                    break;
                 }
-                TU_ARMA(RegSingle, e) {
+                case ASTAsmParam::TAG_RegSingle: {
+                    auto& e = v.as_RegSingle();
                     this->visitNodelete(node, e.val);
+                    break;
                 }
-                TU_ARMA(Reg, e) {
+                case ASTAsmParam::TAG_Reg: {
+                    auto& e = v.as_Reg();
                     this->visitNodelete(node, e.valIn);
                     this->visitNodelete(node, e.valOut);
+                    break;
                 }
             }
         }
@@ -1557,10 +1691,11 @@ struct CExpandExpr: public ASTNodeVisitor {
     /// behind. The conditions become the arm's own guards, which is where they
     /// are evaluated: after every binding of the arm is in scope.
     static void liftGuardPatterns(ASTPattern& pat, ::std::vector<ASTIfLetCondition>& out) {
-        TU_MATCH_HDRA( (pat.data()), {)
-        default:
+        switch (pat.data().tag()) {
+default:
             break;
-        TU_ARMA(Guard, e) {
+            case ASTPatternData::TAG_Guard: {
+                auto& e = pat.data().as_Guard();
                 auto sub = mv$(*e.sub);
                 auto cond = mv$(e.cond);
                 for (auto& b : pat.bindings()) {
@@ -1571,53 +1706,71 @@ struct CExpandExpr: public ASTNodeVisitor {
                 out.push_back(ASTIfLetCondition{nullptr, mv$(cond)});
                 return;
             }
-            TU_ARMA(Box, e) {
+            case ASTPatternData::TAG_Box: {
+                auto& e = pat.data().as_Box();
                 liftGuardPatterns(*e.sub, out);
+                break;
             }
-            TU_ARMA(Deref, e) {
+            case ASTPatternData::TAG_Deref: {
+                auto& e = pat.data().as_Deref();
                 liftGuardPatterns(*e.sub, out);
+                break;
             }
-            TU_ARMA(Ref, e) {
+            case ASTPatternData::TAG_Ref: {
+                auto& e = pat.data().as_Ref();
                 liftGuardPatterns(*e.sub, out);
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case ASTPatternData::TAG_Tuple: {
+                auto& e = pat.data().as_Tuple();
                 for (auto& sub : e.start) {
                     liftGuardPatterns(sub, out);
                 }
                 for (auto& sub : e.end) {
                     liftGuardPatterns(sub, out);
                 }
+                break;
             }
-            TU_ARMA(StructTuple, e) {
+            case ASTPatternData::TAG_StructTuple: {
+                auto& e = pat.data().as_StructTuple();
                 for (auto& sub : e.tupPat.start) {
                     liftGuardPatterns(sub, out);
                 }
                 for (auto& sub : e.tupPat.end) {
                     liftGuardPatterns(sub, out);
                 }
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTPatternData::TAG_Struct: {
+                auto& e = pat.data().as_Struct();
                 for (auto& sub : e.subPatterns) {
                     liftGuardPatterns(sub.pat, out);
                 }
+                break;
             }
-            TU_ARMA(Slice, e) {
+            case ASTPatternData::TAG_Slice: {
+                auto& e = pat.data().as_Slice();
                 for (auto& sub : e.subPats) {
                     liftGuardPatterns(sub, out);
                 }
+                break;
             }
-            TU_ARMA(SplitSlice, e) {
+            case ASTPatternData::TAG_SplitSlice: {
+                auto& e = pat.data().as_SplitSlice();
                 for (auto& sub : e.leading) {
                     liftGuardPatterns(sub, out);
                 }
                 for (auto& sub : e.trailing) {
                     liftGuardPatterns(sub, out);
                 }
+                break;
             }
-            TU_ARMA(Or, e) {
+            case ASTPatternData::TAG_Or: {
+                auto& e = pat.data().as_Or();
                 for (auto& sub : e) {
                     liftGuardPatterns(sub, out);
                 }
+                break;
             }
         }
     }
@@ -1943,17 +2096,27 @@ void ExpandExpr(const ExpandState& es, ASTExpr& node) {
 
 void ExpandGenericParams(const ExpandState& es, ASTModule& mod, ASTGenericParams& params) {
     for (auto& paramDef : params.params) {
-        TU_MATCH_HDRA( (paramDef), {)
-        TU_ARMA(None, e) {
+        switch (paramDef.tag()) {
+            case GenericParam::TAG_None: {
+                auto& e = paramDef.as_None();
+                (void)e;
                 // Ignore
+                break;
             }
-            TU_ARMA(Lifetime, e) {
+            case GenericParam::TAG_Lifetime: {
+                auto& e = paramDef.as_Lifetime();
+                (void)e;
+                break;
             }
-            TU_ARMA(Type, tyDef) {
+            case GenericParam::TAG_Type: {
+                auto& tyDef = paramDef.as_Type();
                 ExpandType(es, mod, tyDef.getDefault());
+                break;
             }
-            TU_ARMA(Value, valDef) {
+            case GenericParam::TAG_Value: {
+                auto& valDef = paramDef.as_Value();
                 ExpandType(es, mod, valDef.type());
+                break;
             }
         }
     }
@@ -2060,12 +2223,16 @@ void Expand_Impl(const ExpandState& es, ASTPath modpath, ASTModule& mod, ASTImpl
         ExpandAttrsCfgAttr(*es.wb.settings, attrs);
         ExpandAttrs(es, attrs, AttrStage::Pre, mod, impl, i.vis, i.name, *i.data);
 
-        TU_MATCH_HDRA( (*i.data), {)
-        default:
+        switch ((*i.data).tag()) {
+default:
             BUG(Span(), "Unknown item type in impl block - " << i.data->tagStr());
-            TU_ARMA(None, e) {
+            case ASTItem::TAG_None: {
+                auto& e = (*i.data).as_None();
+                (void)e;
+                break;
             }
-            TU_ARMA(MacroInv, e) {
+            case ASTItem::TAG_MacroInv: {
+                auto& e = (*i.data).as_MacroInv();
                 if (e.path().isValid()) {
                     TRACE_FUNCTION_F("Macro invoke " << e.path());
                     // Move out of the module to avoid invalidation if a new macro invocation is added
@@ -2090,20 +2257,27 @@ void Expand_Impl(const ExpandState& es, ASTPath modpath, ASTModule& mod, ASTImpl
                         i.data->as_MacroInv() = mv$(miOwned);
                     }
                 }
+                break;
             }
-            TU_ARMA(Function, e) {
+            case ASTItem::TAG_Function: {
+                auto& e = (*i.data).as_Function();
                 TRACE_FUNCTION_F("fn " << i.name);
                 ExpandFunction(es, mod, e);
+                break;
             }
-            TU_ARMA(Static, e) {
+            case ASTItem::TAG_Static: {
+                auto& e = (*i.data).as_Static();
                 TRACE_FUNCTION_F("static " << i.name);
                 ExpandGenericParams(es, mod, e.params());
                 ExpandExpr(es, e.value());
                 ExpandType(es, mod, e.type());
+                break;
             }
-            TU_ARMA(Type, e) {
+            case ASTItem::TAG_Type: {
+                auto& e = (*i.data).as_Type();
                 TRACE_FUNCTION_F("type " << i.name);
                 ExpandType(es, mod, e.type());
+                break;
             }
         }
         impl.items()[idx] = std::move(i);
@@ -2138,26 +2312,34 @@ void Expand_ExternBlock(const ExpandState& es, ASTModule& mod, ASTExternBlock& b
         auto vis = i.vis;
 
         auto dat = std::move(i.data);
-        TU_MATCH_HDRA( (dat), { )
-        default:
+        switch (dat.tag()) {
+default:
             BUG(Span(), "Unexpected item type - " << dat.tagStr());
-            TU_ARMA(None, e) {
+            case ASTItem::TAG_None: {
+                auto& e = dat.as_None();
+                (void)e;
                 // Skip: nothing
+                break;
             }
-
-            TU_ARMA(Type, e) {
+            case ASTItem::TAG_Type: {
+                auto& e = dat.as_Type();
                 ExpandType(es, mod, e.type());
+                break;
             }
-            TU_ARMA(Function, e) {
+            case ASTItem::TAG_Function: {
+                auto& e = dat.as_Function();
                 ExpandFunction(es, mod, e);
+                break;
             }
-            TU_ARMA(Static, e) {
+            case ASTItem::TAG_Static: {
+                auto& e = dat.as_Static();
                 ExpandGenericParams(es, mod, e.params());
                 ExpandExpr(es, e.value());
                 ExpandType(es, mod, e.type());
+                break;
             }
-
-            TU_ARMA(MacroInv, e) {
+            case ASTItem::TAG_MacroInv: {
+                auto& e = dat.as_MacroInv();
                 // Move out of the module to avoid invalidation if a new macro invocation is added
                 auto miOwned = mv$(e);
 
@@ -2185,6 +2367,7 @@ void Expand_ExternBlock(const ExpandState& es, ASTModule& mod, ASTExternBlock& b
                     }
                 }
                 dat.as_MacroInv() = mv$(miOwned);
+                break;
             }
         }
 
@@ -2280,15 +2463,22 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
             TU_MATCH_HDRA( (i.data), { )
             // Expand cfg within types, so derive macros don't need to care
             TU_ARMA(Struct, str) {
-                TU_MATCH_HDRA((str.data), {)
-                TU_ARMA(Unit, e) {
-                        }
-                        TU_ARMA(Struct, e) {
-                            H::filterCfg(*es.wb.settings, e.ents);
-                        }
-                        TU_ARMA(Tuple, e) {
-                            H::filterCfg(*es.wb.settings, e.ents);
-                        }
+                switch (str.data.tag()) {
+                    case ASTStructData::TAG_Unit: {
+                        auto& e = str.data.as_Unit();
+                        (void)e;
+                        break;
+                    }
+                    case ASTStructData::TAG_Struct: {
+                        auto& e = str.data.as_Struct();
+                        H::filterCfg(*es.wb.settings, e.ents);
+                        break;
+                    }
+                    case ASTStructData::TAG_Tuple: {
+                        auto& e = str.data.as_Tuple();
+                        H::filterCfg(*es.wb.settings, e.ents);
+                        break;
+                    }
                 }
                 }
                 TU_ARMA(Union, unm) {
@@ -2341,23 +2531,33 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
 
         auto dat = mv$(i.data);
 
-        TU_MATCH_HDRA( (dat), {)
-        TU_ARMA(None, e) {
+        switch (dat.tag()) {
+            case ASTItem::TAG_None: {
+                auto& e = dat.as_None();
+                (void)e;
                 // Skip: nothing
+                break;
             }
-            TU_ARMA(GlobalAsm, e) {
+            case ASTItem::TAG_GlobalAsm: {
+                auto& e = dat.as_GlobalAsm();
                 for (auto& operand : e.operands) {
-                    TU_MATCH_HDRA((operand), {)
-                    TU_ARMA(Const, expr) {
+                    switch (operand.tag()) {
+                        case ASTGlobalAsmOperand::TAG_Const: {
+                            auto& expr = operand.as_Const();
                             ExpandExpr(es, expr);
+                            break;
                         }
-                        TU_ARMA(Sym, sym) {
+                        case ASTGlobalAsmOperand::TAG_Sym: {
+                            auto& sym = operand.as_Sym();
                             ExpandPath(es, mod, sym);
+                            break;
                         }
                     }
                 }
+                break;
             }
-            TU_ARMA(MacroInv, e) {
+            case ASTItem::TAG_MacroInv: {
+                auto& e = dat.as_MacroInv();
                 // Move out of the module to avoid invalidation if a new macro invocation is added
 
                 if (macroRecursionStack.size() > es.wb.settings->recursionLimit) {
@@ -2385,13 +2585,17 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                     }
                 }
                 dat.as_MacroInv() = mv$(miOwned);
+                break;
             }
-            TU_ARMA(Macro, e) {
+            case ASTItem::TAG_Macro: {
+                auto& e = dat.as_Macro();
                 ASSERT_BUG(i.span, e, "Null macro - " << i.name);
                 mod.addMacro(i.vis.isGlobal(), i.name, mv$(e));
                 dat = ASTItem::make_None({});
+                break;
             }
-            TU_ARMA(Use, e) {
+            case ASTItem::TAG_Use: {
+                auto& e = dat.as_Use();
                 // Determine if the `use` refers to a macro, and import into the current scope
                 for (const auto& ue : e.entries) {
                     // Get module ref, if it's to a HIR module then grab the macro
@@ -2401,19 +2605,29 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                         ASTAbsolutePath refPath;
                         auto m = ResolveLookupMacro(ue.sp, *es.wb.settings, es.crate, mod.path(), ue.path, /*out_path=*/&refPath);
                         MacroRef ref;
-                    TU_MATCH_HDRA( (m), { )
-                    TU_ARMA(None, e) {
-                                // Not found? Ignore.
-                            }
-                            TU_ARMA(InternalMacro, e) {
-                                // Ignore builtins, they're always available.
-                            }
-                            TU_ARMA(ProcMacro, pm) {
-                                ref = pm;
-                            }
-                            TU_ARMA(MacroRules, mr) {
-                                ref = mr;
-                            }
+                    switch (m.tag()) {
+                        case ResolveItemRefMacro::TAG_None: {
+                            auto& e = m.as_None();
+                            (void)e;
+                            // Not found? Ignore.
+                            break;
+                        }
+                        case ResolveItemRefMacro::TAG_InternalMacro: {
+                            auto& e = m.as_InternalMacro();
+                            (void)e;
+                            // Ignore builtins, they're always available.
+                            break;
+                        }
+                        case ResolveItemRefMacro::TAG_ProcMacro: {
+                            auto& pm = m.as_ProcMacro();
+                            ref = pm;
+                            break;
+                        }
+                        case ResolveItemRefMacro::TAG_MacroRules: {
+                            auto& mr = m.as_MacroRules();
+                            ref = mr;
+                            break;
+                        }
                     }
                     if( ! ref.is_None() ) {
                             DEBUG(mod.path() << " + Macro Import: " << refPath);
@@ -2421,25 +2635,35 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                     }
                     }
                 }
+                break;
             }
-            TU_ARMA(ExternBlock, e) {
+            case ASTItem::TAG_ExternBlock: {
+                auto& e = dat.as_ExternBlock();
                 Expand_ExternBlock(es, mod, e);
                 // HACK: Just convert inner items into outer items
                 auto items = mv$(e.items());
                 for (auto& i2 : items) {
                     mod.items.push_back(box$(i2));
                 }
+                break;
             }
-            TU_ARMA(Impl, e) {
+            case ASTItem::TAG_Impl: {
+                auto& e = dat.as_Impl();
                 Expand_Impl(es, modpath, mod, e);
+                break;
             }
-            TU_ARMA(NegImpl, e) {
+            case ASTItem::TAG_NegImpl: {
+                auto& e = dat.as_NegImpl();
                 Expand_ImplDef(es, modpath, mod, e);
+                break;
             }
-            TU_ARMA(Module, e) {
+            case ASTItem::TAG_Module: {
+                auto& e = dat.as_Module();
+                (void)e;
                 throw "";
             }
-            TU_ARMA(Crate, e) {
+            case ASTItem::TAG_Crate: {
+                auto& e = dat.as_Crate();
                 if (e.name != "") {
                     // Can't recurse into an `extern crate`
                     if (es.crate.externCrates.count(e.name) == 0) {
@@ -2454,84 +2678,16 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                         es.wb.settings->implicitCrates.insert(std::make_pair(i.name, ""));
                     }
                 }
+                break;
             }
-
-            TU_ARMA(Struct, e) {
+            case ASTItem::TAG_Struct: {
+                auto& e = dat.as_Struct();
                 ExpandGenericParams(es, mod, e.params());
-            TU_MATCH_HDRA( (e.data), {)
-            TU_ARMA(Unit, sd) {
-                    }
-                    TU_ARMA(Struct, sd) {
-                        for (auto it = sd.ents.begin(); it != sd.ents.end();) {
-                            auto& si = *it;
-                            ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
-                            ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
-                                d.handle(sp, a, es.wb, es.crate, si);
-                            });
-                            ExpandType(es, mod, si.type);
-                            ExpandExpr(es, si.defaultValue);
-                            ExpandAttrs(es, si.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
-                                d.handle(sp, a, es.wb, es.crate, si);
-                            });
-
-                            if (si.name == "") {
-                                it = sd.ents.erase(it);
-                            } else {
-                                ++it;
-                            }
+                TU_MATCH_HDRA( (e.data), {)
+                TU_ARMA(Unit, sd) {
                         }
-                    }
-                    TU_ARMA(Tuple, sd) {
-                        for (auto it = sd.ents.begin(); it != sd.ents.end();) {
-                            auto& si = *it;
-                            ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
-                            ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
-                                d.handle(sp, a, es.wb, es.crate, si);
-                            });
-                            ExpandType(es, mod, si.type);
-                            ExpandAttrs(es, si.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
-                                d.handle(sp, a, es.wb, es.crate, si);
-                            });
-
-                            if (!si.type->isValid()) {
-                                it = sd.ents.erase(it);
-                            } else {
-                                ++it;
-                            }
-                        }
-                    }
-            }
-            }
-            TU_ARMA(Enum, e) {
-                ExpandGenericParams(es, mod, e.params());
-                for (auto& var : e.variants()) {
-                    ExpandAttrsCfgAttr(*es.wb.settings, var.attrs);
-                    ExpandAttrs(es, var.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
-                        d.handle(sp, a, es.wb, es.crate, var);
-                    });
-                TU_MATCH_HDRA( (var.data), {)
-                TU_ARMA(Unit, e) {
-                        }
-                        TU_ARMA(Tuple, e) {
-                            for (auto it = e.items.begin(); it != e.items.end();) {
-                                auto& si = *it;
-                                ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
-                                ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
-                                    d.handle(sp, a, es.wb, es.crate, si);
-                                });
-                                ExpandType(es, mod, si.type);
-                                ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
-                                    d.handle(sp, a, es.wb, es.crate, si);
-                                });
-                                if (!si.type->isValid()) {
-                                    it = e.items.erase(it);
-                                } else {
-                                    ++it;
-                                }
-                            }
-                        }
-                        TU_ARMA(Struct, e) {
-                            for (auto it = e.fields.begin(); it != e.fields.end();) {
+                        TU_ARMA(Struct, sd) {
+                            for (auto it = sd.ents.begin(); it != sd.ents.end();) {
                                 auto& si = *it;
                                 ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
                                 ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
@@ -2544,12 +2700,90 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                                 });
 
                                 if (si.name == "") {
-                                    it = e.fields.erase(it);
+                                    it = sd.ents.erase(it);
                                 } else {
                                     ++it;
                                 }
                             }
                         }
+                        TU_ARMA(Tuple, sd) {
+                            for (auto it = sd.ents.begin(); it != sd.ents.end();) {
+                                auto& si = *it;
+                                ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
+                                ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                                    d.handle(sp, a, es.wb, es.crate, si);
+                                });
+                                ExpandType(es, mod, si.type);
+                                ExpandAttrs(es, si.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
+                                    d.handle(sp, a, es.wb, es.crate, si);
+                                });
+
+                                if (!si.type->isValid()) {
+                                    it = sd.ents.erase(it);
+                                } else {
+                                    ++it;
+                                }
+                            }
+                        }
+                }
+                break;
+            }
+            case ASTItem::TAG_Enum: {
+                auto& e = dat.as_Enum();
+                ExpandGenericParams(es, mod, e.params());
+                for (auto& var : e.variants()) {
+                    ExpandAttrsCfgAttr(*es.wb.settings, var.attrs);
+                    ExpandAttrs(es, var.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                        d.handle(sp, a, es.wb, es.crate, var);
+                    });
+                switch (var.data.tag()) {
+                    case ASTEnumVariantData::TAG_Unit: {
+                        auto& e = var.data.as_Unit();
+                        (void)e;
+                        break;
+                    }
+                    case ASTEnumVariantData::TAG_Tuple: {
+                        auto& e = var.data.as_Tuple();
+                        for (auto it = e.items.begin(); it != e.items.end();) {
+                            auto& si = *it;
+                            ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
+                            ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                                d.handle(sp, a, es.wb, es.crate, si);
+                            });
+                            ExpandType(es, mod, si.type);
+                            ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                                d.handle(sp, a, es.wb, es.crate, si);
+                            });
+                            if (!si.type->isValid()) {
+                                it = e.items.erase(it);
+                            } else {
+                                ++it;
+                            }
+                        }
+                        break;
+                    }
+                    case ASTEnumVariantData::TAG_Struct: {
+                        auto& e = var.data.as_Struct();
+                        for (auto it = e.fields.begin(); it != e.fields.end();) {
+                            auto& si = *it;
+                            ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
+                            ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                                d.handle(sp, a, es.wb, es.crate, si);
+                            });
+                            ExpandType(es, mod, si.type);
+                            ExpandExpr(es, si.defaultValue);
+                            ExpandAttrs(es, si.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
+                                d.handle(sp, a, es.wb, es.crate, si);
+                            });
+
+                            if (si.name == "") {
+                                it = e.fields.erase(it);
+                            } else {
+                                ++it;
+                            }
+                        }
+                        break;
+                    }
                 }
                 ExpandExpr(es,  var.discriminantValue);
                 ExpandAttrs(es, var.attrs, AttrStage::Post,  [&](const Span& sp, const auto& d, const auto& a){
@@ -2563,8 +2797,10 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                         ++it;
                     }
                 }
+                break;
             }
-            TU_ARMA(Union, e) {
+            case ASTItem::TAG_Union: {
+                auto& e = dat.as_Union();
                 ExpandGenericParams(es, mod, e.params_);
                 for (auto it = e.variants.begin(); it != e.variants.end();) {
                     auto& si = *it;
@@ -2584,8 +2820,10 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                         ++it;
                     }
                 }
+                break;
             }
-            TU_ARMA(Trait, e) {
+            case ASTItem::TAG_Trait: {
+                auto& e = dat.as_Trait();
                 ExpandGenericParams(es, mod, e.params());
                 for (auto& p : e.supertraits()) {
                     ExpandPath(es, mod, *p.ent.path);
@@ -2599,48 +2837,59 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                     ExpandAttrsCfgAttr(*es.wb.settings, attrs);
                     ExpandAttrs(es, attrs, AttrStage::Pre, tiPath, mod, e, ti.data);
 
-                TU_MATCH_HDRA( (ti.data), {)
-                default:
+                switch (ti.data.tag()) {
+default:
                     BUG(Span(), "Unknown item type in trait block - " << ti.data.tagStr());
-                        TU_ARMA(None, e) {
-                        }
-                        TU_ARMA(MacroInv, e) {
-                            if (e.path().isValid()) {
-                                TRACE_FUNCTION_F("Macro invoke " << e.path());
-                                // Move out of the module to avoid invalidation if a new macro invocation is added
-                                auto miOwned = mv$(e);
+                    case ASTItem::TAG_None: {
+                        auto& e = ti.data.as_None();
+                        (void)e;
+                        break;
+                    }
+                    case ASTItem::TAG_MacroInv: {
+                        auto& e = ti.data.as_MacroInv();
+                        if (e.path().isValid()) {
+                            TRACE_FUNCTION_F("Macro invoke " << e.path());
+                            // Move out of the module to avoid invalidation if a new macro invocation is added
+                            auto miOwned = mv$(e);
 
-                                // As in an impl block: a macro that is not in
-                                // scope yet is retried on the next pass.
-                                auto ttl = ExpandMacro(es, mod, miOwned);
+                            // As in an impl block: a macro that is not in
+                            // scope yet is retried on the next pass.
+                            auto ttl = ExpandMacro(es, mod, miOwned);
 
-                                if (ttl.get()) {
-                                    // Re-parse tt
-                                    size_t insertPos = idx + 1;
-                                    while (ttl->lookahead(0) != TOK_EOF) {
-                                        auto i = ParseTraitItem(*ttl);
-                                        traitItems.insert(traitItems.begin() + insertPos, mv$(i));
-                                        insertPos++;
-                                    }
-                                    // - Any new macro invocations ends up at the end of the list and handled
-                                    traitItems[idx].data = ASTItem::make_None({});
-                                } else {
-                                    // Move back in (using the index, as the old pointer may be invalid)
-                                    traitItems[idx].data.as_MacroInv() = mv$(miOwned);
+                            if (ttl.get()) {
+                                // Re-parse tt
+                                size_t insertPos = idx + 1;
+                                while (ttl->lookahead(0) != TOK_EOF) {
+                                    auto i = ParseTraitItem(*ttl);
+                                    traitItems.insert(traitItems.begin() + insertPos, mv$(i));
+                                    insertPos++;
                                 }
+                                // - Any new macro invocations ends up at the end of the list and handled
+                                traitItems[idx].data = ASTItem::make_None({});
+                            } else {
+                                // Move back in (using the index, as the old pointer may be invalid)
+                                traitItems[idx].data.as_MacroInv() = mv$(miOwned);
                             }
                         }
-                        TU_ARMA(Function, e) {
-                            ExpandFunction(es, mod, e);
-                        }
-                        TU_ARMA(Static, e) {
-                            ExpandGenericParams(es, mod, e.params());
-                            ExpandExpr(es, e.value());
-                            ExpandType(es, mod, e.type());
-                        }
-                        TU_ARMA(Type, e) {
-                            ExpandType(es, mod, e.type());
-                        }
+                        break;
+                    }
+                    case ASTItem::TAG_Function: {
+                        auto& e = ti.data.as_Function();
+                        ExpandFunction(es, mod, e);
+                        break;
+                    }
+                    case ASTItem::TAG_Static: {
+                        auto& e = ti.data.as_Static();
+                        ExpandGenericParams(es, mod, e.params());
+                        ExpandExpr(es, e.value());
+                        ExpandType(es, mod, e.type());
+                        break;
+                    }
+                    case ASTItem::TAG_Type: {
+                        auto& e = ti.data.as_Type();
+                        ExpandType(es, mod, e.type());
+                        break;
+                    }
                 }
 
                 {
@@ -2652,23 +2901,31 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                         }
                 }
                 }
+                break;
             }
-            TU_ARMA(Type, e) {
+            case ASTItem::TAG_Type: {
+                auto& e = dat.as_Type();
                 ExpandType(es, mod, e.type());
+                break;
             }
-
-            TU_ARMA(Function, e) {
+            case ASTItem::TAG_Function: {
+                auto& e = dat.as_Function();
                 ExpandFunction(es, mod, e);
+                break;
             }
-            TU_ARMA(Static, e) {
+            case ASTItem::TAG_Static: {
+                auto& e = dat.as_Static();
                 ExpandGenericParams(es, mod, e.params());
                 ExpandExpr(es, e.value());
                 ExpandType(es, mod, e.type());
+                break;
             }
-            TU_ARMA(TraitAlias, e) {
+            case ASTItem::TAG_TraitAlias: {
+                auto& e = dat.as_TraitAlias();
                 for (auto& p : e.traits) {
                     ExpandPath(es, mod, *p.ent.path);
                 }
+                break;
             }
         }
         ExpandAttrs(es, attrs, AttrStage::Post,  path, mod, idx, vis, dat);

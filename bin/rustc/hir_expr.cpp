@@ -225,26 +225,36 @@ DEF_VISIT_H(HIRExprNodeAsm, node) {
 DEF_VISIT_H(HIRExprNodeAsm2, node) {
     TRACE_FUNCTION_F("_Asm2");
     for (auto& v : node.params) {
-        TU_MATCH_HDRA( (v), { )
-        TU_ARMA(Const, e) {
+        switch (v.tag()) {
+            case HIRAsmParam::TAG_Const: {
+                auto& e = v.as_Const();
                 visitNodePtr(e);
+                break;
             }
-            TU_ARMA(Sym, e) {
+            case HIRAsmParam::TAG_Sym: {
+                auto& e = v.as_Sym();
                 visitPath(HIRVisitor::PathContext::VALUE, e);
+                break;
             }
-            TU_ARMA(Label, e) {
+            case HIRAsmParam::TAG_Label: {
+                auto& e = v.as_Label();
                 visitNodePtr(e.code);
+                break;
             }
-            TU_ARMA(RegSingle, e) {
+            case HIRAsmParam::TAG_RegSingle: {
+                auto& e = v.as_RegSingle();
                 visitNodePtr(e.val);
+                break;
             }
-            TU_ARMA(Reg, e) {
+            case HIRAsmParam::TAG_Reg: {
+                auto& e = v.as_Reg();
                 if (e.valIn) {
                     visitNodePtr(e.valIn);
                 }
                 if (e.valOut) {
                     visitNodePtr(e.valOut);
                 }
+                break;
             }
         }
     }
@@ -511,37 +521,53 @@ DEF_VISIT_H(HIRExprNodeAsyncBlock, node) {
 
 // TODO: Merge this with the stuff in ::HIR::Visitor
 void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
-    TU_MATCH_HDRA( (pat.data), {)
-    TU_ARMA(Any, e) {
+    switch (pat.data.tag()) {
+        case HIRPatternData::TAG_Any: {
+            auto& e = pat.data.as_Any();
+            (void)e;
+            break;
         }
-        TU_ARMA(Box, e) {
+        case HIRPatternData::TAG_Box: {
+            auto& e = pat.data.as_Box();
             this->visitPattern(sp, *e.sub);
+            break;
         }
-        TU_ARMA(Deref, e) {
+        case HIRPatternData::TAG_Deref: {
+            auto& e = pat.data.as_Deref();
             if (e.targetType) this->visitType(e.targetType);
             this->visitPattern(sp, *e.sub);
+            break;
         }
-        TU_ARMA(Ref, e) {
+        case HIRPatternData::TAG_Ref: {
+            auto& e = pat.data.as_Ref();
             this->visitPattern(sp, *e.sub);
+            break;
         }
-        TU_ARMA(Tuple, e) {
+        case HIRPatternData::TAG_Tuple: {
+            auto& e = pat.data.as_Tuple();
             for (auto& subpat : e.subPatterns) {
                 this->visitPattern(sp, subpat);
             }
+            break;
         }
-        TU_ARMA(SplitTuple, e) {
+        case HIRPatternData::TAG_SplitTuple: {
+            auto& e = pat.data.as_SplitTuple();
             for (auto& subpat : e.leading) {
                 this->visitPattern(sp, subpat);
             }
             for (auto& subpat : e.trailing) {
                 this->visitPattern(sp, subpat);
             }
+            break;
         }
-        TU_ARMA(PathValue, e) {
+        case HIRPatternData::TAG_PathValue: {
+            auto& e = pat.data.as_PathValue();
             // Nothing.
             this->visitPath(HIRVisitor::PathContext::VALUE, e.path);
+            break;
         }
-        TU_ARMA(PathTuple, e) {
+        case HIRPatternData::TAG_PathTuple: {
+            auto& e = pat.data.as_PathTuple();
             this->visitPath(HIRVisitor::PathContext::VALUE, e.path);
             for (auto& subpat : e.leading) {
                 this->visitPattern(sp, subpat);
@@ -549,34 +575,49 @@ void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
             for (auto& subpat : e.trailing) {
                 this->visitPattern(sp, subpat);
             }
+            break;
         }
-        TU_ARMA(PathNamed, e) {
+        case HIRPatternData::TAG_PathNamed: {
+            auto& e = pat.data.as_PathNamed();
             this->visitPath(HIRVisitor::PathContext::TYPE, e.path);
             for (auto& fldPat : e.subPatterns) {
                 this->visitPattern(sp, fldPat.second);
             }
+            break;
         }
-        TU_ARMA(Value, e) {
+        case HIRPatternData::TAG_Value: {
+            auto& e = pat.data.as_Value();
+            (void)e;
+            break;
         }
-        TU_ARMA(Range, e) {
+        case HIRPatternData::TAG_Range: {
+            auto& e = pat.data.as_Range();
+            (void)e;
+            break;
         }
-        TU_ARMA(Slice, e) {
+        case HIRPatternData::TAG_Slice: {
+            auto& e = pat.data.as_Slice();
             for (auto& subpat : e.subPatterns) {
                 this->visitPattern(sp, subpat);
             }
+            break;
         }
-        TU_ARMA(SplitSlice, e) {
+        case HIRPatternData::TAG_SplitSlice: {
+            auto& e = pat.data.as_SplitSlice();
             for (auto& subpat : e.leading) {
                 this->visitPattern(sp, subpat);
             }
             for (auto& subpat : e.trailing) {
                 this->visitPattern(sp, subpat);
             }
+            break;
         }
-        TU_ARMA(Or, e) {
+        case HIRPatternData::TAG_Or: {
+            auto& e = pat.data.as_Or();
             for (auto& subpat : e) {
                 this->visitPattern(sp, subpat);
             }
+            break;
         }
     }
 }
@@ -622,18 +663,23 @@ void HIRExprVisitorDef::visitType(HIRTypeRef& ty) {
             for(auto& trait : e.traits) {
                     this->visitTraitPath(trait);
                     }
-                    TU_MATCH_HDRA( (e.inner), {)
-                    TU_ARMA(Known, ee) {
-                        this->visitType(ee);
-            }
-
-            TU_ARMA(Fcn, ee) {
-                this->visitPath(HIRVisitor::PathContext::TYPE, ee.origin);
-            }
-
-            TU_ARMA(Alias, ee) {
-            }
-            }
+                    switch (e.inner.tag()) {
+                        case TypeDataErasedTypeInner::TAG_Known: {
+                            auto& ee = e.inner.as_Known();
+                            this->visitType(ee);
+                            break;
+                        }
+                        case TypeDataErasedTypeInner::TAG_Fcn: {
+                            auto& ee = e.inner.as_Fcn();
+                            this->visitPath(HIRVisitor::PathContext::TYPE, ee.origin);
+                            break;
+                        }
+                        case TypeDataErasedTypeInner::TAG_Alias: {
+                            auto& ee = e.inner.as_Alias();
+                            (void)ee;
+                            break;
+                        }
+                    }
             break;
         }
         case HIRTypeData::TAG_Array: {
