@@ -1564,6 +1564,19 @@ TU_ARMA(Alias, ee) {
                             hasMetaTy = true;
                             break;
                     }
+                }
+                // A tuple is unsized when its last element is, and it takes
+                // that element's metadata.
+                else if (type->is_Tuple() && !type->as_Tuple().empty()) {
+                    auto tailTy = this->expandAssociatedTypes(sp, HIRTypeRef(type->as_Tuple().back()));
+                    return this->findTraitImpls(sp, trait, params, tailTy, [&](ImplRef impl, HIRCompare cmp) {
+                        HIRTraitPath::assocListT assoc;
+                        auto metadataTy = impl.getType(crate.types, "Metadata", {});
+                        if (metadataTy) {
+                            assoc.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{trait, {}, std::move(metadataTy)}));
+                        }
+                        return callback(ImplRef(type, params.clone(), std::move(assoc)), cmp);
+                    });
                 } else {
                     metaTy = crate.types.unit();
                     hasMetaTy = true;

@@ -192,6 +192,20 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                         return foundCb(ImplRef(type, traitParams, &assocSlice), false);
                 }
             }
+            // A tuple is unsized when its last element is, and it takes that
+            // element's metadata.
+            else if (type->is_Tuple() && !type->as_Tuple().empty()) {
+                auto tailTy = HIRTypeRef(type->as_Tuple().back());
+                this->expandAssociatedTypes(sp, tailTy);
+                return findImpl(sp, traitPath, traitParams, tailTy, [&](ImplRef impl, bool unk) {
+                    HIRTraitPath::assocListT assoc;
+                    auto metadataTy = impl.getType(crate.types, "Metadata", {});
+                    if (metadataTy) {
+                        assoc.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{traitPath, {}, std::move(metadataTy)}));
+                    }
+                    return foundCb(ImplRef(type, traitParams ? traitParams->clone() : HIRPathParams(), std::move(assoc)), unk);
+                });
+            }
             return foundCb(ImplRef(type, traitParams, &assocUnit), false);
         } else if (traitPath == langPointeeSized()) {
             // Lowest level of sizedness: This _might_ be sized (i.e. it's not an extern type?)
