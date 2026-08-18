@@ -48,31 +48,18 @@ public:
     const EncodedLiteral* operator->() const;
 };
 struct HIRConstGenericUnevaluated;
-TAGGED_UNION_EX(
-    HIRConstGeneric,
-    (),
-    Infer,
-    (
-        (Infer,
-         struct HIRInferData { // To be inferred
-             unsigned index;
-             // NOTE: Workaround for VS2014, which can't use initialiser lists when a default is specified
-             HIRInferData(unsigned index = ~0u)
-                 : index(index)
-             {
-             }
-         }),
-        // NOTE: This is a `unique_ptr` because it contains two PathParams and a shared (2*3 pointers + 2 pointers)
-        // The rest of the variants here are two pointers
-        (Unevaluated, std::unique_ptr<HIRConstGenericUnevaluated>), // Unevaluated (or evaluation deferred)
-        //(Unevaluated, std::shared_ptr<HIR::ExprPtr>),   // Unevaluated (or evaluation deferred)
-        (Generic, HIRGenericRef),         // A single generic reference
-        (Evaluated, HIREncodedLiteralPtr) // A fully known literal
-    ),
-    /*extra_move=*/(),
-    /*extra_assign=*/(),
-    /*extra=*/(HIRConstGeneric clone() const; bool operator==(const HIRConstGeneric& x) const; bool operator!=(const HIRConstGeneric& x) const { return !(*this == x); } Ordering ord(const HIRConstGeneric& x) const;)
-);
+/// An inference placeholder for a const generic
+struct HIRInferData {
+    unsigned index;
+
+    HIRInferData(unsigned index = ~0u)
+        : index(index)
+    {
+    }
+};
+
+// Definitions generated from hir_path.tu.
+#include "hir_path_tu.h"
 ::std::ostream& operator<<(::std::ostream& os, const HIRConstGeneric& x);
 
 class HIRTrait;

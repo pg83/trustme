@@ -26,25 +26,8 @@ struct HIRValueParamDef {
 
 class HIRGenericParams;
 
-TAGGED_UNION_EX(
-    HIRGenericBound,
-    (),
-    TypeEquality,
-    ((TraitBound,
-      struct {
-          HIRTypeRef type;
-          HIRTraitPath trait;
-          HIRBoundConstness constness = HIRBoundConstness::Never;
-      }),
-     (TypeEquality,
-      struct {
-          HIRTypeRef type;
-          HIRTypeRef otherType;
-      })),
-    (),
-    (),
-    (HIRGenericBound clone() const; Ordering ord(const HIRGenericBound& x) const;)
-);
+// Definitions generated from hir_generic_params.tu.
+#include "hir_generic_params_tu.h"
 extern ::std::ostream& operator<<(::std::ostream& os, const HIRGenericBound& x);
 
 class HIRGenericParams {
