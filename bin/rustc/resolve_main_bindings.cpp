@@ -1074,6 +1074,7 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
                 switch (item.data.tag()) {
 default:
                     // TODO: Error
+                    break;
                     case ASTItem::TAG_Function: {
                         auto& e = item.data.as_Function();
                         // Bind as trait method
@@ -1553,6 +1554,7 @@ case HIRTypeItem::TAG_ExternType:
                     switch (v->second->ent.tag()) {
 default:
                         DEBUG("Ignore - " << v->second->ent.tagStr());
+                        break;
                         case HIRValueItem::TAG_StructConstant: {
                             auto& e = v->second->ent.as_StructConstant();
                             auto tyPath = e.ty;

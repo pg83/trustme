@@ -5496,6 +5496,7 @@ default:
     switch ((*pe.type).tag()) {
 default:
         // No special handling
+        break;
         case HIRTypeData::TAG_NodeType: {
             auto& te = (*pe.type).as_NodeType();
             switch (te.tag()) {
@@ -7169,6 +7170,7 @@ default:
     switch ((*type).tag()) {
 default:
         // Any unknown - it's sized
+        break;
         case HIRTypeData::TAG_Infer: {
             auto& e = (*type).as_Infer();
             switch (e.tyClass) {

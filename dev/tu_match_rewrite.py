@@ -576,6 +576,11 @@ def rewrite_hdr(text, specs, where, force_class=None, start_line=None):
             if tag is None:
                 for raw in body.splitlines():
                     lines.append(raw.rstrip())
+                # The macros emitted a break before every arm, so a raw chunk
+                # could never fall through into one; keep that guarantee.
+                if not re.search(r"(break|return|continue)\s*;\s*\Z|throw[^;]*;\s*\Z",
+                                 body.strip()):
+                    lines.append(f"{inner_indent}        break;")
                 continue
             body_lines = body.splitlines()
             if body_lines and not body_lines[0].strip():

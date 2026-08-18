@@ -994,6 +994,7 @@ namespace {
             switch ((*ty).tag()) {
 default:
                 // No prototype required
+                break;
                 case HIRTypeData::TAG_Tuple: {
                     auto& te = (*ty).as_Tuple();
                     if (te.size() > 0) {

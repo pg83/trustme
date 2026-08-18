@@ -3109,6 +3109,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
 default:
                     // NOTE: Can be an unsizing!
                     MIR_TODO(state, "RValue::Cast to " << castType << " from " << srcTy << ", val = " << inval);
+                    break;
                     case HIRTypeData::TAG_Primitive: {
                         auto& te = (*castType).as_Primitive();
                         auto ti = TypeInfo::forPrimitive(te);
@@ -3311,6 +3312,7 @@ break;
 default:
                         // NOTE: Can be an unsizing!
                         MIR_TODO(state, "RValue::MakeDst Coerce to " << dstTy);
+                        break;
                         case HIRTypeData::TAG_Path: {
                             auto& te = (*dstTy).as_Path();
                             bool done = false;
@@ -3557,6 +3559,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
         switch (terminator.tag()) {
 default:
             MIR_BUG(state, "Unexpected terminator - " << terminator);
+            break;
             case MIRTerminator::TAG_Goto: {
                 auto& e = terminator.as_Goto();
                 return e;
@@ -3596,6 +3599,7 @@ default:
                 switch (e.values.tag()) {
 default:
                     MIR_TODO(state, "SwitchValue - " << e.values.tagStr());
+                    break;
                     case MIRSwitchValues::TAG_Unsigned: {
                         auto& vals = e.values.as_Unsigned();
                         auto v = lit.readUint(state, ti.bits);

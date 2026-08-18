@@ -343,6 +343,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
     switch ((*type).tag()) {
 default:
         // Nothing magic
+        break;
         case HIRTypeData::TAG_Tuple: {
             auto& e = (*type).as_Tuple();
             (void)e;

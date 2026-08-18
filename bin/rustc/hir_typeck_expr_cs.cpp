@@ -5351,11 +5351,13 @@ void Context::possibleEquateTypeUnknown(const Span& sp, const HIRTypeData* ty, C
         switch (tuMatch.tag()) {
 default:
         // TODO: Shadow sub-types too
+            break;
             case HIRTypeData::TAG_Path: {
                 auto& e = tuMatch.as_Path();
                 switch (e.path.data.tag()) {
 default:
                     // TODO: Ufcs?
+                    break;
                     case HIRPathData::TAG_Generic: {
                         auto& pe = e.path.data.as_Generic();
                         for (const auto& sty : pe.params.types) {

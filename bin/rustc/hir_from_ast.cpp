@@ -2884,6 +2884,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
 default:
                 DEBUG("Import VAL " << ie.first << " = " << hirPath);
                 vi = HIRValueItem::make_Import({mv$(hirPath), false, 0});
+                break;
                 case ASTPathBindingValue::TAG_EnumVar: {
                     auto& pb = ie.second.path.bindings.value.binding.as_EnumVar();
                     DEBUG("Import VAL " << ie.first << " = " << hirPath << " (Enum Variant)");
@@ -4010,6 +4011,7 @@ default:
                     ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value),
                     mv$( args )
                     ) );
+                break;
                 case ASTPathBindingValue::TAG_Static: {
                     auto& e = v.path.bindings.value.binding.as_Static();
                     bool isConst = e.static_ ? e.static_->sClass() == ASTStatic::Class::CONST : (e.hir ? false : true) // If HIR Pointer is null, this is a HIR::Const

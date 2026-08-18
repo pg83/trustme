@@ -793,6 +793,7 @@ bool MIRCleanupUnsizeGetMetadata(const MIRTypeResolve& state, MirMutator& mutato
     switch ((*dstTy).tag()) {
 default:
         MIR_TODO(state, "Obtain metadata converting to " << dstTy);
+        break;
         case HIRTypeData::TAG_Generic: {
             auto& de = (*dstTy).as_Generic();
             (void)de;
@@ -2534,6 +2535,7 @@ namespace {
         switch (e.tag()) {
 default:
             MIR_BUG(state, "MIR Call of " << e.tagStr() << " - " << path);
+            break;
             case TypeckValuePtr::TAG_NotFound: {
                 auto& _ = e.as_NotFound();
                 (void)_;

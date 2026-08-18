@@ -282,6 +282,7 @@ default:
             switch (pat.data.tag()) {
 default:
                 // Nothing
+                break;
                 case HIRPatternData::TAG_Value: {
                     auto& e = pat.data.as_Value();
                     this->visitPatternValue(sp, pat, e.val);

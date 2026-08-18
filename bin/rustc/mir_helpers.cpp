@@ -110,6 +110,7 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
 default:
                 MIR_BUG(*this, "Field access on unexpected type - " << ty);
                     // Array and Slice use LValue::Field when the index is constant and known-good
+                break;
                 case HIRTypeData::TAG_Array: {
                     auto& te = (*ty).as_Array();
                     return te.inner;
@@ -170,6 +171,7 @@ default:
             switch ((*ty).tag()) {
 default:
                 MIR_BUG(*this, "Deref on unexpected type - " << ty);
+                break;
                 case HIRTypeData::TAG_Path: {
                     auto& te = (*ty).as_Path();
                     (void)te;
@@ -197,6 +199,7 @@ default:
             switch ((*ty).tag()) {
 default:
                 MIR_BUG(*this, "Index on unexpected type - " << ty);
+                break;
                 case HIRTypeData::TAG_Slice: {
                     auto& te = (*ty).as_Slice();
                     return te.inner;
@@ -213,6 +216,7 @@ default:
             switch ((*ty).tag()) {
 default:
                 MIR_BUG(*this, "Downcast on unexpected type - " << ty);
+                break;
                 case HIRTypeData::TAG_Path: {
                     auto& te = (*ty).as_Path();
                     MIR_ASSERT(*this, te.binding.is_Enum() || te.binding.is_Union(), "Downcast on non-Enum");
@@ -322,6 +326,7 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
             switch (v.tag()) {
 default:
                 MIR_BUG(*this, "get_const_type - Function points to bad type: " << v.tagStr() << " - " << c);
+                break;
                 case TypeckValuePtr::TAG_NotFound: {
                     auto& ve = v.as_NotFound();
                     (void)ve;
@@ -452,6 +457,7 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vec
             switch (tuMatch.tag()) {
 default:
             MIR_TODO(*this, "offset_of: field " << values[i]);
+                break;
                 case MIRConstant::TAG_Int: {
                     auto& fieldIdx = tuMatch.as_Int();
                     MIR_ASSERT(*this, fieldIdx.v.isI64() && fieldIdx.v >= S128(0), "Invalid tuple field index " << fieldIdx.v);

@@ -4418,6 +4418,7 @@ namespace {
                 switch (tuMatch.tag()) {
 default:
                 // Ignore
+                    break;
                     case SimplePatEnt::TAG_If: {
                         auto& e = tuMatch.as_If();
                         ASSERT_BUG(sp, e.jumpTarget < rv.size(), "If target out of bounds, " << e.jumpTarget << " >= " << rv.size());
