@@ -17,7 +17,7 @@ public:
 
     void visitExpr(HIRExprPtr& exp) override;
 
-    void visitType(HIRTypeRef& ty) override;
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
     void visitConstgeneric(HIRConstGeneric& value) override;
 
     // ------

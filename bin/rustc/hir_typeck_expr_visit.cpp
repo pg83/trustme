@@ -176,11 +176,11 @@ namespace {
             ms.popTraits(mod);
         }
 
-        void visitType(HIRTypeRef& ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             if (ty->is_Array()) {
                 auto data = ty->cloneData();
                 auto& e = data.as_Array();
-                this->visitType(e.inner);
+                e.inner = this->visitType(e.inner);
                 DEBUG("Array size " << ty);
                 tArgs tmp;
                 if (auto* se = e.size.opt_Unevaluated()) {
@@ -188,10 +188,9 @@ namespace {
                         TypecheckCode(ms, tmp, ms.crate.types.primitive(HIRCoreType::Usize), *se->as_Unevaluated()->expr);
                     }
                 }
-                ty = ms.crate.types.intern(std::move(data));
-            } else {
-                HIRVisitor::visitType(ty);
+                return ms.crate.types.intern(std::move(data));
             }
+            return HIRVisitor::visitType(ty);
         }
 
         void visitGlobalAssembly(HIRGlobalAssembly& item) override {

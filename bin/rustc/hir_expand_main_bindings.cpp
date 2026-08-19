@@ -3306,19 +3306,21 @@ namespace {
             BUG(Span(), "visit_expr hit in ClosureOuterVisitor");
         }
 
-        void visitType(HIRTypeRef& ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             if (ty->is_Array()) {
                 auto data = ty->cloneData();
                 auto& e = data.as_Array();
-                this->visitType(e.inner);
+                e.inner = this->visitType(e.inner);
                 DEBUG("Array size " << ty);
                 if (e.size.is_Unevaluated()) {
                     //::std::vector< ::HIR::ASTType*>  tmp;
                 }
-                ty = resolve_.hirCrate().types.intern(std::move(data));
-            } else {
-                HIRVisitor::visitType(ty);
+                return resolve_.hirCrate().types.intern(std::move(data));
             }
+            // Values embedded in types must reach the (suppressing)
+            // visitConstgeneric hook below rather than the base walk, which
+            // would descend into their expressions.
+            return visitTypeDefaultViaHooks(ty);
         }
 
         void visitConstgeneric(HIRConstGeneric&) override {
@@ -3590,9 +3592,10 @@ namespace {
         {
         }
 
-        void visitType(HIRTypeRef& ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             static Span sp;
             ::visitType(sp, resolve_, ty);
+            return ty;
         }
     };
 }
@@ -4408,6 +4411,11 @@ public:
         }
     }
 
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+        // Values embedded in types must reach the visitConstgeneric hook.
+        return visitTypeDefaultViaHooks(ty);
+    }
+
     // ------
     // Code-containing items
     // ------
@@ -5041,6 +5049,11 @@ public:
             StaticBorrowExprVisitorMutate ev(resolve_, selfType, this->getNewTyCb(), *(*e)->expr);
             ev.visitNodePtr(*(*e)->expr);
         }
+    }
+
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+        // Values embedded in types must reach the visitConstgeneric hook.
+        return visitTypeDefaultViaHooks(ty);
     }
 
     // ------
@@ -5891,6 +5904,11 @@ namespace {
             }
         }
 
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+            // Values embedded in types must reach the visitConstgeneric hook.
+            return visitTypeDefaultViaHooks(ty);
+        }
+
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
             const auto* previousImpl = currentTraitImpl;
             currentTraitImpl = &impl;
@@ -5974,25 +5992,25 @@ namespace {
         }
 
     private:
-        void visitType(HIRTypeRef& ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             if (methodName) {
-                HIRVisitor::visitType(ty);
+                ty = HIRVisitor::visitType(ty);
 
                 if (const auto* e = ty->opt_ErasedType()) {
                     if (!e->inner.is_Fcn()) {
-                        return;
+                        return ty;
                     }
                     const HIRPath& origin = e->inner.as_Fcn().origin;
                     // TODO: Do a stricter check, but this is probably good enough for now?
                     // - Just checking the function name
                     if (origin.data.is_Generic() && origin.data.as_Generic().path.components().back() != methodName) {
-                        return;
+                        return ty;
                     }
                     if (origin.data.is_UfcsKnown() && origin.data.as_UfcsKnown().item != methodName) {
-                        return;
+                        return ty;
                     }
                     if (origin.data.is_UfcsInherent() && origin.data.as_UfcsInherent().item != methodName) {
-                        return;
+                        return ty;
                     }
                     auto tyName = RcString::newInterned(FMT(ATY_PREFIX_ERASED << methodName << "_" << varIndex));
                     varIndex += 1;
@@ -6023,6 +6041,7 @@ namespace {
                     ty = typeInterner().path(HIRPath(selfTy ? selfTy : typeInterner().self(), HIRGenericPath(traitPath->clone(), traitArgs->clone()), tyName, methodParams->makeNopParams(typeInterner(), 1)), {});
                 }
             }
+            return ty;
         }
 
         void handleMethod(const HIRSimplePath& traitPath, const HIRPathParams& traitArgs, const HIRTypeData* selfTy, const RcString& name, HIRFunction& fcn) {
@@ -6035,10 +6054,10 @@ namespace {
             varIndex = 0;
             DEBUG("-> " << fcn.returnType);
             if (fcn.traitReturnType) {
-                visitType(*fcn.traitReturnType);
+                *fcn.traitReturnType = visitType(*fcn.traitReturnType);
                 fcn.traitReturnType.reset();
             } else {
-                visitType(fcn.returnType);
+                fcn.returnType = visitType(fcn.returnType);
             }
             DEBUG("-> " << fcn.returnType);
 

@@ -83,13 +83,13 @@ namespace {
             }
         }
 
-        void visitType(HIRTypeRef& type) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override {
             if (!available) {
-                return;
+                return type;
             }
             if (type->is_Infer()) {
                 available = false;
-                return;
+                return type;
             }
             if (const auto* generic = type->opt_Generic()) {
                 if (generic->isSelf()) {
@@ -99,9 +99,23 @@ namespace {
                 } else {
                     available = false;
                 }
-                return;
+                return type;
             }
-            HIRVisitor::visitType(type);
+            switch (type->tag()) {
+                case HIRTypeData::TAG_Path:
+                case HIRTypeData::TAG_TraitObject:
+                case HIRTypeData::TAG_ErasedType:
+                case HIRTypeData::TAG_Array:
+                case HIRTypeData::TAG_Pattern:
+                case HIRTypeData::TAG_NamedFunction: {
+                    // Values inside these must still reach visitConstgeneric.
+                    auto data = type->cloneData();
+                    visitTypeDataChildren(data);
+                    return typeInterner().intern(mv$(data));
+                }
+                default:
+                    return HIRVisitor::visitType(type);
+            }
         }
 
         void visitConstgeneric(HIRConstGeneric& value) override {
@@ -124,7 +138,7 @@ namespace {
                 // The expression refers through these captured parameter lists.
                 // Its own HIR bindings are not parameters of the current state.
                 if ((*unevaluated)->selfType) {
-                    visitType((*unevaluated)->selfType);
+                    (*unevaluated)->selfType = visitType((*unevaluated)->selfType);
                 }
                 visitPathParams((*unevaluated)->paramsImpl);
                 visitPathParams((*unevaluated)->paramsItem);
@@ -138,7 +152,7 @@ namespace {
         }
         auto copy = type;
         MonomorphAvailability visitor(ms);
-        visitor.visitType(copy);
+        copy = visitor.visitType(copy);
         return visitor.available;
     }
 
@@ -5195,8 +5209,24 @@ namespace {
             }
         }
 
-        void visitType(HIRTypeRef& ty) override {
-            HIRVisitor::visitType(ty);
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+            switch (ty->tag()) {
+                case HIRTypeData::TAG_Path:
+                case HIRTypeData::TAG_TraitObject:
+                case HIRTypeData::TAG_ErasedType:
+                case HIRTypeData::TAG_NamedFunction: {
+                    // Params inside these carry values this pass evaluates;
+                    // route them through the owned-structure hooks.
+                    auto data = ty->cloneData();
+                    visitTypeDataChildren(data);
+                    ty = crate.types.intern(mv$(data));
+                    break;
+                }
+                default: {
+                    ty = HIRVisitor::visitType(ty);
+                    break;
+                }
+            }
 
             if (ty->is_Array()) {
                 auto data = ty->cloneData();
@@ -5258,6 +5288,7 @@ namespace {
                 }
                 recurseTypes = true;
             }
+            return ty;
         }
 
         void visitConstant(HIRItemPath p, HIRConstant& item) override {
@@ -5351,7 +5382,7 @@ namespace {
                 void visitType(HIRTypeRef& ty) override {
                     // Need to evaluate array sizes
                     DEBUG("expr type " << ty);
-                    exp.visitType(ty);
+                    ty = exp.visitType(ty);
                 }
 
                 void visitPathParams(HIRPathParams& pp) override {

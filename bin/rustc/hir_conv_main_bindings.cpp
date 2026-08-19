@@ -355,12 +355,18 @@ default:
             }
         }
 
-        void visitType(HIRTypeRef& ty) override {
-            visitTypeInner(ty);
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+            return visitTypeInner(ty);
         }
 
-        void visitTypeInner(HIRTypeRef& ty, bool doBind = true) {
+        [[nodiscard]] HIRTypeRef visitTypeInner(HIRTypeRef ty, bool doBind = true) {
             static Span sp;
+            // Nodes this pass rewrites are handled below; every other
+            // carrier kind still needs its embedded values to reach the
+            // visitConstgeneric hook (which records generic bindings).
+            if (!ty->is_Path() && !ty->is_TraitObject() && !ty->is_ErasedType()) {
+                return visitTypeDefaultViaHooks(ty);
+            }
             auto data = ty->cloneData();
             bool dataVisited = false;
 
@@ -487,7 +493,7 @@ default:
                     // - Add a un-namable generic parameter (TODO: Prevent this from being explicitly set when called)
                     else if (fcnPtr) {
                         // Visit inner first, to handle nested
-                        visitTypeData(data);
+                        visitTypeDataChildren(data);
                         dataVisited = true;
 
                         size_t idx = fcnPtr->params.types.size();
@@ -517,8 +523,7 @@ default:
                             // - Except, that should it be?
                             fcnPtr->params.bounds.push_back(HIRGenericBound::make_TraitBound({newTy, m.monomorphTraitpath(sp, trait, false)}));
                         }
-                        ty = ::std::move(newTy);
-                        return;
+                        return newTy;
                     } else if (inImplTraitBinding) {
                         // `impl Trait` in a local binding is an inference type
                         // constrained by these bounds, not an opaque type with
@@ -542,9 +547,9 @@ default:
             }
 
             if (!dataVisited) {
-                visitTypeData(data);
+                visitTypeDataChildren(data);
             }
-            ty = crate.types.intern(mv$(data));
+            return crate.types.intern(mv$(data));
         }
 
         void visitTypeImpl(HIRTypeImpl& impl) override {
@@ -655,7 +660,7 @@ default:
             // - Done first so the path in return-position `impl Trait` is valid
             for (auto& arg : item.args) {
                 TRACE_FUNCTION_F("ARG " << arg);
-                visitType(arg.second);
+                arg.second = visitType(arg.second);
             }
 
             // Visit return type (populates path for `impl Trait` in return position
@@ -663,7 +668,7 @@ default:
             fcnErasedCount = 0;
             {
                 TRACE_FUNCTION_F("RET " << item.returnType);
-                visitType(item.returnType);
+                item.returnType = visitType(item.returnType);
             }
 
             // Lowering an async function stores its declared return type both
@@ -715,14 +720,14 @@ default:
                 }
 
                 void visitType(HIRTypeRef& ty) override {
-                    upperVisitor.visitTypeInner(ty, true);
+                    ty = upperVisitor.visitTypeInner(ty, true);
                 }
 
                 void visitNodePtr(HIRExprNodeP& nodePtr) override {
                     // A node a desugaring built has no result type until type
                     // checking gives it one.
                     if (nodePtr->resType != HIRTypeRef()) {
-                        upperVisitor.visitType(nodePtr->resType);
+                        nodePtr->resType = upperVisitor.visitType(nodePtr->resType);
                     }
                     HIRExprVisitorDef::visitNodePtr(nodePtr);
                 }
@@ -730,7 +735,7 @@ default:
                 void visit(HIRExprNodeLet& node) override {
                     const bool saved = upperVisitor.inImplTraitBinding;
                     upperVisitor.inImplTraitBinding = true;
-                    upperVisitor.visitType(node.type);
+                    node.type = upperVisitor.visitType(node.type);
                     upperVisitor.visitPattern(node.pattern);
                     HIRExprVisitorDef::visit(node);
                     upperVisitor.inImplTraitBinding = saved;
@@ -792,7 +797,7 @@ default:
                 }
 
                 void visit(HIRExprNodeStructLiteral& node) override {
-                    upperVisitor.visitTypeInner(node.type, false);
+                    node.type = upperVisitor.visitTypeInner(node.type, false);
 
                     HIRExprVisitorDef::visit(node);
                 }
@@ -806,17 +811,17 @@ default:
                 }
 
                 void visit(HIRExprNodeClosure& node) override {
-                    upperVisitor.visitType(node.returnType);
+                    node.returnType = upperVisitor.visitType(node.returnType);
                     for (auto& arg : node.args) {
                         upperVisitor.visitPattern(arg.first);
-                        upperVisitor.visitType(arg.second);
+                        arg.second = upperVisitor.visitType(arg.second);
                     }
                     HIRExprVisitorDef::visit(node);
                 }
             };
 
             for (auto& ty : expr.erasedTypes) {
-                visitType(ty);
+                ty = visitType(ty);
             }
 
             // Set up the module state
@@ -849,7 +854,7 @@ default:
             // External expression (has MIR)
             else if (auto* mir = expr.getExtMirMut()) {
                 for (auto& ty : mir->locals) {
-                    this->visitType(ty);
+                    updateType(ty);
                 }
 
                 struct MirVisitor: public MIRVisitorMut {
@@ -861,7 +866,7 @@ default:
                     }
 
                     void visitType(HIRTypeRef& t) override {
-                        upperVisitor.visitType(t);
+                        t = upperVisitor.visitType(t);
                     }
 
                     void visitPath(HIRPath& p) override {
@@ -1112,13 +1117,18 @@ default:
             ms.popTraits(mod);
         }
 
-        void visitType(HIRTypeRef& ty) override {
-            visitTypeInner(ty);
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+            return visitTypeInner(ty);
         }
 
-        void visitTypeInner(HIRTypeRef& ty, bool doBind = true) {
+        [[nodiscard]] HIRTypeRef visitTypeInner(HIRTypeRef ty, bool doBind = true) {
             static Span sp;
 
+            // Only NamedFunction nodes are rewritten here; everything else
+            // is plain recursion.
+            if (!ty->is_NamedFunction()) {
+                return HIRVisitor::visitType(ty);
+            }
             auto data = ty->cloneData();
             if (auto* te = data.opt_NamedFunction()) {
                 if (te->def.is_Function() && te->def.as_Function() == nullptr) {
@@ -1149,8 +1159,8 @@ default:
                 }
             }
 
-            visitTypeData(data);
-            ty = crate.types.intern(mv$(data));
+            visitTypeDataChildren(data);
+            return crate.types.intern(mv$(data));
         }
 
         void visitTypeImpl(HIRTypeImpl& impl) override {
@@ -1257,20 +1267,20 @@ default:
                 }
 
                 void visitType(HIRTypeRef& ty) override {
-                    upperVisitor.visitTypeInner(ty, true);
+                    ty = upperVisitor.visitTypeInner(ty, true);
                 }
 
                 void visitNodePtr(HIRExprNodeP& nodePtr) override {
                     // A node a desugaring built has no result type until type
                     // checking gives it one.
                     if (nodePtr->resType != HIRTypeRef()) {
-                        upperVisitor.visitType(nodePtr->resType);
+                        nodePtr->resType = upperVisitor.visitType(nodePtr->resType);
                     }
                     HIRExprVisitorDef::visitNodePtr(nodePtr);
                 }
 
                 void visit(HIRExprNodeLet& node) override {
-                    upperVisitor.visitType(node.type);
+                    node.type = upperVisitor.visitType(node.type);
                     upperVisitor.visitPattern(node.pattern);
                     HIRExprVisitorDef::visit(node);
                 }
@@ -1302,7 +1312,7 @@ default:
                 }
 
                 void visit(HIRExprNodeStructLiteral& node) override {
-                    upperVisitor.visitTypeInner(node.type, false);
+                    node.type = upperVisitor.visitTypeInner(node.type, false);
 
                     HIRExprVisitorDef::visit(node);
                 }
@@ -1316,17 +1326,17 @@ default:
                 }
 
                 void visit(HIRExprNodeClosure& node) override {
-                    upperVisitor.visitType(node.returnType);
+                    node.returnType = upperVisitor.visitType(node.returnType);
                     for (auto& arg : node.args) {
                         upperVisitor.visitPattern(arg.first);
-                        upperVisitor.visitType(arg.second);
+                        arg.second = upperVisitor.visitType(arg.second);
                     }
                     HIRExprVisitorDef::visit(node);
                 }
             };
 
             for (auto& ty : expr.erasedTypes) {
-                visitType(ty);
+                ty = visitType(ty);
             }
 
             // Local expression
@@ -1337,7 +1347,7 @@ default:
             // External expression (has MIR)
             else if (auto* mir = expr.getExtMirMut()) {
                 for (auto& ty : mir->locals) {
-                    this->visitType(ty);
+                    updateType(ty);
                 }
 
                 struct MirVisitor: public MIRVisitorMut {
@@ -1349,7 +1359,7 @@ default:
                     }
 
                     void visitType(HIRTypeRef& t) override {
-                        upperVisitor.visitType(t);
+                        t = upperVisitor.visitType(t);
                     }
 
                     void visitPath(HIRPath& p) override {
@@ -1570,7 +1580,7 @@ public:
         }
     }
 
-    void visitType(HIRTypeRef& ty) override {
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
         static Span sp;
 
         if (ty->is_ErasedType() || ty->is_TraitObject()) {
@@ -1615,8 +1625,7 @@ public:
             }
             ty = crate.types.intern(std::move(data));
         }
-
-        HIRVisitor::visitType(ty);
+        ty = HIRVisitor::visitType(ty);
 
         if (const auto* e = ty->opt_Path()) {
             HIRTypeRef newType = ConvertHIRExpandAliasesGetExpansion(crate, e->path, inExpr);
@@ -1625,7 +1634,7 @@ public:
             const unsigned int MAX_RECURSIVE_TYPE_EXPANSIONS = 100;
             while (numExp < MAX_RECURSIVE_TYPE_EXPANSIONS) {
                 // NOTE: inner recurses
-                HIRVisitor::visitType(newType);
+                newType = HIRVisitor::visitType(newType);
                 if (const auto* e = newType->opt_Path()) {
                     auto nt = ConvertHIRExpandAliasesGetExpansion(crate, e->path, inExpr);
                     if (nt->is_Infer()) {
@@ -1643,6 +1652,7 @@ public:
                 ty = mv$(newType);
             }
         }
+        return ty;
     }
 
     void visitTraitPath(HIRTraitPath& tp) override {
@@ -1865,7 +1875,7 @@ default:
                 auto n = ConvertHIRExpandAliasesGetTraitExpansion(sp, crate, be->trait, inExpr);
                 if (!n.empty()) {
                     auto origType = std::move(be->type);
-                    visitType(origType);
+                    origType = visitType(origType);
 
                     it = params.bounds.erase(it);
                     for (auto& t : n) {
@@ -1889,7 +1899,7 @@ default:
             }
 
             void visitType(HIRTypeRef& ty) override {
-                upperVisitor.visitType(ty);
+                ty = upperVisitor.visitType(ty);
             }
 
             void visitPattern(const Span& sp, HIRPattern& pat) override {
@@ -1949,7 +1959,7 @@ default:
         HIRVisitor::visitFunction(p, item);
         if (item.receiver == HIRFunction::Receiver::Custom) {
             ASSERT_BUG(Span(), item.receiverType, "Custom receiver without a receiver type");
-            this->visitType(*item.receiverType);
+            *item.receiverType = this->visitType(*item.receiverType);
         }
     }
 };
@@ -1971,20 +1981,21 @@ public:
         return crate.types;
     }
 
-    void visitType(HIRTypeRef& ty) override {
-        HIRVisitor::visitType(ty);
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+        ty = HIRVisitor::visitType(ty);
 
         if (const auto* te = ty->opt_Generic()) {
             if (te->binding == GENERICSelf) {
                 if (implType) {
                     DEBUG("Replace Self with " << implType);
-                    ty = implType;
+                    return implType;
                 } else {
                     // NOTE: Valid for `trait` definitions.
                     DEBUG("Self outside of an `impl` block");
                 }
             }
         }
+        return ty;
     }
 
     void visitExpr(HIRExprPtr& expr) override {
@@ -1998,7 +2009,7 @@ public:
             }
 
             void visitType(HIRTypeRef& ty) override {
-                upperVisitor.visitType(ty);
+                ty = upperVisitor.visitType(ty);
             }
 
             void visitPattern(const Span& sp, HIRPattern& pat) override {
@@ -2104,6 +2115,11 @@ public:
             }
         }
         HIRVisitor::visitConstgeneric(value);
+    }
+
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+        // Values embedded in types must reach the hook above.
+        return visitTypeDefaultViaHooks(ty);
     }
 
     void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override {
@@ -2309,9 +2325,9 @@ void ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRTypeData* i
     ExpanderSelf exp{crate, implType};
     for (auto& arg : args) {
         exp.visitPattern(arg.first);
-        exp.visitType(arg.second);
+        arg.second = exp.visitType(arg.second);
     }
-    exp.visitType(retTy);
+    retTy = exp.visitType(retTy);
     exp.visitExpr(expr);
 }
 
@@ -2762,7 +2778,7 @@ public:
         auto savedRunEat = runEat;
         runEat = false;
         for (auto& tps : params.types) {
-            this->visitType(tps.defaultValue);
+            tps.defaultValue = this->visitType(tps.defaultValue);
         }
         runEat = savedRunEat;
 
@@ -2837,7 +2853,7 @@ public:
         auto _g = resolve_.setImplGenerics(MetadataType::Unknown, impl.params);
         currentType_ = impl.type;
 
-        this->visitType(impl.type);
+        impl.type = this->visitType(impl.type);
         resolve_.updateImplSelfMetadata(impl.type);
 
         HIRVisitor::visitTypeImpl(impl);
@@ -2863,7 +2879,7 @@ public:
         // The implemented trait is always in scope
         traits.push_back(::std::make_pair(&traitPath, currentTrait));
 
-        this->visitType(impl.type);
+        impl.type = this->visitType(impl.type);
         resolve_.updateImplSelfMetadata(impl.type);
 
         HIRVisitor::visitMarkerImpl(traitPath, impl);
@@ -2886,14 +2902,14 @@ public:
         currentTraitPath_ = &p;
         traits.push_back(::std::make_pair(&traitPath, currentTrait));
 
-        this->visitType(impl.type);
+        impl.type = this->visitType(impl.type);
         resolve_.updateImplSelfMetadata(impl.type);
 
         // TODO: Handle resolution of all items in m_resolve.m_type_equalities
         // - params might reference each other, so `set_item_generics` has to have been called
         // - But `m_type_equalities` can end up with non-resolved UFCS paths
         resolve_.forEachTypeEquality([&](HIRTypeRef& ty) {
-            visitType(ty);
+            ty = visitType(ty);
         });
 
         // The implemented trait is always in scope
@@ -2916,7 +2932,7 @@ public:
             }
 
             void visitType(HIRTypeRef& ty) override {
-                upperVisitor.visitType(ty);
+                ty = upperVisitor.visitType(ty);
             }
 
             void visitPathParams(HIRPathParams& pp) override {
@@ -3367,11 +3383,32 @@ public:
         return false;
     }
 
-    void visitType(HIRTypeRef& ty) override {
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
         // TODO: Add a span parameter.
         static Span sp;
 
-        HIRVisitor::visitType(ty);
+        // This pass rewrites paths and resolves expressions inside const
+        // generics, and those live inside types too: the path-bearing node
+        // kinds go through a working copy and the owned-structure hooks
+        // (including this class's visitPath/visitConstgeneric overrides);
+        // everything else is plain recursion.
+        switch (ty->tag()) {
+            case HIRTypeData::TAG_Path:
+            case HIRTypeData::TAG_TraitObject:
+            case HIRTypeData::TAG_ErasedType:
+            case HIRTypeData::TAG_Array:
+            case HIRTypeData::TAG_Pattern:
+            case HIRTypeData::TAG_NamedFunction: {
+                auto data = ty->cloneData();
+                visitTypeDataChildren(data);
+                ty = crate.types.intern(mv$(data));
+                break;
+            }
+            default: {
+                ty = HIRVisitor::visitType(ty);
+                break;
+            }
+        }
 
         // TODO: If this an associated type, check for default trait params
 
@@ -3386,7 +3423,7 @@ public:
                     ::std::sort(stack.begin(), stack.end());
                     DEBUG("Loop detected, picking " << ty);
                     ty = std::move(stack[0]);
-                    HIRVisitor::visitType(ty);
+                    ty = HIRVisitor::visitType(ty);
                     break;
                 }
                 // NOTE: Only need to clone if this is a Path, as that's the only way we could loop again
@@ -3403,9 +3440,10 @@ public:
                 ASSERT_BUG(sp, stack.size() < 20, "Sanity limit exceeded when resolving UFCS in type " << ty);
                 // Invoke a special version of EAT that only processes a single item.
                 // - Keep recursing while this does replacements
-                HIRVisitor::visitType(ty);
+                ty = HIRVisitor::visitType(ty);
             }
         }
+        return ty;
     }
 
     void visitConstgeneric(HIRConstGeneric& val) override {
@@ -3434,7 +3472,7 @@ public:
             auto& e = *pe;
             TRACE_FUNCTION_FR("UfcsUnknown - p=" << p, p);
 
-            this->visitType(e.type);
+            updateType(e.type);
             this->visitPathParams(e.params);
 
             // If processing a trait, and the type is 'Self', search for the type/method on the trait
@@ -3658,7 +3696,7 @@ default:
         }
 
         auto ty = crate.types.path(path.clone(), {});
-        this->visitType(ty);
+        ty = this->visitType(ty);
         ASSERT_BUG(sp, ty->is_Path(), "Pattern associated type didn't resolve to a path - " << ty);
 
         const auto& te = ty->as_Path();

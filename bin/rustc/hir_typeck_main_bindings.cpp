@@ -205,7 +205,7 @@ namespace {
             HIRVisitor::visitPathParams(pp);
         }
 
-        void visitType(HIRTypeRef& ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             static Span _sp;
             const Span& sp = _sp;
 
@@ -254,7 +254,7 @@ namespace {
                         switch (tuMatch.tag()) {
                             case TypeDataErasedTypeInner::TAG_Known: {
                                 auto& inner = tuMatch.as_Known();
-                                this->visitType(inner);
+                                inner = this->visitType(inner);
                                 break;
                             }
                             case TypeDataErasedTypeInner::TAG_Alias: {
@@ -275,7 +275,7 @@ namespace {
                 }
                 case HIRTypeData::TAG_Array: {
                     auto& e = data.as_Array();
-                    this->visitType(e.inner);
+                    e.inner = this->visitType(e.inner);
                     if (auto* size = e.size.opt_Unevaluated()) {
                         this->visitConstgeneric(*size);
                     }
@@ -283,22 +283,22 @@ namespace {
                 }
                 case HIRTypeData::TAG_Slice: {
                     auto& e = data.as_Slice();
-                    this->visitType(e.inner);
+                    e.inner = this->visitType(e.inner);
                     break;
                 }
                 case HIRTypeData::TAG_Tuple: {
                     auto& e = data.as_Tuple();
-                    for (auto& inner : e) this->visitType(inner);
+                    for (auto& inner : e) inner = this->visitType(inner);
                     break;
                 }
                 case HIRTypeData::TAG_Borrow: {
                     auto& e = data.as_Borrow();
-                    this->visitType(e.inner);
+                    e.inner = this->visitType(e.inner);
                     break;
                 }
                 case HIRTypeData::TAG_Pointer: {
                     auto& e = data.as_Pointer();
-                    this->visitType(e.inner);
+                    e.inner = this->visitType(e.inner);
                     break;
                 }
                 case HIRTypeData::TAG_NamedFunction: {
@@ -309,9 +309,9 @@ namespace {
                 case HIRTypeData::TAG_Function: {
                     auto& e = data.as_Function();
                     for (auto& arg : e.argTypes) {
-                        this->visitType(arg);
+                        arg = this->visitType(arg);
                     }
-                    this->visitType(e.rettype);
+                    e.rettype = this->visitType(e.rettype);
                     break;
                 }
                 case HIRTypeData::TAG_NodeType: {
@@ -326,7 +326,7 @@ namespace {
                 selfTypes.pop_back();
             }
 
-            ty = crate.types.intern(mv$(data));
+            return crate.types.intern(mv$(data));
 
             if (const auto* e = ty->opt_Path()) {
                 switch (e->path.data.tag()) {
@@ -473,7 +473,7 @@ namespace {
             TRACE_FUNCTION_FR("UfcsUnknown - p=" << p, p);
             auto& e = p.data.as_UfcsUnknown();
 
-            this->visitType(e.type);
+            e.type = this->visitType(e.type);
             this->visitPathParams(e.params);
 
             // Search for matching impls in current generic blocks
@@ -575,13 +575,13 @@ namespace {
                 }
                 case HIRPath::Data::TAG_UfcsKnown: {
                     auto& e = p.data.as_UfcsKnown();
-                    this->visitType(e.type); selfTypes.push_back(e.type); this->visitGenericPath(e.trait, HIRVisitor::PathContext::TRAIT); selfTypes.pop_back();
+                    e.type = this->visitType(e.type); selfTypes.push_back(e.type); this->visitGenericPath(e.trait, HIRVisitor::PathContext::TRAIT); selfTypes.pop_back();
                     // TODO: Locate impl block and check parameters
                     break;
                 }
                 case HIRPath::Data::TAG_UfcsInherent: {
                     auto& e = p.data.as_UfcsInherent();
-                    this->visitType(e.type);
+                    e.type = this->visitType(e.type);
                     // TODO: Locate impl block and check parameters
                     break;
                 }
@@ -595,14 +595,14 @@ namespace {
         void visitParams(HIRGenericParams& params) override {
             TRACE_FUNCTION_F(params.fmtArgs());
             for (auto& tps : params.types) {
-                this->visitType(tps.defaultValue);
+                tps.defaultValue = this->visitType(tps.defaultValue);
             }
 
             for (auto& bound : params.bounds) {
                 switch (bound.tag()) {
                     case HIRGenericBound::TAG_TraitBound: {
                         auto& e = bound.as_TraitBound();
-                        this->visitType(e.type);
+                        e.type = this->visitType(e.type);
                         selfTypes.push_back(e.type);
                         this->visitTraitPath(e.trait);
                         selfTypes.pop_back();
@@ -610,8 +610,8 @@ namespace {
                     }
                     case HIRGenericBound::TAG_TypeEquality: {
                         auto& e = bound.as_TypeEquality();
-                        this->visitType(e.type);
-                        this->visitType(e.otherType);
+                        e.type = this->visitType(e.type);
+                        e.otherType = this->visitType(e.otherType);
                         break;
                     }
                 }
@@ -693,7 +693,7 @@ namespace {
             {
                 curParams = &impl.params;
                 curParamsLevel = 0;
-                this->visitType(impl.type);
+                impl.type = this->visitType(impl.type);
                 curParams = nullptr;
             }
 
@@ -713,7 +713,7 @@ namespace {
             {
                 curParams = &impl.params;
                 curParamsLevel = 0;
-                this->visitType(impl.type);
+                impl.type = this->visitType(impl.type);
                 this->visitPathParams(impl.traitArgs);
                 curParams = nullptr;
             }
@@ -961,7 +961,7 @@ namespace {
             {
                 curParams = &impl.params;
                 curParamsLevel = 0;
-                this->visitType(impl.type);
+                impl.type = this->visitType(impl.type);
                 this->visitPathParams(impl.traitArgs);
                 curParams = nullptr;
             }
@@ -992,7 +992,7 @@ namespace {
             curParamsLevel = 1;
             for (auto& arg : item.args) {
                 TRACE_FUNCTION_F("ARG " << arg);
-                visitType(arg.second);
+                arg.second = visitType(arg.second);
             }
             curParams = nullptr;
 
@@ -1001,14 +1001,14 @@ namespace {
             fcnErasedCount = 0;
             {
                 TRACE_FUNCTION_F("RET " << item.returnType);
-                visitType(item.returnType);
+                item.returnType = visitType(item.returnType);
             }
             fcnPath = nullptr;
             fcnPtr = nullptr;
 
             if (item.receiver == HIRFunction::Receiver::Custom) {
                 ASSERT_BUG(Span(), item.receiverType, "Custom receiver without a receiver type");
-                this->visitType(*item.receiverType);
+                *item.receiverType = this->visitType(*item.receiverType);
             }
             HIRVisitor::visitFunction(p, item);
         }

@@ -1330,9 +1330,9 @@ namespace {
         {
         }
 
-        void visitType(HIRTypeRef& ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             auto data = ty->cloneData();
-            visitTypeData(data);
+            visitTypeDataChildren(data);
 
             if (auto* pathTy = data.opt_Path()) {
                 if (pathTy->binding.is_Unbound() && pathTy->path.data.is_Generic()) {
@@ -1365,7 +1365,7 @@ default:
                 }
             }
 
-            ty = typeInterner().intern(mv$(data));
+            return typeInterner().intern(mv$(data));
         }
     };
 

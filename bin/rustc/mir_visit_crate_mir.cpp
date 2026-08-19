@@ -8,21 +8,22 @@ void MIROuterVisitor::visitExpr(HIRExprPtr& exp) {
     BUG(Span(), "visit_expr hit in OuterVisitor");
 }
 
-void MIROuterVisitor::visitType(HIRTypeRef& ty) {
+HIRTypeRef MIROuterVisitor::visitType(HIRTypeRef ty) {
     if (ty->is_Array()) {
         auto data = ty->cloneData();
         auto* e = data.opt_Array();
-        this->visitType(e->inner);
+        e->inner = this->visitType(e->inner);
         DEBUG("Array size " << ty);
         if (auto* se1 = e->size.opt_Unevaluated()) {
             if (auto* se = se1->opt_Unevaluated()) {
                 cb(resolve_, HIRItemPath(""), *(*se)->expr, {}, resolve_.hirCrate().types.primitive(HIRCoreType::Usize));
             }
         }
-        ty = resolve_.hirCrate().types.intern(mv$(data));
-    } else {
-        HIRVisitor::visitType(ty);
+        return resolve_.hirCrate().types.intern(mv$(data));
     }
+    // Const-generic expressions inside types still need MIR generation via
+    // the visitConstgeneric hook.
+    return visitTypeDefaultViaHooks(ty);
 }
 
 void MIROuterVisitor::visitConstgeneric(HIRConstGeneric& value) {

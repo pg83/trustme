@@ -1850,12 +1850,12 @@ namespace {
         {
         }
 
-        void visitType(HIRTypeRef& ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             const auto* erased = ty->opt_ErasedType();
             if (erased && erased->inner.is_Fcn()) {
                 callback(ty);
             }
-            HIRVisitor::visitType(ty);
+            return HIRVisitor::visitType(ty);
         }
     };
 
@@ -1874,13 +1874,12 @@ namespace {
         {
         }
 
-        void visitType(HIRTypeRef& ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             const auto index = indices.find(ty);
             if (index != indices.end()) {
-                ty = projection(index->second);
-                return;
+                return projection(index->second);
             }
-            HIRVisitor::visitType(ty);
+            return HIRVisitor::visitType(ty);
         }
     };
 }
@@ -2008,9 +2007,10 @@ default:
                 auto& i = item.data.as_Function();
                 auto fcn = LowerHIRFunction(itemPath, traitPath.parent(), item.attrs, i, crate->types.self());
                 ::std::vector<HIRTypeRef> erasedTypes;
-                RpititTypeCollector(crate->types, [&](HIRTypeRef type) {
+                auto _discard = RpititTypeCollector(crate->types, [&](HIRTypeRef type) {
                     erasedTypes.push_back(type);
                 }).visitType(fcn.returnType);
+                (void)_discard;
                 ::std::map<HIRTypeRef, size_t> erasedIndices;
                 for (size_t index = 0; index < erasedTypes.size(); index++) {
                     erasedIndices.insert(::std::make_pair(erasedTypes[index], index));

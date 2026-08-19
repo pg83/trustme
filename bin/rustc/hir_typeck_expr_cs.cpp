@@ -53,7 +53,7 @@ namespace {
                 HIRVisitor::visitPathParams(pp);
             }
 
-            void visitType(HIRTypeRef& ty) override {
+            [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
                 if (ty->is_Generic() && ty->as_Generic().isPlaceholder()) {
                     throw HasPlaceholder{};
                 }
@@ -62,12 +62,13 @@ namespace {
                         visitConstgeneric(*ase);
                     }
                 }
-                HIRVisitor::visitType(ty);
+                return visitTypeDefaultViaHooks(ty);
             }
         } v(types);
 
         try {
-            v.visitType(const_cast<HIRTypeRef&>(t));
+            auto _discard = v.visitType(t);
+            (void)_discard;
             return false;
         } catch (const HasPlaceholder&) {
             return true;
@@ -2030,7 +2031,7 @@ default:
                     HIRVisitor::visitConstgeneric(v);
                 }
 
-                void visitType(HIRTypeRef& ty) override {
+                [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
                     if (ty->is_Infer()) {
                         auto newTy = parent.ivars.getType(ty);
                         DEBUG(ty << " -> " << newTy);
@@ -2041,7 +2042,7 @@ default:
                         }
                     }
 
-                    HIRVisitor::visitType(ty);
+                    ty = visitTypeDefaultViaHooks(ty);
 
                     if (ty->is_Array()) {
                         auto data = ty->cloneData();
@@ -2054,11 +2055,12 @@ default:
                             }
                         }
                     }
+                    return ty;
                 }
             };
 
             InnerVisitor v(*this, sp, topType);
-            v.visitType(ty);
+            ty = v.visitType(ty);
         }
 
         void checkTypesEqual(const Span& sp, const HIRTypeData* l, const HIRTypeData* r) const {
@@ -3283,14 +3285,14 @@ void Context::equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRC
                         HIRVisitor::visitConstgeneric(value);
                     }
 
-                    void visitType(HIRTypeRef& type) override {
+                    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override {
                         if (type->is_Infer()) {
                             const auto resolved = context.ivars.getType(type);
                             if (resolved != type) {
                                 type = resolved;
                             }
                         }
-                        HIRVisitor::visitType(type);
+                        return visitTypeDefaultViaHooks(type);
                     }
                 } resolveIvars{*this};
 

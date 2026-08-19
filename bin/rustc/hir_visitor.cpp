@@ -163,7 +163,7 @@ void HIRVisitor::visitTypeImpl(HIRTypeImpl& impl) {
         resolve_->setImplGenericsRaw(MetadataType::Unknown, impl.params);
     }
     this->visitParams(impl.params);
-    this->visitType(impl.type);
+    updateType(impl.type);
 
     for (auto& method : impl.methods) {
         DEBUG("method " << method.first);
@@ -188,7 +188,7 @@ void HIRVisitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) {
         resolve_->setItemGenericsRaw(item.params);
     }
     this->visitParams(item.params);
-    this->visitType(item.type);
+    updateType(item.type);
     if (resolve_) {
         resolve_->clearItemGenerics();
     }
@@ -207,7 +207,7 @@ void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& im
         this->visitGenericPath(gp, PathContext::TRAIT);
         impl.traitArgs = mv$(gp.params);
     }
-    this->visitType(impl.type);
+    updateType(impl.type);
 
     for (auto& ent : impl.methods) {
         DEBUG("method " << ent.first);
@@ -223,7 +223,7 @@ void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& im
     }
     for (auto& ent : impl.types) {
         TRACE_FUNCTION_F("type " << ent.first << " = " << ent.second.data);
-        this->visitType(ent.second.data);
+        updateType(ent.second.data);
     }
     if (resolve_) {
         resolve_->clearImplGenerics();
@@ -236,7 +236,7 @@ void HIRVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& 
     }
     this->visitParams(impl.params);
     this->visitPathParams(impl.traitArgs);
-    this->visitType(impl.type);
+    updateType(impl.type);
     if (resolve_) {
         resolve_->clearImplGenerics();
     }
@@ -247,7 +247,7 @@ void HIRVisitor::visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) {
         resolve_->setImplGenericsRaw(MetadataType::Unknown, item.params);
     }
     this->visitParams(item.params);
-    this->visitType(item.type);
+    updateType(item.type);
     if (resolve_) {
         resolve_->clearImplGenerics();
     }
@@ -326,14 +326,14 @@ void HIRVisitor::visitStruct(HIRItemPath p, HIRStruct& item) {
         case HIRStructData::TAG_Tuple: {
             auto& e = item.data.as_Tuple();
             for (auto& ty : e) {
-                this->visitType(ty.ent);
+                updateType(ty.ent);
             }
             break;
         }
         case HIRStructData::TAG_Named: {
             auto& e = item.data.as_Named();
             for (auto& field : e) {
-                this->visitType(field.ty);
+                updateType(field.ty);
                 if (field.defaultValue) {
                     this->visitGenericPath(*field.defaultValue, PathContext::VALUE);
                 }
@@ -362,7 +362,7 @@ void HIRVisitor::visitEnum(HIRItemPath p, HIREnum& item) {
         case HIREnumClass::TAG_Data: {
             auto& e = item.data.as_Data();
             for (auto& var : e) {
-                this->visitType(var.type);
+                updateType(var.type);
                 this->visitExpr(var.discriminantExpr);
             }
             break;
@@ -380,7 +380,7 @@ void HIRVisitor::visitUnion(HIRItemPath p, HIRUnion& item) {
     }
     this->visitParams(item.params);
     for (auto& var : item.variants) {
-        this->visitType(var.ty);
+        updateType(var.ty);
         assert(!var.defaultValue);
     }
     if (resolve_) {
@@ -393,7 +393,7 @@ void HIRVisitor::visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) {
     for (auto& bound : item.traitBounds) {
         this->visitTraitPath(bound);
     }
-    this->visitType(item.defaultValue);
+    updateType(item.defaultValue);
 }
 
 void HIRVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
@@ -404,11 +404,11 @@ void HIRVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
     this->visitParams(item.params);
     for (auto& arg : item.args) {
         this->visitPattern(arg.first);
-        this->visitType(arg.second);
+        updateType(arg.second);
     }
-    this->visitType(item.returnType);
+    updateType(item.returnType);
     if (item.traitReturnType) {
-        this->visitType(*item.traitReturnType);
+        updateType(*item.traitReturnType);
     }
     this->visitExpr(item.code);
     if (resolve_) {
@@ -421,7 +421,7 @@ void HIRVisitor::visitStatic(HIRItemPath p, HIRStatic& item) {
     if (resolve_) {
         resolve_->setItemGenericsRaw(item.params);
     }
-    this->visitType(item.type);
+    updateType(item.type);
     this->visitExpr(item.value);
     if (resolve_) {
         resolve_->clearItemGenerics();
@@ -434,7 +434,7 @@ void HIRVisitor::visitConstant(HIRItemPath p, HIRConstant& item) {
         resolve_->setItemGenericsRaw(item.params);
     }
     this->visitParams(item.params);
-    this->visitType(item.type);
+    updateType(item.type);
     this->visitExpr(item.value);
     if (resolve_) {
         resolve_->clearItemGenerics();
@@ -444,10 +444,10 @@ void HIRVisitor::visitConstant(HIRItemPath p, HIRConstant& item) {
 void HIRVisitor::visitParams(HIRGenericParams& params) {
     TRACE_FUNCTION_F(params.fmtArgs() << params.fmtBounds());
     for (auto& tps : params.types) {
-        this->visitType(tps.defaultValue);
+        updateType(tps.defaultValue);
     }
     for (auto& val : params.values) {
-        this->visitType(val.type);
+        updateType(val.type);
         this->visitConstgeneric(val.defaultValue);
     }
     for (auto& bound : params.bounds) {
@@ -459,148 +459,16 @@ void HIRVisitor::visitGenericBound(HIRGenericBound& bound) {
     switch (bound.tag()) {
         case HIRGenericBound::TAG_TraitBound: {
             auto& e = bound.as_TraitBound();
-            this->visitType(e.type);
+            updateType(e.type);
             this->visitTraitPath(e.trait);
             break;
         }
         case HIRGenericBound::TAG_TypeEquality: {
             auto& e = bound.as_TypeEquality();
-            this->visitType(e.type);
-            this->visitType(e.otherType);
+            updateType(e.type);
+            updateType(e.otherType);
             break;
         }
-    }
-}
-
-void HIRVisitor::visitType(HIRTypeRef& ty) {
-    assert(ty);
-    auto data = ty->cloneData();
-    visitTypeData(data);
-    ty = typeInterner().intern(mv$(data));
-}
-
-void HIRVisitor::visitTypeData(HIRTypeData& data) {
-    switch (data.tag()) {
-        case HIRTypeData::TAG_Infer: {
-            break;
-        }
-        case HIRTypeData::TAG_Diverge: {
-            break;
-        }
-        case HIRTypeData::TAG_Primitive: {
-            break;
-        }
-        case HIRTypeData::TAG_Path: {
-            auto& e = data.as_Path();
-            this->visitPath(e.path, HIRVisitor::PathContext::TYPE);
-            break;
-        }
-        case HIRTypeData::TAG_Generic: {
-            break;
-        }
-        case HIRTypeData::TAG_TraitObject: {
-            auto& e = data.as_TraitObject();
-            if (e.trait.path != HIRSimplePath()) {
-                this->visitTraitPath(e.trait);
-            }
-            for (auto& trait : e.markers) {
-                this->visitGenericPath(trait, HIRVisitor::PathContext::TYPE);
-            }
-            break;
-        }
-        case HIRTypeData::TAG_ErasedType: {
-            auto& e = data.as_ErasedType();
-            switch (e.inner.tag()) {
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& ee = e.inner.as_Known();
-                    this->visitType(ee);
-                    break;
-                }
-                case TypeDataErasedTypeInner::TAG_Alias: {
-                    auto& ee = e.inner.as_Alias();
-                    this->visitPathParams(ee.params);
-                    break;
-                }
-                case TypeDataErasedTypeInner::TAG_Fcn: {
-                    auto& ee = e.inner.as_Fcn();
-                    if (ee.origin != HIRSimplePath()) {
-                        this->visitPath(ee.origin, HIRVisitor::PathContext::VALUE);
-                    }
-                    break;
-                }
-            }
-            this->visitPathParams(e.use);
-            for(auto& trait : e.traits) {
-                    this->visitTraitPath(trait);
-            }
-            break;
-        }
-        case HIRTypeData::TAG_Array: {
-            auto& e = data.as_Array();
-            this->visitType(e.inner);
-            if (auto* se = e.size.opt_Unevaluated()) {
-                this->visitConstgeneric(*se);
-            }
-            break;
-        }
-        case HIRTypeData::TAG_Slice: {
-            auto& e = data.as_Slice();
-            this->visitType(e.inner);
-            break;
-        }
-        case HIRTypeData::TAG_Pattern: {
-            auto& e = data.as_Pattern();
-            this->visitType(e.inner);
-            for (auto& range : e.pattern.alternatives) {
-                if (range.hasStart) this->visitConstgeneric(range.start);
-                if (range.hasEnd) this->visitConstgeneric(range.end);
-            }
-            break;
-        }
-        case HIRTypeData::TAG_Tuple: {
-            auto& e = data.as_Tuple();
-            for (auto& t : e) {
-                this->visitType(t);
-            }
-            break;
-        }
-        case HIRTypeData::TAG_Borrow: {
-            auto& e = data.as_Borrow();
-            this->visitType(e.inner);
-            break;
-        }
-        case HIRTypeData::TAG_Pointer: {
-            auto& e = data.as_Pointer();
-            this->visitType(e.inner);
-            break;
-        }
-        case HIRTypeData::TAG_NamedFunction: {
-            auto& e = data.as_NamedFunction();
-            this->visitPath(e.path, HIRVisitor::PathContext::VALUE);
-            break;
-        }
-        case HIRTypeData::TAG_Function: {
-            auto& e = data.as_Function();
-            for (auto& t : e.argTypes) {
-                this->visitType(t);
-            }
-            this->visitType(e.rettype);
-            break;
-        }
-        case HIRTypeData::TAG_NodeType: {
-            break;
-        }
-    }
-}
-
-void HIRVisitor::visitConstgeneric(HIRConstGeneric& v) {
-    if (auto* unevaluated = v.opt_Unevaluated()) {
-        if ((*unevaluated)->selfType) {
-            this->visitType((*unevaluated)->selfType);
-        }
-        this->visitPathParams((*unevaluated)->paramsImpl);
-        this->visitPathParams((*unevaluated)->paramsItem);
-        this->visitExpr(*(*unevaluated)->expr);
     }
 }
 
@@ -616,7 +484,7 @@ void HIRVisitor::visitPattern(HIRPattern& pat) {
         }
         case HIRPatternData::TAG_Deref: {
             auto& e = pat.data.as_Deref();
-            if (e.targetType) this->visitType(e.targetType);
+            if (e.targetType) updateType(e.targetType);
             this->visitPattern(*e.sub);
             break;
         }
@@ -730,11 +598,583 @@ void HIRVisitor::visitPatternVal(HIRPattern::Value& val) {
     }
 }
 
+namespace {
+    // Plumbing for the interned-type walk: rebuild-on-child-change over the
+    // value structures embedded in type data. `out` is filled only when a
+    // contained type changed; the change signal is always the pointer that
+    // visitType returned.
+    bool walkTypesInConstgeneric(HIRVisitor& v, const HIRConstGeneric& c, HIRConstGeneric& out);
+    bool walkTypesInPathParams(HIRVisitor& v, const HIRPathParams& p, HIRPathParams& out);
+    bool walkTypesInGenericPath(HIRVisitor& v, const HIRGenericPath& p, HIRGenericPath& out);
+    bool walkTypesInPath(HIRVisitor& v, const HIRPath& p, HIRPath& out);
+    bool walkTypesInTraitPath(HIRVisitor& v, const HIRTraitPath& p, HIRTraitPath& out);
+
+    bool walkTypesInPathParams(HIRVisitor& v, const HIRPathParams& p, HIRPathParams& out) {
+        for (size_t i = 0; i < p.types.size(); i++) {
+            auto nt = v.visitType(p.types[i]);
+            if (nt != p.types[i]) {
+                out = p.clone();
+                out.types[i] = nt;
+                for (size_t j = i + 1; j < out.types.size(); j++) {
+                    out.types[j] = v.visitType(out.types[j]);
+                }
+                for (auto& val : out.values) {
+                    HIRConstGeneric nv;
+                    if (walkTypesInConstgeneric(v, val, nv)) {
+                        val = mv$(nv);
+                    }
+                }
+                return true;
+            }
+        }
+        for (size_t i = 0; i < p.values.size(); i++) {
+            HIRConstGeneric nv;
+            if (walkTypesInConstgeneric(v, p.values[i], nv)) {
+                out = p.clone();
+                out.values[i] = mv$(nv);
+                for (size_t j = i + 1; j < out.values.size(); j++) {
+                    HIRConstGeneric nv2;
+                    if (walkTypesInConstgeneric(v, out.values[j], nv2)) {
+                        out.values[j] = mv$(nv2);
+                    }
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool walkTypesInConstgeneric(HIRVisitor& v, const HIRConstGeneric& c, HIRConstGeneric& out) {
+        const auto* unevaluated = c.opt_Unevaluated();
+        if (!unevaluated) {
+            return false;
+        }
+        const auto& u = **unevaluated;
+        auto nself = u.selfType ? v.visitType(u.selfType) : nullptr;
+        HIRPathParams nimpl;
+        HIRPathParams nitem;
+        bool cimpl = walkTypesInPathParams(v, u.paramsImpl, nimpl);
+        bool citem = walkTypesInPathParams(v, u.paramsItem, nitem);
+        // The expression is shared between clones; its contents were visited
+        // in place by the old clone-based walk too.
+        v.visitExpr(*u.expr);
+        if (nself == u.selfType && !cimpl && !citem) {
+            return false;
+        }
+        // escape: the Unevaluated payload is an owning unique_ptr in today's representation
+    out = HIRConstGeneric(::std::make_unique<HIRConstGenericUnevaluated>(u.clone()));
+        auto& ou = *out.as_Unevaluated();
+        ou.selfType = nself;
+        if (cimpl) {
+            ou.paramsImpl = mv$(nimpl);
+        }
+        if (citem) {
+            ou.paramsItem = mv$(nitem);
+        }
+        return true;
+    }
+
+    bool walkTypesInGenericPath(HIRVisitor& v, const HIRGenericPath& p, HIRGenericPath& out) {
+        HIRPathParams np;
+        if (!walkTypesInPathParams(v, p.params, np)) {
+            return false;
+        }
+        out = HIRGenericPath(p.path, mv$(np));
+        return true;
+    }
+
+    bool walkTypesInPath(HIRVisitor& v, const HIRPath& p, HIRPath& out) {
+        switch (p.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                HIRGenericPath ng;
+                if (!walkTypesInGenericPath(v, p.data.as_Generic(), ng)) {
+                    return false;
+                }
+                out = HIRPath(mv$(ng));
+                return true;
+            }
+            case HIRPathData::TAG_UfcsInherent: {
+                const auto& e = p.data.as_UfcsInherent();
+                auto ntype = v.visitType(e.type);
+                HIRPathParams nparams;
+                HIRPathParams nimplParams;
+                bool cparams = walkTypesInPathParams(v, e.params, nparams);
+                bool cimpl = walkTypesInPathParams(v, e.implParams, nimplParams);
+                if (ntype == e.type && !cparams && !cimpl) {
+                    return false;
+                }
+                out = p.clone();
+                auto& oe = out.data.as_UfcsInherent();
+                oe.type = ntype;
+                if (cparams) {
+                    oe.params = mv$(nparams);
+                }
+                if (cimpl) {
+                    oe.implParams = mv$(nimplParams);
+                }
+                return true;
+            }
+            case HIRPathData::TAG_UfcsKnown: {
+                const auto& e = p.data.as_UfcsKnown();
+                auto ntype = v.visitType(e.type);
+                HIRGenericPath ntrait;
+                HIRPathParams nparams;
+                bool ctrait = walkTypesInGenericPath(v, e.trait, ntrait);
+                bool cparams = walkTypesInPathParams(v, e.params, nparams);
+                if (ntype == e.type && !ctrait && !cparams) {
+                    return false;
+                }
+                out = p.clone();
+                auto& oe = out.data.as_UfcsKnown();
+                oe.type = ntype;
+                if (ctrait) {
+                    oe.trait = mv$(ntrait);
+                }
+                if (cparams) {
+                    oe.params = mv$(nparams);
+                }
+                return true;
+            }
+            case HIRPathData::TAG_UfcsUnknown: {
+                const auto& e = p.data.as_UfcsUnknown();
+                auto ntype = v.visitType(e.type);
+                HIRPathParams nparams;
+                bool cparams = walkTypesInPathParams(v, e.params, nparams);
+                if (ntype == e.type && !cparams) {
+                    return false;
+                }
+                out = p.clone();
+                auto& oe = out.data.as_UfcsUnknown();
+                oe.type = ntype;
+                if (cparams) {
+                    oe.params = mv$(nparams);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool walkTypesInTraitPath(HIRVisitor& v, const HIRTraitPath& p, HIRTraitPath& out) {
+        bool changed = false;
+        auto ensureOut = [&]() {
+            if (!changed) {
+                out = p.clone();
+                changed = true;
+            }
+        };
+        {
+            HIRGenericPath ng;
+            if (walkTypesInGenericPath(v, p.path, ng)) {
+                ensureOut();
+                out.path = mv$(ng);
+            }
+        }
+        for (const auto& assoc : p.typeBounds) {
+            HIRGenericPath ns;
+            if (walkTypesInGenericPath(v, assoc.second.sourceTrait, ns)) {
+                ensureOut();
+                out.typeBounds.at(assoc.first).sourceTrait = mv$(ns);
+            }
+            auto nt = v.visitType(assoc.second.type);
+            if (nt != assoc.second.type) {
+                ensureOut();
+                out.typeBounds.at(assoc.first).type = nt;
+            }
+        }
+        for (const auto& assoc : p.traitBounds) {
+            HIRGenericPath ns;
+            if (walkTypesInGenericPath(v, assoc.second.sourceTrait, ns)) {
+                ensureOut();
+                out.traitBounds.at(assoc.first).sourceTrait = mv$(ns);
+            }
+            for (size_t i = 0; i < assoc.second.traits.size(); i++) {
+                HIRTraitPath ntp;
+                if (walkTypesInTraitPath(v, assoc.second.traits[i], ntp)) {
+                    ensureOut();
+                    out.traitBounds.at(assoc.first).traits[i] = mv$(ntp);
+                }
+            }
+        }
+        return changed;
+    }
+}
+
+HIRTypeRef HIRVisitor::visitType(HIRTypeRef ty) {
+    assert(ty);
+    switch (ty->tag()) {
+        case HIRTypeData::TAG_Infer:
+        case HIRTypeData::TAG_Diverge:
+        case HIRTypeData::TAG_Primitive:
+        case HIRTypeData::TAG_Generic:
+        case HIRTypeData::TAG_NodeType:
+            return ty;
+        case HIRTypeData::TAG_Path: {
+            const auto& e = ty->as_Path();
+            auto np = HIRPath(HIRSimplePath());
+            if (!walkTypesInPath(*this, e.path, np)) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            data.as_Path().path = mv$(np);
+            return typeInterner().intern(mv$(data));
+        }
+        case HIRTypeData::TAG_TraitObject: {
+            const auto& e = ty->as_TraitObject();
+            HIRTraitPath ntrait;
+            bool ctrait = e.trait.path != HIRSimplePath() && walkTypesInTraitPath(*this, e.trait, ntrait);
+            HIRGenericPath nmarker;
+            size_t markerIdx = e.markers.size();
+            for (size_t i = 0; i < e.markers.size(); i++) {
+                if (walkTypesInGenericPath(*this, e.markers[i], nmarker)) {
+                    markerIdx = i;
+                    break;
+                }
+            }
+            if (!ctrait && markerIdx == e.markers.size()) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            auto& ne = data.as_TraitObject();
+            if (ctrait) {
+                ne.trait = mv$(ntrait);
+            }
+            if (markerIdx < ne.markers.size()) {
+                ne.markers[markerIdx] = mv$(nmarker);
+                for (size_t j = markerIdx + 1; j < ne.markers.size(); j++) {
+                    HIRGenericPath nm;
+                    if (walkTypesInGenericPath(*this, ne.markers[j], nm)) {
+                        ne.markers[j] = mv$(nm);
+                    }
+                }
+            }
+            return typeInterner().intern(mv$(data));
+        }
+        case HIRTypeData::TAG_ErasedType: {
+            const auto& e = ty->as_ErasedType();
+            bool cinner = false;
+            HIRTypeRef ninner = nullptr;
+            HIRPathParams naliasParams;
+            auto norigin = HIRPath(HIRSimplePath());
+            switch (e.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    ninner = visitType(e.inner.as_Known());
+                    cinner = ninner != e.inner.as_Known();
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    cinner = walkTypesInPathParams(*this, e.inner.as_Alias().params, naliasParams);
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    const auto& ee = e.inner.as_Fcn();
+                    if (ee.origin != HIRSimplePath()) {
+                        cinner = walkTypesInPath(*this, ee.origin, norigin);
+                    }
+                    break;
+                }
+            }
+            HIRPathParams nuse;
+            bool cuse = walkTypesInPathParams(*this, e.use, nuse);
+            HIRTraitPath ntrait;
+            size_t traitIdx = e.traits.size();
+            for (size_t i = 0; i < e.traits.size(); i++) {
+                if (walkTypesInTraitPath(*this, e.traits[i], ntrait)) {
+                    traitIdx = i;
+                    break;
+                }
+            }
+            if (!cinner && !cuse && traitIdx == e.traits.size()) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            auto& ne = data.as_ErasedType();
+            if (cinner) {
+                switch (ne.inner.tag()) {
+                    case TypeDataErasedTypeInner::TAG_Known:
+                        ne.inner.as_Known() = ninner;
+                        break;
+                    case TypeDataErasedTypeInner::TAG_Alias:
+                        ne.inner.as_Alias().params = mv$(naliasParams);
+                        break;
+                    case TypeDataErasedTypeInner::TAG_Fcn:
+                        ne.inner.as_Fcn().origin = mv$(norigin);
+                        break;
+                }
+            }
+            if (cuse) {
+                ne.use = mv$(nuse);
+            }
+            if (traitIdx < ne.traits.size()) {
+                ne.traits[traitIdx] = mv$(ntrait);
+                for (size_t j = traitIdx + 1; j < ne.traits.size(); j++) {
+                    HIRTraitPath nt;
+                    if (walkTypesInTraitPath(*this, ne.traits[j], nt)) {
+                        ne.traits[j] = mv$(nt);
+                    }
+                }
+            }
+            return typeInterner().intern(mv$(data));
+        }
+        case HIRTypeData::TAG_Array: {
+            const auto& e = ty->as_Array();
+            auto ninner = visitType(e.inner);
+            HIRConstGeneric nsize;
+            const auto* se = e.size.opt_Unevaluated();
+            bool csize = se && walkTypesInConstgeneric(*this, *se, nsize);
+            if (ninner == e.inner && !csize) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            auto& ne = data.as_Array();
+            ne.inner = ninner;
+            if (csize) {
+                ne.size.as_Unevaluated() = mv$(nsize);
+            }
+            return typeInterner().intern(mv$(data));
+        }
+        case HIRTypeData::TAG_Slice: {
+            auto ninner = visitType(ty->as_Slice().inner);
+            if (ninner == ty->as_Slice().inner) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            data.as_Slice().inner = ninner;
+            return typeInterner().intern(mv$(data));
+        }
+        case HIRTypeData::TAG_Pattern: {
+            const auto& e = ty->as_Pattern();
+            auto ninner = visitType(e.inner);
+            HIRConstGeneric nc;
+            size_t rangeIdx = ~size_t(0);
+            bool rangeStart = false;
+            for (size_t i = 0; i < e.pattern.alternatives.size() && rangeIdx == ~size_t(0); i++) {
+                const auto& range = e.pattern.alternatives[i];
+                if (range.hasStart && walkTypesInConstgeneric(*this, range.start, nc)) {
+                    rangeIdx = i;
+                    rangeStart = true;
+                } else if (range.hasEnd && walkTypesInConstgeneric(*this, range.end, nc)) {
+                    rangeIdx = i;
+                }
+            }
+            if (ninner == e.inner && rangeIdx == ~size_t(0)) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            auto& ne = data.as_Pattern();
+            ne.inner = ninner;
+            if (rangeIdx != ~size_t(0)) {
+                auto& range = ne.pattern.alternatives[rangeIdx];
+                (rangeStart ? range.start : range.end) = mv$(nc);
+                HIRConstGeneric nc2;
+                if (rangeStart && range.hasEnd && walkTypesInConstgeneric(*this, range.end, nc2)) {
+                    range.end = mv$(nc2);
+                }
+                for (size_t j = rangeIdx + 1; j < ne.pattern.alternatives.size(); j++) {
+                    auto& r = ne.pattern.alternatives[j];
+                    if (r.hasStart && walkTypesInConstgeneric(*this, r.start, nc2)) {
+                        r.start = mv$(nc2);
+                    }
+                    if (r.hasEnd && walkTypesInConstgeneric(*this, r.end, nc2)) {
+                        r.end = mv$(nc2);
+                    }
+                }
+            }
+            return typeInterner().intern(mv$(data));
+        }
+        case HIRTypeData::TAG_Tuple: {
+            const auto& e = ty->as_Tuple();
+            for (size_t i = 0; i < e.size(); i++) {
+                auto nt = visitType(e[i]);
+                if (nt != e[i]) {
+                    auto data = ty->cloneData();
+                    auto& ne = data.as_Tuple();
+                    ne[i] = nt;
+                    for (size_t j = i + 1; j < ne.size(); j++) {
+                        ne[j] = visitType(ne[j]);
+                    }
+                    return typeInterner().intern(mv$(data));
+                }
+            }
+            return ty;
+        }
+        case HIRTypeData::TAG_Borrow: {
+            auto ninner = visitType(ty->as_Borrow().inner);
+            if (ninner == ty->as_Borrow().inner) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            data.as_Borrow().inner = ninner;
+            return typeInterner().intern(mv$(data));
+        }
+        case HIRTypeData::TAG_Pointer: {
+            auto ninner = visitType(ty->as_Pointer().inner);
+            if (ninner == ty->as_Pointer().inner) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            data.as_Pointer().inner = ninner;
+            return typeInterner().intern(mv$(data));
+        }
+        case HIRTypeData::TAG_NamedFunction: {
+            const auto& e = ty->as_NamedFunction();
+            auto np = HIRPath(HIRSimplePath());
+            if (!walkTypesInPath(*this, e.path, np)) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            data.as_NamedFunction().path = mv$(np);
+            return typeInterner().intern(mv$(data));
+        }
+        case HIRTypeData::TAG_Function: {
+            const auto& e = ty->as_Function();
+            auto nret = visitType(e.rettype);
+            size_t argIdx = e.argTypes.size();
+            HIRTypeRef narg = nullptr;
+            for (size_t i = 0; i < e.argTypes.size(); i++) {
+                narg = visitType(e.argTypes[i]);
+                if (narg != e.argTypes[i]) {
+                    argIdx = i;
+                    break;
+                }
+            }
+            if (nret == e.rettype && argIdx == e.argTypes.size()) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            auto& ne = data.as_Function();
+            ne.rettype = nret;
+            if (argIdx < ne.argTypes.size()) {
+                ne.argTypes[argIdx] = narg;
+                for (size_t j = argIdx + 1; j < ne.argTypes.size(); j++) {
+                    ne.argTypes[j] = visitType(ne.argTypes[j]);
+                }
+            }
+            return typeInterner().intern(mv$(data));
+        }
+    }
+    return ty;
+}
+
+void HIRVisitor::visitTypeDataChildren(HIRTypeData& data) {
+    switch (data.tag()) {
+        case HIRTypeData::TAG_Infer:
+        case HIRTypeData::TAG_Diverge:
+        case HIRTypeData::TAG_Primitive:
+        case HIRTypeData::TAG_Generic:
+        case HIRTypeData::TAG_NodeType:
+            break;
+        case HIRTypeData::TAG_Path: {
+            auto& e = data.as_Path();
+            this->visitPath(e.path, HIRVisitor::PathContext::TYPE);
+            break;
+        }
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = data.as_TraitObject();
+            if (e.trait.path != HIRSimplePath()) {
+                this->visitTraitPath(e.trait);
+            }
+            for (auto& trait : e.markers) {
+                this->visitGenericPath(trait, HIRVisitor::PathContext::TYPE);
+            }
+            break;
+        }
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = data.as_ErasedType();
+            switch (e.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    updateType(e.inner.as_Known());
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    this->visitPathParams(e.inner.as_Alias().params);
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    auto& ee = e.inner.as_Fcn();
+                    if (ee.origin != HIRSimplePath()) {
+                        this->visitPath(ee.origin, HIRVisitor::PathContext::VALUE);
+                    }
+                    break;
+                }
+            }
+            this->visitPathParams(e.use);
+            for (auto& trait : e.traits) {
+                this->visitTraitPath(trait);
+            }
+            break;
+        }
+        case HIRTypeData::TAG_Array: {
+            auto& e = data.as_Array();
+            updateType(e.inner);
+            if (auto* se = e.size.opt_Unevaluated()) {
+                this->visitConstgeneric(*se);
+            }
+            break;
+        }
+        case HIRTypeData::TAG_Slice: {
+            updateType(data.as_Slice().inner);
+            break;
+        }
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = data.as_Pattern();
+            updateType(e.inner);
+            for (auto& range : e.pattern.alternatives) {
+                if (range.hasStart) {
+                    this->visitConstgeneric(range.start);
+                }
+                if (range.hasEnd) {
+                    this->visitConstgeneric(range.end);
+                }
+            }
+            break;
+        }
+        case HIRTypeData::TAG_Tuple: {
+            for (auto& t : data.as_Tuple()) {
+                updateType(t);
+            }
+            break;
+        }
+        case HIRTypeData::TAG_Borrow: {
+            updateType(data.as_Borrow().inner);
+            break;
+        }
+        case HIRTypeData::TAG_Pointer: {
+            updateType(data.as_Pointer().inner);
+            break;
+        }
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = data.as_NamedFunction();
+            this->visitPath(e.path, HIRVisitor::PathContext::VALUE);
+            break;
+        }
+        case HIRTypeData::TAG_Function: {
+            auto& e = data.as_Function();
+            for (auto& t : e.argTypes) {
+                updateType(t);
+            }
+            updateType(e.rettype);
+            break;
+        }
+    }
+}
+
+void HIRVisitor::visitConstgeneric(HIRConstGeneric& c) {
+    if (auto* unevaluated = c.opt_Unevaluated()) {
+        if ((*unevaluated)->selfType) {
+            updateType((*unevaluated)->selfType);
+        }
+        this->visitPathParams((*unevaluated)->paramsImpl);
+        this->visitPathParams((*unevaluated)->paramsItem);
+        this->visitExpr(*(*unevaluated)->expr);
+    }
+}
+
 void HIRVisitor::visitTraitPath(HIRTraitPath& p) {
     this->visitGenericPath(p.path, HIRVisitor::PathContext::TYPE);
     for (auto& assoc : p.typeBounds) {
         this->visitGenericPath(assoc.second.sourceTrait, HIRVisitor::PathContext::TYPE);
-        this->visitType(assoc.second.type);
+        updateType(assoc.second.type);
     }
     for (auto& assoc : p.traitBounds) {
         this->visitGenericPath(assoc.second.sourceTrait, HIRVisitor::PathContext::TYPE);
@@ -753,21 +1193,21 @@ void HIRVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) {
         }
         case HIRPathData::TAG_UfcsInherent: {
             auto& e = p.data.as_UfcsInherent();
-            this->visitType(e.type);
+            updateType(e.type);
             this->visitPathParams(e.params);
             this->visitPathParams(e.implParams);
             break;
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& e = p.data.as_UfcsKnown();
-            this->visitType(e.type);
+            updateType(e.type);
             this->visitGenericPath(e.trait, HIRVisitor::PathContext::TYPE);
             this->visitPathParams(e.params);
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
             auto& e = p.data.as_UfcsUnknown();
-            this->visitType(e.type);
+            updateType(e.type);
             this->visitPathParams(e.params);
             break;
         }
@@ -776,7 +1216,7 @@ void HIRVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) {
 
 void HIRVisitor::visitPathParams(HIRPathParams& p) {
     for (auto& ty : p.types) {
-        this->visitType(ty);
+        updateType(ty);
     }
     for (auto& v : p.values) {
         visitConstgeneric(v);
@@ -790,10 +1230,10 @@ void HIRVisitor::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext /*p
 void HIRVisitor::visitExpr(HIRExprPtr& exp) {
     // Do nothing, leave expression stuff for user
     for (auto& t : exp.erasedTypes) {
-        visitType(t);
+        updateType(t);
     }
     for (auto& t : exp.bindings) {
-        visitType(t);
+        updateType(t);
     }
 }
 

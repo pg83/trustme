@@ -1601,15 +1601,15 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
         {
         }
 
-        void visitType(HIRTypeRef& ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             auto savedClearOpaque = clearOpaque;
             clearOpaque = false;
             if (ty->is_ErasedType()) {
                 revealOpaqueType(ty);
-                visitType(ty);
+                ty = visitType(ty);
                 clearOpaque = true;
             } else {
-                HIRVisitor::visitType(ty);
+                ty = HIRVisitor::visitType(ty);
                 if (clearOpaque && ty->is_Path() && ty->as_Path().binding.is_Opaque()) {
                     auto data = ty->cloneData();
                     data.as_Path().binding = HIRTypePathBinding::make_Unbound({});
@@ -1617,11 +1617,12 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
                 }
             }
             clearOpaque |= savedClearOpaque;
+            return ty;
         }
     } visitor(sp, *this);
 
     expandAssociatedTypes(sp, input);
-    visitor.visitType(input);
+    input = visitor.visitType(input);
     expandAssociatedTypes(sp, input);
 }
 
