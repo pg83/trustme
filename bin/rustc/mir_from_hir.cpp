@@ -906,6 +906,13 @@ namespace {
                 switch (v.tag()) {
                     case HIRAsmParam::TAG_Const: {
                         auto& e = v.as_Const();
+                        // A named constant is a constant: lowering an ordinary
+                        // read of one puts it in a temporary first, which is
+                        // not what an immediate operand can be given.
+                        if (const auto* pv = cast<HIRExprNodePathValue>(&*e); pv && pv->target == HIRExprNodePathValue::CONSTANT) {
+                            ent.params.push_back(MIRAsmParam::make_Const(MIRConstant::make_Const({box$(pv->path.clone())})));
+                            break;
+                        }
                         // This constant needs to have been evaluated fully (so a `MIR::Constant` can be created)
                         this->visitNodePtr(e);
                         auto param = builder.getResultInParam(e->span(), e->resType);

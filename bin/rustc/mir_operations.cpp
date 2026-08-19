@@ -1117,6 +1117,18 @@ void MIRCleanupConstant(const MIRTypeResolve& state, MirMutator& mutator, MIRCon
     }
 }
 
+void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam& p);
+
+/// An immediate assembly operand has to be a value, and a named constant
+/// reaches here as the path that names it.
+static void MIRCleanupAsmConst(const MIRTypeResolve& state, MirMutator& mutator, MIRAsmParam& p) {
+    auto param = MIRParam(std::move(p.as_Const()));
+    MIRCleanupParam(state, mutator, param);
+    if (param.is_Constant()) {
+        p = MIRAsmParam::make_Const(std::move(param.as_Constant()));
+    }
+}
+
 void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam& p) {
     switch (p.tag()) {
         case MIRParam::TAG_LValue: {
@@ -1222,6 +1234,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     for (auto& p : e.params) {
                     switch (p.tag()) {
                         case MIRAsmParam::TAG_Const: {
+                            MIRCleanupAsmConst(state, mutator, p);
                             break;
                         }
                         case MIRAsmParam::TAG_Sym: {
@@ -1538,6 +1551,8 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         if (reg->output) {
                             MIRCleanupLValue(state, mutator, *reg->output);
                         }
+                    } else if (p.is_Const()) {
+                        MIRCleanupAsmConst(state, mutator, p);
                     }
                 }
                 break;

@@ -3889,6 +3889,48 @@ namespace {
 /// <summary>
 /// Mark borrows of promotable statics
 /// </summary>
+/// What a `const` holds is the value of its body's tail, and that value is kept
+/// for the life of the program. A borrow there may not be mutable, and may not
+/// be of a temporary the program can change through it: either would give a
+/// constant a place that can be written.
+static void checkConstFinalBorrow(const StaticTraitResolve& resolve, HIRExprNode& root) {
+    HIRExprNode* node = &root;
+    while (auto* block = cast<HIRExprNodeBlock>(node)) {
+        if (!block->valueNode) {
+            return;
+        }
+        node = &*block->valueNode;
+    }
+    auto* borrow = cast<HIRExprNodeBorrow>(node);
+    if (!borrow) {
+        return;
+    }
+    // Coercing `&mut x` to `&T` reads as a shared borrow of a dereference of
+    // the mutable one, and the place that names is still one the program could
+    // have written through.
+    bool isMutable = borrow->type != HIRBorrowType::Shared;
+    HIRExprNode* held = &*borrow->value;
+    while (auto* deref = cast<HIRExprNodeDeref>(held)) {
+        auto* inner = cast<HIRExprNodeBorrow>(&*deref->value);
+        if (!inner) {
+            break;
+        }
+        isMutable |= inner->type != HIRBorrowType::Shared;
+        held = &*inner->value;
+    }
+    // A borrow of something the program named keeps that thing's own rules;
+    // only a value this expression makes is kept by the constant.
+    if (cast<HIRExprNodePathValue>(held)) {
+        return;
+    }
+    if (isMutable) {
+        ERROR(borrow->span(), E0000, "A mutable reference is not allowed in the final value of a constant");
+    }
+    if (resolve.typeIsInteriorMutable(borrow->span(), held->resType) == HIRCompare::Equal) {
+        ERROR(borrow->span(), E0000, "A constant may not refer to interior mutable data - " << held->resType);
+    }
+}
+
 class StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
     const StaticTraitResolve& resolve_;
     const HIRTypeData* selfType;
@@ -4237,6 +4279,7 @@ public:
 
         // NOTE: The second pass will lift this into a `const`, which will then be evaluated
         // - Evaluation will fail if it's not constant
+        checkConstFinalBorrow(resolve_, *node.inner);
 
         isConstant = allConstant_;
     }
@@ -4486,6 +4529,7 @@ public:
 
     void visitConstant(HIRItemPath p, HIRConstant& item) override {
         if (item.value) {
+            checkConstFinalBorrow(resolve_, *item.value);
             StaticBorrowExprVisitorMark ev(resolve_, selfType, item.value, true);
             ev.visitNodePtr(item.value);
             if (!ev.allConstant()) {

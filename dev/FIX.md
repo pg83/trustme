@@ -264,12 +264,17 @@ Fifty-one negative tests compile successfully. The largest source areas are:
 |---|---:|
 | name resolution | 7 |
 | destructor restrictions | 7 |
-| const evaluation | 3 |
 | subtyping | 3 |
 | trait bounds | 3 |
 | closure restrictions | 3 |
 | drop checking | 3 |
-| all smaller areas | 23 |
+| all smaller areas | 22 |
+
+The `const evaluation` ones are fixed: what a `const` holds is the value of its
+body's tail, kept for the life of the program, so a mutable reference may not
+be part of it and neither may a temporary the program could change through it.
+A borrow of something the program *named* keeps that thing's own rules, which
+is why `const C: &AtomicU8 = &SHARED;` still stands.
 
 The two `trait items` ones are fixed: a trait bounded by `Sized` has no `dyn`
 form, and forming one is now an error.  Only that rule is checked; the rest of
@@ -307,9 +312,8 @@ constant evaluation of a generic argument) sees the extra entry and rejects it.
 The two-argument `wrap_binder!(e; T)` form is not reachable: our macro engine
 does not match `($expr:expr ; $ty:ty)`. No corpus test uses it.
 
-`limits__L37` is the other half of `#![recursion_limit]`: the limit now bounds
-macro expansion, and that test needs it to bound auto-dereferencing as well
-(`(|_: &u8| {})(&&&1)` with a limit of 1).
+`#![recursion_limit]` now bounds how far a coercion may follow `Deref` as well
+as how deep macro expansion may nest, which is what `limits__L37` measures.
 
 ## P2: generated code and linking
 
