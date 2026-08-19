@@ -12,6 +12,7 @@
 #include "hir_typeck_static.h"
 #include <codegen_c_prelude.h>
 
+#include <std/lib/vector.h>
 #include <std/sym/i_map.h>
 #include <std/mem/obj_pool.h>
 #include <std/rng/split_mix_64.h>
@@ -5449,6 +5450,54 @@ default:
                         }
                     }
                 }
+                // A vector register class takes a vector, and the C type a SIMD
+                // value is emitted as is a struct -- which the compiler will not
+                // put in one. Copy such an operand through a vector of the same
+                // width, which it will.
+                stl::Vector<size_t> vectorShim;
+                vectorShim.zero(asmParams.size());
+                auto paramIndexOf = [&](const MIRAsmParam::Data_Reg* reg) {
+                    for (size_t i = 0; i < asmParams.size(); i++) {
+                        if (asmParams[i].opt_Reg() == reg) {
+                            return i;
+                        }
+                    }
+                    return asmParams.size();
+                };
+                for (size_t i = 0; i < asmParams.size(); i++) {
+                    const auto* pe = asmParams[i].opt_Reg();
+                    if (!pe || (!pe->input && !pe->output)) {
+                        continue;
+                    }
+                    const auto* regClass = pe->spec.opt_Class();
+                    if (!regClass
+                        || (*regClass != AsmRegisterClass::x86Xmm && *regClass != AsmRegisterClass::x86Ymm
+                            && *regClass != AsmRegisterClass::x86Zmm)) {
+                        continue;
+                    }
+                    HIRTypeRef tmp;
+                    const auto* opTy = pe->input ? mirRes->getParamType(tmp, *pe->input) : mirRes->getLvalueType(tmp, *pe->output);
+                    if (opTy->is_Primitive() || opTy->is_Pointer() || opTy->is_Borrow()) {
+                        continue;
+                    }
+                    size_t opSize = 0;
+                    if (!TargetGetSizeOf(sp, resolve_, opTy, opSize) || opSize == 0) {
+                        continue;
+                    }
+                    if (!blockOpen) {
+                        blockOpen = true;
+                        of << indent << "{\n";
+                    }
+                    vectorShim.mut(i) = opSize;
+                    of << indent << "typedef long long asm_vec_ty_" << i << " __attribute__((vector_size(" << opSize << ")));\n";
+                    of << indent << "asm_vec_ty_" << i << " asm_vec_" << i << ";\n";
+                    if (pe->input) {
+                        of << indent << "memcpy(&asm_vec_" << i << ", &";
+                        emitParam(*pe->input);
+                        of << ", " << opSize << ");\n";
+                    }
+                }
+
                 std::vector<const MIRAsmParam::Data_Reg*> outputs;
                 // Outputs
                 for (size_t i = 0; i < asmParams.size(); i++) {
@@ -5661,6 +5710,8 @@ default:
                         of << "asm_anon_" << i;
                     } else if (const auto* regnameP = p.spec.opt_Explicit()) {
                         of << "asm_" << *regnameP;
+                    } else if (const auto shimIdx = paramIndexOf(&p); shimIdx != asmParams.size() && vectorShim[shimIdx] != 0) {
+                        of << "asm_vec_" << shimIdx;
                     } else {
                         emitLvalue(*p.output);
                     }
@@ -5726,8 +5777,11 @@ default:
                             }
                             assert(r.input);
                             of << "\" (";
+                            const auto shimIdx = paramIndexOf(&r);
                             if (const auto* regnameP = p.as_Reg().spec.opt_Explicit()) {
                                 of << "asm_" << *regnameP;
+                            } else if (shimIdx != asmParams.size() && vectorShim[shimIdx] != 0) {
+                                of << "asm_vec_" << shimIdx;
                             } else {
                                 emitParam(*r.input);
                             }
@@ -5769,6 +5823,16 @@ default:
                     }
                 }
                 of << ");\n";
+                for (size_t i = 0; i < asmParams.size(); i++) {
+                    if (vectorShim[i] != 0) {
+                        const auto* pe = asmParams[i].opt_Reg();
+                        if (pe->output) {
+                            of << indent << "memcpy(&";
+                            emitLvalue(*pe->output);
+                            of << ", &asm_vec_" << i << ", " << vectorShim[i] << ");\n";
+                        }
+                    }
+                }
                 for (size_t i = 0; i < asmParams.size(); i++) {
                     if (const auto* pe = asmParams[i].opt_Reg()) {
                         if (const auto* regnameP = pe->spec.opt_Explicit()) {
