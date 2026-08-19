@@ -5524,6 +5524,17 @@ default:
                 }
                 break;
             }
+            case ASTItem::TAG_Enum: {
+                // A variant's discriminant is an expression like any other, and
+                // may hold a module of its own.
+                auto& e = i.data.as_Enum();
+                for (auto& var : e.variants()) {
+                    if (var.discriminantValue.isValid()) {
+                        var.discriminantValue.node().visit(exprIter);
+                    }
+                }
+                break;
+            }
         }
     }
 }
