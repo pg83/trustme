@@ -547,6 +547,9 @@ default:
                 auto ptr = mutator.inTemporary(ptrTy, MIRRValue::make_Cast({mv$(addr), ptrTy}));
 
                 switch (metadataType) {
+                    // An extern type carries no metadata at all, so a pointer
+                    // to one is as thin as a pointer to a sized type.
+                    case MetadataType::Zero:
                     case MetadataType::None:
                         return MIRRValue::make_Borrow({te.type, false, MIRLValue::newDeref(mv$(ptr))});
                     case MetadataType::Slice: {
@@ -556,7 +559,6 @@ default:
                     }
                     case MetadataType::TraitObject:
                     case MetadataType::Unknown:
-                    case MetadataType::Zero:
                         MIR_TODO(state, "Integer-address borrow with metadata " << metadataType);
                 }
             }
@@ -572,6 +574,9 @@ default:
                 // Get the metadata type (for !Sized wrapper types)
                 auto metaTy = state.resolve.metadataType(state.sp, te.inner);
                 switch (metaTy) {
+                    // An extern type -- the vtable a `DynMetadata` points at is
+                    // one -- carries no metadata, so the pointer is thin.
+                    case MetadataType::Zero:
                     case MetadataType::None:
                         // TODO: What if the type doesn't match? Emit a `_Cast foo as &Bar`?
                         if (srcTy != te.inner) {
@@ -604,8 +609,6 @@ default:
                     }
                     case MetadataType::Unknown:
                         MIR_BUG(state, te.inner << " unknown metadata type");
-                    case MetadataType::Zero:
-                        MIR_TODO(state, "Zero metadata");
                 }
             } else {
                 // This is a borrow of a "string"
