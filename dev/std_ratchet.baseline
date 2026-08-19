@@ -316,7 +316,7 @@
 1	std::vector	bin/rustc/parse_parseerror.cpp
 1	std::vector	bin/rustc/parse_parseerror.h
 11	new	bin/rustc/parse_token.cpp
-7	std::string	bin/rustc/parse_token.cpp
+6	std::string	bin/rustc/parse_token.cpp
 2	unique_ptr	bin/rustc/parse_token.cpp
 5	std::string	bin/rustc/parse_token.h
 1	unique_ptr	bin/rustc/parse_token.h

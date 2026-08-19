@@ -7,6 +7,8 @@
 #include "parse_parseerror.h"
 #include "parse_interpolated_fragment.h"
 
+#include <iomanip>
+
 #include <std/str/view.h>
 #include <std/str/builder.h>
 
@@ -370,34 +372,119 @@ enum eTokenType Token::typefromstr(const ::std::string& s) {
     return TOK_NULL;
 }
 
-struct EscapedString {
-    const ::std::string& s;
+/// The text of a string literal, viewed as the bytes it holds.
+static stl::StringView literalBytes(const ::std::string& s) {
+    return stl::StringView(reinterpret_cast<const u8*>(s.data()), s.size());
+}
 
-    EscapedString(const ::std::string& s)
+struct EscapedString {
+    stl::StringView s;
+
+    EscapedString(stl::StringView s)
         : s(s)
     {
     }
 
+    /// How many bytes the UTF-8 sequence starting at `i` runs for, or zero
+    /// when the bytes there are not one.
+    static size_t utf8Run(stl::StringView s, size_t i) {
+        const u8 lead = s[i];
+        const size_t len = (lead & 0xE0) == 0xC0 ? 2 : (lead & 0xF0) == 0xE0 ? 3 : (lead & 0xF8) == 0xF0 ? 4 : 0;
+        if (len == 0 || i + len > s.length()) {
+            return 0;
+        }
+        for (size_t k = 1; k < len; k++) {
+            if ((s[i + k] & 0xC0) != 0x80) {
+                return 0;
+            }
+        }
+        return len;
+    }
+
     friend ::std::ostream& operator<<(::std::ostream& os, const EscapedString& x) {
-        for (auto b : x.s) {
+        for (size_t i = 0; i < x.s.length(); i++) {
+            // A byte, not a char: `char` is signed here, and a high byte read
+            // through it would print as its sign-extended self.
+            const u8 b = x.s[i];
             switch (b) {
                 case '"':
                     os << "\\\"";
-                    break;
+                    continue;
                 case '\\':
                     os << "\\\\";
-                    break;
+                    continue;
                 case '\n':
                     os << "\\n";
-                    break;
+                    continue;
+                case '\r':
+                    os << "\\r";
+                    continue;
+                case '\t':
+                    os << "\\t";
+                    continue;
                 default:
-                    if (' ' <= b && b < 0x7F) {
-                        os << b;
-                    } else {
-                        os << "\\u{" << ::std::hex << (unsigned int)b << "}";
-                    }
                     break;
             }
+            if (' ' <= b && b < 0x7F) {
+                os << static_cast<char>(b);
+                continue;
+            }
+            if (b < 0x80) {
+                // A control character is written by its value.
+                os << "\\u{" << ::std::hex << static_cast<unsigned int>(b) << ::std::dec << "}";
+                continue;
+            }
+            // Text passes through as itself; a byte that starts no sequence is
+            // written as the byte it is.
+            if (const auto run = utf8Run(x.s, i)) {
+                os.write(reinterpret_cast<const char*>(x.s.data() + i), run);
+                i += run - 1;
+                continue;
+            }
+            os << "\\x" << ::std::hex << ::std::uppercase << static_cast<unsigned int>(b) << ::std::nouppercase << ::std::dec;
+        }
+        return os;
+    }
+};
+
+/// A byte string holds bytes, not text: rustc writes every byte that is not
+/// printable ASCII as a hex escape, since `\u{..}` has no meaning there.
+struct EscapedByteString {
+    stl::StringView s;
+
+    EscapedByteString(stl::StringView s)
+        : s(s)
+    {
+    }
+
+    friend ::std::ostream& operator<<(::std::ostream& os, const EscapedByteString& x) {
+        for (size_t i = 0; i < x.s.length(); i++) {
+            const u8 b = x.s[i];
+            switch (b) {
+                case '"':
+                    os << "\\\"";
+                    continue;
+                case '\\':
+                    os << "\\\\";
+                    continue;
+                case '\n':
+                    os << "\\n";
+                    continue;
+                case '\r':
+                    os << "\\r";
+                    continue;
+                case '\t':
+                    os << "\\t";
+                    continue;
+                default:
+                    break;
+            }
+            if (' ' <= b && b < 0x7F) {
+                os << static_cast<char>(b);
+                continue;
+            }
+            os << "\\x" << ::std::hex << ::std::uppercase << ::std::setw(2) << ::std::setfill('0') << static_cast<unsigned int>(b)
+               << ::std::nouppercase << ::std::dec << ::std::setfill(' ');
         }
         return os;
     }
@@ -573,9 +660,9 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
             // raw literal, with just enough hashes to close it unambiguously.
             const auto& text = data_.as_String();
             if (!isDocComment_) {
-                return FMT("\"" << EscapedString(text) << "\"");
+                return FMT("\"" << EscapedString(literalBytes(text)) << "\"");
             }
-            auto hashes = rawStringHashes(stl::StringView(reinterpret_cast<const u8*>(text.data()), text.size()));
+            auto hashes = rawStringHashes(literalBytes(text));
             ss << "r";
             for (size_t i = 0; i < hashes; i++) {
                 ss << "#";
@@ -587,11 +674,11 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
             return ss.str();
         }
         case TOK_CSTRING:
-            return FMT("c\"" << EscapedString(data_.as_String()) << "\"");
+            return FMT("c\"" << EscapedString(literalBytes(data_.as_String())) << "\"");
         case TOK_LITERAL_SUFFIXED:
             return data_.as_String();
         case TOK_BYTESTRING:
-            return FMT("b\"" << data_.as_String() << "\"");
+            return FMT("b\"" << EscapedByteString(literalBytes(data_.as_String())) << "\"");
         case TOK_HASH:
             return "#";
         case TOK_UNDERSCORE:
@@ -835,7 +922,7 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         case TOK_BYTESTRING:
         case TOK_LITERAL_SUFFIXED:
             if (tok.data_.is_String()) {
-                os << "\"" << EscapedString(tok.str()) << "\"";
+                os << "\"" << EscapedString(literalBytes(tok.str())) << "\"";
             } else if (tok.data_.is_None())
                 ;
             else {
