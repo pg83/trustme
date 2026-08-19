@@ -1144,8 +1144,17 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
             auto& e = ty->data.as_Array();
             auto inner = LowerHIRType(e.inner);
             if (e.size) {
+                // `[u8; { N }]` is the parameter itself, just braced.
+                const ASTExprNode* sizeInner = &*e.size;
+                for (;;) {
+                    const auto* blk = cast<const ASTExprNodeBlock>(sizeInner);
+                    if (!blk || blk->nodes.size() != 1 || blk->nodes.front().hasSemicolon || !blk->nodes.front().node) {
+                        break;
+                    }
+                    sizeInner = blk->nodes.front().node.get();
+                }
                 // If the size expression is an unannotated or usize integer literal, don't bother converting the expression
-                if (const auto* ptr = cast<const ASTExprNodeInteger>(&*e.size)) {
+                if (const auto* ptr = cast<const ASTExprNodeInteger>(sizeInner)) {
                     if (ptr->datatype == CORETYPE_UINT || ptr->datatype == CORETYPE_ANY) {
                         // TODO: Chage the HIR format to support very large arrays
                         if (ptr->value >= U128(UINT64_MAX)) {
@@ -1154,8 +1163,8 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
                         return crate->types.array(inner, ptr->value.truncateU64());
                     }
                 }
-                if (const auto* ptr = cast<const ASTExprNodeNamedValue>(&*e.size)) {
-                    if (ptr->path.isTrivial()) {
+                if (const auto* ptr = cast<const ASTExprNodeNamedValue>(sizeInner)) {
+                    if (ptr->path.isTrivial() && ptr->path.bindings.value.binding.is_Generic()) {
                         auto gr = HIRGenericRef(ptr->path.asTrivial(), ptr->path.bindings.value.binding.as_Generic().index);
                         return crate->types.array(inner, HIRConstGeneric(mv$(gr)));
                     }
@@ -1165,6 +1174,22 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
                 // expression form uses.
                 if (cast<const ASTExprNodeWildcardPattern>(&*e.size)) {
                     return crate->types.array(inner, HIRConstGeneric::make_Infer({}));
+                }
+                // A const parameter stands on its own in a length; it takes
+                // `generic_const_exprs` to compute with one.
+                if (!crate->featureEnabled("generic_const_exprs")) {
+                    struct FindGeneric: public ASTNodeVisitorDef {
+                        bool found = false;
+                        void visit(ASTExprNodeNamedValue& node) override {
+                            if (node.path.bindings.value.binding.is_Generic()) {
+                                found = true;
+                            }
+                        }
+                    } fg;
+                    const_cast<ASTExprNode&>(*e.size).visit(fg);
+                    if (fg.found) {
+                        ERROR(ty->span(), E0000, "generic parameters may not be used in const operations - " << ty);
+                    }
                 }
                 return crate->types.array(inner, HIRConstGeneric::make_Unevaluated(std::make_unique<HIRConstGenericUnevaluated>(LowerHIRExpr(e.size))));
             } else {
