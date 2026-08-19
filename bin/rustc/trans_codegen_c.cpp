@@ -2698,6 +2698,14 @@ default:
             emitFunctionHeader(p, item, params);
             of << "\n";
             of << "{\n";
+            for (unsigned int i = 0; i < item.args.size(); i++) {
+                const auto& argTy = argTypes[i].second;
+                if (!argumentIsPassed(item.abi, argTy)) {
+                    of << "\t";
+                    emitCtype(argTy, FMT_CB(os, os << "arg" << i;));
+                    of << " = {};\t// zero-sized, not passed\n";
+                }
+            }
 
             if (item.markings.isNaked) {
                 MIR_ASSERT(localMirRes, code->locals.empty(), "Naked function has MIR locals");
@@ -4655,6 +4663,26 @@ default:
             }
         }
 
+        /// The ABI of the function a call names, which decides whether a
+        /// zero-sized argument is passed at all. An intrinsic, or a target
+        /// this cannot resolve, is Rust's own.
+        RcString calleeAbi(const MIRTypeResolve& localMirRes, const MIRCallTarget& fcn) {
+            if (const auto* pathP = fcn.opt_Path()) {
+                MonomorphState msTmp(crate.types);
+                auto v = resolve_.getValue(sp, *pathP, msTmp, /*signature_only=*/true);
+                if (const auto* f = v.opt_Function()) {
+                    return (**f).abi;
+                }
+            } else if (const auto* valP = fcn.opt_Value()) {
+                HIRTypeRef tmp;
+                const auto& ty = localMirRes.getLvalueType(tmp, *valP);
+                if (const auto* ft = ty->opt_Function()) {
+                    return ft->abi;
+                }
+            }
+            return RcString::newInterned(ABI_RUST);
+        }
+
         void emitTermCall(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_Call& e, unsigned indentLevel, bool tailCall = false) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
             const auto* targetPath = e.fcn.opt_Path();
@@ -4669,10 +4697,14 @@ default:
             }
             of << indent;
 
+            const auto calleeAbi = this->calleeAbi(localMirRes, e.fcn);
             bool hasZst = false;
             for (unsigned int j = 0; j < e.args.size(); j++) {
                 HIRTypeRef tmp;
                 const auto& ty = mirRes->getParamType(tmp, e.args[j]);
+                if (!argumentIsPassed(calleeAbi, ty)) {
+                    continue;
+                }
                 if (options.disallowEmptyStructs /*&& (e.args[j].is_LValue() && (e.args[j].as_LValue().is_Field()))*/) {
                     if (this->typeIsBadZst(ty)) {
                         if (!hasZst) {
@@ -4805,13 +4837,16 @@ default:
             of << "(";
             bool firstCallArgument = true;
             for(unsigned int j = 0; j < e.args.size(); j ++) {
+                HIRTypeRef tmp;
+                const auto& ty = mirRes->getParamType(tmp, e.args[j]);
+                if (!argumentIsPassed(calleeAbi, ty)) {
+                    continue;
+                }
                 if (!firstCallArgument) {
                     of << ",";
                 }
                 firstCallArgument = false;
                 of << " ";
-                HIRTypeRef tmp;
-                const auto& ty = mirRes->getParamType(tmp, e.args[j]);
 
                 if (this->typeIsBadZst(ty)) {
                     of << "zarg" << j;
@@ -5717,6 +5752,18 @@ default:
             }
         }
 
+        /// Rust's foreign ABIs pass nothing for a zero-sized argument, and so
+        /// does every C compiler an emitted declaration has to agree with.
+        bool argumentIsPassed(const RcString& abi, const HIRTypeData* ty) {
+            // `rust-call`, `rust-intrinsic` and friends are Rust's own ABI
+            // under another name, and pass what the emitted code passes.
+            if (abi == ABI_RUST || abi == "unadjusted" || strncmp(abi.c_str(), "rust-", 5) == 0) {
+                return true;
+            }
+            size_t size = 0;
+            return !(TargetGetSizeOf(sp, resolve_, ty, size) && size == 0);
+        }
+
         void emitFunctionHeader(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool includeCallerLocation = true, const char* nameSuffix = "") {
             HIRTypeRef tmp;
             const auto& retTy = monomorphiseFcnReturn(tmp, item, params);
@@ -5727,12 +5774,23 @@ default:
             auto cb = FMT_CB(
                 ss,
                 ss << " " << compilerAbiAttribute(item.abi) << TransMangle(p) << nameSuffix << "(";
-                if (item.args.empty() && !hasCallerLocation) { ss << "void)"; } else {
+                unsigned int passedCount = 0;
+                for (unsigned int i = 0; i < item.args.size(); i++) {
+                    if (argumentIsPassed(item.abi, params.monomorph(resolve_, item.args[i].second))) {
+                        passedCount++;
+                    }
+                }
+                if (passedCount == 0 && !hasCallerLocation && !item.variadic) { ss << "void)"; } else {
+                    unsigned int emitted = 0;
                     for (unsigned int i = 0; i < item.args.size(); i++) {
-                        ss << "\n\t\t";
                         auto ty = params.monomorph(resolve_, item.args[i].second);
+                        if (!argumentIsPassed(item.abi, ty)) {
+                            continue;
+                        }
+                        ss << "\n\t\t";
                         this->emitFunctionArgument(ty, FMT_CB(os, os << "arg" << i;));
-                        if (item.variadic || i + 1 < item.args.size() || hasCallerLocation) {
+                        emitted++;
+                        if (item.variadic || emitted < passedCount || hasCallerLocation) {
                             of << ",";
                         }
                         of << " // " << ty;

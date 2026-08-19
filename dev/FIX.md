@@ -292,15 +292,6 @@ imports (or a glob and an outer item) both provide is *used*.
 variadic parameter (`mut ap: ...`) is a `VaListImpl` the body then reads, so
 dropping the parameter as the unnamed form does would only move the failure.
 
-`abi-sysv64-arg-passing` and `extern/extern-pass-empty` are one root: Rust's C
-ABI passes nothing for a zero-sized argument, and the emitted C++ passes the
-one-byte stand-in that `TRUSTME_CODEGEN_DISALLOW_EMPTY_STRUCTS` gives such a
-struct, so every argument after it lands one register late. The fix is to omit
-a zero-sized argument from both the signature and the call wherever the ABI is
-not Rust's own (`emitFunctionHeader` has the ABI; the call site has to find the
-callee's), and to give the body of such a function a zero local in place of the
-parameter it no longer takes.
-
 `_` is written the same way for a type and for a const argument, and lowering
 splits a path's arguments into a type list and a value list by that spelling
 alone, so `Foo::<_, 1>` on `Foo<const N: bool, const M: u8>` binds `N` to `1`.

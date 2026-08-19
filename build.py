@@ -929,6 +929,29 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_extern_c_zst_argument_driver",
+    inputs=[
+        "$(S)/tst/unit/test_extern_c_zst_argument.py",
+        "$(S)/tst/unit/test_extern_c_zst_argument.rs",
+        "$(S)/tst/unit/extern_c_zst_argument.c",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/extern_c_zst_argument_driver.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_extern_c_zst_argument.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/test_extern_c_zst_argument.rs",
+        "$(S)/tst/unit/extern_c_zst_argument.c",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/extern_c_zst_argument_driver.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_native_link_search_driver",
     inputs=[
         "$(S)/tst/unit/test_native_link_search.py",
