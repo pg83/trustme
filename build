@@ -861,7 +861,7 @@ class BuildContext:
 
     def import_build(self, path: str, output_name: str,
                      extra_cflags=(), extra_cxxflags=(),
-                     extra_cppflags=(), deps=()) -> Target:
+                     extra_cppflags=(), deps=(), namespace=None) -> Target:
         path = str(path)
         if path.startswith(S + "/"):
             build_file = self.physical(path)
@@ -873,16 +873,18 @@ class BuildContext:
         if not build_file.is_file():
             raise BuildError(f"imported build file does not exist: {build_file}")
         try:
-            namespace = build_file.parent.relative_to(self.source_root).as_posix()
+            source_namespace = build_file.parent.relative_to(self.source_root).as_posix()
         except ValueError as exc:
             raise BuildError(
                 f"imported build file is outside the source tree: {build_file}"
             ) from exc
-        if namespace in ("", "."):
+        if source_namespace in ("", "."):
             raise BuildError("cannot import the root build file into itself")
 
-        source_prefix = f"{S}/{namespace}"
-        build_prefix = f"{B}/{namespace}"
+        # An explicit namespace gives the import its own build prefix, so the
+        # same build file can be imported more than once with different flags.
+        source_prefix = f"{S}/{source_namespace}"
+        build_prefix = f"{B}/{namespace or source_namespace}"
         graph = self._load_imported_graph(
             build_file,
             self.target,

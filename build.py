@@ -89,6 +89,22 @@ platform_libstd = import_build(
 # artifact below. Preserve that interface and expose the C++ library explicitly.
 platform_libstd.name = "platform_libstd"
 
+# The ThinLTO flavour of the platform library, linked into the ThinLTO rustc
+# so ObjPool and the other hot-path primitives inline across the boundary.
+platform_libstd_lto = import_build(
+    "ext/libstd/build.py",
+    "libstd.a",
+    extra_cflags=[
+        "-Wno-error",
+        "-ffile-prefix-map=$(S)=.",
+        "-ffile-prefix-map=$(B)=.",
+        "-flto=thin",
+    ],
+    extra_cxxflags=["-flto=thin"],
+    namespace="ext/libstd-lto",
+)
+platform_libstd_lto.name = "platform_libstd_lto"
+
 SRC = build.glob("$(S)/bin/rustc/*.cpp")
 # Compiler C++ unit tests live next to the code they test (x.cpp -> x_ut.cpp)
 # and are linked into the rustc_ut runner, not into the compiler.
@@ -195,10 +211,11 @@ else:
         srcs=[*[compiler_source(source) for source in SRC], *tu_compiler_srcs],
         name="rustc",
         output="$(B)/bin/rustc",
-        deps=[platform_libstd, codegen_c_prelude, unicode_nfc_tables],
         # ThinLTO: the codebase deliberately keeps bodies out of headers
         # (thin _tu.h, out-of-line accessors) and leaves cross-TU inlining
-        # to LTO; measured ~23% faster libcore compiles.
+        # to LTO; measured ~23% faster libcore compiles. The LTO flavour of
+        # the platform library joins in so ObjPool inlines too.
+        deps=[platform_libstd_lto, codegen_c_prelude, unicode_nfc_tables],
         cxxflags=["-flto=thin"],
         ldflags=["-lz", "-flto=thin"],
     )
