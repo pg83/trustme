@@ -2223,6 +2223,10 @@ namespace {
                 rv.userAlign = true;
             }
         }
+        // `#[repr(packed(N))]` caps it below its widest member's.
+        if (unn.maxFieldAlignment > 0) {
+            rv.align = ::std::min(rv.align, static_cast<size_t>(unn.maxFieldAlignment));
+        }
         // `#[repr(align(N))]` raises the union past its widest member.
         if (unn.forcedAlignment > 0) {
             rv.align = ::std::max(rv.align, static_cast<size_t>(unn.forcedAlignment));

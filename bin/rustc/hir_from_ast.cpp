@@ -1836,6 +1836,7 @@ HIRUnion AST2HIR::LowerHIRUnion(HIRItemPath path, const ASTUnion& f, const ASTAt
 
     HIRUnion rv{LowerHIRGenericParams(f.params_, nullptr), repr, mv$(variants)};
     rv.forcedAlignment = f.markings.alignValue;
+    rv.maxFieldAlignment = f.markings.maxFieldAlign;
     rv.mustUse = attrs.has("must_use");
     return rv;
 }

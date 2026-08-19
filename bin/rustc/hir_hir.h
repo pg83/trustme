@@ -470,6 +470,9 @@ public:
     /// `#[repr(align(N))]`, which raises the alignment past any member's.
     unsigned forcedAlignment = 0;
 
+    /// `#[repr(packed(N))]`, which caps it below any member's.
+    unsigned maxFieldAlignment = 0;
+
     /// `#[must_use]`: reported at the use site, which may be in another crate,
     /// so it travels with the item.
     bool mustUse = false;

@@ -1241,11 +1241,13 @@ HIRUnion HirDeserialiser::deserialiseUnion() {
     auto repr = static_cast<HIRUnion::Repr>(in.readTag());
     auto variants = deserialiseVec<HIRStructField>();
     auto forcedAlignment = static_cast<unsigned>(in.readCount());
+    auto maxFieldAlignment = static_cast<unsigned>(in.readCount());
     const bool mustUse = in.readBool();
     auto markings = deserialiseMarkings();
 
     auto rv = HIRUnion{mv$(params), repr, mv$(variants), mv$(markings)};
     rv.forcedAlignment = forcedAlignment;
+    rv.maxFieldAlignment = maxFieldAlignment;
     rv.mustUse = mustUse;
     return rv;
 }
@@ -4176,6 +4178,7 @@ break;
 
         serialiseVec(item.variants);
         out.writeCount(item.forcedAlignment);
+        out.writeCount(item.maxFieldAlignment);
         out.writeBool(item.mustUse);
 
         serialise(item.markings);

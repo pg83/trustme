@@ -554,6 +554,8 @@ public:
         } repr = Repr::Rust;
         /// `#[repr(align(N))]`
         u64 alignValue = 0;
+        /// `#[repr(packed(N))]`, which caps the alignment of every member
+        u64 maxFieldAlign = 0;
     } markings;
 
     ASTUnion(ASTGenericParams params, ::std::vector<ASTStructItem> fields);

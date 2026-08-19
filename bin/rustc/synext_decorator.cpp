@@ -304,9 +304,10 @@ class CHandlerRepr: public ExpandDecorator {
                         auto v = val->value;
                         ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(packed(" << v << "))] - alignment must be non-zero");
                         ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(packed(" << v << "))] - alignment must be a power of two");
-                        // TODO: I believe this should change the internal aligment too?
+                        e->markings.maxFieldAlign = v.truncateU64();
                         lex.getTokenCheck(TOK_PAREN_CLOSE);
                     } else {
+                        e->markings.maxFieldAlign = 1;
                     }
                 } else if (reprStr == "align") {
                     lex.getTokenCheck(TOK_PAREN_OPEN);

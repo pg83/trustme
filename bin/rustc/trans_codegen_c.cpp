@@ -1416,6 +1416,11 @@ default:
                 of << ";\n";
             }
             of << "}";
+            // `#[repr(packed)]` on a union caps every member's alignment, so
+            // the whole thing is as small and as loosely aligned as its bytes.
+            if (item.maxFieldAlignment > 0) {
+                of << " __attribute__((packed))";
+            }
             // Pin union alignment - under the power ABI gcc takes a union's alignment from its *first* member
             if (repr->align > 0) {
                 of << " __attribute__((__aligned__(" << repr->align << ")))";

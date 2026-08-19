@@ -432,6 +432,27 @@ default:
                     }
                 }
 
+                // No field covers the whole union: what is left over is padding
+                // the union's alignment asked for, and no field can read it.
+                // The widest field that takes any bit pattern carries the value.
+                if (varIdx == ~0u) {
+                    const auto literalEnd = lit.ofs + lit.size;
+                    const bool hasRelocation = std::any_of(lit.base.relocations.begin(), lit.base.relocations.end(), [&](const auto& relocation) {
+                        return relocation.ofs < literalEnd && lit.ofs < relocation.ofs + relocation.len;
+                    });
+                    size_t widest = 0;
+                    if (!hasRelocation) {
+                        for (const auto& e : repr->fields) {
+                            size_t fieldSize = 0;
+                            if (TargetGetSizeOf(state.sp, state.resolve, e.ty, fieldSize) && fieldSize <= repr->size && fieldSize > widest
+                                && typeAcceptsAllBitPatterns(state.sp, state.resolve, e.ty)) {
+                                widest = fieldSize;
+                                varIdx = &e - &repr->fields.front();
+                            }
+                        }
+                    }
+                }
+
                 if (varIdx == ~0u) {
                     MIR_TODO(state, "MIR_Cleanup_LiteralToRValue - " << path << ": " << ty << " = " << lit << " - Decode union into MIR");
                 }
