@@ -3915,6 +3915,20 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
 
                 // Binding applies to the raw input type (not after dereferencing)
                 for (auto& pb : pattern.bindings) {
+                    // From 2024, a binding written `mut`, `ref` or `ref mut` may
+                    // not sit under a default binding mode that match ergonomics
+                    // changed: `let [mut x] = &[()]` binds by value inside a
+                    // pattern that is already borrowing.
+                    // `mut_ref` lifts that restriction again, so a file that
+                    // asks for it may write either.
+                    if (bindingMode != HIRPatternBinding::Type::Move
+                        && context.crate.edition >= ASTEdition::Rust2024
+                        && !context.crate.featureEnabled("mut_ref")
+                        && (pb.isMutable || pb.type != HIRPatternBinding::Type::Move)) {
+                        ERROR(sp, E0000, "cannot bind `" << pb.name << "` with `"
+                            << (pb.type != HIRPatternBinding::Type::Move ? "ref" : "mut")
+                            << "` within an implicitly-borrowing pattern");
+                    }
                     // - Binding present, use the current binding mode
                     if (pb.type == HIRPatternBinding::Type::Move
                         && (!pb.isMutable || context.crate.edition >= ASTEdition::Rust2024)) {
