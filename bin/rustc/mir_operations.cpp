@@ -1556,7 +1556,18 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     const auto& te = pe.type->as_TraitObject();
                     // TODO: What if the method is from a supertrait?
 
-                    if (te.trait.path == pe.trait || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *te.trait.traitPtr, te.trait.path.path, te.trait.path.params, pe.type, [](const auto&, auto) {
+                    // An inherent impl on a trait object that asks for
+                    // `Self: Sized` can never be called, so nothing filled in
+                    // the trait it would dispatch through. There is no vtable
+                    // call to build.
+                    // An inherent impl on a trait object that asks for
+                    // `Self: Sized` can never be called, and the method it calls
+                    // takes no receiver -- there is nothing to dispatch through,
+                    // and such a method is not in the vtable either.
+                    if (!te.trait.traitPtr || e.args.empty()) {
+                        DEBUG("No receiver to dispatch on for " << pe.type << "::" << pe.item << ", leaving the call alone");
+                    }
+                    else if (te.trait.path == pe.trait || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *te.trait.traitPtr, te.trait.path.path, te.trait.path.params, pe.type, [](const auto&, auto) {
                         return true;
                     })) {
                         auto tgtLvalue = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);

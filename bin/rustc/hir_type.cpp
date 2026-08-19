@@ -943,7 +943,11 @@ namespace {
     }
 
     void addTypeFlags(u32& flags, HIRTypeRef type) {
-        flags |= type->flags;
+        // A path argument can still be empty here: an RPIT that a `where Self:
+        // Sized` keeps out of the vtable is never filled in.
+        if (type) {
+            flags |= type->flags;
+        }
     }
 
     u32 typeFlags(const HIRPathParams& params);
