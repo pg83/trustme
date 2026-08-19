@@ -5479,6 +5479,36 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
     }
 }
 
+namespace {
+    /// The bytes of a constant named in a pattern.  The binding HIR conversion
+    /// recorded is the trait's *declaration* when the constant is an associated
+    /// one -- which impl provides the value is only settled once the pattern's
+    /// type is -- so the impl is looked up here, and the value evaluated if it
+    /// has not been already.
+    static const EncodedLiteral* patternConstantLiteral(const Span& sp, const StaticTraitResolve& resolve, const HIRPattern::Value& val) {
+        const auto* pve = val.opt_Named();
+        if (!pve || !pve->binding) {
+            return nullptr;
+        }
+        const HIRConstant* binding = pve->binding;
+        MonomorphState valueMs(resolve.hirCrate().types);
+        const HIRGenericParams* implDef = nullptr;
+        auto value = resolve.getValue(sp, pve->path, valueMs, false, &implDef);
+        if (const auto* constant = value.opt_Constant()) {
+            binding = *constant;
+        }
+        if (binding->valueState == HIRConstant::ValueState::Unknown
+            || (binding->valueState == HIRConstant::ValueState::Generic && !binding->monomorphCache.count(pve->path))) {
+            ConvertHIRConstantEvaluateConstant(resolve.board(), resolve.hirCrate(), implDef, pve->path, const_cast<HIRConstant&>(*binding));
+        }
+        if (binding->valueState == HIRConstant::ValueState::Known) {
+            return &binding->valueRes;
+        }
+        const auto cached = binding->monomorphCache.find(pve->path);
+        return cached != binding->monomorphCache.end() ? &cached->second : nullptr;
+    }
+}
+
 void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, const HIRTypeData* topTy) {
     static HIRPattern emptyPattern;
     TRACE_FUNCTION_F("pat=" << pat << ", ty=" << topTy << ",   m_field_path=[" << fieldPath << "]");
@@ -5496,16 +5526,16 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
     }
 
     struct H {
-        static U128 getPatternValueInt(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val) {
+        static U128 getPatternValueInt(const Span& sp, const StaticTraitResolve& resolve, const HIRPattern& pat, const HIRPattern::Value& val) {
             switch (val.tag()) {
                 case HIRPattern::Value::TAG_Integer: {
                     auto& e = val.as_Integer();
                     return e.value;
                 }
                 case HIRPattern::Value::TAG_Named: {
-                    auto& e = val.as_Named();
-                    assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readUint();
-                    break;
+                    const auto* lit = patternConstantLiteral(sp, resolve, val);
+                    ASSERT_BUG(sp, lit, "Match with an unresolved constant in " << pat);
+                    return EncodedLiteralSlice(*lit).readUint();
                 }
                 default: {
                     BUG(sp, "Invalid Value type in " << pat);
@@ -5515,16 +5545,16 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             throw "";
         }
 
-        static S128 getPatternValueSigned(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val) {
+        static S128 getPatternValueSigned(const Span& sp, const StaticTraitResolve& resolve, const HIRPattern& pat, const HIRPattern::Value& val) {
             switch (val.tag()) {
                 case HIRPattern::Value::TAG_Integer: {
                     auto& e = val.as_Integer();
                     return S128(e.value);
                 }
                 case HIRPattern::Value::TAG_Named: {
-                    auto& e = val.as_Named();
-                    assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readSint();
-                    break;
+                    const auto* lit = patternConstantLiteral(sp, resolve, val);
+                    ASSERT_BUG(sp, lit, "Match with an unresolved constant in " << pat);
+                    return EncodedLiteralSlice(*lit).readSint();
                 }
                 default: {
                     BUG(sp, "Invalid signed Value type in " << pat);
@@ -5534,16 +5564,16 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             throw "";
         }
 
-        static FloatValue getPatternValueFloat(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val) {
+        static FloatValue getPatternValueFloat(const Span& sp, const StaticTraitResolve& resolve, const HIRPattern& pat, const HIRPattern::Value& val) {
             switch (val.tag()) {
                 case HIRPattern::Value::TAG_Float: {
                     auto& e = val.as_Float();
                     return e.value;
                 }
                 case HIRPattern::Value::TAG_Named: {
-                    auto& e = val.as_Named();
-                    assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readFloat();
-                    break;
+                    const auto* lit = patternConstantLiteral(sp, resolve, val);
+                    ASSERT_BUG(sp, lit, "Match with an unresolved constant in " << pat);
+                    return EncodedLiteralSlice(*lit).readFloat();
                 }
                 default: {
                     BUG(sp, "Invalid Value type in " << pat);
@@ -5553,34 +5583,34 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             throw "";
         }
 
-        static MIRConstant getPatternValue(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val, const HIRCoreType& e) {
+        static MIRConstant getPatternValue(const Span& sp, const StaticTraitResolve& resolve, const HIRPattern& pat, const HIRPattern::Value& val, const HIRCoreType& e) {
             switch (e) {
                 case HIRCoreType::F16:
                 case HIRCoreType::F32:
                 case HIRCoreType::F64:
                 case HIRCoreType::F128:
                     // Yes, this is valid.
-                    return MIRConstant::make_Float({H::getPatternValueFloat(sp, pat, val), e});
+                    return MIRConstant::make_Float({H::getPatternValueFloat(sp, resolve, pat, val), e});
                 case HIRCoreType::U8:
                 case HIRCoreType::U16:
                 case HIRCoreType::U32:
                 case HIRCoreType::U64:
                 case HIRCoreType::U128:
                 case HIRCoreType::Usize:
-                    return MIRConstant::make_Uint({H::getPatternValueInt(sp, pat, val), e});
+                    return MIRConstant::make_Uint({H::getPatternValueInt(sp, resolve, pat, val), e});
                 case HIRCoreType::I8:
                 case HIRCoreType::I16:
                 case HIRCoreType::I32:
                 case HIRCoreType::I64:
                 case HIRCoreType::I128:
                 case HIRCoreType::Isize:
-                    return MIRConstant::make_Int({H::getPatternValueSigned(sp, pat, val), e});
+                    return MIRConstant::make_Int({H::getPatternValueSigned(sp, resolve, pat, val), e});
                 case HIRCoreType::Bool:
                     BUG(sp, "Can't range match on Bool");
                     break;
                 case HIRCoreType::Char:
                     // Char is just another name for 'u32'... but with a restricted range
-                    return MIRConstant::make_Uint({H::getPatternValueInt(sp, pat, val), e});
+                    return MIRConstant::make_Uint({H::getPatternValueInt(sp, resolve, pat, val), e});
                 case HIRCoreType::Str:
                     BUG(sp, "Hit match over `str` - must be `&str`");
                     break;
@@ -5686,27 +5716,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
     if (const auto* pe = pat.data.opt_Value()) {
         if (const auto* pve = pe->val.opt_Named()) {
             if (pve->binding) {
-                const HIRConstant* binding = pve->binding;
-                MonomorphState valueMs(resolve.hirCrate().types);
-                const HIRGenericParams* implDef = nullptr;
-                auto value = resolve.getValue(sp, pve->path, valueMs, false, &implDef);
-                if (const auto* constant = value.opt_Constant()) {
-                    binding = *constant;
-                }
-                // Request consteval
-                if (binding->valueState == HIRConstant::ValueState::Unknown
-                    || (binding->valueState == HIRConstant::ValueState::Generic && !binding->monomorphCache.count(pve->path))) {
-                    ConvertHIRConstantEvaluateConstant(resolve.board(), resolve.hirCrate(), implDef, pve->path, const_cast<HIRConstant&>(*binding));
-                }
-                const EncodedLiteral* literal = nullptr;
-                if (binding->valueState == HIRConstant::ValueState::Known) {
-                    literal = &binding->valueRes;
-                } else if (binding->valueState == HIRConstant::ValueState::Generic) {
-                    const auto cached = binding->monomorphCache.find(pve->path);
-                    if (cached != binding->monomorphCache.end()) {
-                        literal = &cached->second;
-                    }
-                }
+                const EncodedLiteral* literal = patternConstantLiteral(sp, resolve, pe->val);
                 ASSERT_BUG(sp, literal, "Match with an unresolved constant - " << pve->path);
                 this->appendFromLit(sp, *literal, ty);
                 for (size_t i = 0; i < pat.implicitDerefCount; i++) {
@@ -5781,16 +5791,16 @@ default:
                         if (pe.start) {
                             this->pushRule(
                                 PatternRule::make_ValueRange({
-                                    H::getPatternValue(sp, pat, *pe.start, e),
+                                    H::getPatternValue(sp, resolve, pat, *pe.start, e),
                                     H::getPatternValueMax(sp, pat, e),
                                     true // Inclusive always
                                 })
                             );
                         } else {
-                            this->pushRule(PatternRule::make_ValueRange({H::getPatternValueMin(sp, pat, e), H::getPatternValue(sp, pat, *pe.end, e), pe.isInclusive}));
+                            this->pushRule(PatternRule::make_ValueRange({H::getPatternValueMin(sp, pat, e), H::getPatternValue(sp, resolve, pat, *pe.end, e), pe.isInclusive}));
                         }
                     } else {
-                        this->pushRule(PatternRule::make_ValueRange({H::getPatternValue(sp, pat, *pe.start, e), H::getPatternValue(sp, pat, *pe.end, e), pe.isInclusive}));
+                        this->pushRule(PatternRule::make_ValueRange({H::getPatternValue(sp, resolve, pat, *pe.start, e), H::getPatternValue(sp, resolve, pat, *pe.end, e), pe.isInclusive}));
                     }
                     break;
                 }
@@ -5806,7 +5816,7 @@ default:
                             this->pushRule(PatternRule::make_Value(pe.val.as_String()));
                             break;
                         default:
-                            this->pushRule(H::getPatternValue(sp, pat, pe.val, e));
+                            this->pushRule(H::getPatternValue(sp, resolve, pat, pe.val, e));
                             break;
                     }
                     break;
