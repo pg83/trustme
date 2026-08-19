@@ -5843,6 +5843,11 @@ namespace {
                 const auto& outTy = context.ivars.getType(outTyP);
                 DEBUG("From? " << outTy);
                 count += 1;
+                // `#![recursion_limit]` bounds how far a coercion may follow
+                // `Deref`, the same way it bounds macro expansion.
+                if (count > context.resolve.board().settings->recursionLimit) {
+                    ERROR(sp, E0000, "Reached the recursion limit while auto-dereferencing " << src);
+                }
 
                 bool literalMatchesDestination = false;
                 if (const auto* sep = outTy->opt_Infer()) {

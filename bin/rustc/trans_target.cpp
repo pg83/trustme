@@ -1022,7 +1022,12 @@ namespace {
                 idx++;
                 ents.push_back(mv$(ent));
             }
-            sorting = StructSorting::All;
+            // A tuple's last element may be unsized, and the layout has to
+            // leave it there: what a pointer to the tuple carries is the
+            // metadata of that element.
+            sorting = (!ents.empty() && ents.back().size == SIZE_MAX)
+                ? StructSorting::AllButFinal
+                : StructSorting::All;
         } else {
             BUG(sp, "Unexpected type in creating type repr - " << ty);
         }

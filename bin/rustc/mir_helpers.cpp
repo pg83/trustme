@@ -625,20 +625,23 @@ std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
     }
     if (const auto* te = ty->opt_NamedFunction()) {
         // A function item's name is the path that names the function, not the
-        // signature the debug printer shows.
+        // signature the debug printer shows. The constructor of a tuple struct
+        // or of an enum variant is a function item whose path is the type's,
+        // and rustc keeps the two apart by naming the constructor.
+        const char* suffix = te->def.is_Function() ? "" : "::{{constructor}}";
         switch (te->path.data.tag()) {
             case HIRPathData::TAG_Generic: {
                 const auto& pe = te->path.data.as_Generic();
-                return plainPath(pe.path) + pathArgs(pe.params, nullptr);
+                return plainPath(pe.path) + pathArgs(pe.params, nullptr) + suffix;
             }
             case HIRPathData::TAG_UfcsInherent: {
                 const auto& pe = te->path.data.as_UfcsInherent();
-                return FMT(this->intrinsicTypeName(pe.type) << "::" << pe.item << pathArgs(pe.params, nullptr));
+                return FMT(this->intrinsicTypeName(pe.type) << "::" << pe.item << pathArgs(pe.params, nullptr) << suffix);
             }
             case HIRPathData::TAG_UfcsKnown: {
                 const auto& pe = te->path.data.as_UfcsKnown();
                 auto trait = plainPath(pe.trait.path) + pathArgs(pe.trait.params, nullptr);
-                return FMT("<" << this->intrinsicTypeName(pe.type) << " as " << trait << ">::" << pe.item << pathArgs(pe.params, nullptr));
+                return FMT("<" << this->intrinsicTypeName(pe.type) << " as " << trait << ">::" << pe.item << pathArgs(pe.params, nullptr) << suffix);
             }
             case HIRPathData::TAG_UfcsUnknown: {
                 break;

@@ -59,4 +59,16 @@ fn main() {
         type_name::<dyn Fn(i32, i32) -> i32>(),
         "dyn core::ops::function::Fn(i32, i32) -> i32"
     );
+
+    // A tuple struct's constructor is a function item whose path is the
+    // struct's, and the two are told apart by naming the constructor.
+    assert_eq!(name_of(Tup), "test_type_name_printing::Tup::{{constructor}}");
+    assert_eq!(name_of(Tup(1)), "test_type_name_printing::Tup");
+    assert_eq!(name_of(En::V), "test_type_name_printing::En::V::{{constructor}}");
+}
+
+struct Tup(#[allow(dead_code)] i32);
+
+enum En {
+    V(#[allow(dead_code)] i32),
 }

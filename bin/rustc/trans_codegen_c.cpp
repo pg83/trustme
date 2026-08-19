@@ -1478,13 +1478,21 @@ default:
 
             // 1. Enumerate fields with the same offset as the first (these go into a union)
             // TODO: What if all data variants are zero-sized?
+            // A `repr(C)` (or `repr(iN)`) enum keeps its tag beside the data
+            // rather than in it, so the data fields are all of them but the
+            // last -- even when there is only one, which a single-variant
+            // enum with a payload has.
+            const bool hasSeparateTag = repr->fields.size() >= 2
+                && isEnumTag(repr, repr->fields.size() - 1)
+                && repr->fields.back().offset != repr->fields[0].offset;
+            const size_t dataFieldCount = repr->fields.size() - (hasSeparateTag ? 1 : 0);
             ::std::vector<unsigned> unionFields;
-            for (size_t i = 1; i < repr->fields.size(); i++) {
+            for (size_t i = 1; i < dataFieldCount; i++) {
                 if (repr->fields[i].offset == repr->fields[0].offset) {
                     unionFields.push_back(i);
                 }
             }
-            if (unionFields.size() > 0) {
+            if (unionFields.size() > 0 || (hasSeparateTag && dataFieldCount == 1)) {
                 unionFields.insert(unionFields.begin(), 0);
             }
 
@@ -1666,24 +1674,16 @@ default:
                 emitCtype(ty, FMT_CB(ss, ss << "_" << i;));
             }
             of << ") {\n";
-            of << "\tstruct s_" << TransMangle(p) << " rv = {";
-            bool emitted = false;
+            // The emitted members are in layout order, which `repr(Rust)` may
+            // have shuffled, so each one is named rather than positional.
+            of << "\tstruct s_" << TransMangle(p) << " rv = {};\n";
             for (unsigned int i = 0; i < e.size(); i++) {
                 const auto& ty = monomorph(e[i].ent);
                 if (this->typeIsBadZst(ty)) {
                     continue;
                 }
-                if (emitted) {
-                    of << ",";
-                }
-                emitted = true;
-                of << "\n\t\t_" << i;
+                of << "\trv._" << i << " = _" << i << ";\n";
             }
-            if (!emitted) {
-                of << "\n\t\t0";
-            }
-            of << "\n";
-            of << "\t\t};\n";
             of << "\treturn rv;\n";
             of << "}\n";
         }
