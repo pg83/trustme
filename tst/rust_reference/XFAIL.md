@@ -40,3 +40,21 @@ the region these ask about.
 | `lifetime-elision__L140.rs` | the lifetime bound of a trait object cannot be deduced here |
 | `lifetime-elision__L206.rs` | a return reference's lifetime is not pinned to one argument |
 | `trait-bounds__L188.rs` | `T: 'a` is not implied by the signature |
+
+## Needs imports resolved as macros expand
+
+rustc interleaves import resolution with macro expansion, and the rules below
+are about what was and was not visible at each step: a candidate that only
+appeared once a macro had run, or one glob's name measured against another's
+while both were still being worked out. This compiler expands every macro
+first and then resolves, so it has no such order to ask about -- and where the
+question does not arise, neither does the ambiguity.
+
+| case | rule |
+|---|---|
+| `names/name-resolution__L265.rs` | a glob's name against an outer one, in a `use` |
+| `names/name-resolution__L285.rs` | as above, in the macro namespace |
+| `names/name-resolution__L332.rs` | a textual `macro_rules` scope against a path-based import |
+| `names/name-resolution__L391.rs` | a macro definition written by a macro against one that was not |
+| `names/name-resolution__L467.rs` | two macro definitions written by two expansions of one macro |
+| `names/name-resolution__L482.rs` | as above, for a module reached through a `use` |

@@ -258,11 +258,11 @@ data-enum path already collapses a lone variant (`trans_target.cpp`, the
 
 ## P2: missing language checks
 
-Fifteen negative tests compile successfully. The largest source areas are:
+Nine negative tests compile successfully. The largest source areas are:
 
 | language area | tests |
 |---|---:|
-| name resolution | 7 |
+| name resolution | 1 |
 | trait bounds | 2 |
 | all smaller areas | 6 |
 
@@ -272,14 +272,14 @@ be part of it and neither may a temporary the program could change through it.
 A borrow of something the program *named* keeps that thing's own rules, which
 is why `const C: &AtomicU8 = &SHARED;` still stands.
 
-What is left of this class is reachable without regions. The rest -- every
-`destructors` case, the two temporary-lifetime ones, the union double borrow,
-the three closure captures, and the three that ask about a lifetime this
-compiler erases -- are recorded as `xfail` in the Rust Reference manifest, with
-their rules in `tst/rust_reference/XFAIL.md`. trustme compiles programs; it is
-not going to grow a borrow checker to reproduce every rejection rustc makes.
-The rows still run, so making one of those rejections turns its node red and
-asks for the row to move back.
+What is left of this class is reachable with the compiler's existing phase
+model. The rest -- the borrow- and lifetime-dependent cases, plus the six
+import-resolution rules whose answer depends on interleaving resolution with
+macro expansion -- are recorded as `xfail` in the Rust Reference manifest,
+with their rules in `tst/rust_reference/XFAIL.md`. trustme compiles programs;
+it is not going to grow those missing compiler phases solely to reproduce
+every rejection rustc makes. The rows still run, so making one of those
+rejections turns its node red and asks for the row to move back.
 
 The two `trait items` ones are fixed: a trait bounded by `Sized` has no `dyn`
 form, and forming one is now an error.  Only that rule is checked; the rest of
@@ -288,21 +288,6 @@ decides what goes in the vtable.
 
 Source chapters are routing information. Group the concrete examples by the
 missing language rule before implementing diagnostics.
-
-The largest reachable group is name resolution: the `name-resolution` and
-`scopes` tests want an ambiguity error, raised when a name that two glob
-imports both provide is *used*. That part is done.
-
-The glob-versus-outer half is not the same rule and a lookup-time check for it
-is wrong: rustc accepts a glob import inside a block shadowing an item of the
-enclosing scope for an ordinary use (`mod g { pub fn f(); } fn f(); fn main() {
-use g::*; f() }` compiles). What `name-resolution__L265` asks about is *import*
-resolution -- `use ambig::Name` written beside `use glob::*` -- which we resolve
-in a phase that runs before the glob's names exist. Making it work means
-resolving imports iteratively with candidates, not a lookup-time test; a
-lookup-time one was written and reverted for rejecting the programs above.
-`__L285` and `__L332` are the same rule in the macro namespace, where the
-candidates are a textual `macro_rules` scope and a path-based import.
 
 `abi/variadic-ffi` is the other `...` test and needs more than parsing: a named
 variadic parameter (`mut ap: ...`) is a `VaListImpl` the body then reads, so
