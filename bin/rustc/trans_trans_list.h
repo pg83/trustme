@@ -123,6 +123,9 @@ public:
     ::std::set<HIRGenericPath> constructors;
     // Automatic Clone impls
     HIRTypeRefSet autoCloneImpls;
+    /// Those of the above whose `clone_from` is called: the trait's default
+    /// body belongs to the impl, and a generated impl has to carry its own.
+    HIRTypeRefSet autoCloneFromImpls;
     // Automatic FnPtr impls
     HIRTypeRefSet autoFnptrImpls;
     // Trait methods

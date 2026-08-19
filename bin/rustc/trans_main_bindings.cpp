@@ -47,12 +47,20 @@ namespace {
     };
 
     const RcString rcstringCloneLower = RcString::newInterned("clone");
+    const RcString rcstringCloneFromLower = RcString::newInterned("clone_from");
+    const RcString rcstringSourceLower = RcString::newInterned("source");
     const RcString rcstringDrop = RcString::newInterned("drop");
     const RcString rcstringSelfLower = RcString::newInterned("self");
     const RcString rcstringDropGlue = RcString::newInterned("#drop_glue");
 }
 
 namespace {
+    /// The one place a generated body is handed to a function: the pointer
+    /// takes ownership of the `MIRFunction`, which outlives this scope.
+    MIRFunctionPointer generatedBody(MIRFunction mir = MIRFunction()) {
+        return MIRFunctionPointer(new MIRFunction(mv$(mir)));
+    }
+
     struct CloneCleanupState {
         ::std::vector<MIRBasicBlockId> calls;
         ::std::vector<::std::pair<MIRLValue, unsigned>> values;
@@ -216,12 +224,67 @@ default:
         /*m_return=*/ty,
         HIRExprPtr{}
     };
-    fcn.code.mir = MIRFunctionPointer(new MIRFunction(mv$(mirFcn)));
+    fcn.code.mir = generatedBody(mv$(mirFcn));
 
     // Impl
     HIRTraitImpl impl;
-    impl.type = mv$(ty);
+    impl.type = ty;
     impl.methods.insert(::std::make_pair(rcstringCloneLower, HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fcn)}));
+
+    // `clone_from` is the trait's own default body -- clone the source, drop
+    // what the destination held, and move the clone in. A generated impl is
+    // named by the caller like any other, so it carries its own copy.
+    if (state.transList.autoCloneFromImpls.count(ty)) {
+        MIRFunction fromMir;
+        auto dst = MIRLValue::newDeref(MIRLValue::newArgument(0));
+        if (state.resolve.typeIsCopy(sp, ty)) {
+            MIRBasicBlock bb;
+            bb.statements.push_back(MIRStatement::make_Assign({dst.clone(), MIRRValue::make_Use(MIRLValue::newDeref(MIRLValue::newArgument(1)))}));
+            bb.terminator = MIRTerminator::make_Return({});
+            fromMir.blocks.push_back(mv$(bb));
+        } else {
+            const auto& langClone = state.resolve.hirCrate().getLangItemPath(sp, "clone");
+            auto cloned = MIRLValue::newLocal(fromMir.locals.size());
+            fromMir.locals.push_back(ty);
+
+            MIRBasicBlock call;
+            call.terminator = MIRTerminator::make_Call({
+                1,
+                MIRUnwindAction::make_Continue({}),
+                cloned.clone(),
+                MIRCallTarget(HIRPath(ty, langClone, rcstringCloneLower, HIRPathParams())),
+                ::makeVec1<MIRParam>(MIRLValue::newArgument(1)),
+            });
+            fromMir.blocks.push_back(mv$(call));
+
+            MIRBasicBlock drop;
+            drop.terminator = MIRTerminator::make_Drop({MIRDropKind::DEEP, dst.clone(), ~0u, 2, MIRUnwindAction::make_Continue({})});
+            fromMir.blocks.push_back(mv$(drop));
+
+            MIRBasicBlock store;
+            store.statements.push_back(MIRStatement::make_Assign({dst.clone(), MIRRValue::make_Use(mv$(cloned))}));
+            store.terminator = MIRTerminator::make_Return({});
+            fromMir.blocks.push_back(mv$(store));
+        }
+
+        auto fromArgs = ::makeVec1(::std::make_pair(
+            HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, rcstringSelfLower, 0), HIRPattern::Data::make_Any({})),
+            state.crate.types.borrow(HIRBorrowType::Unique, ty)
+        ));
+        fromArgs.push_back(::std::make_pair(
+            HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, rcstringSourceLower, 1), HIRPattern::Data::make_Any({})),
+            state.crate.types.borrow(HIRBorrowType::Shared, ty)
+        ));
+        HIRFunction fromFcn{
+            HIRFunction::Receiver::BorrowUnique,
+            HIRGenericParams{},
+            mv$(fromArgs),
+            /*m_return=*/state.crate.types.unit(),
+            HIRExprPtr{}
+        };
+        fromFcn.code.mir = generatedBody(mv$(fromMir));
+        impl.methods.insert(::std::make_pair(rcstringCloneFromLower, HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fromFcn)}));
+    }
 
     // Add impl to the crate
     auto& list = state.crate.traitImpls[state.langClone].getListForTypeMut(impl.type);
@@ -455,18 +518,32 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             assert(implListIt != crate.traitImpls.end());
             // TODO: Find a way of turning a set into a vector so items can be erased.
 
-            auto p = HIRPath(ty, HIRGenericPath(state.langClone), "clone");
-            auto e = transList.addFunction(crate.types, ::std::move(p));
-
             const auto* implList = implListIt->second.getListForType(ty);
             ASSERT_BUG(Span(), implList, "No impl list of Clone for " << ty);
             auto& impl = **::std::find_if(implList->begin(), implList->end(), [&](const auto& i) {
                 return i->type == ty;
             });
-            assert(impl.methods.size() == 1);
-            e->ptr = &impl.methods.begin()->second.data;
+
+            auto bind = [&](const RcString& method) {
+                auto p = HIRPath(ty, HIRGenericPath(state.langClone), method);
+                auto* e = transList.addFunction(crate.types, p.clone());
+                if (!e) {
+                    // The list already holds it under its symbol, put there
+                    // with a body; there is nothing to fill in.
+                    DEBUG(p << " was already enumerated");
+                    return;
+                }
+                auto m = impl.methods.find(method);
+                ASSERT_BUG(Span(), m != impl.methods.end(), "Generated Clone for " << ty << " has no `" << method << "`");
+                e->ptr = &m->second.data;
+            };
+            bind(rcstringCloneLower);
+            if (transList.autoCloneFromImpls.count(ty)) {
+                bind(rcstringCloneFromLower);
+            }
         }
         transList.autoCloneImpls.clear();
+        transList.autoCloneFromImpls.clear();
     }
 
     if (!transList.autoFnptrImpls.empty()) {
@@ -489,7 +566,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 /*m_return=*/std::move(outTy),
                 HIRExprPtr{}
             };
-            fcn.code.mir = MIRFunctionPointer(new MIRFunction(mv$(mirFcn)));
+            fcn.code.mir = generatedBody(mv$(mirFcn));
 
             // Impl
             HIRTraitImpl impl;
@@ -547,7 +624,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             }
             ASSERT_BUG(sp, !newFcn.args.empty(), "Trait object method with no arguments?!");
 
-            newFcn.code.mir = MIRFunctionPointer(new MIRFunction());
+            newFcn.code.mir = generatedBody();
             Builder builder(state, *newFcn.code.mir);
 
             MIRLValue lvSelf = MIRLValue::newArgument(0);
@@ -685,7 +762,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         fcn.args.push_back(std::make_pair(HIRPattern(), !isByValue ? crate.types.borrow(ent.bt, type) : type));
                         fcn.args.push_back(std::make_pair(HIRPattern(), mv$(argTy)));
 
-                        fcn.code.mir = MIRFunctionPointer(new MIRFunction());
+                        fcn.code.mir = generatedBody();
                         Builder builder(state, *fcn.code.mir);
 
                         std::vector<MIRParam> argParams;
@@ -727,7 +804,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         fcn.args.push_back(std::make_pair(HIRPattern(), !isByValue ? crate.types.borrow(ent.bt, type) : type));
                         fcn.args.push_back(std::make_pair(HIRPattern(), mv$(argTy)));
 
-                        fcn.code.mir = MIRFunctionPointer(new MIRFunction());
+                        fcn.code.mir = generatedBody();
                         Builder builder(state, *fcn.code.mir);
 
                         std::vector<MIRParam> argParams;
@@ -914,7 +991,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
                                 DEBUG("> Generate shim: " << itemPath);
 
-                                newFcn.code.mir = MIRFunctionPointer(new MIRFunction());
+                                newFcn.code.mir = generatedBody();
                                 MIRTypeResolve localMirRes{sp, state.resolve, FMT_CB(ss, ss << itemPath), newFcn.returnType, newFcn.args, *newFcn.code.mir};
                                 Builder builder(state, *newFcn.code.mir);
                                 // bb0:
@@ -1000,7 +1077,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             fcn.returnType = crate.types.unit();
             fcn.args.push_back(std::make_pair(HIRPattern(), crate.types.borrow(HIRBorrowType::Owned, ty)));
 
-            fcn.code.mir = MIRFunctionPointer(new MIRFunction());
+            fcn.code.mir = generatedBody();
             MIRTypeResolve localMirRes{sp, state.resolve, FMT_CB(ss, ss << path), fcn.returnType, fcn.args, *fcn.code.mir};
             Builder builder(state, *fcn.code.mir);
             builder.pushStmtAssign(MIRLValue::newReturn(), MIRRValue::make_Tuple({}));
@@ -2202,8 +2279,12 @@ default:
         }
     }
     for (const auto& ty : newList.autoCloneImpls) {
-        static RcString rcstringCloneLower = RcString::newInterned("clone");
         HIRPath fnPath(ty, crate.getLangItemPath(Span(), "clone"), rcstringCloneLower);
+        DEBUG("++ " << fnPath);
+        newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
+    }
+    for (const auto& ty : newList.autoCloneFromImpls) {
+        HIRPath fnPath(ty, crate.getLangItemPath(Span(), "clone"), rcstringCloneFromLower);
         DEBUG("++ " << fnPath);
         newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
     }
@@ -2296,6 +2377,9 @@ namespace {
         }
         for (const auto& ty : additions.autoCloneImpls) {
             changed |= out.autoCloneImpls.insert(ty).second;
+        }
+        for (const auto& ty : additions.autoCloneFromImpls) {
+            changed |= out.autoCloneFromImpls.insert(ty).second;
         }
         for (const auto& ty : additions.autoFnptrImpls) {
             changed |= out.autoFnptrImpls.insert(ty).second;
@@ -3371,6 +3455,9 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 }
                 // Add this type to a list of types that will have the impl auto-generated
                 state.rv.autoCloneImpls.insert(innerTy);
+                if (pe.item == "clone_from") {
+                    state.rv.autoCloneFromImpls.insert(innerTy);
+                }
             } else {
                 BUG(sp, "AutoGenerate returned for unknown path type - " << pathMono);
             }
