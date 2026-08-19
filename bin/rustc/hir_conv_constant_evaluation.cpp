@@ -697,7 +697,9 @@ public:
     }
 
     void setReloc(size_t ofs, MIREvalRelocPtr ptr) override {
-        assert(ofs % (TargetGetPointerBits() / 8) == 0);
+        // Not necessarily pointer-aligned: a packed struct puts a reference
+        // wherever its fields fall, and constant evaluation copies those bytes
+        // around as bytes.
         auto it = std::lower_bound(this->relocations.begin(), this->relocations.end(), ofs, [](const Reloc& r, size_t ofs) {
             return r.offset < ofs;
         });
