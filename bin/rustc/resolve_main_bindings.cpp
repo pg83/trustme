@@ -475,7 +475,7 @@ namespace {
                         if (v != mod.typeItems.end()) {
                             DEBUG("- " << mod.path() << " NS: Type " << v->second.path);
                             checkUnambiguous(sp, mod, name, v->second);
-                        path = ASTPath(v->second.path);
+                            path = ASTPath(v->second.path);
                             return true;
                         }
                     }
@@ -514,7 +514,7 @@ namespace {
                             case ASTPathBindingValue::TAG_Static:
                                 DEBUG("- PV: Value " << v->second.path);
                                 checkUnambiguous(sp, mod, name, v->second);
-                        path = ASTPath(v->second.path);
+                                path = ASTPath(v->second.path);
                                 return true;
                             case ASTPathBindingValue::TAG_Struct: {
                                 const auto& be = b.binding.as_Struct();
@@ -526,7 +526,7 @@ namespace {
                                 else {
                                     DEBUG("- " << mod.path() << " PV: Value " << b.path);
                                     checkUnambiguous(sp, mod, name, v->second);
-                                path = ASTPath(b);
+                                    path = ASTPath(b);
                                     return true;
                                 }
                                 break;
