@@ -2041,23 +2041,24 @@ default:
                     }
                     DEBUG("Closure, " << trait << " ?= Fn*");
                     if (trait == langFn() || trait == langFnMut() || trait == langFnOnce()) {
-                        if (params.types.size() != 1) {
-                            BUG(sp, "Fn* traits require a single tuple argument");
-                        }
-                        if (!params.types[0]->is_Tuple()) {
-                            BUG(sp, "Fn* traits require a single tuple argument");
-                        }
+                        // `FnMut::call_mut(&mut f, ())` names the trait without
+                        // an argument tuple to compare against. What the closure
+                        // takes is the only thing that tuple could be, so it is
+                        // the answer, and the caller equates.
+                        const HIRTypeData* wanted = params.types.size() == 1 && params.types[0]->is_Tuple() ? params.types[0] : nullptr;
 
-                        const auto& argsDes = params.types[0]->as_Tuple();
-                        if (argsDes.size() != nodeP->args.size()) {
+                        auto cmp = wanted ? HIRCompare::Equal : HIRCompare::Fuzzy;
+                        ::std::vector<HIRTypeRef> args;
+                        if (wanted && wanted->as_Tuple().size() != nodeP->args.size()) {
                             return false;
                         }
-
-                        auto cmp = HIRCompare::Equal;
-                        ::std::vector<HIRTypeRef> args;
                         for (unsigned int i = 0; i < nodeP->args.size(); i++) {
                             const auto& at = nodeP->args[i].second;
                             args.push_back(at);
+                            if (!wanted) {
+                                continue;
+                            }
+                            const auto& argsDes = wanted->as_Tuple();
                             DEBUG(at << " ?= " << argsDes[i]);
                             auto argCmp = at->compareWithPlaceholders(sp, argsDes[i], this->ivars.callbackResolveInfer());
                             if (argCmp == HIRCompare::Unequal) {

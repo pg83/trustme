@@ -1471,6 +1471,7 @@ namespace {
                     break;
 
                 case TOK_RWORD_UNSAFE:
+                case TOK_RWORD_TRY:
                     lex.consume();
                     if (lex.next() != TOK_BRACE_OPEN) {
                         return false;
@@ -1478,6 +1479,22 @@ namespace {
                     consumeTt(lex);
                     exprIsComplete = !hasPrefix;
                     break;
+                // A label heads a loop or a block, and nothing else.
+                case TOK_LIFETIME:
+                    lex.consume();
+                    if (!lex.consumeIf(TOK_COLON)) {
+                        return false;
+                    }
+                    switch (lex.next()) {
+                        case TOK_RWORD_LOOP:
+                        case TOK_RWORD_WHILE:
+                        case TOK_RWORD_FOR:
+                        case TOK_BRACE_OPEN:
+                            break;
+                        default:
+                            return false;
+                    }
+                    return consumeExpr(lex, noStructLit, statementExpr);
                 case TOK_PAREN_OPEN:
                 case TOK_SQUARE_OPEN:
                     consumeTt(lex);
@@ -2866,6 +2883,9 @@ bool isTokenExpr(eTokenType tt) {
         case TOK_RWORD_WHILE:
         case TOK_RWORD_LOOP:
         case TOK_RWORD_UNSAFE:
+        case TOK_RWORD_TRY:
+        // A label, which heads a loop or a block
+        case TOK_LIFETIME:
 
         // Closures
         case TOK_RWORD_MOVE:
