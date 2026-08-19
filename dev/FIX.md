@@ -291,7 +291,18 @@ missing language rule before implementing diagnostics.
 
 The largest reachable group is name resolution: the `name-resolution` and
 `scopes` tests want an ambiguity error, raised when a name that two glob
-imports (or a glob and an outer item) both provide is *used*.
+imports both provide is *used*. That part is done.
+
+The glob-versus-outer half is not the same rule and a lookup-time check for it
+is wrong: rustc accepts a glob import inside a block shadowing an item of the
+enclosing scope for an ordinary use (`mod g { pub fn f(); } fn f(); fn main() {
+use g::*; f() }` compiles). What `name-resolution__L265` asks about is *import*
+resolution -- `use ambig::Name` written beside `use glob::*` -- which we resolve
+in a phase that runs before the glob's names exist. Making it work means
+resolving imports iteratively with candidates, not a lookup-time test; a
+lookup-time one was written and reverted for rejecting the programs above.
+`__L285` and `__L332` are the same rule in the macro namespace, where the
+candidates are a textual `macro_rules` scope and a path-based import.
 
 `abi/variadic-ffi` is the other `...` test and needs more than parsing: a named
 variadic parameter (`mut ap: ...`) is a `VaListImpl` the body then reads, so
