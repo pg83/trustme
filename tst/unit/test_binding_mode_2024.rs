@@ -23,4 +23,11 @@ fn main() {
     // `ref` where nothing is implicitly borrowing.
     let ref direct = 6u8;
     assert_eq!(*direct, 6);
+
+    // A `&` pattern is fine where nothing is implicitly borrowing: it takes
+    // apart the reference it was given.
+    let &deref = &7u8;
+    assert_eq!(deref, 7);
+    let &[&first] = &[&8u8];
+    assert_eq!(first, 8);
 }

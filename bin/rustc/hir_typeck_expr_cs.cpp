@@ -3968,6 +3968,17 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 }
 
                 if (auto* pe = pattern.data.opt_Ref()) {
+                    // From 2024, a `&` pattern may not sit under a default
+                    // binding mode that match ergonomics changed: the reference
+                    // it would take apart is the one already being borrowed
+                    // through. `ref_pat_eat_one_layer_2024` is the rule that
+                    // replaces this one.
+                    if (bindingMode != HIRPatternBinding::Type::Move
+                        && context.crate.edition >= ASTEdition::Rust2024
+                        && !context.crate.featureEnabled("ref_pat_eat_one_layer_2024")
+                        && !context.crate.featureEnabled("mut_ref")) {
+                        ERROR(sp, E0000, "cannot explicitly dereference within an implicitly-borrowing pattern - " << pattern);
+                    }
                     // Require a &-ptr (hard requirement), then visit sub-pattern
                     auto innerTy = context.ivars.newIvarTr();
                     auto newTy = context.crate.types.borrow(pe->type, innerTy);
