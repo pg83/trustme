@@ -139,6 +139,12 @@ Rust 1.97 rejects a relaxed bound in a trait alias outright ("nothing to
 relax"), so the reference compiler cannot confirm the 1.90 behaviour these tests
 want -- the unit test covers the expansion with a lifetime-only alias instead.
 
+A value path that names an import resolves to what it imports, so a crate whose
+entry point is a `use` (`use m::f as main;`) builds. And a module's prelude is
+in scope inside its function bodies, so a `use format_args as f;` written in a
+block finds it; that lookup used to walk out of the block's anonymous module
+and then skip the prelude of the module it landed in.
+
 What is left of the unresolved-name group splits by rule: two
 `non_lifetime_binders` (the `for<T>` trap above), `T` in a const trait bound
 under `-Zunpretty=hir` (which runs the passes that build the HIR, so it cannot
@@ -238,6 +244,12 @@ tests under Miri. Merging equal promoted constants (never `static` items, whose
 addresses Rust does keep distinct) is the fix, and it has to survive separate
 translation units.
 
+A field of a `#[repr(packed)]` struct is dropped through an aligned copy now:
+the destructor takes a `&mut Self` that the packing may place below its own
+alignment, and the packing reaches everything nested inside such a field, so
+the whole chain of owners decides. That is what `packed-struct-drop-aligned`
+and `issue-99838` measure.
+
 `glossary__L232` reached this class from the generated-code one: an enum with a
 single unit variant needs no tag, so `size_of` of it is 0 and we say 1. The
 data-enum path already collapses a lone variant (`trans_target.cpp`, the
@@ -280,6 +292,27 @@ imports (or a glob and an outer item) both provide is *used*.
 variadic parameter (`mut ap: ...`) is a `VaListImpl` the body then reads, so
 dropping the parameter as the unnamed form does would only move the failure.
 
+`abi-sysv64-arg-passing` and `extern/extern-pass-empty` are one root: Rust's C
+ABI passes nothing for a zero-sized argument, and the emitted C++ passes the
+one-byte stand-in that `TRUSTME_CODEGEN_DISALLOW_EMPTY_STRUCTS` gives such a
+struct, so every argument after it lands one register late. The fix is to omit
+a zero-sized argument from both the signature and the call wherever the ABI is
+not Rust's own (`emitFunctionHeader` has the ABI; the call site has to find the
+callee's), and to give the body of such a function a zero local in place of the
+parameter it no longer takes.
+
+`_` is written the same way for a type and for a const argument, and lowering
+splits a path's arguments into a type list and a value list by that spelling
+alone, so `Foo::<_, 1>` on `Foo<const N: bool, const M: u8>` binds `N` to `1`.
+`fixParamCount` moves a surplus placeholder across afterwards, but by then the
+order the arguments were written in is gone, so it can only append.
+`inferred_const` and `infer_arg_and_const_arg` need the classification done
+where the order survives -- in `LowerHIRPathParams`, against the item's own
+parameter list, which means threading the declaration in. Recording the
+placeholder in both lists and pruning later was tried and reverted: everything
+that reads a path's parameters before `Resolve Bind` (type-alias expansion,
+constant evaluation of a generic argument) sees the extra entry and rejects it.
+
 The two-argument `wrap_binder!(e; T)` form is not reachable: our macro engine
 does not match `($expr:expr ; $ty:ty)`. No corpus test uses it.
 
@@ -289,9 +322,9 @@ macro expansion, and that test needs it to bound auto-dereferencing as well
 
 ## P2: generated code and linking
 
-Nine tests emit C++ rejected by clang: three inline-assembly lowerings, two
-enum-discriminant narrowings, one malformed generated filename `-.cpp`, and
-three remaining incomplete or wrongly ordered generated types.
+Six tests emit C++ rejected by clang: three inline-assembly lowerings, one
+enum-discriminant narrowing, and two remaining incomplete or wrongly ordered
+generated types.
 
 Six tests reach the linker: three miss generated constant symbols, two refer
 to intentional native test symbols, and one exercises native-link directives.
