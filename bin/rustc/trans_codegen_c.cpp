@@ -1817,8 +1817,10 @@ default:
             // gives them one address, and library code compares those
             // addresses. Which of them holds it is settled here, before any
             // definition can name either.
-            if (promotedIsShared(item)) {
-                takePromotedHolder(p, type, item.valueRes);
+            if (promotedIsShared(item) && promotedTypeIsSettled(type)) {
+                if (const auto* value = promotedValue(p, item)) {
+                    takePromotedHolder(p, type, *value);
+                }
             }
             switch (item.linkage.type) {
                 case HIRLinkage::Type::External:
@@ -1899,7 +1901,25 @@ default:
         /// Only storage the compiler made for a promoted borrow shares a
         /// place with another: a `static` the program wrote keeps its own.
         static bool promotedIsShared(const HIRStatic& item) {
-            return item.isPromoted && !item.params.isGeneric() && item.valueGenerated && !item.noEmitValue;
+            return item.isPromoted && !item.noEmitValue;
+        }
+
+        /// Two promoted values are matched under the C type they are emitted
+        /// as, so a type still carrying a parameter -- an array whose length
+        /// is one, say -- has no name to match under yet.
+        static bool promotedTypeIsSettled(const HIRTypeData* ty) {
+            return !monomorphiseTypeNeeded(ty) && !ty->mayHaveAssociatedType();
+        }
+
+        /// The bytes a promoted static holds. One inside a generic body holds
+        /// them per instantiation, under the path that names that one, so two
+        /// instantiations only share a place where their bytes agree.
+        static const EncodedLiteral* promotedValue(const HIRPath& p, const HIRStatic& item) {
+            if (!item.params.isGeneric()) {
+                return item.valueGenerated ? &item.valueRes : nullptr;
+            }
+            auto it = item.monomorphCache.find(p);
+            return it == item.monomorphCache.end() ? nullptr : &it->second;
         }
 
         void emitStaticLocal(const HIRPath& p, const HIRStatic& item, const TransParams& params, const EncodedLiteral& encoded) override {
@@ -5812,7 +5832,12 @@ default:
             if (!stat || !promotedIsShared(**stat)) {
                 return path;
             }
-            const auto* held = promotedHolder(msTmp.monomorphType(sp, (**stat).type), (**stat).valueRes);
+            const auto* value = promotedValue(path, **stat);
+            auto statTy = msTmp.monomorphType(sp, (**stat).type);
+            if (!value || !promotedTypeIsSettled(statTy)) {
+                return path;
+            }
+            const auto* held = promotedHolder(statTy, *value);
             return held ? *held : path;
         }
 
