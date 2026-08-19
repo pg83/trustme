@@ -431,7 +431,7 @@ namespace {
         }
 
         ASTPath lookup(const Span& sp, const RcString& name, const Ident::Hygiene& srcContext, LookupMode mode) const {
-            auto rv = this->lookupOpt(name, srcContext, mode);
+            auto rv = this->lookupOpt(sp, name, srcContext, mode);
             if (!rv.isValid()) {
                 switch (mode) {
                     case LookupMode::Namespace:
@@ -451,12 +451,21 @@ namespace {
             return rv;
         }
 
-        static bool lookupInMod(const ASTModule& mod, const RcString& name, LookupMode mode, ASTPath& path) {
+        /// Two globs offering one name shadow nothing: the name is an error
+        /// where it is used, not where it was brought in.
+        static void checkUnambiguous(const Span& sp, const ASTModule& mod, const RcString& name, const ASTModule::IndexEnt& ent) {
+            if (ent.ambiguous) {
+                ERROR(sp, E0000, "`" << name << "` is ambiguous: more than one glob import in " << mod.path() << " provides it");
+            }
+        }
+
+        static bool lookupInMod(const Span& sp, const ASTModule& mod, const RcString& name, LookupMode mode, ASTPath& path) {
             switch (mode) {
                 case LookupMode::Namespace: {
                     auto v = mod.namespaceItems.find(name);
                     if (v != mod.namespaceItems.end()) {
                         DEBUG("- " << mod.path() << " NS: Namespace " << v->second.path);
+                        checkUnambiguous(sp, mod, name, v->second);
                         path = ASTPath(v->second.path);
                         return true;
                     }
@@ -465,7 +474,8 @@ namespace {
                         auto v = mod.typeItems.find(name);
                         if (v != mod.typeItems.end()) {
                             DEBUG("- " << mod.path() << " NS: Type " << v->second.path);
-                            path = ASTPath(v->second.path);
+                            checkUnambiguous(sp, mod, name, v->second);
+                        path = ASTPath(v->second.path);
                             return true;
                         }
                     }
@@ -476,6 +486,7 @@ namespace {
                     auto v = mod.typeItems.find(name);
                     if (v != mod.typeItems.end()) {
                         DEBUG("- " << mod.path() << " TY: Type " << v->second.path);
+                        checkUnambiguous(sp, mod, name, v->second);
                         path = ASTPath(v->second.path);
                         return true;
                     }
@@ -487,6 +498,7 @@ namespace {
                             const auto& b = v->second.path.bindings.value;
                             if (/*const auto* be =*/b.binding.opt_EnumVar()) {
                                 DEBUG("- " << mod.path() << " TY: Enum variant " << b.path);
+                                checkUnambiguous(sp, mod, name, v->second);
                                 path = ASTPath(b);
                                 return true;
                             }
@@ -501,7 +513,8 @@ namespace {
                             case ASTPathBindingValue::TAG_EnumVar:
                             case ASTPathBindingValue::TAG_Static:
                                 DEBUG("- PV: Value " << v->second.path);
-                                path = ASTPath(v->second.path);
+                                checkUnambiguous(sp, mod, name, v->second);
+                        path = ASTPath(v->second.path);
                                 return true;
                             case ASTPathBindingValue::TAG_Struct: {
                                 const auto& be = b.binding.as_Struct();
@@ -512,7 +525,8 @@ namespace {
                                     ;
                                 else {
                                     DEBUG("- " << mod.path() << " PV: Value " << b.path);
-                                    path = ASTPath(b);
+                                    checkUnambiguous(sp, mod, name, v->second);
+                                path = ASTPath(b);
                                     return true;
                                 }
                                 break;
@@ -527,6 +541,7 @@ namespace {
                     auto v = mod.valueItems.find(name);
                     if (v != mod.valueItems.end()) {
                         DEBUG("- " << mod.path() << " C/V: Value " << v->second.path);
+                        checkUnambiguous(sp, mod, name, v->second);
                         path = ASTPath(v->second.path);
                         return true;
                     }
@@ -535,7 +550,7 @@ namespace {
             return false;
         }
 
-        ASTPath lookupOpt(const RcString& name, const Ident::Hygiene& srcContext, LookupMode mode) const {
+        ASTPath lookupOpt(const Span& sp, const RcString& name, const Ident::Hygiene& srcContext, LookupMode mode) const {
             DEBUG("name=" << name << ", src_context=" << srcContext);
             auto lookupContext = srcContext;
             // NOTE: src_context may provide a module to search
@@ -691,7 +706,7 @@ default:
                         mod = next;
                     }
                     ASTPath rv;
-                    if (this->lookupInMod(*mod, name, mode, rv)) {
+                    if (this->lookupInMod(sp, *mod, name, mode, rv)) {
                         return rv;
                     }
                 }
@@ -702,7 +717,7 @@ default:
                         auto& e = (*it).as_Module();
                         DEBUG("- Module " << e.mod->path());
                         ASTPath rv;
-                        if (this->lookupInMod(*e.mod, name, mode, rv)) {
+                        if (this->lookupInMod(sp, *e.mod, name, mode, rv)) {
                             return rv;
                         }
                         break;
@@ -805,7 +820,7 @@ default:
             // Top-level module
             DEBUG("- Top module (" << mod.path() << ")");
             ASTPath rv;
-            if (this->lookupInMod(mod, name, mode, rv)) {
+            if (this->lookupInMod(sp, mod, name, mode, rv)) {
                 return rv;
             }
 
@@ -995,10 +1010,10 @@ void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPa
                 if (t->data.is_Path() && t->data.as_Path()->isTrivial()) {
                     auto p = t->data.as_Path()->cls.as_Relative();
                     // If type lookup fails
-                    auto newPath = context.lookupOpt(p.nodes[0].name(), p.hygiene, Context::LookupMode::Type);
+                    auto newPath = context.lookupOpt(sp, p.nodes[0].name(), p.hygiene, Context::LookupMode::Type);
                     if (newPath == ASTPath()) {
                         // Try (constant) value lookup
-                        auto newPath = context.lookupOpt(p.nodes[0].name(), p.hygiene, Context::LookupMode::Constant);
+                        auto newPath = context.lookupOpt(sp, p.nodes[0].name(), p.hygiene, Context::LookupMode::Constant);
                         if (newPath != ASTPath()) {
                             // If that lookup succeeds, then create a value (and visit it - just in case)
                             ent = ASTPathParamEnt::make_Value(new ASTExprNodeNamedValue(std::move(newPath)));
@@ -1877,7 +1892,7 @@ default:
 
     // Set binding to binding of node in last module
     ASTPath tmp;
-    if (!Context::lookupInMod(*mod, pathAbs.nodes.back().name(), mode, tmp)) {
+    if (!Context::lookupInMod(sp, *mod, pathAbs.nodes.back().name(), mode, tmp)) {
         ERROR(sp, E0000, "Couldn't find " << Context::lookupModeMsg(mode) << " '" << pathAbs.nodes.back().name() << "' of " << path);
     }
     ASSERT_BUG(sp, tmp.bindings.hasBinding(), "Lookup for " << path << " succeeded, but had no binding");
@@ -2733,7 +2748,7 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
             auto& e = pat.data().as_MaybeBind();
             auto name = mv$(e.name);
             // Attempt to resolve the name in the current namespace, and if it fails, it's a binding
-            auto p = context.lookupOpt(name.name, name.hygiene, Context::LookupMode::PatternValue);
+            auto p = context.lookupOpt(pat.span(), name.name, name.hygiene, Context::LookupMode::PatternValue);
             if (p.isValid()) {
                 ResolveAbsolutePath(context, pat.span(), Context::LookupMode::PatternValue, p);
                 pat.data() = ASTPattern::Data::make_Value({ASTPattern::Value::make_Named(mv$(p)), ASTPattern::Value()});
@@ -4162,7 +4177,7 @@ namespace {
     }
 } // namespace
 
-void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false) {
+void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false) {
     ASSERT_BUG(sp, ir.bindings.hasBinding(), "Adding item with no binding - " << ir);
     auto& list = getModIndex(mod, location);
 
@@ -4193,22 +4208,31 @@ void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcStrin
         } else if (errorOnCollision) {
             ERROR(sp, E0000, "Duplicate definition of name '" << name << "' in " << location << " scope (" << mod.path() << ") " << ir << ", and " << e.path);
         } else {
-            DEBUG(location << " name collision - '" << name << "' = " << ir << ", ignored (mod=" << mod.path() << ", was " << e.path << ")");
+            // An item written here, or named by a `use`, shadows a glob; two
+            // globs shadow nothing, and the name is ambiguous where it is used.
+            // The prelude is not one of the two: it is what a module falls back
+            // to, and anything brought in another way shadows it.
+            if (fromGlob && e.fromGlob && !fromPrelude && !e.fromPrelude) {
+                DEBUG(location << " name ambiguity - '" << name << "' = " << ir << " and " << e.path << " (mod=" << mod.path() << ")");
+                e.ambiguous = true;
+            } else {
+                DEBUG(location << " name collision - '" << name << "' = " << ir << ", ignored (mod=" << mod.path() << ", was " << e.path << ")");
+            }
         }
     } else {
         DEBUG("### " << (wasImport ? "Import" : "Add") << " " << location << " item " << mod.path() << " :: " << name << " = " << ir << vis);
-        auto rec = list.insert(::std::make_pair(name, ASTModule::IndexEnt{wasImport, fromPrelude, mv$(vis), mv$(ir)}));
+        auto rec = list.insert(::std::make_pair(name, ASTModule::IndexEnt{wasImport, fromPrelude, mv$(vis), mv$(ir), fromGlob, false}));
         assert(rec.second);
     }
 }
 
-void _add_item_type(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false) {
-    _add_item(sp, mod, IndexName::Namespace, name, vis, ASTPath(ir), errorOnCollision, fromPrelude);
-    _add_item(sp, mod, IndexName::Type, name, vis, ::std::move(ir), errorOnCollision, fromPrelude);
+void _add_item_type(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false) {
+    _add_item(sp, mod, IndexName::Namespace, name, vis, ASTPath(ir), errorOnCollision, fromPrelude, fromGlob);
+    _add_item(sp, mod, IndexName::Type, name, vis, ::std::move(ir), errorOnCollision, fromPrelude, fromGlob);
 }
 
-void _add_item_value(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false) {
-    _add_item(sp, mod, IndexName::Value, name, vis, mv$(ir), errorOnCollision, fromPrelude);
+void _add_item_value(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false) {
+    _add_item(sp, mod, IndexName::Value, name, vis, mv$(ir), errorOnCollision, fromPrelude, fromGlob);
 }
 
 void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
@@ -4497,7 +4521,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                 // Import of the crate root
                 if (spath.components().size() == 0) {
                     pb.binding = ASTPathBindingType::make_Module({nullptr, {nullptr, hmod}});
-                    _add_item(sp, dstMod, IndexName::Namespace, it.first, vis, ASTPath(pb), false, fromPrelude);
+                    _add_item(sp, dstMod, IndexName::Namespace, it.first, vis, ASTPath(pb), false, fromPrelude, /*from_glob=*/true);
                     continue;
                 }
                 for (unsigned int i = 0; i < spath.components().size() - 1; i++) {
@@ -4505,7 +4529,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     // Only support enums on the penultimate component
                     if (i == spath.components().size() - 2 && hit->ent.is_Enum()) {
                         pb.binding = ASTPathBindingType::make_EnumVar({nullptr, 0});
-                        _add_item_type(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude);
+                        _add_item_type(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true);
                         hmod = nullptr;
                         break;
                     }
@@ -4564,7 +4588,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     break;
                 }
             }
-            _add_item_type( sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude );
+            _add_item_type( sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true );
         }
     }
     for (const auto& it : hmod.valueItems) {
@@ -4586,7 +4610,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                         auto idx = hit->ent.as_Enum().findVariant(spath.components().back());
                         ASSERT_BUG(sp, idx != SIZE_MAX, spath);
                         pb.binding = ASTPathBindingValue::make_EnumVar({nullptr, static_cast<unsigned>(idx)});
-                        _add_item_value(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude);
+                        _add_item_value(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true);
                         hmod = nullptr;
                         break;
                     }
@@ -4628,7 +4652,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     break;
                 }
             }
-            _add_item_value( sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude );
+            _add_item_value( sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true );
         }
     }
     for (const auto& it : hmod.macroItems) {
@@ -4660,7 +4684,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     break;
                 }
             }
-            _add_item(sp, dstMod, IndexName::Macro, it.first, vis, mv$(pb), false, fromPrelude );
+            _add_item(sp, dstMod, IndexName::Macro, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true );
         }
     }
 }
@@ -4676,22 +4700,22 @@ void ResolveIndexModuleWildcardSubmod(ASTCrate& crate, ASTModule& dstMod, const 
 
     for (const auto& vi : srcMod.namespaceItems) {
         if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-            _add_item(sp, dstMod, IndexName::Namespace, vi.first, dstVis, vi.second.path, false, fromPrelude);
+            _add_item(sp, dstMod, IndexName::Namespace, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true);
         }
     }
     for (const auto& vi : srcMod.typeItems) {
         if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-            _add_item(sp, dstMod, IndexName::Type, vi.first, dstVis, vi.second.path, false, fromPrelude);
+            _add_item(sp, dstMod, IndexName::Type, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true);
         }
     }
     for (const auto& vi : srcMod.valueItems) {
         if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-            _add_item(sp, dstMod, IndexName::Value, vi.first, dstVis, vi.second.path, false, fromPrelude);
+            _add_item(sp, dstMod, IndexName::Value, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true);
         }
     }
     for (const auto& vi : srcMod.macroItems) {
         if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-            _add_item(sp, dstMod, IndexName::Macro, vi.first, dstVis, vi.second.path, false, fromPrelude);
+            _add_item(sp, dstMod, IndexName::Macro, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true);
         }
     }
 
@@ -4746,12 +4770,12 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
                     ASTPathBinding<ASTPathBindingType> pb;
                     pb.path = b.path + ev.name;
                     pb.binding = ASTPathBindingType::make_EnumVar({e.enum_, idx});
-                    _add_item_type(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude);
+                    _add_item_type(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true);
                 } else {
                     ASTPathBinding<ASTPathBindingValue> pb;
                     pb.path = b.path + ev.name;
                     pb.binding = ASTPathBindingValue::make_EnumVar({e.enum_, idx});
-                    _add_item_value(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude);
+                    _add_item_value(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true);
                 }
 
                 idx += 1;
@@ -4765,7 +4789,7 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
                     ASTPathBinding<ASTPathBindingValue> pb;
                     pb.path = b.path + ev.name;
                     pb.binding = ASTPathBindingValue::make_EnumVar({nullptr, idx, e.hir});
-                    _add_item_value(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude);
+                    _add_item_value(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true);
 
                     idx += 1;
                 }
@@ -4776,12 +4800,12 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
                         ASTPathBinding<ASTPathBindingType> pb;
                         pb.path = b.path + ev.name;
                         pb.binding = ASTPathBindingType::make_EnumVar({nullptr, idx, e.hir});
-                        _add_item_type(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude);
+                        _add_item_type(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true);
                     } else {
                         ASTPathBinding<ASTPathBindingValue> pb;
                         pb.path = b.path + ev.name;
                         pb.binding = ASTPathBindingValue::make_EnumVar({nullptr, idx, e.hir});
-                        _add_item_value(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude);
+                        _add_item_value(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true);
                     }
 
                     idx += 1;
@@ -4797,13 +4821,13 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
             ASTPathBinding<ASTPathBindingValue> pb;
             pb.path = b.path + name;
             pb.binding = ASTPathBindingValue::make_Static({nullptr, nullptr});
-            _add_item_value(sp, dstMod, name, vis, mv$(pb), false, fromPrelude);
+            _add_item_value(sp, dstMod, name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true);
         };
         auto addType = [&](const RcString& name) {
             ASTPathBinding<ASTPathBindingType> pb;
             pb.path = b.path + name;
             pb.binding = ASTPathBindingType::make_TypeAlias({nullptr});
-            _add_item_type(sp, dstMod, name, vis, mv$(pb), false, fromPrelude);
+            _add_item_type(sp, dstMod, name, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true);
         };
         if (tp->hir) {
             for (const auto& v : tp->hir->values) {

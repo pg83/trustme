@@ -784,6 +784,12 @@ public:
         bool fromPrelude; // Prelude names are local defaults, not module exports
         ASTVisibility vis;
         ASTPath path;
+        /// A glob brought this name in. Two globs offering different items for
+        /// one name is not an error until the name is used, so which of them
+        /// won is not decided here.
+        bool fromGlob = false;
+        /// Two globs offer this name, and neither shadows the other.
+        bool ambiguous = false;
     };
 
     // TODO: Document difference between namespace and Type
