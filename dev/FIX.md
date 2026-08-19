@@ -237,19 +237,23 @@ data-enum path already collapses a lone variant (`trans_target.cpp`, the
 
 ## P2: missing language checks
 
-Fifty-three negative tests compile successfully. The largest source areas are:
+Fifty-one negative tests compile successfully. The largest source areas are:
 
 | language area | tests |
 |---|---:|
 | name resolution | 7 |
 | destructor restrictions | 7 |
-| trait items | 2 |
 | const evaluation | 3 |
 | subtyping | 3 |
 | trait bounds | 3 |
 | closure restrictions | 3 |
 | drop checking | 3 |
 | all smaller areas | 23 |
+
+The two `trait items` ones are fixed: a trait bounded by `Sized` has no `dyn`
+form, and forming one is now an error.  Only that rule is checked; the rest of
+dyn compatibility (a method that is generic, or that names `Self`) still only
+decides what goes in the vtable.
 
 Source chapters are routing information. Group the concrete examples by the
 missing language rule before implementing diagnostics.

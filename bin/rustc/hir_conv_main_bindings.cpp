@@ -355,6 +355,25 @@ default:
             }
         }
 
+        /// Whether the trait itself is bounded by `Sized`, which is what makes
+        /// it impossible to build a trait object out of.
+        bool traitRequiresSizedSelf(const HIRTrait& trait) const {
+            const auto& sized = crate.getLangItemPathOpt("sized");
+            if (sized == HIRSimplePath()) {
+                return false;
+            }
+            for (const auto& bound : trait.params.bounds) {
+                if (!bound.is_TraitBound()) {
+                    continue;
+                }
+                const auto& tb = bound.as_TraitBound();
+                if (tb.type == interner().self() && tb.trait.path.path == sized) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             return visitTypeInner(ty);
         }
@@ -537,6 +556,14 @@ default:
             } else if (auto* te = data.opt_TraitObject()) {
                 if (te->trait.path.path != HIRSimplePath()) {
                     const auto& trait = crate.getTraitByPath(sp, te->trait.path.path);
+                    // A trait that requires `Self: Sized` has no `dyn` form:
+                    // what a trait object points at is unsized, so no impl of
+                    // it could ever be the one behind the pointer.  The same
+                    // clause on a *method* only keeps that method out of the
+                    // vtable, and is not this.
+                    if (traitRequiresSizedSelf(trait)) {
+                        ERROR(sp, E0000, "The trait " << te->trait.path.path << " is not dyn compatible: it requires `Self: Sized`");
+                    }
                     fixParamCount(crate.types, sp, te->trait.path, trait.params, te->trait.path.params, /*fill_infer=*/inExpr, nullptr);
                 }
                 for (auto& m : te->markers) {
