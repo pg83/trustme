@@ -1,5 +1,6 @@
 #include "hir_expand_main_bindings.h"
-#include "hir_expand_main_bindings.h"
+
+#include <std/lib/vector.h>
 
 #include "hir_hir.h"
 #include "hir_expr.h"
@@ -90,6 +91,9 @@ namespace {
 
         ::std::vector<HIRValueUsage> usage;
         ::std::vector<Scope> closureStack;
+        /// Calls of a closure that had not been classified yet when the call was
+        /// seen -- the closure is written later in the same expression.
+        stl::Vector<HIRExprNodeCallValue*> pendingCalls;
         /// Disable the capture logic in `ExprNode_Variable` (as the variable was captured using a field access)
         bool ignoreVariableCapture;
 
@@ -155,6 +159,34 @@ namespace {
             auto expectedSize = usage.size();
             rootPtr->visit(*this);
             assert(usage.size() == expectedSize);
+
+            // Now that every closure has been classified, the calls that could
+            // not be settled earlier can be.
+            for (auto* call : pendingCalls) {
+                const auto* nodePp = (*call->value->resType).is_NodeType() ? ((*call->value->resType).as_NodeType().opt_Closure()) : nullptr;
+                if (!nodePp || !*nodePp) {
+                    continue;
+                }
+                switch ((*nodePp)->cls) {
+                    case HIRExprNodeClosure::Class::Unknown:
+                        break;
+                    case HIRExprNodeClosure::Class::NoCapture:
+                    case HIRExprNodeClosure::Class::Shared:
+                        if (!resolve_.hirCrate().getLangItemPathOpt("fn").components().empty()) {
+                            call->traitUsed = HIRExprNodeCallValue::TraitUsed::Fn;
+                        } else if (!resolve_.hirCrate().getLangItemPathOpt("fn_mut").components().empty()) {
+                            call->traitUsed = HIRExprNodeCallValue::TraitUsed::FnMut;
+                        }
+                        break;
+                    case HIRExprNodeClosure::Class::Mut:
+                        call->traitUsed = !resolve_.hirCrate().getLangItemPathOpt("fn_mut").components().empty() ? HIRExprNodeCallValue::TraitUsed::FnMut : HIRExprNodeCallValue::TraitUsed::FnOnce;
+                        break;
+                    case HIRExprNodeClosure::Class::Once:
+                        call->traitUsed = HIRExprNodeCallValue::TraitUsed::FnOnce;
+                        break;
+                }
+            }
+            pendingCalls.clear();
         }
 
         void visitNodePtr(HIRExprNodeP& nodePtr) override {
@@ -596,7 +628,14 @@ namespace {
                 }
                 switch ((*nodePp)->cls) {
                     case HIRExprNodeClosure::Class::Unknown:
-                        BUG(node.span(), "CallValue with unknown closure class - " << node.value->resType);
+                        // The closure is written later in this expression
+                        // (`foo(|f| (*f)(), Box::new(|| {}))`), so what it
+                        // captures is not known yet. Read the value the most
+                        // restrictive way for now -- taking too much is safe,
+                        // taking too little is not -- and settle which trait the
+                        // call uses once the whole expression has been seen.
+                        node.traitUsed = HIRExprNodeCallValue::TraitUsed::FnOnce;
+                        pendingCalls.pushBack(&node);
                         break;
                     case HIRExprNodeClosure::Class::NoCapture:
                     case HIRExprNodeClosure::Class::Shared:
