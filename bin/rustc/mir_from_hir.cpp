@@ -1877,7 +1877,18 @@ default:
             builder.pushStmtAssign(node.value->span(), rhs.clone(), mv$(val));
 
             this->visitNodePtr(node.slot);
-            auto dst = builder.getResultUnwrapLvalue(sp);
+            auto dstRes = builder.getResult(sp);
+            if (!dstRes.is_Use()) {
+                // `S = S;` names a unit struct or variant on the left. Such a
+                // pattern matches and holds nothing, so there is nowhere for the
+                // value to go -- keep it in a temporary for its effects.
+                ASSERT_BUG(sp, node.op == HIRExprNodeAssign::Op::None, "Assignment operator on a value that is not a place");
+                auto tmp = builder.newTemporary(tySlot);
+                builder.pushStmtAssign(node.slot->span(), mv$(tmp), mv$(dstRes));
+                builder.setResult(node.span(), MIRRValue::make_Tuple({}));
+                return;
+            }
+            auto dst = mv$(dstRes.as_Use());
 
             if (node.op != HIRExprNodeAssign::Op::None) {
                 auto dstClone = dst.clone();
