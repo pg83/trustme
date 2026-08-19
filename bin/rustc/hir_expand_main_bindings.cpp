@@ -4967,6 +4967,7 @@ public:
                     );
                     newStatic.explicitAlignment = alignment;
                     newStatic.valueGenerated = true;
+                    newStatic.isPromoted = true;
                     newStatic.valueRes = ::std::move(value);
                     DEBUG(path << " = " << newStatic.valueRes);
                     currentModule.valueItems.insert(
@@ -5197,6 +5198,7 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
             /*m_value=*/mv$(valExpr)
         );
         newStatic.params = mv$(generics);
+        newStatic.isPromoted = true;
         // - Since this was neeed in consteval, it's going to need to be saved?
         newStatic.saveLiteral = true;
 
@@ -5220,6 +5222,7 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
                 );
                 newStatic.explicitAlignment = alignment;
                 newStatic.valueGenerated = true;
+                newStatic.isPromoted = true;
                 newStatic.valueRes = ::std::move(value);
                 DEBUG(path << " = " << newStatic.valueRes);
                 crate.newValues.push_back(

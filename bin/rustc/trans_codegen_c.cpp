@@ -12,6 +12,10 @@
 #include "hir_typeck_static.h"
 #include <codegen_c_prelude.h>
 
+#include <std/sym/i_map.h>
+#include <std/mem/obj_pool.h>
+#include <std/rng/split_mix_64.h>
+
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -194,6 +198,21 @@ namespace {
         ::std::set<const TypeRepr*> embeddedTags;
         HIRTypeRefMap<HIRTypeRef> normalizedCtypes;
 
+        /// Storage the compiler made for a promoted borrow, keyed by what it
+        /// holds. Two promoted borrows of the same value are the same value:
+        /// rustc gives them one address, and library code compares those
+        /// addresses. Entries chain per hash and are told apart by comparing.
+        struct PromotedNode {
+            PromotedNode* next;
+            // Owned: the enumeration's list of statics is released once they
+            // are emitted, and function bodies name them after that.
+            HIRPath path;
+            RcString ctype;
+            const EncodedLiteral* value;
+        };
+
+        stl::IntMap<PromotedNode*> promotedValues;
+
         bool usesIntelCompilerAsmDialect() const {
             const auto& arch = TargetGetCurSpec(wb_).arch.name;
             return arch == "x86" || arch == "x86_64";
@@ -207,6 +226,7 @@ namespace {
             , outfilePath(outfile)
             , outfilePathC(outfile + ".cpp")
             , of(outfilePathC)
+            , promotedValues(crate.pool)
         {
             ASSERT_BUG(Span(), of.is_open(), "Failed to open `" << outfilePathC << "` for writing");
             options.emulatedI128 = TargetGetCurSpec(wb_).backendC.emulatedI128;
@@ -1793,6 +1813,13 @@ default:
 
             TRACE_FUNCTION_F(p);
             auto type = params.monomorph(resolve_, item.type);
+            // Two promoted borrows of the same value are the same value: rustc
+            // gives them one address, and library code compares those
+            // addresses. Which of them holds it is settled here, before any
+            // definition can name either.
+            if (promotedIsShared(item)) {
+                takePromotedHolder(p, type, item.valueRes);
+            }
             switch (item.linkage.type) {
                 case HIRLinkage::Type::External:
                     break;
@@ -1824,6 +1851,55 @@ default:
             of << "\n";
 
             mirRes = nullptr;
+        }
+
+        static u64 promotedHash(const RcString& ctype, const EncodedLiteral& value) {
+            auto h = stl::splitMix64(ctype.contentHash());
+            for (auto b : value.bytes) {
+                h = stl::splitMix64(h ^ static_cast<u64>(b));
+            }
+            for (const auto& reloc : value.relocations) {
+                h = stl::splitMix64(h ^ reloc.ofs ^ (reloc.len << 8));
+            }
+            return h;
+        }
+
+        /// The static that holds this value, if one has been seen. The emitted
+        /// C type is what has to agree, not the type as HIR spells it: after
+        /// this, the two names stand for one union of that type.
+        const HIRPath* promotedHolder(const HIRTypeData* ty, const EncodedLiteral& value) const {
+            const auto ctype = TransMangle(ty);
+            auto* head = promotedValues.find(promotedHash(ctype, value));
+            for (auto* n = (head ? *head : nullptr); n; n = n->next) {
+                if (n->ctype == ctype && *n->value == value) {
+                    return &n->path;
+                }
+            }
+            return nullptr;
+        }
+
+        /// The static that holds this value, making this one hold it when no
+        /// other does yet.
+        const HIRPath* takePromotedHolder(const HIRPath& p, const HIRTypeData* ty, const EncodedLiteral& value) {
+            if (const auto* held = promotedHolder(ty, value)) {
+                return held;
+            }
+            const auto ctype = TransMangle(ty);
+            const auto h = promotedHash(ctype, value);
+            auto* head = promotedValues.find(h);
+            auto* node = crate.pool->make<PromotedNode>(PromotedNode{head ? *head : nullptr, p.clone(), ctype, &value});
+            if (head) {
+                *head = node;
+            } else {
+                promotedValues.insert(h, node);
+            }
+            return &node->path;
+        }
+
+        /// Only storage the compiler made for a promoted borrow shares a
+        /// place with another: a `static` the program wrote keeps its own.
+        static bool promotedIsShared(const HIRStatic& item) {
+            return item.isPromoted && !item.params.isGeneric() && item.valueGenerated && !item.noEmitValue;
         }
 
         void emitStaticLocal(const HIRPath& p, const HIRStatic& item, const TransParams& params, const EncodedLiteral& encoded) override {
@@ -5717,8 +5793,31 @@ default:
             of << "," << source.filename.size() << "}," << source.line << "," << source.column << "}";
         }
 
+        /// The name a promoted borrow's value is reached by: whichever static
+        /// holds that value. A name that stands for the same value keeps its
+        /// own definition -- another crate may have been given it -- but is
+        /// not what this crate reads the value through.
+        const HIRPath& promotedName(const HIRPath& path) {
+            const auto* gp = path.data.opt_Generic();
+            if (!gp || gp->path.components().empty()) {
+                return path;
+            }
+            const auto& last = gp->path.components().back();
+            if (strncmp(last.c_str(), "const#", 6) != 0 && strncmp(last.c_str(), "lifted#", 7) != 0) {
+                return path;
+            }
+            MonomorphState msTmp(crate.types);
+            auto v = resolve_.getValue(sp, path, msTmp, /*signature_only=*/true);
+            const auto* stat = v.opt_Static();
+            if (!stat || !promotedIsShared(**stat)) {
+                return path;
+            }
+            const auto* held = promotedHolder(msTmp.monomorphType(sp, (**stat).type), (**stat).valueRes);
+            return held ? *held : path;
+        }
+
         void emitReifiedFunctionName(const HIRPath& path, bool preserveTrackCaller = false) {
-            of << TransMangle(path);
+            of << TransMangle(promotedName(path));
             if (!preserveTrackCaller && pathTracksCaller(path)) {
                 of << "__trustme_reify";
             }

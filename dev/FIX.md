@@ -236,13 +236,13 @@ lifetimes -- `HIRPathParams` has no lifetime list to carry them. Nothing short o
 carrying lifetimes through HIR would separate those types, so do not count these
 two as independent work.
 
-`will_wake` is a trap: it compares vtable *addresses*, and `alloc::task`
-promotes the same `RawWakerVTable` value in two functions (`const#0` and
-`const#1`), which we emit as two weak symbols. rustc relies on the backend
-merging them and documents the check as best-effort -- upstream even skips the
-tests under Miri. Merging equal promoted constants (never `static` items, whose
-addresses Rust does keep distinct) is the fix, and it has to survive separate
-translation units.
+Two promoted borrows of the same value now name one place: the emitted code
+reads such a value through whichever static holds it, which is what `will_wake`
+(comparing two promoted `RawWakerVTable`s) and `const_str_ptr` (comparing a
+promoted borrow with a `const` that holds the same bytes) measure. Each name
+keeps a definition of its own, because another crate may have been given it;
+only what this crate reads through changes. A `static` the program wrote is
+never shared this way -- Rust keeps those addresses distinct.
 
 A field of a `#[repr(packed)]` struct is dropped through an aligned copy now:
 the destructor takes a `&mut Self` that the packing may place below its own
