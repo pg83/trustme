@@ -121,10 +121,10 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             auto name = RcString::newInterned(FMT("ConstEvalMonomorph#" << count));
             count++;
             auto p = HIRSimplePath(crate.crateName, {name});
-            auto* ent = crate.pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newGlobal(), HIRValueItem(HIRStatic(HIRLinkage(), false, std::move(type), HIRExprPtr()))});
+            auto* ent = crate.pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newGlobal(), HIRValueItem(crate.pool->make<HIRStatic>(HIRStatic(HIRLinkage(), false, std::move(type), HIRExprPtr())))});
 
             {
-                auto& s = ent->ent.as_Static();
+                auto& s = *ent->ent.as_Static();
                 s.explicitAlignment = alignment;
                 s.valueGenerated = true;
                 s.valueRes = std::move(value);

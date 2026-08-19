@@ -3837,19 +3837,13 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     break;
                 }
                 case HIRValueItem::TAG_Constant: {
-                    auto& ve = v.as_Constant();
-                    outParams.ppMethod = &pe.params; return &ve;
-                    break;
+                    outParams.ppMethod = &pe.params; return v.as_Constant();
                 }
                 case HIRValueItem::TAG_Static: {
-                    auto& ve = v.as_Static();
-                    outParams.ppMethod = &pe.params; return &ve;
-                    break;
+                    outParams.ppMethod = &pe.params; return v.as_Static();
                 }
                 case HIRValueItem::TAG_Function: {
-                    auto& ve = v.as_Function();
-                    outParams.ppMethod = &pe.params; return &ve;
-                    break;
+                    outParams.ppMethod = &pe.params; return v.as_Function();
                 }
                 case HIRValueItem::TAG_StructConstant: {
                     outParams.ppImpl = &pe.params; TODO(sp, "StructConstant - " << p);

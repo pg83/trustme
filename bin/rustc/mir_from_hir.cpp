@@ -3224,7 +3224,7 @@ default:
                             break;
                         }
                         case HIRValueItem::TAG_Constant: {
-                            auto& e = vi.as_Constant();
+                            const auto& e = *vi.as_Constant();
                             auto ty = MonomorphStatePtr(builder.resolve().crate.types, nullptr, nullptr, &pe.params).monomorphType(sp, e.type);
                             auto tmp = builder.newTemporary(ty);
                             builder.pushStmtAssign(sp, tmp.clone(), MIRConstant::make_Const({box$(node.path.clone())}));

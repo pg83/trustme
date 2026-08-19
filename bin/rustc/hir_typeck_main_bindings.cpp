@@ -31,12 +31,10 @@ namespace {
                         break;
                     }
                     case HIRValueItem::TAG_Function: {
-                        auto& e = item.as_Function();
-                        return e.params;
+                        return item.as_Function()->params;
                     }
                     case HIRValueItem::TAG_Constant: {
-                        auto& e = item.as_Constant();
-                        return e.params;
+                        return item.as_Constant()->params;
                     }
                     case HIRValueItem::TAG_Static: {
                         // TODO: Return an empty set?

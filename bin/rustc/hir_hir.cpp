@@ -1,5 +1,7 @@
 #include "hir_hir.h"
 
+#include <std/mem/obj_pool.h>
+
 #include "floats.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
@@ -735,10 +737,11 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
     if (path.crateName() == "#intrinsics") {
         ASSERT_BUG(sp, path.components().size() == 1, "");
         if (path.components().back() == "offset_of") {
-            if (!intrinsicOffsetof.as_Function().variadic) {
-                auto& v = intrinsicOffsetof.as_Function();
-                v.variadic = true;
-                v.params.types.push_back(HIRTypeParamDef{RcString::newInterned("T"), types.infer(), false});
+            if (!intrinsicOffsetof.as_Function()) {
+                auto* v = pool->make<HIRFunction>(HIRFunction{HIRFunction::Receiver::Free, HIRGenericParams{}, {}, types.primitive(HIRCoreType::Usize), {}});
+                v->variadic = true;
+                v->params.types.push_back(HIRTypeParamDef{RcString::newInterned("T"), types.infer(), false});
+                intrinsicOffsetof = HIRValueItem::make_Function(v);
             }
             return intrinsicOffsetof;
         }
@@ -765,8 +768,7 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
 const HIRFunction& HIRCrate::getFunctionByPath(const Span& sp, const HIRSimplePath& path) const {
     const auto& ti = this->getValitemByPath(sp, path);
     if (ti.is_Function()) {
-        auto& e = ti.as_Function();
-        return e;
+        return *ti.as_Function();
     }
     else {
         BUG(sp, "Function path " << path << " didn't point to an function (" << ti.tagStr() << ")");
@@ -792,7 +794,7 @@ const HIRStatic& HIRCrate::getStaticByPath(const Span& sp, const HIRSimplePath& 
     auto it = m.valueItems.find(path.components().back());
     if (it != m.valueItems.end()) {
         ASSERT_BUG(sp, it->second->ent.is_Static(), "`static` path " << path << " didn't point to a static - " << it->second->ent.tagStr());
-        return it->second->ent.as_Static();
+        return *it->second->ent.as_Static();
     }
     for (const auto& e : m.inlineStatics) {
         if (e.first == path.components().back()) {
@@ -804,7 +806,7 @@ const HIRStatic& HIRCrate::getStaticByPath(const Span& sp, const HIRSimplePath& 
             return v.first == path.components().back();
         });
         if (i != newValues.end()) {
-            return i->second->ent.as_Static();
+            return *i->second->ent.as_Static();
         }
     }
     BUG(sp, "`static` path " << path << " can't be found");
@@ -2400,15 +2402,14 @@ HIRModule::HIRModule() {
 HIRCrate::HIRCrate(stl::ObjPool* pool, HIRTypeInterner& types)
     : pool(pool)
     , types(types)
-    , intrinsicOffsetof(HIRFunction{HIRFunction::Receiver::Free, HIRGenericParams{}, {}, types.primitive(HIRCoreType::Usize), {}})
+    , intrinsicOffsetof(HIRValueItem::make_Function(nullptr))
 {
 }
 
 const HIRConstant& HIRCrate::getConstantByPath(const Span& sp, const HIRSimplePath& path) const {
     const auto& ti = this->getValitemByPath(sp, path);
     if (ti.is_Constant()) {
-        auto& e = ti.as_Constant();
-        return e;
+        return *ti.as_Constant();
     }
     else {
         BUG(sp, "`const` path " << path << " didn't point to an enum");

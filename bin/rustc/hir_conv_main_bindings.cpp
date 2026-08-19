@@ -247,9 +247,9 @@ namespace {
 default:
                             ERROR(sp, E0000, "Value pattern " << pat << " pointing to unexpected item type - " << it->second->ent.tagStr());
                             case HIRValueItem::TAG_Constant: {
-                                auto& e2 = it->second->ent.as_Constant();
+                                const auto* e2 = it->second->ent.as_Constant();
                                 // Store reference to this item for later use
-                                ve->binding = &e2;
+                                ve->binding = e2;
                                 break;
                             }
                             case HIRValueItem::TAG_StructConstant: {

@@ -1423,7 +1423,7 @@ default:
         void enumerateLinkFunctionsIn(const HIRModule& mod, HIRItemPath modPath) {
             for (const auto& vi : mod.valueItems) {
                 if (const auto* ip = vi.second->ent.opt_Function()) {
-                    const auto& i = *ip;
+                    const auto& i = **ip;
                     if (i.code.mir && i.linkage.name != "") {
                         linkFunctions[i.linkage.name] = std::make_pair((modPath + vi.first).getSimplePath(), &i);
                     }
@@ -1690,7 +1690,7 @@ namespace {
                 break;
                 break;
                 case HIRValueItem::TAG_Constant: {
-                    auto& e = vi.as_Constant();
+                    const auto& e = *vi.as_Constant();
                     if (isVisible) {
                         // Visible constants need their relocations added as roots
                         // - Can't add this logic to `Trans_Enumerate_FillFrom_Literal` as it's used by non-public enumeration
@@ -1706,7 +1706,7 @@ namespace {
                 break;
                 break;
                 case HIRValueItem::TAG_Static: {
-                    auto& e = vi.as_Static();
+                    const auto& e = *vi.as_Static();
                     if (e.linkage.name != "" || e.linkage.section != "") {
                         // If a link name is set, force emit
                         isVisible = true;
@@ -1730,7 +1730,7 @@ namespace {
                 break;
                 break;
                 case HIRValueItem::TAG_Function: {
-                    auto& e = vi.as_Function();
+                    const auto& e = *vi.as_Function();
                     bool isInline = false;
                     if (isVisible) {
                         switch (e.markings.inlineType) {
@@ -1777,9 +1777,9 @@ namespace {
         for (const auto& vi : mod.valueItems) {
             bool hasExplicitLinkage = false;
             if (const auto* function = vi.second->ent.opt_Function()) {
-                hasExplicitLinkage = function->linkage.name != "" || function->linkage.section != "";
+                hasExplicitLinkage = (*function)->linkage.name != "" || (*function)->linkage.section != "";
             } else if (const auto* stat = vi.second->ent.opt_Static()) {
-                hasExplicitLinkage = stat->linkage.name != "" || stat->linkage.section != "";
+                hasExplicitLinkage = (*stat)->linkage.name != "" || (*stat)->linkage.section != "";
             }
             if (hasExplicitLinkage) {
                 auto path = modPath + vi.first;

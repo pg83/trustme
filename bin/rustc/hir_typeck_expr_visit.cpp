@@ -72,7 +72,7 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
         implGenerics = nullptr;
             switch (item.tag()) {
                 case HIRValueItem::TAG_Constant: {
-                    auto& e = item.as_Constant();
+                    const auto& e = *item.as_Constant();
                     itemGenerics = &e.params;
                     break;
                 }
@@ -80,7 +80,7 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
                     break;
                 }
                 case HIRValueItem::TAG_Function: {
-                    auto& e = item.as_Function();
+                    const auto& e = *item.as_Function();
                     itemGenerics = &e.params;
                     break;
                 }

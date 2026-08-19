@@ -707,13 +707,13 @@ public:
                 return HIRValueItem::make_Import({mv$(spath), isVariant, static_cast<unsigned int>(in.readCount())});
             }
             case 1:
-                return HIRValueItem(deserialiseConstant());
+                return HIRValueItem(pool.make<HIRConstant>(deserialiseConstant()));
             case 2:
-                return HIRValueItem(deserialiseStatic());
+                return HIRValueItem(pool.make<HIRStatic>(deserialiseStatic()));
             case 3:
                 return HIRValueItem::make_StructConstant({deserialiseSimplepath()});
             case 4:
-                return HIRValueItem(deserialiseFunction());
+                return HIRValueItem(pool.make<HIRFunction>(deserialiseFunction()));
             case 5:
                 return HIRValueItem::make_StructConstructor({deserialiseSimplepath()});
             default:
@@ -3916,12 +3916,12 @@ break;
                 break;
             }
             case HIRValueItem::TAG_Constant: {
-                auto& e = item.as_Constant();
+                const auto& e = *item.as_Constant();
                 out.writeTag(1); serialise(e);
                 break;
             }
             case HIRValueItem::TAG_Static: {
-                auto& e = item.as_Static();
+                const auto& e = *item.as_Static();
                 out.writeTag(2); serialise(e);
                 break;
             }
@@ -3931,7 +3931,7 @@ break;
                 break;
             }
             case HIRValueItem::TAG_Function: {
-                auto& e = item.as_Function();
+                const auto& e = *item.as_Function();
                 out.writeTag(4); serialise(e);
                 break;
             }

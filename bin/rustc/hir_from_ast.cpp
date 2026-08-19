@@ -1392,7 +1392,7 @@ tStructFields AST2HIR::LowerHIRStructFields(HIRItemPath path, const HIRGenericPa
             // NOTE: I'd love to have this be a `Constant`, but that would require duplicating the type and the params
             // meh. Lazy option is to just duplicate
             auto name = RcString::newInterned(FMT(path.getName() << "#default_" << field.name));
-            outMod.valueItems.insert(std::make_pair(name, crate->pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newGlobal(), HIRValueItem(HIRConstant(params.clone(), type, LowerHIRExpr(field.defaultValue)))})));
+            outMod.valueItems.insert(std::make_pair(name, crate->pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newGlobal(), HIRValueItem(crate->pool->make<HIRConstant>(HIRConstant(params.clone(), type, LowerHIRExpr(field.defaultValue))))})));
             fieldDefault = std::make_unique<HIRGenericPath>((*path.parent + name).getSimplePath(), params.makeNopParams(crate->types, 0));
         }
         fields.push_back(HIRStructField{field.name, LowerHIRVis(getParentModule(path), field.vis), std::move(type), std::move(fieldDefault)});
@@ -2513,7 +2513,7 @@ HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attr
 
     if (e.sClass() == ASTStatic::CONST) {
         // Note: Empty names are allowed for `const _: ...`
-        return HIRValueItem::make_Constant(HIRConstant(mv$(params), LowerHIRType(e.type()), mv$(value)));
+        return HIRValueItem::make_Constant(crate->pool->make<HIRConstant>(HIRConstant(mv$(params), LowerHIRType(e.type()), mv$(value))));
     } else {
         // Note: Empty names are allowed for `const _: ...`
         ASSERT_BUG(sp, name != "", "Empty constant name " << p);
@@ -2538,7 +2538,7 @@ HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attr
             linkage.name = name.c_str();
         }
 
-        return HIRValueItem::make_Static(HIRStatic(mv$(linkage), (e.sClass() == ASTStatic::MUT), LowerHIRType(e.type()), mv$(value)));
+        return HIRValueItem::make_Static(crate->pool->make<HIRStatic>(HIRStatic(mv$(linkage), (e.sClass() == ASTStatic::MUT), LowerHIRType(e.type()), mv$(value))));
     }
 }
 
@@ -2751,7 +2751,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
             }
             case ASTItem::TAG_Function: {
                 auto& e = item.data.as_Function();
-                _add_mod_val_item(*crate->pool, mod, item.name, getVis(item.vis), LowerHIRFunction(itemPath, modPath, item.attrs, e, HIRTypeRef{}));
+                _add_mod_val_item(*crate->pool, mod, item.name, getVis(item.vis), HIRValueItem(crate->pool->make<HIRFunction>(LowerHIRFunction(itemPath, modPath, item.attrs, e, HIRTypeRef{}))));
                 break;
             }
             case ASTItem::TAG_Static: {

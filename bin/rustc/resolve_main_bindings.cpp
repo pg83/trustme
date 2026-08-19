@@ -1273,8 +1273,7 @@ default:
                     break;
                 }
                 case HIRValueItem::TAG_Static: {
-                    auto& e = it->second->ent.as_Static();
-                    pbv = ASTPathBindingValue::make_Static({nullptr, &e});
+                    pbv = ASTPathBindingValue::make_Static({nullptr, it->second->ent.as_Static()});
                     break;
                 }
                 case HIRValueItem::TAG_StructConstant: {
@@ -1640,8 +1639,7 @@ default:
                             break;
                         }
                         case HIRValueItem::TAG_Static: {
-                            auto& e = v->second->ent.as_Static();
-                            pbv = ASTPathBindingValue::make_Static({nullptr, &e});
+                            pbv = ASTPathBindingValue::make_Static({nullptr, v->second->ent.as_Static()});
                             break;
                         }
                         case HIRValueItem::TAG_Constant: {

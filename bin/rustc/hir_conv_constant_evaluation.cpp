@@ -5051,11 +5051,11 @@ namespace {
                             break;
                         }
                         case HIRValueItem::TAG_Constant: {
-                            auto& e = vi.as_Constant();
+                            const auto& e = *vi.as_Constant();
                             return e.params;
                         }
                         case HIRValueItem::TAG_Function: {
-                            auto& e = vi.as_Function();
+                            const auto& e = *vi.as_Function();
                             return e.params;
                         }
                         case HIRValueItem::TAG_StructConstant: {
@@ -5630,7 +5630,7 @@ namespace {
             if (!mod.inlineStatics.empty()) {
                 for (auto& v : mod.inlineStatics) {
                     // ::std::unique_ptr<VisEnt<ValueItem>>
-                    auto* iv = pool_.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), HIRValueItem::make_Static(mv$(*v.second))});
+                    auto* iv = pool_.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), HIRValueItem::make_Static(pool_.make<HIRStatic>(mv$(*v.second)))});
                     mod.valueItems.insert(::std::make_pair(v.first, iv));
                 }
                 mod.inlineStatics.clear();

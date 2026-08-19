@@ -4934,7 +4934,7 @@ public:
                             name,
                             pool.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{
                                     HIRPublicity::newNone(), // Should really be private, but we're well after checking
-                                    HIRValueItem(::std::move(newStatic))
+                                    HIRValueItem(pool.make<HIRStatic>(::std::move(newStatic)))
                                 })
                         )
                     );
@@ -4955,7 +4955,7 @@ public:
             // same pass, and path lookup must already be able to find it.
             for (auto& newStaticPair : modList.second) {
                 auto& newStatic = newStaticPair.data;
-                auto newEnt = newStaticPair.isConst ? HIRValueItem(H::toConst(newStatic)) : HIRValueItem(std::move(newStaticPair.data));
+                auto newEnt = newStaticPair.isConst ? HIRValueItem(crate.pool->make<HIRConstant>(H::toConst(newStatic))) : HIRValueItem(crate.pool->make<HIRStatic>(std::move(newStaticPair.data)));
                 auto inserted = mod.valueItems.insert(
                     std::make_pair(
                         newStaticPair.path.components().back(),
@@ -4971,7 +4971,8 @@ public:
             for (const auto& newStaticPair : modList.second) {
                 Span sp;
                 auto& value = mod.valueItems.at(newStaticPair.path.components().back())->ent;
-                if (auto* newConst = value.opt_Constant()) {
+                if (auto* newConstP = value.opt_Constant()) {
+                    auto* newConst = *newConstP;
                     TRACE_FUNCTION_F("New constant " << newStaticPair.path << newConst->params.fmtArgs());
                     if (newConst->valueState == HIRConstant::ValueState::Unknown) {
                         newConst->value.state->stage = HIRExprState::Stage::Sbc;
@@ -4979,7 +4980,7 @@ public:
                         newConst->valueState = HIRConstant::ValueState::Known;
                     }
                 } else {
-                    auto& newStatic = value.as_Static();
+                    auto& newStatic = *value.as_Static();
                     TRACE_FUNCTION_F("New static " << newStaticPair.path << newStatic.params.fmtArgs());
                     if (!newStatic.params.isGeneric() && !newStatic.valueGenerated) {
                         newStatic.value.state->stage = HIRExprState::Stage::Sbc;
@@ -5186,12 +5187,12 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
                         name,
                         crate.pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{
                                 HIRPublicity::newNone(), // Should really be private, but we're well after checking
-                                HIRValueItem(::std::move(newStatic))
+                                HIRValueItem(crate.pool->make<HIRStatic>(::std::move(newStatic)))
                             })
                     )
                 );
 
-                auto& s = crate.newValues.back().second->ent.as_Static();
+                auto& s = *crate.newValues.back().second->ent.as_Static();
                 ASSERT_BUG(Span(), !s.value.state, "ExprState set already");
                 s.value.state = HIRExprStatePtr(crate.pool, HIRExprState(crate.types, crate.rootModule, HIRSimplePath(crate.crateName)));
                 s.value.state->stage = HIRExprState::Stage::Sbc;
@@ -5208,14 +5209,14 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
         }
 
         DEBUG(path << " = ?");
-        auto vi = isConst ? HIRValueItem(HIRConstant{std::move(newStatic.params), std::move(newStatic.type), std::move(newStatic.value)}) : HIRValueItem(std::move(newStatic));
+        auto vi = isConst ? HIRValueItem(crate.pool->make<HIRConstant>(HIRConstant{std::move(newStatic.params), std::move(newStatic.type), std::move(newStatic.value)})) : HIRValueItem(crate.pool->make<HIRStatic>(std::move(newStatic)));
         auto boxed = crate.pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), std::move(vi)});
         crate.newValues.push_back(::std::make_pair(name, boxed));
         {
             auto& e = crate.newValues.back().second->ent;
             ASSERT_BUG(sp, e.is_Static() || e.is_Constant(), "");
-            auto& p = e.is_Static() ? e.as_Static().params : e.as_Constant().params;
-            auto& v = e.is_Static() ? e.as_Static().value : e.as_Constant().value;
+            auto& p = e.is_Static() ? e.as_Static()->params : e.as_Constant()->params;
+            auto& v = e.is_Static() ? e.as_Static()->value : e.as_Constant()->value;
             ASSERT_BUG(Span(), v.state, "");
             v.state->implGenerics = nullptr;
             v.state->itemGenerics = &p;

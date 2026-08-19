@@ -35,10 +35,13 @@ generate(
             ("bool", "isVariant"),
             ("unsigned int", "idx"),
         ], copy=False),
-        v("Constant", "HIRConstant", copy=False),
-        v("Static", "HIRStatic", copy=False),
+        # The three big payloads live behind pool pointers: most value items
+        # are imports, and an inline HIRFunction made every entry pay 472
+        # bytes for a 24-byte import.
+        v("Constant", "HIRConstant*"),
+        v("Static", "HIRStatic*"),
         v("StructConstant", fields=[("HIRSimplePath", "ty")], copy=False),
-        v("Function", "HIRFunction", copy=False),
+        v("Function", "HIRFunction*"),
         v("StructConstructor", fields=[("HIRSimplePath", "ty")], copy=False),
     ],
 )

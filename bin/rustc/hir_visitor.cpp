@@ -107,13 +107,13 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
                 break;
             }
             case HIRValueItem::TAG_Constant: {
-                auto& e = item.as_Constant();
+                auto& e = *item.as_Constant();
                 DEBUG("const " << name);
                 this->visitConstant(p + name, e);
                 break;
             }
             case HIRValueItem::TAG_Static: {
-                auto& e = item.as_Static();
+                auto& e = *item.as_Static();
                 DEBUG("static " << name);
                 this->visitStatic(p + name, e);
                 break;
@@ -123,7 +123,7 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
                 break;
             }
             case HIRValueItem::TAG_Function: {
-                auto& e = item.as_Function();
+                auto& e = *item.as_Function();
                 DEBUG("fn " << name);
                 this->visitFunction(p + name, e);
                 break;
