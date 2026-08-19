@@ -326,6 +326,25 @@ does not match `($expr:expr ; $ty:ty)`. No corpus test uses it.
 `#![recursion_limit]` now bounds how far a coercion may follow `Deref` as well
 as how deep macro expansion may nest, which is what `limits__L37` measures.
 
+A function item and something else meeting in one `if`/`match` settle on the
+item, and the other arm is then read as the item too. `let f: fn(u8) = if c {
+fallback } else { transmute(p) }` calls `fallback` whatever `p` holds, because
+the transmute's target became the item's zero-sized type and the load was
+dropped; that is why `set_alloc_error_hook` has no effect on
+`handle_alloc_error` (`std::alloc::rust_oom` reads `HOOK` and then discards it),
+which `alloctests`' `test_shrink_to_unwind` measures. rustc gives the arms a
+least upper bound and decays a function item to a pointer where the arms
+differ; here the first arm equates the result ivar to the item and the rest
+follows.
+
+Offering the decayed pointer beside the item as a coercion possibility was
+tried and reverted: it fixes the case above, but the possibility resolver then
+has two function-pointer types to order where it had none, and `core`'s
+`Filter::next_chunk` -- `const { if needs_drop { a } else { b } }` over two
+function items -- stops on a mismatch between them. The fix belongs in the
+match/`if` result type, as a least upper bound over the arms, not in the
+pairwise coercion.
+
 ## P2: generated code and linking
 
 Six tests emit C++ rejected by clang: three inline-assembly lowerings, one
