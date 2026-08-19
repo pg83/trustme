@@ -1793,6 +1793,23 @@ public:
             if (!s.valueGenerated) {
                 auto& item = const_cast<HIRStatic&>(s);
 
+                // A static that names itself (through a promoted, say) only
+                // needs its address here, which is a relocation -- asking for
+                // its bytes while they are being worked out would never finish.
+                if (item.value.state) {
+                    switch (item.value.state->stage) {
+                        case HIRExprState::Stage::ConstEvalRequest:
+                        case HIRExprState::Stage::TypecheckRequest:
+                        case HIRExprState::Stage::SbcRequest:
+                        case HIRExprState::Stage::ExpandRequest:
+                        case HIRExprState::Stage::MirRequest:
+                            DEBUG("- Already being worked out, taking the address only: " << p);
+                            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, staticSize);
+                        default:
+                            break;
+                    }
+                }
+
                 // Challenge: Adding items to the module might invalidate an iterator.
                 HIRItemPath modIp{item.value.state->modPath};
                 auto nvs = NewvalState(item.value.state->module, modIp, FMT("static" << &item << "#"));
@@ -5371,6 +5388,17 @@ namespace {
 
         void visitExpr(HIRExprPtr& expr) override {
             struct Visitor: public HIRExprVisitorDef {
+                /// A value is out of the tree while a borrow of it is being
+                /// lifted into a static: making that static evaluates it, and
+                /// a static that names itself walks back through here before
+                /// the hole has been filled.
+                void visitNodePtr(HIRExprNodeP& nodePtr) override {
+                    if (!nodePtr) {
+                        return;
+                    }
+                    HIRExprVisitorDef::visitNodePtr(nodePtr);
+                }
+
                 Expander& exp;
 
                 Visitor(Expander& exp)
