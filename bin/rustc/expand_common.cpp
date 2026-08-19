@@ -134,6 +134,34 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
         return;
     }
     DEBUG(a);
+    // Run a built-in attribute, if this pass is the one it belongs to.
+    auto runDecorator = [&](const RcString& name, const ExpandDecorator& d) {
+        if (d.stage() != stage) {
+            DEBUG("#[" << name << "] Ignore: Wrong stage " << (int)d.stage() << " != " << (int)stage);
+            return;
+        }
+        if (!d.runDuringIter()) {
+            switch (es.mode) {
+                case ExpandMode::FirstPass:
+                case ExpandMode::Iterate:
+                    if (stage != AttrStage::Pre) {
+                        DEBUG("#[" << name << "] m=" << (int)es.mode);
+                        return;
+                    }
+                    break;
+                case ExpandMode::Final:
+                    if (stage != AttrStage::Post) {
+                        DEBUG("#[" << name << "] m=" << (int)es.mode);
+                        return;
+                    }
+                    break;
+            }
+        }
+        DEBUG("#[" << name << "]");
+        f(sp, d, a);
+        // Annotate the attribute as having been handled
+        a.markInert();
+    };
     for (auto& d : gDecorators) {
         if (a.name() == d.first
             // HACK: Handle `::core::prelude::v1::<FOO>`
@@ -163,6 +191,47 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
                 f(sp, *d.second, a);
                 // Annotate the attribute as having been handled
                 a.markInert();
+            }
+        }
+    }
+    if (!found) {
+        // The attribute may have been imported under another name
+        // (`use derive as my_derive;`). The index that records that is built
+        // after expansion, so read the `use` items themselves for the name a
+        // built-in answers to.
+        if (a.name().elems.size() == 1) {
+            const auto& want = a.name().elems[0];
+            for (const auto* ll = &es.modstack; ll && !found; ll = ll->prev) {
+                if (!ll->item) {
+                    continue;
+                }
+                for (const auto& i : ll->item->items) {
+                    const auto* u = i->data.opt_Use();
+                    if (!u) {
+                        continue;
+                    }
+                    for (const auto& ent : u->entries) {
+                        if (ent.name != want) {
+                            continue;
+                        }
+                        RcString target;
+                        if (ent.path.cls.is_Local()) {
+                            target = ent.path.cls.as_Local().name;
+                        } else if (!ent.path.nodes().empty()) {
+                            target = ent.path.nodes().back().name();
+                        }
+                        if (target != RcString()) {
+                            if (const auto* d = ExpandFindDecorator(target)) {
+                                found = true;
+                                runDecorator(target, *d);
+                            }
+                        }
+                        break;
+                    }
+                    if (found) {
+                        break;
+                    }
+                }
             }
         }
     }
