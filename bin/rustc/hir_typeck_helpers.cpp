@@ -2054,7 +2054,20 @@ default:
                             const auto& at = nodeP->args[i].second;
                             args.push_back(at);
                             DEBUG(at << " ?= " << argsDes[i]);
-                            cmp &= at->compareWithPlaceholders(sp, argsDes[i], this->ivars.callbackResolveInfer());
+                            auto argCmp = at->compareWithPlaceholders(sp, argsDes[i], this->ivars.callbackResolveInfer());
+                            if (argCmp == HIRCompare::Unequal) {
+                                // The wanted argument may be an opaque type this
+                                // body gets to define, in which case the
+                                // closure's own argument is what it turns out to
+                                // be -- the caller equates the two.
+                                if (const auto* er = argsDes[i]->opt_ErasedType()) {
+                                    if (const auto* alias = er->inner.opt_Alias(); alias && isOpaqueAliasDefiningScope(*alias->inner)) {
+                                        DEBUG("- " << argsDes[i] << " is an opaque this body defines");
+                                        argCmp = HIRCompare::Fuzzy;
+                                    }
+                                }
+                            }
+                            cmp &= argCmp;
                         }
                         if (cmp != HIRCompare::Unequal) {
                             // NOTE: This is a conditional "true", we know nothing about the move/mut-ness of this closure yet

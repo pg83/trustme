@@ -41,13 +41,13 @@ read as a qualified path), which a rerun of the failing set could not have.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 198 |
-| fixed, or no longer reproducing, since the gate | 433 |
+| still failing on the current tree | 193 |
+| fixed, or no longer reproducing, since the gate | 438 |
 
 The 221 is measured, not decremented by hand: the eight corpus groups that hold
 the failures (`rust_ui_compile rust_1_90 rust_reference rust_by_example gccrs
 gccrs_compile miri rust_lib`) are rerun whole, which is also the only regression
-check there is between full gates. That run last stood at 173; the remaining 25
+check there is between full gates. That run last stood at 168; the remaining 25
 are in groups outside it and come from the last full sweep.
 
 | priority class | tests |
