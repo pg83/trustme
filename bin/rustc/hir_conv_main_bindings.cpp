@@ -1146,8 +1146,20 @@ default:
                         DEBUG("- " << *prev);
                         DEBUG("- " << *it);
                         for (auto& e : it->typeBounds) {
-                            if (prev->typeBounds.count(e.first)) {
-                                ASSERT_BUG(sp, prev->typeBounds[e.first].type == e.second.type, "TODO: Handle mismatched type bounds in merging supertrait ATY bounds: " << e.first << " =\n " << prev->typeBounds[e.first] << "\n " << e.second.type);
+                            auto have = prev->typeBounds.find(e.first);
+                            if (have != prev->typeBounds.end() && have->second.type != e.second.type) {
+                                // One of the two may be a projection that comes
+                                // out as the other -- `Base<Output = <Self as
+                                // ConstI32>::Out>` beside `Base<Output = i32>`.
+                                // The one written out is the one to keep.
+                                auto isProjection = [](const HIRTypeData* t) {
+                                    return t->is_Path() && !t->as_Path().path.data.is_Generic();
+                                };
+                                if (isProjection(have->second.type) && !isProjection(e.second.type)) {
+                                    have->second.type = e.second.type;
+                                } else if (!isProjection(e.second.type)) {
+                                    ASSERT_BUG(sp, false, "TODO: Handle mismatched type bounds in merging supertrait ATY bounds: " << e.first << " =\n " << have->second << "\n " << e.second.type);
+                                }
                             }
                             prev->typeBounds.insert(std::move(e));
                         }
