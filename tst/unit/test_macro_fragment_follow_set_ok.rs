@@ -23,6 +23,12 @@ macro_rules! declares {
     };
 }
 
+macro_rules! after_repetition {
+    ($($e:expr),* ; $t:ty) => {
+        0 $(+ $e)*
+    };
+}
+
 macro_rules! typed {
     ($t:ty = $e:expr, $p:path as $u:ty) => {
         0
@@ -34,6 +40,7 @@ declares!(pub struct Named; pub(crate) fn made());
 fn main() {
     assert_eq!(ends_a_group!({ 1 + 2 }), 3);
     assert_eq!(repeats!(1, 2, 3; u8, u16), 6);
+    assert_eq!(after_repetition!(1, 2; u8), 3);
     assert_eq!(typed!(u8 = 1, core::option::Option<u8> as u16), 0);
     let _ = Named;
     made();

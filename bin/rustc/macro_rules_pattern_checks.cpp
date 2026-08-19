@@ -203,19 +203,19 @@ namespace {
             Ents follow;
             followOf(ents, count, i, outer, follow);
             if (e.type == Ent::PAT_LOOP) {
-                // What stands after the body's last entry is the separator
-                // where there is one, and otherwise whatever follows the loop.
-                // Repeating the body is not a break in the run: the rule is
-                // about what a fragment's own parser could have swallowed, and
-                // it has already stopped by the time the body starts again.
+                // After the body's last entry comes the separator, where
+                // there is one, and after the last iteration whatever follows
+                // the loop itself. Repeating the body is not a break in the
+                // run: the rule is about what a fragment's own parser could
+                // have swallowed, and it has stopped by the time the body
+                // starts again.
                 Ent separator(e.sp, e.tok.clone());
                 Ents inner;
                 if (e.tok.type() != TOK_NULL) {
                     inner.pushBack(&separator);
-                } else {
-                    for (size_t k = 0; k < follow.length(); k++) {
-                        inner.pushBack(follow[k]);
-                    }
+                }
+                for (size_t k = 0; k < follow.length(); k++) {
+                    inner.pushBack(follow[k]);
                 }
                 checkRun(e.subpats.data(), e.subpats.size(), inner);
                 continue;
