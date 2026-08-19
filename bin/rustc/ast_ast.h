@@ -793,6 +793,10 @@ public:
         /// The glob that brought it in was itself reached through another
         /// module's glob, so what this module wrote does not decide it.
         bool fromNestedGlob = false;
+        /// A macro expansion wrote the item. rustc resolves imports before it
+        /// expands macros, so a name only two of them provide is a
+        /// future-compatibility lint there rather than an error.
+        bool fromMacro = false;
         /// Two globs offer this name, and neither shadows the other.
         bool ambiguous = false;
     };

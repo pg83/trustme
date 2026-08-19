@@ -4177,8 +4177,18 @@ namespace {
     }
 } // namespace
 
+/// Whether the span comes out of a macro expansion, at any depth.
+bool spanIsFromMacro(const Span& sp) {
+    for (auto s = sp; s; s = s->parentSpan) {
+        if (s->nodeKind() == SpanInnerMacro::kind) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false,
-    bool globIsNested = false) {
+    bool globIsNested = false, bool fromMacro = false) {
     ASSERT_BUG(sp, ir.bindings.hasBinding(), "Adding item with no binding - " << ir);
     auto& list = getModIndex(mod, location);
 
@@ -4216,7 +4226,8 @@ void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcStrin
             // globs this module wrote decide: one reached through a glob of
             // another module is that module's business, and what it already
             // says under the name has shadowed the rest there.
-            if (fromGlob && e.fromGlob && !globIsNested && !e.fromNestedGlob && !fromPrelude && !e.fromPrelude) {
+            const bool eitherFromMacro = (fromMacro || spanIsFromMacro(sp)) || e.fromMacro;
+            if (fromGlob && e.fromGlob && !globIsNested && !e.fromNestedGlob && !fromPrelude && !e.fromPrelude && !eitherFromMacro) {
                 DEBUG(location << " name ambiguity - '" << name << "' = " << ir << " and " << e.path << " (mod=" << mod.path() << ")");
                 e.ambiguous = true;
             } else {
@@ -4225,20 +4236,20 @@ void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcStrin
         }
     } else {
         DEBUG("### " << (wasImport ? "Import" : "Add") << " " << location << " item " << mod.path() << " :: " << name << " = " << ir << vis);
-        auto rec = list.insert(::std::make_pair(name, ASTModule::IndexEnt{wasImport, fromPrelude, mv$(vis), mv$(ir), fromGlob, fromGlob && globIsNested, false}));
+        auto rec = list.insert(::std::make_pair(name, ASTModule::IndexEnt{wasImport, fromPrelude, mv$(vis), mv$(ir), fromGlob, fromGlob && globIsNested, fromMacro || spanIsFromMacro(sp), false}));
         assert(rec.second);
     }
 }
 
 void _add_item_type(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false,
-    bool globIsNested = false) {
-    _add_item(sp, mod, IndexName::Namespace, name, vis, ASTPath(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested);
-    _add_item(sp, mod, IndexName::Type, name, vis, ::std::move(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested);
+    bool globIsNested = false, bool fromMacro = false) {
+    _add_item(sp, mod, IndexName::Namespace, name, vis, ASTPath(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested, fromMacro);
+    _add_item(sp, mod, IndexName::Type, name, vis, ::std::move(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested, fromMacro);
 }
 
 void _add_item_value(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false,
-    bool globIsNested = false) {
-    _add_item(sp, mod, IndexName::Value, name, vis, mv$(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested);
+    bool globIsNested = false, bool fromMacro = false) {
+    _add_item(sp, mod, IndexName::Value, name, vis, mv$(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested, fromMacro);
 }
 
 void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
@@ -4707,22 +4718,22 @@ void ResolveIndexModuleWildcardSubmod(ASTCrate& crate, ASTModule& dstMod, const 
 
     for (const auto& vi : srcMod.namespaceItems) {
         if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-            _add_item(sp, dstMod, IndexName::Namespace, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested);
+            _add_item(sp, dstMod, IndexName::Namespace, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
         }
     }
     for (const auto& vi : srcMod.typeItems) {
         if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-            _add_item(sp, dstMod, IndexName::Type, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested);
+            _add_item(sp, dstMod, IndexName::Type, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
         }
     }
     for (const auto& vi : srcMod.valueItems) {
         if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-            _add_item(sp, dstMod, IndexName::Value, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested);
+            _add_item(sp, dstMod, IndexName::Value, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
         }
     }
     for (const auto& vi : srcMod.macroItems) {
         if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-            _add_item(sp, dstMod, IndexName::Macro, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested);
+            _add_item(sp, dstMod, IndexName::Macro, vi.first, dstVis, vi.second.path, false, fromPrelude, /*from_glob=*/true, nested, vi.second.fromMacro);
         }
     }
 
