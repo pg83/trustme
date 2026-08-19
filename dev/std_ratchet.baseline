@@ -275,8 +275,8 @@
 13	std::vector	bin/rustc/mir_from_hir.h
 8	std::function	bin/rustc/mir_helpers.cpp
 1	std::set	bin/rustc/mir_helpers.cpp
-9	std::string	bin/rustc/mir_helpers.cpp
-42	std::vector	bin/rustc/mir_helpers.cpp
+6	std::string	bin/rustc/mir_helpers.cpp
+41	std::vector	bin/rustc/mir_helpers.cpp
 8	std::function	bin/rustc/mir_helpers.h
 1	std::string	bin/rustc/mir_helpers.h
 8	std::vector	bin/rustc/mir_helpers.h
