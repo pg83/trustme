@@ -4485,9 +4485,14 @@ default:
                     auto emitVariant = [&]() {
                         if (pointerTag) {
                             of << "(uintptr_t)";
+                        } else {
+                            of << "(" << tagUnsignedType(e.field.size) << ")";
                         }
                         emitLvalue(val);
                         emitEnumPath(repr, e.field);
+                    };
+                    auto tagOf = [&](size_t varIdx) {
+                        return tagBits(e.field.size, e.tagValue(varIdx));
                     };
 
                     // Optimisation: If there's only one arm with a different value, then emit an `if` isntead of a `switch`
@@ -4496,9 +4501,9 @@ default:
                         emitVariant();
                         if (e.isNiche(oddArm)) {
                             MIR_ASSERT(localMirRes, nArms == 2, "Niche odd-arm switch without two arms");
-                            of << " != " << e.tagValue(oddArm == 0 ? 1 : 0);
+                            of << " != " << tagOf(oddArm == 0 ? 1 : 0) << "ull";
                         } else {
-                            of << " == " << e.tagValue(oddArm);
+                            of << " == " << tagOf(oddArm) << "ull";
                         }
                         of << ") {";
                         cb(oddArm);
@@ -4513,8 +4518,7 @@ default:
                             if (e.isNiche(j)) {
                                 continue;
                             }
-                            // Handle signed values
-                            of << indent << "case " << e.tagValue(j) << ": ";
+                            of << indent << "case " << tagOf(j) << "ull: ";
                             cb(j);
                             of << "break;\n";
                         }
@@ -5989,6 +5993,28 @@ default:
             of << "}\n";
         }
 
+        /// A tag is matched on the bits it holds. Where a signed tag's niche
+        /// values run past its own maximum they read back as negative, while
+        /// the layout names them by the unsigned value they are, so both sides
+        /// are compared as the unsigned integer of the tag's width.
+        static const char* tagUnsignedType(size_t size) {
+            switch (size) {
+                case 1:
+                    return "u8";
+                case 2:
+                    return "u16";
+                case 4:
+                    return "u32";
+                default:
+                    return "u64";
+            }
+        }
+
+        static uint64_t tagBits(size_t size, size_t value) {
+            const auto v = static_cast<uint64_t>(value);
+            return (size == 0 || size >= 8) ? v : (v & ((uint64_t(1) << (size * 8)) - 1));
+        }
+
         void emitIntrinsicCall(const RcString& name, const HIRPathParams& params, const MIRTerminator::Data_Call& e) {
             const auto& localMirRes = *mirRes;
             enum class Ordering {
@@ -6733,6 +6759,8 @@ default:
                                 auto emitTag = [&]() {
                                     if (pointerTag) {
                                         of << "(uintptr_t)";
+                                    } else {
+                                        of << "(" << tagUnsignedType(ve.field.size) << ")";
                                     }
                                     of << "(*";
                                     emitParam(e.args.at(0));
@@ -6740,14 +6768,15 @@ default:
                                     emitEnumPath(repr, ve.field);
                                 };
                                 if (ve.usesNiche()) {
+                                    const auto start = tagBits(ve.field.size, ve.offset);
                                     of << "( ";
                                     emitTag();
-                                    of << " >= " << ve.offset << " && ";
+                                    of << " >= " << start << "ull && ";
                                     emitTag();
-                                    of << " < " << (ve.offset + ve.nicheVariantCount());
+                                    of << " < " << (start + ve.nicheVariantCount()) << "ull";
                                     of << " ? " << ve.nicheVariantStart() << " + ";
                                     emitTag();
-                                    of << " - " << ve.offset;
+                                    of << " - " << start << "ull";
                                     of << " : ";
                                     of << ve.field.index;
                                     of << " )";
