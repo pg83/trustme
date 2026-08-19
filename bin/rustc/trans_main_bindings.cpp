@@ -1711,6 +1711,14 @@ namespace {
                         // If a link name is set, force emit
                         isVisible = true;
                     }
+                    if (e.isPromoted && !e.params.isGeneric()) {
+                        // Storage this compiler made for a promoted borrow is
+                        // named after the crate that made it. A generic body
+                        // another crate monomorphises reads it by that name, so
+                        // this crate defines it whether or not anything here
+                        // does.
+                        isVisible = true;
+                    }
                     if (isVisible && !e.params.isGeneric()) {
                         // HACK: Refuse to emit unused generated statics
                         // - Needed because all items are visited (regardless of
