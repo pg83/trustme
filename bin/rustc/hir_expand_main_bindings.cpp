@@ -4916,6 +4916,7 @@ public:
                 /*m_value=*/mv$(valExpr)
             );
             newStatic.params = mv$(generics);
+            newStatic.isPromoted = true;
             // Downstream const evaluation can execute saved `const fn` MIR that
             // refers to this promoted static. Non-generic statics have no HIR
             // body in an rlib, so their evaluated bytes must travel with it.

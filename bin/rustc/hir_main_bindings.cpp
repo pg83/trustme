@@ -819,14 +819,17 @@ public:
         bool isMut;
         bool saveLiteral;
         bool hasExplicitAlignment;
+        bool isPromoted;
         BIT(0, isMut);
         BIT(1, saveLiteral);
         BIT(2, hasExplicitAlignment);
+        BIT(3, isPromoted);
 #undef BIT
         auto explicitAlignment = hasExplicitAlignment ? in.readCount() : 0;
         auto ty = deserialiseType();
         auto rv = HIRStatic(mv$(linkage), isMut, mv$(ty), {});
         rv.explicitAlignment = explicitAlignment;
+        rv.isPromoted = isPromoted;
         if (params.isGeneric()) {
             rv.value = deserialiseExprptr();
         }
@@ -4014,6 +4017,7 @@ break;
         BIT(0, item.isMut);
         BIT(1, item.saveLiteral)
         BIT(2, item.explicitAlignment != 0)
+        BIT(3, item.isPromoted)
 #undef BIT
         out.writeU8(bitflag1);
         if (item.explicitAlignment != 0) {

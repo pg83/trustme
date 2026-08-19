@@ -9015,6 +9015,23 @@ default:
                     } else {
                         MonomorphState msTmp(crate.types);
                         auto v = resolve_.getValue(sp, *c, msTmp, /*signature_only=*/true);
+                        // Storage the compiler made for a promoted borrow of a
+                        // zero-sized value holds nothing, so it needs none: the
+                        // address is the alignment, which is what rustc gives
+                        // `&()` and an empty slice.
+                        if (const auto* stat = v.opt_Static(); stat && (**stat).isPromoted && !hasOffset) {
+                            auto statTy = msTmp.monomorphType(sp, (**stat).type);
+                            size_t size = 0;
+                            size_t align = 0;
+                            if (!monomorphiseTypeNeeded(statTy) && !statTy->mayHaveAssociatedType()
+                                && TargetGetSizeOf(sp, resolve_, statTy, size) && size == 0
+                                && TargetGetAlignOf(sp, resolve_, statTy, align)) {
+                                of << "((";
+                                emitCtype(statTy);
+                                of << "*)(uintptr_t)" << (align == 0 ? 1 : align) << ")";
+                                break;
+                            }
+                        }
                         const bool isFcn = v.is_Function() || v.is_EnumConstructor() || v.is_StructConstructor();
                         MIR_ASSERT(*mirRes, !isFcn || !hasOffset, "Function address has a non-zero offset: " << c.offset);
                         if (!isFcn) {

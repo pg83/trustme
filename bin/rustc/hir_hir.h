@@ -115,6 +115,10 @@ public:
     bool valueGenerated = false;
     bool saveLiteral = false;
     bool noEmitValue = false;
+    /// Storage the compiler made for a promoted borrow, not a `static` the
+    /// program wrote. A zero-sized one holds nothing, so its address is the
+    /// alignment rather than a place in the data section.
+    bool isPromoted = false;
 
     mutable ::std::map<HIRPath, EncodedLiteral> monomorphCache;
 
