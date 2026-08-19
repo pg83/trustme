@@ -763,6 +763,14 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
         BUG(sp, "Could not find value name " << path);
     }
 
+    // A `use` in the value namespace names the item it imports: `use m::f as
+    // main;` makes the crate's `main` that import, and every consumer of a
+    // value path wants what stands behind it. An enum variant is not one --
+    // its import carries the variant index and is read as the import it is.
+    if (const auto* imp = it->second->ent.opt_Import(); imp && !imp->isVariant && imp->path != path) {
+        return this->getValitemByPath(sp, imp->path, ignoreCrateName);
+    }
+
     return it->second->ent;
 }
 
