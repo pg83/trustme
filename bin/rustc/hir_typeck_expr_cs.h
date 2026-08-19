@@ -64,7 +64,7 @@ struct Context {
         // Source types for coercion/unsizing (these types are known to exist in the function)
         ::std::vector<CoerceTy> typesCoerceFrom;
         // Possible default types (from generic defaults)
-        ::std::set<HIRTypeRef> typesDefault;
+        HIRTypeRefSet typesDefault;
 
         ::std::vector<HIRTypeRef> bounded;
 

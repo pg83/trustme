@@ -26,7 +26,7 @@ namespace {
         StaticTraitResolve resolve;
         const TransList& transList;
         ::std::deque<HIRTypeRef> todoList;
-        ::std::set<HIRTypeRef> doneList;
+        HIRTypeRefSet doneList;
 
         HIRSimplePath langClone;
 
@@ -2355,7 +2355,7 @@ namespace {
         TransList& out;
         const TransList* prevList;
 
-        ::std::set<HIRTypeRef> activeSet;
+        HIRTypeRefSet activeSet;
 
         TypeVisitor(const WireBoard& wb, TransList& out, const TransList* prevList)
             : crate(*wb.crate)

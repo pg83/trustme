@@ -130,6 +130,13 @@ static inline Ordering ord(double l, double r) {
 
 Ordering ord(const ::std::string& l, const ::std::string& r);
 
+class HIRTypeData;
+// Interned types order by the interner-assigned uid (creation order), never
+// by address: pointer order leaks the allocation layout into anything walked
+// in container order, including the emitted output. Declared before the
+// generic templates below so their qualified ::ord calls resolve to it.
+Ordering ord(const HIRTypeData* l, const HIRTypeData* r);
+
 template <typename T>
 Ordering ord(T* const& l, T* const& r) {
     return l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess);

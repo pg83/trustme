@@ -23,11 +23,11 @@ class StaticTraitResolve: public TraitResolveCommon {
     class NextSolverBridge;
 
     MetadataType selfMetadata = MetadataType::Unknown;
-    mutable ::std::map<HIRTypeRef, bool> copyCache;
-    mutable ::std::map<HIRTypeRef, bool> cloneCache;
-    mutable ::std::map<HIRTypeRef, bool> dropCache;
+    mutable HIRTypeRefMap<bool> copyCache;
+    mutable HIRTypeRefMap<bool> cloneCache;
+    mutable HIRTypeRefMap<bool> dropCache;
     // Keyed by the interned UfcsKnown type itself (pointer identity).
-    mutable ::std::map<HIRTypeRef, HIRTypeRef> atyCache;
+    mutable HIRTypeRefMap<HIRTypeRef> atyCache;
 
     /// Cache key for findImplCheckCrateRaw: the impl side is identified by
     /// the addresses of its (immutable, pool-owned) definition parts, the

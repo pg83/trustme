@@ -147,7 +147,7 @@ namespace {
             });
         }
 
-        bool typeNeedsAsyncDrop(const Span& sp, const HIRTypeData* ty, ::std::set<const HIRTypeData*>& stack) const {
+        bool typeNeedsAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRTypeRefSet& stack) const {
             HIRPath path{HIRSimplePath()};
             HIRTypeRef futureTy;
             if (findAsyncDrop(sp, ty, path, futureTy)) {
@@ -220,7 +220,7 @@ namespace {
         }
 
         bool typeNeedsAsyncDrop(const Span& sp, const HIRTypeData* ty) const {
-            ::std::set<const HIRTypeData*> stack;
+            HIRTypeRefSet stack;
             return typeNeedsAsyncDrop(sp, ty, stack);
         }
 

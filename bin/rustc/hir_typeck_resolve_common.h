@@ -141,7 +141,7 @@ struct TraitResolveCommon {
         HIRTypeRef ty;
     };
 
-    ::std::map<HIRTypeRef, CachedEquality> typeEqualities;
+    HIRTypeRefMap<CachedEquality> typeEqualities;
 
     // A pre-calculated list of trait bounds
     struct CachedBound {

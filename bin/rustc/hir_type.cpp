@@ -6,6 +6,17 @@
 #include <std/mem/obj_pool.h>
 
 #include <cstdint>
+#include <cassert>
+
+Ordering ord(const HIRTypeData* l, const HIRTypeData* r) {
+    if (l == r) {
+        return OrdEqual;
+    }
+    // Distinct interned nodes always have distinct uids; two zeros mean an
+    // un-interned working copy leaked into an ordered container.
+    assert(l->uid != r->uid);
+    return l->uid < r->uid ? OrdLess : OrdGreater;
+}
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRTypeData* ty) {
     if (ty) {
@@ -1464,7 +1475,8 @@ HIRTypeRef HIRTypeInterner::intern(HIRTypeData data) {
             return it->second;
         }
     }
-    const auto* node = pool.make<HIRTypeData>(mv$(data));
+    auto* node = pool.make<HIRTypeData>(mv$(data));
+    node->uid = ++nextUid;
     nodes.emplace(hash, node);
     return node;
 }

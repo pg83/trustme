@@ -189,10 +189,10 @@ namespace {
             bool disallowEmptyStructs = false;
         } options;
 
-        ::std::set<HIRTypeRef> emittedFnTypes;
+        HIRTypeRefSet emittedFnTypes;
         ::std::set<HIRPath> trackedFunctions;
         ::std::set<const TypeRepr*> embeddedTags;
-        ::std::map<HIRTypeRef, HIRTypeRef> normalizedCtypes;
+        HIRTypeRefMap<HIRTypeRef> normalizedCtypes;
 
         bool usesIntelCompilerAsmDialect() const {
             const auto& arch = TargetGetCurSpec(wb_).arch.name;

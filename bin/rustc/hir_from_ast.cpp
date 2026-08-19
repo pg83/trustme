@@ -1867,11 +1867,11 @@ namespace {
     /// A nested one belongs to no function of its own, so it cannot stay an
     /// erased type once it is copied out into a bound.
     class RpititNestedRewrite: public HIRVisitor {
-        const ::std::map<HIRTypeRef, size_t>& indices;
+        const HIRTypeRefMap<size_t>& indices;
         ::std::function<HIRTypeRef(size_t)> projection;
 
     public:
-        RpititNestedRewrite(HIRTypeInterner& types, const ::std::map<HIRTypeRef, size_t>& indices, ::std::function<HIRTypeRef(size_t)> projection)
+        RpititNestedRewrite(HIRTypeInterner& types, const HIRTypeRefMap<size_t>& indices, ::std::function<HIRTypeRef(size_t)> projection)
             : HIRVisitor(nullptr, types)
             , indices(indices)
             , projection(std::move(projection))
@@ -2015,7 +2015,7 @@ default:
                     erasedTypes.push_back(type);
                 }).visitType(fcn.returnType);
                 (void)_discard;
-                ::std::map<HIRTypeRef, size_t> erasedIndices;
+                HIRTypeRefMap<size_t> erasedIndices;
                 for (size_t index = 0; index < erasedTypes.size(); index++) {
                     erasedIndices.insert(::std::make_pair(erasedTypes[index], index));
                 }

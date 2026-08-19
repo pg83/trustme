@@ -39,6 +39,10 @@ generate(
     ],
     extra_fields=[
         ("u32", "flags", "0"),
+        # Assigned by HIRTypeInterner::intern in creation order; 0 means
+        # "not interned". The deterministic ordering key for interned types
+        # (see ord(const HIRTypeData*, const HIRTypeData*)).
+        ("u32", "uid", "0"),
     ],
     extra="""
         enum HIRTypeFlags : u32 {

@@ -116,15 +116,15 @@ public:
     ::std::map<HIRPath, ::std::unique_ptr<TransListConst>> constants;
     ::std::map<HIRPath, TransParams> vtables;
     /// Required type_id values
-    ::std::set<HIRTypeRef> typeids;
+    HIRTypeRefSet typeids;
     // Required drop glue
-    ::std::set<HIRTypeRef> dropGlue;
+    HIRTypeRefSet dropGlue;
     /// Required struct/enum constructor impls
     ::std::set<HIRGenericPath> constructors;
     // Automatic Clone impls
-    ::std::set<HIRTypeRef> autoCloneImpls;
+    HIRTypeRefSet autoCloneImpls;
     // Automatic FnPtr impls
-    ::std::set<HIRTypeRef> autoFnptrImpls;
+    HIRTypeRefSet autoFnptrImpls;
     // Trait methods
     ::std::set<HIRPath> traitObjectMethods;
 

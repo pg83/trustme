@@ -146,7 +146,7 @@
 4	make_unique	bin/rustc/hir_from_ast.cpp
 2	shared_ptr	bin/rustc/hir_from_ast.cpp
 7	std::function	bin/rustc/hir_from_ast.cpp
-11	std::map	bin/rustc/hir_from_ast.cpp
+8	std::map	bin/rustc/hir_from_ast.cpp
 4	std::set	bin/rustc/hir_from_ast.cpp
 7	std::string	bin/rustc/hir_from_ast.cpp
 2	std::unordered	bin/rustc/hir_from_ast.cpp
@@ -213,7 +213,6 @@
 63	std::vector	bin/rustc/hir_typeck_expr_cs.cpp
 3	unique_ptr	bin/rustc/hir_typeck_expr_cs.cpp
 1	std::map	bin/rustc/hir_typeck_expr_cs.h
-1	std::set	bin/rustc/hir_typeck_expr_cs.h
 1	std::unordered	bin/rustc/hir_typeck_expr_cs.h
 16	std::vector	bin/rustc/hir_typeck_expr_cs.h
 3	unique_ptr	bin/rustc/hir_typeck_expr_cs.h
@@ -232,11 +231,10 @@
 3	std::vector	bin/rustc/hir_typeck_main_bindings.cpp
 1	std::function	bin/rustc/hir_typeck_resolve_common.cpp
 2	std::function	bin/rustc/hir_typeck_resolve_common.h
-1	std::map	bin/rustc/hir_typeck_resolve_common.h
 3	std::function	bin/rustc/hir_typeck_static.cpp
 9	std::vector	bin/rustc/hir_typeck_static.cpp
 4	std::function	bin/rustc/hir_typeck_static.h
-5	std::map	bin/rustc/hir_typeck_static.h
+1	std::map	bin/rustc/hir_typeck_static.h
 1	std::vector	bin/rustc/hir_typeck_static.h
 1	std::function	bin/rustc/hir_visitor.cpp
 1	unique_ptr	bin/rustc/hir_visitor.cpp
@@ -268,7 +266,7 @@
 2	new	bin/rustc/mir_from_hir.cpp
 7	std::function	bin/rustc/mir_from_hir.cpp
 19	std::map	bin/rustc/mir_from_hir.cpp
-9	std::set	bin/rustc/mir_from_hir.cpp
+7	std::set	bin/rustc/mir_from_hir.cpp
 4	std::string	bin/rustc/mir_from_hir.cpp
 135	std::vector	bin/rustc/mir_from_hir.cpp
 4	unique_ptr	bin/rustc/mir_from_hir.cpp
@@ -384,8 +382,7 @@
 1	std::string	bin/rustc/trans_codegen.h
 1	new	bin/rustc/trans_codegen_c.cpp
 5	std::function	bin/rustc/trans_codegen_c.cpp
-1	std::map	bin/rustc/trans_codegen_c.cpp
-5	std::set	bin/rustc/trans_codegen_c.cpp
+4	std::set	bin/rustc/trans_codegen_c.cpp
 53	std::string	bin/rustc/trans_codegen_c.cpp
 41	std::vector	bin/rustc/trans_codegen_c.cpp
 2	unique_ptr	bin/rustc/trans_codegen_c.cpp
@@ -400,7 +397,7 @@
 2	std::deque	bin/rustc/trans_main_bindings.cpp
 2	std::function	bin/rustc/trans_main_bindings.cpp
 2	std::map	bin/rustc/trans_main_bindings.cpp
-6	std::set	bin/rustc/trans_main_bindings.cpp
+4	std::set	bin/rustc/trans_main_bindings.cpp
 3	std::string	bin/rustc/trans_main_bindings.cpp
 2	std::unordered	bin/rustc/trans_main_bindings.cpp
 25	std::vector	bin/rustc/trans_main_bindings.cpp
@@ -419,7 +416,7 @@
 7	std::vector	bin/rustc/trans_target.h
 3	new	bin/rustc/trans_trans_list.cpp
 4	std::map	bin/rustc/trans_trans_list.h
-6	std::set	bin/rustc/trans_trans_list.h
+2	std::set	bin/rustc/trans_trans_list.h
 3	std::string	bin/rustc/trans_trans_list.h
 3	std::unordered	bin/rustc/trans_trans_list.h
 4	std::vector	bin/rustc/trans_trans_list.h

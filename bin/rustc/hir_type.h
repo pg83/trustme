@@ -199,6 +199,7 @@ struct HIRTypeDataNamedFunction {
 class HIRTypeInterner {
     stl::ObjPool& pool;
     ::std::unordered_multimap<size_t, HIRTypeRef> nodes;
+    u32 nextUid = 0;
 
 public:
     explicit HIRTypeInterner(stl::ObjPool& pool);

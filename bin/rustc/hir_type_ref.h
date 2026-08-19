@@ -6,10 +6,29 @@
 #include <memory>
 #include <vector>
 #include <cstdint>
+#include <set> // escape: uid-ordered alias below, single declaration point
+#include <map> // escape: uid-ordered alias below, single declaration point
 
 class HIRTypeData;
 using HIRTypeRef = const HIRTypeData*;
 class HIRTypeInterner;
+
+// Interned types are ordered by the interner-assigned uid (creation order):
+// deterministic across runs and allocation-layout changes. The ordering
+// itself is the ord(const HIRTypeData*, const HIRTypeData*) overload in
+// common.h; it also drives HIRPath::ord and the pair/vector ord templates.
+struct HIRTypeUidOrder {
+    bool operator()(const HIRTypeData* a, const HIRTypeData* b) const {
+        return ord(a, b) == OrdLess;
+    }
+};
+
+// The only sanctioned ordered containers over HIRTypeRef: iteration follows
+// type-creation order, never pointer order (pointer order leaks the
+// allocation layout into the emitted output).
+using HIRTypeRefSet = ::std::set<HIRTypeRef, HIRTypeUidOrder>; // escape: deterministic-order alias, replaces address-ordered sets across the codebase
+template <typename V>
+using HIRTypeRefMap = ::std::map<HIRTypeRef, V, HIRTypeUidOrder>; // escape: deterministic-order alias, replaces address-ordered maps across the codebase
 
 struct HIRGenericRef;
 struct HIRSimplePath;
