@@ -35,8 +35,9 @@ namespace {
     }
 }
 
-ASTCrate::ASTCrate(stl::ObjPool* pool, HIRTypeInterner& types)
+ASTCrate::ASTCrate(stl::ObjPool* pool, stl::ObjPool* hirPool, HIRTypeInterner& types)
     : pool(pool)
+    , hirPool(hirPool)
     , types(types)
     , rootModule_(ASTAbsolutePath())
     , loadStd(LOAD_STD)
@@ -211,7 +212,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
     }
 
     // NOTE: Creating `ExternCrate` loads the crate from the specified path
-    auto ec = ASTExternCrate{pool, types, name, path};
+    auto ec = ASTExternCrate{hirPool, types, name, path};
     auto realName = ec.hir->crateName;
     assert(realName != "");
     auto res = externCrates.insert(::std::make_pair(realName, mv$(ec)));

@@ -2185,7 +2185,7 @@ namespace {
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(), Ident::Hygiene::newScope(*crate.pool), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(), Ident::Hygiene::newScope(*crate.hirPool), mv$(toks))));
     }
 }
 
@@ -2292,7 +2292,7 @@ class CIncludeExpander: public ExpandProcMacro {
             ParseState ps;
             ps.module = &mod;
             DEBUG("Edition = " << crate.edition);
-            return box$(Lexer(*crate.pool, filePath, crate.edition, ps));
+            return box$(Lexer(*crate.hirPool, filePath, crate.edition, ps));
         } catch (::std::runtime_error& e) {
             ERROR(sp, E0000, e.what());
         }

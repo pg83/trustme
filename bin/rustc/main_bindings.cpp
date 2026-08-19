@@ -441,10 +441,15 @@ static int compile(int argc, char* argv[]) {
 
     ExpandInit();
 
+    // The AST gets its own pool so parse/expand-lifetime data can be dropped
+    // wholesale right after HIR lowering (the one place a pool dies early).
+    auto* astPool = stl::ObjPool::fromMemoryRaw();
+    wb.astPool = astPool;
+
     try {
         // Parse the crate into AST
         ASTCrate* cratePtr = CompilePhase<ASTCrate*>("Parse", [&]() {
-            return ParseCrate(wb, pool, params.infile, params.edition);
+            return ParseCrate(wb, wb.astPool, params.infile, params.edition);
         });
         ASTCrate& crate = *cratePtr;
         wb.astCrate = cratePtr;
@@ -684,6 +689,15 @@ static int compile(int argc, char* argv[]) {
         wb.crate = hirCrate;
         wb.langItems = LangItems::create(*pool, *hirCrate);
         memoryDump("HIR Gen");
+
+        // The AST is dead from here on: drop it physically.
+        CompilePhaseV("AST Drop", [&]() {
+            wb.astCrate = nullptr;
+            wb.astPool = nullptr;
+            delete astPool;
+            astPool = nullptr;
+        });
+        memoryDump("AST Dropped");
         if (params.debug.dumpHir) {
             CompilePhaseV("Dump HIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));

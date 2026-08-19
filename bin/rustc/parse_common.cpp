@@ -5701,7 +5701,7 @@ ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, ::std::string main
     p = (p == ::std::string::npos ? mainfile.find_last_of('\\') : p);
     ::std::string mainpath = mainfile == "-" ? "-" : (p != ::std::string::npos ? ::std::string(mainfile.begin(), mainfile.begin() + p + 1) : "./");
 
-    auto* crate = pool->make<ASTCrate>(pool, *wb.types);
+    auto* crate = pool->make<ASTCrate>(pool, wb.pool, *wb.types);
     crate->edition = edition;
 
     crate->rootModule().fileInfo.path = mainpath;

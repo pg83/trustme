@@ -1671,7 +1671,9 @@ struct CExpandExpr: public ASTNodeVisitor {
         static const RcString rcstringIntoAsyncIter = RcString::newInterned("into_async_iter");
         static const RcString rcstringNext = RcString::newInterned("next");
         static const RcString rcstringIt = RcString::newInterned("it");
-        const auto iteratorHygiene = Ident::Hygiene::newScope(*parentExpandState.crate.pool);
+        // Hygiene outlives the AST (idents in HIR patterns and macro_rules
+        // keep pointing at it), so it lives in the persistent pool.
+        const auto iteratorHygiene = Ident::Hygiene::newScope(*parentExpandState.crate.hirPool);
         auto coreCrate = crate.extCratenameCore;
         auto pathSome = getPath(coreCrate, "option", "Option", "Some");
         auto pathNone = getPath(coreCrate, "option", "Option", "None");

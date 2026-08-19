@@ -50,6 +50,8 @@ public:
 class ASTCrate {
 public:
     stl::ObjPool* pool;
+    // Loaded extern-crate HIR outlives the AST, so it allocates from here.
+    stl::ObjPool* hirPool;
     HIRTypeInterner& types;
     ASTAttributeList attrs;
 
@@ -102,7 +104,7 @@ public:
     RcString crateNameReal;        // user name '-' suffix
     ASTPath preludePath;
 
-    ASTCrate(stl::ObjPool* pool, HIRTypeInterner& types);
+    ASTCrate(stl::ObjPool* pool, stl::ObjPool* hirPool, HIRTypeInterner& types);
 
     const ASTModule& rootModule() const {
         return rootModule_;

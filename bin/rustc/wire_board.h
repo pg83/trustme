@@ -24,6 +24,10 @@ struct WireBoard {
     explicit WireBoard(stl::ObjPool* pool);
 
     stl::ObjPool* pool = nullptr;
+    // The AST's own pool: everything with parse/expand lifetime. Dropped
+    // (physically) right after HIR Lower, together with the AST itself;
+    // null from then on.
+    stl::ObjPool* astPool = nullptr;
     // The one type interner; created right after the pool, before parsing.
     HIRTypeInterner* types = nullptr;
 
