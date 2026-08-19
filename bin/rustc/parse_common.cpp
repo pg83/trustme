@@ -48,6 +48,7 @@ static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex);
 ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee = ASTExprNodeP());
 ASTExprNodeP ParseExpr1(TokenStream& lex);
 ASTExprNodeP ParseExprFC(TokenStream& lex);
+ASTExprNodeP ParseExprVal(TokenStream& lex);
 ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath tok, Span pathSpan);
 ASTFunction ParseDelegationFunction(TokenStream& lex, RcString& itemName);
 ::std::vector<::std::pair<RcString, ASTFunction>> SplitDelegationFunction(const ASTFunction& fcn);
@@ -317,6 +318,8 @@ static bool getAbiStringOpt(TokenStream& lex, ::std::string& out) {
     return false;
 }
 
+static bool exprIsBlockHeaded(ASTExprNode& node);
+
 ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
     TRACE_FUNCTION;
     Token tok;
@@ -459,6 +462,15 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
             case TOK_BRACE_OPEN:
                 PUTBACK(tok, lex);
                 ret = ParseExprBlockNode(lex);
+                break;
+            case TOK_INTERPOLATED_EXPR:
+                // An `:expr` fragment standing for a block-headed expression
+                // ends the statement just as the tokens behind it would.
+                if (!exprIsBlockHeaded(tok.fragNode()) || lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
+                    PUTBACK(tok, lex);
+                    return ParseExprBlockLineStmt(lex, *addSilence);
+                }
+                ret = tok.takeFragNode();
                 break;
 
             // Flow control
@@ -781,6 +793,17 @@ ASTExprNodeP ParseFlowControl(TokenStream& lex, ASTExprNodeFlow::Type type) {
     return NEWNODE(ASTExprNodeFlow, type, std::move(lifetime), ::std::move(val));
 }
 
+/// Whether the expression is headed by a block, which is what makes it end the
+/// statement it starts: `if c {} | x` is an `if` and then a new statement, not
+/// a `BitOr`.  rustc calls this `expr_requires_semi_to_be_stmt`.
+static bool exprIsBlockHeaded(ASTExprNode& node) {
+    return cast<ASTExprNodeBlock>(&node) || cast<ASTExprNodeAsyncBlock>(&node)
+        || cast<ASTExprNodeGeneratorBlock>(&node) || cast<ASTExprNodeTry>(&node)
+        || cast<ASTExprNodeLoop>(&node) || cast<ASTExprNodeFor>(&node)
+        || cast<ASTExprNodeWhile>(&node) || cast<ASTExprNodeMatch>(&node)
+        || cast<ASTExprNodeIf>(&node);
+}
+
 /// Parses the 'stmt' fragment specifier
 /// - Flow control
 /// - Expressions
@@ -790,6 +813,15 @@ ASTExprNodeP ParseStmt(TokenStream& lex) {
 
     switch (GET_TOK(tok, lex)) {
         case TOK_INTERPOLATED_STMT:
+            return tok.takeFragNode();
+        case TOK_INTERPOLATED_EXPR:
+            // An `:expr` fragment standing for a block-headed expression ends
+            // the statement just as the tokens behind it would -- unless `.` or
+            // `?` follows, which continues the expression instead.
+            if (!exprIsBlockHeaded(tok.fragNode()) || lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
+                PUTBACK(tok, lex);
+                return ParseExpr0(lex);
+            }
             return tok.takeFragNode();
         // Duplicated here for the :stmt pattern fragment.
         case TOK_RWORD_LET:
@@ -813,6 +845,31 @@ ASTExprNodeP ParseStmt(TokenStream& lex) {
         case TOK_BRACE_OPEN: {
             PUTBACK(tok, lex);
             auto block = ParseExprBlockNode(lex);
+            // A block followed by `.` or `?` is the start of an expression, not
+            // a statement that happens to be a block.
+            if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
+                lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, block.release())));
+                return ParseExpr0(lex);
+            }
+            return block;
+        }
+        // These also head a block, and so also end the statement -- but each
+        // can start something that is not a block (an item, a closure), so the
+        // block itself is what is looked for.
+        case TOK_RWORD_UNSAFE:
+        case TOK_RWORD_TRY:
+        case TOK_RWORD_CONST:
+        case TOK_RWORD_ASYNC: {
+            const bool isBlock = tok.type() == TOK_RWORD_ASYNC
+                // `async {}`, and the `move`/`use` capture forms of it.
+                ? (lex.lookahead(0) == TOK_BRACE_OPEN
+                    || ((lex.lookahead(0) == TOK_RWORD_MOVE || lex.lookahead(0) == TOK_RWORD_USE) && lex.lookahead(1) == TOK_BRACE_OPEN))
+                : lex.lookahead(0) == TOK_BRACE_OPEN;
+            PUTBACK(tok, lex);
+            if (!isBlock) {
+                return ParseExpr0(lex);
+            }
+            auto block = ParseExprVal(lex);
             // A block followed by `.` or `?` is the start of an expression, not
             // a statement that happens to be a block.
             if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
