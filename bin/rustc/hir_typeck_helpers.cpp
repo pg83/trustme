@@ -4804,6 +4804,48 @@ default:
                     }
                 }
             }
+            // `#[define_opaque(X)]` may name something that holds the opaque
+            // rather than the opaque itself: a struct with a field of that type,
+            // or an alias whose bounds mention it
+            // (`type Baz = impl Iterator<Item = Bar>`).
+            if (this->wb.crate) {
+                for (const auto& named : definingOpaqueAliases) {
+                    const auto* item = this->wb.crate->getTypeitemByPathOpt(named);
+                    if (!item) {
+                        continue;
+                    }
+                    bool found = false;
+                    auto check = [&](const HIRTypeData* ty) {
+                        if (const auto* erased = ty->opt_ErasedType()) {
+                            if (const auto* inner = erased->inner.opt_Alias(); inner && inner->inner->path == alias.path) {
+                                found = true;
+                            }
+                        }
+                        return found;
+                    };
+                    if (const auto* str = item->opt_Struct()) {
+                        switch (str->data.tag()) {
+                            case HIRStructData::TAG_Named:
+                                for (const auto& fld : str->data.as_Named()) {
+                                    visitTyWith(fld.ty, check);
+                                }
+                                break;
+                            case HIRStructData::TAG_Tuple:
+                                for (const auto& fld : str->data.as_Tuple()) {
+                                    visitTyWith(fld.ent, check);
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+                    } else if (const auto* ta = item->opt_TypeAlias(); ta && ta->type != HIRTypeRef()) {
+                        visitTyWith(ta->type, check);
+                    }
+                    if (found) {
+                        return true;
+                    }
+                }
+            }
             for (const auto& path : opaqueAliasScopes) {
                 if (alias.isLocalTo(path)) {
                     return true;
