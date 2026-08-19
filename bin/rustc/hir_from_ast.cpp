@@ -1305,7 +1305,9 @@ default:
         }
         case TypeData::TAG_ErasedType: {
             auto& e = ty->data.as_ErasedType();
-            ASSERT_BUG(ty->span(), e->traits.size() > 0, "ErasedType with no traits");
+            // `impl ?Sized` names no trait at all: the only bound it carries is
+            // the relaxed one, which says what the type is not.
+
 
             // TODO: There can be associated type bounds, those need to be propagated
 

@@ -4254,6 +4254,12 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
     bool fallBackOnSimple = false;
 
     const auto& matchTy = node.value->resType;
+    // Nothing inhabits `!`, so the value being matched cannot exist and no arm
+    // can run: `match unimplemented!() { .. }` is dead code that still compiles.
+    if (matchTy->is_Diverge()) {
+        builder.endBlock(MIRTerminator::make_Unreachable({}));
+        return;
+    }
     auto resultVal = builder.newTemporary(node.resType);
     auto nextBlock = builder.newBbUnlinked();
 
@@ -4707,6 +4713,14 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
         }
 
         armCode.push_back(std::move(ac));
+    }
+
+    // Nothing inhabits the value being matched (`match unimplemented!()`), so
+    // every arm is impossible and there is no rule to sort or test.
+    if (armRules.empty()) {
+        builder.setCurBlock(firstCmpBlock);
+        builder.endBlock(MIRTerminator::make_Unreachable({}));
+        return;
     }
 
     // Sort columns of `arm_rules` to maximise effectiveness
@@ -5166,7 +5180,8 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            BUG(sp, "Diverge in match type");
+            // As above: nothing to read, so nothing to test.
+            this->pushRule(PatternRule::make_Any({}));
             break;
         }
         case HIRTypeData::TAG_Primitive: {
@@ -5476,6 +5491,14 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
     HIRTypeRef revealedTopTy = topTy;
     resolve.revealOpaqueTypes(sp, revealedTopTy);
     topTy = revealedTopTy;
+
+    // Nothing inhabits `!`, so there is no value for a rule to read. The arm
+    // still has to keep its shape, so this stands in as a rule that tests
+    // nothing.
+    if (topTy->is_Diverge()) {
+        this->pushRule(PatternRule::make_Any({}));
+        return;
+    }
 
     struct H {
         static U128 getPatternValueInt(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val) {
