@@ -5513,12 +5513,10 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                                 return sext(u, 64);
                             case HIRCoreType::I128:
                                 return v;
-                            // usize/size - need to handle <64 pointer bits
+                            // `isize` is as wide as a pointer, which is at most
+                            // as wide as the 64 bits `truncateU` keeps.
                             case HIRCoreType::Isize:
-                                if (TargetGetPointerBits() < 64) {
-                                    return sext(u, TargetGetPointerBits());
-                                }
-                                return v;
+                                return sext(u, TargetGetPointerBits());
                             default:
                                 // Invalid type for `Constant::Int` literal
                                 break;
