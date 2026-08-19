@@ -3967,6 +3967,7 @@ void enumerateNames(const ::std::vector<MacroPatEnt>& pats, ::std::vector<RcStri
 }
 
 MacroRulesArm ParseMacroRulesMakeArm(Span patSp, ::std::vector<MacroPatEnt> pattern, ::std::vector<MacroExpansionEnt> contents) {
+    MacroRulesCheckFollowSets(pattern.data(), pattern.size());
     // - Convert the rule into an instruction stream
     auto ruleSequence = macroPatternToSimple(patSp, pattern);
     auto arm = MacroRulesArm(mv$(ruleSequence), mv$(contents));
