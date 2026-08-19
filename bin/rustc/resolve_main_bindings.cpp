@@ -5777,7 +5777,11 @@ ASTPath::Bindings ResolveUseGetBindingMod(
             continue;
         }
         const auto& impData = imp->data.as_Use();
-        if (impData.isPrelude && mod.path() != sourceModPath) {
+        // The prelude is in scope for everything lexically inside the module it
+        // was added to, which includes the anonymous modules holding the items
+        // of its function bodies: a `use format_args as f;` written in a block
+        // reaches the same prelude the module around it does.
+        if (impData.isPrelude && !mod.path().isParentOf(sourceModPath)) {
             continue;
         }
         for (const auto& impE : impData.entries) {
@@ -5817,7 +5821,11 @@ ASTPath::Bindings ResolveUseGetBindingMod(
             continue;
         }
         const auto& impData = imp->data.as_Use();
-        if (impData.isPrelude && mod.path() != sourceModPath) {
+        // The prelude is in scope for everything lexically inside the module it
+        // was added to, which includes the anonymous modules holding the items
+        // of its function bodies: a `use format_args as f;` written in a block
+        // reaches the same prelude the module around it does.
+        if (impData.isPrelude && !mod.path().isParentOf(sourceModPath)) {
             continue;
         }
         for (const auto& impE : impData.entries) {
