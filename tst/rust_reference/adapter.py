@@ -61,6 +61,13 @@ def main() -> int:
                 if compile_result.returncode == 0:
                     return fail_output(compile_result, case, "unexpected compile success")
                 continue
+            if mode == "xfail":
+                # A rejection this compiler does not make, and is not going to
+                # (see XFAIL.md). Recorded rather than dropped, so that making
+                # it starts failing here and the row can move back to `fail`.
+                if compile_result.returncode == 0:
+                    continue
+                return fail_output(compile_result, case, "compiled as expected once, now rejected (move to `fail`)")
             if compile_result.returncode != 0:
                 return fail_output(compile_result, case, "compile")
             if mode == "compile":

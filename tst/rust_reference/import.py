@@ -113,11 +113,27 @@ def standalone(lines: list[str]) -> str:
     ])
 
 
+def recorded_modes() -> dict[str, str]:
+    """The modes already in the manifest, so an `xfail` survives a re-import."""
+    manifest = HERE / "cases.tsv"
+    if not manifest.is_file():
+        return {}
+    rv = {}
+    for line in manifest.read_text().splitlines():
+        fields = line.split("\t")
+        if len(fields) == 4:
+            rv[fields[0]] = fields[3]
+    return rv
+
+
 def check_case(
     rustc: Path,
     case: tuple[str, str, str, str, str],
 ) -> tuple[str, str, str, str, str] | None:
     relative, origin, edition, mode, program = case
+    if mode == "xfail":
+        # rustc rejects it; that this compiler does not is what the row records.
+        return case
     with tempfile.TemporaryDirectory(prefix="rust-reference-import-") as work_name:
         work = Path(work_name)
         source = work / "case.rs"
@@ -181,6 +197,7 @@ def main() -> int:
         parser.error(f"missing reference compiler: {rustc}")
     default_edition = tomllib.loads(book_toml.read_text())["rust"]["edition"]
 
+    recorded = recorded_modes()
     candidates = []
     for markdown in sorted(source_root.rglob("*.md")):
         source_relative = markdown.relative_to(source_root)
@@ -192,6 +209,8 @@ def main() -> int:
             filename = f"{source_relative.stem}__L{line}.rs"
             relative = (source_relative.parent / filename).as_posix()
             origin = f"src/{source_relative.as_posix()}:{line}"
+            if recorded.get(relative) == "xfail":
+                mode = "xfail"
             candidates.append((relative, origin, edition, mode, standalone(code_lines)))
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as executor:
