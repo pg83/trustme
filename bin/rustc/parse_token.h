@@ -196,3 +196,8 @@ public:
 };
 
 extern ::std::ostream& operator<<(::std::ostream& os, const Token& tok);
+
+/// Whether re-printing `prev` then `cur` as source needs a space to keep the
+/// two tokens apart.  `stringify!` and the meta-fragment printer share the
+/// rule so a fragment prints the way the tokens around it do.
+extern bool tokensNeedSpace(eTokenType prev, eTokenType cur);

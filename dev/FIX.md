@@ -191,9 +191,7 @@ Thirty-eight programs build but execute incorrectly:
 | generated executable SIGABRT | 1 | |
 
 The repeated high-yield areas inside the panic set are enum/DST/layout, drop
-order, and coroutine layout. `macro-doc-raw-str-hashes` is the last
-`stringify!` one: a `meta` fragment still prints as a placeholder rather than
-the attribute it holds. `issue-61894` is the type name of a function item,
+order, and coroutine layout. `issue-61894` is the type name of a function item,
 which still prints as `fn{::"bin#"::#0::f}` -- the path of a function inside an
 impl is not reconstructed. Of the formatting ones, `test_format_int_exp_precision` survives the precision
 fix. No 128-bit ones are left. Minimise representatives before treating nearby

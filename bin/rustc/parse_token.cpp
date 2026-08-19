@@ -7,6 +7,9 @@
 #include "parse_parseerror.h"
 #include "parse_interpolated_fragment.h"
 
+#include <std/str/view.h>
+#include <std/str/builder.h>
+
 Token::~Token() {
     switch (type_) {
         case TOK_INTERPOLATED_TYPE:
@@ -400,6 +403,92 @@ struct EscapedString {
     }
 };
 
+namespace {
+    /// The fewest hashes that let a raw literal hold `text`: one more than the
+    /// longest run of `#` that follows a quote in it, and none without a quote.
+    static size_t rawStringHashes(stl::StringView text) {
+        size_t needed = 0;
+        for (size_t i = 0; i < text.length(); i++) {
+            if (text[i] != '"') {
+                continue;
+            }
+            size_t run = 0;
+            while (i + 1 + run < text.length() && text[i + 1 + run] == '#') {
+                run++;
+            }
+            if (run + 1 > needed) {
+                needed = run + 1;
+            }
+        }
+        return needed;
+    }
+
+    /// Append `tt` to `out` as source, spacing the tokens the way whoever wrote
+    /// them had to.  `prev` carries the token before the tree.
+    static void appendTokenTreeSource(stl::StringBuilder& out, const TokenTree& tt, eTokenType& prev) {
+        if (tt.isToken()) {
+            if (!out.empty() && tokensNeedSpace(prev, tt.tok().type())) {
+                out.append(" ", 1);
+            }
+            auto text = tt.tok().toStr();
+            out.append(text.data(), text.size());
+            prev = tt.tok().type();
+        }
+        for (size_t i = 0; i < tt.size(); i++) {
+            appendTokenTreeSource(out, tt[i], prev);
+        }
+    }
+
+    /// An attribute's meta item as source: `doc = "..."`, `cfg(unix)`, `C`.
+    static void attributeToSource(stl::StringBuilder& out, const ASTAttribute& attr) {
+        auto name = FMT(attr.name());
+        out.append(name.data(), name.size());
+        auto prev = TOK_IDENT;
+        appendTokenTreeSource(out, attr.data(), prev);
+    }
+}
+
+bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
+    // These bind to what is on their left: `x,` `x;` `x.y` `f()` `a[0]`.
+    switch (cur) {
+        case TOK_COMMA:
+        case TOK_SEMICOLON:
+        case TOK_DOT:
+        case TOK_PAREN_CLOSE:
+        case TOK_SQUARE_CLOSE:
+        case TOK_QMARK:
+        case TOK_DOUBLE_COLON:
+            return false;
+        default:
+            break;
+    }
+    // And these to what is on their right: `.y` `#[a]` `$x` `(a` `[a`.
+    switch (prev) {
+        case TOK_DOT:
+        case TOK_HASH:
+        case TOK_DOLLAR:
+        case TOK_PAREN_OPEN:
+        case TOK_SQUARE_OPEN:
+        case TOK_DOUBLE_COLON:
+            return false;
+        default:
+            break;
+    }
+    // A macro call keeps its name, its `!` and its delimiter together.
+    if (cur == TOK_EXCLAM && (prev == TOK_IDENT || Token::typeIsRword(prev))) {
+        return false;
+    }
+    if (prev == TOK_EXCLAM && (cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN || cur == TOK_BRACE_OPEN)) {
+        return false;
+    }
+    // As does a call or an index.
+    if ((cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN)
+        && (prev == TOK_IDENT || prev == TOK_PAREN_CLOSE || prev == TOK_SQUARE_CLOSE)) {
+        return false;
+    }
+    return true;
+}
+
 ::std::string Token::toStr() const {
     ::std::stringstream ss;
     switch (type_) {
@@ -430,8 +519,11 @@ struct EscapedString {
             reinterpret_cast<const ASTExprNode*>(data_.as_Fragment())->print(ss);
             return ss.str();
         }
-        case TOK_INTERPOLATED_META:
-            return "/*:meta*/";
+        case TOK_INTERPOLATED_META: {
+            stl::StringBuilder out;
+            attributeToSource(out, *reinterpret_cast<const ASTAttribute*>(data_.as_Fragment()));
+            return {static_cast<const char*>(out.data()), out.used()};
+        }
         case TOK_INTERPOLATED_STMT_ITEM:
             return "/*:stmt-item*/";
         case TOK_INTERPOLATED_ITEM:
@@ -476,8 +568,24 @@ struct EscapedString {
             } else {
                 return FMT(formatFloatValueForToken(data_.as_Float().floatval) << coretypeName(data_.as_Float().datatype));
             }
-        case TOK_STRING:
-            return FMT("\"" << EscapedString(data_.as_String()) << "\"");
+        case TOK_STRING: {
+            // A doc comment is a `#[doc = ...]` whose string rustc writes as a
+            // raw literal, with just enough hashes to close it unambiguously.
+            const auto& text = data_.as_String();
+            if (!isDocComment_) {
+                return FMT("\"" << EscapedString(text) << "\"");
+            }
+            auto hashes = rawStringHashes(stl::StringView(reinterpret_cast<const u8*>(text.data()), text.size()));
+            ss << "r";
+            for (size_t i = 0; i < hashes; i++) {
+                ss << "#";
+            }
+            ss << "\"" << text << "\"";
+            for (size_t i = 0; i < hashes; i++) {
+                ss << "#";
+            }
+            return ss.str();
+        }
         case TOK_CSTRING:
             return FMT("c\"" << EscapedString(data_.as_String()) << "\"");
         case TOK_LITERAL_SUFFIXED:

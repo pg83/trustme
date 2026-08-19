@@ -967,7 +967,9 @@ Token Lexer::getTokenInt() {
                     if (isDoc || isPdoc) {
                         //# [ doc = "commment data" ]
                         nextTokens.push_back(TOK_SQUARE_CLOSE);
-                        nextTokens.push_back(Token(TOK_STRING, mv$(str), realGetHygiene()));
+                        auto docString = Token(TOK_STRING, mv$(str), realGetHygiene());
+                        docString.markAsDocComment();
+                        nextTokens.push_back(mv$(docString));
                         nextTokens.push_back(TOK_EQUAL);
                         nextTokens.push_back(Token(TOK_IDENT, RcString::newInterned("doc")));
                         nextTokens.push_back(TOK_SQUARE_OPEN);
@@ -1040,7 +1042,9 @@ Token Lexer::getTokenInt() {
                     if (isDoc || isPdoc) {
                         //# [ doc = "commment data" ]
                         nextTokens.push_back(TOK_SQUARE_CLOSE);
-                        nextTokens.push_back(Token(TOK_STRING, mv$(str), realGetHygiene()));
+                        auto docString = Token(TOK_STRING, mv$(str), realGetHygiene());
+                        docString.markAsDocComment();
+                        nextTokens.push_back(mv$(docString));
                         nextTokens.push_back(TOK_EQUAL);
                         nextTokens.push_back(Token(TOK_IDENT, RcString::newInterned("doc")));
                         nextTokens.push_back(TOK_SQUARE_OPEN);

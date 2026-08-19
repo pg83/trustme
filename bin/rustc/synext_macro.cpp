@@ -2489,49 +2489,6 @@ STATIC_MACRO("__diagnostic_used", CExpanderDiagnosticUsed)
 STATIC_MACRO("__build_diagnostic_array", CExpanderBuildDiagnosticArray)
 
 class CExpander: public ExpandProcMacro {
-    /// `stringify!` writes the tokens as they were written, so a space goes
-    /// between two of them only where one would be needed to keep them apart.
-    static bool spaceBetween(eTokenType prev, eTokenType cur) {
-        // These bind to what is on their left: `x,` `x;` `x.y` `f()` `a[0]`.
-        switch (cur) {
-            case TOK_COMMA:
-            case TOK_SEMICOLON:
-            case TOK_DOT:
-            case TOK_PAREN_CLOSE:
-            case TOK_SQUARE_CLOSE:
-            case TOK_QMARK:
-            case TOK_DOUBLE_COLON:
-                return false;
-            default:
-                break;
-        }
-        // And these to what is on their right: `.y` `#[a]` `$x` `(a` `[a`.
-        switch (prev) {
-            case TOK_DOT:
-            case TOK_HASH:
-            case TOK_DOLLAR:
-            case TOK_PAREN_OPEN:
-            case TOK_SQUARE_OPEN:
-            case TOK_DOUBLE_COLON:
-                return false;
-            default:
-                break;
-        }
-        // A macro call keeps its name, its `!` and its delimiter together.
-        if (cur == TOK_EXCLAM && (prev == TOK_IDENT || Token::typeIsRword(prev))) {
-            return false;
-        }
-        if (prev == TOK_EXCLAM && (cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN || cur == TOK_BRACE_OPEN)) {
-            return false;
-        }
-        // As does a call or an index.
-        if ((cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN)
-            && (prev == TOK_IDENT || prev == TOK_PAREN_CLOSE || prev == TOK_SQUARE_CLOSE)) {
-            return false;
-        }
-        return true;
-    }
-
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
         ::std::string rv;
@@ -2540,7 +2497,7 @@ class CExpander: public ExpandProcMacro {
         auto lex = TTStream(sp, ParseState(), tt);
         lex.parseState().wb = &wb;
         while (GET_TOK(tok, lex) != TOK_EOF) {
-            if (!rv.empty() && spaceBetween(prev, tok.type())) {
+            if (!rv.empty() && tokensNeedSpace(prev, tok.type())) {
                 rv += " ";
             }
             DEBUG(" += " << tok);
