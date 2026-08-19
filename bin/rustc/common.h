@@ -130,6 +130,15 @@ static inline Ordering ord(double l, double r) {
 
 Ordering ord(const ::std::string& l, const ::std::string& r);
 
+// Bridge a lambda into a per-interface callback adapter: T is the adapter
+// template for one concrete callback interface (e.g. ExpandAttrCb), F the
+// lambda. Keeps call sites on lambdas while the API takes a plain virtual
+// interface reference - no std::function, no allocation.
+template <template <typename> class T, typename F>
+auto makeCallable(F f) {
+    return T<F>(static_cast<F&&>(f));
+}
+
 class HIRTypeData;
 // Interned types order by the interner-assigned uid (creation order), never
 // by address: pointer order leaks the allocation layout into anything walked

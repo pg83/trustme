@@ -4,16 +4,63 @@
 #include "hir_hir.h" // ABI_RUST
 #include "hir_type.h"
 
+#include <std/str/builder.h>
+#include <std/str/fmt.h>
+#include <std/sym/i_map.h>
+#include <std/mem/obj_pool.h>
+#include <std/lib/vector.h>
+
 #include <cmath> // ceil/log10
 #include <cctype>
+#include <cstring>
+#include <string_view> // hash of the reused buffer, keeps old symbol spelling
+#include <type_traits>
 #include <algorithm> // std::find
 
+namespace {
+    // Every symbol is formatted into one process-wide reused buffer: mangling
+    // used to be the top allocation-count site (stringstream churn per
+    // symbol); steady-state this allocates nothing.
+    stl::StringBuilder& mangleBuffer() {
+        static stl::StringBuilder sb;
+        return sb;
+    }
+
+    // Back-reference name store for the symbol being mangled. Shared storage,
+    // reused across symbols; every Mangler instance sees only its own window
+    // so sibling manglers of one symbol stay independent (matching the old
+    // per-instance cache byte for byte).
+    stl::Vector<RcString>& mangleNames() {
+        static stl::Vector<RcString> names;
+        return names;
+    }
+
+    stl::StringBuilder& operator<<(stl::StringBuilder& sb, char c) {
+        sb.append(&c, 1);
+        return sb;
+    }
+
+    stl::StringBuilder& operator<<(stl::StringBuilder& sb, const char* s) {
+        sb.append(s, strlen(s));
+        return sb;
+    }
+
+    template <typename T>
+        requires(std::is_integral_v<T> && sizeof(T) >= 2)
+    stl::StringBuilder& operator<<(stl::StringBuilder& sb, T v) {
+        char buf[20];
+        sb.append(buf, static_cast<char*>(stl::formatU64Base10(static_cast<u64>(v), buf)) - buf);
+        return sb;
+    }
+}
+
 class Mangler {
-    ::std::ostream& os;
-    std::vector<RcString> nameCache;
+    stl::StringBuilder& os;
+    stl::Vector<RcString>& names = mangleNames();
+    const size_t nameWindowStart = names.length();
 
 public:
-    Mangler(::std::ostream& os)
+    Mangler(stl::StringBuilder& os)
         : os(os)
     {
     }
@@ -36,9 +83,10 @@ public:
     // - Otherwise, emitted as a raw string (see below)
     void fmtName(const RcString& s) {
         // Support back-references to names (if shorter than the literal name)
-        auto it = std::find(nameCache.begin(), nameCache.end(), s);
-        if (it != nameCache.end()) {
-            auto idx = it - nameCache.begin();
+        const auto* windowBegin = names.begin() + nameWindowStart;
+        auto it = std::find(windowBegin, names.end(), s);
+        if (it != names.end()) {
+            auto idx = it - windowBegin;
             // Only emit this way if shorter than the formatted name would be.
             auto len = 1 + static_cast<unsigned>(std::ceil(std::log10(idx + 1) / std::log10(26)));
             if (len < s.size()) {
@@ -47,7 +95,7 @@ public:
                 return;
             }
         } else {
-            nameCache.push_back(s);
+            names.pushBack(s);
         }
 
         this->fmtName(s.c_str());
@@ -463,52 +511,67 @@ case HIRTypeData::TAG_Infer:
     }
 };
 
-::FmtLambda TransManglePath(const HIRPath& p) {
-    return FMT_CB(os, os << "ZR"; Mangler(os).fmtPath(p));
-}
-
-::FmtLambda TransMangleSimplePath(const HIRSimplePath& p) {
-    return FMT_CB(os, os << "ZRG"; Mangler(os).fmtSimplePath(p); Mangler(os).fmtPathParams({}););
-}
-
-::FmtLambda TransMangleGenericPath(const HIRGenericPath& p) {
-    return FMT_CB(os, os << "ZRG"; Mangler(os).fmtGenericPath(p));
-}
-
-::FmtLambda TransMangleTypeRef(const HIRTypeData* p) {
-    return ::FmtLambda([p](::std::ostream& os) {
-        os << "ZRT";
-        Mangler(os).fmtType(p);
-    });
-}
-
 namespace {
-    RcString maxLen(::FmtLambda v) {
-        std::stringstream ss;
-        ss << v;
-        auto s = ss.str();
-        static const size_t MAX_LEN = 128;
-        if (s.size() > 128) {
-            size_t hash = ::std::hash<std::string>()(s);
-            ss.str("");
-            ss << s.substr(0, MAX_LEN - 9) << "$" << ::std::hex << hash;
-            DEBUG("Over-long symbol '" << s << "' -> '" << ss.str() << "'");
-            s = ss.str();
-        } else {
+    constexpr size_t MANGLE_MAX_LEN = 128;
+
+    stl::StringBuilder& mangleBegin() {
+        auto& sb = mangleBuffer();
+        sb.reset();
+        mangleNames().clear();
+        return sb;
+    }
+
+    RcString mangleFinish(stl::StringBuilder& sb) {
+        const auto* data = static_cast<const char*>(sb.data());
+        size_t size = static_cast<const char*>(sb.current()) - data;
+        if (size > MANGLE_MAX_LEN) {
+            // Keep the head, replace the tail with a hash. std::hash over the
+            // same bytes reproduces the old stringstream-based spelling.
+            const size_t hash = std::hash<std::string_view>()(std::string_view(data, size));
+            sb.seekAbsolute(MANGLE_MAX_LEN - 9);
+            sb << '$';
+            char buf[20];
+            sb.append(buf, static_cast<char*>(stl::formatU64Base16(hash, buf)) - buf);
+            data = static_cast<const char*>(sb.data());
+            size = static_cast<const char*>(sb.current()) - data;
+            DEBUG("Over-long symbol -> '" << std::string_view(data, size) << "'");
         }
-        return RcString(s);
+        return RcString::newInterned(data, size);
     }
 }
 
-// TODO: If the mangled name exceeds a limit, stop emitting the real name and start hashing the rest.
-#define DO_MANGLE(ty, suffix)                  \
-    RcString TransMangle(const ty& v) {        \
-        return maxLen(TransMangle##suffix(v)); \
-    }
-DO_MANGLE(HIRSimplePath, SimplePath)
-DO_MANGLE(HIRGenericPath, GenericPath)
-DO_MANGLE(HIRPath, Path)
+RcString TransMangle(const HIRSimplePath& p) {
+    auto& sb = mangleBegin();
+    sb << "ZRG";
+    Mangler(sb).fmtSimplePath(p);
+    Mangler(sb).fmtPathParams({});
+    return mangleFinish(sb);
+}
+
+RcString TransMangle(const HIRGenericPath& p) {
+    auto& sb = mangleBegin();
+    sb << "ZRG";
+    Mangler(sb).fmtGenericPath(p);
+    return mangleFinish(sb);
+}
+
+RcString TransMangle(const HIRPath& p) {
+    auto& sb = mangleBegin();
+    sb << "ZR";
+    Mangler(sb).fmtPath(p);
+    return mangleFinish(sb);
+}
 
 RcString TransMangle(const HIRTypeData* v) {
-    return maxLen(TransMangleTypeRef(v));
+    // Types are interned: one spelling per node, cached for the process
+    // lifetime (symbols for the same type are requested many times).
+    static stl::ObjPool::Ref cachePool = stl::ObjPool::fromMemory();
+    static stl::IntMap<RcString> cache{cachePool.mutPtr()};
+    if (const auto* hit = cache.find(reinterpret_cast<uintptr_t>(v))) {
+        return *hit;
+    }
+    auto& sb = mangleBegin();
+    sb << "ZRT";
+    Mangler(sb).fmtType(v);
+    return *cache.insert(reinterpret_cast<uintptr_t>(v), mangleFinish(sb));
 }

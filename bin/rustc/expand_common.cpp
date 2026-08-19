@@ -54,7 +54,28 @@ struct ExpandState {
     explicit ExpandState(const ExpandState&) = default;
 };
 
-void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, ::std::function<void(const ExpandDecorator& d, const ASTAttribute& a)> f);
+// Per-attribute action for ExpandAttrs/ExpandAttr. Call sites keep their
+// lambdas via makeCallable<ExpandAttrCb>(...); the API sees only this
+// interface - no std::function, no allocation.
+struct ExpandAttrCallback {
+    virtual void run(const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) const = 0;
+};
+
+template <typename F>
+struct ExpandAttrCb final: ExpandAttrCallback {
+    F f;
+
+    ExpandAttrCb(F&& f)
+        : f(static_cast<F&&>(f))
+    {
+    }
+
+    void run(const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) const override {
+        f(sp, d, a);
+    }
+};
+
+void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f);
 void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, unsigned int firstItem = 0);
 void ExpandExpr(const ExpandState& es, ASTExprNodeP& node);
 void ExpandExpr(const ExpandState& es, ASTExpr& node);
@@ -125,7 +146,7 @@ void ParseModRootItemsInto(ASTModule& mod, size_t idx, TokenStream& lex) {
     mod.items = std::move(oldItems);
 }
 
-void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, AttrStage stage, ::std::function<void(const Span& sp, const ExpandDecorator& d, const ASTAttribute& a)> f) {
+void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, AttrStage stage, const ExpandAttrCallback& f) {
     bool found = false;
     if (a.name().elems.empty()) {
         return;
@@ -158,7 +179,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
             }
         }
         DEBUG("#[" << name << "]");
-        f(sp, d, a);
+        f.run(sp, d, a);
         // Annotate the attribute as having been handled
         a.markInert();
     };
@@ -188,7 +209,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
                     }
                 }
                 DEBUG("#[" << d.first << "]");
-                f(sp, *d.second, a);
+                f.run(sp, *d.second, a);
                 // Annotate the attribute as having been handled
                 a.markInert();
             }
@@ -300,7 +321,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
             if (stage == AttrStage::Pre) {
                 d.macPath.push_back(procMac->path.crateName());
                 d.macPath.insert(d.macPath.end(), procMac->path.components().begin(), procMac->path.components().end());
-                f(sp, d, a);
+                f.run(sp, d, a);
                 a.markInert();
             }
             found = true;
@@ -317,7 +338,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
     }
 }
 
-void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, ::std::function<void(const Span& sp, const ExpandDecorator& d, const ASTAttribute& a)> f) {
+void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f) {
     // Reduce load on derive etc by visiting `cfg` first.
     for (auto& a : attrs.items) {
         static const RcString rcstringCfg = RcString::newInterned("cfg");
@@ -353,39 +374,39 @@ namespace {
 }
 
 void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, const ASTVisibility& vis, ASTItem& item) {
-    ExpandAttrs(es, attrs, stage, [&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
+    ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
         if (!item.is_None()) {
             // Pass attributes _after_ this attribute (or all of them, if the decorator asks)
             auto attrsSlice = d.wantsAllAttrs() ? slice<const ASTAttribute>(attrs.items.data(), attrs.items.size()) : getAttrsAfter(attrs, a);
             d.handle(sp, a, es.wb, es.crate, path, mod, modIdx, attrsSlice, vis, item);
         }
-    });
+    }));
 }
 
 void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ASTAbsolutePath& path, ASTModule& mod, ASTTrait& trait, ASTItem& item) {
     gCurrentMod = &mod;
-    ExpandAttrs(es, attrs, stage, [&](const Span& sp, const auto& d, const ASTAttribute& a) {
+    ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
         if (!item.is_None()) {
             d.handle(sp, a, es.wb, es.crate, path, trait, getAttrsAfter(attrs, a), item);
         }
-    });
+    }));
     gCurrentMod = nullptr;
 }
 
 void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, ASTModule& mod, ASTImpl& impl, const ASTVisibility& vis, const RcString& name, ASTItem& item) {
     gCurrentMod = &mod;
-    ExpandAttrs(es, attrs, stage, [&](const Span& sp, const auto& d, const auto& a) {
+    ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
         if (!item.is_None()) {
             d.handle(sp, a, es.wb, es.crate, impl, name, getAttrsAfter(attrs, a), vis, item);
         }
-    });
+    }));
     gCurrentMod = nullptr;
 }
 
 bool ExpandAttrsCfgOnly(const ExpandState& es, ASTAttributeList& attrs) {
     bool remove = false;
     ExpandAttrsCfgAttr(*es.wb.settings, attrs);
-    ExpandAttrs(es, attrs, AttrStage::Pre, [&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
+    ExpandAttrs(es, attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
         if (a.name() == "cfg") {
             if (!checkCfg(*es.wb.settings, sp, a)) {
                 remove = true;
@@ -398,7 +419,7 @@ bool ExpandAttrsCfgOnly(const ExpandState& es, ASTAttributeList& attrs) {
         } else {
             TODO(sp, "non-cfg attributes - " << a);
         }
-    });
+    }));
     return !remove;
 }
 
@@ -987,9 +1008,9 @@ struct CExpandExpr: public ASTNodeVisitor {
         if (cnode.get()) {
             auto attrs = mv$(cnode->attrs());
             ExpandAttrsCfgAttr(*expandState.wb.settings, attrs);
-            ExpandAttrs(expandState, attrs, AttrStage::Pre, [&](const Span& sp, const ExpandDecorator& d, const auto& a) {
+            ExpandAttrs(expandState, attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const auto& a) {
                 d.handle(sp, a, this->expandState.wb, this->crate, cnode);
-            });
+            }));
             if (cnode.get()) {
                 cnode->attrs() = mv$(attrs);
             }
@@ -1009,9 +1030,9 @@ struct CExpandExpr: public ASTNodeVisitor {
 
         if (cnode.get()) {
             auto attrs = mv$(cnode->attrs());
-            ExpandAttrs(expandState, attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
+            ExpandAttrs(expandState, attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                 d.handle(sp, a, this->expandState.wb, this->crate, cnode);
-            });
+            }));
             if (cnode.get()) {
                 cnode->attrs() = mv$(attrs);
             }
@@ -1176,9 +1197,9 @@ struct CExpandExpr: public ASTNodeVisitor {
                 const auto macroName = nodeMac->ident;
                 auto attrs = std::move(it->node->attrs());
                 ExpandAttrsCfgAttr(*expandState.wb.settings, attrs);
-                ExpandAttrs(expandState, attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                ExpandAttrs(expandState, attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                     d.handle(sp, a, this->expandState.wb, this->crate, it->node);
-                });
+                }));
                 if (!it->node.get()) {
                     it = node.nodes.erase(it);
                     continue;
@@ -1818,9 +1839,9 @@ default:
         this->visitNodelete(node, node.val);
         for (auto& arm : node.arms) {
             ExpandAttrsCfgAttr(*expandState.wb.settings, arm.attrs);
-            ExpandAttrs(expandState, arm.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+            ExpandAttrs(expandState, arm.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                 d.handle(sp, a, expandState.wb, crate, arm);
-            });
+            }));
             if (arm.patterns.size() == 0) {
                 continue;
             }
@@ -1844,9 +1865,9 @@ default:
             }
 
             this->visitNodelete(node, arm.code);
-            ExpandAttrs(expandState, arm.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
+            ExpandAttrs(expandState, arm.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                 d.handle(sp, a, expandState.wb, crate, arm);
-            });
+            }));
         }
         // Prune deleted arms
         for (auto it = node.arms.begin(); it != node.arms.end();) {
@@ -1910,16 +1931,16 @@ default:
         this->visitNodelete(node, node.baseValue);
         for (auto& val : node.values) {
             ExpandAttrsCfgAttr(*expandState.wb.settings, val.attrs);
-            ExpandAttrs(expandState, val.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+            ExpandAttrs(expandState, val.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                 d.handle(sp, a, expandState.wb, crate, val);
-            });
+            }));
             if (!val.value) {
                 continue;
             }
             this->visitNodelete(node, val.value);
-            ExpandAttrs(expandState, val.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
+            ExpandAttrs(expandState, val.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                 d.handle(sp, a, expandState.wb, crate, val);
-            });
+            }));
         }
         for (auto it = node.values.begin(); it != node.values.end();) {
             if (it->value) {
@@ -1933,16 +1954,16 @@ default:
     void visit(ASTExprNodeStructLiteralPattern& node) override {
         for (auto& val : node.values) {
             ExpandAttrsCfgAttr(*expandState.wb.settings, val.attrs);
-            ExpandAttrs(expandState, val.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+            ExpandAttrs(expandState, val.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                 d.handle(sp, a, expandState.wb, crate, val);
-            });
+            }));
             if (!val.value) {
                 continue;
             }
             this->visitNodelete(node, val.value);
-            ExpandAttrs(expandState, val.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
+            ExpandAttrs(expandState, val.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                 d.handle(sp, a, expandState.wb, crate, val);
-            });
+            }));
         }
         for (auto it = node.values.begin(); it != node.values.end();) {
             if (it->value) {
@@ -2225,9 +2246,9 @@ void ExpandFunction(const ExpandState& es, ASTModule& mod, ASTFunction& e) {
         }
         ExpandPattern(es, mod, arg.pat, false);
         ExpandType(es, mod, arg.ty);
-        ExpandAttrs(es, arg.attrs, AttrStage::Post, [&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
+        ExpandAttrs(es, arg.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
             TODO(sp, "attributes on function arguments - " << a);
-        });
+        }));
     }
     ExpandType(es, mod, e.rettype());
     ExpandExpr(es, e.code());
@@ -2719,14 +2740,14 @@ default:
                         for (auto it = sd.ents.begin(); it != sd.ents.end();) {
                             auto& si = *it;
                             ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
-                            ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                            ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                 d.handle(sp, a, es.wb, es.crate, si);
-                            });
+                            }));
                             ExpandType(es, mod, si.type);
                             ExpandExpr(es, si.defaultValue);
-                            ExpandAttrs(es, si.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
+                            ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                 d.handle(sp, a, es.wb, es.crate, si);
-                            });
+                            }));
 
                             if (si.name == "") {
                                 it = sd.ents.erase(it);
@@ -2741,13 +2762,13 @@ default:
                         for (auto it = sd.ents.begin(); it != sd.ents.end();) {
                             auto& si = *it;
                             ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
-                            ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                            ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                 d.handle(sp, a, es.wb, es.crate, si);
-                            });
+                            }));
                             ExpandType(es, mod, si.type);
-                            ExpandAttrs(es, si.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
+                            ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                 d.handle(sp, a, es.wb, es.crate, si);
-                            });
+                            }));
 
                             if (!si.type->isValid()) {
                                 it = sd.ents.erase(it);
@@ -2765,9 +2786,9 @@ default:
                 ExpandGenericParams(es, mod, e.params());
                 for (auto& var : e.variants()) {
                     ExpandAttrsCfgAttr(*es.wb.settings, var.attrs);
-                    ExpandAttrs(es, var.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                    ExpandAttrs(es, var.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                         d.handle(sp, a, es.wb, es.crate, var);
-                    });
+                    }));
                 switch (var.data.tag()) {
                     case ASTEnumVariantData::TAG_Unit: {
                         break;
@@ -2777,13 +2798,13 @@ default:
                         for (auto it = e.items.begin(); it != e.items.end();) {
                             auto& si = *it;
                             ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
-                            ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                            ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                 d.handle(sp, a, es.wb, es.crate, si);
-                            });
+                            }));
                             ExpandType(es, mod, si.type);
-                            ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                            ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                 d.handle(sp, a, es.wb, es.crate, si);
-                            });
+                            }));
                             if (!si.type->isValid()) {
                                 it = e.items.erase(it);
                             } else {
@@ -2797,14 +2818,14 @@ default:
                         for (auto it = e.fields.begin(); it != e.fields.end();) {
                             auto& si = *it;
                             ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
-                            ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                            ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                 d.handle(sp, a, es.wb, es.crate, si);
-                            });
+                            }));
                             ExpandType(es, mod, si.type);
                             ExpandExpr(es, si.defaultValue);
-                            ExpandAttrs(es, si.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
+                            ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                                 d.handle(sp, a, es.wb, es.crate, si);
-                            });
+                            }));
 
                             if (si.name == "") {
                                 it = e.fields.erase(it);
@@ -2816,8 +2837,8 @@ default:
                     }
                 }
                 ExpandExpr(es,  var.discriminantValue);
-                ExpandAttrs(es, var.attrs, AttrStage::Post,  [&](const Span& sp, const auto& d, const auto& a){
-                        d.handle(sp, a, es.wb, es.crate, var); });
+                ExpandAttrs(es, var.attrs, AttrStage::Post,  makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a){
+                        d.handle(sp, a, es.wb, es.crate, var); }));
                 }
                 // Handle cfg on variants (kinda hacky)
                 for (auto it = e.variants().begin(); it != e.variants().end();) {
@@ -2835,14 +2856,14 @@ default:
                 for (auto it = e.variants.begin(); it != e.variants.end();) {
                     auto& si = *it;
                     ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
-                    ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                    ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                         d.handle(sp, a, es.wb, es.crate, si);
-                    });
+                    }));
                     ExpandType(es, mod, si.type);
                     ExpandExpr(es, si.defaultValue);
-                    ExpandAttrs(es, si.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
+                    ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                         d.handle(sp, a, es.wb, es.crate, si);
-                    });
+                    }));
 
                     if (si.name == "") {
                         it = e.variants.erase(it);
@@ -3103,9 +3124,9 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
 
     // 1. Crate attributes
     ExpandAttrsCfgAttr(*es.wb.settings, crate.attrs);
-    ExpandAttrs(es, crate.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+    ExpandAttrs(es, crate.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
         d.handle(sp, a, es.wb, crate);
-    });
+    }));
 
     // TODO: Crate name and type
 

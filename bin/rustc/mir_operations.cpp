@@ -2506,9 +2506,54 @@ default:
         return nullptr;
     }
 
-    void visitBlocksMut(MIRTypeResolve& state, MIRFunction& fcn, ::std::function<void(MIRBasicBlockId, MIRBasicBlock&)> cb) {
-        ::std::vector<bool> visited(fcn.blocks.size());
-        ::std::vector<MIRBasicBlockId> toVisit;
+    // Per-block actions for visitBlocks/visitBlocksMut. Call sites keep their
+    // lambdas via makeCallable<...>; the API sees only these interfaces.
+    struct MIRBlockCallback {
+        virtual void run(MIRBasicBlockId bb, MIRBasicBlock& block) const = 0;
+    };
+
+    template <typename F>
+    struct MIRBlockCb final: MIRBlockCallback {
+        F f;
+
+        MIRBlockCb(F&& f)
+            : f(static_cast<F&&>(f))
+        {
+        }
+
+        void run(MIRBasicBlockId bb, MIRBasicBlock& block) const override {
+            f(bb, block);
+        }
+    };
+
+    struct MIRBlockConstCallback {
+        virtual void run(MIRBasicBlockId bb, const MIRBasicBlock& block) const = 0;
+    };
+
+    template <typename F>
+    struct MIRBlockConstCb final: MIRBlockConstCallback {
+        F f;
+
+        MIRBlockConstCb(F&& f)
+            : f(static_cast<F&&>(f))
+        {
+        }
+
+        void run(MIRBasicBlockId bb, const MIRBasicBlock& block) const override {
+            f(bb, block);
+        }
+    };
+
+    void visitBlocksMut(MIRTypeResolve& state, MIRFunction& fcn, const MIRBlockCallback& cb) {
+        // Reused scratch: this walk runs once per optimisation pass per
+        // function, the buffers alone were ~1.5M allocations on libcore.
+        static ::std::vector<bool> visited;
+        static ::std::vector<MIRBasicBlockId> toVisit;
+        static bool inUse = false;
+        ASSERT_BUG(Span(), !inUse, "visitBlocksMut re-entered");
+        inUse = true;
+        visited.assign(fcn.blocks.size(), false);
+        toVisit.clear();
         toVisit.push_back(0);
         while (toVisit.size() > 0) {
             auto bb = toVisit.back();
@@ -2519,7 +2564,7 @@ default:
             visited[bb] = true;
             auto& block = fcn.blocks[bb];
 
-            cb(bb, block);
+            cb.run(bb, block);
 
             struct QueueUnvisited final: public MIRTargetVisitor {
                 const ::std::vector<bool>& visited;
@@ -2539,12 +2584,13 @@ default:
             } queueUnvisited{visited, toVisit};
             visitTerminatorTarget(block.terminator, queueUnvisited);
         }
+        inUse = false;
     }
 
-    void visitBlocks(MIRTypeResolve& state, const MIRFunction& fcn, ::std::function<void(MIRBasicBlockId, const MIRBasicBlock&)> cb) {
-        visitBlocksMut(state, const_cast<MIRFunction&>(fcn), [cb](auto id, auto& blk) {
-            cb(id, blk);
-        });
+    void visitBlocks(MIRTypeResolve& state, const MIRFunction& fcn, const MIRBlockConstCallback& cb) {
+        visitBlocksMut(state, const_cast<MIRFunction&>(fcn), makeCallable<MIRBlockCb>([&cb](MIRBasicBlockId id, MIRBasicBlock& blk) {
+            cb.run(id, blk);
+        }));
     }
 
     /// Convert a MIR::Param into a MIR::RValue
@@ -7403,7 +7449,7 @@ bool MIROptimiseDeadDropFlags(MIRTypeResolve& state, MIRFunction& fcn) {
     ::std::vector<bool> usedDropFlags(fcn.dropFlags.size());
     {
         ::std::vector<bool> readDropFlags(fcn.dropFlags.size());
-        visitBlocks(state, fcn, [&readDropFlags, &usedDropFlags](auto, const MIRBasicBlock& block) {
+        visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&readDropFlags, &usedDropFlags](auto, const MIRBasicBlock& block) {
             for (const auto& stmt : block.statements) {
                 if (const auto* e = stmt.opt_SetDropFlag()) {
                     if (e->other != ~0u) {
@@ -7430,9 +7476,9 @@ bool MIROptimiseDeadDropFlags(MIRTypeResolve& state, MIRFunction& fcn) {
                     usedDropFlags[e->validFlag] = true;
                 }
             }
-        });
+        }));
         DEBUG("Un-read drop flags:" << FMT_CB(ss, for (size_t i = 0; i < readDropFlags.size(); i++) if (!readDropFlags[i] && usedDropFlags[i]) ss << " " << i;));
-        visitBlocksMut(state, fcn, [&readDropFlags, &removedStatement](auto _id, auto& block) {
+        visitBlocksMut(state, fcn, makeCallable<MIRBlockCb>([&readDropFlags, &removedStatement](auto _id, auto& block) {
             for (auto it = block.statements.begin(); it != block.statements.end();) {
                 if (it->is_SetDropFlag() && !readDropFlags[it->as_SetDropFlag().idx]) {
                     removedStatement = true;
@@ -7444,13 +7490,13 @@ bool MIROptimiseDeadDropFlags(MIRTypeResolve& state, MIRFunction& fcn) {
                     ++it;
                 }
             }
-        });
+        }));
     }
 
     // Find any drop flags that are never assigned with a value other than their default, then remove those dead assignments.
     {
         ::std::vector<bool> editedDropFlags(fcn.dropFlags.size());
-        visitBlocks(state, fcn, [&editedDropFlags, &fcn](auto, const MIRBasicBlock& block) {
+        visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&editedDropFlags, &fcn](auto, const MIRBasicBlock& block) {
             for (const auto& stmt : block.statements) {
                 if (const auto* e = stmt.opt_SetDropFlag()) {
                     if (e->other != ~0u) {
@@ -7464,9 +7510,9 @@ bool MIROptimiseDeadDropFlags(MIRTypeResolve& state, MIRFunction& fcn) {
                     }
                 }
             }
-        });
+        }));
         DEBUG("Un-edited drop flags:" << FMT_CB(ss, for (size_t i = 0; i < editedDropFlags.size(); i++) if (!editedDropFlags[i] && usedDropFlags[i]) ss << " " << i;));
-        visitBlocksMut(state, fcn, [&editedDropFlags, &removedStatement, &fcn](auto _id, auto& block) {
+        visitBlocksMut(state, fcn, makeCallable<MIRBlockCb>([&editedDropFlags, &removedStatement, &fcn](auto _id, auto& block) {
             for (auto it = block.statements.begin(); it != block.statements.end();) {
                 // If this is a SetDropFlag and the target flag isn't edited, remove
                 if (const auto* e = it->opt_SetDropFlag()) {
@@ -7481,7 +7527,7 @@ bool MIROptimiseDeadDropFlags(MIRTypeResolve& state, MIRFunction& fcn) {
                     ++it;
                 }
             }
-        });
+        }));
     }
 
     return removedStatement;
@@ -7736,7 +7782,15 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
     // `visitTerminatorTarget` reports them, matching the per-candidate scan this
     // replaces. The rewrite below only retargets assignment destinations and
     // call return values, never terminator targets, so this stays valid.
-    ::std::vector<::std::vector<unsigned>> blockPreds(fcn.blocks.size());
+    // Reused scratch (~70MB of churn on libcore): inner vectors keep their
+    // capacity across calls, only [0, nBlocks) is meaningful this call.
+    static ::std::vector<::std::vector<unsigned>> blockPreds;
+    if (blockPreds.size() < fcn.blocks.size()) {
+        blockPreds.resize(fcn.blocks.size());
+    }
+    for (size_t i = 0; i < fcn.blocks.size(); i++) {
+        blockPreds[i].clear();
+    }
     for (const auto& srcBb : fcn.blocks) {
         unsigned srcIdx = &srcBb - fcn.blocks.data();
         struct CollectPreds final: public MIRTargetVisitor {
@@ -7939,10 +7993,10 @@ bool MIROptimiseGarbageCollectPartial(MIRTypeResolve& state, MIRFunction& fcn) {
     bool rv = false;
     TRACE_FUNCTION_FR("", rv);
     ::std::vector<bool> visited(fcn.blocks.size());
-    visitBlocks(state, fcn, [&visited](auto bb, const auto& /*block*/) {
+    visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&visited](auto bb, const auto& /*block*/) {
         assert(!visited[bb]);
         visited[bb] = true;
-    });
+    }));
     for (unsigned int i = 0; i < visited.size(); i++) {
         auto& blk = fcn.blocks[i];
         if (blk.terminator.is_Incomplete() && blk.statements.empty()) {
@@ -7965,7 +8019,7 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
     ::std::vector<bool> usedDfs(fcn.dropFlags.size());
     ::std::vector<bool> visited(fcn.blocks.size());
 
-    visitBlocks(state, fcn, [&](auto bb, const auto& block) {
+    visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&](auto bb, const auto& block) {
         visited[bb] = true;
 
         auto assignedLval = [&](const MIRLValue& lv) {
@@ -8025,7 +8079,7 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
                 usedDfs.at(te->validFlag) = true;
             }
         }
-    });
+    }));
 
     ::std::vector<unsigned int> localRewriteTable;
     unsigned int nLocals = fcn.locals.size();
@@ -8169,9 +8223,9 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
     // reachability after all such rewrites, otherwise the detached cleanup
     // subgraph is retained and can be sorted ahead of the real entry block.
     visited.assign(fcn.blocks.size(), false);
-    visitBlocks(state, fcn, [&](auto bb, const auto&) {
+    visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&](auto bb, const auto&) {
         visited[bb] = true;
-    });
+    }));
 
     ::std::vector<unsigned int> blockRewriteTable;
     for (unsigned int i = 0, j = 0; i < fcn.blocks.size(); i++) {

@@ -1,6 +1,7 @@
 #include "hir_hir.h"
 
 #include <std/mem/obj_pool.h>
+#include <std/lib/vector.h>
 
 #include "floats.h"
 #include "mir_mir.h"
@@ -829,20 +830,23 @@ namespace {
     }
 
     class ImplMatcher: public HIRMatchGenerics {
-        std::vector<std::optional<HIRTypeRef>> implTypes;
+        // Borrowed reused scratch (see matchesTypeRoot); nullptr = unbound.
+        stl::Vector<HIRTypeRef>& implTypes;
 
     public:
-        ImplMatcher(const HIRGenericParams& implGenerics)
-            : implTypes(implGenerics.types.size())
+        ImplMatcher(stl::Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics)
+            : implTypes(buf)
         {
+            implTypes.clear();
+            implTypes.zero(implGenerics.types.size());
         }
 
         HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override {
-            assert(g.binding < implTypes.size());
+            assert(g.binding < implTypes.length());
             if (implTypes[g.binding]) {
-                return (*implTypes[g.binding])->compareWithPlaceholders(Span(), ty, resolveCb);
+                return implTypes[g.binding]->compareWithPlaceholders(Span(), ty, resolveCb);
             }
-            implTypes[g.binding] = ty;
+            implTypes.mut(g.binding) = ty;
             return HIRCompare::Equal;
         }
 
@@ -861,7 +865,20 @@ namespace {
         if (isUnboundedInfer(matchType) || (matchPath && matchPath->binding.is_Unbound() && !matchPath->path.data.is_Generic())) {
             return false;
         }
-        ImplMatcher m{params};
+        // Depth-indexed pool of reused binding buffers: ~1.7M allocations on
+        // libcore came from a fresh vector per match. The depth index keeps a
+        // re-entrant match (via the resolve callback) off the same buffer.
+        static stl::Vector<HIRTypeRef> matcherBufs[8];
+        static unsigned matcherDepth = 0;
+        ASSERT_BUG(Span(), matcherDepth < 8, "impl matcher nested too deep");
+        struct DepthGuard {
+            unsigned& depth;
+
+            ~DepthGuard() {
+                depth--;
+            }
+        } depthGuard{matcherDepth};
+        ImplMatcher m{matcherBufs[matcherDepth++], params};
         auto cmp = implTy->matchTestGenericsFuzz(Span(), matchType, tyRes, m);
         return cmp != HIRCompare::Unequal;
     }

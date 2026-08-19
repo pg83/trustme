@@ -91,7 +91,6 @@
 1	std::vector	bin/rustc/expand_cfg.h
 39	new	bin/rustc/expand_common.cpp
 3	shared_ptr	bin/rustc/expand_common.cpp
-3	std::function	bin/rustc/expand_common.cpp
 2	std::map	bin/rustc/expand_common.cpp
 2	std::string	bin/rustc/expand_common.cpp
 26	std::vector	bin/rustc/expand_common.cpp
@@ -157,7 +156,7 @@
 1	make_unique	bin/rustc/hir_hir.cpp
 2	shared_ptr	bin/rustc/hir_hir.cpp
 8	std::function	bin/rustc/hir_hir.cpp
-14	std::vector	bin/rustc/hir_hir.cpp
+13	std::vector	bin/rustc/hir_hir.cpp
 1	unique_ptr	bin/rustc/hir_hir.cpp
 3	shared_ptr	bin/rustc/hir_hir.h
 3	std::function	bin/rustc/hir_hir.h
@@ -220,7 +219,7 @@
 1	new	bin/rustc/hir_typeck_helpers.cpp
 5	std::function	bin/rustc/hir_typeck_helpers.cpp
 2	std::unordered	bin/rustc/hir_typeck_helpers.cpp
-31	std::vector	bin/rustc/hir_typeck_helpers.cpp
+30	std::vector	bin/rustc/hir_typeck_helpers.cpp
 10	std::function	bin/rustc/hir_typeck_helpers.h
 1	std::map	bin/rustc/hir_typeck_helpers.h
 1	std::string	bin/rustc/hir_typeck_helpers.h
@@ -264,13 +263,13 @@
 3	std::vector	bin/rustc/memory_dump.cpp
 3	make_unique	bin/rustc/mir_from_hir.cpp
 2	new	bin/rustc/mir_from_hir.cpp
-7	std::function	bin/rustc/mir_from_hir.cpp
+6	std::function	bin/rustc/mir_from_hir.cpp
 19	std::map	bin/rustc/mir_from_hir.cpp
 7	std::set	bin/rustc/mir_from_hir.cpp
 4	std::string	bin/rustc/mir_from_hir.cpp
 135	std::vector	bin/rustc/mir_from_hir.cpp
 4	unique_ptr	bin/rustc/mir_from_hir.cpp
-2	std::function	bin/rustc/mir_from_hir.h
+1	std::function	bin/rustc/mir_from_hir.h
 11	std::map	bin/rustc/mir_from_hir.h
 1	std::set	bin/rustc/mir_from_hir.h
 13	std::vector	bin/rustc/mir_from_hir.h
@@ -288,7 +287,7 @@
 2	std::string	bin/rustc/mir_mir.h
 17	std::vector	bin/rustc/mir_mir.h
 3	unique_ptr	bin/rustc/mir_mir.h
-4	std::function	bin/rustc/mir_operations.cpp
+2	std::function	bin/rustc/mir_operations.cpp
 7	std::map	bin/rustc/mir_operations.cpp
 1	std::set	bin/rustc/mir_operations.cpp
 2	std::string	bin/rustc/mir_operations.cpp
@@ -403,8 +402,7 @@
 25	std::vector	bin/rustc/trans_main_bindings.cpp
 9	std::string	bin/rustc/trans_main_bindings.h
 6	std::vector	bin/rustc/trans_main_bindings.h
-2	std::string	bin/rustc/trans_mangling.cpp
-1	std::vector	bin/rustc/trans_mangling.cpp
+1	std::string	bin/rustc/trans_mangling.cpp
 4	std::set	bin/rustc/trans_monomorphise.cpp
 4	std::vector	bin/rustc/trans_monomorphise.cpp
 3	std::map	bin/rustc/trans_target.cpp

@@ -297,10 +297,7 @@ namespace {
             builder.endBlock(MIRTerminator::make_Switch({lvPoll.clone(), makeVec2(bbReady, bbPending)}));
             builder.setCurBlock(bbPending);
 
-            HIRGenericPath returnPollPath;
-            builder.withValType(sp, MIRLValue::newReturn(), [&](const HIRTypeData* ty) {
-                returnPollPath = ty->as_Path().path.data.as_Generic().clone();
-            });
+            HIRGenericPath returnPollPath = builder.valType(sp, MIRLValue::newReturn())->as_Path().path.data.as_Generic().clone();
             builder.pushStmtAssign(sp, MIRLValue::newReturn(), MIRRValue::make_EnumVariant({std::move(returnPollPath), 1, {}}));
             builder.pushStmtAssign(sp, generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), stateValue, {}}));
             builder.endBlock(MIRTerminator::make_Return({}));
@@ -377,8 +374,7 @@ namespace {
         }
 
         bool emitAsyncDrop(const Span& sp, MIRLValue value, unsigned int flag) {
-            const HIRTypeData* ty = nullptr;
-            builder.withValType(sp, value, [&](const HIRTypeData* valueTy) { ty = valueTy; });
+            const HIRTypeData* ty = builder.valType(sp, value);
             HIRPath dropPath{HIRSimplePath()};
             HIRTypeRef futureTy;
             const bool hasAsyncDestructor = findAsyncDrop(sp, ty, dropPath, futureTy);
@@ -453,8 +449,7 @@ namespace {
         }
 
         bool emitAsyncBoxShallowDrop(const Span& sp, MIRLValue value, unsigned int flag) {
-            const HIRTypeData* ty = nullptr;
-            builder.withValType(sp, value, [&](const HIRTypeData* valueTy) { ty = valueTy; });
+            const HIRTypeData* ty = builder.valType(sp, value);
             if (!builder.isTypeOwnedBox(ty) || !typeNeedsAsyncDrop(sp, ty)) {
                 return false;
             }
@@ -1058,13 +1053,12 @@ namespace {
 
         AsyncGenReturn asyncGenReturnType(const Span& sp) {
             AsyncGenReturn rv{HIRGenericPath(), nullptr};
-            builder.withValType(sp, MIRLValue::newReturn(), [&](const HIRTypeData* ty) {
-                const auto& gp = ty->as_Path().path.data.as_Generic();
-                ASSERT_BUG(sp, ty->as_Path().binding.as_Enum()->findVariant("Ready") == 0, "");
-                ASSERT_BUG(sp, gp.params.types.size() == 1, "`async gen` return type " << ty);
-                rv.poll = gp.clone();
-                rv.optionTy = gp.params.types.at(0);
-            });
+            const auto* ty = builder.valType(sp, MIRLValue::newReturn());
+            const auto& gp = ty->as_Path().path.data.as_Generic();
+            ASSERT_BUG(sp, ty->as_Path().binding.as_Enum()->findVariant("Ready") == 0, "");
+            ASSERT_BUG(sp, gp.params.types.size() == 1, "`async gen` return type " << ty);
+            rv.poll = gp.clone();
+            rv.optionTy = gp.params.types.at(0);
             return rv;
         }
 
@@ -1092,13 +1086,9 @@ namespace {
             }
             const auto& variantName = generatorState.isFuture ? rcstringReady : rcstringComplete;
             // TODO: Handle difference between generators and futures (different return/yield types)
-            HIRGenericPath enmPath;
-            size_t variantIndex = SIZE_MAX;
-            builder.withValType(sp, MIRLValue::newReturn(), [&](const HIRTypeData* ty) {
-                const auto& te = ty->as_Path();
-                enmPath = te.path.data.as_Generic().clone();
-                variantIndex = te.binding.as_Enum()->findVariant(variantName);
-            });
+            const auto& te = builder.valType(sp, MIRLValue::newReturn())->as_Path();
+            HIRGenericPath enmPath = te.path.data.as_Generic().clone();
+            const size_t variantIndex = te.binding.as_Enum()->findVariant(variantName);
             ASSERT_BUG(sp, enmPath.path != HIRSimplePath(), "Failed to get path from return type?");
             ASSERT_BUG(sp, variantIndex != SIZE_MAX, "Unable to find variant " << variantName << " in " << enmPath << " for coroutine return");
 
@@ -1191,12 +1181,9 @@ namespace {
             if (isGenerator) {
                 ASSERT_BUG(node.span(), !generatorState.isFuture, "");
 
-                HIRGenericPath enmPath;
-                builder.withValType(node.span(), MIRLValue::newReturn(), [&](const HIRTypeData* ty) {
-                    const auto& te = ty->as_Path();
-                    enmPath = te.path.data.as_Generic().clone();
-                    ASSERT_BUG(node.span(), te.binding.as_Enum()->findVariant("Yielded") == 0, "");
-                });
+                const auto& te = builder.valType(node.span(), MIRLValue::newReturn())->as_Path();
+                HIRGenericPath enmPath = te.path.data.as_Generic().clone();
+                ASSERT_BUG(node.span(), te.binding.as_Enum()->findVariant("Yielded") == 0, "");
 
                 this->visitNodePtr(node.value);
                 // Emit return, wrapped in GeneratorState::Yielded
@@ -4179,10 +4166,7 @@ void sortRulesetsInner(RulesetRef rulesets, size_t idx);
 void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRPattern& pat, MIRLValue val, const HIRExprNode* elseNode) {
     TRACE_FUNCTION;
 
-    HIRTypeRef outerTy;
-    builder.withValType(sp, val, [&](const HIRTypeData* ty) {
-        outerTy = ty;
-    });
+    HIRTypeRef outerTy = builder.valType(sp, val);
 
     auto successNode = builder.newBbUnlinked();
     auto firstCmpBlock = builder.pauseCurBlock();
@@ -9886,10 +9870,7 @@ namespace {
                             builder.pushStmtSetDropflagVal(sp, ose.outerFlag, true);
                         }
 
-                        bool isBox = false;
-                        builder.withValType(sp, lv, [&](const auto& ty) {
-                            isBox = builder.isTypeOwnedBox(ty);
-                        });
+                        const bool isBox = builder.isTypeOwnedBox(builder.valType(sp, lv));
                         if (isBox) {
                             mergeState(sp, builder, MIRLValue::newDeref(lv.clone()), *ose.innerState, *nse.innerState);
                         } else {
@@ -9899,10 +9880,8 @@ namespace {
                     }
                     case VarState::TAG_Partial: {
                         const auto& nse = newState.as_Partial();
-                        bool is_enum = false;
-                        builder.withValType(sp, lv, [&](const auto& ty) {
-                            is_enum = ty->is_Path() && ty->as_Path().binding.is_Enum();
-                        });
+                        const auto* lvTy = builder.valType(sp, lv);
+                        const bool is_enum = lvTy->is_Path() && lvTy->as_Path().binding.is_Enum();
                         const auto outerFlag = is_enum ? mergeInvalidWithPartialOuter(sp, builder, nse.outerFlag) : ~0u;
 
                         // Create a partial filled with Invalid
@@ -9991,10 +9970,7 @@ namespace {
                             // In both arms, the container is valid. No need for a drop flag
                         }
 
-                        bool isBox = false;
-                        builder.withValType(sp, lv, [&](const auto& ty) {
-                            isBox = builder.isTypeOwnedBox(ty);
-                        });
+                        const bool isBox = builder.isTypeOwnedBox(builder.valType(sp, lv));
 
                         if (isBox) {
                             mergeState(sp, builder, MIRLValue::newDeref(lv.clone()), *ose.innerState, *nse.innerState);
@@ -10006,10 +9982,8 @@ namespace {
                     // Valid <= Partial
                     case VarState::TAG_Partial: {
                         const auto& nse = newState.as_Partial();
-                        bool is_enum = false;
-                        builder.withValType(sp, lv, [&](const auto& ty) {
-                            is_enum = ty->is_Path() && ty->as_Path().binding.is_Enum();
-                        });
+                        const auto* lvTy = builder.valType(sp, lv);
+                        const bool is_enum = lvTy->is_Path() && lvTy->as_Path().binding.is_Enum();
                         unsigned int outerFlag = ~0u;
                         if (is_enum && nse.outerFlag != ~0u) {
                             mergeOuterValidity(sp, builder, outerFlag, nse.outerFlag);
@@ -10084,10 +10058,7 @@ namespace {
                         // Create an old state that just wraps a copy of the `Optional`
                         oldState = VarState::make_MovedOut({std::make_unique<VarState>(oldState.clone()), oldState.as_Optional()});
 
-                        bool isBox = false;
-                        builder.withValType(sp, lv, [&](const auto& ty) {
-                            isBox = builder.isTypeOwnedBox(ty);
-                        });
+                        const bool isBox = builder.isTypeOwnedBox(builder.valType(sp, lv));
 
                         if (isBox) {
                             mergeState(sp, builder, MIRLValue::newDeref(lv.clone()), *oldState.as_MovedOut().innerState, *newState.as_MovedOut().innerState);
@@ -10098,11 +10069,9 @@ namespace {
                     }
                     case VarState::TAG_Partial: {
                         const auto& nse = newState.as_Partial();
-                        bool is_enum = false;
-                        builder.withValType(sp, lv, [&](const auto& ty) {
-                            assert(!builder.isTypeOwnedBox(ty));
-                            is_enum = ty->is_Path() && ty->as_Path().binding.is_Enum();
-                        });
+                        const auto* lvTy = builder.valType(sp, lv);
+                        assert(!builder.isTypeOwnedBox(lvTy));
+                        const bool is_enum = lvTy->is_Path() && lvTy->as_Path().binding.is_Enum();
                         const auto oldOptionalFlag = oldState.as_Optional();
 
                         // Create a Partial filled with copies of the Optional
@@ -10171,10 +10140,7 @@ namespace {
                 break;
             case VarState::TAG_MovedOut: {
                 auto& ose = oldState.as_MovedOut();
-                bool isBox = false;
-                builder.withValType(sp, lv, [&](const auto& ty) {
-                    isBox = builder.isTypeOwnedBox(ty);
-                });
+                const bool isBox = builder.isTypeOwnedBox(builder.valType(sp, lv));
                 if (!isBox) {
                     BUG(sp, "MovedOut on non-Box");
                 }
@@ -10232,11 +10198,9 @@ namespace {
             }
             case VarState::TAG_Partial: {
                 auto& ose = oldState.as_Partial();
-                bool is_enum = false;
-                builder.withValType(sp, lv, [&](const auto& ty) {
-                    assert(!builder.isTypeOwnedBox(ty));
-                    is_enum = ty->is_Path() && ty->as_Path().binding.is_Enum();
-                });
+                const auto* lvTy = builder.valType(sp, lv);
+                assert(!builder.isTypeOwnedBox(lvTy));
+                const bool is_enum = lvTy->is_Path() && lvTy->as_Path().binding.is_Enum();
                 // Need to tag for conditional shallow drop? Or just do that at the end of the split?
                 // - End of the split means that the only optional state is outer drop.
                 switch (newState.tag()) {
@@ -10569,7 +10533,7 @@ void MirBuilder::completeScope(ScopeDef& sd) {
     }
 }
 
-void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::function<void(const HIRTypeData*)> cb, const MIRLValue::Wrapper* stopWrapper /*=nullptr*/) const {
+HIRTypeRef MirBuilder::valType(const Span& sp, const MIRLValue& val, const MIRLValue::Wrapper* stopWrapper /*=nullptr*/) const {
     HIRTypeRef tmp;
     const HIRTypeData* ty = nullptr;
     auto revealType = [&](const HIRTypeData* input) {
@@ -10762,17 +10726,13 @@ default:
         assert(ty);
     }
     ASSERT_BUG(sp, !stopWrapper, "A stop wrapper was passed, but not found");
-    cb(revealType(ty));
+    return revealType(ty);
 }
 
 bool MirBuilder::lvalueIsCopy(const Span& sp, const MIRLValue& val) const {
-    int rv = 0;
-    withValType(sp, val, [&](const auto& ty) {
-        DEBUG("[lvalue_is_copy] ty=" << ty);
-        rv = (resolve_.typeIsCopy(sp, ty) ? 2 : 1);
-    });
-    ASSERT_BUG(sp, rv != 0, "Type for " << val << " can't be determined");
-    return rv == 2;
+    const auto* ty = valType(sp, val);
+    DEBUG("[lvalue_is_copy] ty=" << ty);
+    return resolve_.typeIsCopy(sp, ty);
 }
 
 const VarState& MirBuilder::getSlotState(const Span& sp, unsigned int idx, SlotType type, const ScopeHandle* aboveScope /*=nullptr*/) const {
@@ -10990,7 +10950,8 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                 if (!ivs.is_Partial() && !ivs.is_PartialArray()) {
                     size_t nFlds = 0;
                     bool isArray = false;
-                    withValType(sp, lv, [&](const auto& ty) {
+                    {
+                        const auto* ty = valType(sp, lv, &w);
                         DEBUG("ty = " << ty);
                         if (const auto* e = ty->opt_Path()) {
                             ASSERT_BUG(sp, e->binding.is_Struct(), "");
@@ -11020,7 +10981,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                         } else {
                             TODO(sp, "Determine field count for " << ty);
                         }
-                    }, &w);
+                    }
                     if (isArray && nFlds >= PARTIAL_ARRAY_MIN) {
                         ivs = VarState::make_PartialArray({box$(tpl.clone()), {}, nFlds});
                     } else {
@@ -11050,10 +11011,9 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                 // later shallow drop deallocates the Box without dropping moved data.
                 bool isBox = false;
                 if (this->langBox_) {
-                    withValType(sp, lv, [&](const auto& ty) {
-                        DEBUG("ty = " << ty);
-                        isBox = this->isTypeOwnedBox(ty);
-                    }, &w);
+                    const auto* ty = valType(sp, lv, &w);
+                    DEBUG("ty = " << ty);
+                    isBox = this->isTypeOwnedBox(ty);
                 }
 
                 if (isBox) {
@@ -11078,7 +11038,8 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                     ASSERT_BUG(sp, !ivs.is_MovedOut(), "Downcast of a MovedOut value");
 
                     size_t varCount = 0;
-                    withValType(sp, lv, [&](const auto& ty) {
+                    {
+                        const auto* ty = valType(sp, lv, &w);
                         DEBUG("ty = " << ty);
                         ASSERT_BUG(sp, ty->is_Path(), "Downcast on non-Path type - " << ty);
                         const auto& pb = ty->as_Path().binding;
@@ -11093,7 +11054,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                         } else {
                             BUG(sp, "Downcast on non-Enum/Union - " << ty);
                         }
-                    }, &w);
+                    }
 
                     const auto outerFlag = ivs.is_Optional() ? ivs.as_Optional() : ~0u;
                     ::std::vector<VarState> inner;
@@ -11158,13 +11119,10 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
         }
         case VarState::TAG_MovedOut: {
             auto& vse = vs.as_MovedOut();
-            auto movedState = vse.innerState->clone(); const auto outerFlag = vse.outerFlag; vs = VarState::make_Invalid(InvalidType::Moved); bool isBox = false; withValType(
-                        sp,
-                        lv,
-                        [&](const auto& ty) {
-                isBox = this->isTypeOwnedBox(ty);
-            }
-                    );
+            auto movedState = vse.innerState->clone();
+            const auto outerFlag = vse.outerFlag;
+            vs = VarState::make_Invalid(InvalidType::Moved);
+            const bool isBox = this->isTypeOwnedBox(valType(sp, lv));
                     if (isBox) {
                 dropValueFromState(sp, movedState, MIRLValue::newDeref(lv.clone()));
                 pushStmtDropShallow(sp, mv$(lv), outerFlag);
@@ -11173,14 +11131,12 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
             break;
         }
         case VarState::TAG_Partial: {
-            auto partialState = vs.clone(); vs = VarState::make_Invalid(InvalidType::Moved); auto& partial = partialState.as_Partial(); bool is_enum = false; bool isUnion = false; withValType(
-                        sp,
-                        lv,
-                        [&](const auto& ty) {
-                is_enum = ty->is_Path() && ty->as_Path().binding.is_Enum();
-                isUnion = ty->is_Path() && ty->as_Path().binding.is_Union();
-            }
-                    );
+            auto partialState = vs.clone();
+            vs = VarState::make_Invalid(InvalidType::Moved);
+            auto& partial = partialState.as_Partial();
+            const auto* lvTy = valType(sp, lv);
+            const bool is_enum = lvTy->is_Path() && lvTy->as_Path().binding.is_Enum();
+            const bool isUnion = lvTy->is_Path() && lvTy->as_Path().binding.is_Union();
                     if (is_enum) {
                 bool hasValidVariant = false;
                 for (const auto& state : partial.innerStates) {

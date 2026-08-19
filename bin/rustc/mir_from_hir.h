@@ -417,7 +417,9 @@ private:
     void completeScope(ScopeDef& sd);
 
 public:
-    void withValType(const Span& sp, const MIRLValue& val, ::std::function<void(const HIRTypeData*)> cb, const MIRLValue::Wrapper* stopWrapper = nullptr) const;
+    // The type of an lvalue; with `stopWrapper`, the type at that wrapper.
+    // Types are interned, so the result is a plain persistent handle.
+    HIRTypeRef valType(const Span& sp, const MIRLValue& val, const MIRLValue::Wrapper* stopWrapper = nullptr) const;
     bool lvalueIsCopy(const Span& sp, const MIRLValue& lv) const;
 
     // Obtain the base fat poiner for a dst reference. Errors if it wasn't via a fat pointer

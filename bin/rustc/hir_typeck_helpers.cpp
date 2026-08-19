@@ -9,6 +9,7 @@
 #include <std/mem/obj_list.h>
 #include <std/mem/obj_pool.h>
 #include <std/sym/i_map.h>
+#include <std/lib/vector.h>
 #include <std/rng/split_mix_64.h>
 
 #include <optional>
@@ -193,21 +194,21 @@ void HMTypeInferrence::dump() const {
 
 void HMTypeInferrence::checkForLoops() {
     struct LoopChecker {
-        ::std::vector<unsigned int> indexes;
+        stl::Vector<unsigned int>& indexes;
 
         void checkTy(const HMTypeInferrence& ivars, const HIRTypeData* ty) {
             visitTyWith(ty, [&](const HIRTypeData* t) {
                 if (const auto* ep = t->opt_Infer()) {
                     const auto& e = *ep;
                     for (auto idx : indexes) {
-                        ASSERT_BUG(Span(), e.index != idx, "Recursion in ivar #" << indexes.front() << " " << ivars.ivars[indexes.front()].type << " - loop with " << idx << " " << ivars.ivars[idx].type);
+                        ASSERT_BUG(Span(), e.index != idx, "Recursion in ivar #" << indexes[0] << " " << ivars.ivars[indexes[0]].type << " - loop with " << idx << " " << ivars.ivars[idx].type);
                     }
                     const auto& ivd = ivars.getPointedIvar(e.index);
                     assert(!ivd.isAlias());
                     if (!ivd.type->is_Infer()) {
-                        indexes.push_back(e.index);
+                        indexes.pushBack(e.index);
                         this->checkTy(ivars, ivd.type);
-                        indexes.pop_back();
+                        indexes.popBack();
                     }
                 }
                 return false;
@@ -215,11 +216,15 @@ void HMTypeInferrence::checkForLoops() {
         }
     };
 
+    // Reused across the ~one-per-ivar checks; capacity persists.
+    static stl::Vector<unsigned int> indexes;
     unsigned int i = 0;
     for (const auto& v : ivars) {
         if (!v.isAlias() && !v.type->is_Infer()) {
             DEBUG("- " << i << " " << v.type);
-            (LoopChecker{{i}}).checkTy(*this, v.type);
+            indexes.clear();
+            indexes.pushBack(i);
+            (LoopChecker{indexes}).checkTy(*this, v.type);
         }
         i++;
     }
