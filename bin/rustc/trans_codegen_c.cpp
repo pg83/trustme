@@ -8413,6 +8413,39 @@ default:
             of << indent << "}";
         }
 
+        /// Whether the slot names a field that the type holding it packs
+        /// tighter than the field's own type is aligned.
+        bool fieldIsUnderaligned(const MIRLValue& slot, const HIRTypeData* ty) {
+            auto ref = MIRLValue::CRef(slot);
+            if (!ref.is_Field()) {
+                return false;
+            }
+            size_t align = 0;
+            if (!TargetGetAlignOf(sp, resolve_, ty, align) || align <= 1) {
+                return false;
+            }
+            // Only `#[repr(packed)]` places a field below its own alignment,
+            // and it does so for everything nested inside that field too, so
+            // the whole chain of owners is what decides.
+            while (ref.is_Field() || ref.is_Downcast()) {
+                auto inner = ref.innerRef();
+                if (ref.is_Field()) {
+                    HIRTypeRef tmp;
+                    const auto* outerTy = mirRes->getLvalueType(tmp, inner);
+                    if (const auto* te = outerTy->opt_Path()) {
+                        if (const auto* str = te->binding.opt_Struct()) {
+                            const unsigned packedTo = (**str).maxFieldAlignment;
+                            if (packedTo != 0 && packedTo < align) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                ref = inner;
+            }
+            return false;
+        }
+
         /// slot :: The value to drop
         /// ty :: Type of value to be dropped
         /// unsized_valid ::
@@ -8498,6 +8531,17 @@ default:
                                 of << indent << TransMangle(p) << "((";
                                 emitCtype(ty);
                                 of << "*)&rv);\n";
+                            } else if (this->fieldIsUnderaligned(slot, ty)) {
+                                // A field of a packed struct can sit at less
+                                // alignment than its own type asks for, and
+                                // `Drop::drop` takes a `&mut Self` that may
+                                // not. Drop a properly aligned copy instead,
+                                // which is what the field's owner does with it.
+                                of << indent << "{ ";
+                                emitCtype(ty, FMT_CB(ss, ss << "trustme_unaligned"));
+                                of << "; memcpy(&trustme_unaligned, &";
+                                emitLvalue(slot);
+                                of << ", sizeof(trustme_unaligned)); " << TransMangle(p) << "(&trustme_unaligned); }\n";
                             } else {
                                 of << indent << TransMangle(p) << "(&";
                                 emitLvalue(slot);
