@@ -59,14 +59,6 @@ are in groups outside it and come from the last full sweep.
 | generated C++ or link failure | 10 |
 | stable timeout | 8 |
 
-A single-variant enum is not zero-sized yet (`glossary__L232`, `size_of::<enum
-E { V }>()`). Dropping the tag field from the layout is a two-line change and
-makes that test pass, but eight sites across const evaluation and both codegen
-backends read the discriminant out of a tag field and assert on the variant mode
-that goes with it, so three tests that cast such an enum to an integer break.
-The tag-free read has to come first: for one variant the discriminant is a
-constant, with nothing to load.
-
 ## P0: accepted Rust rejected by the front end
 
 All 72 tests are positive programs accepted by Rust 1.90. A normal trustme

@@ -2086,6 +2086,12 @@ namespace {
                             if (enm.isCRepr) {
                                 // No auto-sizing, just i32?
                                 rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(HIRCoreType::U32)});
+                            } else if (e.variants.size() == 1) {
+                                // One variant is not a choice, so nothing has to
+                                // be stored to tell which it is: `enum E { V }`
+                                // is zero-sized, and its discriminant is a
+                                // constant the tag-less paths below read off the
+                                // enum itself.
                             } else if (!e.variants.empty()) {
                                 i64 minValue = INT64_MAX;
                                 i64 maxValue = INT64_MIN;

@@ -3073,6 +3073,14 @@ default:
                                         if (!repr) {
                                             throw Defer();
                                         }
+                                        if (repr->variants.is_None()) {
+                                            // One variant, so nothing is stored
+                                            // to say which: the discriminant is
+                                            // a constant on the enum.
+                                            MIR_ASSERT(state, enm.numVariants() == 1, "Enum with no tag and " << enm.numVariants() << " variants - " << srcTy);
+                                            dst.writeUint(state, ti.bits, U128(enm.getDiscriminant(0)));
+                                            break;
+                                        }
                                         auto& ve = repr->variants.as_Values();
                                         const auto& field = repr->fields.at(ve.field.index);
                                         auto src = inval.slice(repr->getOffset(state.sp, resolve, ve.field), ve.field.size);
@@ -4243,7 +4251,18 @@ default:
 
                             switch (repr->variants.tag()) {
                                 case TypeReprVariantMode::TAG_None: {
-                                    dst.writeUint(state, dst.getLen() * 8, U128(0));
+                                    // An enum with one variant stores nothing to
+                                    // say which it is, but still has that
+                                    // variant's discriminant.
+                                    U128 only(0);
+                                    if (ty->is_Path()) {
+                                        if (const auto* enmpp = ty->as_Path().binding.opt_Enum()) {
+                                            if ((*enmpp)->numVariants() == 1) {
+                                                only = U128((*enmpp)->getDiscriminant(0));
+                                            }
+                                        }
+                                    }
+                                    dst.writeUint(state, dst.getLen() * 8, only);
                                     break;
                                 }
                                 case TypeReprVariantMode::TAG_Linear: {

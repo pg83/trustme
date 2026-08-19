@@ -3954,6 +3954,11 @@ default:
 
                         switch (repr->variants.tag()) {
                             case TypeReprVariantMode::TAG_None: {
+                                // One variant and nothing in it: there is no
+                                // storage to write.
+                                if (enumIsTagless(repr)) {
+                                    break;
+                                }
                                 emitCompositeAssign(localMirRes, [&]() {
                                     emitLvalue(e.dst);
                                     of << ".DATA.var_0";
@@ -4112,6 +4117,17 @@ default:
                             emitLvalue(ve.val);
                             of << ".hi";
                         } else if (ty->is_Path() && ty->as_Path().binding.is_Enum()) {
+                            if (enumIsTagless(TargetGetTypeRepr(sp, resolve_, ty))) {
+                                emitLvalue(dst);
+                                of << ".lo = ";
+                                emitTaglessEnumDiscriminant(ty);
+                                of << "; ";
+                                emitLvalue(dst);
+                                of << ".hi = (";
+                                emitTaglessEnumDiscriminant(ty);
+                                of << ") < 0 ? -1 : 0";
+                                break;
+                            }
                             emitLvalue(dst);
                             of << ".lo = ";
                             emitLvalue(ve.val);
@@ -4265,9 +4281,13 @@ default:
                 special = true;
             }
             if (ve.type->is_Primitive() && ty->is_Path() && ty->as_Path().binding.is_Enum()) {
-                emitLvalue(ve.val);
-                // NOTE: Embedded tag enums can't be cast
-                of << ".TAG";
+                if (enumIsTagless(TargetGetTypeRepr(sp, resolve_, ty))) {
+                    emitTaglessEnumDiscriminant(ty);
+                } else {
+                    emitLvalue(ve.val);
+                    // NOTE: Embedded tag enums can't be cast
+                    of << ".TAG";
+                }
                 special = true;
             }
             if (!special) {
@@ -8537,6 +8557,18 @@ default:
                     break;
                 }
             }
+        }
+
+        /// An enum with one variant stores nothing to say which it is, so its
+        /// discriminant is a constant read off the enum itself.
+        static bool enumIsTagless(const TypeRepr* repr) {
+            return repr && repr->fields.empty() && repr->variants.is_None();
+        }
+
+        void emitTaglessEnumDiscriminant(const HIRTypeData* ty) {
+            const auto& enm = *ty->as_Path().binding.as_Enum();
+            auto v = enm.getDiscriminant(0);
+            of << S128(U128(v)).truncateI64() << "ll";
         }
 
         void emitEnumVariantVal(const TypeRepr* repr, unsigned idx) {
