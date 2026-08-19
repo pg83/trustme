@@ -5614,11 +5614,36 @@ default:
                                 }
                                 break;
                             }
-                            case 'r':
-                                of << 'q'; // x86: `q` selects rax explicitly
+                            // Rust names the part of a register it wants by
+                            // width; gcc names the same parts by other letters.
+                            case 'l':
+                                of << 'b'; // x86: the low byte, `al`
+                                break;
+                            case 'h':
+                                of << 'h'; // x86: the second byte, `ah`
+                                break;
+                            case 'x': {
+                                // On a general register this is the low half,
+                                // `ax`; on a vector register it is the whole
+                                // 128-bit one, which gcc spells the same way.
+                                const auto* opClass = asmParams[f.index].as_Reg().spec.opt_Class();
+                                const bool vector = opClass
+                                    && (*opClass == AsmRegisterClass::x86Xmm || *opClass == AsmRegisterClass::x86Ymm
+                                        || *opClass == AsmRegisterClass::x86Zmm);
+                                of << (vector ? 'x' : 'w');
+                                break;
+                            }
+                            case 'y':
+                                of << 't'; // x86: the 256-bit `ymm`
+                                break;
+                            case 'z':
+                                of << 'g'; // x86: the 512-bit `zmm`
                                 break;
                             case 'e':
                                 of << 'k'; // x86: `k` selects eax instead of rax
+                                break;
+                            case 'r':
+                                of << 'q'; // x86: `q` selects rax explicitly
                                 break;
                             default:
                                 MIR_TODO(localMirRes, "Asm2 GCC: modifier " << f.modifier);
