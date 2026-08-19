@@ -2197,10 +2197,10 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             HIRConstGeneric teKnown;
             HIRConstGeneric xeKnown;
             const auto& teValue = te.size.is_Known()
-                ? (teKnown = HIREncodedLiteralPtr(EncodedLiteral::makeUsize(te.size.as_Known())))
+                ? (teKnown = freezeEncodedLiteral(EncodedLiteral::makeUsize(te.size.as_Known())))
                 : resolvePlaceholder.getVal(sp, te.size.as_Unevaluated());
             const auto& xeValue = xe.size.is_Known()
-                ? (xeKnown = HIREncodedLiteralPtr(EncodedLiteral::makeUsize(xe.size.as_Known())))
+                ? (xeKnown = freezeEncodedLiteral(EncodedLiteral::makeUsize(xe.size.as_Known())))
                 : resolvePlaceholder.getVal(sp, xe.size.as_Unevaluated());
             auto rv = matchValues(sp, teValue, xeValue, *this);
             rv &= this->cmpType(sp, te.inner, xe.inner, resolvePlaceholder);

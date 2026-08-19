@@ -791,42 +791,11 @@ bool HIRPath::operator==(const HIRPath& x) const {
     return this->ord(x) == ::OrdEqual;
 }
 
-HIREncodedLiteralPtr::HIREncodedLiteralPtr()
-    : p(nullptr)
-{
-}
-
-HIREncodedLiteralPtr::HIREncodedLiteralPtr(HIREncodedLiteralPtr&& x)
-    : p(x.p)
-{
-    x.p = nullptr;
-}
-
-HIREncodedLiteralPtr& HIREncodedLiteralPtr::operator=(HIREncodedLiteralPtr&& x) {
-    this->~HIREncodedLiteralPtr();
-    this->p = x.p;
-    x.p = nullptr;
-    return *this;
-}
-
-EncodedLiteral& HIREncodedLiteralPtr::operator*() {
-    assert(p);
-    return *p;
-}
-
-const EncodedLiteral& HIREncodedLiteralPtr::operator*() const {
-    assert(p);
-    return *p;
-}
-
-EncodedLiteral* HIREncodedLiteralPtr::operator->() {
-    assert(p);
-    return p;
-}
-
-const EncodedLiteral* HIREncodedLiteralPtr::operator->() const {
-    assert(p);
-    return p;
+// Evaluated literals are immutable and shared; their storage lives here
+// until process exit.
+const EncodedLiteral* freezeEncodedLiteral(EncodedLiteral e) {
+    static stl::ObjPool::Ref pool = stl::ObjPool::fromMemory();
+    return pool.mutPtr()->make<EncodedLiteral>(mv$(e));
 }
 
 HIRSimplePath::HIRSimplePath(ThinVector<RcString> members)

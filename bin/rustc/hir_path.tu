@@ -1,5 +1,5 @@
 # A const generic value.  clone() stays hand-written: Unevaluated re-wraps
-# into a fresh unique_ptr and Evaluated into a fresh literal ptr.
+# into a fresh unique_ptr; every other variant copies plainly.
 
 generate(
     name="HIRConstGeneric",
@@ -13,7 +13,7 @@ generate(
               " payload holds two PathParams and a shared ptr; every other"
               " variant is two pointers"),
         v("Generic", "HIRGenericRef", doc="A single generic reference"),
-        v("Evaluated", "HIREncodedLiteralPtr", copy=False, doc="A fully known literal"),
+        v("Evaluated", "const EncodedLiteral*", doc="A fully known literal, frozen in the literal pool"),
     ],
     extra="""
         HIRConstGeneric clone() const;

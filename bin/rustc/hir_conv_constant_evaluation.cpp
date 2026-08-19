@@ -4955,7 +4955,7 @@ namespace {
         void evalulateConstGeneric(const Span& sp, const HIRTypeData* ty, HIRConstGeneric& v) {
             if (v.is_Unevaluated()) {
                 try {
-                    v = HIRConstGeneric::make_Evaluated(evaluateConstgeneric(sp, wb, crate, ty, *v.as_Unevaluated()));
+                    v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *v.as_Unevaluated())));
                 } catch (const Defer&) {
                     // Deferred - no update
                 }
@@ -5193,7 +5193,7 @@ namespace {
                 auto evaluateEndpoint = [&](HIRConstGeneric& value) {
                     if (const auto* unevaluated = value.opt_Unevaluated()) {
                         try {
-                            value = HIREncodedLiteralPtr(evaluateConstgeneric(Span(), wb, crate, e.inner, **unevaluated));
+                            value = freezeEncodedLiteral(evaluateConstgeneric(Span(), wb, crate, e.inner, **unevaluated));
                         } catch (const Defer&) {
                         }
                     }
@@ -5724,7 +5724,7 @@ void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb,
     if (auto* cgeP = cg.opt_Unevaluated()) {
         const auto& cge = *cgeP;
         try {
-            cg = HIREncodedLiteralPtr(evaluateConstgeneric(sp, wb, crate, ty, *cge));
+            cg = freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *cge));
         } catch (const Defer&) {
             // Deferred - no update
         }
@@ -5813,7 +5813,7 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
                     ty = tmp = ms.monomorphType(sp, ty);
                     ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
                 }
-                v = HIRConstGeneric::make_Evaluated(evaluateConstgeneric(sp, wb, crate, ty, ue));
+                v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, ue)));
             } catch (const Defer&) {
                 // Deferred - no update
             }

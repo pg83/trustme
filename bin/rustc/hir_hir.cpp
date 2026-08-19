@@ -392,7 +392,7 @@ HIRConstGeneric HIRConstGeneric::clone() const {
         }
         case HIRConstGeneric::TAG_Evaluated: {
             auto& e = (*this).as_Evaluated();
-            return HIREncodedLiteralPtr(e->clone());
+            return e;
         }
     }
     throw "";
@@ -2086,17 +2086,6 @@ const tStructFields& patternGetNamed(const Span& sp, const HIRPath& path, const 
         return binding.as_Union()->variants;
     }
     return patternGetStruct(sp, path, binding, false).data.as_Named();
-}
-
-HIREncodedLiteralPtr::HIREncodedLiteralPtr(EncodedLiteral el) {
-    p = new EncodedLiteral(mv$(el));
-}
-
-HIREncodedLiteralPtr::~HIREncodedLiteralPtr() {
-    if (p) {
-        delete p;
-        p = nullptr;
-    }
 }
 
 // ---

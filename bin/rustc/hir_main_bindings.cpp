@@ -1330,7 +1330,7 @@ HIRConstGeneric HirDeserialiser::deserialiseConstgeneric() {
         _(Infer, {})
         _(Unevaluated, std::make_unique<HIRConstGenericUnevaluated>(deserialiseConstgenericUnevaluated()))
         _(Generic, deserialiseGenericref())
-        _(Evaluated, HIREncodedLiteralPtr(deserialiseEncodedliteral()))
+        _(Evaluated, freezeEncodedLiteral(deserialiseEncodedliteral()))
 #undef _
         default:
             BUG(Span(), "Unknown HIR::ConstGeneric tag when deserialising - " << tag);

@@ -155,7 +155,6 @@
 3	std::vector	bin/rustc/hir_generic_params.h
 3	make_shared	bin/rustc/hir_hir.cpp
 1	make_unique	bin/rustc/hir_hir.cpp
-1	new	bin/rustc/hir_hir.cpp
 2	shared_ptr	bin/rustc/hir_hir.cpp
 8	std::function	bin/rustc/hir_hir.cpp
 14	std::vector	bin/rustc/hir_hir.cpp
