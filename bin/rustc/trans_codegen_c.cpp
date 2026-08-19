@@ -5832,7 +5832,9 @@ default:
                     if (i > 0) {
                         of << ",";
                     }
-                    of << " \"" << clobbers[i] << "\"";
+                    // GCC spells the top of the x87 stack `st`, where Rust
+                    // spells it `st(0)`; the rest of the stack agrees.
+                    of << " \"" << (::std::strcmp(clobbers[i], "st(0)") == 0 ? "st" : clobbers[i]) << "\"";
                 }
                 if (asmGoto) {
                     of << " :";
