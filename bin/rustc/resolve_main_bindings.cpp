@@ -2786,7 +2786,10 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
             auto& e = pat.data().as_ValueLeftInc();
             if (!allowRefutable) {
                 // TODO: If this is a single value of a unit-like struct, accept
-                BUG(pat.span(), "Resolve_Absolute_Pattern - Encountered refutable pattern where only irrefutable allowed - " << pat);
+                // A range does not match every value, so it cannot stand where a
+                // pattern has to (a parameter, a `let` without an `else`). That
+                // is a program error, not a compiler one.
+                ERROR(pat.span(), E0000, "refutable pattern where an irrefutable one is required - " << pat);
             }
             ResolveAbsolutePatternValue(context, pat.span(), e.start);
             ResolveAbsolutePatternValue(context, pat.span(), e.end);

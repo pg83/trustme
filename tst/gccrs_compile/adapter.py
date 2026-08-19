@@ -47,6 +47,15 @@ def crate_name_options(case: str, text: str) -> list[str]:
     return ["--crate-name", name]
 
 
+def is_expected_failure(text: str) -> bool:
+    """A case gccrs itself marks as known to fail.
+
+    DejaGnu's xfail means the case is not expected to compile, so requiring it
+    to is wrong; an unexpected pass is not a failure either, so skip it.
+    """
+    return bool(re.search(r"dg-do\s+compile\s*\{\s*xfail", text))
+
+
 def target_applies(text: str) -> bool:
     machine = platform.machine().lower()
     targets = re.findall(r"dg-do\s+compile\s+\{\s*target\s+([^\s}]+)", text)
@@ -95,6 +104,9 @@ def main() -> int:
             text = open(source, encoding="utf-8", errors="surrogateescape").read()
             if not target_applies(text):
                 print(f"SKIP {case}: target directive does not apply", file=sys.stderr)
+                continue
+            if is_expected_failure(text):
+                print(f"SKIP {case}: marked xfail upstream", file=sys.stderr)
                 continue
             environment = dict(base_environment)
             for key, value in re.findall(
