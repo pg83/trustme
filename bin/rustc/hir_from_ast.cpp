@@ -2415,6 +2415,11 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     rv.params = LowerHIRGenericParams(f.params(), nullptr); // TODO: If this is a method, then it can add the Self: Sized bound
     rv.args = mv$(args);
     rv.variadic = f.isVariadic();
+    // Only a foreign ABI has a variadic call convention; Rust's own does not,
+    // so `fn f(x: i32, ...)` names something that cannot be called.
+    if (rv.variadic && rv.abi == ABI_RUST) {
+        ERROR(f.sp(), E0000, "Only functions with a foreign ABI may be variadic");
+    }
     rv.returnType = LowerHIRType(f.rettype());
     rv.source = SourceLocation(f.sp());
     rv.code = LowerHIRExpr(f.code());
