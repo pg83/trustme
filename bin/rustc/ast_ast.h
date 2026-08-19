@@ -788,6 +788,9 @@ public:
         /// one name is not an error until the name is used, so which of them
         /// won is not decided here.
         bool fromGlob = false;
+        /// The glob that brought it in was itself reached through another
+        /// module's glob, so what this module wrote does not decide it.
+        bool fromNestedGlob = false;
         /// Two globs offer this name, and neither shadows the other.
         bool ambiguous = false;
     };
