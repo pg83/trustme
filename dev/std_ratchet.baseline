@@ -237,7 +237,6 @@
 9	std::vector	bin/rustc/hir_typeck_static.cpp
 4	std::function	bin/rustc/hir_typeck_static.h
 5	std::map	bin/rustc/hir_typeck_static.h
-1	std::string	bin/rustc/hir_typeck_static.h
 1	std::vector	bin/rustc/hir_typeck_static.h
 1	std::function	bin/rustc/hir_visitor.cpp
 1	unique_ptr	bin/rustc/hir_visitor.cpp

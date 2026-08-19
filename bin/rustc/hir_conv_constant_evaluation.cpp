@@ -5379,10 +5379,10 @@ namespace {
                 {
                 }
 
-                void visitType(HIRTypeRef& ty) override {
+                [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
                     // Need to evaluate array sizes
                     DEBUG("expr type " << ty);
-                    ty = exp.visitType(ty);
+                    return exp.visitType(ty);
                 }
 
                 void visitPathParams(HIRPathParams& pp) override {

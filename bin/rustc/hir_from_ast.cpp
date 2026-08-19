@@ -4553,7 +4553,8 @@ HIRExprPtr AST2HIR::LowerHIRExprNode(const ASTExprNode& e) {
             node->visit(*this);
         }
 
-        void visitType(HIRTypeRef&) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+            return ty;
         }
     } initialise(crate->types);
 

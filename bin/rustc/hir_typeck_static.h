@@ -26,7 +26,8 @@ class StaticTraitResolve: public TraitResolveCommon {
     mutable ::std::map<HIRTypeRef, bool> copyCache;
     mutable ::std::map<HIRTypeRef, bool> cloneCache;
     mutable ::std::map<HIRTypeRef, bool> dropCache;
-    mutable ::std::map<std::string, HIRTypeRef> atyCache;
+    // Keyed by the interned UfcsKnown type itself (pointer identity).
+    mutable ::std::map<HIRTypeRef, HIRTypeRef> atyCache;
 
     /// Cache key for findImplCheckCrateRaw: the impl side is identified by
     /// the addresses of its (immutable, pool-owned) definition parts, the
@@ -145,7 +146,7 @@ public:
 
 private:
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& input) const;
-    void expandAssociatedTypesInner(const Span& sp, HIRTypeRef& input) const;
+    [[nodiscard]] HIRTypeRef expandAssociatedTypesInner(const Span& sp, HIRTypeRef input) const;
     bool expandAssociatedTypesUfcsInherent(const Span& sp, HIRTypeRef& input) const;
     bool expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeRef& input, bool recurse = true) const;
 

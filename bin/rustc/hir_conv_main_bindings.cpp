@@ -719,8 +719,8 @@ default:
                     upperVisitor.visitGenericPath(p, pc);
                 }
 
-                void visitType(HIRTypeRef& ty) override {
-                    ty = upperVisitor.visitTypeInner(ty, true);
+                [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+                    return upperVisitor.visitTypeInner(ty, true);
                 }
 
                 void visitNodePtr(HIRExprNodeP& nodePtr) override {
@@ -1266,8 +1266,8 @@ default:
                     upperVisitor.visitGenericPath(p, pc);
                 }
 
-                void visitType(HIRTypeRef& ty) override {
-                    ty = upperVisitor.visitTypeInner(ty, true);
+                [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+                    return upperVisitor.visitTypeInner(ty, true);
                 }
 
                 void visitNodePtr(HIRExprNodeP& nodePtr) override {
@@ -1898,8 +1898,8 @@ default:
             {
             }
 
-            void visitType(HIRTypeRef& ty) override {
-                ty = upperVisitor.visitType(ty);
+            [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+                return upperVisitor.visitType(ty);
             }
 
             void visitPattern(const Span& sp, HIRPattern& pat) override {
@@ -2008,8 +2008,8 @@ public:
             {
             }
 
-            void visitType(HIRTypeRef& ty) override {
-                ty = upperVisitor.visitType(ty);
+            [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+                return upperVisitor.visitType(ty);
             }
 
             void visitPattern(const Span& sp, HIRPattern& pat) override {
@@ -2931,8 +2931,8 @@ public:
             {
             }
 
-            void visitType(HIRTypeRef& ty) override {
-                ty = upperVisitor.visitType(ty);
+            [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+                return upperVisitor.visitType(ty);
             }
 
             void visitPathParams(HIRPathParams& pp) override {

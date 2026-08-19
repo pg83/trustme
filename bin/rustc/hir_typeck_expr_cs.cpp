@@ -10921,7 +10921,7 @@ public:
         }
     }
 
-    void visitType(HIRTypeRef& ty) override {
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
         this->context.addIvars(ty);
         innerVisitType(ty);
         visitTyWith(ty, [&](const HIRTypeData* inner) {
@@ -10935,6 +10935,7 @@ public:
             }
             return false;
         });
+        return ty;
     }
 
     void visit(HIRExprNodeLet& node) override {

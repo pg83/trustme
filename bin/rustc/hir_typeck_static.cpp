@@ -1524,7 +1524,7 @@ const HIRTypeData* StaticTraitResolve::fixTraitDefaultReturn(const Span& sp, con
 
 void StaticTraitResolve::expandAssociatedTypes(const Span& sp, HIRTypeRef& input) const {
     TRACE_FUNCTION_FR(input, input);
-    this->expandAssociatedTypesInner(sp, input);
+    input = this->expandAssociatedTypesInner(sp, input);
 }
 
 void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) const {
@@ -1688,24 +1688,24 @@ void StaticTraitResolve::expandAssociatedTypesPath(const Span& sp, HIRPath& inpu
         }
         case HIRPathData::TAG_UfcsInherent: {
             auto& e2 = input.data.as_UfcsInherent();
-            this->expandAssociatedTypesInner(sp, e2.type);
+            e2.type = this->expandAssociatedTypesInner(sp, e2.type);
             this->expandAssociatedTypesParams(sp, e2.params);
             // TODO: impl params too?
             for (auto& arg : e2.implParams.types) {
-                this->expandAssociatedTypesInner(sp, arg);
+                arg = this->expandAssociatedTypesInner(sp, arg);
             }
             break;
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& e2 = input.data.as_UfcsKnown();
-            this->expandAssociatedTypesInner(sp, e2.type);
+            e2.type = this->expandAssociatedTypesInner(sp, e2.type);
             this->expandAssociatedTypesParams(sp, e2.trait.params);
             this->expandAssociatedTypesParams(sp, e2.params);
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
             auto& e2 = input.data.as_UfcsUnknown();
-            this->expandAssociatedTypesInner(sp, e2.type);
+            e2.type = this->expandAssociatedTypesInner(sp, e2.type);
             this->expandAssociatedTypesParams(sp, e2.params);
             break;
         }
@@ -1754,7 +1754,7 @@ bool StaticTraitResolve::typesEqualResolvingOpaque(const Span& sp, const HIRType
 
 void StaticTraitResolve::expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const {
     for (auto& arg : params.types) {
-        this->expandAssociatedTypesInner(sp, arg);
+        arg = this->expandAssociatedTypesInner(sp, arg);
     }
 }
 
@@ -1762,7 +1762,7 @@ void StaticTraitResolve::expandAssociatedTypesTp(const Span& sp, HIRTraitPath& i
     expandAssociatedTypesParams(sp, input.path.params);
     for (auto& arg : input.typeBounds) {
         this->expandAssociatedTypesParams(sp, arg.second.sourceTrait.params);
-        this->expandAssociatedTypesInner(sp, arg.second.type);
+        arg.second.type = this->expandAssociatedTypesInner(sp, arg.second.type);
     }
     for (auto& arg : input.traitBounds) {
         this->expandAssociatedTypesParams(sp, arg.second.sourceTrait.params);
@@ -1772,41 +1772,68 @@ void StaticTraitResolve::expandAssociatedTypesTp(const Span& sp, HIRTraitPath& i
     }
 }
 
-void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& input) const {
-    auto data = input->cloneData();
-    switch (data.tag()) {
-        case HIRTypeData::TAG_Infer: {
-            //}
-            break;
-        }
-        case HIRTypeData::TAG_Diverge: {
-            break;
-        }
-        case HIRTypeData::TAG_Primitive: {
-            break;
-        }
+HIRTypeRef StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef input) const {
+    switch (input->tag()) {
+        case HIRTypeData::TAG_Infer:
+        case HIRTypeData::TAG_Diverge:
+        case HIRTypeData::TAG_Primitive:
+        case HIRTypeData::TAG_Generic:
+        case HIRTypeData::TAG_NodeType:
+            return input;
         case HIRTypeData::TAG_Path: {
-            auto& e = data.as_Path();
+            const auto& e = input->as_Path();
             switch (e.path.data.tag()) {
                 case HIRPathData::TAG_Generic: {
-                    auto& e2 = e.path.data.as_Generic();
-                    evaluatePathParams(sp, e2.params);
-                    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, e.binding.getGenerics(), e2.params);
-                    expandAssociatedTypesParams(sp, e2.params);
-                    break;
+                    const auto& e2 = e.path.data.as_Generic();
+                    // The evaluation helpers only act on unevaluated values;
+                    // types are folded with the usual first-change scan.
+                    bool valueWork = false;
+                    for (const auto& v : e2.params.values) {
+                        if (v.is_Unevaluated()) {
+                            valueWork = true;
+                            break;
+                        }
+                    }
+                    size_t tyIdx = e2.params.types.size();
+                    HIRTypeRef nty = nullptr;
+                    for (size_t i = 0; i < e2.params.types.size(); i++) {
+                        nty = expandAssociatedTypesInner(sp, e2.params.types[i]);
+                        if (nty != e2.params.types[i]) {
+                            tyIdx = i;
+                            break;
+                        }
+                    }
+                    if (!valueWork && tyIdx == e2.params.types.size()) {
+                        return input;
+                    }
+                    auto data = input->cloneData();
+                    auto& ne2 = data.as_Path().path.data.as_Generic();
+                    if (tyIdx < ne2.params.types.size()) {
+                        ne2.params.types[tyIdx] = nty;
+                        for (size_t j = tyIdx + 1; j < ne2.params.types.size(); j++) {
+                            ne2.params.types[j] = expandAssociatedTypesInner(sp, ne2.params.types[j]);
+                        }
+                    }
+                    if (valueWork) {
+                        evaluatePathParams(sp, ne2.params);
+                        ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, data.as_Path().binding.getGenerics(), ne2.params);
+                        expandAssociatedTypesParams(sp, ne2.params);
+                    }
+                    return crate.types.intern(mv$(data));
                 }
                 case HIRPathData::TAG_UfcsInherent: {
-                    auto& e2 = e.path.data.as_UfcsInherent();
-                    this->expandAssociatedTypesInner(sp, e2.type);
+                    auto data = input->cloneData();
+                    auto& e2 = data.as_Path().path.data.as_UfcsInherent();
+                    e2.type = this->expandAssociatedTypesInner(sp, e2.type);
                     expandAssociatedTypesParams(sp, e2.params);
                     for (auto& arg : e2.implParams.types) {
-                        this->expandAssociatedTypesInner(sp, arg);
+                        arg = this->expandAssociatedTypesInner(sp, arg);
                     }
-                    input = crate.types.intern(mv$(data));
-                    if (this->expandAssociatedTypesUfcsInherent(sp, input)) {
-                        this->expandAssociatedTypesInner(sp, input);
+                    auto rv = crate.types.intern(mv$(data));
+                    if (this->expandAssociatedTypesUfcsInherent(sp, rv)) {
+                        rv = this->expandAssociatedTypesInner(sp, rv);
                     }
-                    return;
+                    return rv;
                 }
                 case HIRPathData::TAG_UfcsKnown: {
                     // An opaque associated type is not a resolved type. It only records
@@ -1815,50 +1842,48 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
                     const bool wasUnbound = e.binding.is_Unbound();
                     const bool wasOpaque = e.binding.is_Opaque();
                     if (!wasUnbound && !wasOpaque) {
-                        return;
+                        return input;
                     }
 
-                    input = crate.types.intern(data.cloneData());
                     if (wasOpaque) {
-                        const auto opaque = input;
-                        this->expandAssociatedTypesUfcsKnown(sp, input, false);
-                        if (input != opaque) {
-                            this->expandAssociatedTypesInner(sp, input);
+                        auto rv = input;
+                        this->expandAssociatedTypesUfcsKnown(sp, rv, false);
+                        if (rv != input) {
+                            rv = this->expandAssociatedTypesInner(sp, rv);
                         }
-                    } else {
-                        auto k = FMT(e.path);
-                        auto it = atyCache.find(k);
-                        if (it != atyCache.end()) {
-                            DEBUG("Cached " << it->second);
-                            input = it->second;
-                        } else {
-                            this->expandAssociatedTypesUfcsKnown(sp, input);
-                            atyCache.insert(std::make_pair(std::move(k), input));
-                        }
+                        return rv;
                     }
-                    return;
+                    auto it = atyCache.find(input);
+                    if (it != atyCache.end()) {
+                        DEBUG("Cached " << it->second);
+                        return it->second;
+                    }
+                    auto rv = input;
+                    this->expandAssociatedTypesUfcsKnown(sp, rv);
+                    atyCache.insert(std::make_pair(input, rv));
+                    return rv;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
-                    auto& e2 = e.path.data.as_UfcsUnknown();
-                    this->expandAssociatedTypesInner(sp, e2.type);
+                    auto data = input->cloneData();
+                    auto& e2 = data.as_Path().path.data.as_UfcsUnknown();
+                    e2.type = this->expandAssociatedTypesInner(sp, e2.type);
                     expandAssociatedTypesParams(sp, e2.params);
-                    break;
+                    return crate.types.intern(mv$(data));
                 }
             }
-            break;
-        }
-        case HIRTypeData::TAG_Generic: {
-            break;
+            return input;
         }
         case HIRTypeData::TAG_TraitObject: {
+            auto data = input->cloneData();
             auto& e = data.as_TraitObject();
             expandAssociatedTypesTp(sp, e.trait);
             for (auto& m : e.markers) {
                 expandAssociatedTypesParams(sp, m.params);
             }
-            break;
+            return crate.types.intern(mv$(data));
         }
         case HIRTypeData::TAG_ErasedType: {
+            auto data = input->cloneData();
             auto& e = data.as_ErasedType();
             for (auto& trait : e.traits) {
                 expandAssociatedTypesTp(sp, trait);
@@ -1867,7 +1892,7 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
             switch (e.inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Known: {
                     auto& ee = e.inner.as_Known();
-                    expandAssociatedTypesInner(sp, ee);
+                    ee = expandAssociatedTypesInner(sp, ee);
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Fcn: {
@@ -1881,46 +1906,90 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
                     break;
                 }
             }
-            break;
+            return crate.types.intern(mv$(data));
         }
         case HIRTypeData::TAG_Array: {
-            auto& e = data.as_Array();
-            ConvertHIRConstantEvaluateArraySize(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), e.size);
-            expandAssociatedTypesInner(sp, e.inner);
-            break;
+            const auto& e = input->as_Array();
+            auto ninner = expandAssociatedTypesInner(sp, e.inner);
+            bool sizeWork = e.size.is_Unevaluated();
+            if (ninner == e.inner && !sizeWork) {
+                return input;
+            }
+            auto data = input->cloneData();
+            auto& ne = data.as_Array();
+            ne.inner = ninner;
+            if (sizeWork) {
+                ConvertHIRConstantEvaluateArraySize(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), ne.size);
+            }
+            return crate.types.intern(mv$(data));
         }
         case HIRTypeData::TAG_Slice: {
-            auto& e = data.as_Slice();
-            expandAssociatedTypesInner(sp, e.inner);
-            break;
+            auto ninner = expandAssociatedTypesInner(sp, input->as_Slice().inner);
+            if (ninner == input->as_Slice().inner) {
+                return input;
+            }
+            auto data = input->cloneData();
+            data.as_Slice().inner = ninner;
+            return crate.types.intern(mv$(data));
         }
         case HIRTypeData::TAG_Pattern: {
-            auto& e = data.as_Pattern();
-            expandAssociatedTypesInner(sp, e.inner);
-            for (auto& range : e.pattern.alternatives) {
-                if (range.hasStart) ConvertHIRConstantEvaluateConstGeneric(sp, this->wb, crate, e.inner, range.start);
-                if (range.hasEnd) ConvertHIRConstantEvaluateConstGeneric(sp, this->wb, crate, e.inner, range.end);
+            const auto& e = input->as_Pattern();
+            auto ninner = expandAssociatedTypesInner(sp, e.inner);
+            bool rangeWork = false;
+            for (const auto& range : e.pattern.alternatives) {
+                if ((range.hasStart && range.start.is_Unevaluated()) || (range.hasEnd && range.end.is_Unevaluated())) {
+                    rangeWork = true;
+                    break;
+                }
             }
-            break;
+            if (ninner == e.inner && !rangeWork) {
+                return input;
+            }
+            auto data = input->cloneData();
+            auto& ne = data.as_Pattern();
+            ne.inner = ninner;
+            for (auto& range : ne.pattern.alternatives) {
+                if (range.hasStart) ConvertHIRConstantEvaluateConstGeneric(sp, this->wb, crate, ne.inner, range.start);
+                if (range.hasEnd) ConvertHIRConstantEvaluateConstGeneric(sp, this->wb, crate, ne.inner, range.end);
+            }
+            return crate.types.intern(mv$(data));
         }
         case HIRTypeData::TAG_Tuple: {
-            auto& e = data.as_Tuple();
-            for (auto& sub : e) {
-                expandAssociatedTypesInner(sp, sub);
+            const auto& e = input->as_Tuple();
+            for (size_t i = 0; i < e.size(); i++) {
+                auto nt = expandAssociatedTypesInner(sp, e[i]);
+                if (nt != e[i]) {
+                    auto data = input->cloneData();
+                    auto& ne = data.as_Tuple();
+                    ne[i] = nt;
+                    for (size_t j = i + 1; j < ne.size(); j++) {
+                        ne[j] = expandAssociatedTypesInner(sp, ne[j]);
+                    }
+                    return crate.types.intern(mv$(data));
+                }
             }
-            break;
+            return input;
         }
         case HIRTypeData::TAG_Borrow: {
-            auto& e = data.as_Borrow();
-            expandAssociatedTypesInner(sp, e.inner);
-            break;
+            auto ninner = expandAssociatedTypesInner(sp, input->as_Borrow().inner);
+            if (ninner == input->as_Borrow().inner) {
+                return input;
+            }
+            auto data = input->cloneData();
+            data.as_Borrow().inner = ninner;
+            return crate.types.intern(mv$(data));
         }
         case HIRTypeData::TAG_Pointer: {
-            auto& e = data.as_Pointer();
-            expandAssociatedTypesInner(sp, e.inner);
-            break;
+            auto ninner = expandAssociatedTypesInner(sp, input->as_Pointer().inner);
+            if (ninner == input->as_Pointer().inner) {
+                return input;
+            }
+            auto data = input->cloneData();
+            data.as_Pointer().inner = ninner;
+            return crate.types.intern(mv$(data));
         }
         case HIRTypeData::TAG_NamedFunction: {
+            auto data = input->cloneData();
             auto& e = data.as_NamedFunction();
             switch (e.path.data.tag()) {
                 case HIRPathData::TAG_Generic: {
@@ -1930,44 +1999,58 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
                 }
                 case HIRPathData::TAG_UfcsInherent: {
                     auto& e2 = e.path.data.as_UfcsInherent();
-                    this->expandAssociatedTypesInner(sp, e2.type);
+                    e2.type = this->expandAssociatedTypesInner(sp, e2.type);
                     expandAssociatedTypesParams(sp, e2.params);
                     // TODO: impl params too?
                     for (auto& arg : e2.implParams.types) {
-                        this->expandAssociatedTypesInner(sp, arg);
+                        arg = this->expandAssociatedTypesInner(sp, arg);
                     }
                     break;
                 }
                 case HIRPathData::TAG_UfcsKnown: {
                     auto& e2 = e.path.data.as_UfcsKnown();
-                    this->expandAssociatedTypesInner(sp, e2.type);
+                    e2.type = this->expandAssociatedTypesInner(sp, e2.type);
                     expandAssociatedTypesParams(sp, e2.trait.params);
                     expandAssociatedTypesParams(sp, e2.params);
                     break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
                     auto& e2 = e.path.data.as_UfcsUnknown();
-                    this->expandAssociatedTypesInner(sp, e2.type);
+                    e2.type = this->expandAssociatedTypesInner(sp, e2.type);
                     expandAssociatedTypesParams(sp, e2.params);
                     break;
                 }
             }
-            break;
+            return crate.types.intern(mv$(data));
         }
         case HIRTypeData::TAG_Function: {
-            auto& e = data.as_Function();
-            // Recurse?
-            for (auto& ty : e.argTypes) {
-                expandAssociatedTypesInner(sp, ty);
+            const auto& e = input->as_Function();
+            auto nret = expandAssociatedTypesInner(sp, e.rettype);
+            size_t argIdx = e.argTypes.size();
+            HIRTypeRef narg = nullptr;
+            for (size_t i = 0; i < e.argTypes.size(); i++) {
+                narg = expandAssociatedTypesInner(sp, e.argTypes[i]);
+                if (narg != e.argTypes[i]) {
+                    argIdx = i;
+                    break;
+                }
             }
-            expandAssociatedTypesInner(sp, e.rettype);
-            break;
-        }
-        case HIRTypeData::TAG_NodeType: {
-            break;
+            if (nret == e.rettype && argIdx == e.argTypes.size()) {
+                return input;
+            }
+            auto data = input->cloneData();
+            auto& ne = data.as_Function();
+            ne.rettype = nret;
+            if (argIdx < ne.argTypes.size()) {
+                ne.argTypes[argIdx] = narg;
+                for (size_t j = argIdx + 1; j < ne.argTypes.size(); j++) {
+                    ne.argTypes[j] = expandAssociatedTypesInner(sp, ne.argTypes[j]);
+                }
+            }
+            return crate.types.intern(mv$(data));
         }
     }
-    input = crate.types.intern(std::move(data));
+    return input;
 }
 
 bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTypeRef& input) const {
@@ -2088,9 +2171,9 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
     sRecursionStack.push_back(RecurseEntry{crate.types.path(HIRPath(e2.type, e2.trait.clone(), e2.item), {}), sRecursionLevel});
 
     sRecursionLevel += 1;
-    this->expandAssociatedTypesInner(sp, e2.type);
+    e2.type = this->expandAssociatedTypesInner(sp, e2.type);
     for (auto& arg : e2.trait.params.types) {
-        this->expandAssociatedTypesInner(sp, arg);
+        arg = this->expandAssociatedTypesInner(sp, arg);
     }
     sRecursionLevel -= 1;
     publish();
@@ -2221,7 +2304,7 @@ default:
     }
     if( rv ) {
         if (recurse) {
-            this->expandAssociatedTypesInner(sp, input);
+            input = this->expandAssociatedTypesInner(sp, input);
         }
         return true;
     }
@@ -2380,7 +2463,7 @@ default:
 
         bool rv = this->replaceEqualities(input);
         if (recurse) {
-            this->expandAssociatedTypesInner(sp, input);
+            input = this->expandAssociatedTypesInner(sp, input);
         }
         return rv;
     }

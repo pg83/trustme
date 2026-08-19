@@ -934,7 +934,15 @@ public:
 #undef NV
 
     virtual void visitPattern(const Span& sp, HIRPattern& pat);
-    virtual void visitType(HIRTypeRef& ty);
+
+    // Same contract as HIRVisitor::visitType: a pure function returning the
+    // canonical type; pointer identity is the change signal.
+    [[nodiscard]] virtual HIRTypeRef visitType(HIRTypeRef ty);
+
+    void updateType(HIRTypeRef& ty) {
+        ty = visitType(ty);
+    }
+
     virtual void visitTraitPath(HIRTraitPath& p);
     virtual void visitPathParams(HIRPathParams& ty);
     virtual void visitPath(HIRVisitor::PathContext pc, HIRPath& ty);

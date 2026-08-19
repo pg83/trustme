@@ -1703,9 +1703,9 @@ namespace {
             HIRExprVisitorDef::visitPattern(sp, pat);
         }
 
-        void visitType(HIRTypeRef& ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             DEBUG(ty);
-            ty = monomorphiser.monomorphType(Span(), ty, /*allow_infer=*/true);
+            return monomorphiser.monomorphType(Span(), ty, /*allow_infer=*/true);
         }
 
         void visitPathParams(HIRPathParams& pp) override {
@@ -1730,7 +1730,7 @@ namespace {
                 nodePtr = mv$(replacement_);
             }
 
-            visitType(nodePtr->resType);
+            updateType(nodePtr->resType);
         }
 
         void visit(HIRExprNodeClosure& node) override {
@@ -1748,7 +1748,7 @@ namespace {
             assert(!node.code);
 
             visitGenericPath(HIRVisitor::PathContext::VALUE, node.objPath);
-            visitType(node.stateDataType);
+            updateType(node.stateDataType);
             for (auto& subnode : node.captures) {
                 visitNodePtr(subnode);
             }
@@ -1758,7 +1758,7 @@ namespace {
             assert(!node.code);
 
             visitGenericPath(HIRVisitor::PathContext::VALUE, node.objPath);
-            visitType(node.stateDataType);
+            updateType(node.stateDataType);
             for (auto& subnode : node.captures) {
                 visitNodePtr(subnode);
             }
@@ -1788,7 +1788,7 @@ namespace {
                     if (bindingIt->usage != HIRValueUsage::Move) {
                         auto bt = (bindingIt->usage == HIRValueUsage::Mutate ? HIRBorrowType::Unique : HIRBorrowType::Shared);
 
-                        visitType(replacement_->resType);
+                        updateType(replacement_->resType);
                         replacement_->resType = monomorphiser.typeInterner().borrow(bt, replacement_->resType);
                         replacement_ = NEWNODE(node.resType, Deref, node.span(), mv$(replacement_));
                     }
@@ -1828,7 +1828,7 @@ namespace {
                     if (bindingIt->usage != HIRValueUsage::Move) {
                         auto bt = (bindingIt->usage == HIRValueUsage::Mutate ? HIRBorrowType::Unique : HIRBorrowType::Shared);
 
-                        visitType(replacement_->resType);
+                        updateType(replacement_->resType);
                         replacement_->resType = monomorphiser.typeInterner().borrow(bt, replacement_->resType);
                         replacement_ = NEWNODE(node.resType, Deref, node.span(), mv$(replacement_));
                     }
@@ -1895,22 +1895,22 @@ namespace {
             TRACE_FUNCTION;
 
             root->visit(*this);
-            visitType(root->resType);
+            updateType(root->resType);
 
             for (auto& ty : root.bindings) {
-                visitType(ty);
+                updateType(ty);
                 DEBUG("Local " << ty);
             }
 
             for (auto& ty : root.erasedTypes) {
-                visitType(ty);
+                updateType(ty);
                 DEBUG("Erased " << ty);
             }
         }
 
         void visitNodePtr(HIRExprNodeP& node) override {
             node->visit(*this);
-            visitType(node->resType);
+            updateType(node->resType);
         }
 
         void visit(HIRExprNodeCast& node) override {
@@ -1986,7 +1986,7 @@ namespace {
             HIRExprVisitorDef::visit(node);
         }
 
-        void visitType(HIRTypeRef& ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             struct M: MonomorphiserNop {
                 const Monomorphiser& monomorphiser;
 
@@ -2038,7 +2038,7 @@ namespace {
                 }
             } m(monomorphiser);
 
-            ty = m.monomorphType(Span(), ty, true);
+            return m.monomorphType(Span(), ty, true);
         }
     };
 
@@ -2464,7 +2464,7 @@ namespace {
                 for (size_t i = 0; i < captureTypes.size(); i++) {
                     HIRTypeRef& tyMono = captureTypes[i].ent;
                     fixup.resolve_.expandAssociatedTypes(sp, tyMono);
-                    fixup.visitType(tyMono);
+                    tyMono = fixup.visitType(tyMono);
                 }
             }
             monomorphCb.addBounds(sp, resolve_);
@@ -2516,8 +2516,8 @@ namespace {
                 fixup.visitRoot(bodyCode);
 
                 DEBUG("-- Fixing types in signature");
-                fixup.visitType(argsTy);
-                fixup.visitType(retType);
+                argsTy = fixup.visitType(argsTy);
+                retType = fixup.visitType(retType);
                 // TODO: Replace erased types too
             }
             DEBUG("args_ty = " << argsTy << ", ret_type = " << retType);
@@ -2695,8 +2695,8 @@ namespace {
             {
             }
 
-            void visitType(HIRTypeRef& ty) override {
-                ty = monomorph.monomorphType(Span(), ty, /*allow_infer=*/true);
+            [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+                return monomorph.monomorphType(Span(), ty, /*allow_infer=*/true);
             }
 
             void visitPathParams(HIRPathParams& pp) override {
@@ -2740,7 +2740,7 @@ namespace {
             void visit(HIRExprNodeGenerator& node) override {
                 assert(!node.code);
                 visitGenericPath(HIRVisitor::PathContext::TYPE, node.objPath);
-                visitType(node.stateDataType);
+                updateType(node.stateDataType);
 
                 for (auto& cap : node.captures) {
                     visitNodePtr(cap);
@@ -2750,7 +2750,7 @@ namespace {
             void visit(HIRExprNodeAsyncBlock& node) override {
                 assert(!node.code);
                 visitGenericPath(HIRVisitor::PathContext::TYPE, node.objPath);
-                visitType(node.stateDataType);
+                updateType(node.stateDataType);
 
                 for (auto& cap : node.captures) {
                     visitNodePtr(cap);
@@ -2865,11 +2865,11 @@ namespace {
             ClosureExprVisitorFixup fixup{resolve_.board(), &params, monomorphCb, &out};
             for (auto& type : vars.newLocals) {
                 fixup.resolve_.expandAssociatedTypes(sp, type);
-                fixup.visitType(type);
+                type = fixup.visitType(type);
             }
             for (auto& field : vars.structEnts) {
                 fixup.resolve_.expandAssociatedTypes(sp, field.ent);
-                fixup.visitType(field.ent);
+                field.ent = fixup.visitType(field.ent);
             }
         }
 
@@ -3361,7 +3361,7 @@ namespace {
                     MonomorphiserNop mm(resolve_.hirCrate().types);
                     ClosureExprVisitorFixup fixup{resolve_.board(), nullptr, mm, &out};
                     fixup.visitRoot(item.value);
-                    fixup.visitType(item.type);
+                    item.type = fixup.visitType(item.type);
                 }
             }
         }
@@ -3446,7 +3446,7 @@ void HIRExpandClosuresExpr(const WireBoard& wb, const HIRCrate& crateRo, HIRType
         MonomorphiserNop mm(crate.types);
         ClosureExprVisitorFixup fixup{wb, nullptr, mm, &out};
         fixup.visitRoot(exp);
-        fixup.visitType(expTy);
+        expTy = fixup.visitType(expTy);
     }
 
     for (auto& impl : out.implsType) {
@@ -3494,7 +3494,7 @@ void HIRExpandClosures(const WireBoard& wb, HIRCrate& crate) {
                 if (const auto* e = ty->opt_ErasedType()) {
                     if (const auto* ee = e->inner.opt_Alias()) {
                         if (ee->inner->type) {
-                            fixup.visitType(ee->inner->type);
+                            ee->inner->type = fixup.visitType(ee->inner->type);
                         }
                     }
                 }
@@ -3543,24 +3543,25 @@ namespace {
 
         void visitRoot(HIRExprPtr& root) {
             root->visit(*this);
-            visitType(root->resType);
+            updateType(root->resType);
             for (auto& ty : root.bindings) {
-                visitType(ty);
+                updateType(ty);
             }
             for (auto& ty : root.erasedTypes) {
-                visitType(ty);
+                updateType(ty);
             }
         }
 
         void visitNodePtr(HIRExprNodeP& nodePtr) override {
             assert(nodePtr);
             nodePtr->visit(*this);
-            visitType(nodePtr->resType);
+            updateType(nodePtr->resType);
         }
 
-        void visitType(HIRTypeRef& ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             static Span sp;
             ::visitType(sp, resolve_, ty);
+            return ty;
         }
     };
 
@@ -4636,13 +4637,14 @@ public:
             {
             }
 
-            void visitType(HIRTypeRef& ty) override {
+            [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
                 if (monomorphiseTypeNeeded(ty)) {
                     this->isGeneric = true;
                     auto newTy = this->resolve.monomorphExpand(sp, ty, this->monomorph);
                     DEBUG(ty << " -> " << newTy);
-                    ty = std::move(newTy);
+                    return newTy;
                 }
+                return ty;
             }
 
             void visitPathParams(HIRPathParams& pp) override {
@@ -4708,7 +4710,7 @@ public:
         } v(resolve, monomorph);
 
         node->visit(v);
-        v.visitType(node->resType);
+        node->resType = v.visitType(node->resType);
         if (!v.isGeneric && !preserveGenericContext) {
             paramsDef = HIRGenericParams();
             constrParams = HIRPathParams();

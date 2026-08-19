@@ -193,7 +193,7 @@ void HIRExprVisitorDef::visitNodePtr(HIRExprNodeP& nodePtr) {
     // A node a desugaring built has no result type until type checking gives
     // it one, and a pass that runs before then has nothing to visit.
     if (nodePtr->resType != HIRTypeRef()) {
-        visitType(nodePtr->resType);
+        updateType(nodePtr->resType);
     }
 }
 
@@ -287,7 +287,7 @@ DEF_VISIT_H(HIRExprNodeLet, node) {
         visitNodePtr(node.value);
     }
     visitPattern(node.span(), node.pattern);
-    visitType(node.type);
+    updateType(node.type);
 }
 
 DEF_VISIT_H(HIRExprNodeLoop, node) {
@@ -325,13 +325,13 @@ DEF_VISIT(HIRExprNodeRawBorrow, node, visitNodePtr(node.value);)
 
 DEF_VISIT_H(HIRExprNodeCast, node) {
     TRACE_FUNCTION_F("_Cast " << node.dstType);
-    visitType(node.dstType);
+    updateType(node.dstType);
     visitNodePtr(node.value);
 }
 
 DEF_VISIT_H(HIRExprNodeUnsize, node) {
     TRACE_FUNCTION_F("_Unsize " << node.dstType);
-    visitType(node.dstType);
+    updateType(node.dstType);
     visitNodePtr(node.value);
 }
 
@@ -360,7 +360,7 @@ DEF_VISIT_H(HIRExprNodeTupleVariant, node) {
 
     for (auto& ty : node.argTypes) {
         if (ty != HIRTypeRef()) {
-            visitType(ty);
+            updateType(ty);
         }
     }
 
@@ -372,7 +372,7 @@ DEF_VISIT_H(HIRExprNodeTupleVariant, node) {
 DEF_VISIT_H(HIRExprNodeCallPath, node) {
     TRACE_FUNCTION_F("_CallPath: " << node.path);
     for (auto& ty : node.cache.argTypes) {
-        visitType(ty);
+        updateType(ty);
     }
 
     visitPath(HIRVisitor::PathContext::VALUE, node.path);
@@ -384,7 +384,7 @@ DEF_VISIT_H(HIRExprNodeCallPath, node) {
 DEF_VISIT_H(HIRExprNodeCallValue, node) {
     TRACE_FUNCTION_F("_CallValue:");
     for (auto& ty : node.argTypes) {
-        visitType(ty);
+        updateType(ty);
     }
 
     visitNodePtr(node.value);
@@ -397,7 +397,7 @@ DEF_VISIT_H(HIRExprNodeCallMethod, node) {
     TRACE_FUNCTION_FR("_CallMethod: " << node.method, "_CallMethod: " << node.method);
     visitPathParams(node.params);
     for (auto& ty : node.cache.argTypes) {
-        visitType(ty);
+        updateType(ty);
     }
 
     visitPath(HIRVisitor::PathContext::VALUE, node.methodPath);
@@ -422,7 +422,7 @@ DEF_VISIT(HIRExprNodeConstParam, node, TRACE_FUNCTION_F("_ConstParam");)
 DEF_VISIT_H(HIRExprNodeStructLiteral, node) {
     TRACE_FUNCTION_F("_StructLiteral: " << node.realPath);
     if (node.type != HIRTypeRef()) {
-        visitType(node.type);
+        updateType(node.type);
     }
     if (node.baseValue) {
         visitNodePtr(node.baseValue);
@@ -461,9 +461,9 @@ DEF_VISIT_H(HIRExprNodeClosure, node) {
     } else {
         for (auto& arg : node.args) {
             visitPattern(node.span(), arg.first);
-            visitType(arg.second);
+            updateType(arg.second);
         }
-        visitType(node.returnType);
+        updateType(node.returnType);
         visitNodePtr(node.code);
     }
 }
@@ -483,9 +483,9 @@ DEF_VISIT_H(HIRExprNodeClosure, node) {
 
 DEF_VISIT_H(HIRExprNodeGenerator, node) {
     TRACE_FUNCTION_F("_Generator");
-    visitType(node.returnType);
-    visitType(node.yieldTy);
-    visitType(node.resumeTy);
+    updateType(node.returnType);
+    updateType(node.yieldTy);
+    updateType(node.resumeTy);
     if (node.hasResumePattern) {
         visitPattern(node.span(), node.resumePattern);
     }
@@ -500,8 +500,8 @@ DEF_VISIT_H(HIRExprNodeGenerator, node) {
 
 DEF_VISIT_H(HIRExprNodeGeneratorWrapper, node) {
     //}
-    visitType(node.returnType);
-    visitType(node.yieldTy);
+    updateType(node.returnType);
+    updateType(node.yieldTy);
     if (node.code) {
         visitNodePtr(node.code);
     }
@@ -509,7 +509,7 @@ DEF_VISIT_H(HIRExprNodeGeneratorWrapper, node) {
 
 DEF_VISIT_H(HIRExprNodeAsyncBlock, node) {
     TRACE_FUNCTION_F("_AsyncBlock");
-    visitType(node.returnType);
+    updateType(node.returnType);
     if (node.code) {
         visitNodePtr(node.code);
     } else {
@@ -532,7 +532,7 @@ void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
         }
         case HIRPatternData::TAG_Deref: {
             auto& e = pat.data.as_Deref();
-            if (e.targetType) this->visitType(e.targetType);
+            if (e.targetType) updateType(e.targetType);
             this->visitPattern(sp, *e.sub);
             break;
         }
@@ -616,118 +616,158 @@ void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
     }
 }
 
-void HIRExprVisitorDef::visitType(HIRTypeRef& ty) {
-    auto data = ty->cloneData();
-    switch (data.tag()) {
-        case HIRTypeData::TAG_Infer: {
-            break;
-        }
-        case HIRTypeData::TAG_Diverge: {
-            break;
-        }
-        case HIRTypeData::TAG_Primitive: {
-            break;
-        }
+HIRTypeRef HIRExprVisitorDef::visitType(HIRTypeRef ty) {
+    switch (ty->tag()) {
+        case HIRTypeData::TAG_Infer:
+        case HIRTypeData::TAG_Diverge:
+        case HIRTypeData::TAG_Primitive:
+        case HIRTypeData::TAG_Generic:
+        case HIRTypeData::TAG_NodeType:
+            return ty;
+        // Path-carrying kinds go through the mutable hooks on a working
+        // copy, exactly as before.
         case HIRTypeData::TAG_Path: {
-            auto& e = data.as_Path();
-            this->visitPath(HIRVisitor::PathContext::TYPE, e.path);
-            break;
-        }
-        case HIRTypeData::TAG_Generic: {
-            break;
+            auto data = ty->cloneData();
+            this->visitPath(HIRVisitor::PathContext::TYPE, data.as_Path().path);
+            return types.intern(std::move(data));
         }
         case HIRTypeData::TAG_TraitObject: {
+            auto data = ty->cloneData();
             auto& e = data.as_TraitObject();
             this->visitTraitPath(e.trait);
-            for(auto& trait : e.markers) {
-            this->visitGenericPath(HIRVisitor::PathContext::TYPE, trait);
+            for (auto& trait : e.markers) {
+                this->visitGenericPath(HIRVisitor::PathContext::TYPE, trait);
             }
-            break;
+            return types.intern(std::move(data));
         }
         case HIRTypeData::TAG_ErasedType: {
+            auto data = ty->cloneData();
             auto& e = data.as_ErasedType();
-            for(auto& trait : e.traits) {
-                    this->visitTraitPath(trait);
-                    }
-                    switch (e.inner.tag()) {
-                        case TypeDataErasedTypeInner::TAG_Known: {
-                            auto& ee = e.inner.as_Known();
-                            this->visitType(ee);
-                            break;
-                        }
-                        case TypeDataErasedTypeInner::TAG_Fcn: {
-                            auto& ee = e.inner.as_Fcn();
-                            this->visitPath(HIRVisitor::PathContext::TYPE, ee.origin);
-                            break;
-                        }
-                        case TypeDataErasedTypeInner::TAG_Alias: {
-                            break;
-                        }
-                    }
-            break;
-        }
-        case HIRTypeData::TAG_Array: {
-            auto& e = data.as_Array();
-            this->visitType( e.inner );
-            break;
-        }
-        case HIRTypeData::TAG_Slice: {
-            auto& e = data.as_Slice();
-            this->visitType( e.inner );
-            break;
-        }
-        case HIRTypeData::TAG_Pattern: {
-            auto& e = data.as_Pattern();
-            this->visitType(e.inner);
-            break;
-        }
-        case HIRTypeData::TAG_Tuple: {
-            auto& e = data.as_Tuple();
-            for(auto& t : e) {
-            this->visitType(t);
+            for (auto& trait : e.traits) {
+                this->visitTraitPath(trait);
+            }
+            switch (e.inner.tag()) {
+                case TypeDataErasedTypeInner::TAG_Known: {
+                    updateType(e.inner.as_Known());
+                    break;
                 }
-            break;
-        }
-        case HIRTypeData::TAG_Borrow: {
-            auto& e = data.as_Borrow();
-            this->visitType( e.inner );
-            break;
-        }
-        case HIRTypeData::TAG_Pointer: {
-            auto& e = data.as_Pointer();
-            this->visitType( e.inner );
-            break;
+                case TypeDataErasedTypeInner::TAG_Fcn: {
+                    this->visitPath(HIRVisitor::PathContext::TYPE, e.inner.as_Fcn().origin);
+                    break;
+                }
+                case TypeDataErasedTypeInner::TAG_Alias: {
+                    break;
+                }
+            }
+            return types.intern(std::move(data));
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& e = data.as_NamedFunction();
-            this->visitPath(HIRVisitor::PathContext::VALUE, e.path);
-            break;
+            auto data = ty->cloneData();
+            this->visitPath(HIRVisitor::PathContext::VALUE, data.as_NamedFunction().path);
+            return types.intern(std::move(data));
+        }
+        // Structural kinds rebuild only when a child changed.
+        case HIRTypeData::TAG_Array: {
+            auto ninner = visitType(ty->as_Array().inner);
+            if (ninner == ty->as_Array().inner) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            data.as_Array().inner = ninner;
+            return types.intern(std::move(data));
+        }
+        case HIRTypeData::TAG_Slice: {
+            auto ninner = visitType(ty->as_Slice().inner);
+            if (ninner == ty->as_Slice().inner) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            data.as_Slice().inner = ninner;
+            return types.intern(std::move(data));
+        }
+        case HIRTypeData::TAG_Pattern: {
+            auto ninner = visitType(ty->as_Pattern().inner);
+            if (ninner == ty->as_Pattern().inner) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            data.as_Pattern().inner = ninner;
+            return types.intern(std::move(data));
+        }
+        case HIRTypeData::TAG_Borrow: {
+            auto ninner = visitType(ty->as_Borrow().inner);
+            if (ninner == ty->as_Borrow().inner) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            data.as_Borrow().inner = ninner;
+            return types.intern(std::move(data));
+        }
+        case HIRTypeData::TAG_Pointer: {
+            auto ninner = visitType(ty->as_Pointer().inner);
+            if (ninner == ty->as_Pointer().inner) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            data.as_Pointer().inner = ninner;
+            return types.intern(std::move(data));
+        }
+        case HIRTypeData::TAG_Tuple: {
+            const auto& e = ty->as_Tuple();
+            for (size_t i = 0; i < e.size(); i++) {
+                auto nt = visitType(e[i]);
+                if (nt != e[i]) {
+                    auto data = ty->cloneData();
+                    auto& ne = data.as_Tuple();
+                    ne[i] = nt;
+                    for (size_t j = i + 1; j < ne.size(); j++) {
+                        ne[j] = visitType(ne[j]);
+                    }
+                    return types.intern(std::move(data));
+                }
+            }
+            return ty;
         }
         case HIRTypeData::TAG_Function: {
-            auto& e = data.as_Function();
-            for(auto& t : e.argTypes) {
-            this->visitType(t);
+            const auto& e = ty->as_Function();
+            auto nret = visitType(e.rettype);
+            size_t argIdx = e.argTypes.size();
+            HIRTypeRef narg = nullptr;
+            for (size_t i = 0; i < e.argTypes.size(); i++) {
+                narg = visitType(e.argTypes[i]);
+                if (narg != e.argTypes[i]) {
+                    argIdx = i;
+                    break;
                 }
-                this->visitType(e.rettype);
-            break;
-        }
-        case HIRTypeData::TAG_NodeType: {
-            break;
+            }
+            if (nret == e.rettype && argIdx == e.argTypes.size()) {
+                return ty;
+            }
+            auto data = ty->cloneData();
+            auto& ne = data.as_Function();
+            ne.rettype = nret;
+            if (argIdx < ne.argTypes.size()) {
+                ne.argTypes[argIdx] = narg;
+                for (size_t j = argIdx + 1; j < ne.argTypes.size(); j++) {
+                    ne.argTypes[j] = visitType(ne.argTypes[j]);
+                }
+            }
+            return types.intern(std::move(data));
         }
     }
-    ty = types.intern(std::move(data));
-        }
+    return ty;
+}
 
         void HIRExprVisitorDef::visitPathParams(HIRPathParams& pp) {
             for (auto& ty : pp.types) {
-                visitType(ty);
+                updateType(ty);
             }
         }
 
         void HIRExprVisitorDef::visitTraitPath(HIRTraitPath& p) {
             this->visitGenericPath(HIRVisitor::PathContext::TYPE, p.path);
             for (auto& assoc : p.typeBounds) {
-                this->visitType(assoc.second.type);
+                updateType(assoc.second.type);
             }
             for (auto& assoc : p.traitBounds) {
                 for (auto& t : assoc.second.traits) {
@@ -745,17 +785,17 @@ void HIRExprVisitorDef::visitType(HIRTypeRef& ty) {
                 }
                 case HIRPathData::TAG_UfcsKnown: {
                     auto& e = path.data.as_UfcsKnown();
-                    visitType(e.type); visitGenericPath(pc, e.trait); visitPathParams(e.params);
+                    updateType(e.type); visitGenericPath(pc, e.trait); visitPathParams(e.params);
                     break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
                     auto& e = path.data.as_UfcsUnknown();
-                    visitType(e.type); visitPathParams(e.params);
+                    updateType(e.type); visitPathParams(e.params);
                     break;
                 }
                 case HIRPathData::TAG_UfcsInherent: {
                     auto& e = path.data.as_UfcsInherent();
-                    visitType(e.type); visitPathParams(e.params); visitPathParams(e.implParams);
+                    updateType(e.type); visitPathParams(e.params); visitPathParams(e.implParams);
                     break;
                 }
             }

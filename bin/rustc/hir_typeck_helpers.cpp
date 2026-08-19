@@ -8,6 +8,8 @@
 
 #include <std/mem/obj_list.h>
 #include <std/mem/obj_pool.h>
+#include <std/sym/i_map.h>
+#include <std/rng/split_mix_64.h>
 
 #include <optional>
 #include <algorithm>
@@ -4246,6 +4248,7 @@ default:
             NextTraitGoalEvaluator(const TraitResolution& resolve, const HIRCrate& crate)
                 : resolve_(resolve)
                 , crate(crate)
+                , overlapCache(crate.pool)
                 , candidateNodes(crate.pool)
                 , activeGoalNodes(crate.pool)
                 , cachedGoalNodes(crate.pool)
@@ -4258,6 +4261,34 @@ default:
             }
 
             bool evaluateOverlap(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right) {
+                // The probe is a pure function of the impl pair (impls are
+                // immutable after conversion), so cache it by identity.
+                const auto key = stl::splitMix64(reinterpret_cast<uintptr_t>(&left)) ^ stl::splitMix64(~reinterpret_cast<uintptr_t>(&right));
+                auto* bucket = overlapCache.find(key);
+                if (bucket) {
+                    for (const auto& ent : *bucket) {
+                        if (ent.left == &left && ent.right == &right) {
+                            return ent.overlaps;
+                        }
+                    }
+                }
+                const bool rv = evaluateOverlapUncached(callSpan, trait, left, right);
+                if (!bucket) {
+                    bucket = overlapCache.insert(key);
+                }
+                bucket->push_back(OverlapEntry{&left, &right, rv});
+                return rv;
+            }
+
+            struct OverlapEntry {
+                const HIRTraitImpl* left;
+                const HIRTraitImpl* right;
+                bool overlaps;
+            };
+
+            stl::IntMap<ThinVector<OverlapEntry>> overlapCache;
+
+            bool evaluateOverlapUncached(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right) {
                 ASSERT_BUG(callSpan, !span_, "nested coherence overlap session");
                 ASSERT_BUG(callSpan, !coherenceMode, "coherence mode leaked before overlap probe");
                 ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked before coherence probe");
