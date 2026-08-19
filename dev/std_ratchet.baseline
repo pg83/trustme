@@ -296,8 +296,8 @@
 7	std::map	bin/rustc/mir_operations.cpp
 1	std::set	bin/rustc/mir_operations.cpp
 2	std::string	bin/rustc/mir_operations.cpp
-4	std::unordered	bin/rustc/mir_operations.cpp
-114	std::vector	bin/rustc/mir_operations.cpp
+3	std::unordered	bin/rustc/mir_operations.cpp
+113	std::vector	bin/rustc/mir_operations.cpp
 1	std::function	bin/rustc/mir_visit_crate_mir.h
 1	make_unique	bin/rustc/parse_common.cpp
 5	new	bin/rustc/parse_common.cpp

@@ -166,6 +166,17 @@ public:
         }
     }
 
+    /// Destroys the elements but keeps the capacity.
+    void clear() {
+        auto* m = this->meta();
+        if (m) {
+            for (size_t i = 0; i < m->len; i++) {
+                ptr[i].~T();
+            }
+            m->len = 0;
+        }
+    }
+
     const T& front() const {
         if (this->size() == 0) {
             throw std::out_of_range("ThinVector::front");

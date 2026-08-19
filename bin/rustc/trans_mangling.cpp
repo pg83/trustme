@@ -483,7 +483,7 @@ case HIRTypeData::TAG_Infer:
 }
 
 namespace {
-    ::FmtLambda maxLen(::FmtLambda v) {
+    RcString maxLen(::FmtLambda v) {
         std::stringstream ss;
         ss << v;
         auto s = ss.str();
@@ -496,21 +496,19 @@ namespace {
             s = ss.str();
         } else {
         }
-        return ::FmtLambda([=](::std::ostream& os) {
-            os << s;
-        });
+        return RcString(s);
     }
 }
 
 // TODO: If the mangled name exceeds a limit, stop emitting the real name and start hashing the rest.
 #define DO_MANGLE(ty, suffix)                  \
-    ::FmtLambda TransMangle(const ty& v) {     \
+    RcString TransMangle(const ty& v) {        \
         return maxLen(TransMangle##suffix(v)); \
     }
 DO_MANGLE(HIRSimplePath, SimplePath)
 DO_MANGLE(HIRGenericPath, GenericPath)
 DO_MANGLE(HIRPath, Path)
 
-::FmtLambda TransMangle(const HIRTypeData* v) {
+RcString TransMangle(const HIRTypeData* v) {
     return maxLen(TransMangleTypeRef(v));
 }

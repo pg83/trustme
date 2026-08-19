@@ -3431,7 +3431,12 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
         }
     };
 
-    auto usageInfo = ::std::vector<LocalUsage>(fcn.locals.size());
+    // Reused across calls (the compiler is single-threaded): the pass runs
+    // per function per iteration, and a fresh vector here was one of the top
+    // allocation sites of the whole compile.
+    static ::std::vector<LocalUsage> usageInfo;
+    usageInfo.clear();
+    usageInfo.resize(fcn.locals.size());
 
     // 1. Enumrate usage
     {
@@ -3760,7 +3765,20 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     };
 
-    auto usageInfo = ::std::vector<LocalUsage>(fcn.locals.size());
+    // Reused across calls, like in SingleSetAndUse above. Entries are reset
+    // in place so the per-local dropLocs vectors keep their capacity.
+    static ::std::vector<LocalUsage> usageInfo;
+    if (usageInfo.size() < fcn.locals.size()) {
+        usageInfo.resize(fcn.locals.size());
+    }
+    for (size_t i = 0; i < fcn.locals.size(); i++) {
+        auto& u = usageInfo[i];
+        u.nWrite = 0;
+        u.nOtherRead = 0;
+        u.nDerefRead = 0;
+        u.setLoc = OptimiseStmtRef();
+        u.dropLocs.clear();
+    }
     struct CountBorrowUsage final: public LvalueVisitor {
         const MIRFunction& fcn;
         decltype(usageInfo)& usageInfo;
@@ -4872,7 +4890,15 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
 
     // Locate duplicate blocks and replace
     ::std::map<unsigned int, unsigned int> replacements;
-    ::std::unordered_map<size_t, ::std::vector<unsigned int>> candidates;
+    struct HashedBlock {
+        size_t hash;
+        unsigned int bbIdx;
+    };
+    // Reused across calls; sort-and-group replaces the old per-node-allocating
+    // hash map of buckets.
+    static ThinVector<HashedBlock> hashedBlocks;
+    static ThinVector<unsigned int> groupReps;
+    hashedBlocks.clear();
     for (unsigned int bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
         if (fcn.blocks[bbIdx].terminator.isDead()) {
             continue;
@@ -4880,18 +4906,35 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
         if (fcn.blocks[bbIdx].terminator.is_Incomplete() && fcn.blocks[bbIdx].statements.size() == 0) {
             continue;
         }
-        auto& bucket = candidates[H::blockHash(fcn.blocks[bbIdx])];
-        bool found = false;
-        for (auto candidate : bucket) {
-            if (H::blocksEqual(fcn.blocks[candidate], fcn.blocks[bbIdx])) {
-                replacements[bbIdx] = candidate;
-                found = true;
-                break;
+        hashedBlocks.push_back(HashedBlock{H::blockHash(fcn.blocks[bbIdx]), bbIdx});
+    }
+    ::std::sort(hashedBlocks.begin(), hashedBlocks.end(), [](const HashedBlock& a, const HashedBlock& b) {
+        return a.hash != b.hash ? a.hash < b.hash : a.bbIdx < b.bbIdx;
+    });
+    for (size_t i = 0; i < hashedBlocks.size();) {
+        size_t j = i;
+        while (j < hashedBlocks.size() && hashedBlocks[j].hash == hashedBlocks[i].hash) {
+            j++;
+        }
+        if (j - i > 1) {
+            // Within a group, the earliest equal block becomes the candidate.
+            groupReps.clear();
+            for (size_t k = i; k < j; k++) {
+                auto bbIdx = hashedBlocks[k].bbIdx;
+                bool found = false;
+                for (auto candidate : groupReps) {
+                    if (H::blocksEqual(fcn.blocks[candidate], fcn.blocks[bbIdx])) {
+                        replacements[bbIdx] = candidate;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    groupReps.push_back(bbIdx);
+                }
             }
         }
-        if (!found) {
-            bucket.push_back(bbIdx);
-        }
+        i = j;
     }
 
     if (!replacements.empty()) {
