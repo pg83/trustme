@@ -191,11 +191,20 @@ Thirty-eight programs build but execute incorrectly:
 | generated executable SIGABRT | 1 | |
 
 The repeated high-yield areas inside the panic set are enum/DST/layout, drop
-order, and coroutine layout. `issue-61894` is the type name of a function item,
-which still prints as `fn{::"bin#"::#0::f}` -- the path of a function inside an
-impl is not reconstructed. Of the formatting ones, `test_format_int_exp_precision` survives the precision
-fix. No 128-bit ones are left. Minimise representatives before treating nearby
-assertions as one root cause.
+order, and coroutine layout. `type_name` now prints the type the way rustc
+writes it -- tuples and argument lists without a trailing comma, an ordinary
+function pointer without `extern "Rust"`, a function item under the path that
+names it, a closure under the item that holds it, and a trait object with its
+principal trait's arguments -- which is what `type-name-unsized` measures. What
+is left of that family is the anonymous scope: an item declared inside a
+function body sits under `#N` in its path, where rustc names it after the
+function, so `issue-61894` still prints `issue_61894::#0::f` for
+`issue_61894::Bar<_>::foo::f` and `any::dyn_type_name` prints `any::#2::Foo`.
+Naming those scopes is a parser change (`ASTModule::addAnon`) that moves every
+such path, and with it every mangled name. Of the formatting ones,
+`test_format_int_exp_precision` survives the precision fix. No 128-bit ones are
+left. Minimise representatives before treating nearby assertions as one root
+cause.
 
 The let-chain family is fixed. Each `&&` operand has its own temporary scope, and
 a binding from a `let` operand now drops at the end of the body whether or not

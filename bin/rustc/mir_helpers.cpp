@@ -530,41 +530,127 @@ std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
             if (!rv.empty()) {
                 rv += "::";
             }
-            rv += comp.c_str();
+            // A closure is a generated type named `closure#<item>_<n>`; rustc
+            // names it after the item that holds it instead.
+            auto text = FMT(comp);
+            if (text.compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0) {
+                auto owner = text.substr(strlen(CLOSURE_PATH_PREFIX));
+                // `npos` compares greater than any index, so the digits check
+                // also covers a name with no `_` in it at all.
+                const auto index = owner.rfind('_');
+                if (index < owner.size() && owner.find_first_not_of("0123456789", index + 1) >= owner.size()) {
+                    owner = owner.substr(0, index);
+                }
+                rv += owner;
+                rv += "::{{closure}}";
+                continue;
+            }
+            rv += text;
+        }
+        return rv;
+    };
+    // The arguments of a path, as `<A, B>`, empty when there are none.
+    auto pathArgs = [this](const HIRPathParams& params, const HIRTraitPath::assocListT* typeBounds) {
+        auto rv = FMT("");
+        auto add = [&](const auto& text) {
+            rv += (rv.empty() ? "<" : ", ");
+            rv += text;
+        };
+        for (const auto& t : params.types) {
+            add(this->intrinsicTypeName(t));
+        }
+        // Const generic arguments are part of the name too: `S<3>`. An
+        // evaluated one prints as its encoded bytes otherwise.
+        for (const auto& v : params.values) {
+            if (const auto* e = v.opt_Evaluated()) {
+                add(FMT(EncodedLiteralSlice(**e).readUint()));
+            } else {
+                add(FMT(v));
+            }
+        }
+        if (typeBounds) {
+            for (const auto& b : *typeBounds) {
+                add(FMT(b.first << " = " << this->intrinsicTypeName(b.second.type)));
+            }
+        }
+        if (!rv.empty()) {
+            rv += ">";
         }
         return rv;
     };
 
-    if (ty->is_Path() && ty->as_Path().path.data.is_Generic()) {
-        const auto& gp = ty->as_Path().path.data.as_Generic();
-        ::std::string rv = plainPath(gp.path);
-        ::std::vector<::std::string> args;
-        for (const auto& t : gp.params.types) {
-            args.push_back(this->intrinsicTypeName(t));
-        }
-        // Const generic arguments are part of the name too: `S<3>`. An
-        // evaluated one prints as its encoded bytes otherwise.
-        for (const auto& v : gp.params.values) {
-            if (const auto* e = v.opt_Evaluated()) {
-                args.push_back(FMT(EncodedLiteralSlice(**e).readUint()));
-            } else {
-                args.push_back(FMT(v));
+    if (const auto* te = ty->opt_Tuple()) {
+        auto rv = FMT("(");
+        for (size_t i = 0; i < te->size(); i++) {
+            if (i > 0) {
+                rv += ", ";
             }
+            rv += this->intrinsicTypeName((*te)[i]);
         }
-        if (!args.empty()) {
-            rv += "<";
-            for (size_t i = 0; i < args.size(); i++) {
-                if (i > 0) {
-                    rv += ", ";
-                }
-                rv += args[i];
+        return rv + ")";
+    }
+    if (const auto* te = ty->opt_Slice()) {
+        return "[" + this->intrinsicTypeName(te->inner) + "]";
+    }
+    if (const auto* te = ty->opt_Array()) {
+        return FMT("[" << this->intrinsicTypeName(te->inner) << "; " << te->size << "]");
+    }
+    if (const auto* te = ty->opt_Borrow()) {
+        const char* prefix = te->type == HIRBorrowType::Shared ? "&" : (te->type == HIRBorrowType::Unique ? "&mut " : "&move ");
+        return prefix + this->intrinsicTypeName(te->inner);
+    }
+    if (const auto* te = ty->opt_Pointer()) {
+        const char* prefix = te->type == HIRBorrowType::Shared ? "*const " : (te->type == HIRBorrowType::Unique ? "*mut " : "*move ");
+        return prefix + this->intrinsicTypeName(te->inner);
+    }
+    if (const auto* te = ty->opt_Function()) {
+        // rustc leaves the default ABI and an empty return type unwritten.
+        auto rv = FMT((te->isUnsafe ? "unsafe " : ""));
+        if (te->abi != "" && te->abi != "Rust") {
+            rv += FMT("extern \"" << te->abi << "\" ");
+        }
+        rv += "fn(";
+        for (size_t i = 0; i < te->argTypes.size(); i++) {
+            if (i > 0) {
+                rv += ", ";
             }
-            rv += ">";
+            rv += this->intrinsicTypeName(te->argTypes[i]);
+        }
+        rv += ")";
+        if (!(te->rettype->is_Tuple() && te->rettype->as_Tuple().empty())) {
+            rv += " -> ";
+            rv += this->intrinsicTypeName(te->rettype);
         }
         return rv;
     }
+    if (const auto* te = ty->opt_NamedFunction()) {
+        // A function item's name is the path that names the function, not the
+        // signature the debug printer shows.
+        switch (te->path.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                const auto& pe = te->path.data.as_Generic();
+                return plainPath(pe.path) + pathArgs(pe.params, nullptr);
+            }
+            case HIRPathData::TAG_UfcsInherent: {
+                const auto& pe = te->path.data.as_UfcsInherent();
+                return FMT(this->intrinsicTypeName(pe.type) << "::" << pe.item << pathArgs(pe.params, nullptr));
+            }
+            case HIRPathData::TAG_UfcsKnown: {
+                const auto& pe = te->path.data.as_UfcsKnown();
+                auto trait = plainPath(pe.trait.path) + pathArgs(pe.trait.params, nullptr);
+                return FMT("<" << this->intrinsicTypeName(pe.type) << " as " << trait << ">::" << pe.item << pathArgs(pe.params, nullptr));
+            }
+            case HIRPathData::TAG_UfcsUnknown: {
+                break;
+            }
+        }
+        return FMT(ty);
+    }
+    if (ty->is_Path() && ty->as_Path().path.data.is_Generic()) {
+        const auto& gp = ty->as_Path().path.data.as_Generic();
+        return plainPath(gp.path) + pathArgs(gp.params, nullptr);
+    }
     if (const auto* te = ty->opt_TraitObject()) {
-
         ::std::vector<::std::string> bounds;
         if (te->trait.path.path.crateName() != "" || !te->trait.path.path.components().empty()) {
             auto principal = plainPath(te->trait.path.path);
@@ -587,13 +673,15 @@ std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
                     principal += " -> ";
                     principal += this->intrinsicTypeName(it->second.type);
                 }
+            } else {
+                principal += pathArgs(params, &te->trait.typeBounds);
             }
             bounds.push_back(std::move(principal));
         }
         for (const auto& marker : te->markers) {
             bounds.push_back(plainPath(marker.path));
         }
-        ::std::string rv = "dyn ";
+        auto rv = FMT("dyn ");
         for (size_t i = 0; i < bounds.size(); i++) {
             if (i > 0) {
                 rv += " + ";
