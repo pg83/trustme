@@ -44,6 +44,7 @@ def main() -> int:
     default_edition = tomllib.loads(book_toml.read_text())["rust"]["edition"]
     common = load_common()
 
+    recorded = common.recorded_modes(HERE / "cases.tsv")
     candidates = []
     for markdown in sorted(source_root.rglob("*.md")):
         source_relative = markdown.relative_to(source_root)
@@ -57,6 +58,8 @@ def main() -> int:
             filename = f"{source_relative.stem}__L{line}.rs"
             relative = (source_relative.parent / filename).as_posix()
             origin = f"src/{source_relative.as_posix()}:{line}"
+            if recorded.get(relative) == "xfail":
+                mode = "xfail"
             candidates.append(
                 (relative, origin, edition, mode, common.standalone(code_lines))
             )

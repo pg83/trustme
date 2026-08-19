@@ -113,9 +113,8 @@ def standalone(lines: list[str]) -> str:
     ])
 
 
-def recorded_modes() -> dict[str, str]:
+def recorded_modes(manifest: Path) -> dict[str, str]:
     """The modes already in the manifest, so an `xfail` survives a re-import."""
-    manifest = HERE / "cases.tsv"
     if not manifest.is_file():
         return {}
     rv = {}
@@ -197,7 +196,7 @@ def main() -> int:
         parser.error(f"missing reference compiler: {rustc}")
     default_edition = tomllib.loads(book_toml.read_text())["rust"]["edition"]
 
-    recorded = recorded_modes()
+    recorded = recorded_modes(HERE / "cases.tsv")
     candidates = []
     for markdown in sorted(source_root.rglob("*.md")):
         source_relative = markdown.relative_to(source_root)
