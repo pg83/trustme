@@ -1,5 +1,7 @@
 #include "hir_from_ast.h"
 
+#include <std/lib/vector.h>
+
 #include "common.h"
 #include "ast_ast.h"
 #include "hir_hir.h"
@@ -2845,6 +2847,105 @@ default:
     return mod;
 }
 
+namespace {
+    /// Names of the lifetimes an AST type mentions, handed to `cb` one at a time.
+    template <typename Cb>
+    void collectTypeLifetimes(const ASTType* ty, const Cb& cb);
+
+    template <typename Cb>
+    void collectPathLifetimes(const ASTPath& path, const Cb& cb) {
+        if (path.cls.is_Local() || !path.isValid()) {
+            return;
+        }
+        for (const auto& node : path.nodes()) {
+            for (const auto& ent : node.args().entries) {
+                switch (ent.tag()) {
+                    case ASTPathParamEnt::TAG_Lifetime:
+                        cb(ent.as_Lifetime().name().name);
+                        break;
+                    case ASTPathParamEnt::TAG_Type:
+                        collectTypeLifetimes(ent.as_Type(), cb);
+                        break;
+                    case ASTPathParamEnt::TAG_AssociatedTyEqual:
+                        collectTypeLifetimes(ent.as_AssociatedTyEqual().second, cb);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
+    template <typename Cb>
+    void collectTypeLifetimes(const ASTType* ty, const Cb& cb) {
+        if (!ty) {
+            return;
+        }
+        switch (ty->data.tag()) {
+            case TypeData::TAG_Borrow: {
+                const auto& e = ty->data.as_Borrow();
+                cb(e.lifetime.name().name);
+                collectTypeLifetimes(e.inner, cb);
+                break;
+            }
+            case TypeData::TAG_Pointer:
+                collectTypeLifetimes(ty->data.as_Pointer().inner, cb);
+                break;
+            case TypeData::TAG_Array:
+                collectTypeLifetimes(ty->data.as_Array().inner, cb);
+                break;
+            case TypeData::TAG_Slice:
+                collectTypeLifetimes(ty->data.as_Slice().inner, cb);
+                break;
+            case TypeData::TAG_Pattern:
+                collectTypeLifetimes(ty->data.as_Pattern().inner, cb);
+                break;
+            case TypeData::TAG_Tuple:
+                for (const auto* inner : ty->data.as_Tuple().innerTypes) {
+                    collectTypeLifetimes(inner, cb);
+                }
+                break;
+            case TypeData::TAG_Function: {
+                const auto& e = ty->data.as_Function().info;
+                for (const auto* arg : e.argTypes) {
+                    collectTypeLifetimes(arg, cb);
+                }
+                collectTypeLifetimes(e.rettype, cb);
+                break;
+            }
+            case TypeData::TAG_Path:
+                collectPathLifetimes(*ty->data.as_Path(), cb);
+                break;
+            case TypeData::TAG_TraitObject: {
+                const auto& e = ty->data.as_TraitObject();
+                for (const auto& lft : e.lifetimes) {
+                    cb(lft.name().name);
+                }
+                for (const auto& tr : e.traits) {
+                    if (tr.path) {
+                        collectPathLifetimes(*tr.path, cb);
+                    }
+                }
+                break;
+            }
+            case TypeData::TAG_ErasedType: {
+                const auto* e = ty->data.as_ErasedType();
+                for (const auto& lft : e->lifetimes) {
+                    cb(lft.name().name);
+                }
+                for (const auto& tr : e->traits) {
+                    if (tr.path) {
+                        collectPathLifetimes(*tr.path, cb);
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}  // namespace
+
 void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
     TRACE_FUNCTION_F(astMod.path());
     HIRSimplePath modPath(crateName, astMod.path().nodes);
@@ -2867,6 +2968,69 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
         }
         const auto& impl = i->data.as_Impl();
         const Span implSpan;
+        // A lifetime of the impl that neither the type nor the trait mentions
+        // cannot be worked out at a use, so an associated type may not carry it.
+        {
+            stl::Vector<RcString> constrained;
+            auto add = [](stl::Vector<RcString>& into, const RcString& n) {
+                for (const auto& v : into) {
+                    if (v == n) {
+                        return;
+                    }
+                }
+                into.pushBack(n);
+            };
+            auto holds = [](const stl::Vector<RcString>& in, const RcString& n) {
+                for (const auto& v : in) {
+                    if (v == n) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            auto mark = [&](const RcString& n) { add(constrained, n); };
+            collectTypeLifetimes(impl.def().type(), mark);
+            if (impl.def().trait().ent.isValid()) {
+                collectPathLifetimes(impl.def().trait().ent, mark);
+            }
+            // A where clause pins one down too: `where T: Combine<'a, Ty = &'x
+            // ()>` says what `'x` is once `T` is known.
+            for (const auto& b : impl.def().params().bounds) {
+                switch (b.tag()) {
+                    case ASTGenericBound::TAG_IsTrait: {
+                        const auto& e = b.as_IsTrait();
+                        collectTypeLifetimes(e.type, mark);
+                        collectPathLifetimes(e.trait, mark);
+                        break;
+                    }
+                    case ASTGenericBound::TAG_TypeLifetime: {
+                        const auto& e = b.as_TypeLifetime();
+                        collectTypeLifetimes(e.type, mark);
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            }
+            for (const auto& item : impl.items()) {
+                const auto* ta = item.data ? item.data->opt_Type() : nullptr;
+                if (!ta) {
+                    continue;
+                }
+                stl::Vector<RcString> used;
+                collectTypeLifetimes(ta->type(), [&](const RcString& n) { add(used, n); });
+                for (const auto& p : impl.def().params().params) {
+                    const auto* lft = p.opt_Lifetime();
+                    if (!lft) {
+                        continue;
+                    }
+                    const auto& name = lft->name().name;
+                    if (holds(used, name) && !holds(constrained, name)) {
+                        ERROR(item.sp, E0000, "the lifetime parameter `'" << name << "` is not constrained by the impl trait, self type, or predicates");
+                    }
+                }
+            }
+        }
         auto params = LowerHIRGenericParams(impl.def().params(), nullptr);
 
         TRACE_FUNCTION_F("IMPL " << impl.def());

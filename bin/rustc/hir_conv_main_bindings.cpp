@@ -552,8 +552,86 @@ default:
             return crate.types.intern(mv$(data));
         }
 
+        /// Every type parameter of an impl has to be pinned down by a use: by
+        /// the type the impl is for, by the trait arguments, or by an
+        /// associated-type equality whose own inputs are already pinned down.
+        /// One that is not cannot be worked out at a use site.
+        static void checkImplParamsConstrained(const HIRGenericParams& params, const HIRTypeData* selfTy, const HIRPathParams* traitArgs) {
+            const size_t n = params.types.size();
+            if (n == 0 || n > 64) {
+                return;
+            }
+            uint64_t used = 0;
+            auto mark = [&](const HIRTypeData* t) {
+                if (const auto* g = t->opt_Generic()) {
+                    if (g->group() == GENERICImpl && g->idx() < 64) {
+                        used |= uint64_t(1) << g->idx();
+                    }
+                }
+                return false;
+            };
+            auto usesOnly = [&](uint64_t mask) {
+                return (mask & ~used) == 0;
+            };
+            auto collect = [&](const HIRTypeData* t) {
+                uint64_t saved = used;
+                used = 0;
+                visitTyWith(t, mark);
+                uint64_t rv = used;
+                used = saved;
+                return rv;
+            };
+
+            visitTyWith(selfTy, mark);
+            if (traitArgs) {
+                for (const auto& t : traitArgs->types) {
+                    visitTyWith(t, mark);
+                }
+            }
+            // `where B: Equate<Proj = A>` pins down `A` once `B` is pinned down,
+            // so keep going while anything new is pinned down.
+            for (bool changed = true; changed;) {
+                changed = false;
+                for (const auto& b : params.bounds) {
+                    switch (b.tag()) {
+                        case HIRGenericBound::TAG_TraitBound: {
+                            const auto& e = b.as_TraitBound();
+                            uint64_t inputs = collect(e.type);
+                            for (const auto& t : e.trait.path.params.types) {
+                                inputs |= collect(t);
+                            }
+                            if (!usesOnly(inputs)) {
+                                break;
+                            }
+                            for (const auto& assoc : e.trait.typeBounds) {
+                                uint64_t before = used;
+                                visitTyWith(assoc.second.type, mark);
+                                changed = changed || used != before;
+                            }
+                            break;
+                        }
+                        case HIRGenericBound::TAG_TypeEquality: {
+                            const auto& e = b.as_TypeEquality();
+                            if (usesOnly(collect(e.type))) {
+                                uint64_t before = used;
+                                visitTyWith(e.otherType, mark);
+                                changed = changed || used != before;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            for (size_t i = 0; i < n; i++) {
+                if ((used & (uint64_t(1) << i)) == 0) {
+                    ERROR(Span(), E0000, "the type parameter `" << params.types[i].name << "` is not constrained by the impl trait, self type, or predicates - impl for " << selfTy);
+                }
+            }
+        }
+
         void visitTypeImpl(HIRTypeImpl& impl) override {
             TRACE_FUNCTION_F("impl " << impl.type << " - from " << impl.srcModule);
+            checkImplParamsConstrained(impl.params, impl.type, nullptr);
             auto _ = this->ms.setImplGenerics(impl.params);
             const auto oldSelfType = selfType;
             selfType = impl.type;
@@ -579,6 +657,7 @@ default:
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
             TRACE_FUNCTION_F("impl " << traitPath << " for " << impl.type);
+            checkImplParamsConstrained(impl.params, impl.type, &impl.traitArgs);
             auto traitGpath = HIRGenericPath(traitPath, impl.traitArgs.clone());
             auto _0 = this->ms.setCurrentTraitImpl(impl);
             auto _1 = this->ms.setCurrentTrait(traitGpath);
