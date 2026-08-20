@@ -2995,6 +2995,87 @@ static void writeCtfeUnsizeMetadata(
     }
 }
 
+template<typename WriteField>
+static void writeCtfeEnumVariant(
+    const StaticTraitResolve& resolve,
+    MIREvalCallStackEntry& localState,
+    MIREvalValueRef dst,
+    const HIRTypeData* ty,
+    size_t index,
+    size_t valueCount,
+    WriteField&& writeField
+) {
+    const auto& state = localState.state;
+    auto* enmRepr = TargetGetTypeRepr(state.sp, resolve, ty);
+    if (!enmRepr) {
+        throw Defer();
+    }
+    if (valueCount > 0) {
+        MIR_ASSERT(state, index < enmRepr->fields.size(), "Enum representation has no variant " << index << " for " << ty);
+        const auto ofs = enmRepr->fields[index].offset;
+        const auto& innerType = enmRepr->fields[index].ty;
+        auto* innerRepr = TargetGetTypeRepr(state.sp, resolve, innerType);
+        if (!innerRepr) {
+            throw Defer();
+        }
+        MIR_ASSERT(state, valueCount <= innerRepr->fields.size(),
+            "Enum variant " << index << " has " << innerRepr->fields.size() << " fields, got " << valueCount);
+        for (size_t i = 0; i < valueCount; i++) {
+            const size_t size = localState.sizeOfOrBug(innerRepr->fields[i].ty);
+            auto fieldDst = dst.slice(ofs + innerRepr->fields[i].offset, size);
+            writeField(fieldDst, i);
+            DEBUG("@" << (ofs + innerRepr->fields[i].offset) << " = " << fieldDst);
+        }
+    }
+
+    switch (enmRepr->variants.tag()) {
+        case TypeReprVariantMode::TAG_None: {
+            break;
+        }
+        case TypeReprVariantMode::TAG_NonZero: {
+            auto& variant = enmRepr->variants.as_NonZero();
+            // No tag to write for the populated variant. The empty variant is
+            // represented by zeroing the niche field.
+            if (index == variant.zeroVariant) {
+                auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
+                const auto savedOffset = offset;
+                for (size_t i = 0; i + 8 <= variant.field.size; i += 8) {
+                    dst.slice(offset, 8).writeUint(state, 64, 0);
+                    offset += 8;
+                }
+                if (variant.field.size % 8 > 0) {
+                    dst.slice(offset, variant.field.size % 8).writeUint(state, (variant.field.size % 8) * 8, 0);
+                }
+                DEBUG("@" << offset << " = " << dst.slice(savedOffset, variant.field.size) << " NonZero");
+            }
+            break;
+        }
+        case TypeReprVariantMode::TAG_Linear: {
+            auto& variant = enmRepr->variants.as_Linear();
+            if (!variant.isNiche(index)) {
+                const auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
+                MIR_ASSERT(state, variant.field.size <= 64 / 8, "");
+                dst.slice(offset, variant.field.size).writeUint(state, variant.field.size * 8, variant.tagValue(index));
+            }
+            break;
+        }
+        case TypeReprVariantMode::TAG_Values: {
+            auto& variant = enmRepr->variants.as_Values();
+            const auto& field = enmRepr->fields[variant.field.index];
+            const auto typeInfo = TypeInfo::forType(field.ty);
+            MIR_ASSERT(state, typeInfo.ty == TypeInfo::Signed || typeInfo.ty == TypeInfo::Unsigned,
+                "EnumVariant: Values not integer - " << field.ty);
+            auto tagDst = dst.slice(field.offset, (typeInfo.bits + 7) / 8);
+            if (typeInfo.ty == TypeInfo::Signed) {
+                tagDst.writeSint(state, typeInfo.bits, S128(variant.values.at(index)));
+            } else {
+                tagDst.writeUint(state, typeInfo.bits, variant.values.at(index));
+            }
+            break;
+        }
+    }
+}
+
 void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStatement& stmt) {
     const auto& state = localState.state;
     DEBUG("E" << this->evalIndex << " F" << localState.frameIndex << " " << state << stmt);
@@ -3441,73 +3522,10 @@ default:
                 auto& e = sa.src.as_EnumVariant();
                 HIRTypeRef tmp;
                 const auto& ty = state.getLvalueType(tmp, sa.dst);
-                auto* enmRepr = TargetGetTypeRepr(state.sp, resolve, ty);
-                if (!enmRepr) {
-                    throw Defer();
-                }
-                if (e.vals.size() > 0) {
-                    auto ofs = enmRepr->fields[e.index].offset;
-                    const auto& ity = enmRepr->fields[e.index].ty;
-                    auto* repr = TargetGetTypeRepr(state.sp, resolve, ity);
-                    if (!repr) {
-                        throw Defer();
-                    }
-                    for (size_t i = 0; i < e.vals.size(); i++) {
-                        size_t sz = localState.sizeOfOrBug(repr->fields[i].ty);
-                        auto localDst = dst.slice(ofs + repr->fields[i].offset, sz);
-                        localState.writeParam(localDst, e.vals[i]);
-                        DEBUG("@" << (ofs + repr->fields[i].offset) << " = " << localDst);
-                    }
-                }
-
-                switch (enmRepr->variants.tag()) {
-                    case TypeReprVariantMode::TAG_None: {
-                        break;
-                    }
-                    case TypeReprVariantMode::TAG_NonZero: {
-                        auto& ve = enmRepr->variants.as_NonZero();
-                        // No tag to write, just leave as zeroes
-                        if (e.index == ve.zeroVariant) {
-                            auto ofs = getOffset(state.sp, resolve, enmRepr, ve.field);
-                            auto savedOfs = ofs;
-                            for (size_t i = 0; i + 8 <= ve.field.size; i += 8) {
-                                dst.slice(ofs, 8).writeUint(state, 64, 0);
-                                ofs += 8;
-                            }
-                            if (ve.field.size % 8 > 0) {
-                                dst.slice(ofs, ve.field.size % 8).writeUint(state, (ve.field.size % 8) * 8, 0);
-                            }
-                            DEBUG("@" << ofs << " = " << dst.slice(savedOfs, ve.field.size) << " NonZero");
-                        } else {
-                            // No tag, already filled
-                        }
-                        break;
-                    }
-                    case TypeReprVariantMode::TAG_Linear: {
-                        auto& ve = enmRepr->variants.as_Linear();
-                        if (ve.isNiche(e.index)) {
-                            // No need to write tag, as this variant is the niche
-                        } else {
-                            auto ofs = getOffset(state.sp, resolve, enmRepr, ve.field);
-                            MIR_ASSERT(state, ve.field.size <= 64 / 8, "");
-                            dst.slice(ofs, ve.field.size).writeUint(state, ve.field.size * 8, ve.tagValue(e.index));
-                        }
-                        break;
-                    }
-                    case TypeReprVariantMode::TAG_Values: {
-                        auto& ve = enmRepr->variants.as_Values();
-                        const auto& fld = enmRepr->fields[ve.field.index];
-                        auto ti = TypeInfo::forType(fld.ty);
-                        MIR_ASSERT(state, ti.ty == TypeInfo::Signed || ti.ty == TypeInfo::Unsigned, "EnumVariant: Values not integer - " << fld.ty);
-                        auto tagDst = dst.slice(fld.offset, (ti.bits + 7) / 8);
-                        if (ti.ty == TypeInfo::Signed) {
-                            tagDst.writeSint(state, ti.bits, S128(ve.values.at(e.index)));
-                        } else {
-                            tagDst.writeUint(state, ti.bits, ve.values.at(e.index));
-                        }
-                        break;
-                    }
-                }
+                writeCtfeEnumVariant(resolve, localState, dst, ty, e.index, e.vals.size(),
+                    [&](MIREvalValueRef fieldDst, size_t i) {
+                        localState.writeParam(fieldDst, e.vals[i]);
+                    });
                 break;
             }
         }
@@ -4653,6 +4671,16 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
             localDst.copyFrom(state, MIREvalValueRef(callArgs[i]));
             DEBUG("@" << repr->fields[i].offset << " = " << localDst);
         }
+        return false;
+    } else if (rv.is_Enum()) {
+        const auto& enumEnt = rv.as_Enum();
+        auto dst = localState.getLval(rvSlot);
+        HIRTypeRef tmp;
+        const auto& ty = state.getLvalueType(tmp, rvSlot);
+        writeCtfeEnumVariant(resolve, localState, dst, ty, enumEnt.idx, callArgs.size(),
+            [&](MIREvalValueRef fieldDst, size_t i) {
+                fieldDst.copyFrom(state, MIREvalValueRef(callArgs[i]));
+            });
         return false;
     } else {
         MIR_TODO(state, "Could not find function for " << path << " - " << rv.tagStr());

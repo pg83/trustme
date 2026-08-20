@@ -25,8 +25,8 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 ```
 
 All 631 failed nodes were independently rerun for that snapshot. Current
-eight-corpus rerun data is in `.build-clang/reclass-20260820f`; classified
-records are in `.build-clang/classification-20260820f`. The 25 failures outside
+eight-corpus rerun data is in `.build-clang/reclass-20260820g`; classified
+records are in `.build-clang/classification-20260820g`. The 25 failures outside
 those corpora are still carried from the complete snapshot rather than
 silently dropped from the total.
 
@@ -38,21 +38,21 @@ cannot.
 
 | result | tests |
 |---|---:|
-| total active fast-gate nodes | 14,114 |
+| total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 119 |
-| fixed, or no longer reproducing, since the gate | 512 |
+| still failing or still carried from the last full sweep | 118 |
+| fixed, or no longer reproducing, since the gate | 513 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-20. All 99 failures reproduced independently before the
-latest fixes and 94 after them. The remaining 25 are in groups outside that
+latest fixes and 93 after them. The remaining 25 are in groups outside that
 sweep and are still carried from the last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 49 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 21 |
 | wrong runtime behaviour, panic, abort, or output | 16 |
 | generated C++ or link failure | 3 |
 | stable timeout | 4 |
@@ -106,13 +106,13 @@ impl, and a `use` of an item declared in the same block.
 
 ## P1: internal compiler failures
 
-There are 22 compiler-internal failures in 21 stable signatures in the current
+There are 21 compiler-internal failures in 20 stable signatures in the current
 eight-corpus rerun.
 
 | compiler area | tests |
 |---|---:|
 | type checking and HIR lowering | 13 |
-| MIR lowering, CTFE MIR, and optimisation | 6 |
+| MIR lowering, CTFE MIR, and optimisation | 5 |
 | translation and code generation | 3 |
 
 Only one signature covers more than one test, so the class is a long tail:
@@ -120,7 +120,7 @@ Only one signature covers more than one test, so the class is a long tail:
 | signature | tests |
 |---|---:|
 | `BUG hir_typeck_common.cpp:824` | 2 |
-| twenty one-test signatures | 20 |
+| nineteen one-test signatures | 19 |
 
 The line numbers in a signature move with every commit that touches the file:
 the ones here are read from the classification named above, and are worth
