@@ -2854,15 +2854,18 @@ default:
             if (node.path.data.is_Generic()) {
                 const auto& gpath = node.path.data.as_Generic();
                 const auto& fcn = builder.crate().getFunctionByPath(node.span(), gpath.path);
+                const auto& name = gpath.path.components().back();
                 if (gpath.path.crateName() == "#intrinsics") {
-                    const auto& name = gpath.path.components().back();
                     if (name == "offset_of") {
                         builder.endBlock(MIRTerminator::make_Call({nextBlock, MIRUnwindAction::make_Cleanup(panicBlock), res.clone(), MIRCallTarget::make_Intrinsic({name, gpath.params.clone()}), mv$(values)}));
                     } else {
                         ERROR(node.span(), E0000, "Unknown builtin - " << gpath.path);
                     }
-                } else if (fcn.abi == "rust-intrinsic") {
-                    auto name = gpath.path.components().back();
+                // A layout intrinsic may carry a fallback body, but a backend
+                // that knows it still replaces the call with its own answer.
+                } else if (fcn.abi == "rust-intrinsic"
+                    || (fcn.markings.isRustcIntrinsic
+                        && (name == "vtable_size" || name == "vtable_align"))) {
                     if (name == "ptr_metadata") {
                         auto& v = values.front();
                         builder.pushStmtAssign(node.span(), res.clone(), MIRRValue::make_DstMeta({std::move(v.as_LValue())}));
