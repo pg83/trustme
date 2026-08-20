@@ -82,6 +82,16 @@ struct SimplePatIfCheck {
     MacroPatEnt::Type ty; // If PAT_TOKEN, token is checked
     Token tok;
 
+    // Fragment checks otherwise carry TOK_NULL. EOF marks a fragment that can
+    // start both a repetition and its continuation at the same input token.
+    bool isLocalAmbiguity() const {
+        return ty != MacroPatEnt::PAT_TOKEN && tok == TOK_EOF;
+    }
+
+    void markLocalAmbiguity() {
+        tok = Token(TOK_EOF);
+    }
+
     bool operator==(const SimplePatIfCheck& x) const {
         return this->ty == x.ty && this->tok == x.tok;
     }

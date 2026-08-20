@@ -25,8 +25,8 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 ```
 
 All 631 failed nodes were independently rerun for that snapshot. Current
-eight-corpus rerun data is in `.build-clang/reclass-20260820d`; classified
-records are in `.build-clang/classification-20260820d`. The 25 failures outside
+eight-corpus rerun data is in `.build-clang/reclass-20260820e`; classified
+records are in `.build-clang/classification-20260820e`. The 25 failures outside
 those corpora are still carried from the complete snapshot rather than
 silently dropped from the total.
 
@@ -40,13 +40,13 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 121 |
-| fixed, or no longer reproducing, since the gate | 510 |
+| still failing or still carried from the last full sweep | 120 |
+| fixed, or no longer reproducing, since the gate | 511 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-20. All 99 failures reproduced independently before the
-latest fixes and 96 after them. The remaining 25 are in groups outside that
+latest fixes and 95 after them. The remaining 25 are in groups outside that
 sweep and are still carried from the last full sweep.
 
 | current eight-corpus result | tests |
@@ -54,7 +54,7 @@ sweep and are still carried from the last full sweep.
 | accepted Rust rejected by the compiler or driver | 49 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 16 |
-| missing rejection or diagnostic | 2 |
+| missing rejection or diagnostic | 1 |
 | generated C++ or link failure | 3 |
 | stable timeout | 4 |
 | carried from groups outside the sweep | 25 |
@@ -167,11 +167,11 @@ two as independent work.
 
 ## P2: missing language checks
 
-Two negative tests compile successfully:
+One negative test compiles successfully:
 
 | language area | tests |
 |---|---:|
-| macro matching and visibility | 2 |
+| macro visibility | 1 |
 
 What is left of this class is reachable with the compiler's existing phase
 model. The rest -- the borrow- and lifetime-dependent cases, plus the six

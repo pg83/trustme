@@ -2326,6 +2326,9 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, c
                             lc.consume();
                         }
                     }
+                    if (check.isLocalAmbiguity()) {
+                        ERROR(sp, E0000, "local ambiguity when calling macro: multiple parsing options");
+                    }
                 }
                 if (rv == e->isEqual) {
                     DEBUG("- Succeeded");
@@ -4050,7 +4053,7 @@ namespace {
         }
 
         bool operator==(const ExpTok& t) const {
-            return this->ty == t.ty && *this->tok == *t.tok;
+            return this->ty == t.ty && (this->ty != MacroPatEnt::PAT_TOKEN || *this->tok == *t.tok);
         }
 
         bool operator!=(const ExpTok& t) const {
@@ -4226,6 +4229,15 @@ namespace {
                             if (sIt != skipConds.end()) {
                                 didExtend = true;
                                 DEBUG("Entry condition is also in skip condition: " << *eIt);
+
+                                // Lowering extends the condition to construct a
+                                // deterministic stream. Rust still reports an
+                                // ambiguity at the current fragment instead of
+                                // using that extra lookahead to choose a capture.
+                                if (eIt->front().ty != MacroPatEnt::PAT_TOKEN && !eIt->front().isLocalAmbiguity()) {
+                                    eIt->front().markLocalAmbiguity();
+                                    sIt->front().markLocalAmbiguity();
+                                }
 
                                 std::vector<ExpTok> path;
                                 for (auto it = eIt->begin(); it != eIt->end(); ++it) {
