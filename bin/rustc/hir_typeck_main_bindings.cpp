@@ -111,6 +111,8 @@ namespace {
         HIRItemPath* fcnPath = nullptr;
         HIRFunction* fcnPtr = nullptr;
         unsigned int fcnErasedCount = 0;
+        bool checkingFunctionSignature = false;
+        bool checkingTypeDeclarationParams = false;
 
         ::std::vector<const HIRTypeData*> selfTypes;
 
@@ -146,7 +148,15 @@ namespace {
             return rv;
         }
 
-        void checkParameters(const Span& sp, const HIRGenericParams& paramDef, HIRPathParams& paramVals) {
+        static bool traitBoundSatisfied(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* type, const HIRTraitPath& trait) {
+            return resolve.findImpl(sp, trait.path.path, &trait.path.params, type, [](const auto&, bool isFuzzed) {
+                // A possible impl is not proof that a generic signature is
+                // well formed; an in-scope bound or a concrete impl is exact.
+                return !isFuzzed;
+            });
+        }
+
+        void checkParameters(const Span& sp, const HIRSimplePath& usedPath, PathContext pc, const HIRGenericParams& paramDef, HIRPathParams& paramVals) {
             MonomorphStatePtr ms(crate.types, selfTypes.empty() ? nullptr : selfTypes.back(), &paramVals, nullptr);
 
             while (paramVals.types.size() < paramDef.types.size()) {
@@ -176,13 +186,46 @@ namespace {
                 }
             }
 
-            // TODO: Check generic bounds
             for (const auto& bound : paramDef.bounds) {
                 switch (bound.tag()) {
                     case HIRGenericBound::TAG_TraitBound: {
-                        auto& e = bound.as_TraitBound();
-                        // TODO: Check for an implementation of this trait
-                        DEBUG("TODO: Check bound " << e.type << " : " << e.trait.path);
+                        const auto& e = bound.as_TraitBound();
+                        const auto* boundedParam = e.type->opt_Generic();
+                        if (boundedParam && boundedParam->isSelf() && e.trait.path.path == usedPath) {
+                            // Every trait carries a synthetic `Self: Trait`
+                            // bound so its items can be resolved. The trait
+                            // path being formed is itself that evidence.
+                            break;
+                        }
+                        // This pass has a complete parameter mapping for type
+                        // constructors. Function and trait paths can contain
+                        // method-level or associated-type evidence that is
+                        // resolved by their later specialised checks.
+                        if (!checkingFunctionSignature || pc != PathContext::TYPE || !boundedParam || boundedParam->group() != 0) {
+                            break;
+                        }
+                        auto type = ms.monomorphType(sp, e.type);
+                        auto trait = ms.monomorphTraitpath(sp, e.trait, false);
+                        if (type->mayHaveAssociatedType()) {
+                            break;
+                        }
+                        if (const auto* actualGeneric = type->opt_Generic()) {
+                            const auto* context = actualGeneric->group() == 0
+                                ? resolve_.implGenericsPtr()
+                                : actualGeneric->group() == 1
+                                    ? resolve_.itemGenericsPtr()
+                                    : nullptr;
+                            // Some lowered trait-impl associated types no
+                            // longer carry their own GAT parameter list. A
+                            // missing context cannot prove or disprove its
+                            // bound here.
+                            if (!context || actualGeneric->idx() >= context->types.size()) {
+                                break;
+                            }
+                        }
+                        if (!traitBoundSatisfied(sp, resolve_, type, trait)) {
+                            ERROR(sp, E0000, "trait bound `" << type << ": " << trait.path << "` is not satisfied");
+                        }
                         break;
                     }
                     case HIRGenericBound::TAG_TypeEquality: {
@@ -353,7 +396,7 @@ namespace {
             const auto& params = getParamsForItem(sp, crate, p.path, pc);
             auto& args = p.params;
 
-            checkParameters(sp, params, args);
+            checkParameters(sp, p.path, pc, params, args);
             DEBUG("p = " << p);
 
             HIRVisitor::visitGenericPath(p, pc);
@@ -604,6 +647,21 @@ namespace {
                         selfTypes.push_back(e.type);
                         this->visitTraitPath(e.trait);
                         selfTypes.pop_back();
+
+                        // Bounds on a type declaration that are already fully
+                        // concrete must hold there. Other generic blocks can
+                        // contain projections and const predicates whose
+                        // original dependency has been folded out of HIR, so
+                        // their bounds are checked when applied instead.
+                        if (checkingTypeDeclarationParams
+                            && !crate.featureEnabled("trivial_bounds")
+                            && !monomorphiseTypeNeeded(e.type)
+                            && !monomorphiseTraitpathNeeded(e.trait)) {
+                            StaticTraitResolve bareResolve(resolve_.board());
+                            if (!traitBoundSatisfied(Span(), bareResolve, e.type, e.trait)) {
+                                ERROR(Span(), E0000, "trait bound `" << e.type << ": " << e.trait.path << "` is not satisfied");
+                            }
+                        }
                         break;
                     }
                     case HIRGenericBound::TAG_TypeEquality: {
@@ -644,17 +702,23 @@ namespace {
 
         void visitStruct(HIRItemPath p, HIRStruct& item) override {
             auto _ = resolve_.setImplGenerics(item.structMarkings.dstType, item.params);
+            checkingTypeDeclarationParams = true;
             HIRVisitor::visitStruct(p, item);
+            checkingTypeDeclarationParams = false;
         }
 
         void visitUnion(HIRItemPath p, HIRUnion& item) override {
             auto _ = resolve_.setImplGenerics(MetadataType::None, item.params);
+            checkingTypeDeclarationParams = true;
             HIRVisitor::visitUnion(p, item);
+            checkingTypeDeclarationParams = false;
         }
 
         void visitEnum(HIRItemPath p, HIREnum& item) override {
             auto _ = resolve_.setImplGenerics(MetadataType::None, item.params);
+            checkingTypeDeclarationParams = true;
             HIRVisitor::visitEnum(p, item);
+            checkingTypeDeclarationParams = false;
         }
 
         void visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) override {
@@ -982,6 +1046,7 @@ namespace {
             visitParams(item.params);
 
             fcnPtr = &item;
+            checkingFunctionSignature = true;
 
             // Visit arguments
             // - Used to convert `impl Trait` in argument position into generics
@@ -1008,6 +1073,7 @@ namespace {
                 ASSERT_BUG(Span(), item.receiverType, "Custom receiver without a receiver type");
                 *item.receiverType = this->visitType(*item.receiverType);
             }
+            checkingFunctionSignature = false;
             HIRVisitor::visitFunction(p, item);
         }
     };

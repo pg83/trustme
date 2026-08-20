@@ -25,8 +25,8 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 ```
 
 All 631 failed nodes were independently rerun for that snapshot. Current
-eight-corpus rerun data is in `.build-clang/reclass-20260820c`; classified
-records are in `.build-clang/classification-20260820c`. The 25 failures outside
+eight-corpus rerun data is in `.build-clang/reclass-20260820d`; classified
+records are in `.build-clang/classification-20260820d`. The 25 failures outside
 those corpora are still carried from the complete snapshot rather than
 silently dropped from the total.
 
@@ -40,21 +40,21 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 123 |
-| fixed, or no longer reproducing, since the gate | 508 |
+| still failing or still carried from the last full sweep | 121 |
+| fixed, or no longer reproducing, since the gate | 510 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-20. All 99 failures reproduced independently before the
-latest fix and 98 after it. The remaining 25 are in groups outside that sweep
-and are still carried from the last full sweep.
+latest fixes and 96 after them. The remaining 25 are in groups outside that
+sweep and are still carried from the last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 49 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 16 |
-| missing rejection or diagnostic | 4 |
+| missing rejection or diagnostic | 2 |
 | generated C++ or link failure | 3 |
 | stable timeout | 4 |
 | carried from groups outside the sweep | 25 |
@@ -167,11 +167,10 @@ two as independent work.
 
 ## P2: missing language checks
 
-Four negative tests compile successfully:
+Two negative tests compile successfully:
 
 | language area | tests |
 |---|---:|
-| trait bounds | 2 |
 | macro matching and visibility | 2 |
 
 What is left of this class is reachable with the compiler's existing phase
