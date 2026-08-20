@@ -5426,6 +5426,12 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
             if (!useEnt.path.bindings.hasBinding()) {
                 ERROR(span, E0000, "Unable to resolve `use` target " << useEnt.path);
             }
+            if (useEnt.name != "" && useStmt->vis.isGlobal()) {
+                const auto* macroBinding = useEnt.path.bindings.macro.binding.opt_MacroRules();
+                if (macroBinding && macroBinding->mac && macroBinding->mac->definitionSpan && !macroBinding->mac->exported) {
+                    ERROR(span, E0000, "Macro is only public within the crate and cannot be re-exported outside");
+                }
+            }
             DEBUG("'" << useEnt.name << "' = " << useEnt.path);
 
             // - If doing a glob, ensure the item type is valid
@@ -5740,7 +5746,7 @@ ASTPath::Bindings ResolveUseGetBindingMod(
     // NOTE: `use macroname;` can refer to a macro already in-scope via a parent `#[macro_use]`
     // - So, need to look upwards
     // - Can't use `parent_modules`, as that's only for anon.
-    if (rv.macro.is_Unbound()) {
+    if (rv.macro.is_Unbound() && mod.path() == sourceModPath) {
         ::std::vector<const ASTModule*> mods;
         mods.push_back(&crate.rootModule());
         for (size_t i = 0; i < mod.path().nodes.size(); i++) {

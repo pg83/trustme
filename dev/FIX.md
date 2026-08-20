@@ -25,8 +25,8 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 ```
 
 All 631 failed nodes were independently rerun for that snapshot. Current
-eight-corpus rerun data is in `.build-clang/reclass-20260820e`; classified
-records are in `.build-clang/classification-20260820e`. The 25 failures outside
+eight-corpus rerun data is in `.build-clang/reclass-20260820f`; classified
+records are in `.build-clang/classification-20260820f`. The 25 failures outside
 those corpora are still carried from the complete snapshot rather than
 silently dropped from the total.
 
@@ -38,15 +38,15 @@ cannot.
 
 | result | tests |
 |---|---:|
-| total active fast-gate nodes | 14,113 |
+| total active fast-gate nodes | 14,114 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 120 |
-| fixed, or no longer reproducing, since the gate | 511 |
+| still failing or still carried from the last full sweep | 119 |
+| fixed, or no longer reproducing, since the gate | 512 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-20. All 99 failures reproduced independently before the
-latest fixes and 95 after them. The remaining 25 are in groups outside that
+latest fixes and 94 after them. The remaining 25 are in groups outside that
 sweep and are still carried from the last full sweep.
 
 | current eight-corpus result | tests |
@@ -54,7 +54,6 @@ sweep and are still carried from the last full sweep.
 | accepted Rust rejected by the compiler or driver | 49 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 16 |
-| missing rejection or diagnostic | 1 |
 | generated C++ or link failure | 3 |
 | stable timeout | 4 |
 | carried from groups outside the sweep | 25 |
@@ -165,25 +164,7 @@ lifetimes -- `HIRPathParams` has no lifetime list to carry them. Nothing short o
 carrying lifetimes through HIR would separate those types, so do not count these
 two as independent work.
 
-## P2: missing language checks
-
-One negative test compiles successfully:
-
-| language area | tests |
-|---|---:|
-| macro visibility | 1 |
-
-What is left of this class is reachable with the compiler's existing phase
-model. The rest -- the borrow- and lifetime-dependent cases, plus the six
-import-resolution rules whose answer depends on interleaving resolution with
-macro expansion -- are recorded as `xfail` in the Rust Reference manifest,
-with their rules in `tst/rust_reference/XFAIL.md`. trustme compiles programs;
-it is not going to grow those missing compiler phases solely to reproduce
-every rejection rustc makes. The rows still run, so making one of those
-rejections turns its node red and asks for the row to move back.
-
-Source chapters are routing information. Group the concrete examples by the
-missing language rule before implementing diagnostics.
+## P2: isolated front-end rules
 
 `abi/variadic-ffi` is the other `...` test and needs more than parsing: a named
 variadic parameter (`mut ap: ...`) is a `VaListImpl` the body then reads, so
