@@ -7939,6 +7939,39 @@ default: {
                         }
                     }
 
+                    // Pin ergonomics permits a method receiver written as
+                    // `Pin<&T>` to reborrow a `Pin<&mut T>`. Probe that
+                    // receiver before ordinary autoref candidates.
+                    if (possibilities.empty() && crate.featureEnabled("pin_ergonomics")) {
+                        const auto* pathTy = ty->opt_Path();
+                        const auto& langPin = crate.getLangItemPathOpt("pin");
+                        if (pathTy && pathTy->path.data.is_Generic()
+                            && !langPin.components().empty()) {
+                            const auto& pinPath = pathTy->path.data.as_Generic();
+                            if (pinPath.path == langPin && pinPath.params.types.size() == 1) {
+                                const auto* pinInner = this->ivars.getType(pinPath.params.types.front());
+                                if (const auto* borrow = pinInner->opt_Borrow();
+                                    borrow && borrow->type == HIRBorrowType::Unique) {
+                                    auto shared = crate.types.borrow(HIRBorrowType::Shared, borrow->inner);
+                                    auto sharedPin = crate.types.path(
+                                        HIRGenericPath(langPin, HIRPathParams(shared)),
+                                        pathTy->binding.clone()
+                                    );
+                                    if (this->findMethod(
+                                            sp, traits, ivars, typeIvarCount, sharedPin, methodName,
+                                            MethodAccess::Move, AutoderefBorrow::PinShared,
+                                            possibilities, &undecided
+                                        )) {
+                                        DEBUG(
+                                            "FOUND Pin<&> *{" << derefCount
+                                                              << "}, fcn_path = " << possibilities.back().second
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Auto-ref
                     auto borrowTy = crate.types.borrow(HIRBorrowType::Shared, ty);
                     if (this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, MethodAccess::Move, AutoderefBorrow::Shared, possibilities, &undecided)) {
@@ -8010,6 +8043,9 @@ default: {
                     break;
                 case TraitResolution::AutoderefBorrow::RawShared:
                     os << "RawShared";
+                    break;
+                case TraitResolution::AutoderefBorrow::PinShared:
+                    os << "PinShared";
                     break;
                 case TraitResolution::AutoderefBorrow::Owned:
                     os << "Owned";

@@ -45,7 +45,9 @@ binding while resolving its target also closed `imports/issue-62767`; making a
 fuzzy blanket-method candidate wait until its receiver is known, then checking
 the impl bounds, closed `self/explicit-self-generic`; recovering a concrete
 inherent `Self` when a custom receiver reaches an unbound type argument closed
-`self/arbitrary_self_types_lifetime_elision`. Thus 80
+`self/arbitrary_self_types_lifetime_elision`; probing the pin-ergonomics shared
+reborrow during method lookup closed `self/arbitrary_self_types_niche_deshadowing`
+and `pin-ergonomics/reborrow-self`. Thus 78
 of the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -60,18 +62,18 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 105 |
-| fixed, or no longer reproducing, since the gate | 526 |
+| still failing or still carried from the last full sweep | 103 |
+| fixed, or no longer reproducing, since the gate | 528 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed eighteen nodes, leaving 80. The remaining 25 are
+subsequent point fixes have closed twenty nodes, leaving 78. The remaining 25 are
 in groups outside that sweep and are still carried from the last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 44 |
+| accepted Rust rejected by the compiler or driver | 42 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -79,13 +81,13 @@ in groups outside that sweep and are still carried from the last full sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 44 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 42 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 41 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 39 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 | parser | 1 | named variadic parameter |
 
@@ -111,11 +113,12 @@ masking a failed where-clause.
 The direct `self: SmartPtr<Self>` lifetime-elision case is closed: for the
 exact custom-receiver shape, an unbound cache key now visits the concrete
 inherent candidates, and a non-generic impl supplies its concrete `Self`
-instead of producing `<_>::method`. The superficially related
-`arbitrary_self_types_niche_deshadowing.rs` still fails for a different
-reason: its `Pin<&mut SmartPtr2<A>>` call must reborrow to the method's
-`Pin<&SmartPtr2<Self>>` receiver. `pin-ergonomics/reborrow-self.rs` fails on
-the same missing `Pin<&mut T>` to `Pin<&T>` method-call adjustment.
+instead of producing `<_>::method`. The superficially related Pin cases are
+also closed, but through a separate adjustment: method lookup now probes the
+shared `Pin<&T>` receiver for a `Pin<&mut T>` value under `pin_ergonomics`,
+then lowers the selected call through the existing transparent-wrapper
+coercion. This closes both `arbitrary_self_types_niche_deshadowing.rs` and
+`pin-ergonomics/reborrow-self.rs`.
 
 A `for<T>` binder is only dropped where it quantifies a where predicate. In a
 supertrait list (`trait Foo: for<T> Bar<T>`) or a return type

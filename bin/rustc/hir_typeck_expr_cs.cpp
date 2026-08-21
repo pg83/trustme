@@ -1354,12 +1354,22 @@ default: {
                     auto span = node.value->span();
                     node.value = NEWNODE(ty, span, Cast, mv$(node.value), ty);
                 }
+                // `Pin<&mut T>` is reborrowed as the `Pin<&T>` receiver found
+                // by the pin-ergonomics probe. The ordinary coercion lowering
+                // already knows how to rebuild this transparent wrapper.
+                else if (adBorrow == TraitResolution::AutoderefBorrow::PinShared) {
+                    auto ty = node.cache.argTypes[0];
+                    DEBUG("- Pin reborrow (cmd) " << &*node.value << " -> " << ty);
+                    auto span = node.value->span();
+                    node.value = NEWNODE(ty, span, Unsize, mv$(node.value), ty);
+                }
                 // Autoref
                 else if (adBorrow != TraitResolution::AutoderefBorrow::None) {
                     HIRBorrowType bt = HIRBorrowType::Shared;
                     switch (adBorrow) {
                         case TraitResolution::AutoderefBorrow::None:
                         case TraitResolution::AutoderefBorrow::RawShared:
+                        case TraitResolution::AutoderefBorrow::PinShared:
                             throw "";
                         case TraitResolution::AutoderefBorrow::Shared:
                             bt = HIRBorrowType::Shared;

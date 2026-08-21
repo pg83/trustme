@@ -316,6 +316,8 @@ public:
         /// Not a borrow: a `*mut T` receiver taken as the `*const T` a method
         /// was written for.
         RawShared,
+        /// The pin-ergonomics reborrow from `Pin<&mut T>` to `Pin<&T>`.
+        PinShared,
     };
     friend ::std::ostream& operator<<(::std::ostream& os, const AutoderefBorrow& x);
     /// Locate the named method by applying auto-dereferencing.
