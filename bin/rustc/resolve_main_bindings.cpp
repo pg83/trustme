@@ -3612,7 +3612,8 @@ ASTFunction HIRFunctionToAST(Context& context, const Span& span, const HIRFuncti
         HIRGenericParamsToAST(context, span, function.params),
         HIRTypeToAST(context, span, function.returnType),
         mv$(args),
-        function.variadic
+        function.variadic,
+        function.hasNamedVariadic
     );
 }
 

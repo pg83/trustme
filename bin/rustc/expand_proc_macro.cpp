@@ -1765,14 +1765,19 @@ default:
             pmi.sendIdent(name.c_str());
             this->visitParams(fcn.params());
             pmi.sendSymbol("(");
-            for (const auto& arg : fcn.args()) {
+            for (size_t i = 0; i < fcn.args().size(); i++) {
+                const auto& arg = fcn.args()[i];
                 this->visitAttrs(arg.attrs);
                 this->visitPattern(arg.pat);
                 pmi.sendSymbol(":");
-                this->visitType(arg.ty);
+                if (fcn.hasNamedVariadic() && i + 1 == fcn.args().size()) {
+                    pmi.sendSymbol("...");
+                } else {
+                    this->visitType(arg.ty);
+                }
                 pmi.sendSymbol(",");
             }
-            if (fcn.isVariadic()) {
+            if (fcn.isVariadic() && !fcn.hasNamedVariadic()) {
                 pmi.sendSymbol("...");
             }
             pmi.sendSymbol(")");

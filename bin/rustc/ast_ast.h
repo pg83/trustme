@@ -222,6 +222,7 @@ private:
     ASTType* rettype_;
     Arglist args_;
     bool isVariadic_; // extern only
+    bool hasNamedVariadic_; // the last entry in args_ is the body-only VaList binding
 
     ::std::string abi_;
     Flags flags;
@@ -258,7 +259,7 @@ public:
     ASTFunction(ASTFunction&&) = default;
     ASTFunction& operator=(ASTFunction&&) = default;
 
-    ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic);
+    ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic, bool hasNamedVariadic = false);
 
     // Helper for derive, defines an ABI_RUST function with no generics
     ASTFunction(Span sp, ASTType* retType, Arglist args);
@@ -329,6 +330,10 @@ public:
 
     bool isVariadic() const {
         return isVariadic_;
+    }
+
+    bool hasNamedVariadic() const {
+        return hasNamedVariadic_;
     }
 
     const Delegation* delegation() const {

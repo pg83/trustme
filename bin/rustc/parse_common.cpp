@@ -3566,6 +3566,7 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
     }
 
     bool isVariadic = false;
+    bool hasNamedVariadic = false;
     if (tok.type() != TOK_PAREN_CLOSE) {
         // Comma after self
         if (args.size()) {
@@ -3600,14 +3601,24 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
             // following `,` continue the list.
             if (LOOK_AHEAD(lex) == TOK_TRIPLE_DOT) {
                 GET_TOK(tok, lex);
-                isVariadic = true;
+                if (keepArg) {
+                    isVariadic = true;
+                }
                 continue;
             }
-            if ((lex.lookahead(0) == TOK_IDENT || lex.lookahead(0) == TOK_UNDERSCORE) && lex.lookahead(1) == TOK_COLON && lex.lookahead(2) == TOK_TRIPLE_DOT) {
-                GET_TOK(tok, lex);
-                GET_TOK(tok, lex);
-                GET_TOK(tok, lex);
-                isVariadic = true;
+            const bool plainNamedVariadic = (lex.lookahead(0) == TOK_IDENT || lex.lookahead(0) == TOK_UNDERSCORE)
+                && lex.lookahead(1) == TOK_COLON && lex.lookahead(2) == TOK_TRIPLE_DOT;
+            const bool mutableNamedVariadic = lex.lookahead(0) == TOK_RWORD_MUT && lex.lookahead(1) == TOK_IDENT
+                && lex.lookahead(2) == TOK_COLON && lex.lookahead(3) == TOK_TRIPLE_DOT;
+            if (plainNamedVariadic || mutableNamedVariadic) {
+                auto pat = ParsePattern(lex, AllowOrPattern::No);
+                GET_CHECK_TOK(tok, lex, TOK_COLON);
+                GET_CHECK_TOK(tok, lex, TOK_TRIPLE_DOT);
+                if (keepArg) {
+                    args.push_back(ASTFunction::Arg(mv$(pat), mkType(lex.typePool(), lex.pointSpan()), mv$(argAttrs)));
+                    isVariadic = true;
+                    hasNamedVariadic = true;
+                }
                 continue;
             }
             {
@@ -3645,7 +3656,7 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
         ParseWhereClause(lex, params);
     }
 
-    return ASTFunction(std::move(definitionSpan), mv$(abi), mv$(flags), mv$(params), mv$(retType), mv$(args), isVariadic);
+    return ASTFunction(std::move(definitionSpan), mv$(abi), mv$(flags), mv$(params), mv$(retType), mv$(args), isVariadic, hasNamedVariadic);
 }
 
 ASTFunction ParseFunctionDefWithCode(TokenStream& lex, Span definitionSpan, bool allowSelf, std::string abi, ASTFunction::Flags flags) {

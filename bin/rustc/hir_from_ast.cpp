@@ -2127,7 +2127,8 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     auto defineOpaque = LowerHIRDefineOpaque(p, sourceModule, attrs);
 
     ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> args;
-    for (const auto& arg : f.args()) {
+    for (size_t i = 0; i < f.args().size(); i++) {
+        const auto& arg = f.args()[i];
         // A parameter is matched unconditionally, so it cannot be a pattern
         // that only some values reach. A path names a variant or a unit struct,
         // which for a one-variant type is every value, and a range can cover a
@@ -2142,7 +2143,15 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         if (!f.code().isValid() && !(arg.pat.data().is_Any() || arg.pat.data().is_MaybeBind())) {
             ERROR(arg.pat.span(), E0000, "patterns aren't allowed in functions without bodies");
         }
-        args.push_back(::std::make_pair(LowerHIRPattern(arg.pat), LowerHIRType(arg.ty)));
+        HIRTypeRef type;
+        if (f.hasNamedVariadic() && i + 1 == f.args().size()) {
+            const auto& path = crate->getLangItemPath(arg.pat.span(), "va_list");
+            const auto& str = crate->getStructByPath(arg.pat.span(), path);
+            type = crate->types.path(HIRGenericPath(path, str.params.makeNopParams(crate->types, 0)), &str);
+        } else {
+            type = LowerHIRType(arg.ty);
+        }
+        args.push_back(::std::make_pair(LowerHIRPattern(arg.pat), mv$(type)));
     }
 
     auto receiver = HIRFunction::Receiver::Free;
@@ -2417,6 +2426,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     rv.params = LowerHIRGenericParams(f.params(), nullptr); // TODO: If this is a method, then it can add the Self: Sized bound
     rv.args = mv$(args);
     rv.variadic = f.isVariadic();
+    rv.hasNamedVariadic = f.hasNamedVariadic();
     // Only a foreign ABI has a variadic call convention; Rust's own does not,
     // so `fn f(x: i32, ...)` names something that cannot be called.
     if (rv.variadic && rv.abi == ABI_RUST) {

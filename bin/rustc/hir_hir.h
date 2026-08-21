@@ -178,6 +178,7 @@ public:
 
     argsT args;
     bool variadic = false;
+    bool hasNamedVariadic = false;
     HIRTypeRef returnType;
     // The trait-declared return used to typecheck a refining RPITIT impl.
     // `returnType` remains the impl's public, possibly concrete signature.
@@ -220,6 +221,11 @@ public:
     HIRFunction();
 
     HIRFunction(Receiver receiver, HIRGenericParams params, argsT args, HIRTypeRef retTy, HIRExprPtr code);
+
+    size_t fixedArgCount() const {
+        assert(!hasNamedVariadic || (variadic && !args.empty()));
+        return args.size() - hasNamedVariadic;
+    }
 
     HIRTypeRef makePtrTy(const Span& sp, const Monomorphiser& ms) const;
 };

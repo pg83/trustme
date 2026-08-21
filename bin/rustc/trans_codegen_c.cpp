@@ -2800,7 +2800,25 @@ default:
             emitFunctionHeader(p, item, params);
             of << "\n";
             of << "{\n";
-            for (unsigned int i = 0; i < item.args.size(); i++) {
+            if (item.hasNamedVariadic) {
+                const auto index = item.fixedArgCount();
+                of << "\t";
+                emitCtype(argTypes[index].second, FMT_CB(os, os << "arg" << index;));
+                of << ";\n\tva_start(*(va_list*)&arg" << index << ", ";
+                size_t lastPassed = SIZE_MAX;
+                for (size_t i = 0; i < item.fixedArgCount(); i++) {
+                    if (argumentIsPassed(item.abi, argTypes[i].second)) {
+                        lastPassed = i;
+                    }
+                }
+                if (lastPassed == SIZE_MAX) {
+                    of << '0';
+                } else {
+                    of << "arg" << lastPassed;
+                }
+                of << ");\n";
+            }
+            for (unsigned int i = 0; i < item.fixedArgCount(); i++) {
                 const auto& argTy = argTypes[i].second;
                 if (!argumentIsPassed(item.abi, argTy)) {
                     of << "\t";
@@ -6002,14 +6020,14 @@ default:
                 ss,
                 ss << " " << compilerAbiAttribute(item.abi) << TransMangle(p) << nameSuffix << "(";
                 unsigned int passedCount = 0;
-                for (unsigned int i = 0; i < item.args.size(); i++) {
+                for (unsigned int i = 0; i < item.fixedArgCount(); i++) {
                     if (argumentIsPassed(item.abi, params.monomorph(resolve_, item.args[i].second))) {
                         passedCount++;
                     }
                 }
                 if (passedCount == 0 && !hasCallerLocation && !item.variadic) { ss << "void)"; } else {
                     unsigned int emitted = 0;
-                    for (unsigned int i = 0; i < item.args.size(); i++) {
+                    for (unsigned int i = 0; i < item.fixedArgCount(); i++) {
                         auto ty = params.monomorph(resolve_, item.args[i].second);
                         if (!argumentIsPassed(item.abi, ty)) {
                             continue;
@@ -8117,11 +8135,22 @@ default:
                 of << ")->DATA.var_1. _0";
             }
             // -- stdarg --
-            else if (name == "va_copy") {
-                of << "va_copy( *(va_list*)&";
+            else if (name == "va_arg") {
+                emitLvalue(e.retVal);
+                of << " = va_arg(*(va_list*)";
                 emitParam(e.args.at(0));
-                of << ", *(va_list*)&";
+                of << ", ";
+                emitCtype(params.types.at(0));
+                of << ")";
+            } else if (name == "va_copy") {
+                of << "va_copy(*(va_list*)";
+                emitParam(e.args.at(0));
+                of << ", *(va_list*)";
                 emitParam(e.args.at(1));
+                of << ")";
+            } else if (name == "va_end") {
+                of << "va_end(*(va_list*)";
+                emitParam(e.args.at(0));
                 of << ")";
             }
             // -- Platform Intrinsics (and SIMD) --

@@ -1599,14 +1599,25 @@ void RustPrinter::handleFunction(const ASTVisibility& vis, const RcString& name,
     printParams(f.params());
     os << "(";
     bool isFirst = true;
-    for (const auto& a : f.args()) {
+    for (size_t i = 0; i < f.args().size(); i++) {
+        const auto& a = f.args()[i];
         if (!isFirst) {
             os << ", ";
         }
         printAttrs(a.attrs);
         printPattern(a.pat, false);
-        os << ": " << a.ty->printPretty();
+        if (f.hasNamedVariadic() && i + 1 == f.args().size()) {
+            os << ": ...";
+        } else {
+            os << ": " << a.ty->printPretty();
+        }
         isFirst = false;
+    }
+    if (f.isVariadic() && !f.hasNamedVariadic()) {
+        if (!isFirst) {
+            os << ", ";
+        }
+        os << "...";
     }
     os << ")";
     if (!f.rettype()->isUnit()) {

@@ -266,9 +266,8 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
                 ms.monomorphType(sp, f.returnType),
                 {}
             };
-            for( const auto& arg : f.args )
-            {
-                    ft.argTypes.push_back(ms.monomorphType(sp, arg.second));
+            for (size_t i = 0; i < f.fixedArgCount(); i++) {
+                ft.argTypes.push_back(ms.monomorphType(sp, f.args[i].second));
             }
             return mv$(ft);
         }

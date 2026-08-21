@@ -10719,7 +10719,8 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
         const auto& monomorph = *cache.monomorph;
 
         // --- Monomorphise the argument/return types (into current context)
-        for(const auto& arg : fcn.args) {
+        for (size_t i = 0; i < fcn.fixedArgCount(); i++) {
+        const auto& arg = fcn.args[i];
         TRACE_FUNCTION_FR("ARG " << path << " - " << arg.first << ": " << arg.second, "Arg " << arg.first << " : " << cache.argTypes.back());
         cache.argTypes.push_back(monomorph.monomorphType(sp, arg.second, false));
         }

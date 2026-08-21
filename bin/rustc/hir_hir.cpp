@@ -423,9 +423,9 @@ HIRTypeRef HIRFunction::makePtrTy(const Span& sp, const Monomorphiser& ms) const
     ft.isVariadic = this->variadic;
     ft.abi = this->abi;
     ft.rettype = ms.monomorphType(sp, this->returnType);
-    ft.argTypes.reserve(this->args.size());
-    for (const auto& arg : this->args) {
-        ft.argTypes.push_back(ms.monomorphType(sp, arg.second));
+    ft.argTypes.reserve(this->fixedArgCount());
+    for (size_t i = 0; i < this->fixedArgCount(); i++) {
+        ft.argTypes.push_back(ms.monomorphType(sp, this->args[i].second));
     }
     return ms.typeInterner().function(std::move(ft));
 }

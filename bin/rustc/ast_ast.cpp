@@ -254,12 +254,13 @@ ASTStatic ASTStatic::clone() const {
     return ASTStatic(cls, type_->clone(), value_.isValid() ? ASTExpr(value_.node().clone()) : ASTExpr(), params_.clone());
 }
 
-ASTFunction::ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic)
+ASTFunction::ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic, bool hasNamedVariadic)
     : span_(sp)
     , params_(mv$(params))
     , rettype_(mv$(retType))
     , args_(mv$(args))
     , isVariadic_(isVariadic)
+    , hasNamedVariadic_(hasNamedVariadic)
     , abi_(mv$(abi))
     , flags(flags)
 {
@@ -271,7 +272,7 @@ ASTFunction ASTFunction::clone() const {
         newArgs.push_back(ASTFunction::Arg(arg.pat.clone(), arg.ty->clone(), arg.attrs.clone()));
     }
 
-    auto rv = ASTFunction(span_, abi_, flags, params_.clone(), rettype_->clone(), mv$(newArgs), isVariadic_);
+    auto rv = ASTFunction(span_, abi_, flags, params_.clone(), rettype_->clone(), mv$(newArgs), isVariadic_, hasNamedVariadic_);
     if (code_.isValid()) {
         rv.code_ = ASTExpr(code_.node().clone());
     }

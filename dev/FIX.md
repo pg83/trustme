@@ -52,7 +52,9 @@ name resolution and matching their bound parameters closed
 `traits/non_lifetime_binders/method-probe` and
 `traits/non_lifetime_binders/on-rpit`; restoring the saved module and trait
 context before lazily resolving a function body closed
-`traits/const-traits/ice-113375-index-out-of-bounds-generics`. Thus 75
+`traits/const-traits/ice-113375-index-out-of-bounds-generics`; preserving a
+named C-variadic binding as a body-only `VaListImpl` argument and lowering its
+stdarg operations in the C backend closed `abi/variadic-ffi`. Thus 74
 of the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -67,18 +69,18 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 100 |
-| fixed, or no longer reproducing, since the gate | 531 |
+| still failing or still carried from the last full sweep | 99 |
+| fixed, or no longer reproducing, since the gate | 532 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed twenty-three nodes, leaving 75. The remaining 25 are
+subsequent point fixes have closed twenty-four nodes, leaving 74. The remaining 25 are
 in groups outside that sweep and are still carried from the last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 39 |
+| accepted Rust rejected by the compiler or driver | 38 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -86,7 +88,7 @@ in groups outside that sweep and are still carried from the last full sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 39 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 38 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
@@ -94,7 +96,6 @@ result.
 |---|---:|---|
 | type checking, HIR lowering, and resolution | 36 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
-| parser | 1 | named variadic parameter |
 
 An async closure's future now takes the captures with it instead of borrowing
 the frame of the call that made it, which is what made a capture read freed
@@ -187,10 +188,6 @@ carrying lifetimes through HIR would separate those types, so do not count these
 two as independent work.
 
 ## P2: isolated front-end rules
-
-`abi/variadic-ffi` is the other `...` test and needs more than parsing: a named
-variadic parameter (`mut ap: ...`) is a `VaListImpl` the body then reads, so
-dropping the parameter as the unnamed form does would only move the failure.
 
 `_` is written the same way for a type and for a const argument, and lowering
 splits a path's arguments into a type list and a value list by that spelling

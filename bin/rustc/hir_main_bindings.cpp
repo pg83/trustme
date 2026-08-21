@@ -763,6 +763,7 @@ public:
         rv.params = deserialiseGenericparams();
         rv.args = deserialiseFcnargs();
         rv.variadic = in.readBool();
+        rv.hasNamedVariadic = in.readBool();
         rv.returnType = deserialiseType();
         rv.source.filename = in.readIstring();
         rv.source.line = static_cast<unsigned int>(in.readCount());
@@ -3975,6 +3976,7 @@ break;
         }
         DEBUG("m_args = " << fcn.args);
         out.writeBool(fcn.variadic);
+        out.writeBool(fcn.hasNamedVariadic);
         serialise(fcn.returnType);
         out.writeString(fcn.source.filename);
         out.writeCount(fcn.source.line);
