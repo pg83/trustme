@@ -111,7 +111,9 @@ family while desugaring under `new_range` closed `new-range/enabled`; keeping
 normal match-guard moves and coroutine state outside the early-exit shadow
 scope closed both `rfcs/rfc-2294-if-let-guard` nodes; relating concrete struct
 applications through their represented field types, while leaving unused type
-parameters bivariant, closed `mir/important-higher-ranked-regions`. Thus 42 of
+parameters bivariant, closed `mir/important-higher-ranked-regions`; a point
+rerun after the structural-coercion fixes also found
+`mir/inline-causes-trimmed-paths` green. Thus 41 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -126,19 +128,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 67 |
-| fixed, or no longer reproducing, since the gate | 564 |
+| still failing or still carried from the last full sweep | 66 |
+| fixed, or no longer reproducing, since the gate | 565 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed fifty-six nodes, leaving 42. The
+subsequent point fixes and reruns have closed fifty-seven nodes, leaving 41. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 6 |
+| accepted Rust rejected by the compiler or driver | 5 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -146,13 +148,13 @@ last full sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 6 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 5 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| AST/HIR lowering, type checking, and resolution | 6 | trait/impl selection and type mismatch dominate |
+| AST/HIR lowering, type checking, and resolution | 5 | trait/impl selection and type mismatch dominate |
 
 An async closure's future now takes the captures with it instead of borrowing
 the frame of the call that made it, which is what made a capture read freed
