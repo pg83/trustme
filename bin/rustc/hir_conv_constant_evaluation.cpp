@@ -5269,23 +5269,9 @@ namespace {
         }
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
-            switch (ty->tag()) {
-                case HIRTypeData::TAG_Path:
-                case HIRTypeData::TAG_TraitObject:
-                case HIRTypeData::TAG_ErasedType:
-                case HIRTypeData::TAG_NamedFunction: {
-                    // Params inside these carry values this pass evaluates;
-                    // route them through the owned-structure hooks.
-                    auto data = ty->cloneData();
-                    visitTypeDataChildren(data);
-                    ty = crate.types.intern(mv$(data));
-                    break;
-                }
-                default: {
-                    ty = HIRVisitor::visitType(ty);
-                    break;
-                }
-            }
+            // Params and consts embedded in these types carry values this pass
+            // evaluates; route them through the owned-structure hooks.
+            ty = visitTypeDefaultViaHooks(ty);
 
             if (ty->is_Array()) {
                 auto data = ty->cloneData();
