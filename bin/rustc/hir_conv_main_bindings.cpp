@@ -2809,9 +2809,12 @@ namespace {
     };
 
     class Visitor2: public HIRVisitor {
+        StaticTraitResolve resolve_;
+
     public:
-        explicit Visitor2(HIRTypeInterner& types)
-            : HIRVisitor(nullptr, types)
+        explicit Visitor2(const WireBoard& wb)
+            : HIRVisitor(nullptr, wb.crate->types)
+            , resolve_(wb)
         {
         }
 
@@ -2855,7 +2858,11 @@ namespace {
                 }
             }
             assert(fieldTy);
+            HIRTypeRef normalizedFieldTy;
         tryAgain:
+            normalizedFieldTy = fieldTy;
+            resolve_.expandAssociatedTypes(sp, normalizedFieldTy);
+            fieldTy = normalizedFieldTy;
             DEBUG("field_ty = " << fieldTy);
 
             if (const auto* te = fieldTy->opt_Path()) {
@@ -2916,7 +2923,7 @@ void ConvertHIRMarkings(const WireBoard& wb, HIRCrate& crate) {
     exp.visitCrate(crate);
 
     // Visit again, visiting all structs and filling the coerce_unsized data
-    Visitor2 exp2{crate.types};
+    Visitor2 exp2{wb};
     exp2.visitCrate(crate);
 }
 

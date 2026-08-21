@@ -131,7 +131,9 @@ module through a glob import. Treating an unevaluated const's captured
 `const-generics/generic_const_exprs/abstract-const-as-cast-4`; routing a
 marker impl's trait arguments through the same trait-path visitor as an
 ordinary trait impl closed
-`coherence/negative-coherence/regions-in-canonical`. Thus 33 of
+`coherence/negative-coherence/regions-in-canonical`; normalizing the selected
+`CoerceUnsized` field before classifying its nested coercion closed
+`coercion/codegen-smart-pointer-with-alias`. Thus 32 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -146,20 +148,20 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 58 |
-| fixed, or no longer reproducing, since the gate | 573 |
+| still failing or still carried from the last full sweep | 57 |
+| fixed, or no longer reproducing, since the gate | 574 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed sixty-five nodes, leaving 33. The
+subsequent point fixes and reruns have closed sixty-six nodes, leaving 32. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 0 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 19 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 18 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
@@ -384,12 +386,12 @@ coercion. This closes both `arbitrary_self_types_niche_deshadowing.rs` and
 
 ## P1: internal compiler failures
 
-There are 19 compiler-internal failures in 19 stable signatures in the current
+There are 18 compiler-internal failures in 18 stable signatures in the current
 eight-corpus rerun.
 
 | compiler area | tests |
 |---|---:|
-| type checking and HIR lowering | 11 |
+| type checking and HIR lowering | 10 |
 | MIR lowering, CTFE MIR, and optimisation | 4 |
 | translation and code generation | 3 |
 | unattributed compiler abort | 1 |
@@ -398,7 +400,7 @@ Every remaining signature covers one test, so the class is a long tail:
 
 | signature | tests |
 |---|---:|
-| one-test signatures | 19 |
+| one-test signatures | 18 |
 
 The former two-test `BUG hir_typeck_common.cpp:824` cluster was one const-eval
 root cause. An unevaluated const captures `selfType` as its evaluation
@@ -412,6 +414,13 @@ impl visitor handing const trait arguments directly to `visitPathParams`.
 Unlike an ordinary trait impl, that lost the trait path and left const-eval's
 parameter-definition callback unset. Both impl forms now visit their trait
 arguments as a `HIRGenericPath` with trait context.
+
+The former `CoerceUnsized` marking assertion in
+`codegen-smart-pointer-with-alias` was in the second markings pass. The first
+pass already normalized projected fields while locating the single differing
+field, but the second read the declaration type again and required it to be a
+struct. It now normalizes each field reached while classifying the nested
+passthrough or pointer coercion.
 
 The line numbers in a signature move with every commit that touches the file:
 the ones here are read from the classification named above, and are worth
