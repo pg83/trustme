@@ -624,6 +624,9 @@ ASTItem ASTItem::clone() const {
         for (const auto& l : x.lifetimes) {
             os << l << ",";
         }
+        for (const auto& t : x.types) {
+            os << t << ",";
+        }
         os << "> ";
     }
     return os;

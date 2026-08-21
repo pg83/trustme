@@ -6088,6 +6088,70 @@ default:
             // E.g. `T: IntoIterator<Item=&u8>` implies `<T as IntoIterator>::IntoIter : Iterator<Item=&u8>`
             // > Would maybe want a list of all explicit and implied bounds instead.
             {
+                struct HrtbBoundMatcher: public HIRMatchGenerics, public Monomorphiser {
+                    Span sp;
+                    stl::ObjPool::Ref scratchPool;
+                    stl::IntMap<HIRTypeRef> hrtbTypes;
+                    stl::IntMap<HIRConstGeneric> hrtbValues;
+
+                    HrtbBoundMatcher(Span sp, HIRTypeInterner& types)
+                        : Monomorphiser(types)
+                        , sp(sp)
+                        , scratchPool(stl::ObjPool::fromMemory())
+                        , hrtbTypes(scratchPool.mutPtr())
+                        , hrtbValues(scratchPool.mutPtr())
+                    {
+                    }
+
+                    HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override {
+                        if (generic.group() != GENERICHrtb) {
+                            return types.generic(generic.name, generic.binding)->compareWithPlaceholders(sp, type, resolve);
+                        }
+                        auto* existing = hrtbTypes.find(generic.binding);
+                        if (!existing) {
+                            hrtbTypes.insert(generic.binding, type);
+                            return HIRCompare::Equal;
+                        }
+                        return (*existing)->compareWithPlaceholders(sp, type, resolve);
+                    }
+
+                    HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
+                        if (generic.group() != GENERICHrtb) {
+                            if (value.is_Infer()) {
+                                return HIRCompare::Fuzzy;
+                            }
+                            return value.is_Generic() && value.as_Generic() == generic ? HIRCompare::Equal : HIRCompare::Unequal;
+                        }
+                        auto* existing = hrtbValues.find(generic.binding);
+                        if (!existing) {
+                            hrtbValues.insert(generic.binding, value.clone());
+                            return HIRCompare::Equal;
+                        }
+                        if (*existing == value) {
+                            return HIRCompare::Equal;
+                        }
+                        return existing->is_Infer() || value.is_Infer() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
+                    }
+
+                    HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
+                        if (generic.group() == GENERICHrtb) {
+                            if (auto* type = hrtbTypes.find(generic.binding)) {
+                                return *type;
+                            }
+                        }
+                        return types.generic(generic.name, generic.binding);
+                    }
+
+                    HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
+                        if (generic.group() == GENERICHrtb) {
+                            if (auto* value = hrtbValues.find(generic.binding)) {
+                                return value->clone();
+                            }
+                        }
+                        return generic;
+                    }
+                };
+
                 bool rv = this->iterateBoundsTraits(sp, type, trait, [&](HIRCompare cmp, const HIRTypeData* boundTy, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
                     const auto& storedParams = boundTrait.params;
                     HIRPathParams normalisedParams;
@@ -6105,7 +6169,28 @@ default:
                     // Check against `params`
                     DEBUG("[find_trait_impls_bound] Checking params " << params << " vs " << *bParams);
                     auto ord = cmp;
-                    ord &= this->comparePp(sp, *bParams, params);
+                    const bool hasHrtb = ::std::any_of(bParams->types.begin(), bParams->types.end(), [](const auto& ty) {
+                        return visitTyWith(ty, [](const auto* type) {
+                            return type->is_Generic() && type->as_Generic().group() == GENERICHrtb;
+                        });
+                    }) || ::std::any_of(bParams->values.begin(), bParams->values.end(), [](const auto& value) {
+                        return value.is_Generic() && value.as_Generic().group() == GENERICHrtb;
+                    });
+                    if (!hasHrtb) {
+                        ord &= this->comparePp(sp, *bParams, params);
+                        if (ord == HIRCompare::Unequal) {
+                            DEBUG("[find_trait_impls_bound] - Mismatch");
+                            return false;
+                        }
+                        if (ord == HIRCompare::Fuzzy) {
+                            DEBUG("[find_trait_impls_bound] - Fuzzy match");
+                        }
+                        DEBUG("[find_trait_impls_bound] Match " << boundTy << " : " << boundTrait);
+                        return callback(ImplRef(boundTy, &boundTrait.params, &boundInfo.assoc, boundInfo.constness), ord);
+                    }
+
+                    HrtbBoundMatcher matcher(sp, crate.types);
+                    ord &= bParams->matchTestGenericsFuzz(sp, params, this->ivars.callbackResolveInfer(), matcher);
                     if (ord == HIRCompare::Unequal) {
                         DEBUG("[find_trait_impls_bound] - Mismatch");
                         return false;
@@ -6116,7 +6201,11 @@ default:
                     DEBUG("[find_trait_impls_bound] Match " << boundTy << " : " << boundTrait);
                     // Hand off to the closure, and return true if it does
                     // TODO: The type bounds are only the types that are specified.
-                    if (callback(ImplRef(boundTy, &boundTrait.params, &boundInfo.assoc, boundInfo.constness), ord)) {
+                    HIRTraitPath::assocListT assoc;
+                    for (const auto& entry : boundInfo.assoc) {
+                        assoc.insert({entry.first, matcher.monomorphTpAtyEqual(sp, entry.second, true)});
+                    }
+                    if (callback(ImplRef(boundTy, params.clone(), mv$(assoc), boundInfo.constness), ord)) {
                         return true;
                     }
 

@@ -35,8 +35,7 @@ enum class ASTBoundConstness : u8 {
 class ASTHigherRankedBounds {
 public:
     ::std::vector<ASTLifetimeParam> lifetimes;
-    /// Names bound by a `for<T>` type binder. Nothing here models a predicate
-    /// quantified over a type, so these only mark that it is one.
+    /// Names bound by a `for<T>` type binder.
     ::std::vector<RcString> types;
     //::std::vector<GenericBound>    m_bounds;
 

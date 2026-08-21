@@ -30,7 +30,7 @@ namespace {
         unsigned short index;
 
         unsigned int toBinding() const {
-            if (level == Level::Method && index != 0xFFFF) {
+            if ((level == Level::Method || level == Level::Hrb) && index != 0xFFFF) {
                 return (unsigned int)index + 256 * static_cast<unsigned int>(level);
             } else {
                 return (unsigned int)index;
@@ -100,6 +100,9 @@ namespace {
 
             for (size_t i = 0; i < params.lifetimes.size(); i++) {
                 data.lifetimes.push_back(NamedI<GenericSlot>{params.lifetimes[i].name(), GenericSlot{GenericSlot::Level::Hrb, static_cast<unsigned short>(i)}});
+            }
+            for (size_t i = 0; i < params.types.size(); i++) {
+                data.types.push_back(Named<GenericSlot>{params.types[i], GenericSlot{GenericSlot::Level::Hrb, static_cast<unsigned short>(i)}});
             }
 
             nameContext.push_back(mv$(e));

@@ -46,7 +46,7 @@ ASTHigherRankedBounds& ASTHigherRankedBounds::operator=(ASTHigherRankedBounds&&)
 ASTHigherRankedBounds::ASTHigherRankedBounds(const ASTHigherRankedBounds&) = default;
 
 bool ASTHigherRankedBounds::empty() const {
-    return lifetimes.empty();
+    return lifetimes.empty() && types.empty();
 }
 
 TypeFunction::TypeFunction() = default;

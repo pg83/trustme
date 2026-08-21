@@ -1149,6 +1149,10 @@ default:
                     pmi.sendLifetime(v.name().name.c_str());
                     pmi.sendSymbol(",");
                 }
+                for (const auto& v : hrbs.types) {
+                    pmi.sendIdent(v.c_str());
+                    pmi.sendSymbol(",");
+                }
                 pmi.sendSymbol(">");
             }
         }
@@ -1430,6 +1434,10 @@ default:
                 pmi.sendSymbol("<");
                 for (const auto& lft : hrb.lifetimes) {
                     pmi.sendLifetime(lft.name().name.c_str());
+                    pmi.sendSymbol(",");
+                }
+                for (const auto& type : hrb.types) {
+                    pmi.sendIdent(type.c_str());
                     pmi.sendSymbol(",");
                 }
                 pmi.sendSymbol(">");

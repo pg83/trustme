@@ -10593,6 +10593,8 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
                 auto idx = e.idx();
                 ASSERT_BUG(sp, idx < fcnParams.types.size(), "Generic param out of input range - " << e << " >= " << fcnParams.types.size());
                 return context.getType(fcnParams.types[idx]);
+            } else if (e.group() == GENERICHrtb) {
+                return context.crate.types.generic(e.name, e.binding);
             } else {
                 BUG(sp, "Generic binding out of total range (" << e << ")");
             }
@@ -10608,6 +10610,8 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
                 auto idx = e.idx();
                 ASSERT_BUG(sp, idx < fcnParams.values.size(), "Generic value out of input range - " << e << " >= " << fcnParams.values.size());
                 return context.ivars.getValue(fcnParams.values[idx]).clone();
+            } else if (e.group() == GENERICHrtb) {
+                return e;
             } else {
                 BUG(sp, "Generic value bounding out of total range (" << e << ")");
             }

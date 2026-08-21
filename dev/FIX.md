@@ -47,7 +47,10 @@ the impl bounds, closed `self/explicit-self-generic`; recovering a concrete
 inherent `Self` when a custom receiver reaches an unbound type argument closed
 `self/arbitrary_self_types_lifetime_elision`; probing the pin-ergonomics shared
 reborrow during method lookup closed `self/arbitrary_self_types_niche_deshadowing`
-and `pin-ergonomics/reborrow-self`. Thus 78
+and `pin-ergonomics/reborrow-self`; preserving `for<T>` type binders through
+name resolution and matching their bound parameters closed
+`traits/non_lifetime_binders/method-probe` and
+`traits/non_lifetime_binders/on-rpit`. Thus 76
 of the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -62,18 +65,18 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 103 |
-| fixed, or no longer reproducing, since the gate | 528 |
+| still failing or still carried from the last full sweep | 101 |
+| fixed, or no longer reproducing, since the gate | 530 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed twenty nodes, leaving 78. The remaining 25 are
+subsequent point fixes have closed twenty-two nodes, leaving 76. The remaining 25 are
 in groups outside that sweep and are still carried from the last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 42 |
+| accepted Rust rejected by the compiler or driver | 40 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -81,13 +84,13 @@ in groups outside that sweep and are still carried from the last full sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 42 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 40 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 39 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 37 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 | parser | 1 | named variadic parameter |
 
@@ -120,18 +123,9 @@ then lowers the selected call through the existing transparent-wrapper
 coercion. This closes both `arbitrary_self_types_niche_deshadowing.rs` and
 `pin-ergonomics/reborrow-self.rs`.
 
-A `for<T>` binder is only dropped where it quantifies a where predicate. In a
-supertrait list (`trait Foo: for<T> Bar<T>`) or a return type
-(`impl for<T> Trait<T>`) the bound is the item's whole meaning, so
-`non_lifetime_binders/method-probe.rs` and `on-rpit.rs` still fail. Replacing
-the binder's argument with a wildcard was tried and reverted: it makes both
-tests reach typeck and then abort on an inference variable that a bound may
-not hold (`hir_typeck_common.cpp`, `allowInfer`).
-
-What is left of the unresolved-name group splits by rule: two
-`non_lifetime_binders` (the `for<T>` trap above), `T` in a const trait bound
-under `-Zunpretty=hir` (which runs the passes that build the HIR, so it cannot
-stop before resolution).
+What is left of the unresolved-name group is `T` in a const trait bound under
+`-Zunpretty=hir` (which runs the passes that build the HIR, so it cannot stop
+before resolution).
 
 ## P1: internal compiler failures
 
