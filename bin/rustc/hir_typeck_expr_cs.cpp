@@ -13195,7 +13195,7 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
             });
         }
     }
-    resolve.setInherentTypeConstraint([this](const Span& sp, const HIRTypeData* receiver, const HIRTypeData* implType) {
+    resolve.setTypeConstraint([this](const Span& sp, const HIRTypeData* receiver, const HIRTypeData* implType) {
         this->equateTypesInner(sp, receiver, implType);
     });
 }

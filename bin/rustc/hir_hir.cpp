@@ -2522,6 +2522,81 @@ HIRCrate::HIRCrate(stl::ObjPool* pool, HIRTypeInterner& types)
 {
 }
 
+bool HIRCrate::isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias, const HIRSimplePath* names, size_t nameCount) const {
+    for (size_t i = 0; i < nameCount; i++) {
+        if (names[i] == alias.path) {
+            return true;
+        }
+    }
+
+    // The attribute can name a plain alias of the opaque alias.
+    for (size_t i = 0; i < nameCount; i++) {
+        const auto& named = names[i];
+        const HIRSimplePath* path = &named;
+        for (unsigned int depth = 0; depth < 8; depth++) {
+            const auto* item = getTypeitemByPathOpt(*path);
+            if (!item) {
+                break;
+            }
+            const auto* typeAlias = item->opt_TypeAlias();
+            if (!typeAlias || typeAlias->type == HIRTypeRef()) {
+                break;
+            }
+            const auto* erased = typeAlias->type->opt_ErasedType();
+            if (!erased || !erased->inner.is_Alias()) {
+                break;
+            }
+            const auto& inner = erased->inner.as_Alias();
+            if (inner.inner->path == alias.path) {
+                return true;
+            }
+            path = &inner.inner->path;
+        }
+    }
+
+    // It can also name a type that contains the opaque alias.
+    for (size_t i = 0; i < nameCount; i++) {
+        const auto& named = names[i];
+        const auto* item = getTypeitemByPathOpt(named);
+        if (!item) {
+            continue;
+        }
+        auto containsAlias = [&](const HIRTypeData* type) {
+            if (const auto* erased = type->opt_ErasedType()) {
+                if (const auto* inner = erased->inner.opt_Alias()) {
+                    return inner->inner->path == alias.path;
+                }
+            }
+            return false;
+        };
+        if (const auto* structure = item->opt_Struct()) {
+            switch (structure->data.tag()) {
+                case HIRStructData::TAG_Named:
+                    for (const auto& field : structure->data.as_Named()) {
+                        if (visitTyWith(field.ty, containsAlias)) {
+                            return true;
+                        }
+                    }
+                    break;
+                case HIRStructData::TAG_Tuple:
+                    for (const auto& field : structure->data.as_Tuple()) {
+                        if (visitTyWith(field.ent, containsAlias)) {
+                            return true;
+                        }
+                    }
+                    break;
+                default:
+                    break;
+            }
+        } else if (const auto* typeAlias = item->opt_TypeAlias(); typeAlias && typeAlias->type != HIRTypeRef()) {
+            if (visitTyWith(typeAlias->type, containsAlias)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 const HIRConstant& HIRCrate::getConstantByPath(const Span& sp, const HIRSimplePath& path) const {
     const auto& ti = this->getValitemByPath(sp, path);
     if (ti.is_Constant()) {

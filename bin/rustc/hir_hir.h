@@ -726,6 +726,8 @@ public:
     // query index for lazy type checking and is intentionally not serialised.
     std::map<HIRSimplePath, std::vector<HIRPath>> opaqueTypeDefiners;
 
+    bool isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias, const HIRSimplePath* names, size_t nameCount) const;
+
     template <typename T>
     struct ImplGroup {
         typedef ::std::vector<T> listT;

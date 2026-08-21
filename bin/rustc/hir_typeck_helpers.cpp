@@ -4,6 +4,7 @@
 #include "wire_board.h"
 #include "hir_inherent_cache.h"
 #include "hir_conv_main_bindings.h"
+#include "thin_vector.h"
 #include "trans_target.h"
 
 #include <std/mem/obj_list.h>
@@ -4785,77 +4786,8 @@ default:
         }
 
         bool TraitResolution::isOpaqueAliasDefiningScope(const HIRTypeDataErasedTypeAliasInner& alias) const {
-            if (::std::find(definingOpaqueAliases.begin(), definingOpaqueAliases.end(), alias.path) != definingOpaqueAliases.end()) {
+            if (this->wb.crate && this->wb.crate->isOpaqueAliasNamedBy(alias, definingOpaqueAliases.data(), definingOpaqueAliases.size())) {
                 return true;
-            }
-            // `#[define_opaque(X)]` may name a plain alias of the opaque one.
-            // The two are the same type, but only the opaque one is the path an
-            // erased type records.
-            if (this->wb.crate) {
-                for (const auto& named : definingOpaqueAliases) {
-                    const HIRSimplePath* path = &named;
-                    for (unsigned int depth = 0; depth < 8; depth++) {
-                        const auto* item = this->wb.crate->getTypeitemByPathOpt(*path);
-                        if (!item) {
-                            break;
-                        }
-                        const auto* ta = item->opt_TypeAlias();
-                        if (!ta || ta->type == HIRTypeRef()) {
-                            break;
-                        }
-                        const auto* erased = ta->type->opt_ErasedType();
-                        if (!erased || !erased->inner.is_Alias()) {
-                            break;
-                        }
-                        const auto& inner = erased->inner.as_Alias();
-                        if (inner.inner->path == alias.path) {
-                            return true;
-                        }
-                        path = &inner.inner->path;
-                    }
-                }
-            }
-            // `#[define_opaque(X)]` may name something that holds the opaque
-            // rather than the opaque itself: a struct with a field of that type,
-            // or an alias whose bounds mention it
-            // (`type Baz = impl Iterator<Item = Bar>`).
-            if (this->wb.crate) {
-                for (const auto& named : definingOpaqueAliases) {
-                    const auto* item = this->wb.crate->getTypeitemByPathOpt(named);
-                    if (!item) {
-                        continue;
-                    }
-                    bool found = false;
-                    auto check = [&](const HIRTypeData* ty) {
-                        if (const auto* erased = ty->opt_ErasedType()) {
-                            if (const auto* inner = erased->inner.opt_Alias(); inner && inner->inner->path == alias.path) {
-                                found = true;
-                            }
-                        }
-                        return found;
-                    };
-                    if (const auto* str = item->opt_Struct()) {
-                        switch (str->data.tag()) {
-                            case HIRStructData::TAG_Named:
-                                for (const auto& fld : str->data.as_Named()) {
-                                    visitTyWith(fld.ty, check);
-                                }
-                                break;
-                            case HIRStructData::TAG_Tuple:
-                                for (const auto& fld : str->data.as_Tuple()) {
-                                    visitTyWith(fld.ent, check);
-                                }
-                                break;
-                            default:
-                                break;
-                        }
-                    } else if (const auto* ta = item->opt_TypeAlias(); ta && ta->type != HIRTypeRef()) {
-                        visitTyWith(ta->type, check);
-                    }
-                    if (found) {
-                        return true;
-                    }
-                }
             }
             for (const auto& path : opaqueAliasScopes) {
                 if (alias.isLocalTo(path)) {
@@ -5394,9 +5326,9 @@ default:
             }
 
             ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, implParamsDef, implParams);
-            if (inherentTypeConstraint) {
+            if (typeConstraint) {
                 auto selectedType = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr).monomorphType(sp, selectedImpl->type);
-                inherentTypeConstraint(sp, pe.type, selectedType);
+                typeConstraint(sp, pe.type, selectedType);
             }
 
             auto itemParams = pe.params.clone();
@@ -5974,6 +5906,25 @@ default:
             if (bestImpl.hasMagicParams()) {
                 DEBUG("- Placeholder parameters present in impl, can't expand");
                 return;
+            }
+
+            if (canFuzz && count == 1 && typeConstraint) {
+                const auto* selected = bestImpl.data.opt_TraitImpl();
+                if (selected && selected->impl) {
+                    HIRPathParams committedParams;
+                    const auto committed = this->fticCheckParams(
+                        sp,
+                        traitPath.path,
+                        &traitPath.params,
+                        pe.type,
+                        selected->impl->params,
+                        selected->impl->traitArgs,
+                        selected->impl->type,
+                        committedParams,
+                        true,
+                        true);
+                    ASSERT_BUG(sp, committed != HIRCompare::Unequal, "Selected fuzzy impl no longer matches " << input);
+                }
             }
 
             DEBUG("Converted UfcsKnown - " << e.path << " = " << ty);
@@ -6659,7 +6610,8 @@ default:
             const HIRPathParams& implTraitArgs,
             const HIRTypeData* implTy,
             /*Out->*/ HIRPathParams& outImplParams,
-            bool evaluateBounds /*=true*/
+            bool evaluateBounds /*=true*/,
+            bool commitDefiningOpaque /*=false*/
         ) const {
             TRACE_FUNCTION_FR("impl" << implParamsDef.fmtArgs() << " " << trait << implTraitArgs << " for " << implTy, outImplParams);
 
@@ -6962,13 +6914,17 @@ default:
             //::std::vector<::HIR::ASTType*> saved_ph;
 
             // Keep looping while placeholders are updated
+            using DeferredTypeConstraint = ::std::pair<const HIRTypeData*, const HIRTypeData*>;
+
             int loops = 0;
             HIRPathParams lastPlaceholders;
+            ThinVector<DeferredTypeConstraint> deferredTypeConstraints;
             do {
                 DEBUG(">> LOOP " << loops);
                 ASSERT_BUG(sp, loops < 4, "Excessive iterations while resolving bound placeholders");
                 loops += 1;
                 lastPlaceholders = placeholders.clone();
+                deferredTypeConstraints.clear();
                 // Check bounds for this impl
                 // - If a bound fails, then this can't be a valid impl
                 for (const auto& bound : implParamsDef.bounds) {
@@ -7001,9 +6957,11 @@ default:
                     // NOTE: Save the placeholder state and restore if the result was Fuzzy
                     HIRPathParams savedPh = placeholders.clone();
                     HIRPathParams fuzzyPh;
+                    ThinVector<DeferredTypeConstraint> fuzzyTypeConstraints;
                     unsigned numFuzzy = 0;       //!< Number of detected fuzzy impls
                     bool fuzzyCompatible = true; //!< Indicates that the `fuzzy_ph` applies to all detected fuzzy impls
                     auto rv = this->findTraitImpls(sp, realTraitPath.path, realTraitPath.params, realType, [&](auto impl, auto implCmp) {
+                        ThinVector<DeferredTypeConstraint> candidateTypeConstraints;
                         // TODO: Save and restore placeholders if this isn't a full match
                         DEBUG("[ftic_check_params] impl_cmp = " << implCmp << ", impl = " << impl);
                         auto cmp = implCmp;
@@ -7051,6 +7009,18 @@ default:
                                     // TODO: When a fuzzy match is encountered on a conditional bound, returning `false` can lead to an false negative (and a compile error)
                                     // BUT, returning `true` could lead to it being selected. (Is this a problem, should a later validation pass check?)
                                     DEBUG("[ftic_check_params] Fuzzy match assoc bound between " << ty << " and " << assocBound.second.type);
+                                    if (commitDefiningOpaque && typeConstraint) {
+                                        const auto containsDefiningOpaque = [&](const HIRTypeData* type) {
+                                            return visitTyWith(type, [&](const HIRTypeData* inner) {
+                                                const auto* erased = inner->opt_ErasedType();
+                                                const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+                                                return alias && this->isOpaqueAliasDefiningScope(*alias->inner);
+                                            });
+                                        };
+                                        if (containsDefiningOpaque(ty) || containsDefiningOpaque(assocBound.second.type)) {
+                                            candidateTypeConstraints.emplace_back(ty, assocBound.second.type);
+                                        }
+                                    }
                                     cmp = HIRCompare::Fuzzy;
                                     break;
                             }
@@ -7068,6 +7038,12 @@ default:
                                 fuzzyCompatible = false;
                             }
                             numFuzzy += 1;
+
+                            if (numFuzzy == 1) {
+                                fuzzyTypeConstraints = ::std::move(candidateTypeConstraints);
+                            } else {
+                                fuzzyTypeConstraints.clear();
+                            }
 
                             fuzzyPh = ::std::move(placeholders);
                             // TODO: Should this do some form of reset?
@@ -7093,6 +7069,9 @@ default:
                         } else if (numFuzzy == 1) {
                             DEBUG("Use placeholders " << fuzzyPh);
                             placeholders = ::std::move(fuzzyPh);
+                            for (const auto& constraint : fuzzyTypeConstraints) {
+                                deferredTypeConstraints.push_back(constraint);
+                            }
                         } else if (fuzzyCompatible) {
                             DEBUG("Multiple placeholders (" << numFuzzy << "), but all equal " << fuzzyPh);
                             placeholders = ::std::move(fuzzyPh);
@@ -7147,6 +7126,12 @@ default:
                     } else {
                         // TODO: Set match to fuzzy?
                     }
+                }
+            }
+
+            if (commitDefiningOpaque && typeConstraint) {
+                for (const auto& constraint : deferredTypeConstraints) {
+                    typeConstraint(sp, constraint.first, constraint.second);
                 }
             }
 

@@ -65,7 +65,10 @@ param-env `CoerceUnsized` bounds before structural coercion, then folding
 identity coercions after monomorphization, closed `mir/mir_coercions`;
 normalizing field types before excluding semantic `PhantomData` fields from
 the custom coercion check closed
-`self/phantomdata-in-coerce-and-dispatch-impls`. Thus 69
+`self/phantomdata-in-coerce-and-dispatch-impls`; preserving a defining opaque
+projection until type checking and committing the selected fuzzy impl's
+associated equality closed
+`type-alias-impl-trait/defined-by-user-annotation`. Thus 68
 of the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -80,19 +83,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 94 |
-| fixed, or no longer reproducing, since the gate | 537 |
+| still failing or still carried from the last full sweep | 93 |
+| fixed, or no longer reproducing, since the gate | 538 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed twenty-nine nodes, leaving 69. The remaining
+subsequent point fixes have closed thirty nodes, leaving 68. The remaining
 25 are in groups outside that sweep and are still carried from the last full
 sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 33 |
+| accepted Rust rejected by the compiler or driver | 32 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -100,13 +103,13 @@ sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 33 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 32 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 31 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 30 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 
 An async closure's future now takes the captures with it instead of borrowing

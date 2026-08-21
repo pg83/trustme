@@ -2940,6 +2940,8 @@ class UfcsVisitor: public HIRVisitor {
     const HIRTypeData* currentType_ = nullptr;
     const HIRTrait* currentTrait = nullptr;
     const HIRItemPath* currentTraitPath_ = nullptr;
+    const HIRSimplePath* definingOpaqueAliases_ = nullptr;
+    size_t definingOpaqueAliasCount_ = 0;
     bool inExpr = false;
     HIRSimplePath curModPath;
 
@@ -3299,9 +3301,15 @@ public:
 
         if (visitExprs_ && expr.get() != nullptr) {
             auto savedInExpr = inExpr;
+            const auto* savedDefiningOpaqueAliases = definingOpaqueAliases_;
+            const auto savedDefiningOpaqueAliasCount = definingOpaqueAliasCount_;
             inExpr = true;
+            definingOpaqueAliases_ = expr.state ? expr.state->defineOpaque.data() : nullptr;
+            definingOpaqueAliasCount_ = expr.state ? expr.state->defineOpaque.size() : 0;
             ExprVisitor v{*this};
             (*expr).visit(v);
+            definingOpaqueAliases_ = savedDefiningOpaqueAliases;
+            definingOpaqueAliasCount_ = savedDefiningOpaqueAliasCount;
             inExpr = savedInExpr;
         }
     }
@@ -3620,6 +3628,13 @@ public:
         // TODO: Add a span parameter.
         static Span sp;
 
+        const bool definesContainedOpaque = inExpr && definingOpaqueAliasCount_ > 0
+            && ty->is_Path() && ty->as_Path().path.data.is_UfcsKnown()
+            && visitTyWith(ty, [&](const HIRTypeData* inner) {
+                const auto* erased = inner->opt_ErasedType();
+                const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+                return alias && crate.isOpaqueAliasNamedBy(*alias->inner, definingOpaqueAliases_, definingOpaqueAliasCount_);
+            });
         // This pass rewrites paths and resolves expressions inside const
         // generics, and those live inside types too: the path-bearing node
         // kinds go through a working copy and the owned-structure hooks
@@ -3645,7 +3660,7 @@ public:
 
         // TODO: If this an associated type, check for default trait params
 
-        if (runEat) {
+        if (runEat && !definesContainedOpaque) {
             TRACE_FUNCTION_FR(ty, ty);
             std::vector<HIRTypeRef> stack;
             if (ty->is_Path()) {

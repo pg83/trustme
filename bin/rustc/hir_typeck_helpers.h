@@ -184,7 +184,7 @@ private:
     // cannot bind or append variables in the caller's type-checking context.
     mutable HMTypeInferrence coherenceIvars;
     mutable TraitResolution* coherenceResolve = nullptr;
-    ::std::function<void(const Span&, const HIRTypeData*, const HIRTypeData*)> inherentTypeConstraint;
+    ::std::function<void(const Span&, const HIRTypeData*, const HIRTypeData*)> typeConstraint;
     ::std::vector<HIRSimplePath> opaqueAliasScopes;
     ::std::vector<HIRSimplePath> definingOpaqueAliases;
 
@@ -204,8 +204,8 @@ public:
 
     bool isOpaqueAliasDefiningScope(const HIRTypeDataErasedTypeAliasInner& alias) const;
 
-    void setInherentTypeConstraint(::std::function<void(const Span&, const HIRTypeData*, const HIRTypeData*)> constraint) {
-        inherentTypeConstraint = mv$(constraint);
+    void setTypeConstraint(::std::function<void(const Span&, const HIRTypeData*, const HIRTypeData*)> constraint) {
+        typeConstraint = mv$(constraint);
     }
 
     const HIRGenericPath* currentTraitPath() const {
@@ -304,7 +304,8 @@ private:
         const HIRPathParams& implTraitArgs,
         const HIRTypeData* implTy,
         /*Out->*/ HIRPathParams& outImplParams,
-        bool evaluateBounds = true
+        bool evaluateBounds = true,
+        bool commitDefiningOpaque = false
     ) const;
 
 public:
