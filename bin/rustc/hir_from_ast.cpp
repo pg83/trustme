@@ -4340,7 +4340,7 @@ default:
             args.push_back(lower(arg));
         }
 
-        rv.reset(ctx.crate->pool->make<HIRExprNodeCallMethod>(v.span(), lower(v.val), v.method.name(), ctx.LowerHIRPathParams(v.span(), v.method.args(), /*allow_assoc=*/false), mv$(args)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeCallMethod>(v.span(), lower(v.val), v.method.hygienicName(), ctx.LowerHIRPathParams(v.span(), v.method.args(), /*allow_assoc=*/false), mv$(args), v.method.name()));
     }
 
     virtual void visit(ASTExprNodeCallObject& v) override {

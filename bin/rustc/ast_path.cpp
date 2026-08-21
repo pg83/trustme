@@ -315,14 +315,20 @@ void ASTPathParamEnt::fmt(::std::ostream& os) const {
 
 // --- AST::PathNode
 ASTPathNode::ASTPathNode(RcString name, ASTPathParams args)
-    : name_(mv$(name))
+    : ident_(mv$(name))
+    , params_(mv$(args))
+{
+}
+
+ASTPathNode::ASTPathNode(Ident::Hygiene hygiene, RcString name, ASTPathParams args)
+    : ident_(mv$(hygiene), mv$(name))
     , params_(mv$(args))
 {
 }
 
 Ordering ASTPathNode::ord(const ASTPathNode& x) const {
     Ordering rv;
-    rv = ::ord(name_, x.name_);
+    rv = ::ord(hygienicName(), x.hygienicName());
     if (rv != OrdEqual) {
         return rv;
     }
@@ -334,7 +340,7 @@ Ordering ASTPathNode::ord(const ASTPathNode& x) const {
 }
 
 void ASTPathNode::printPretty(::std::ostream& os, bool isTypeContext) const {
-    os << name_;
+    os << ident_.name;
     if (!params_.isEmpty()) {
         if (!isTypeContext) {
             os << "::";
@@ -664,7 +670,9 @@ bool ASTAbsolutePath::isParentOf(const ASTAbsolutePath& other) const {
     return true;
 }
 
-ASTPathNode::ASTPathNode() {
+ASTPathNode::ASTPathNode()
+    : ident_(RcString())
+{
 }
 
 void ASTPath::Bindings::mergeFrom(const Bindings& x) {

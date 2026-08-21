@@ -1077,6 +1077,13 @@ default: {
             // for, so the probe answers from what is known.
             this->context.resolve.methodProbeMustDecide = this->isFallback;
             unsigned int derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.method, possibleMethods);
+            if ((derefCount == ~0u || possibleMethods.empty()) && node.method != node.fallbackMethod) {
+                possibleMethods.clear();
+                derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.fallbackMethod, possibleMethods);
+                if (derefCount != ~0u && !possibleMethods.empty()) {
+                    node.method = node.fallbackMethod;
+                }
+            }
             this->context.resolve.methodProbeMustDecide = false;
         tryAgain:
             if (derefCount != ~0u) {
@@ -8255,6 +8262,10 @@ namespace {
             DEBUG("Check <" << t << ">::" << node.method);
             ::std::vector<::std::pair<TraitResolution::AutoderefBorrow, HIRPath>> possibleMethods;
             unsigned int derefCount = context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, t, node.method, possibleMethods);
+            if ((derefCount == ~0u || possibleMethods.empty()) && node.method != node.fallbackMethod) {
+                possibleMethods.clear();
+                derefCount = context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, t, node.fallbackMethod, possibleMethods);
+            }
             DEBUG("> deref_count = " << derefCount << ", possible_methods={" << possibleMethods << "}");
             // TODO: Detect the above hitting an ivar, and use that instead of this hacky check of if it's `_` or `&_`
             if (!(t->is_Infer() || ((*t).is_Borrow() && ((*t).as_Borrow().inner->is_Infer()))) && possibleMethods.empty()) {
@@ -12406,11 +12417,15 @@ public:
 
         // - Search in-scope trait list for traits that provide a method of this name
         const RcString& methodName = node.method;
+        const RcString& fallbackMethodName = node.fallbackMethod;
         tTraitList possibleTraits;
         unsigned int maxNumParams = 0;
         unsigned int maxNumValueParams = 0;
-        auto visitTraitInner = [&methodName, &maxNumParams, &maxNumValueParams, &possibleTraits](const HIRSimplePath& p, const HIRTrait& tr, bool push) {
+        auto visitTraitInner = [&methodName, &fallbackMethodName, &maxNumParams, &maxNumValueParams, &possibleTraits](const HIRSimplePath& p, const HIRTrait& tr, bool push) {
             auto it = tr.values.find(methodName);
+            if (it == tr.values.end() && methodName != fallbackMethodName) {
+                it = tr.values.find(fallbackMethodName);
+            }
             if (it == tr.values.end()) {
                 return;
             }

@@ -58,7 +58,7 @@ struct Ident {
 
         static Hygiene newScope(stl::ObjPool& pool);
 
-        static Hygiene newScopeChained(stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition = 0);
+        static Hygiene newScopeChained(stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition = 0, bool itemOpaque = false);
 
         Hygiene withTailScope(stl::ObjPool& pool, const Hygiene& scope, bool inheritModPath = false) const;
 
@@ -76,6 +76,8 @@ struct Ident {
 
         // Returns true if an ident with hygine `source` can see an ident with this hygine
         bool isVisible(const Hygiene& source) const;
+
+        RcString applyToItemName(const RcString& name) const;
 
         Ordering ord(const Hygiene& x) const;
 
@@ -114,6 +116,10 @@ struct Ident {
 
     RcString intoString() {
         return ::std::move(name);
+    }
+
+    RcString hygienicName() const {
+        return hygiene.applyToItemName(name);
     }
 
     bool operator==(const char* s) const {

@@ -1081,16 +1081,20 @@ HIRTypeRef HIRExprVisitorDef::visitType(HIRTypeRef ty) {
         {
         }
 
-        HIRExprNodeCallMethod::HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString methodName, HIRPathParams params, ::std::vector<HIRExprNodeP> args)
+        HIRExprNodeCallMethod::HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString methodName, HIRPathParams params, ::std::vector<HIRExprNodeP> args, RcString fallbackMethod)
             : HIRExprNode(mv$(sp))
             , value(mv$(val))
             , method(mv$(methodName))
+            , fallbackMethod(mv$(fallbackMethod))
             , params(mv$(params))
             , args(mv$(args))
             ,
 
             methodPath(HIRSimplePath("", {}))
         {
+            if (this->fallbackMethod == "") {
+                this->fallbackMethod = this->method;
+            }
         }
 
         HIRExprNodeField::HIRExprNodeField(Span sp, HIRExprNodeP val, RcString field)

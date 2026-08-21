@@ -385,20 +385,29 @@ ASTUnion ASTUnion::clone() const {
     return os << "impl " << (impl.isConst_ ? "const " : "") << "<" << impl.params_ << "> " << impl.trait_.ent << " for " << impl.type_ << "";
 }
 
-void ASTImpl::addFunction(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTFunction fcn) {
-    items_.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(ASTItem::make_Function(mv$(fcn)))});
+void ASTImpl::addFunction(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTFunction fcn, RcString sourceName) {
+    if (sourceName == "") {
+        sourceName = name;
+    }
+    items_.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), mv$(sourceName), box$(ASTItem::make_Function(mv$(fcn)))});
 }
 
-void ASTImpl::addType(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTGenericParams params, ASTType* type) {
-    items_.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(ASTItem::make_Type(ASTTypeAlias(mv$(params), mv$(type))))});
+void ASTImpl::addType(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTGenericParams params, ASTType* type, RcString sourceName) {
+    if (sourceName == "") {
+        sourceName = name;
+    }
+    items_.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), mv$(sourceName), box$(ASTItem::make_Type(ASTTypeAlias(mv$(params), mv$(type))))});
 }
 
-void ASTImpl::addStatic(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTStatic v) {
-    items_.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(ASTItem::make_Static(mv$(v)))});
+void ASTImpl::addStatic(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTStatic v, RcString sourceName) {
+    if (sourceName == "") {
+        sourceName = name;
+    }
+    items_.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), mv$(sourceName), box$(ASTItem::make_Static(mv$(v)))});
 }
 
 void ASTImpl::addMacroInvocation(ASTMacroInvocation item) {
-    items_.push_back(ImplItem{item.span(), {}, ASTVisibility::makeGlobal(), false, "", box$(ASTItem::make_MacroInv(mv$(item)))});
+    items_.push_back(ImplItem{item.span(), {}, ASTVisibility::makeGlobal(), false, "", "", box$(ASTItem::make_MacroInv(mv$(item)))});
 }
 
 bool ASTImpl::hasNamedItem(const RcString& name) const {

@@ -565,7 +565,7 @@ public:
         , sourceEdition(sourceEdition)
         , isMacroItem(isMacroItem)
         , transparent(transparent)
-        , hygiene_(Ident::Hygiene::newScopeChained(pool, parentHygiene, definitionId))
+        , hygiene_(Ident::Hygiene::newScopeChained(pool, parentHygiene, definitionId, isMacroItem))
         , lastHygiene(hygiene_)
     {
     }

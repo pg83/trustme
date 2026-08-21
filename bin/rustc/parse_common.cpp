@@ -41,7 +41,7 @@ ASTExprNodeP ParseIfStmt(TokenStream& lex);
 ASTExprNodeP ParseWhileStmt(TokenStream& lex, Ident lifetime);
 ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime);
 std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStructLiteral = false);
-RcString getOptionalIdent(TokenStream& lex);
+RcString getOptionalIdent(TokenStream& lex, RcString* sourceName = nullptr);
 ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs = {});
 bool ParseParamAttrsKeep(TokenStream& lex, ASTAttributeList* attrsOut = nullptr);
 static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex);
@@ -1261,7 +1261,7 @@ ASTExprNodeP ParseExprFC(TokenStream& lex) {
                 switch (GET_TOK(tok, lex)) {
                     case TOK_IDENT: {
                         const auto methodPosition = tok.getPos();
-                        ASTPathNode pn(tok.ident().name, {});
+                        ASTPathNode pn(tok.ident().hygiene, tok.ident().name, {});
                         switch (GET_TOK(tok, lex)) {
                             case TOK_PAREN_OPEN:
                                 PUTBACK(tok, lex);
@@ -1404,7 +1404,7 @@ ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
 
         ASTExprNodeP val;
         if (lex.lookahead(0) != TOK_COLON) {
-            val = NEWNODE(ASTExprNodeNamedValue, ASTPath::newRelative(h, {ASTPathNode(name)}));
+            val = NEWNODE(ASTExprNodeNamedValue, ASTPath::newRelative(h, {ASTPathNode(h, name)}));
         } else {
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             val = ParseExpr0(lex);
@@ -2100,11 +2100,11 @@ ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMod
         ASTPathParams params;
 
         GET_TOK(tok, lex);
-        RcString component;
+        Ident component{RcString()};
         if (tok.type() == TOK_IDENT) {
-            component = mv$(tok.ident().name);
+            component = mv$(tok.ident());
         } else if (tok.type() == TOK_RWORD_SELF || tok.type() == TOK_RWORD_SUPER || tok.type() == TOK_RWORD_CRATE) {
-            component = RcString::newInterned(tok.toStr());
+            component = Ident(RcString::newInterned(tok.toStr()));
         } else {
             throw ParseErrorUnexpected(lex, tok, TOK_IDENT);
         }
@@ -2166,7 +2166,7 @@ ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMod
             }
         }
         if (lex.lookahead(0) != TOK_DOUBLE_COLON) {
-            ret.push_back(ASTPathNode(component, mv$(params)));
+            ret.push_back(ASTPathNode(component.hygiene, component.name, mv$(params)));
             break;
         }
         GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
@@ -2183,13 +2183,13 @@ ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMod
             // Expr-mode generics "::path::to::function::<Type1,Type2>(arg1, arg2)"
             params = ParsePathGenericList(lex);
             if (lex.lookahead(0) != TOK_DOUBLE_COLON) {
-                ret.push_back(ASTPathNode(component, mv$(params)));
+                ret.push_back(ASTPathNode(component.hygiene, component.name, mv$(params)));
                 // Break out of loop down to return
                 break;
             }
             GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
         }
-        ret.push_back(ASTPathNode(component, mv$(params)));
+        ret.push_back(ASTPathNode(component.hygiene, component.name, mv$(params)));
     }
     DEBUG("ret = " << ret);
     return ret;
@@ -3902,7 +3902,7 @@ default:
     switch (tok.type()) {
         case TOK_RWORD_STATIC: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            name = tok.ident().name;
+            name = tok.ident().hygienicName();
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             auto ty = ParseType(lex);
             GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
@@ -3946,7 +3946,7 @@ default:
         // Associated type
         case TOK_RWORD_TYPE: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            name = tok.ident().name;
+            name = tok.ident().hygienicName();
             auto typeParams = ParseGenericParamsOpt(lex);
             ASTGenericParams bounds;
             if (GET_TOK(tok, lex) == TOK_COLON) {
@@ -3981,7 +3981,7 @@ default:
         case TOK_RWORD_FN: {
             auto definitionSpan = lex.tokenStartSpan(tok);
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            name = tok.ident().name;
+            name = tok.ident().hygienicName();
             // Self allowed, prototype-form allowed (optional names and no code)
             auto fcn = ParseFunctionDef(lex, std::move(definitionSpan), /*allow_self*/ true, /*can_be_proto*/ true, std::move(abi), fnFlags);
             // A default body may be written out or come from a `block` fragment.
@@ -4119,7 +4119,7 @@ ASTEnum ParseEnumDef(TokenStream& lex, const ASTAttributeList& metaItems) {
         }
 
         GET_CHECK_TOK(tok, lex, TOK_IDENT);
-        auto name = tok.ident().name;
+        auto name = tok.ident().hygienicName();
         // Tuple-like variants
         if (lex.getTokenIf(TOK_PAREN_OPEN)) {
             ::std::vector<ASTTupleItem> items;
@@ -4493,7 +4493,8 @@ default:
     ASTFunction::Flags fnFlags;
     if (tok.type() == TOK_RWORD_TYPE) {
         GET_CHECK_TOK(tok, lex, TOK_IDENT);
-        auto name = tok.ident().name;
+        auto sourceName = tok.ident().name;
+        auto name = tok.ident().hygienicName();
         auto atypeParams = ParseGenericParamsOpt(lex);
         // Bounds are allowed by the grammar here and mean nothing; the aliased
         // type may be absent in source that a `cfg` removes.
@@ -4515,13 +4516,14 @@ default:
             ParseWhereClause(lex, atypeParams);
         }
         GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
-        impl.addType(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, name, mv$(atypeParams), mv$(ty));
+        impl.addType(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, name, mv$(atypeParams), mv$(ty), mv$(sourceName));
         return;
     }
 
     ParseFunctionQualifiers(lex, tok, fnFlags, abi);
     if (tok.type() == TOK_RWORD_CONST) {
-        auto name = getOptionalIdent(lex);
+        RcString sourceName;
+        auto name = getOptionalIdent(lex, &sourceName);
         auto params = ParseGenericParamsOpt(lex);
         GET_CHECK_TOK(tok, lex, TOK_COLON);
         auto ty = ParseType(lex);
@@ -4542,18 +4544,18 @@ default:
         GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
 
         auto i = ASTStatic(ASTStatic::CONST, mv$(ty), mv$(val), mv$(params));
-        impl.addStatic(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, mv$(name), mv$(i));
+        impl.addStatic(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, mv$(name), mv$(i), mv$(sourceName));
         return;
     }
     CHECK_TOK(tok, TOK_RWORD_FN);
     auto definitionSpan = lex.tokenStartSpan(tok);
     GET_CHECK_TOK(tok, lex, TOK_IDENT);
-    // TODO: Hygine on function names? - Not in impl blocks?
-    auto name = tok.ident().name;
+    auto sourceName = tok.ident().name;
+    auto name = tok.ident().hygienicName();
     DEBUG("Function " << name);
     // - Self allowed, can't be prototype-form
     auto fcn = ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/true, std::move(abi), fnFlags);
-    impl.addFunction(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, mv$(name), mv$(fcn));
+    impl.addFunction(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, mv$(name), mv$(fcn), mv$(sourceName));
 }
 
 ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi) {
@@ -4607,7 +4609,7 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
         case TOK_RWORD_FN: {
             auto definitionSpan = lex.tokenStartSpan(tok);
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            auto name = tok.ident().name;
+            auto name = tok.ident().hygienicName();
             // parse function as prototype
             // - no self, is prototype, is unsafe and not const
             auto i = ASTItem(ParseFunctionDef(lex, std::move(definitionSpan), /*allow_self*/ false, /*can_be_prototype=*/true, abi, ASTFunction::Flags::makeUnsafe()));
@@ -4624,7 +4626,7 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
                 PUTBACK(tok, lex);
             }
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            auto name = tok.ident().name;
+            auto name = tok.ident().hygienicName();
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             auto type = ParseType(lex);
             GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
@@ -4635,7 +4637,7 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
         }
         case TOK_RWORD_TYPE: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            auto name = tok.ident().name;
+            auto name = tok.ident().hygienicName();
             // The grammar gives an extern type the whole alias syntax —
             // generics, bounds, a where clause and even a body — none of which
             // means anything here.
@@ -4668,14 +4670,21 @@ ASTExternBlock ParseExternBlock(TokenStream& lex, ::std::string abi, ASTAttribut
     return rv;
 }
 
-RcString getOptionalIdent(TokenStream& lex) {
+RcString getOptionalIdent(TokenStream& lex, RcString* sourceName) {
     Token tok;
     GET_TOK(tok, lex);
     if (tok.type() == TOK_UNDERSCORE) {
         static unsigned anonIndex = 0;
-        return RcString::newInterned(FMT(" " << anonIndex++));
+        auto name = RcString::newInterned(FMT(" " << anonIndex++));
+        if (sourceName) {
+            *sourceName = name;
+        }
+        return name;
     } else if (tok.type() == TOK_IDENT) {
-        return tok.ident().name;
+        if (sourceName) {
+            *sourceName = tok.ident().name;
+        }
+        return tok.ident().hygienicName();
     } else {
         throw ParseErrorUnexpected(lex, tok, {TOK_UNDERSCORE, TOK_IDENT});
     }
@@ -4716,12 +4725,12 @@ void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, AS
                     && path.cls.as_Absolute().crate == "" && path.cls.as_Absolute().nodes.empty()) {
                     path = ASTPath(RcString(std::string("=") + tok.ident().name.c_str()), {});
                 } else {
-                    path.append(ASTPathNode(tok.ident().name, {}));
+                    path.append(ASTPathNode(tok.ident().hygiene, tok.ident().name, {}));
                 }
                 break;
             case TOK_RWORD_SELF: {
                 ASSERT_BUG(lex.pointSpan(), !path.nodes().empty(), "`self` with no path");
-                auto name = path.nodes().back().name();
+                auto name = path.nodes().back().hygienicName();
                 if (lex.getTokenIf(TOK_RWORD_AS)) {
                     name = getOptionalIdent(lex);
                 }
@@ -4748,7 +4757,7 @@ void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, AS
                             if (path.nodes().size() == 0) {
                                 ERROR(lex.pointSpan(), E0000, "`self` with no path, use `as` to give it a name");
                             }
-                            name = path.nodes().back().name();
+                            name = path.nodes().back().hygienicName();
                         }
                         entries.push_back({lex.pointSpan(), ASTPath(path), ::std::move(name), /*isSelf=*/true});
                     } else {
@@ -4782,7 +4791,7 @@ void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, AS
     } else {
         PUTBACK(tok, lex);
         ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, "`use` with no path");
-        name = path.nodes().back().name();
+        name = path.nodes().back().hygienicName();
     }
 
     // TODO: Get a span covering the final node.
@@ -4872,7 +4881,7 @@ void ParseUseRoot(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries) {
                     name = getOptionalIdent(lex);
                 } else {
                     ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, "`use` with an empty path fragment");
-                    name = path.nodes().back().name();
+                    name = path.nodes().back().hygienicName();
                 }
                 entries.push_back({lex.pointSpan(), ASTPath(path), ::std::move(name)});
                 return;
@@ -5115,7 +5124,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         case TOK_RWORD_FN: {
                             auto definitionSpan = lex.tokenStartSpan(tok);
                             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                            itemName = tok.ident().name;
+                            itemName = tok.ident().hygienicName();
                             itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, ASTFunction::Flags()));
                             break;
                         }
@@ -5133,7 +5142,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 case TOK_RWORD_FN: {
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                    itemName = tok.ident().name;
+                    itemName = tok.ident().hygienicName();
                     itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, "C", ASTFunction::Flags()));
                     break;
                 }
@@ -5153,7 +5162,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             itemData = ASTItem::make_Crate({RcString::newInterned("")});
                             if (lex.getTokenIf(TOK_RWORD_AS)) {
                                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                                itemName = tok.ident().name;
+                                itemName = tok.ident().hygienicName();
                             } else {
                                 itemName = RcString::newInterned("self");
                             }
@@ -5164,12 +5173,12 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             itemData = ASTItem::make_Crate({RcString::newInterned(tok.str())});
                             GET_CHECK_TOK(tok, lex, TOK_RWORD_AS);
                             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                            itemName = tok.ident().name;
+                            itemName = tok.ident().hygienicName();
                             break;
                         // `extern crate crate_name;`
                         // `extern crate crate_name as other_name;`
                         case TOK_IDENT:
-                            itemName = tok.ident().name;
+                            itemName = tok.ident().hygienicName();
                             if (GET_TOK(tok, lex) == TOK_RWORD_AS) {
                                 itemData = ASTItem::make_Crate({mv$(itemName)});
 
@@ -5228,7 +5237,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                    itemName = tok.ident().name;
+                    itemName = tok.ident().hygienicName();
                     itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, ASTFunction::Flags().setConst().setUnsafe()));
                     break;
                 }
@@ -5246,7 +5255,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                    itemName = tok.ident().name;
+                    itemName = tok.ident().hygienicName();
                     itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, flags));
                     break;
                 }
@@ -5256,14 +5265,14 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                    itemName = tok.ident().name;
+                    itemName = tok.ident().hygienicName();
                     itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, ASTFunction::Flags().setConst()));
                     break;
                 }
                 case TOK_RWORD_FN: {
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                    itemName = tok.ident().name;
+                    itemName = tok.ident().hygienicName();
                     // - self not allowed, not prototype
                     itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, ABI_RUST, ASTFunction::Flags().setConst()));
                     break;
@@ -5315,7 +5324,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
                         auto definitionSpan = lex.tokenStartSpan(tok);
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                        itemName = tok.ident().name;
+                        itemName = tok.ident().hygienicName();
                         itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, abi, ASTFunction::Flags().setUnsafe()));
                     }
                     break;
@@ -5324,7 +5333,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 case TOK_RWORD_FN: {
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                    itemName = tok.ident().name;
+                    itemName = tok.ident().hygienicName();
                     // - self not allowed, not prototype
                     itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags().setUnsafe()));
                     break;
@@ -5332,7 +5341,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 // `unsafe trait`
                 case TOK_RWORD_TRAIT: {
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                    itemName = tok.ident().name;
+                    itemName = tok.ident().hygienicName();
                     auto tr = ParseTraitDef(lex, metaItems, ParseGenericParamsOpt(lex));
                     tr.setIsUnsafe();
                     itemData = ASTItem(::std::move(tr));
@@ -5355,7 +5364,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     if (tok.ident().name == "auto") {
                         GET_CHECK_TOK(tok, lex, TOK_RWORD_TRAIT);
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                        itemName = tok.ident().name;
+                        itemName = tok.ident().hygienicName();
                         auto tr = ParseTraitDef(lex, metaItems, ParseGenericParamsOpt(lex));
                         tr.setIsUnsafe();
                         tr.setIsMarker();
@@ -5386,7 +5395,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
             auto definitionSpan = lex.tokenStartSpan(tok);
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            itemName = tok.ident().name;
+            itemName = tok.ident().hygienicName();
             // - self not allowed, not prototype
             itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, flags));
             break;
@@ -5395,7 +5404,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
         case TOK_RWORD_FN: {
             auto definitionSpan = lex.tokenStartSpan(tok);
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            itemName = tok.ident().name;
+            itemName = tok.ident().hygienicName();
             // - self not allowed, not prototype
             itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags()));
             break;
@@ -5403,19 +5412,19 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
         // `type`
         case TOK_RWORD_TYPE:
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            itemName = tok.ident().name;
+            itemName = tok.ident().hygienicName();
             itemData = ASTItem(ParseTypeAlias(lex));
             break;
         // `struct`
         case TOK_RWORD_STRUCT:
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            itemName = tok.ident().name;
+            itemName = tok.ident().hygienicName();
             itemData = ASTItem(ParseStruct(lex, metaItems));
             break;
         // `enum`
         case TOK_RWORD_ENUM:
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            itemName = tok.ident().name;
+            itemName = tok.ident().hygienicName();
             itemData = ASTItem(ParseEnumDef(lex, metaItems));
             break;
 
@@ -5426,18 +5435,18 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
                 auto definitionSpan = lex.tokenStartSpan(tok);
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                itemName = tok.ident().name;
+                itemName = tok.ident().hygienicName();
                 itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags().setGen()));
             } else if (tok.ident().name == "union") {
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                itemName = tok.ident().name;
+                itemName = tok.ident().hygienicName();
                 itemData = ASTItem(ParseUnion(lex, metaItems));
             }
             // `auto trait`
             else if (tok.ident().name == "auto") {
                 GET_CHECK_TOK(tok, lex, TOK_RWORD_TRAIT);
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                itemName = tok.ident().name;
+                itemName = tok.ident().hygienicName();
                 auto tr = ParseTraitDef(lex, metaItems, ParseGenericParamsOpt(lex));
                 tr.setIsMarker();
                 itemData = ASTItem(::std::move(tr));
@@ -5464,7 +5473,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
         // `trait`
         case TOK_RWORD_TRAIT: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            itemName = tok.ident().name;
+            itemName = tok.ident().hygienicName();
             ASTGenericParams params = ParseGenericParamsOpt(lex);
             if (lex.lookahead(0) == TOK_EQUAL) {
                 // Trait alias (can't be auto or unsafe?)
@@ -5507,7 +5516,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
 
         case TOK_RWORD_MACRO: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            auto name = tok.ident().name;
+            auto name = tok.ident().hygienicName();
             DEBUG("name = " << name);
             MacroRulesPtr mrp;
             if (lex.lookahead(0) == TOK_BRACE_OPEN) {
@@ -5534,7 +5543,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
 
         case TOK_RWORD_MOD: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            auto name = tok.ident().name;
+            auto name = tok.ident().hygienicName();
             DEBUG("Sub module '" << name << "'");
             ASTModule submod(modPath + name);
 

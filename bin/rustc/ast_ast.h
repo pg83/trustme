@@ -642,6 +642,7 @@ public:
         ASTVisibility vis; // Ignored for trait impls
         bool isSpecialisable;
         RcString name;
+        RcString sourceName;
 
         ::std::unique_ptr<ASTItem> data;
     };
@@ -660,9 +661,9 @@ public:
     ~ASTImpl();
     ASTImpl& operator=(ASTImpl&&);
 
-    void addFunction(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTFunction fcn);
-    void addType(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTGenericParams params, ASTType* type);
-    void addStatic(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTStatic v);
+    void addFunction(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTFunction fcn, RcString sourceName = {});
+    void addType(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTGenericParams params, ASTType* type, RcString sourceName = {});
+    void addStatic(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTStatic v, RcString sourceName = {});
     void addMacroInvocation(ASTMacroInvocation inv);
 
     const ASTImplDef& def() const {

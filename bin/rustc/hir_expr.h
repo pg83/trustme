@@ -512,6 +512,9 @@ struct HIRExprNodeCallMethod: public HIRExprNode {
     HIRExprNodeP value;
     /// @brief Method name
     RcString method;
+    /// Ordinary def-site name, used only when an opaque hygiene binding with
+    /// `method` does not exist.
+    RcString fallbackMethod;
     /// @brief Generic parameters to the method
     HIRPathParams params;
     /// @brief Argument values
@@ -529,7 +532,7 @@ struct HIRExprNodeCallMethod: public HIRExprNode {
     ::std::vector<unsigned int> traitParamIvars;
     unsigned int traitParamTypeIvars = 0;
 
-    HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString methodName, HIRPathParams params, ::std::vector<HIRExprNodeP> args);
+    HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString methodName, HIRPathParams params, ::std::vector<HIRExprNodeP> args, RcString fallbackMethod = {});
 
     static constexpr unsigned int kind = 25;
     unsigned int nodeKind() const override;

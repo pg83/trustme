@@ -139,7 +139,7 @@ struct ASTPathParams {
 };
 
 class ASTPathNode {
-    RcString name_;
+    Ident ident_;
     ASTPathParams params_;
 
 public:
@@ -147,8 +147,14 @@ public:
 
     ASTPathNode(RcString name, ASTPathParams args = {});
 
+    ASTPathNode(Ident::Hygiene hygiene, RcString name, ASTPathParams args = {});
+
     const RcString& name() const {
-        return name_;
+        return ident_.name;
+    }
+
+    RcString hygienicName() const {
+        return ident_.hygienicName();
     }
 
     const ASTPathParams& args() const {

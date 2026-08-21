@@ -20,6 +20,15 @@ namespace {
         return ASTAbsolutePath(sp.crateName(), sp.componentsVec());
     }
 
+    template <typename Map>
+    auto findHygienicItem(const Map& items, const RcString& name, const RcString& hygienicName) {
+        auto it = items.find(hygienicName);
+        if (it == items.end() && hygienicName != name) {
+            it = items.find(name);
+        }
+        return it;
+    }
+
     struct GenericSlot {
         enum class Level {
             Top,
@@ -555,6 +564,8 @@ namespace {
 
         ASTPath lookupOpt(const Span& sp, const RcString& name, const Ident::Hygiene& srcContext, LookupMode mode) const {
             DEBUG("name=" << name << ", src_context=" << srcContext);
+            const auto itemName = srcContext.applyToItemName(name);
+            auto resolvedItemName = itemName;
             auto lookupContext = srcContext;
             // NOTE: src_context may provide a module to search
             // TODO: This should be checked AFTER locals
@@ -581,16 +592,17 @@ namespace {
                         case LookupMode::Constant:
                         case LookupMode::PatternValue:
                         case LookupMode::Variable: {
-                            auto it = mod->valueItems.find(name);
+                            auto it = findHygienicItem(mod->valueItems, name, itemName);
                             if (it != mod->valueItems.end()) {
+                                resolvedItemName = it->first;
                                 const auto* item = &it->second->ent;
-                                auto itemPath = ASTAbsolutePath(mp.crate, mp.ents) + name;
+                                auto itemPath = ASTAbsolutePath(mp.crate, mp.ents) + resolvedItemName;
                                 if (item->is_Import()) {
                                     const auto& imp = item->as_Import();
                                     // Set the true path (so the returned path is canonical)
                                     truePath = &imp.path;
 
-                                    auto itemPath = spToAp(imp.path) + name;
+                                    auto itemPath = spToAp(imp.path) + resolvedItemName;
                                     if (imp.isVariant) {
                                         const auto& enm = crate.externCrates.at(imp.path.crateName()).hir->getEnumByPath(sp, imp.path, /*ignore_crate_name*/ true, /*ignore_last*/ true);
                                         bindings.value.set(itemPath, ASTPathBindingValue::make_EnumVar({nullptr, imp.idx, &enm}));
@@ -616,16 +628,17 @@ default:
                         case LookupMode::Namespace:
                         case LookupMode::PatternType:
                         case LookupMode::Type: {
-                            auto it = mod->modItems.find(name);
+                            auto it = findHygienicItem(mod->modItems, name, itemName);
                             if (it != mod->modItems.end()) {
+                                resolvedItemName = it->first;
                                 const auto* item = &it->second->ent;
-                                auto itemPath = ASTAbsolutePath(mp.crate, mp.ents) + name;
+                                auto itemPath = ASTAbsolutePath(mp.crate, mp.ents) + resolvedItemName;
                                 if (item->is_Import()) {
                                     const auto& imp = item->as_Import();
                                     // Set the true path (so the returned path is canonical)
                                     truePath = &imp.path;
 
-                                    auto itemPath = spToAp(imp.path) + name;
+                                    auto itemPath = spToAp(imp.path) + resolvedItemName;
                                     if (imp.isVariant) {
                                         const auto& enm = crate.externCrates.at(imp.path.crateName()).hir->getEnumByPath(sp, imp.path, /*ignore_crate_name*/ true, /*ignore_last*/ true);
                                         bindings.type.set(itemPath, ASTPathBindingType::make_EnumVar({nullptr, imp.idx, &enm}));
@@ -678,7 +691,7 @@ default:
                             for (const auto& e : mp.ents) {
                                 rv.nodes().push_back(e);
                             }
-                            rv.nodes().push_back(name);
+                            rv.nodes().push_back(resolvedItemName);
                         }
                         rv.bindings = std::move(bindings);
                         return rv;
@@ -709,7 +722,8 @@ default:
                         mod = next;
                     }
                     ASTPath rv;
-                    if (this->lookupInMod(sp, *mod, name, mode, rv)) {
+                    if (this->lookupInMod(sp, *mod, itemName, mode, rv)
+                        || (itemName != name && this->lookupInMod(sp, *mod, name, mode, rv))) {
                         return rv;
                     }
                 }
@@ -720,7 +734,8 @@ default:
                         auto& e = (*it).as_Module();
                         DEBUG("- Module " << e.mod->path());
                         ASTPath rv;
-                        if (this->lookupInMod(sp, *e.mod, name, mode, rv)) {
+                        if (this->lookupInMod(sp, *e.mod, itemName, mode, rv)
+                            || (itemName != name && this->lookupInMod(sp, *e.mod, name, mode, rv))) {
                             return rv;
                         }
                         break;
@@ -823,7 +838,8 @@ default:
             // Top-level module
             DEBUG("- Top module (" << mod.path() << ")");
             ASTPath rv;
-            if (this->lookupInMod(sp, mod, name, mode, rv)) {
+            if (this->lookupInMod(sp, mod, itemName, mode, rv)
+                || (itemName != name && this->lookupInMod(sp, mod, name, mode, rv))) {
                 return rv;
             }
 
@@ -1092,6 +1108,7 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
         BUG(sp, "UFCS with no nodes encountered - " << path);
     }
     const auto& node = ufcs.nodes.at(0);
+    auto itemName = node.hygienicName();
 
     if (ufcs.trait && ufcs.trait->isValid()) {
         // Trait is specified, definitely a trait item
@@ -1105,6 +1122,14 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
         }
         assert(pb.as_Trait().trait_);
         const auto& tr = *pb.as_Trait().trait_;
+        if (itemName != node.name()) {
+            const auto exact = ::std::find_if(tr.items().begin(), tr.items().end(), [&](const auto& item) {
+                return item.name == itemName;
+            });
+            if (exact == tr.items().end()) {
+                itemName = node.name();
+            }
+        }
 
         switch (mode) {
             // A qualified path names a type in a pattern the same way it does
@@ -1115,7 +1140,7 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
             case Context::LookupMode::Namespace:
             case Context::LookupMode::Type:
                 for (const auto& item : tr.items()) {
-                    if (item.name != node.name()) {
+                    if (item.name != itemName) {
                         continue;
                     }
                     switch (item.data.tag()) {
@@ -1135,7 +1160,7 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
             case Context::LookupMode::Constant:
             case Context::LookupMode::Variable:
                 for (const auto& item : tr.items()) {
-                    if (item.name != node.name()) {
+                    if (item.name != itemName) {
                         continue;
                     }
                 switch (item.data.tag()) {
@@ -1391,13 +1416,16 @@ default:
         }
 
         const HIRModule* hmod = &crate.hir->rootModule;
+        ASTAbsolutePath resolvedPath(crate.name, {});
         for (unsigned int i = start; i < pathAbs.nodes.size() - 1; i++) {
             auto& n = pathAbs.nodes[i];
+            const auto nodeName = n.hygienicName();
             assert(hmod);
-            auto it = hmod->modItems.find(n.name());
+            auto it = findHygienicItem(hmod->modItems, n.name(), nodeName);
             if (it == hmod->modItems.end()) {
                 ERROR(sp, E0000, "Couldn't find path component '" << n.name() << "' of " << path);
             }
+            resolvedPath.nodes.push_back(it->first);
 
             switch (it->second->ent.tag()) {
                 case HIRTypeItem::TAG_Import: {
@@ -1436,10 +1464,7 @@ default:
                 }
                 case HIRTypeItem::TAG_Trait: {
                     auto& e = it->second->ent.as_Trait();
-                    ASTAbsolutePath ap(crate.name, {});
-                    for (unsigned int j = start; j <= i; j++) {
-                        ap.nodes.push_back(pathAbs.nodes[j].name());
-                    }
+                    auto ap = resolvedPath;
                     ASTPathParams pp;
                     if (!n.args().isEmpty()) {
                         pp = mv$(n.args());
@@ -1453,6 +1478,7 @@ default:
 
                     ASTPath newPath;
                     const auto& nextNode = pathAbs.nodes[i + 1];
+                    auto nextName = nextNode.hygienicName();
                     // If the named item can't be found in the trait, fall back to it being a type binding
                     // - What if this item is from a nested trait?
                     bool found = false;
@@ -1460,12 +1486,26 @@ default:
                         case Context::LookupMode::Namespace:
                         case Context::LookupMode::Type:
                         case Context::LookupMode::PatternType:
-                            found = (e.types.find(nextNode.name()) != e.types.end());
+                            found = (e.types.find(nextName) != e.types.end());
                         case Context::LookupMode::PatternValue:
                         case Context::LookupMode::Constant:
                         case Context::LookupMode::Variable:
-                            found = (e.values.find(nextNode.name()) != e.values.end());
+                            found |= (e.values.find(nextName) != e.values.end());
                             break;
+                    }
+                    if (!found && nextName != nextNode.name()) {
+                        nextName = nextNode.name();
+                        switch (i + 1 < pathAbs.nodes.size() ? Context::LookupMode::Namespace : mode) {
+                            case Context::LookupMode::Namespace:
+                            case Context::LookupMode::Type:
+                            case Context::LookupMode::PatternType:
+                                found = (e.types.find(nextName) != e.types.end());
+                            case Context::LookupMode::PatternValue:
+                            case Context::LookupMode::Constant:
+                            case Context::LookupMode::Variable:
+                                found |= (e.values.find(nextName) != e.values.end());
+                                break;
+                        }
                     }
 
                     if (!found) {
@@ -1491,19 +1531,20 @@ case HIRTypeItem::TAG_ExternType:
                     auto& e = it->second->ent.as_Enum();
                     if (i + 1 < pathAbs.nodes.size()) {
                         auto& nextNode = pathAbs.nodes[i + 1];
+                        auto nextName = nextNode.hygienicName();
                         // If this refers to an enum variant, return the full path
                         // - Otherwise, assume it's an associated type?
-                        auto idx = e.findVariant(nextNode.name());
+                        auto idx = e.findVariant(nextName);
+                        if (idx == SIZE_MAX && nextName != nextNode.name()) {
+                            nextName = nextNode.name();
+                            idx = e.findVariant(nextName);
+                        }
                         if (idx != SIZE_MAX) {
                             if (i != pathAbs.nodes.size() - 2) {
                                 ERROR(sp, E0000, "Unexpected enum in path " << path);
                             }
 
-                            ASTAbsolutePath ap(crate.name, {});
-                            auto traitPath = ASTPath(crate.name, {});
-                            for (unsigned int j = start; j < pathAbs.nodes.size(); j++) {
-                                ap.nodes.push_back(pathAbs.nodes[j].name());
-                            }
+                            auto ap = resolvedPath + nextName;
 
                             // NOTE: Type parameters for enums go after the _variant_
                             if (!n.args().isEmpty()) {
@@ -1531,20 +1572,16 @@ case HIRTypeItem::TAG_ExternType:
             }
         }
 
-        ASTAbsolutePath ap(crate.name, {});
-        auto traitPath = ASTPath(crate.name, {});
-        for (unsigned int j = start; j < pathAbs.nodes.size(); j++) {
-            ap.nodes.push_back(pathAbs.nodes[j].name());
-        }
-
-        const auto& name = pathAbs.nodes.back().name();
+        const auto& finalNode = pathAbs.nodes.back();
+        const auto name = finalNode.hygienicName();
         switch (mode) {
             // TODO: Don't bind to a Module if LookupMode::Type
             case Context::LookupMode::Namespace:
             case Context::LookupMode::Type:
             case Context::LookupMode::PatternType: {
-                auto v = hmod->modItems.find(name);
+                auto v = findHygienicItem(hmod->modItems, finalNode.name(), name);
                 if (v != hmod->modItems.end()) {
+                    auto ap = resolvedPath + v->first;
                     ASTPathBindingType pbt;
                     switch (v->second->ent.tag()) {
                         case HIRTypeItem::TAG_Import: {
@@ -1600,8 +1637,9 @@ case HIRTypeItem::TAG_ExternType:
             } break;
 
             case Context::LookupMode::PatternValue: {
-                auto v = hmod->valueItems.find(name);
+                auto v = findHygienicItem(hmod->valueItems, finalNode.name(), name);
                 if (v != hmod->valueItems.end()) {
+                    auto ap = resolvedPath + v->first;
                     switch (v->second->ent.tag()) {
 default:
                         DEBUG("Ignore - " << v->second->ent.tagStr());
@@ -1631,8 +1669,9 @@ default:
             } break;
             case Context::LookupMode::Constant:
             case Context::LookupMode::Variable: {
-                auto v = hmod->valueItems.find(name);
+                auto v = findHygienicItem(hmod->valueItems, finalNode.name(), name);
                 if (v != hmod->valueItems.end()) {
+                    auto ap = resolvedPath + v->first;
                     ASTPathBindingValue pbv;
                     switch (v->second->ent.tag()) {
                         case HIRValueItem::TAG_Import: {
@@ -1724,7 +1763,8 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
             assert(mod->anonMods()[idx]);
             mod = mod->anonMods()[idx].get();
         } else {
-            auto it = mod->namespaceItems.find(n.name());
+            const auto nodeName = n.hygienicName();
+            auto it = findHygienicItem(mod->namespaceItems, n.name(), nodeName);
             if (it == mod->namespaceItems.end()) {
                 ERROR(sp, E0000, "Couldn't find path component '" << n.name() << "' of " << path);
             }
@@ -1784,11 +1824,17 @@ default:
                     ASTPath newPath;
                     bool found = false;
                     assert(i + 1 < pathAbs.nodes.size());
-                    const auto& itemName = pathAbs.nodes[i + 1].name();
+                    auto itemName = pathAbs.nodes[i + 1].hygienicName();
                     if (e.trait_) {
                         auto it = ::std::find_if(e.trait_->items().begin(), e.trait_->items().end(), [&](const auto& x) {
                             return x.name == itemName;
                         });
+                        if (it == e.trait_->items().end() && itemName != pathAbs.nodes[i + 1].name()) {
+                            itemName = pathAbs.nodes[i + 1].name();
+                            it = ::std::find_if(e.trait_->items().begin(), e.trait_->items().end(), [&](const auto& x) {
+                                return x.name == itemName;
+                            });
+                        }
                         if (it != e.trait_->items().end()) {
                             found = true;
                         }
@@ -1832,8 +1878,15 @@ default:
                     } else {
                         assert(e.enum_);
                         auto& lastNode = pathAbs.nodes.back();
+                        auto variantName = lastNode.hygienicName();
+                        const auto exact = ::std::find_if(e.enum_->variants().begin(), e.enum_->variants().end(), [&](const auto& var) {
+                            return var.name == variantName;
+                        });
+                        if (exact == e.enum_->variants().end()) {
+                            variantName = lastNode.name();
+                        }
                         for (const auto& var : e.enum_->variants()) {
-                            if (var.name == lastNode.name()) {
+                            if (var.name == variantName) {
                                 if (i != pathAbs.nodes.size() - 2) {
                                     ERROR(sp, E0000, "Unexpected enum in path " << path);
                                 }
@@ -1895,7 +1948,9 @@ default:
 
     // Set binding to binding of node in last module
     ASTPath tmp;
-    if (!Context::lookupInMod(sp, *mod, pathAbs.nodes.back().name(), mode, tmp)) {
+    const auto finalName = pathAbs.nodes.back().hygienicName();
+    if (!Context::lookupInMod(sp, *mod, finalName, mode, tmp)
+        && (finalName == pathAbs.nodes.back().name() || !Context::lookupInMod(sp, *mod, pathAbs.nodes.back().name(), mode, tmp))) {
         ERROR(sp, E0000, "Couldn't find " << Context::lookupModeMsg(mode) << " '" << pathAbs.nodes.back().name() << "' of " << path);
     }
     ASSERT_BUG(sp, tmp.bindings.hasBinding(), "Lookup for " << path << " succeeded, but had no binding");
@@ -1954,7 +2009,8 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                     if (const auto* pep = p.bindings.type.binding.opt_Module()) {
                         const auto& pe = *pep;
                         bool found = false;
-                        const auto& name = e.nodes[1].name();
+                        const auto& nextNode = e.nodes[1];
+                        const auto name = nextNode.hygienicName();
                         if (!pe.module_) {
                             assert(pe.hir.mod);
                             const auto& mod = *pe.hir.mod;
@@ -1964,7 +2020,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                                 case Context::LookupMode::Type:
                                 case Context::LookupMode::PatternType:
                                     // TODO: Restrict if ::Type
-                                    if (mod.modItems.find(name) != mod.modItems.end()) {
+                                    if (findHygienicItem(mod.modItems, nextNode.name(), name) != mod.modItems.end()) {
                                         found = true;
                                     }
                                     break;
@@ -1972,7 +2028,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                                     TODO(sp, "Check " << p << " for an item named " << name << " (Pattern)");
                                 case Context::LookupMode::Constant:
                                 case Context::LookupMode::Variable:
-                                    if (mod.valueItems.find(name) != mod.valueItems.end()) {
+                                    if (findHygienicItem(mod.valueItems, nextNode.name(), name) != mod.valueItems.end()) {
                                         found = true;
                                     }
                                     break;
@@ -1981,12 +2037,12 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                             const auto& mod = *pe.module_;
                             switch (e.nodes.size() == 2 ? mode : Context::LookupMode::Namespace) {
                                 case Context::LookupMode::Namespace:
-                                    if (mod.namespaceItems.find(name) != mod.namespaceItems.end()) {
+                                    if (findHygienicItem(mod.namespaceItems, nextNode.name(), name) != mod.namespaceItems.end()) {
                                         found = true;
                                     }
                                 case Context::LookupMode::Type:
                                 case Context::LookupMode::PatternType:
-                                    if (mod.namespaceItems.find(name) != mod.namespaceItems.end()) {
+                                    if (findHygienicItem(mod.namespaceItems, nextNode.name(), name) != mod.namespaceItems.end()) {
                                         found = true;
                                     }
                                     break;
@@ -1994,7 +2050,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                                     TODO(sp, "Check " << p << " for an item named " << name << " (Pattern)");
                                 case Context::LookupMode::Constant:
                                 case Context::LookupMode::Variable:
-                                    if (mod.valueItems.find(name) != mod.valueItems.end()) {
+                                    if (findHygienicItem(mod.valueItems, nextNode.name(), name) != mod.valueItems.end()) {
                                         found = true;
                                     }
                                     break;
@@ -2189,7 +2245,8 @@ default:
     if(const auto* e = path.cls.opt_UFCS())
     {
         if (!e->nodes.empty() && (!e->trait || !e->trait->isValid()) && e->type->data.is_Generic() && e->type->data.as_Generic().index == GENERICSelf) {
-            const auto& name = e->nodes.front().name();
+            const auto& node = e->nodes.front();
+            auto name = node.hygienicName();
 
             if (const auto* selfTy = context.getSelfOpt()) {
                 // Check if we're in an enum
@@ -2201,6 +2258,12 @@ default:
                             auto it = std::find_if(enm.variants().begin(), enm.variants().end(), [&](const ASTEnumVariant& v) {
                                 return v.name == name;
                             });
+                            if (it == enm.variants().end() && name != node.name()) {
+                                name = node.name();
+                                it = std::find_if(enm.variants().begin(), enm.variants().end(), [&](const ASTEnumVariant& v) {
+                                    return v.name == name;
+                                });
+                            }
                             if (it != enm.variants().end()) {
                                 unsigned idx = it - enm.variants().begin();
                                 auto p2 = p.bindings.type.path + name;
@@ -2219,6 +2282,10 @@ default:
                             // is here -- the variant list is the same either way.
                             const auto& enm = *pbe->hir;
                             auto idx = enm.findVariant(name);
+                            if (idx == SIZE_MAX && name != node.name()) {
+                                name = node.name();
+                                idx = enm.findVariant(name);
+                            }
                             if (idx != SIZE_MAX) {
                                 auto p2 = p.bindings.type.path + name;
                                 auto newPath = std::move(p);
@@ -3065,6 +3132,31 @@ void ExpandDelegationGlobs(Context& itemContext, ASTImpl& impl) {
 }
 
 // - For impl blocks
+bool TraitHasImplItem(const ASTTrait* astTrait, const HIRTrait* hirTrait, const RcString& name, ASTItem::Tag tag) {
+    if (astTrait) {
+        for (const auto& item : astTrait->items()) {
+            if (item.name == name && item.data.tag() == tag) {
+                return true;
+            }
+        }
+    }
+    if (!hirTrait) {
+        return false;
+    }
+    if (tag == ASTItem::TAG_Type) {
+        return hirTrait->types.count(name) != 0;
+    }
+    if (tag == ASTItem::TAG_Function) {
+        const auto it = hirTrait->values.find(name);
+        return it != hirTrait->values.end() && it->second.is_Function();
+    }
+    if (tag == ASTItem::TAG_Static) {
+        const auto it = hirTrait->values.find(name);
+        return it != hirTrait->values.end() && (it->second.is_Constant() || it->second.is_Static());
+    }
+    return false;
+}
+
 void ResolveAbsoluteImplItems(Context& itemContext, ASTImpl& impl) {
     TRACE_FUNCTION_F("");
     const ASTTrait* implementedTrait = nullptr;
@@ -3076,6 +3168,11 @@ void ResolveAbsoluteImplItems(Context& itemContext, ASTImpl& impl) {
         }
     }
     for (auto& i : impl.items()) {
+        if (i.name != i.sourceName
+            && !TraitHasImplItem(implementedTrait, implementedHirTrait, i.name, i.data->tag())
+            && TraitHasImplItem(implementedTrait, implementedHirTrait, i.sourceName, i.data->tag())) {
+            i.name = i.sourceName;
+        }
         switch ((*i.data).tag()) {
             case ASTItem::TAG_None: {
                 break;
@@ -3648,7 +3745,12 @@ void ResolveAbsoluteFunction(
             const auto& ufcs = target.cls.as_UFCS();
             if (ufcs.trait && ufcs.trait->isValid() && !ufcs.nodes.empty()) {
                 if (const auto* traitBinding = ufcs.trait->bindings.type.binding.opt_Trait(); traitBinding && traitBinding->hir) {
-                    targetHirFunction = FindHIRTraitFunction(*traitBinding->hir, ufcs.nodes.back().name());
+                    const auto& node = ufcs.nodes.back();
+                    const auto name = node.hygienicName();
+                    targetHirFunction = FindHIRTraitFunction(*traitBinding->hir, name);
+                    if (!targetHirFunction && name != node.name()) {
+                        targetHirFunction = FindHIRTraitFunction(*traitBinding->hir, node.name());
+                    }
                 }
             }
         }
@@ -4927,7 +5029,8 @@ void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, A
     }
 
     for (unsigned int i = 0; i < info.nodes.size() - 1; i++) {
-        auto it = hmod->modItems.find(info.nodes[i].name());
+        const auto& node = info.nodes[i];
+        auto it = findHygienicItem(hmod->modItems, node.name(), node.hygienicName());
         if (it == hmod->modItems.end()) {
             ERROR(sp, E0000, "Couldn't find node " << i << " of path " << path);
         }
@@ -4973,11 +5076,12 @@ void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, A
         }
     }
     const auto& lastnode = info.nodes.back();
+    const auto lastName = lastnode.hygienicName();
 
     switch (loc) {
         case IndexName::Type:
         case IndexName::Namespace: {
-            auto itM = hmod->modItems.find(lastnode.name());
+            auto itM = findHygienicItem(hmod->modItems, lastnode.name(), lastName);
             if (itM != hmod->modItems.end()) {
                 if (itM->second->ent.is_Import()) {
                     auto& e = itM->second->ent.as_Import();
@@ -4990,7 +5094,7 @@ void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, A
             }
         } break;
         case IndexName::Value: {
-            auto itV = hmod->valueItems.find(lastnode.name());
+            auto itV = findHygienicItem(hmod->valueItems, lastnode.name(), lastName);
             if (itV != hmod->valueItems.end()) {
                 if (itV->second->ent.is_Import()) {
                     auto& e = itV->second->ent.as_Import();
@@ -5003,7 +5107,7 @@ void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, A
             }
         } break;
         case IndexName::Macro: {
-            auto itV = hmod->macroItems.find(lastnode.name());
+            auto itV = findHygienicItem(hmod->macroItems, lastnode.name(), lastName);
             if (itV != hmod->macroItems.end()) {
                 if (const auto* e = itV->second->ent.opt_Import()) {
                     // Replace the path with this path (maintaining binding)
@@ -5038,8 +5142,9 @@ bool ResolveIndexModuleNormalisePath(const ASTCrate& crate, const Span& sp, ASTP
     ASSERT_BUG(sp, info.nodes.size() > 0, "Empty node list in " << path);
     for (unsigned int i = 0; i < info.nodes.size() - 1; i++) {
         const auto& node = info.nodes[i];
+        const auto nodeName = node.hygienicName();
 
-        auto it = mod->namespaceItems.find(node.name());
+        auto it = findHygienicItem(mod->namespaceItems, node.name(), nodeName);
         if (it == mod->namespaceItems.end()) {
             ERROR(sp, E0000, "Couldn't find node " << i << " of path " << path);
         }
@@ -5082,37 +5187,38 @@ default:
     }
 
     const auto& node = info.nodes.back();
+    const auto nodeName = node.hygienicName();
 
     // TODO: Use get_mod_index instead.
     const ASTModule::IndexEnt* ieP = nullptr;
     switch (loc) {
         case IndexName::Namespace: {
-            auto it = mod->namespaceItems.find(node.name());
+            auto it = findHygienicItem(mod->namespaceItems, node.name(), nodeName);
             if (it != mod->namespaceItems.end()) {
                 ieP = &it->second;
             }
         } break;
         case IndexName::Value: {
-            auto it = mod->valueItems.find(node.name());
+            auto it = findHygienicItem(mod->valueItems, node.name(), nodeName);
             if (it != mod->valueItems.end()) {
                 ieP = &it->second;
             }
         } break;
         case IndexName::Type: {
-            auto it = mod->typeItems.find(node.name());
+            auto it = findHygienicItem(mod->typeItems, node.name(), nodeName);
             if (it != mod->typeItems.end()) {
                 ieP = &it->second;
             }
         } break;
         case IndexName::Macro: {
-            auto it = mod->macroItems.find(node.name());
+            auto it = findHygienicItem(mod->macroItems, node.name(), nodeName);
             if (it != mod->macroItems.end()) {
                 ieP = &it->second;
             } else {
                 // Workaround for `use` on an exporter macro
                 const ASTModule::MacroImport* found = nullptr;
                 for (const auto& a : mod->macroImports) {
-                    if (a.name == node.name()) {
+                    if (a.name == nodeName || (nodeName != node.name() && a.name == node.name())) {
                         found = &a;
                     }
                 }
@@ -5347,7 +5453,13 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
 
                 for (;;) {
                     DEBUG("Module " << curMod->path());
-                    if (ResolveUseGetBindingMod(span, settings, crate, sourceMod->path(), *curMod, e.nodes.front().name(), parentMods, /*types_only*/ e.nodes.size() > 1).hasBinding()) {
+                    const auto& node = e.nodes.front();
+                    const auto nodeName = node.hygienicName();
+                    auto binding = ResolveUseGetBindingMod(span, settings, crate, sourceMod->path(), *curMod, nodeName, parentMods, /*types_only*/ e.nodes.size() > 1);
+                    if (!binding.hasBinding() && nodeName != node.name()) {
+                        binding = ResolveUseGetBindingMod(span, settings, crate, sourceMod->path(), *curMod, node.name(), parentMods, /*types_only*/ e.nodes.size() > 1);
+                    }
+                    if (binding.hasBinding()) {
                         break;
                     }
                     if (parentMods.empty()) {
@@ -6127,13 +6239,15 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
         return rv;
     }
     for (unsigned int i = start; i < nodes.size() - 1; i++) {
-        ap.nodes.push_back(nodes[i].name());
+        const auto& node = nodes[i];
+        const auto nodeName = node.hygienicName();
         DEBUG("m_mod_items = {" << FMT_CB(ss, for (const auto& e : hmod->modItems) ss << e.first << ", ";) << "}");
-        auto it = hmod->modItems.find(nodes[i].name());
+        auto it = findHygienicItem(hmod->modItems, node.name(), nodeName);
         if (it == hmod->modItems.end()) {
             // BZZT!
             ERROR(span, E0000, "Unable to find path component " << nodes[i].name() << " in " << path << " (" << ap << ")");
         }
+        ap.nodes.push_back(it->first);
         DEBUG(i << " : " << nodes[i].name() << " = " << it->second->ent.tagStr());
         switch (it->second->ent.tag()) {
 default:
@@ -6153,15 +6267,20 @@ default:
                         if (i != nodes.size() - 1) {
                             ERROR(span, E0000, "Encountered trait at unexpected location in import");
                         }
-                        const auto& name = nodes[i].name();
+                        auto name = nodes[i].hygienicName();
                         ap.crate = e.path.crateName();
                         ap.nodes = e.path.componentsVec();
-                        ap.nodes.push_back(name);
-                        const bool isValue = tr->values.count(name) != 0;
-                        const bool isType = tr->types.count(name) != 0;
+                        bool isValue = tr->values.count(name) != 0;
+                        bool isType = tr->types.count(name) != 0;
+                        if (!isValue && !isType && name != nodes[i].name()) {
+                            name = nodes[i].name();
+                            isValue = tr->values.count(name) != 0;
+                            isType = tr->types.count(name) != 0;
+                        }
                         if (!isValue && !isType) {
                             ERROR(span, E0000, "Unable to find associated item " << name << " of trait in " << path);
                         }
+                        ap.nodes.push_back(name);
                         if (isValue) {
                             rv.value.set(ap, ASTPathBindingValue::make_Static({nullptr, nullptr}));
                         }
@@ -6178,9 +6297,13 @@ default:
                     if (i != nodes.size() - 1) {
                         ERROR(span, E0000, "Encountered enum at unexpected location in import");
                     }
-                    const auto& name = nodes[i].name();
+                    auto name = nodes[i].hygienicName();
 
                     auto idx = enm.findVariant(name);
+                    if (idx == SIZE_MAX && name != nodes[i].name()) {
+                        name = nodes[i].name();
+                        idx = enm.findVariant(name);
+                    }
                     if (idx == SIZE_MAX) {
                         ERROR(span, E0000, "Unable to find variant " << path);
                     }
@@ -6213,14 +6336,18 @@ default:
                 if (i != nodes.size() - 1) {
                     ERROR(span, E0000, "Encountered trait at unexpected location in import");
                 }
-                const auto& name = nodes[i].name();
-                ap.nodes.push_back(name);
-
-                const bool isValue = e.values.count(name) != 0;
-                const bool isType = e.types.count(name) != 0;
+                auto name = nodes[i].hygienicName();
+                bool isValue = e.values.count(name) != 0;
+                bool isType = e.types.count(name) != 0;
+                if (!isValue && !isType && name != nodes[i].name()) {
+                    name = nodes[i].name();
+                    isValue = e.values.count(name) != 0;
+                    isType = e.types.count(name) != 0;
+                }
                 if (!isValue && !isType) {
                     ERROR(span, E0000, "Unable to find associated item " << name << " of trait in " << path);
                 }
+                ap.nodes.push_back(name);
                 if (isValue) {
                     rv.value.set(ap, ASTPathBindingValue::make_Static({nullptr, nullptr}));
                 }
@@ -6235,13 +6362,17 @@ default:
                 if (i != nodes.size() - 1) {
                     ERROR(span, E0000, "Encountered enum at unexpected location in import");
                 }
-                const auto& name = nodes[i].name();
-                ap.nodes.push_back(name);
+                auto name = nodes[i].hygienicName();
 
                 auto idx = e.findVariant(name);
+                if (idx == SIZE_MAX && name != nodes[i].name()) {
+                    name = nodes[i].name();
+                    idx = e.findVariant(name);
+                }
                 if (idx == SIZE_MAX) {
                     ERROR(span, E0000, "Unable to find variant " << path);
                 }
+                ap.nodes.push_back(name);
                 if (e.data.is_Data() && e.data.as_Data()[idx].isStruct) {
                     rv.type.set(ap, ASTPathBindingType::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &e}));
                 } else {
@@ -6252,18 +6383,18 @@ default:
         }
     }
     // > Found the target module
-    ap.nodes.push_back(nodes.back().name());
+    const auto lastName = nodes.back().hygienicName();
 
     // - namespace/type items
     {
-        auto it = hmod->modItems.find(nodes.back().name());
+        auto it = findHygienicItem(hmod->modItems, nodes.back().name(), lastName);
         if (it == hmod->modItems.end()) {
             DEBUG("E: : Types = " << FMT_CB(ss, for (const auto& e : hmod->modItems) { ss << e.first << ":" << e.second->ent.tagStr() << ","; }));
         } else if (!it->second->publicity.isGlobal()) {
             DEBUG("E : Mod " << nodes.back().name() << " = " << it->second->ent.tagStr() << " [private]");
         } else {
             const auto* itemPtr = &it->second->ent;
-            auto ap2 = ap;
+            auto ap2 = ap + it->first;
             auto ap = ap2;
             DEBUG("E : Mod " << nodes.back().name() << " = " << itemPtr->tagStr());
             if (itemPtr->is_Import()) {
@@ -6339,14 +6470,14 @@ default:
     }
     // - Values
     {
-        auto it = hmod->valueItems.find(nodes.back().name());
+        auto it = findHygienicItem(hmod->valueItems, nodes.back().name(), lastName);
         if (it == hmod->valueItems.end()) {
             DEBUG("E : Values = " << FMT_CB(ss, for (const auto& e : hmod->valueItems) { ss << e.first << ":" << e.second->ent.tagStr() << ","; }));
         } else if (!it->second->publicity.isGlobal()) {
             DEBUG("E : Value " << nodes.back().name() << " = " << it->second->ent.tagStr() << " [private]");
         } else {
             const auto* itemPtr = &it->second->ent;
-            auto ap2 = ap;
+            auto ap2 = ap + it->first;
             auto ap = ap2;
             DEBUG("E : Value " << nodes.back().name() << " = " << itemPtr->tagStr());
             if (itemPtr->is_Import()) {
@@ -6401,14 +6532,14 @@ default:
     }
     // - Macros
     {
-        auto it = hmod->macroItems.find(nodes.back().name());
+        auto it = findHygienicItem(hmod->macroItems, nodes.back().name(), lastName);
         if (it == hmod->macroItems.end()) {
             DEBUG("E : Macros = " << FMT_CB(ss, for (const auto& e : hmod->macroItems) { ss << e.first << ":" << e.second->ent.tagStr() << ","; }));
         } else if (!it->second->publicity.isGlobal()) {
             DEBUG("E : Macro " << nodes.back().name() << " = " << it->second->ent.tagStr() << " [private]");
         } else {
             const auto* itemPtr = &it->second->ent;
-            auto ap2 = ap;
+            auto ap2 = ap + it->first;
             auto ap = ap2;
             DEBUG("E : Macro " << nodes.back().name() << " = " << itemPtr->tagStr());
 
@@ -6519,7 +6650,12 @@ ASTPath::Bindings ResolveUseGetBinding(
         // TODO: If this came from an import, return the real path?
 
         assert(mod);
-        auto b = ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, nodes.at(i).name(), innerParentModules, /*types_only=*/true);
+        const auto& node = nodes.at(i);
+        const auto nodeName = node.hygienicName();
+        auto b = ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, nodeName, innerParentModules, /*types_only=*/true);
+        if (!b.hasBinding() && nodeName != node.name()) {
+            b = ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, node.name(), innerParentModules, /*types_only=*/true);
+        }
         switch (b.type.binding.tag()) {
 default:
             ERROR(span, E0000, "Unexpected item type " << b.type.binding.tagStr() << " in import of " << path);
@@ -6550,38 +6686,49 @@ default:
                     ERROR(span, E0000, "Encountered trait at unexpected location in import");
                 }
                 const auto& node2 = nodes[i];
+                auto itemName = node2.hygienicName();
 
                 bool isValue = false;
                 bool isType = false;
                 const ASTFunction* astFunc = nullptr;
-                if (e.hir) {
-                    if (e.hir->values.count(node2.name())) {
-                        isValue = true;
-                    }
-                    if (e.hir->types.count(node2.name())) {
-                        isType = true;
-                    }
-                } else {
-                    for (const auto& item : e.trait_->items()) {
-                        if (item.name != node2.name()) {
-                            continue;
+                auto findItem = [&]() {
+                    isValue = false;
+                    isType = false;
+                    astFunc = nullptr;
+                    if (e.hir) {
+                        if (e.hir->values.count(itemName)) {
+                            isValue = true;
                         }
-                        switch (item.data.tag()) {
-                            case ASTItem::TAG_Function:
-                                isValue = true;
-                                astFunc = &item.data.as_Function();
-                                break;
-                            case ASTItem::TAG_Static:
-                                isValue = true;
-                                break;
-                            case ASTItem::TAG_Type:
-                                isType = true;
-                                break;
-                            default:
-                                break;
+                        if (e.hir->types.count(itemName)) {
+                            isType = true;
                         }
-                        break;
+                    } else {
+                        for (const auto& item : e.trait_->items()) {
+                            if (item.name != itemName) {
+                                continue;
+                            }
+                            switch (item.data.tag()) {
+                                case ASTItem::TAG_Function:
+                                    isValue = true;
+                                    astFunc = &item.data.as_Function();
+                                    break;
+                                case ASTItem::TAG_Static:
+                                    isValue = true;
+                                    break;
+                                case ASTItem::TAG_Type:
+                                    isType = true;
+                                    break;
+                                default:
+                                    break;
+                            }
+                            break;
+                        }
                     }
+                };
+                findItem();
+                if (!isValue && !isType && itemName != node2.name()) {
+                    itemName = node2.name();
+                    findItem();
                 }
                 if (!isValue && !isType) {
                     if (softFail) {
@@ -6589,7 +6736,7 @@ default:
                     }
                     ERROR(span, E0000, "Unknown associated item " << node2.name() << " of trait in " << path);
                 }
-                auto itemPath = b.type.path + node2.name();
+                auto itemPath = b.type.path + itemName;
                 if (isValue) {
                     if (astFunc) {
                         rv.value.set(itemPath, ASTPathBindingValue::make_Function({astFunc}));
@@ -6613,15 +6760,21 @@ default:
                 ASSERT_BUG(span, i < nodes.size(), "Enum import position error, " << i << " >= " << nodes.size() << " - " << path);
 
                 const auto& node2 = nodes[i];
+                auto variantName = node2.hygienicName();
 
                 unsigned variantIndex = 0;
                 bool isValue = false;
                 if (e.hir) {
                     const auto& enum_ = *e.hir;
-                    size_t idx = enum_.findVariant(node2.name());
+                    size_t idx = enum_.findVariant(variantName);
+                    if (idx == ~0u && variantName != node2.name()) {
+                        variantName = node2.name();
+                        idx = enum_.findVariant(variantName);
+                    }
                     if (idx == ~0u) {
                         ERROR(span, E0000, "Unknown enum variant " << path);
                     }
+                    variantIndex = static_cast<unsigned>(idx);
                 switch (enum_.data.tag()) {
                     case HIREnumClass::TAG_Value: {
                         isValue = true;
@@ -6636,12 +6789,19 @@ default:
                 DEBUG("HIR Enum variant - " << variantIndex << ", is_value=" << isValue);
                 } else {
                     const auto& enum_ = *e.enum_;
-                    for (const auto& var : enum_.variants()) {
-                        if (var.name == node2.name()) {
-                            isValue = !var.data.is_Struct();
+                    for (;;) {
+                        for (const auto& var : enum_.variants()) {
+                            if (var.name == variantName) {
+                                isValue = !var.data.is_Struct();
+                                break;
+                            }
+                            variantIndex++;
+                        }
+                        if (variantIndex != enum_.variants().size() || variantName == node2.name()) {
                             break;
                         }
-                        variantIndex++;
+                        variantName = node2.name();
+                        variantIndex = 0;
                     }
                     if (variantIndex == enum_.variants().size()) {
                         ERROR(span, E0000, "Unknown enum variant '" << node2.name() << "'");
@@ -6650,9 +6810,9 @@ default:
                     DEBUG("AST Enum variant - " << variantIndex << ", is_value=" << isValue << " " << enum_.variants()[variantIndex].data.tagStr());
                 }
                 if (isValue) {
-                    rv.value.set(b.type.path + node2.name(), ASTPathBindingValue::make_EnumVar({e.enum_, variantIndex, e.hir}));
+                    rv.value.set(b.type.path + variantName, ASTPathBindingValue::make_EnumVar({e.enum_, variantIndex, e.hir}));
                 } else {
-                    rv.type.set(b.type.path + node2.name(), ASTPathBindingType::make_EnumVar({e.enum_, variantIndex, e.hir}));
+                    rv.type.set(b.type.path + variantName, ASTPathBindingType::make_EnumVar({e.enum_, variantIndex, e.hir}));
                 }
                 return rv;
             }
@@ -6672,7 +6832,13 @@ default:
     }
 
     assert(mod);
-    return ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, nodes.back().name(), parentModules, typesOnly);
+    const auto& node = nodes.back();
+    const auto nodeName = node.hygienicName();
+    auto binding = ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, nodeName, parentModules, typesOnly);
+    if (!binding.hasBinding() && nodeName != node.name()) {
+        binding = ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, node.name(), parentModules, typesOnly);
+    }
+    return binding;
 }
 
 //::AST::PathBinding_Macro Resolve_Use_GetBinding_Macro(const Span& span, const ::AST::Crate& crate, const ::AST::Path& path, ::std::span< const ::AST::Module* > parent_modules)
