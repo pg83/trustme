@@ -6442,9 +6442,75 @@ default:
                 return CoerceResult::Equality;
             }
             const auto& sm = spbe->structMarkings;
-            // Has to be equal?
             if (sm.coerceUnsized == HIRStructMarkings::Coerce::None) {
-                return CoerceResult::Equality;
+                const auto& ppDst = dst->as_Path().path.data.as_Generic().params;
+                const auto& ppSrc = src->as_Path().path.data.as_Generic().params;
+                ASSERT_BUG(sp, ppDst.types.size() == ppSrc.types.size(), "Struct type argument count mismatch");
+                ASSERT_BUG(sp, ppDst.values.size() == ppSrc.values.size(), "Struct const argument count mismatch");
+
+                // Preserve the ordinary equality constraint while either
+                // application is still participating in inference.  Variance
+                // is only needed once two concrete applications differ.
+                if (context.ivars.pathparamsContainIvars(ppDst, false) || context.ivars.pathparamsContainIvars(ppSrc, false)) {
+                    return CoerceResult::Equality;
+                }
+
+                // Bounds do not contribute to variance.  Compare the types
+                // they produce in fields instead of making every declared
+                // type parameter invariant; a parameter used only by a
+                // where-clause is bivariant.
+                HIRCompare fieldsCmp = HIRCompare::Equal;
+                auto relateField = [&](const HIRTypeData* fieldTpl) {
+                    auto srcField = context.resolve.expandAssociatedTypes(
+                        sp,
+                        MonomorphStatePtr(context.crate.types, src, &ppSrc, nullptr).monomorphType(sp, fieldTpl)
+                    );
+                    auto dstField = context.resolve.expandAssociatedTypes(
+                        sp,
+                        MonomorphStatePtr(context.crate.types, dst, &ppDst, nullptr).monomorphType(sp, fieldTpl)
+                    );
+                    fieldsCmp &= dstField->compareWithPlaceholders(sp, srcField, context.ivars.callbackResolveInfer());
+                    if (contextMut && fieldsCmp != HIRCompare::Unequal) {
+                        contextMut->equateTypes(sp, dstField, srcField);
+                    }
+                };
+                switch (spbe->data.tag()) {
+                    case HIRStructData::TAG_Unit:
+                        break;
+                    case HIRStructData::TAG_Tuple:
+                        for (const auto& field : spbe->data.as_Tuple()) {
+                            relateField(field.ent);
+                        }
+                        break;
+                    case HIRStructData::TAG_Named:
+                        for (const auto& field : spbe->data.as_Named()) {
+                            relateField(field.ty);
+                        }
+                        break;
+                }
+                if (fieldsCmp == HIRCompare::Unequal) {
+                    return CoerceResult::Equality;
+                }
+                for (size_t i = 0; i < ppSrc.values.size(); i++) {
+                    if (contextMut) {
+                        contextMut->equateValues(sp, ppDst.values[i], ppSrc.values[i]);
+                    } else if (ppDst.values[i] != ppSrc.values[i]) {
+                        return CoerceResult::Equality;
+                    }
+                }
+                if (!contextMut && fieldsCmp == HIRCompare::Fuzzy) {
+                    return CoerceResult::Unknown;
+                }
+
+                if (nodePtrPtr) {
+                    HIRExprNodeP* valueNode = nodePtrPtr;
+                    while (auto* block = cast<HIRExprNodeBlock>(valueNode->get())) {
+                        block->resType = dst;
+                        valueNode = &block->valueNode;
+                    }
+                    (*valueNode)->resType = dst;
+                }
+                return CoerceResult::Custom;
             }
 
             // Equate all parameters that aren't the unsizing param
