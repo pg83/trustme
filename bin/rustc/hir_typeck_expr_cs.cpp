@@ -7385,12 +7385,11 @@ default:
                     // - If we're looking for an associated type, allow it to eliminate impossible impls
                     //  > This makes `let v: usize = !0;` work without special cases
                     auto cmp2 = v.leftTy->compareWithPlaceholders(sp, outTyO, context.ivars.callbackResolveInfer());
-                    bool definingOpaqueOutput = false;
-                    if (const auto* erased = v.leftTy->opt_ErasedType()) {
-                        if (const auto* alias = erased->inner.opt_Alias()) {
-                            definingOpaqueOutput = context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
-                        }
-                    }
+                    const bool definingOpaqueOutput = visitTyWith(v.leftTy, [&](const HIRTypeData* type) {
+                        const auto* erased = type->opt_ErasedType();
+                        const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+                        return alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
+                    });
                     if (cmp2 == HIRCompare::Unequal && !definingOpaqueOutput) {
                         DEBUG("[check_associated] - (fail) known result can't match (" << context.ivars.fmtType(v.leftTy) << " and " << context.ivars.fmtType(outTyO) << ")");
                         return false;
