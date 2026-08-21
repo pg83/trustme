@@ -7378,6 +7378,7 @@ default:
                         outTyO = context.crate.types.path(HIRPath(v.implTy, HIRGenericPath(v.trait, v.params.clone()), v.name, v.atyPp.clone()), {});
                     }
                     outTyO = context.resolve.expandAssociatedTypes(sp, mv$(outTyO));
+                    outTyO = context.revealOpaqueTypes(outTyO);
 
                     // TODO: if this is an unbound UfcsUnknown, treat as a fuzzy match.
                     // - Shouldn't compare_with_placeholders do that?
