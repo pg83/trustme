@@ -920,6 +920,11 @@ namespace {
         }
 
         void visit(HIRExprNodeGenerator& node) override {
+            if (!node.code) {
+                DEBUG("Already expanded (via consteval?)");
+                return;
+            }
+
             closureStack.push_back(CoroutineScope(node));
 
             if (node.hasResumePattern) {
@@ -936,13 +941,19 @@ namespace {
             applyCoroutine(node.span(), node.isMove, node.isCoroutineClosureBody, node.avuCache, ent.usedVariables);
         }
 
-        void visit(HIRExprNodeGeneratorWrapper& node) override {
-            BUG(node.span(), "");
+        void visit(HIRExprNodeGeneratorWrapper&) override {
+            // Lazy CTFE can extract a coroutine before the whole-crate pass.
+            // Its body was annotated before it was moved into this wrapper.
         }
 
         void visit(HIRExprNodeAsyncBlock& node) override {
             // NOTE: This is a near-clone of `ExprNodeGenerator` (they're very similar, and at one point
             // futures/async were directly implemented as syntax sugar around generators)
+            if (!node.code) {
+                DEBUG("Already expanded (via consteval?)");
+                return;
+            }
+
             closureStack.push_back(CoroutineScope(node));
 
             {
@@ -2081,6 +2092,22 @@ namespace {
         }
     };
 
+    void fixDefiningOpaqueAliasNodeTypes(const StaticTraitResolve& resolve, const HIRSimplePath* definingAliases, size_t definingAliasCount, HIRTypeRef type) {
+        visitTyWith(type, [&](const HIRTypeData* candidate) {
+            const auto* erased = candidate->opt_ErasedType();
+            const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+            if (!alias || !alias->inner->type
+                || !resolve.hirCrate().isOpaqueAliasNamedBy(*alias->inner, definingAliases, definingAliasCount)) {
+                return false;
+            }
+
+            OpaqueAliasParamMonomorph monomorph{resolve.hirCrate().types, *alias->inner, alias->params};
+            ClosureExprVisitorFixup fixup{resolve.board(), nullptr, monomorph, nullptr};
+            alias->inner->type = fixup.visitType(alias->inner->type);
+            return false;
+        });
+    }
+
     struct H {
         static void fixFnParams(HIRExprPtr& code, const HIRTypeData* selfTy, const HIRTypeData* argsTy) {
             // TODO: The self_ty here is wrong, the borrow needs to be included.
@@ -2972,6 +2999,11 @@ namespace {
         /// Main extraction generator visitor
         /// </summary>
         void visit(HIRExprNodeGenerator& node) override {
+            if (!node.code) {
+                DEBUG("Already expanded (via consteval?)");
+                return;
+            }
+
             const auto& sp = node.span();
 
             // NOTE: Most of generator's lowering is done in MIR lowering
@@ -3111,6 +3143,8 @@ namespace {
             // -- Create function
             HIRFunction fcnResume;
             fcnResume.markings.trackCaller = node.trackCaller;
+            fcnResume.receiver = HIRFunction::Receiver::Custom;
+            fcnResume.receiverType = selfArgTy;
             // - `self: Pin<&mut {Self}>`
             fcnResume.args.push_back(std::make_pair(HIRPattern(), selfArgTy));
             fcnResume.args.push_back(std::make_pair(
@@ -3149,6 +3183,11 @@ namespace {
         }
 
         void visit(HIRExprNodeAsyncBlock& node) override {
+            if (!node.code) {
+                DEBUG("Already expanded (via consteval?)");
+                return;
+            }
+
             const auto& sp = node.span();
 
             TRACE_FUNCTION_F("Extract async - " << node.resType);
@@ -3261,6 +3300,8 @@ namespace {
 
             // -- Create function
             HIRFunction fcnResume;
+            fcnResume.receiver = HIRFunction::Receiver::Custom;
+            fcnResume.receiverType = selfArgTy;
             // - `self: Pin<&mut {Self}>`
             fcnResume.args.push_back(std::make_pair(HIRPattern(), selfArgTy));
             // - `context: &mut Context<'_>`
@@ -3447,6 +3488,7 @@ namespace {
                     ClosureExprVisitorFixup fixup{resolve_.board(), nullptr, mm, &out};
                     fixup.visitRoot(item.code);
                 }
+                fixDefiningOpaqueAliasNodeTypes(resolve_, item.code.state->defineOpaque.data(), item.code.state->defineOpaque.size(), item.returnType);
             } else {
                 DEBUG("Function code " << p << " (none)");
             }
@@ -3549,6 +3591,7 @@ void HIRExpandClosuresExpr(const WireBoard& wb, const HIRCrate& crateRo, HIRType
         fixup.visitRoot(exp);
         expTy = fixup.visitType(expTy);
     }
+    fixDefiningOpaqueAliasNodeTypes(resolve, exp.state->defineOpaque.data(), exp.state->defineOpaque.size(), expTy);
 
     for (auto& impl : out.implsType) {
         for (auto& m : impl->methods) {

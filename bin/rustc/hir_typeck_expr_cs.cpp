@@ -5308,6 +5308,16 @@ default:
 }
 
 void Context::equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSimplePath& trait, HIRPathParams pp, const HIRTypeData* implTy, const char* name, const HIRPathParams& atyPp, bool isOp, TypeckPrimitiveOperator operatorKind) {
+    const auto& traitDef = crate.getTraitByPath(sp, trait);
+    auto monomorph = MonomorphStatePtr(crate.types, implTy, &pp, nullptr);
+    while (pp.types.size() < traitDef.params.types.size()) {
+        const auto& defaultType = traitDef.params.types[pp.types.size()].defaultValue;
+        if (defaultType == HIRTypeRef() || defaultType->is_Infer()) {
+            break;
+        }
+        pp.types.push_back(monomorph.monomorphType(sp, defaultType));
+    }
+
     for (const auto& a : this->linkAssoc) {
         if (a.leftTy != l) {
             continue;

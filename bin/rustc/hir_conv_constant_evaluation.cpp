@@ -3973,6 +3973,11 @@ default:
                     // ---
                     else if (te->name == "transmute" || te->name == "transmute_unchecked") {
                         localState.writeParam(dst, e.args.at(0));
+                    } else if (te->name == "init") {
+                        MIR_ASSERT(state, e.args.empty(), "`init` takes no arguments");
+                        // This is trustme's internal zero-initialisation
+                        // intrinsic, also emitted for a coroutine's state slot.
+                        memset(dst.extWriteBytes(state, dst.getLen()), 0, dst.getLen());
                     } else if (te->name == "unlikely") {
                         localState.writeParam(dst, e.args.at(0));
                     } else if (te->name == "fabsf16" || te->name == "fabsf32" || te->name == "fabsf64" || te->name == "fabsf128") {
