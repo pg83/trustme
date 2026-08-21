@@ -147,6 +147,7 @@ struct Context {
         const HIRPath* origin;
         unsigned int index;
         HIRTypeRef ourType;
+        bool selfReferenced;
     };
 
     ::std::vector<RpitEntry> rpitTypes;
@@ -255,6 +256,8 @@ struct Context {
     const HIRTypeData* revealOpaqueType(const HIRTypeData* type) const;
 
     void addRpitType(const HIRPath& origin, unsigned int index, HIRTypeRef type);
+    void noteRpitSelfReference(const HIRPath& origin, unsigned int index);
+    bool fallbackUnresolvedRpitType(const Span& sp);
 
     /// Create an autoderef operation from val_node->m_res_type to ty_dst (handling implicit unsizing)
     HIRExprNodeP createAutoderef(HIRExprNodeP valNode, HIRTypeRef tyDst) const;

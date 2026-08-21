@@ -10143,6 +10143,18 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
             }
         }
 
+        // A return-position opaque that is constrained only by itself has no
+        // concrete hidden type. rustc falls such RPITs back to `()` after the
+        // rest of body inference has stopped making progress. Keep unresolved
+        // calls and coercions ahead of this fallback so they can still provide
+        // the hidden type.
+        if (!context.ivars.peekChanged()
+            && context.linkCoerce.empty()
+            && context.toVisit.empty()
+            && context.advRevisits.empty()) {
+            context.fallbackUnresolvedRpitType(rootPtr->span());
+        }
+
         if (!context.ivars.peekChanged()) {
             DEBUG("--- Coercion consume");
             if (!context.linkCoerce.empty()) {
@@ -10756,6 +10768,11 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
         {
         TRACE_FUNCTION_FR("RET " << path << " - " << fcn.returnType, "Ret " << cache.argTypes.back());
         auto returnType = monomorph.monomorphType(sp, fcn.returnType, false);
+        if (const auto* erased = returnType->opt_ErasedType()) {
+            if (const auto* origin = erased->inner.opt_Fcn()) {
+                context.noteRpitSelfReference(origin->origin, origin->index);
+            }
+        }
         if (const auto* traitCall = path.data.opt_UfcsKnown()) {
             if (const auto* erased = returnType->opt_ErasedType()) {
                 if (const auto* origin = erased->inner.opt_Fcn()) {
@@ -13307,7 +13324,33 @@ void Context::addRpitType(const HIRPath& origin, unsigned int index, HIRTypeRef 
             return;
         }
     }
-    rpitTypes.push_back(RpitEntry{&origin, index, type});
+    rpitTypes.push_back(RpitEntry{&origin, index, type, false});
+}
+
+void Context::noteRpitSelfReference(const HIRPath& origin, unsigned int index) {
+    for (auto& entry : rpitTypes) {
+        if (entry.index == index && *entry.origin == origin) {
+            entry.selfReferenced = true;
+            return;
+        }
+    }
+}
+
+bool Context::fallbackUnresolvedRpitType(const Span& sp) {
+    for (const auto& entry : rpitTypes) {
+        if (!entry.selfReferenced) {
+            continue;
+        }
+        const auto* hiddenType = ivars.getType(entry.ourType);
+        const auto* infer = hiddenType->opt_Infer();
+        if (!infer || infer->tyClass != HIRInferClass::None) {
+            continue;
+        }
+        DEBUG("RPIT fallback " << *entry.origin << "#" << entry.index << ": " << hiddenType << " -> ()");
+        equateTypes(sp, hiddenType, crate.types.unit());
+        return true;
+    }
+    return false;
 }
 
 const HIRTypeData* Context::coercionHint(const HIRExprNode& node) const {
