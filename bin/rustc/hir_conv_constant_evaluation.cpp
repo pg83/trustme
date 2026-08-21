@@ -4873,18 +4873,19 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
         }
     }
 
-    // If `ms` is empty, but `resolve` has impl/item generics, then re-make `ms` as a nop set of params
-    // - This is a lazy hack, isntead of doing this creation in the caller
+    // Fill each missing generic layer independently.  An associated generic
+    // const arrives with the impl layer already set, but still needs its item
+    // parameters while evaluating the body.
     HIRPathParams nopParamsImpl;
     HIRPathParams nopParamsMethod;
-    if (!ms.ppImpl && !ms.ppMethod) {
-        if (resolve.itemGenericsPtr()) {
+    if (!ms.ppImpl || !ms.ppMethod) {
+        if (!ms.ppMethod && resolve.itemGenericsPtr()) {
             ms.ppMethod = &(nopParamsMethod = resolve.itemGenericsPtr()->makeNopParams(resolve.hirCrate().types, 1));
         }
-        if (resolve.implGenericsPtr()) {
+        if (!ms.ppImpl && resolve.implGenericsPtr()) {
             ms.ppImpl = &(nopParamsImpl = resolve.implGenericsPtr()->makeNopParams(resolve.hirCrate().types, 0));
         }
-        DEBUG("(was empty) ms = " << ms);
+        DEBUG("(filled missing params) ms = " << ms);
     }
 
     if (mir) {

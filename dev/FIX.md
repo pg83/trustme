@@ -150,7 +150,9 @@ solver rules, marking the generated `resume` receiver, rebasing a defining
 opaque alias from its application arguments before generic scope is lost,
 making lazy coroutine extraction idempotent, and evaluating the internal
 zero-initialisation intrinsic in CTFE closed
-`type-alias-impl-trait/issue-53678-coroutine-and-const-fn`. Thus 25 of
+`type-alias-impl-trait/issue-53678-coroutine-and-const-fn`; reconstructing each
+missing generic substitution layer independently before CTFE closed
+`generic-const-items/associated-const-equality`. Thus 24 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -165,20 +167,20 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 50 |
-| fixed, or no longer reproducing, since the gate | 581 |
+| still failing or still carried from the last full sweep | 49 |
+| fixed, or no longer reproducing, since the gate | 582 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed seventy-three nodes, leaving 25. The
+subsequent point fixes and reruns have closed seventy-four nodes, leaving 24. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 0 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 11 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 10 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
@@ -403,12 +405,12 @@ coercion. This closes both `arbitrary_self_types_niche_deshadowing.rs` and
 
 ## P1: internal compiler failures
 
-There are 11 compiler-internal failures in 11 stable signatures in the current
+There are 10 compiler-internal failures in 10 stable signatures in the current
 eight-corpus rerun.
 
 | compiler area | tests |
 |---|---:|
-| type checking and HIR lowering | 5 |
+| type checking and HIR lowering | 4 |
 | MIR lowering, CTFE MIR, and optimisation | 4 |
 | translation and code generation | 1 |
 | unattributed compiler abort | 1 |
@@ -417,7 +419,7 @@ Every remaining signature covers one test, so the class is a long tail:
 
 | signature | tests |
 |---|---:|
-| one-test signatures | 11 |
+| one-test signatures | 10 |
 
 The former `No repr for struct` assertion in `sized/coinductive-2` came from
 caching an associated projection as complete while its recursive `Sized`
@@ -433,6 +435,13 @@ fixup uses the alias application's arguments while the function substitution
 still exists. Lazy CTFE no longer revisits an already-extracted coroutine body,
 and its internal generator-state `init` has the same zero-fill semantics as
 the C backend.
+
+The former `Method parameters were not expected` BUG in
+`associated-const-equality` came from CTFE restoring generic substitutions
+only when both the impl and item layers were absent. An associated generic
+const already arrived with its impl layer, so its own `N/*M:0*/` was left
+unmapped. CTFE now reconstructs each missing layer independently before
+evaluating the constant body.
 
 The former translation-time CTFE exception in
 `dont-propagate-generic-instance-2` came from resolving a function pointer to
