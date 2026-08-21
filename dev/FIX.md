@@ -41,7 +41,9 @@ where-clauses through argument-position `impl Trait` also closed
 `traits/alias/bounds`; completing default const arguments in trait impl heads
 closed `const-generics/defaults/rp_impl_trait` and
 `const-generics/defaults/trait_objects`; excluding an import's own future
-binding while resolving its target also closed `imports/issue-62767`. Thus 82
+binding while resolving its target also closed `imports/issue-62767`; making a
+fuzzy blanket-method candidate wait until its receiver is known, then checking
+the impl bounds, closed `self/explicit-self-generic`. Thus 81
 of the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -56,18 +58,18 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 107 |
-| fixed, or no longer reproducing, since the gate | 524 |
+| still failing or still carried from the last full sweep | 106 |
+| fixed, or no longer reproducing, since the gate | 525 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed sixteen nodes, leaving 82. The remaining 25 are
+subsequent point fixes have closed seventeen nodes, leaving 81. The remaining 25 are
 in groups outside that sweep and are still carried from the last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 46 |
+| accepted Rust rejected by the compiler or driver | 45 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -75,13 +77,13 @@ in groups outside that sweep and are still carried from the last full sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 46 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 45 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 43 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 42 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 | parser | 1 | named variadic parameter |
 
@@ -94,6 +96,14 @@ rustc solves this with a second, by-reference coroutine body; we have one body.
 
 The tests routed through the trait-selection and type-mismatch lines are not
 one root cause. Minimise each before grouping.
+
+`Box<_>` is no reason to commit to the only fuzzy method currently visible.
+In `explicit-self-generic`, the blanket `ExactSizeIterator for Box<I>` looked
+applicable before the inner type was known, but its `I: ExactSizeIterator`
+bound failed once `I` became `HashMap`; the inherent `HashMap::len` was one
+autoderef further in. The probe now waits even for one fuzzy candidate, and a
+known receiver uses the regular impl lookup without a prior loose result
+masking a failed where-clause.
 
 
 `self: SmartPtr<Self>` still fails
@@ -115,8 +125,7 @@ not hold (`hir_typeck_common.cpp`, `allowInfer`).
 What is left of the unresolved-name group splits by rule: two
 `non_lifetime_binders` (the `for<T>` trap above), `T` in a const trait bound
 under `-Zunpretty=hir` (which runs the passes that build the HIR, so it cannot
-stop before resolution), `Self` as a constructor from an item nested inside the
-impl.
+stop before resolution).
 
 ## P1: internal compiler failures
 

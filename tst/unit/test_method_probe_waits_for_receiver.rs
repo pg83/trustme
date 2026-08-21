@@ -17,7 +17,7 @@ fn main() {
 
     let _: IntoIter<i32> = IntoIterator::into_iter(boxed_slice);
 
-    // A lone candidate is the answer whatever the receiver becomes.
+    // A lone candidate is selected once type checking has stabilised.
     let v = Vec::new();
     let mut w = v.clone();
     w.push(1u8);

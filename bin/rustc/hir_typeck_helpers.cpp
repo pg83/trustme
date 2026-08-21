@@ -7955,10 +7955,11 @@ default: {
                     if (!possibilities.empty()) {
                         collapseToMostSpecificSubtrait();
                         // A candidate that only matches while the receiver is
-                        // unknown cannot be told from the others: which one is
-                        // right is decided by the type, so wait for it. A lone
-                        // candidate is the answer whatever the type becomes.
-                        if (undecided && possibilities.size() > 1 && !this->methodProbeMustDecide) {
+                        // unknown is not yet an answer, even when it is alone:
+                        // the eventual type may expose an inherent method at a
+                        // later autoderef level. Wait until inference advances;
+                        // the fallback pass must answer from what remains.
+                        if (undecided && !this->methodProbeMustDecide) {
                             DEBUG("- " << possibilities.size() << " options and the receiver is not known, pausing");
                             possibilities.clear();
                             return ~0u;
@@ -8537,11 +8538,8 @@ default: {
 
                     // TODO: Re-monomorphise the trait path!
 
-                    auto acceptImpl = [&](auto impl, auto cmp) {
-                        return true;
-                    };
                     bool undecided = false;
-                    bool implFound = findTraitImplsLegacy(sp, *traitRef.first, traitParams, selfTy, acceptImpl, true, false, true);
+                    bool implFound = false;
 
                     // A literal's type is decided by fallback whatever the
                     // method turns out to be, but a type with no class at all
@@ -8572,15 +8570,19 @@ default: {
                             implFound = true;
                             return true;
                         };
-                        // A receiver with no inference variables left decides
-                        // the question: ask for the impl the way a bound does,
-                        // so that an impl written for a bare type parameter is
-                        // only taken when the bounds it carries hold. While the
-                        // receiver is still unknown the looser search stands,
+                        // For a known receiver the regular lookup validates impl
+                        // bounds. Do not seed its result with the looser bound-only
+                        // probe: a blanket impl whose head matches but whose bounds
+                        // fail would steal the method from a later autoderef level.
+                        // An open receiver still needs the old existential search,
                         // since the trait arguments are committed later.
                         if (!receiverIsOpen) {
                             findTraitImpls(sp, *traitRef.first, traitParams, selfTy, onImpl);
                         } else {
+                            auto acceptImpl = [&](auto impl, auto cmp) {
+                                return true;
+                            };
+                            implFound = findTraitImplsLegacy(sp, *traitRef.first, traitParams, selfTy, acceptImpl, true, false, true);
                             findTraitImplsCrate(sp, *traitRef.first, nullptr, selfTy, onImpl);
                         }
                     } catch (const TraitResolution::RecursionDetected&) {
