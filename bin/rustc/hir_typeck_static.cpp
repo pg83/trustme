@@ -1878,7 +1878,9 @@ HIRTypeRef StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTyp
                     }
                     auto rv = input;
                     this->expandAssociatedTypesUfcsKnown(sp, rv);
-                    atyCache.insert(std::make_pair(input, rv));
+                    if (!(rv->is_Path() && rv->as_Path().binding.is_Opaque())) {
+                        atyCache.insert(std::make_pair(input, rv));
+                    }
                     return rv;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {

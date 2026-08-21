@@ -143,7 +143,9 @@ arguments while instantiating its declared bounds, and retaining those
 arguments through solver candidate checks, closed
 `generic-associated-types/collections`; retaining a trait-object method as a
 symbolic function relocation through CTFE closed
-`const_prop/dont-propagate-generic-instance-2`. Thus 27 of
+`const_prop/dont-propagate-generic-instance-2`; keeping a provisional opaque
+associated projection out of the completed normalisation cache closed
+`sized/coinductive-2`. Thus 26 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -158,20 +160,20 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 52 |
-| fixed, or no longer reproducing, since the gate | 579 |
+| still failing or still carried from the last full sweep | 51 |
+| fixed, or no longer reproducing, since the gate | 580 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed seventy-one nodes, leaving 27. The
+subsequent point fixes and reruns have closed seventy-two nodes, leaving 26. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 0 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 13 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 12 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
@@ -396,21 +398,27 @@ coercion. This closes both `arbitrary_self_types_niche_deshadowing.rs` and
 
 ## P1: internal compiler failures
 
-There are 13 compiler-internal failures in 13 stable signatures in the current
+There are 12 compiler-internal failures in 12 stable signatures in the current
 eight-corpus rerun.
 
 | compiler area | tests |
 |---|---:|
 | type checking and HIR lowering | 6 |
 | MIR lowering, CTFE MIR, and optimisation | 4 |
-| translation and code generation | 2 |
+| translation and code generation | 1 |
 | unattributed compiler abort | 1 |
 
 Every remaining signature covers one test, so the class is a long tail:
 
 | signature | tests |
 |---|---:|
-| one-test signatures | 13 |
+| one-test signatures | 12 |
+
+The former `No repr for struct` assertion in `sized/coinductive-2` came from
+caching an associated projection as complete while its recursive `Sized`
+probe had only marked it opaque. Opaque is a provisional cycle result, so it
+now stays out of `atyCache`; the later layout query retries the projection,
+selects the concrete `CollectionFactory` impl, and obtains `Vec<Node<_>>`.
 
 The former translation-time CTFE exception in
 `dont-propagate-generic-instance-2` came from resolving a function pointer to
