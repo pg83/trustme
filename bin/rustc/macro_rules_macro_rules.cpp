@@ -1061,6 +1061,11 @@ namespace {
             case TOK_RWORD_DYN:
                 lex.consume();
                 return consumeTypeTraitList(lex);
+            case TOK_QMARK:
+                // Relaxed bounds are part of the type grammar even when a
+                // later semantic check rejects the resulting trait object.
+                lex.consume();
+                return consumeTypeTraitList(lex);
             case TOK_RWORD_FOR:
                 lex.consume();
                 if (lex.next() != TOK_LT || !consumeTtAngle(lex)) {

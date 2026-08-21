@@ -33,9 +33,10 @@ classification, and the subsequent point reruns of `niche-in-coroutine`,
 `link-directives`, `fn-align-dyn`, gccrs `issue-2187`, and const-generic
 promotion, `deriving-with-repr-packed`, and `match-ref-mut-stability` are green
 after their fixes; the specialization impl-head fix also closed
-`specialization-basics` and `impl-trait/equality-rpass`, so 88 of the 98 sweep
-failures remain. The 25 failures outside those corpora are still carried from the
-complete snapshot rather than silently dropped from the total.
+`specialization-basics` and `impl-trait/equality-rpass`, and the macro type
+fragment fix closed `macro-bare-trait-object-maybe-trait-bound`, so 87 of the
+98 sweep failures remain. The 25 failures outside those corpora are still
+carried from the complete snapshot rather than silently dropped from the total.
 
 Reruns and the whole-group sweeps are the only regression check there is
 between full gates. Sweep all eight groups (`rust_ui_compile rust_1_90
@@ -47,18 +48,18 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 113 |
-| fixed, or no longer reproducing, since the gate | 518 |
+| still failing or still carried from the last full sweep | 112 |
+| fixed, or no longer reproducing, since the gate | 519 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed ten nodes, leaving 88. The remaining 25 are
+subsequent point fixes have closed eleven nodes, leaving 87. The remaining 25 are
 in groups outside that sweep and are still carried from the last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 52 |
+| accepted Rust rejected by the compiler or driver | 51 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -66,7 +67,7 @@ in groups outside that sweep and are still carried from the last full sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 52 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 51 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
@@ -75,7 +76,6 @@ result.
 | type checking, HIR lowering, and resolution | 48 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 | parser | 1 | named variadic parameter |
-| macro and attribute expansion | 1 | bare trait object in a macro fragment |
 
 An async closure's future now takes the captures with it instead of borrowing
 the frame of the call that made it, which is what made a capture read freed

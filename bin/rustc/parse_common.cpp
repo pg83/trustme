@@ -5858,6 +5858,14 @@ ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
             ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
             return ParseTypeTraitObject(lex, mv$(hrbs));
         }
+        // A relaxed bound can start a bare trait-object type in the grammar.
+        // This is important for macro `ty` fragments, which must capture the
+        // syntax before later semantic checks decide whether the type is valid.
+        case TOK_QMARK:
+            if (allowTraitList) {
+                return ParseTypeTraitObject(lex, {});
+            }
+            throw ParseErrorUnexpected(lex, tok);
         // `<'a + Trait>::Assoc` -- a lifetime can only start a bare trait
         // object, whose first bound is that lifetime.
         case TOK_LIFETIME:
