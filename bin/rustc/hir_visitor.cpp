@@ -1171,13 +1171,13 @@ void HIRVisitor::visitConstgeneric(HIRConstGeneric& c) {
 }
 
 void HIRVisitor::visitTraitPath(HIRTraitPath& p) {
-    this->visitGenericPath(p.path, HIRVisitor::PathContext::TYPE);
+    this->visitGenericPath(p.path, HIRVisitor::PathContext::TRAIT);
     for (auto& assoc : p.typeBounds) {
-        this->visitGenericPath(assoc.second.sourceTrait, HIRVisitor::PathContext::TYPE);
+        this->visitGenericPath(assoc.second.sourceTrait, HIRVisitor::PathContext::TRAIT);
         updateType(assoc.second.type);
     }
     for (auto& assoc : p.traitBounds) {
-        this->visitGenericPath(assoc.second.sourceTrait, HIRVisitor::PathContext::TYPE);
+        this->visitGenericPath(assoc.second.sourceTrait, HIRVisitor::PathContext::TRAIT);
         for (auto& trait : assoc.second.traits) {
             this->visitTraitPath(trait);
         }
