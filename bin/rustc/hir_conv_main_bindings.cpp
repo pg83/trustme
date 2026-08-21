@@ -1680,6 +1680,62 @@ public:
     {
     }
 
+    using GenericBounds = decltype(HIRGenericParams::bounds);
+
+    struct ActiveTraitAlias {
+        const HIRTraitAlias* alias;
+        const ActiveTraitAlias* parent;
+    };
+
+    static bool hasBound(const GenericBounds& bounds, const HIRGenericBound& candidate) {
+        return ::std::any_of(bounds.begin(), bounds.end(), [&](const auto& bound) {
+            return bound.ord(candidate) == OrdEqual;
+        });
+    }
+
+    void collectTraitAliasBounds(const Span& sp, const HIRTraitPath& aliasPath, HIRTypeRef selfType,
+        GenericBounds& out, const ActiveTraitAlias* active = nullptr) {
+        const auto* alias = crate.getTypeitemByPath(sp, aliasPath.path.path).opt_TraitAlias();
+        if (!alias) {
+            return;
+        }
+        for (auto* entry = active; entry; entry = entry->parent) {
+            if (entry->alias == alias) {
+                return;
+            }
+        }
+        const ActiveTraitAlias activeEntry { alias, active };
+
+        auto params = ConvertHIRCompleteAliasParams(crate.types, sp, alias->params, aliasPath.path, inExpr);
+        auto monomorph = MonomorphStatePtr(crate.types, selfType, &params, nullptr);
+        for (const auto& bound : alias->params.bounds) {
+            HIRGenericBound expanded;
+            switch (bound.tag()) {
+                case HIRGenericBound::TAG_TraitBound: {
+                    const auto& e = bound.as_TraitBound();
+                    expanded = HIRGenericBound::make_TraitBound({monomorph.monomorphType(sp, e.type), monomorph.monomorphTraitpath(sp, e.trait, false), e.constness});
+                    break;
+                }
+                case HIRGenericBound::TAG_TypeEquality: {
+                    const auto& e = bound.as_TypeEquality();
+                    expanded = HIRGenericBound::make_TypeEquality({monomorph.monomorphType(sp, e.type), monomorph.monomorphType(sp, e.otherType)});
+                    break;
+                }
+            }
+            if (!hasBound(out, expanded)) {
+                out.push_back(mv$(expanded));
+            }
+        }
+
+        // Alias definitions are flattened later in this pass.  Collect the
+        // nested aliases' where-clauses first so that flattening does not
+        // silently discard them.
+        for (const auto& trait : alias->traits) {
+            auto expandedTrait = monomorph.monomorphTraitpath(sp, trait, false);
+            collectTraitAliasBounds(sp, expandedTrait, selfType, out, &activeEntry);
+        }
+    }
+
     HIRTypeInterner& interner() const {
         return crate.types;
     }
@@ -1987,21 +2043,27 @@ default:
     }
 
     void visitParams(HIRGenericParams& params) override {
-        for (auto it = params.bounds.begin(); it != params.bounds.end(); ++it) {
-            static Span sp;
-            if (auto* be = it->opt_TraitBound()) {
-                auto n = ConvertHIRExpandAliasesGetTraitExpansion(sp, crate, be->trait, inExpr);
-                if (!n.empty()) {
-                    auto origType = std::move(be->type);
-                    origType = visitType(origType);
-
-                    it = params.bounds.erase(it);
-                    for (auto& t : n) {
-                        auto type = origType;
-                        it = params.bounds.insert(it, HIRGenericBound::make_TraitBound({std::move(type), std::move(t)}));
-                    }
-                }
+        static Span sp;
+        for (size_t i = 0; i < params.bounds.size();) {
+            auto* bound = params.bounds[i].opt_TraitBound();
+            if (!bound || !crate.getTypeitemByPath(sp, bound->trait.path.path).is_TraitAlias()) {
+                i++;
+                continue;
             }
+
+            auto aliasPath = bound->trait.clone();
+            auto originalType = bound->type;
+            collectTraitAliasBounds(sp, aliasPath, originalType, params.bounds);
+
+            auto expandedTraits = ConvertHIRExpandAliasesGetTraitExpansion(sp, crate, aliasPath, inExpr);
+            originalType = visitType(originalType);
+            params.bounds.erase(params.bounds.begin() + i);
+            for (size_t j = 0; j < expandedTraits.size(); j++) {
+                params.bounds.insert(params.bounds.begin() + i + j,
+                    HIRGenericBound::make_TraitBound({originalType, mv$(expandedTraits[j])}));
+            }
+            // Revisit this slot: an alias can expand to another alias, and an
+            // alias with only a where-clause expands to no trait at all.
         }
         HIRVisitor::visitParams(params);
     }
@@ -2045,7 +2107,40 @@ default:
         }
     }
 
+    void visitFunction(HIRItemPath p, HIRFunction& item) override {
+        // Argument-position `impl Trait` becomes a synthetic function type
+        // parameter in the following binding pass.  Preserve a trait alias's
+        // arbitrary where-clauses now, while the erased type still names the
+        // alias; its ordinary trait list alone cannot represent a bound such
+        // as `i32: PartialEq<Self>`.
+        size_t erasedIndex = item.params.types.size();
+        for (const auto& arg : item.args) {
+            visitTyWith(arg.second, [&](const HIRTypeData* type) {
+                const auto* erased = type->opt_ErasedType();
+                if (!erased || !erased->inner.is_Fcn()) {
+                    return false;
+                }
+
+                auto name = RcString::newInterned(FMT("erased$" << erasedIndex));
+                auto erasedType = crate.types.generic(name, 256 + erasedIndex);
+                erasedIndex++;
+                for (const auto& trait : erased->traits) {
+                    collectTraitAliasBounds(Span(), trait, erasedType, item.params.bounds);
+                }
+                return false;
+            });
+        }
+        HIRVisitor::visitFunction(p, item);
+        if (item.receiver == HIRFunction::Receiver::Custom) {
+            ASSERT_BUG(Span(), item.receiverType, "Custom receiver without a receiver type");
+            *item.receiverType = this->visitType(*item.receiverType);
+        }
+    }
+
     void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override {
+        for (const auto& trait : item.traits) {
+            collectTraitAliasBounds(Span(), trait, crate.types.self(), item.params.bounds);
+        }
         expandTraitList(Span(), item.traits);
         HIRVisitor::visitTraitAlias(p, item);
     }
@@ -2073,13 +2168,6 @@ default:
         implType = nullptr;
     }
 
-    void visitFunction(HIRItemPath p, HIRFunction& item) override {
-        HIRVisitor::visitFunction(p, item);
-        if (item.receiver == HIRFunction::Receiver::Custom) {
-            ASSERT_BUG(Span(), item.receiverType, "Custom receiver without a receiver type");
-            *item.receiverType = this->visitType(*item.receiverType);
-        }
-    }
 };
 
 class ExpanderSelf: public HIRVisitor {
