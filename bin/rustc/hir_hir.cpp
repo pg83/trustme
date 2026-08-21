@@ -1150,7 +1150,7 @@ namespace {
 }
 
 namespace {
-    void addBoundFromTrait(HIRTypeInterner& types, ::std::vector<HIRGenericBound>& rv, const HIRTypeData* type, const HIRTraitPath& curTrait) {
+    void addBoundFromTrait(HIRTypeInterner& types, ::std::vector<HIRGenericBound>& rv, const HIRTypeData* type, const HIRTraitPath& curTrait, bool isTrivial) {
         static Span sp;
         assert(curTrait.traitPtr);
         const auto& tr = *curTrait.traitPtr;
@@ -1160,7 +1160,7 @@ namespace {
             // 1. Monomorph
             auto traitPathMono = monomorphCb.monomorphTraitpath(sp, traitPathRaw, false);
             // 2. Add
-            rv.push_back(HIRGenericBound::make_TraitBound({type, mv$(traitPathMono)}));
+            rv.push_back(HIRGenericBound::make_TraitBound({type, mv$(traitPathMono), HIRBoundConstness::Never, isTrivial}));
         }
 
         // TODO: Add traits from `Self: Foo` bounds?
@@ -1172,7 +1172,7 @@ namespace {
         for (const auto& b : bounds) {
             rv.push_back(b.clone());
             if (const auto* be = b.opt_TraitBound()) {
-                addBoundFromTrait(types, rv, be->type, be->trait);
+                addBoundFromTrait(types, rv, be->type, be->trait, be->isTrivial);
             }
         }
         ::std::sort(rv.begin(), rv.end(), [](const auto& a, const auto& b) {

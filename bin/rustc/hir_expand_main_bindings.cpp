@@ -2354,7 +2354,7 @@ namespace {
                 switch (b.tag()) {
                     case HIRGenericBound::TAG_TraitBound: {
                         auto& e = b.as_TraitBound();
-                        return HIRGenericBound::make_TraitBound({this->monomorphType(sp, e.type), this->monomorphTraitpath(sp, e.trait, false), e.constness});
+                        return HIRGenericBound::make_TraitBound({this->monomorphType(sp, e.type), this->monomorphTraitpath(sp, e.trait, false), e.constness, e.isTrivial});
                     }
                     case HIRGenericBound::TAG_TypeEquality: {
                         auto& e = b.as_TypeEquality();
@@ -4753,7 +4753,7 @@ public:
                 switch (b.tag()) {
                     case HIRGenericBound::TAG_TraitBound: {
                         auto& e = b.as_TraitBound();
-                        return HIRGenericBound::make_TraitBound({monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphTraitpath(sp, e.trait, false), e.constness});
+                        return HIRGenericBound::make_TraitBound({monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphTraitpath(sp, e.trait, false), e.constness, e.isTrivial});
                     }
                     case HIRGenericBound::TAG_TypeEquality: {
                         auto& e = b.as_TypeEquality();

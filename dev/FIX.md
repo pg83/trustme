@@ -103,7 +103,9 @@ checking its monomorphised field type closed
 `rustc_no_implicit_bounds` attribute while lowering generic parameters closed
 `traits/next-solver/supertrait-alias-1`; resolving an associated type under its
 own generic parameter scope closed
-`impl-trait/in-trait/shorthand-projection-in-rpitit-bound`. Thus 49 of the 98 sweep failures
+`impl-trait/in-trait/shorthand-projection-in-rpitit-bound`; preserving whether
+an item predicate was trivial before lifetimes and `Self` were erased closed
+`associated-types/issue-71113` and `associated-types/issue-91234`. Thus 47 of the 98 sweep failures
 remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -118,19 +120,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 74 |
-| fixed, or no longer reproducing, since the gate | 557 |
+| still failing or still carried from the last full sweep | 72 |
+| fixed, or no longer reproducing, since the gate | 559 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed forty-nine nodes, leaving 49. The remaining
+subsequent point fixes and reruns have closed fifty-one nodes, leaving 47. The remaining
 25 are in groups outside that sweep and are still carried from the last full
 sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 13 |
+| accepted Rust rejected by the compiler or driver | 11 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -138,13 +140,13 @@ sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 13 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 11 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 11 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 9 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 
 An async closure's future now takes the captures with it instead of borrowing
@@ -177,6 +179,14 @@ parameters, but associated types were visited without making those parameters
 current; `X::Foo` therefore had no visible `X: Bar` bound. Associated types now
 enter their own generic scope and resolve its bounds before their declared
 trait bounds, matching the existing function and inherent-type handling.
+
+`associated-types/issue-71113.rs` and `associated-types/issue-91234.rs` are
+closed by retaining a trait predicate's lowering-time trivial-bound
+classification in HIR. A predicate depending on an item's lifetime or on
+`Self` is an assumption of that item even after those dependencies disappear
+from its lowered type, while a genuinely trivial predicate such as
+`i32: Iterator` is still proved and rejected at the declaration. The marker is
+preserved through cloning, monomorphisation, alias expansion, and HIR metadata.
 
 `impl-trait/recursive-impl-trait-type-direct.rs` is closed at the shared RPIT
 inference boundary. A return opaque constrained only by a direct recursive

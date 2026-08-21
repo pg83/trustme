@@ -718,7 +718,8 @@ namespace {
             case HIRGenericBound::TAG_TraitBound: {
                 auto& ae = a.as_TraitBound();
                 auto& be = b.as_TraitBound();
-                return ae.type == be.type && exactTraitPathEqual(ae.trait, be.trait);
+                return ae.type == be.type && exactTraitPathEqual(ae.trait, be.trait)
+                    && ae.isTrivial == be.isTrivial;
             }
             case HIRGenericBound::TAG_TypeEquality: {
                 auto& ae = a.as_TypeEquality();

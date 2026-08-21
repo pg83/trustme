@@ -68,6 +68,7 @@ Ordering HIRGenericBound::ord(const HIRGenericBound& b) const {
             auto& ae = (*this).as_TraitBound();
             auto& be = b.as_TraitBound();
             auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.trait.ord(be.trait); if (cmp != OrdEqual) return cmp;
+            cmp = ::ord(ae.isTrivial, be.isTrivial); if (cmp != OrdEqual) return cmp;
             break;
         }
         case HIRGenericBound::TAG_TypeEquality: {
@@ -115,7 +116,7 @@ HIRGenericBound HIRGenericBound::clone() const {
     switch ((*this).tag()) {
         case HIRGenericBound::TAG_TraitBound: {
             auto& e = (*this).as_TraitBound();
-            return HIRGenericBound::make_TraitBound({e.type, e.trait.clone(), e.constness});
+            return HIRGenericBound::make_TraitBound({e.type, e.trait.clone(), e.constness, e.isTrivial});
         }
         case HIRGenericBound::TAG_TypeEquality: {
             auto& e = (*this).as_TypeEquality();

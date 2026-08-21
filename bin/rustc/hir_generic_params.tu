@@ -10,6 +10,7 @@ generate(
             ("HIRTypeRef", "type"),
             ("HIRTraitPath", "trait"),
             ("HIRBoundConstness", "constness", "HIRBoundConstness::Never"),
+            ("bool", "isTrivial", "false"),
         ], copy=False),
         v("TypeEquality", fields=[
             ("HIRTypeRef", "type"),

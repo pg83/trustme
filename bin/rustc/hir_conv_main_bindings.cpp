@@ -1733,7 +1733,7 @@ public:
             switch (bound.tag()) {
                 case HIRGenericBound::TAG_TraitBound: {
                     const auto& e = bound.as_TraitBound();
-                    expanded = HIRGenericBound::make_TraitBound({monomorph.monomorphType(sp, e.type), monomorph.monomorphTraitpath(sp, e.trait, false), e.constness});
+                    expanded = HIRGenericBound::make_TraitBound({monomorph.monomorphType(sp, e.type), monomorph.monomorphTraitpath(sp, e.trait, false), e.constness, e.isTrivial});
                     break;
                 }
                 case HIRGenericBound::TAG_TypeEquality: {
@@ -2073,6 +2073,7 @@ default:
 
             auto aliasPath = bound->trait.clone();
             auto originalType = bound->type;
+            const bool isTrivial = bound->isTrivial;
             collectTraitAliasBounds(sp, aliasPath, originalType, params.bounds);
 
             auto expandedTraits = ConvertHIRExpandAliasesGetTraitExpansion(sp, crate, aliasPath, inExpr);
@@ -2080,7 +2081,7 @@ default:
             params.bounds.erase(params.bounds.begin() + i);
             for (size_t j = 0; j < expandedTraits.size(); j++) {
                 params.bounds.insert(params.bounds.begin() + i + j,
-                    HIRGenericBound::make_TraitBound({originalType, mv$(expandedTraits[j])}));
+                    HIRGenericBound::make_TraitBound({originalType, mv$(expandedTraits[j]), HIRBoundConstness::Never, isTrivial}));
             }
             // Revisit this slot: an alias can expand to another alias, and an
             // alias with only a where-clause expands to no trait at all.

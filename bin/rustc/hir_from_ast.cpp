@@ -94,6 +94,12 @@ struct AST2HIR {
 };
 
 namespace {
+    template <typename Cb>
+    void collectTypeLifetimes(const ASTType* ty, const Cb& cb);
+
+    template <typename Cb>
+    void collectPathLifetimes(const ASTPath& path, const Cb& cb);
+
     HIRBoundConstness LowerHIRBoundConstness(ASTBoundConstness v) {
         switch (v) {
             case ASTBoundConstness::Never:
@@ -161,6 +167,26 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                 auto& e = bound.as_IsTrait();
                 auto type = LowerHIRType(e.type);
 
+                bool usesGenericLifetime = false;
+                auto noteLifetime = [&](const ASTLifetimeRef& lifetime) {
+                    unsigned int lifetimeIndex = 0;
+                    for (const auto& param : gp.params) {
+                        const auto* lifetimeParam = param.opt_Lifetime();
+                        if (!lifetimeParam) {
+                            continue;
+                        }
+                        const auto binding = lifetime.binding();
+                        if (lifetime.name().name == lifetimeParam->name().name
+                            && (binding == lifetimeIndex || binding == 0x100 + lifetimeIndex)) {
+                            usesGenericLifetime = true;
+                            return;
+                        }
+                        lifetimeIndex++;
+                    }
+                };
+                collectTypeLifetimes(e.type, noteLifetime);
+                collectPathLifetimes(e.trait, noteLifetime);
+
                 // TODO: Check if this trait is `Sized` and ignore if it is? (It's a useless bound)
 
                 if (!e.outerHrbs.empty() && !e.innerHrbs.empty()) {
@@ -169,6 +195,9 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                 }
 
                 auto boundTraitPath = LowerHIRTraitPath(bound.span, e.trait, e.innerHrbs, /*allow_bounds=*/true, e.constness);
+                const bool isTrivial = !usesGenericLifetime
+                    && !monomorphiseTypeNeeded(type)
+                    && !monomorphiseTraitpathNeeded(boundTraitPath);
                 auto tpBounds = mv$(boundTraitPath.traitBounds);
                 boundTraitPath.traitBounds.clear();
 
@@ -185,14 +214,14 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                     }
                 }
 
-                rv.bounds.push_back(HIRGenericBound::make_TraitBound({type, mv$(boundTraitPath), LowerHIRBoundConstness(e.constness)}));
+                rv.bounds.push_back(HIRGenericBound::make_TraitBound({type, mv$(boundTraitPath), LowerHIRBoundConstness(e.constness), isTrivial}));
 
                 for (auto& bound : tpBounds) {
                     const auto& name = bound.first;
                     const auto& srcTrait = bound.second.sourceTrait;
                     const auto& params = bound.second.atyParams;
                     for (auto& trait : bound.second.traits) {
-                        rv.bounds.push_back(HIRGenericBound::make_TraitBound({crate->types.path(HIRPath(type, srcTrait.clone(), name, params.clone()), {}), std::move(trait)}));
+                        rv.bounds.push_back(HIRGenericBound::make_TraitBound({crate->types.path(HIRPath(type, srcTrait.clone(), name, params.clone()), {}), std::move(trait), HIRBoundConstness::Never, isTrivial}));
                     }
                     bound.second.traits.clear();
                 }
@@ -3043,9 +3072,7 @@ default:
 }
 
 namespace {
-    /// Names of the lifetimes an AST type mentions, handed to `cb` one at a time.
-    template <typename Cb>
-    void collectTypeLifetimes(const ASTType* ty, const Cb& cb);
+    /// Lifetime references an AST type mentions, handed to `cb` one at a time.
 
     template <typename Cb>
     void collectPathLifetimes(const ASTPath& path, const Cb& cb) {
@@ -3056,13 +3083,20 @@ namespace {
             for (const auto& ent : node.args().entries) {
                 switch (ent.tag()) {
                     case ASTPathParamEnt::TAG_Lifetime:
-                        cb(ent.as_Lifetime().name().name);
+                        cb(ent.as_Lifetime());
                         break;
                     case ASTPathParamEnt::TAG_Type:
                         collectTypeLifetimes(ent.as_Type(), cb);
                         break;
                     case ASTPathParamEnt::TAG_AssociatedTyEqual:
                         collectTypeLifetimes(ent.as_AssociatedTyEqual().second, cb);
+                        break;
+                    case ASTPathParamEnt::TAG_AssociatedTyBound:
+                        for (const auto& trait : ent.as_AssociatedTyBound().second) {
+                            if (trait.path) {
+                                collectPathLifetimes(*trait.path, cb);
+                            }
+                        }
                         break;
                     default:
                         break;
@@ -3079,7 +3113,7 @@ namespace {
         switch (ty->data.tag()) {
             case TypeData::TAG_Borrow: {
                 const auto& e = ty->data.as_Borrow();
-                cb(e.lifetime.name().name);
+                cb(e.lifetime);
                 collectTypeLifetimes(e.inner, cb);
                 break;
             }
@@ -3114,7 +3148,7 @@ namespace {
             case TypeData::TAG_TraitObject: {
                 const auto& e = ty->data.as_TraitObject();
                 for (const auto& lft : e.lifetimes) {
-                    cb(lft.name().name);
+                    cb(lft);
                 }
                 for (const auto& tr : e.traits) {
                     if (tr.path) {
@@ -3126,7 +3160,7 @@ namespace {
             case TypeData::TAG_ErasedType: {
                 const auto* e = ty->data.as_ErasedType();
                 for (const auto& lft : e->lifetimes) {
-                    cb(lft.name().name);
+                    cb(lft);
                 }
                 for (const auto& tr : e->traits) {
                     if (tr.path) {
@@ -3183,7 +3217,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 }
                 return false;
             };
-            auto mark = [&](const RcString& n) { add(constrained, n); };
+            auto mark = [&](const ASTLifetimeRef& lft) { add(constrained, lft.name().name); };
             collectTypeLifetimes(impl.def().type(), mark);
             if (impl.def().trait().ent.isValid()) {
                 collectPathLifetimes(impl.def().trait().ent, mark);
@@ -3213,7 +3247,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                     continue;
                 }
                 stl::Vector<RcString> used;
-                collectTypeLifetimes(ta->type(), [&](const RcString& n) { add(used, n); });
+                collectTypeLifetimes(ta->type(), [&](const ASTLifetimeRef& lft) { add(used, lft.name().name); });
                 for (const auto& p : impl.def().params().params) {
                     const auto* lft = p.opt_Lifetime();
                     if (!lft) {

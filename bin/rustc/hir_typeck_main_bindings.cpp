@@ -648,15 +648,13 @@ namespace {
                         this->visitTraitPath(e.trait);
                         selfTypes.pop_back();
 
-                        // Bounds on a type declaration that are already fully
-                        // concrete must hold there. Other generic blocks can
-                        // contain projections and const predicates whose
-                        // original dependency has been folded out of HIR, so
-                        // their bounds are checked when applied instead.
+                        // A trivial bound has no dependency on this item's
+                        // parameters and must hold at the declaration. Keep
+                        // the lowering-time classification: lifetimes are
+                        // erased and `Self` is replaced before this pass.
                         if (checkingTypeDeclarationParams
                             && !crate.featureEnabled("trivial_bounds")
-                            && !monomorphiseTypeNeeded(e.type)
-                            && !monomorphiseTraitpathNeeded(e.trait)) {
+                            && e.isTrivial) {
                             StaticTraitResolve bareResolve(resolve_.board());
                             if (!traitBoundSatisfied(Span(), bareResolve, e.type, e.trait)) {
                                 ERROR(Span(), E0000, "trait bound `" << e.type << ": " << e.trait.path << "` is not satisfied");

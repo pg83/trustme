@@ -1195,7 +1195,8 @@ HIRGenericBound HirDeserialiser::deserialiseGenericbound() {
             auto type = deserialiseType();
             auto trait = deserialiseTraitpath();
             auto constness = static_cast<HIRBoundConstness>(in.readU8());
-            return HIRGenericBound::make_TraitBound({mv$(type), mv$(trait), constness});
+            auto isTrivial = in.readBool();
+            return HIRGenericBound::make_TraitBound({mv$(type), mv$(trait), constness, isTrivial});
         }
         case 3:
             return HIRGenericBound::make_TypeEquality({deserialiseType(), deserialiseType()});
@@ -2969,6 +2970,7 @@ break;
                     serialiseType(e.type);
                     serialiseTraitpath(e.trait);
                     out.writeU8(static_cast<u8>(e.constness));
+                    out.writeBool(e.isTrivial);
                     break;
                 }
                 case HIRGenericBound::TAG_TypeEquality: {
