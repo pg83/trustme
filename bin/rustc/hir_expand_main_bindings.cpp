@@ -2197,6 +2197,7 @@ namespace {
                             resolve.typeIsSized(sp, constructorPathParams.types.back()),
                         }
                     );
+                    params.paramKinds.pushBack(HIRGenericParamKind::Type);
                 }
                 ASSERT_BUG(sp, rv < params.types.size(), ge << " -> " << rv << " < " << params.types.size());
                 return types.generic(params.types[rv].name, rv);
@@ -2217,6 +2218,7 @@ namespace {
                     constructorPathParams.values.push_back(ge);
                     params.values.push_back(HIRValueParamDef());
                     params.values.back().name = ge.name;
+                    params.paramKinds.pushBack(HIRGenericParamKind::Value);
                 }
                 return HIRConstGeneric::make_Generic({params.values[rv].name, static_cast<u32>(rv)});
             }
@@ -4706,6 +4708,7 @@ public:
             ASSERT_BUG(sp, selfType, "Missing self type (disagreement between m_resolve and StaticBorrowExprVisitorMutate)");
             constructorPathParams.types.push_back(selfType);
             params.types.push_back(HIRTypeParamDef{RcString::newInterned("Super"), resolve_.hirCrate().types.infer(), false}); // TODO: Determine if parent Self is Sized
+            params.paramKinds.pushBack(HIRGenericParamKind::Type);
         }
         // - Top-level params come first
         unsigned ofsImplT = params.types.size();
@@ -4732,6 +4735,12 @@ public:
             unsigned i = &vDef - &resolve_.itemGenerics().values.front();
             constructorPathParams.values.push_back(HIRGenericRef(vDef.name, 1 * 256 + i));
             params.values.push_back(HIRValueParamDef{vDef.name, vDef.type});
+        }
+        for (size_t i = 0; i < resolve_.implGenerics().paramCount(); i++) {
+            params.paramKinds.pushBack(resolve_.implGenerics().paramKindAt(i));
+        }
+        for (size_t i = 0; i < resolve_.itemGenerics().paramCount(); i++) {
+            params.paramKinds.pushBack(resolve_.itemGenerics().paramKindAt(i));
         }
 
         // Create the params used for the type on the impl block
@@ -6329,6 +6338,7 @@ namespace {
                                 this->hasConflict = true;
                             } else {
                                 paramsDef.types.push_back(HIRTypeParamDef{RcString::newInterned(FMT("a#" << ty.first)), types.infer(), ty.second.isSized});
+                                paramsDef.paramKinds.pushBack(HIRGenericParamKind::Type);
                             }
                         }
                     }
@@ -6341,6 +6351,9 @@ namespace {
             }
             for (const auto& vp : tr.params.values) {
                 visitor.paramsDef.values.push_back(HIRValueParamDef{vp.name, vp.type});
+            }
+            for (size_t i = 0; i < tr.params.paramCount(); i++) {
+                visitor.paramsDef.paramKinds.pushBack(tr.params.paramKindAt(i));
             }
             visitor.addTypesFromTrait(traitPath, tr, {});
             for (const auto& st : tr.allParentTraits) {

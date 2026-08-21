@@ -4,6 +4,7 @@
 #include "hir_type_ref.h"
 #include "hir_generic_ref.h"
 
+#include <std/lib/vector.h>
 #include <string>
 #include <vector>
 #include <iostream>
@@ -24,6 +25,11 @@ struct HIRValueParamDef {
     Ordering ord(const HIRValueParamDef& x) const;
 };
 
+enum class HIRGenericParamKind : u8 {
+    Type,
+    Value,
+};
+
 class HIRGenericParams;
 
 // Definitions generated from hir_generic_params.tu.
@@ -34,6 +40,9 @@ class HIRGenericParams {
 public:
     ::std::vector<HIRTypeParamDef> types;
     ::std::vector<HIRValueParamDef> values;
+    // Declaration order after erasing lifetimes. `types` and `values` retain
+    // their separate indices; this supplies the kind of each source position.
+    stl::Vector<HIRGenericParamKind> paramKinds;
 
     ::std::vector<HIRGenericBound> bounds;
 
@@ -44,6 +53,21 @@ public:
     bool isEmpty() const;
 
     bool isGeneric() const;
+
+    size_t paramCount() const {
+        return types.size() + values.size();
+    }
+
+    bool hasParamOrder() const {
+        return paramKinds.length() == paramCount();
+    }
+
+    HIRGenericParamKind paramKindAt(size_t index) const {
+        if (hasParamOrder()) {
+            return paramKinds[index];
+        }
+        return index < types.size() ? HIRGenericParamKind::Type : HIRGenericParamKind::Value;
+    }
 
     /// Create a PathParams instance that doesn't monomorphise at all
     HIRPathParams makeNopParams(HIRTypeInterner& types, unsigned level) const;

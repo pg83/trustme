@@ -3559,11 +3559,15 @@ ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
 
 ASTGenericParams HIRGenericParamsToAST(Context& context, const Span& span, const HIRGenericParams& params) {
     ASTGenericParams rv;
-    for (size_t i = 0; i < params.types.size(); i++) {
-        rv.addTyParam(ASTTypeParam(context.typePool(), span, {}, RcString::newInterned(FMT("#hir-item-" << i))));
-    }
-    for (const auto& value : params.values) {
-        rv.addValueParam(span, {}, Ident(value.name), HIRTypeToAST(context, span, value.type), {});
+    size_t typeIndex = 0;
+    size_t valueIndex = 0;
+    for (size_t i = 0; i < params.paramCount(); i++) {
+        if (params.paramKindAt(i) == HIRGenericParamKind::Type) {
+            rv.addTyParam(ASTTypeParam(context.typePool(), span, {}, RcString::newInterned(FMT("#hir-item-" << typeIndex++))));
+        } else {
+            const auto& value = params.values[valueIndex++];
+            rv.addValueParam(span, {}, Ident(value.name), HIRTypeToAST(context, span, value.type), {});
+        }
     }
     for (const auto& bound : params.bounds) {
         switch (bound.tag()) {

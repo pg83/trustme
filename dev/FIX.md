@@ -57,7 +57,10 @@ named C-variadic binding as a body-only `VaListImpl` argument and lowering its
 stdarg operations in the C backend closed `abi/variadic-ffi`; settling
 inference variables with concrete expression sources before variables
 constrained only by expected coercion destinations closed
-`issues/issue-23433`. Thus 73
+`issues/issue-23433`; preserving declaration order for generic type and const
+parameters, then using it while path argument order still exists, closed
+`const-generics/min_const_generics/inferred_const` and
+`const-generics/generic_arg_infer/infer_arg_and_const_arg`. Thus 71
 of the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -72,19 +75,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 98 |
-| fixed, or no longer reproducing, since the gate | 533 |
+| still failing or still carried from the last full sweep | 96 |
+| fixed, or no longer reproducing, since the gate | 535 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed twenty-five nodes, leaving 73. The remaining
+subsequent point fixes have closed twenty-seven nodes, leaving 71. The remaining
 25 are in groups outside that sweep and are still carried from the last full
 sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 37 |
+| accepted Rust rejected by the compiler or driver | 35 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -92,13 +95,13 @@ sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 37 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 35 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 35 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 33 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 
 An async closure's future now takes the captures with it instead of borrowing
@@ -192,18 +195,6 @@ carrying lifetimes through HIR would separate those types, so do not count these
 two as independent work.
 
 ## P2: isolated front-end rules
-
-`_` is written the same way for a type and for a const argument, and lowering
-splits a path's arguments into a type list and a value list by that spelling
-alone, so `Foo::<_, 1>` on `Foo<const N: bool, const M: u8>` binds `N` to `1`.
-`fixParamCount` moves a surplus placeholder across afterwards, but by then the
-order the arguments were written in is gone, so it can only append.
-`inferred_const` and `infer_arg_and_const_arg` need the classification done
-where the order survives -- in `LowerHIRPathParams`, against the item's own
-parameter list, which means threading the declaration in. Recording the
-placeholder in both lists and pruning later was tried and reverted: everything
-that reads a path's parameters before `Resolve Bind` (type-alias expansion,
-constant evaluation of a generic argument) sees the extra entry and rejects it.
 
 A function item and something else meeting in one `if`/`match` settle on the
 item, and the other arm is then read as the item too. `let f: fn(u8) = if c {

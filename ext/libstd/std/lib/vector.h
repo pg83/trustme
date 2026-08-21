@@ -19,6 +19,8 @@ namespace stl {
         Vector() = default;
         Vector(Vector&&) = default;
         Vector(const Vector&) = default;
+        Vector& operator=(Vector&&) noexcept = default;
+        Vector& operator=(const Vector&) = default;
 
         auto data() const noexcept {
             return (const T*)buf_.data();

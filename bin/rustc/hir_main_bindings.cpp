@@ -1160,6 +1160,15 @@ HIRPath HirDeserialiser::deserialisePath() {
 HIRGenericParams HirDeserialiser::deserialiseGenericparams() {
     TRACE_FUNCTION;
     HIRGenericParams params;
+    auto paramKindCount = in.readCount();
+    params.paramKinds.grow(paramKindCount);
+    for (size_t i = 0; i < paramKindCount; i++) {
+        auto kind = static_cast<HIRGenericParamKind>(in.readU8());
+        ASSERT_BUG(Span(),
+            kind == HIRGenericParamKind::Type || kind == HIRGenericParamKind::Value,
+            "Invalid generic parameter kind");
+        params.paramKinds.pushBack(kind);
+    }
     params.types = deserialiseVec<HIRTypeParamDef>();
     params.values = deserialiseVec<HIRValueParamDef>();
     params.bounds = deserialiseVec<HIRGenericBound>();
@@ -2927,6 +2936,13 @@ break;
 
     void serialiseGenerics(const HIRGenericParams& params) {
         DEBUG("params = " << params.fmtArgs() << ", " << params.fmtBounds());
+        ASSERT_BUG(Span(), params.paramKinds.empty() || params.hasParamOrder(),
+            "Incomplete generic parameter order: " << params.paramKinds.length()
+            << " entries for " << params.paramCount() << " parameters");
+        out.writeCount(params.paramKinds.length());
+        for (const auto kind : params.paramKinds) {
+            out.writeU8(static_cast<u8>(kind));
+        }
         serialiseVec(params.types);
         serialiseVec(params.values);
         serialiseVec(params.bounds);

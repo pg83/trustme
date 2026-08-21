@@ -21,23 +21,22 @@
 ::std::ostream& operator<<(::std::ostream& os, const HIRGenericParams::PrintArgs& x) {
     if (x.gp.types.size() > 0 || x.gp.values.size() > 0) {
         os << "<";
-        for (const auto& typ : x.gp.types) {
-            os << typ.name;
-            if (!typ.isSized) {
-                os << ": ?Sized";
+        size_t typeIndex = 0;
+        size_t valueIndex = 0;
+        for (size_t i = 0; i < x.gp.paramCount(); i++) {
+            if (x.gp.paramKindAt(i) == HIRGenericParamKind::Type) {
+                const auto& typ = x.gp.types[typeIndex++];
+                os << typ.name;
+                if (!typ.isSized) {
+                    os << ": ?Sized";
+                }
+                if (typ.defaultValue && !typ.defaultValue->is_Infer()) {
+                    os << " = " << typ.defaultValue;
+                }
+            } else {
+                const auto& valP = x.gp.values[valueIndex++];
+                os << "const " << valP.name << ": " << valP.type;
             }
-            if (typ.defaultValue && !typ.defaultValue->is_Infer()) {
-                os << " = " << typ.defaultValue;
-            }
-            os << ",";
-        }
-        if (!x.gp.values.empty()) {
-            os << "const ";
-        }
-        for (const auto& valP : x.gp.values) {
-            os << valP.name;
-            os << ": ";
-            os << valP.type;
             os << ",";
         }
         os << ">";
@@ -96,6 +95,7 @@ HIRPathParams HIRGenericParams::makeNopParams(HIRTypeInterner& types, unsigned l
 
 HIRGenericParams HIRGenericParams::clone() const {
     HIRGenericParams rv;
+    rv.paramKinds = paramKinds;
     rv.types.reserve(types.size());
     for (const auto& type : types) {
         rv.types.push_back(HIRTypeParamDef{type.name, type.defaultValue, type.isSized});
@@ -173,6 +173,14 @@ HIRGenericParams::PrintBounds::PrintBounds(const HIRGenericParams& gp)
 }
 
 Ordering HIRGenericParams::ord(const HIRGenericParams& x) const {
+    if (paramCount() != x.paramCount()) {
+        return paramCount() < x.paramCount() ? OrdLess : OrdGreater;
+    }
+    for (size_t i = 0; i < paramCount(); i++) {
+        if (paramKindAt(i) != x.paramKindAt(i)) {
+            return paramKindAt(i) < x.paramKindAt(i) ? OrdLess : OrdGreater;
+        }
+    }
     ORD(types, x.types);
     ORD(values, x.values);
     ORD(bounds, x.bounds);

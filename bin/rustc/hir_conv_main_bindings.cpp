@@ -520,6 +520,7 @@ default:
                         DEBUG("-> " << name);
                         auto newTy = crate.types.generic(name, 256 + idx);
                         fcnPtr->params.types.push_back({name, crate.types.infer(), te->isSized});
+                        fcnPtr->params.paramKinds.pushBack(HIRGenericParamKind::Type);
                         for (auto& trait : te->traits) {
                             struct M: MonomorphiserNop {
                                 const HIRTypeData* newTy;

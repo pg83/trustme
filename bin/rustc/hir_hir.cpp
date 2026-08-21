@@ -742,6 +742,7 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
                 auto* v = pool->make<HIRFunction>(HIRFunction{HIRFunction::Receiver::Free, HIRGenericParams{}, {}, types.primitive(HIRCoreType::Usize), {}});
                 v->variadic = true;
                 v->params.types.push_back(HIRTypeParamDef{RcString::newInterned("T"), types.infer(), false});
+                v->params.paramKinds.pushBack(HIRGenericParamKind::Type);
                 intrinsicOffsetof = HIRValueItem::make_Function(v);
             }
             return intrinsicOffsetof;

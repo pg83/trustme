@@ -45,6 +45,11 @@ struct ImplTraitSource {
     }
 };
 
+struct GenericParamLayout {
+    const ASTGenericParams* ast = nullptr;
+    const HIRGenericParams* hir = nullptr;
+};
+
 // All HIR-lowering state, threaded via `this` instead of file-scope globals.
 // Every `LowerHIR*` is a method; helper structs hold an `AST2HIR&` back-ref.
 struct AST2HIR {
@@ -65,7 +70,7 @@ struct AST2HIR {
     HIRExprPtr LowerHIRExpr(const ::std::shared_ptr<ASTExprNode>& e);
     HIRExprPtr LowerHIRExpr(const ASTExpr& e);
     HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric = false);
-    HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc);
+    HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs = {});
     HIRConstGeneric LowerHIRConstGeneric(const ASTExprNode& nodeRef);
     HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
     HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds = false, ASTBoundConstness constness = ASTBoundConstness::Never);
@@ -125,11 +130,13 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
             }
             case GenericParam::TAG_Type: {
                 auto& tp = param.as_Type();
+                rv.paramKinds.pushBack(HIRGenericParamKind::Type);
                 rv.types.push_back({tp.name(), LowerHIRType(tp.getDefault()), true});
                 break;
             }
             case GenericParam::TAG_Value: {
                 auto& tp = param.as_Value();
+                rv.paramKinds.pushBack(HIRGenericParamKind::Value);
                 rv.values.push_back(HIRValueParamDef{tp.name().name, LowerHIRType(tp.type()), tp.defaultValue() ? LowerHIRConstGeneric(tp.defaultValue().node()) : HIRConstGeneric::make_Infer({})});
                 break;
             }
@@ -561,14 +568,175 @@ HIRSimplePath AST2HIR::LowerHIRSimplePath(const Span& sp, const ASTPath& path, F
     return HIRSimplePath((ap->crate == "" ? crateName : ap->crate), ap->nodes);
 }
 
-HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc) {
+namespace {
+    GenericParamLayout getPathGenericParams(const Span& sp, const HIRCrate& crate, const HIRSimplePath& hirPath, const ASTPath& path, FromASTPathClass pc) {
+        if (pc == FromASTPathClass::Value) {
+            const auto& binding = path.bindings.value.binding;
+            if (const auto* e = binding.opt_Function()) {
+                if (e->func_) {
+                    return {&e->func_->params(), nullptr};
+                }
+                return {nullptr, &crate.getFunctionByPath(sp, hirPath).params};
+            }
+            if (const auto* e = binding.opt_Struct()) {
+                return e->struct_ ? GenericParamLayout{&e->struct_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+            }
+            if (const auto* e = binding.opt_EnumVar()) {
+                return e->enum_ ? GenericParamLayout{&e->enum_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+            }
+            if (const auto* e = binding.opt_Static()) {
+                return e->static_ ? GenericParamLayout{&e->static_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+            }
+            return {};
+        }
+        if (pc != FromASTPathClass::Type) {
+            return {};
+        }
+
+        const auto& binding = path.bindings.type.binding;
+        if (const auto* e = binding.opt_Struct()) {
+            return e->struct_ ? GenericParamLayout{&e->struct_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        }
+        if (const auto* e = binding.opt_Enum()) {
+            return e->enum_ ? GenericParamLayout{&e->enum_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        }
+        if (const auto* e = binding.opt_Union()) {
+            return e->union_ ? GenericParamLayout{&e->union_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        }
+        if (const auto* e = binding.opt_Trait()) {
+            return e->trait_ ? GenericParamLayout{&e->trait_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        }
+        if (const auto* e = binding.opt_TraitAlias()) {
+            return e->trait_ ? GenericParamLayout{&e->trait_->params, nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        }
+        if (const auto* e = binding.opt_EnumVar()) {
+            return e->enum_ ? GenericParamLayout{&e->enum_->params(), nullptr} : GenericParamLayout{nullptr, e->hir ? &e->hir->params : nullptr};
+        }
+        if (const auto* e = binding.opt_TypeAlias()) {
+            if (e->alias_) {
+                return {&e->alias_->params(), nullptr};
+            }
+            if (const auto* item = crate.getTypeitemByPathOpt(hirPath)) {
+                if (const auto* alias = item->opt_TypeAlias()) {
+                    return {nullptr, &alias->params};
+                }
+            }
+        }
+        return {};
+    }
+
+    GenericParamLayout getUfcsGenericParams(const ASTPath& path, FromASTPathClass pc) {
+        const auto& ufcs = path.cls.as_UFCS();
+        if (pc == FromASTPathClass::Value) {
+            if (const auto* e = path.bindings.value.binding.opt_Function(); e && e->func_) {
+                return {&e->func_->params(), nullptr};
+            }
+        }
+        if (!ufcs.trait || !ufcs.trait->isValid() || ufcs.nodes.empty()) {
+            return {};
+        }
+
+        const auto& itemName = ufcs.nodes.front().name();
+        const auto* traitBinding = ufcs.trait->bindings.type.binding.opt_Trait();
+        if (!traitBinding) {
+            return {};
+        }
+        if (traitBinding->trait_) {
+            for (const auto& item : traitBinding->trait_->items()) {
+                if (item.name != itemName) {
+                    continue;
+                }
+                if (pc == FromASTPathClass::Value) {
+                    if (const auto* function = item.data.opt_Function()) {
+                        return {&function->params(), nullptr};
+                    }
+                } else if (const auto* type = item.data.opt_Type()) {
+                    return {&type->params(), nullptr};
+                }
+                return {};
+            }
+        }
+        if (traitBinding->hir) {
+            if (pc == FromASTPathClass::Value) {
+                auto item = traitBinding->hir->values.find(itemName);
+                if (item != traitBinding->hir->values.end()) {
+                    if (const auto* function = item->second.opt_Function()) {
+                        return {nullptr, &function->params};
+                    }
+                }
+            } else {
+                auto item = traitBinding->hir->types.find(itemName);
+                if (item != traitBinding->hir->types.end()) {
+                    return {nullptr, &item->second.generics};
+                }
+            }
+        }
+        return {};
+    }
+
+    enum class GenericParamSlot {
+        None,
+        Type,
+        Value,
+    };
+
+    GenericParamSlot consumeGenericParam(GenericParamLayout defs, size_t& index, bool lifetime) {
+        if (defs.ast) {
+            while (index < defs.ast->params.size() && defs.ast->params[index].is_None()) {
+                index++;
+            }
+            if (lifetime) {
+                if (index < defs.ast->params.size() && defs.ast->params[index].is_Lifetime()) {
+                    index++;
+                }
+                return GenericParamSlot::None;
+            }
+            while (index < defs.ast->params.size() && defs.ast->params[index].is_Lifetime()) {
+                index++;
+            }
+            if (index >= defs.ast->params.size()) {
+                return GenericParamSlot::None;
+            }
+            return defs.ast->params[index++].is_Value() ? GenericParamSlot::Value : GenericParamSlot::Type;
+        }
+        if (!defs.hir || lifetime || index >= defs.hir->paramCount()) {
+            return GenericParamSlot::None;
+        }
+        return defs.hir->paramKindAt(index++) == HIRGenericParamKind::Value ? GenericParamSlot::Value : GenericParamSlot::Type;
+    }
+
+    bool isInferredConstArgument(const ASTPathParamEnt& param, GenericParamLayout defs, size_t& index) {
+        switch (param.tag()) {
+            case ASTPathParamEnt::TAG_Lifetime: {
+                consumeGenericParam(defs, index, true);
+                break;
+            }
+            case ASTPathParamEnt::TAG_Type: {
+                const auto slot = consumeGenericParam(defs, index, false);
+                return slot == GenericParamSlot::Value && param.as_Type()->data.is_Any();
+            }
+            case ASTPathParamEnt::TAG_Value: {
+                consumeGenericParam(defs, index, false);
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+        return false;
+    }
+}
+
+HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs) {
     HIRPathParams params;
 
     size_t numLft = 0;
     size_t numTy = 0;
     size_t numVal = 0;
 
+    size_t paramDefIndex = 0;
     for (const auto& param : srcParams.entries) {
+        const bool inferredConst = isInferredConstArgument(param, paramDefs, paramDefIndex);
         switch (param.tag()) {
             case ASTPathParamEnt::TAG_Null: {
                 break;
@@ -578,7 +746,7 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
                 break;
             }
             case ASTPathParamEnt::TAG_Type: {
-                numTy++;
+                (inferredConst ? numVal : numTy)++;
                 break;
             }
             case ASTPathParamEnt::TAG_Value: {
@@ -599,7 +767,9 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
 
     params.types.reserveInit(numTy);
     params.values.reserveInit(numVal);
+    paramDefIndex = 0;
     for (const auto& param : srcParams.entries) {
+        const bool inferredConst = isInferredConstArgument(param, paramDefs, paramDefIndex);
         switch (param.tag()) {
             case ASTPathParamEnt::TAG_Null: {
                 break;
@@ -608,8 +778,12 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
                 break;
             }
             case ASTPathParamEnt::TAG_Type: {
-                auto& ty = param.as_Type();
-                params.types.push_back(LowerHIRType(ty));
+                if (inferredConst) {
+                    params.values.push_back(HIRConstGeneric::make_Infer({}));
+                } else {
+                    auto& ty = param.as_Type();
+                    params.types.push_back(LowerHIRType(ty));
+                }
                 break;
             }
             case ASTPathParamEnt::TAG_Value: {
@@ -668,7 +842,8 @@ HIRConstGeneric AST2HIR::LowerHIRConstGeneric(const ASTExprNode& nodeRef) {
 HIRGenericPath AST2HIR::LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc) {
     if (const auto* e = path.cls.opt_Absolute()) {
         auto simpepath = LowerHIRSimplePath(sp, path, pc, /*allow_params*/ true);
-        HIRPathParams params = LowerHIRPathParams(sp, e->nodes.back().args(), allowAssoc);
+        auto paramDefs = getPathGenericParams(sp, *crate, simpepath, path, pc);
+        HIRPathParams params = LowerHIRPathParams(sp, e->nodes.back().args(), allowAssoc, paramDefs);
         auto rv = HIRGenericPath(mv$(simpepath), mv$(params));
         DEBUG(path << " => " << rv);
         return rv;
@@ -904,7 +1079,7 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
                 TODO(sp, "Handle UFCS with multiple nodes - " << path);
             }
             // - No associated type bounds allowed in UFCS paths
-            auto params = LowerHIRPathParams(sp, e.nodes.front().args(), /*allow_assoc*/ false);
+            auto params = LowerHIRPathParams(sp, e.nodes.front().args(), /*allow_assoc*/ false, getUfcsGenericParams(path, pc));
             auto itemName = e.nodes[0].name();
             if (e.nodes.front().args().isRtn) {
                 itemName = RcString::newInterned(FMT(ATY_PREFIX_ERASED << itemName << "_0"));
