@@ -2892,7 +2892,7 @@ void ConvertHIRMarkings(HIRCrate& crate) {
     exp2.visitCrate(crate);
 }
 
-void expandTraitImplTypeDefaults(const HIRCrate& crate, const HIRSimplePath& traitPath, HIRTraitImpl& impl) {
+void expandTraitImplDefaults(const HIRCrate& crate, const HIRSimplePath& traitPath, HIRTraitImpl& impl) {
     Span sp;
     const auto& trait = crate.getTraitByPath(sp, traitPath);
     auto ms = MonomorphStatePtr(crate.types, impl.type, &impl.traitArgs, nullptr);
@@ -2902,6 +2902,26 @@ void expandTraitImplTypeDefaults(const HIRCrate& crate, const HIRSimplePath& tra
         auto ty = ms.monomorphType(sp, def.defaultValue);
         DEBUG("Add default trait arg " << ty << " from " << def.defaultValue);
         impl.traitArgs.types.push_back(mv$(ty));
+    }
+    while (impl.traitArgs.values.size() < trait.params.values.size()) {
+        const auto& def = trait.params.values[impl.traitArgs.values.size()];
+        if (def.defaultValue.is_Infer()) {
+            ERROR(sp, E0000, "Omitted const parameter with no default in impl of " << traitPath);
+        }
+        auto value = def.defaultValue.clone();
+        if (auto* unevaluated = value.opt_Unevaluated()) {
+            // A const default is allowed to name the parameters before it.
+            // Evaluate the cloned expression with the trait arguments that
+            // have already been completed for this impl; monomorphising the
+            // definition's full identity snapshot would also try to resolve
+            // the not-yet-filled parameter itself.
+            (*unevaluated)->selfType = impl.type;
+            (*unevaluated)->paramsImpl = impl.traitArgs.clone();
+        } else {
+            value = ms.monomorphConstgeneric(sp, value, false);
+        }
+        DEBUG("Add default trait const arg " << value << " from " << def.defaultValue);
+        impl.traitArgs.values.push_back(mv$(value));
     }
 }
 
@@ -3101,7 +3121,7 @@ public:
         auto _t = this->pushModTraits(impl.srcModule, this->crate.getModByPath(Span(), impl.srcModule));
         auto _g = resolve_.setImplGenerics(MetadataType::Unknown, impl.params);
 
-        expandTraitImplTypeDefaults(crate, traitPath, impl);
+        expandTraitImplDefaults(crate, traitPath, impl);
 
         currentType_ = impl.type;
         currentTrait = &crate.getTraitByPath(Span(), traitPath);
@@ -4036,7 +4056,7 @@ void ConvertHIRResolveUFCSOuter(const WireBoard& wb, HIRCrate& crate) {
     for (auto& implGroup : crate.traitImpls) {
         auto expandList = [&](auto& implList) {
             for (auto& impl : implList) {
-                expandTraitImplTypeDefaults(crate, implGroup.first, *impl);
+                expandTraitImplDefaults(crate, implGroup.first, *impl);
             }
         };
         for (auto& named : implGroup.second.named) {
