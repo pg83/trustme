@@ -10798,11 +10798,13 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
 
 bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr) {
     auto& e = path.data.as_UfcsInherent();
+    const auto lookupType = context.revealOpaqueTypes(e.type);
+    e.type = lookupType;
 
     const HIRTypeImpl* implPtr = nullptr;
     // Detect multiple applicable methods and get the caller to try again later if there are multiple
     unsigned int count = 0;
-    context.crate.findTypeImpls(e.type, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
+    context.crate.findTypeImpls(lookupType, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
         DEBUG("- impl" << impl.params.fmtArgs() << " " << impl.type);
         auto it = impl.methods.find(e.item);
         if (it == impl.methods.end()) {
@@ -10835,7 +10837,7 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
         implParams.values.resize(implPtr->params.values.size());
         OwnedImplMatcher matcher(implParams);
 
-        auto cmp = implPtr->type->matchTestGenericsFuzz(sp, e.type, context.ivars.callbackResolveInfer(), matcher);
+        auto cmp = implPtr->type->matchTestGenericsFuzz(sp, lookupType, context.ivars.callbackResolveInfer(), matcher);
         if (cmp == HIRCompare::Fuzzy) {
             // If the match was fuzzy, it could be due to a compound being matched against an ivar
             DEBUG("- Fuzzy match, adding ivars and equating");
@@ -10885,6 +10887,9 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
 
         context.equateTypes(sp, e.type, implTyM);
     }
+    // Later passes resolve the stored UFCS path again, so retain the receiver
+    // that selected this impl after the hidden type has been constrained.
+    e.type = context.revealOpaqueTypes(e.type);
 
     return true;
 }
@@ -12709,6 +12714,8 @@ public:
                 }
                 case HIRPathData::TAG_UfcsInherent: {
                     auto& e = node.path.data.as_UfcsInherent();
+                    const auto lookupType = this->context.revealOpaqueTypes(e.type);
+                    e.type = lookupType;
                     // TODO: Share code with visit_call_populate_cache
 
                     // - Locate function (and impl block)
@@ -12717,7 +12724,7 @@ public:
                     const HIRTypeImpl* implPtr = nullptr;
                     // TODO: Support mutiple matches here (if there's a fuzzy match) and retry if so
                     unsigned int count = 0;
-                    this->context.crate.findTypeImpls(e.type, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
+                    this->context.crate.findTypeImpls(lookupType, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
                         DEBUG("- impl" << impl.params.fmtArgs() << " " << impl.type);
                         {
                             auto it = impl.methods.find(e.item);
@@ -12765,7 +12772,7 @@ public:
                         implParams.values.resize(implPtr->params.values.size());
                         OwnedImplMatcher matcher(implParams);
                         // NOTE: Could be fuzzy.
-                        bool r = implPtr->type->matchTestGenerics(sp, e.type, this->context.ivars.callbackResolveInfer(), matcher);
+                        bool r = implPtr->type->matchTestGenerics(sp, lookupType, this->context.ivars.callbackResolveInfer(), matcher);
                         for (auto& ty : implParams.types) {
                             // Create new ivars if there's holes
                             if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
@@ -12777,6 +12784,13 @@ public:
                             this->context.equateTypes(node.span(), t, e.type);
                         }
                     }
+
+                    {
+                        auto implType = MonomorphStatePtr(this->context.crate.types, e.type, &implParams, nullptr).monomorphType(sp, implPtr->type);
+                        this->context.equateTypes(node.span(), e.type, implType);
+                    }
+                    // Keep path values consistent with the call-path lookup.
+                    e.type = this->context.revealOpaqueTypes(e.type);
 
                     if (fcnPtr) {
                         // Create monomorphise callback
@@ -13256,7 +13270,7 @@ namespace {
 
 const HIRTypeData* Context::revealOpaqueType(const HIRTypeData* type) const {
     type = ivars.getType(type);
-    const size_t maxDepth = erasedTypeAliases.size() + rpitTypes.size();
+    const size_t maxDepth = 1 + erasedTypeAliases.size() + rpitTypes.size() + crate.opaqueTypeDefiners.size();
     for (size_t depth = 0; depth < maxDepth; depth++) {
         const HIRTypeData* hiddenType = nullptr;
         auto revealRpit = [&](const HIRPath& origin, unsigned int index) {
@@ -13280,6 +13294,8 @@ const HIRTypeData* Context::revealOpaqueType(const HIRTypeData* type) const {
                 const auto it = erasedTypeAliases.find(alias->inner.get());
                 if (it != erasedTypeAliases.end()) {
                     hiddenType = it->second.ourType;
+                } else if (alias->inner->type) {
+                    hiddenType = MonomorphStatePtr(crate.types, nullptr, &alias->params, nullptr).monomorphType(Span(), alias->inner->type);
                 }
             } else if (const auto* fcn = erased->inner.opt_Fcn()) {
                 revealRpit(fcn->origin, fcn->index);
@@ -13315,6 +13331,26 @@ const HIRTypeData* Context::revealOpaqueType(const HIRTypeData* type) const {
         type = revealed;
     }
     return type;
+}
+
+HIRTypeRef Context::revealOpaqueTypes(const HIRTypeData* type) const {
+    // The scalar helper reveals an opaque at the current node. Inherent
+    // receivers can contain one below a nominal type, e.g. `Wrapper<Hidden>`.
+    struct Visitor: HIRVisitor {
+        const Context& context;
+
+        explicit Visitor(const Context& context)
+            : HIRVisitor(nullptr, context.crate.types)
+            , context(context)
+        {
+        }
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override {
+            return HIRVisitor::visitType(context.revealOpaqueType(type));
+        }
+    } visitor{*this};
+
+    return visitor.visitType(type);
 }
 
 void Context::addRpitType(const HIRPath& origin, unsigned int index, HIRTypeRef type) {

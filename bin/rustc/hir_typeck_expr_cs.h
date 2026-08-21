@@ -254,6 +254,7 @@ struct Context {
     }
 
     const HIRTypeData* revealOpaqueType(const HIRTypeData* type) const;
+    HIRTypeRef revealOpaqueTypes(const HIRTypeData* type) const;
 
     void addRpitType(const HIRPath& origin, unsigned int index, HIRTypeRef type);
     void noteRpitSelfReference(const HIRPath& origin, unsigned int index);
