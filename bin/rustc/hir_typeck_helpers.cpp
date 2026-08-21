@@ -6910,9 +6910,28 @@ default:
             match &= implTy->matchTestGenericsFuzz(sp, type, this->ivars.callbackResolveInfer(), getParams);
             if (paramsPtr) {
                 const auto& params = *paramsPtr;
-                match &= implTraitArgs.matchTestGenericsFuzz(sp, params, this->ivars.callbackResolveInfer(), getParams);
+                const HIRPathParams* traitArgs = &implTraitArgs;
+                HIRPathParams monomorphTraitArgs;
+                bool implParamsKnown = match != HIRCompare::Unequal;
+                for (const auto& ty : outImplParams.types) {
+                    implParamsKnown &= ty != HIRTypeRef();
+                }
+                for (const auto& value : outImplParams.values) {
+                    implParamsKnown &= value != HIRConstGeneric();
+                }
+                if (implParamsKnown && monomorphisePathparamsNeeded(implTraitArgs)) {
+                    MonomorphStatePtr monomorph(crate.types, nullptr, &outImplParams, nullptr);
+                    monomorph.setConstevalState(this->board(), HIRItemPath(""));
+                    monomorphTraitArgs = monomorph.monomorphPathParams(sp, implTraitArgs, true);
+                    traitArgs = &monomorphTraitArgs;
+                }
+                if (traitArgs == &implTraitArgs) {
+                    match &= traitArgs->matchTestGenericsFuzz(sp, params, this->ivars.callbackResolveInfer(), getParams);
+                } else {
+                    match &= traitArgs->compareWithPlaceholders(sp, params, this->ivars.callbackResolveInfer());
+                }
                 if (match == HIRCompare::Unequal) {
-                    DEBUG("- Failed to match parameters - " << implTraitArgs << "+" << implTy << " != " << params << "+" << type);
+                    DEBUG("- Failed to match parameters - " << *traitArgs << "+" << implTy << " != " << params << "+" << type);
                     return HIRCompare::Unequal;
                 }
             } else {
