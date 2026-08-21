@@ -235,7 +235,11 @@ void HIRVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& 
         resolve_->setImplGenericsRaw(MetadataType::Unknown, impl.params);
     }
     this->visitParams(impl.params);
-    this->visitPathParams(impl.traitArgs);
+    {
+        HIRGenericPath gp{traitPath, mv$(impl.traitArgs)};
+        this->visitGenericPath(gp, PathContext::TRAIT);
+        impl.traitArgs = mv$(gp.params);
+    }
     updateType(impl.type);
     if (resolve_) {
         resolve_->clearImplGenerics();

@@ -128,7 +128,10 @@ stabilised closed the coretests future case where `join!` reached a nested
 module through a glob import. Treating an unevaluated const's captured
 `selfType` as evaluation context rather than as a nested expression closed
 `const-generics/issues/issue-89304` and
-`const-generics/generic_const_exprs/abstract-const-as-cast-4`. Thus 34 of
+`const-generics/generic_const_exprs/abstract-const-as-cast-4`; routing a
+marker impl's trait arguments through the same trait-path visitor as an
+ordinary trait impl closed
+`coherence/negative-coherence/regions-in-canonical`. Thus 33 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -143,20 +146,20 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 59 |
-| fixed, or no longer reproducing, since the gate | 572 |
+| still failing or still carried from the last full sweep | 58 |
+| fixed, or no longer reproducing, since the gate | 573 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed sixty-four nodes, leaving 34. The
+subsequent point fixes and reruns have closed sixty-five nodes, leaving 33. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 0 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 20 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 19 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
@@ -381,13 +384,13 @@ coercion. This closes both `arbitrary_self_types_niche_deshadowing.rs` and
 
 ## P1: internal compiler failures
 
-There are 20 compiler-internal failures in 20 stable signatures in the current
+There are 19 compiler-internal failures in 19 stable signatures in the current
 eight-corpus rerun.
 
 | compiler area | tests |
 |---|---:|
 | type checking and HIR lowering | 11 |
-| MIR lowering, CTFE MIR, and optimisation | 5 |
+| MIR lowering, CTFE MIR, and optimisation | 4 |
 | translation and code generation | 3 |
 | unattributed compiler abort | 1 |
 
@@ -395,7 +398,7 @@ Every remaining signature covers one test, so the class is a long tail:
 
 | signature | tests |
 |---|---:|
-| one-test signatures | 20 |
+| one-test signatures | 19 |
 
 The former two-test `BUG hir_typeck_common.cpp:824` cluster was one const-eval
 root cause. An unevaluated const captures `selfType` as its evaluation
@@ -403,6 +406,12 @@ environment; an impl header can make that type contain a pre-binding snapshot
 of the same const argument. The global const-evaluation walk now visits the
 captured impl/item parameters and expression without recursively evaluating
 that context with an empty impl substitution.
+
+The former `bad_function_call` in `regions-in-canonical` came from the marker
+impl visitor handing const trait arguments directly to `visitPathParams`.
+Unlike an ordinary trait impl, that lost the trait path and left const-eval's
+parameter-definition callback unset. Both impl forms now visit their trait
+arguments as a `HIRGenericPath` with trait context.
 
 The line numbers in a signature move with every commit that touches the file:
 the ones here are read from the classification named above, and are worth
