@@ -115,7 +115,9 @@ parameters bivariant, closed `mir/important-higher-ranked-regions`; a point
 rerun after the structural-coercion fixes also found
 `mir/inline-causes-trimmed-paths` green; visiting trait predicates with trait
 rather than type-constructor context closed
-`traits/trait-upcasting/mono-impossible`. Thus 40 of
+`traits/trait-upcasting/mono-impossible`; projecting a trait object's requested
+supertrait during expression coercion and equating its monomorphised arguments
+closed `traits/trait-upcasting/type-checking-test-opaques`. Thus 39 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -130,19 +132,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 65 |
-| fixed, or no longer reproducing, since the gate | 566 |
+| still failing or still carried from the last full sweep | 64 |
+| fixed, or no longer reproducing, since the gate | 567 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed fifty-eight nodes, leaving 40. The
+subsequent point fixes and reruns have closed fifty-nine nodes, leaving 39. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 4 |
+| accepted Rust rejected by the compiler or driver | 3 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -150,13 +152,13 @@ last full sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 4 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 3 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| AST/HIR lowering, type checking, and resolution | 4 | trait/impl selection and type mismatch dominate |
+| AST/HIR lowering, type checking, and resolution | 3 | trait/impl selection and type mismatch dominate |
 
 An async closure's future now takes the captures with it instead of borrowing
 the frame of the call that made it, which is what made a capture read freed
@@ -231,6 +233,15 @@ possible concrete implementation; the surrounding function does not have to
 repeat those bounds. Only ordinary type-constructor applications go through
 the eager declaration-bound check, so the existing rejection of
 `Needs<T: Required>` without `T: Required` remains intact.
+
+`traits/trait-upcasting/type-checking-test-opaques.rs` is closed in expression
+coercion. A trait-object upcast now projects the requested supertrait from the
+source principal and relates its type, const, and associated-type arguments to
+the destination. That relation can define a TAIT used by the supertrait before
+MIR construction asks for its hidden type, avoiding the defining function's
+self-recursive MIR request. A defining opaque is fuzzy only at its own type
+node while candidate paths are compared, and a concrete parameter mismatch is
+still rejected.
 
 `impl-trait/recursive-impl-trait-type-direct.rs` is closed at the shared RPIT
 inference boundary. A return opaque constrained only by a direct recursive

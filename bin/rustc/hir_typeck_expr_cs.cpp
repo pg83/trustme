@@ -6032,35 +6032,206 @@ namespace {
                 DEBUG("TraitObject => TraitObject");
                 // Ensure that the trait list in the destination is a strict subset of the source
 
-                // TODO: Equate these two trait paths
-                if (dep->trait.path.path != sep->trait.path.path) {
-// Trait mismatch!
-#if 1 // 1.74: `trait_upcasting` feature
-                    return CoerceResult::Unsize;
-#endif
+                class ProjectionMatcher: public HIRMatchGenerics {
+                    const Context& context;
+
+                    bool isDefiningOpaque(const HIRTypeData* type) const {
+                        const auto* erased = type->opt_ErasedType();
+                        const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+                        return alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
+                    }
+
+                public:
+                    explicit ProjectionMatcher(const Context& context)
+                        : context(context)
+                    {
+                    }
+
+                    HIRCompare cmpType(const Span& sp, const HIRTypeData* left, const HIRTypeData* right, tCbResolveType resolve) override {
+                        const auto* resolvedLeft = left->is_Infer() ? resolve.getType(sp, left) : left;
+                        const auto* resolvedRight = right->is_Infer() ? resolve.getType(sp, right) : right;
+                        if (isDefiningOpaque(resolvedLeft) || isDefiningOpaque(resolvedRight)) {
+                            return HIRCompare::Fuzzy;
+                        }
+                        return HIRMatchGenerics::cmpType(sp, left, right, resolve);
+                    }
+
+                    HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override {
+                        const auto* resolved = type->is_Infer() ? resolve.getType(Span(), type) : type;
+                        if (isDefiningOpaque(resolved) || resolved->is_Infer()
+                            || (resolved->is_Path() && resolved->as_Path().binding.is_Unbound())) {
+                            return HIRCompare::Fuzzy;
+                        }
+                        if (const auto* other = resolved->opt_Generic()) {
+                            if (*other == generic) {
+                                return HIRCompare::Equal;
+                            }
+                            if (other->group() == GENERICPlaceholder || generic.group() == GENERICPlaceholder) {
+                                return HIRCompare::Fuzzy;
+                            }
+                        }
+                        return generic.group() == GENERICPlaceholder ? HIRCompare::Fuzzy : HIRCompare::Unequal;
+                    }
+
+                    HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
+                        if (value.is_Generic() && value.as_Generic() == generic) {
+                            return HIRCompare::Equal;
+                        }
+                        if (value.is_Infer() || generic.group() == GENERICPlaceholder
+                            || (value.is_Generic() && value.as_Generic().group() == GENERICPlaceholder)) {
+                            return HIRCompare::Fuzzy;
+                        }
+                        return HIRCompare::Unequal;
+                    }
+                } matcher{context};
+                auto compareType = [&](const HIRTypeData* left, const HIRTypeData* right) {
+                    return left->matchTestGenericsFuzz(sp, right, context.ivars.callbackResolveInfer(), matcher);
+                };
+                auto compareParams = [&](const HIRPathParams& left, const HIRPathParams& right) {
+                    if (left.types.size() != right.types.size() || left.values.size() != right.values.size()) {
+                        return HIRCompare::Unequal;
+                    }
+                    auto cmp = HIRCompare::Equal;
+                    for (size_t i = 0; i < left.types.size(); i++) {
+                        cmp &= compareType(left.types[i], right.types[i]);
+                        if (cmp == HIRCompare::Unequal) {
+                            return cmp;
+                        }
+                    }
+                    for (size_t i = 0; i < left.values.size(); i++) {
+                        const auto& leftValue = context.ivars.getValue(left.values[i]);
+                        const auto& rightValue = context.ivars.getValue(right.values[i]);
+                        if (leftValue == rightValue) {
+                            continue;
+                        }
+                        if (leftValue.is_Infer() || rightValue.is_Infer()
+                            || (leftValue.is_Generic() && leftValue.as_Generic().isPlaceholder())
+                            || (rightValue.is_Generic() && rightValue.as_Generic().isPlaceholder())) {
+                            cmp = HIRCompare::Fuzzy;
+                        } else {
+                            return HIRCompare::Unequal;
+                        }
+                    }
+                    return cmp;
+                };
+                auto compareProjected = [&](const HIRTraitPath& projected) {
+                    auto cmp = compareParams(projected.path.params, dep->trait.path.params);
+                    for (const auto& required : dep->trait.typeBounds) {
+                        const auto source = projected.typeBounds.find(required.first);
+                        if (source == projected.typeBounds.end()) {
+                            return HIRCompare::Unequal;
+                        }
+                        cmp &= compareType(source->second.type, required.second.type);
+                    }
+                    return cmp;
+                };
+
+                const HIRTraitPath* projected = nullptr;
+                HIRTraitPath projectedStorage;
+                auto projectedCmp = HIRCompare::Unequal;
+                bool ambiguousProjection = false;
+                if (dep->trait.path.path == HIRSimplePath()) {
+                    // `dyn Principal + Auto` can shed its principal and retain
+                    // only auto traits; there is no named supertrait to project.
+                    projected = &dep->trait;
+                    projectedCmp = HIRCompare::Equal;
+                } else if (dep->trait.path.path == sep->trait.path.path) {
+                    projected = &sep->trait;
+                    projectedCmp = compareProjected(*projected);
+                } else if (sep->trait.traitPtr) {
+                    context.resolve.findNamedTraitInTrait(
+                        sp,
+                        dep->trait.path.path,
+                        dep->trait.path.params,
+                        *sep->trait.traitPtr,
+                        sep->trait.path.path,
+                        sep->trait.path.params,
+                        src,
+                        [&](const HIRTraitPath& parent) {
+                            const auto cmp = compareProjected(parent);
+                            if (cmp == HIRCompare::Unequal) {
+                                return false;
+                            }
+                            if (!projected || (projectedCmp == HIRCompare::Fuzzy && cmp == HIRCompare::Equal)) {
+                                projectedStorage = parent.clone();
+                                projected = &projectedStorage;
+                                projectedCmp = cmp;
+                            } else if (projectedCmp == HIRCompare::Fuzzy && cmp == HIRCompare::Fuzzy
+                                && compareParams(projected->path.params, parent.path.params) == HIRCompare::Unequal) {
+                                ambiguousProjection = true;
+                            }
+                            return cmp == HIRCompare::Equal;
+                        }
+                    );
+                }
+                if (!projected || projectedCmp == HIRCompare::Unequal || ambiguousProjection) {
                     return CoerceResult::Equality;
                 }
-                const auto& tysD = dep->trait.path.params.types;
-                const auto& tysS = sep->trait.path.params.types;
+
                 if (contextMut) {
-                    for (size_t i = 0; i < tysD.size(); i++) {
-                        contextMut->equateTypes(sp, tysD[i], tysS.at(i));
+                    for (size_t i = 0; i < dep->trait.path.params.types.size(); i++) {
+                        contextMut->equateTypes(sp, dep->trait.path.params.types[i], projected->path.params.types[i]);
+                    }
+                    for (size_t i = 0; i < dep->trait.path.params.values.size(); i++) {
+                        contextMut->equateValues(sp, dep->trait.path.params.values[i], projected->path.params.values[i]);
+                    }
+                    for (const auto& required : dep->trait.typeBounds) {
+                        contextMut->equateTypes(sp, required.second.type, projected->typeBounds.at(required.first).type);
                     }
                 }
 
                 // 2. Destination markers must be a strict subset
                 for (const auto& mt : dep->markers) {
-                    // TODO: Fuzzy match
                     bool found = false;
-                    for (const auto& omt : sep->markers) {
-                        if (omt == mt) {
+                    bool ambiguousMarker = false;
+                    auto markerCmp = HIRCompare::Unequal;
+                    HIRPathParams markerParams;
+                    auto considerMarker = [&](const HIRPathParams& params) {
+                        const auto cmp = compareParams(params, mt.params);
+                        if (cmp == HIRCompare::Unequal) {
+                            return false;
+                        }
+                        if (!found || (markerCmp == HIRCompare::Fuzzy && cmp == HIRCompare::Equal)) {
+                            markerParams = params.clone();
+                            markerCmp = cmp;
                             found = true;
+                            ambiguousMarker = false;
+                        } else if (markerCmp == HIRCompare::Fuzzy && cmp == HIRCompare::Fuzzy
+                            && compareParams(markerParams, params) == HIRCompare::Unequal) {
+                            ambiguousMarker = true;
+                        }
+                        return cmp == HIRCompare::Equal;
+                    };
+                    for (const auto& omt : sep->markers) {
+                        if (omt.path == mt.path && considerMarker(omt.params)) {
                             break;
                         }
                     }
-                    if (!found) {
+                    if (markerCmp != HIRCompare::Equal && sep->trait.traitPtr) {
+                        context.resolve.findNamedTraitInTrait(
+                            sp,
+                            mt.path,
+                            mt.params,
+                            *sep->trait.traitPtr,
+                            sep->trait.path.path,
+                            sep->trait.path.params,
+                            src,
+                            [&](const HIRTraitPath& parent) {
+                                return considerMarker(parent.path.params);
+                            }
+                        );
+                    }
+                    if (!found || ambiguousMarker) {
                         // Return early.
                         return CoerceResult::Equality;
+                    }
+                    if (contextMut) {
+                        for (size_t i = 0; i < mt.params.types.size(); i++) {
+                            contextMut->equateTypes(sp, mt.params.types[i], markerParams.types[i]);
+                        }
+                        for (size_t i = 0; i < mt.params.values.size(); i++) {
+                            contextMut->equateValues(sp, mt.params.values[i], markerParams.values[i]);
+                        }
                     }
                 }
 
