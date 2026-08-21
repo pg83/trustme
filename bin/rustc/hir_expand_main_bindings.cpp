@@ -3589,12 +3589,12 @@ void HIRExpandClosures(const WireBoard& wb, HIRCrate& crate) {
         }
 
         void fixType(HIRTypeRef& ty) const {
-            MonomorphiserNop mm(resolve_.hirCrate().types);
-            ClosureExprVisitorFixup fixup{resolve_.board(), nullptr, mm, nullptr};
-            visitTyWith(ty, [&fixup](const HIRTypeData* ty) -> bool {
+            visitTyWith(ty, [&](const HIRTypeData* ty) -> bool {
                 if (const auto* e = ty->opt_ErasedType()) {
                     if (const auto* ee = e->inner.opt_Alias()) {
                         if (ee->inner->type) {
+                            OpaqueAliasParamMonomorph monomorph{resolve_.hirCrate().types, *ee->inner, ee->params};
+                            ClosureExprVisitorFixup fixup{resolve_.board(), nullptr, monomorph, nullptr};
                             ee->inner->type = fixup.visitType(ee->inner->type);
                         }
                     }

@@ -141,7 +141,7 @@ projections, and matching bounded equalities by those arguments, closed
 `generic-associated-types/issue-102333`; supplying a projected GAT's own
 arguments while instantiating its declared bounds, and retaining those
 arguments through solver candidate checks, closed
-`generic-associated-types/collections`. Thus 29 of
+`generic-associated-types/collections`. Thus 28 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -156,20 +156,20 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 54 |
-| fixed, or no longer reproducing, since the gate | 577 |
+| still failing or still carried from the last full sweep | 53 |
+| fixed, or no longer reproducing, since the gate | 578 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed sixty-nine nodes, leaving 29. The
+subsequent point fixes and reruns have closed seventy nodes, leaving 28. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 0 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 15 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 14 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
@@ -394,12 +394,12 @@ coercion. This closes both `arbitrary_self_types_niche_deshadowing.rs` and
 
 ## P1: internal compiler failures
 
-There are 15 compiler-internal failures in 15 stable signatures in the current
+There are 14 compiler-internal failures in 14 stable signatures in the current
 eight-corpus rerun.
 
 | compiler area | tests |
 |---|---:|
-| type checking and HIR lowering | 7 |
+| type checking and HIR lowering | 6 |
 | MIR lowering, CTFE MIR, and optimisation | 4 |
 | translation and code generation | 3 |
 | unattributed compiler abort | 1 |
@@ -408,7 +408,14 @@ Every remaining signature covers one test, so the class is a long tail:
 
 | signature | tests |
 |---|---:|
-| one-test signatures | 15 |
+| one-test signatures | 14 |
+
+The former multi-layered erased-type TODO in `issue-89008` came from treating
+an opaque GAT as though it had only the impl's generic layer. Its opaque alias
+now has one flat definition over the impl and GAT parameters while each alias
+application retains the original impl/item bindings. Hidden-type
+generalisation rebases both type and const parameters, including generic
+arguments added to an async block's generated type after closure expansion.
 
 The former two-test `BUG hir_typeck_common.cpp:824` cluster was one const-eval
 root cause. An unevaluated const captures `selfType` as its evaluation

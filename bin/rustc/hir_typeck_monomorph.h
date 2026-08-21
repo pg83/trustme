@@ -73,6 +73,17 @@ public:
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
 };
 
+class OpaqueAliasParamMonomorph: public MonomorphiserNop {
+    const HIRTypeDataErasedTypeAliasInner& alias;
+    const HIRPathParams& params;
+
+public:
+    OpaqueAliasParamMonomorph(HIRTypeInterner& types, const HIRTypeDataErasedTypeAliasInner& alias, const HIRPathParams& params);
+
+    HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override;
+    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
+};
+
 // Wrappers to only monomorphise if required
 static inline const HIRTypeData* monomorphiseTypeWithOpt(const Span& sp, HIRTypeRef& tmp, const HIRTypeData* tpl, const Monomorphiser& mono, bool allowInfer = true) {
     return (monomorphiseTypeNeeded(tpl) ? tmp = mono.monomorphType(sp, tpl, allowInfer) : tpl);

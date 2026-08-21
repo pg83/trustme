@@ -106,6 +106,35 @@ HIRConstGeneric MonomorphiserNop::getValue(const Span& sp, const HIRGenericRef& 
     return HIRConstGeneric(val);
 }
 
+OpaqueAliasParamMonomorph::OpaqueAliasParamMonomorph(HIRTypeInterner& types, const HIRTypeDataErasedTypeAliasInner& alias, const HIRPathParams& params)
+    : MonomorphiserNop(types)
+    , alias(alias)
+    , params(params)
+{
+}
+
+HIRTypeRef OpaqueAliasParamMonomorph::getType(const Span& sp, const HIRGenericRef& generic) const {
+    auto type = MonomorphiserNop::getType(sp, generic);
+    for (size_t i = 0; i < params.types.size(); i++) {
+        if (params.types[i] == type) {
+            ASSERT_BUG(sp, i < alias.generics.types.size(), "Opaque alias type parameter count mismatch");
+            return types.generic(alias.generics.types[i].name, i);
+        }
+    }
+    return type;
+}
+
+HIRConstGeneric OpaqueAliasParamMonomorph::getValue(const Span& sp, const HIRGenericRef& generic) const {
+    for (size_t i = 0; i < params.values.size(); i++) {
+        const auto* param = params.values[i].opt_Generic();
+        if (param && *param == generic) {
+            ASSERT_BUG(sp, i < alias.generics.values.size(), "Opaque alias const parameter count mismatch");
+            return HIRGenericRef(alias.generics.values[i].name, i);
+        }
+    }
+    return MonomorphiserNop::getValue(sp, generic);
+}
+
 const HIRTypeData* MonomorphStatePtr::getSelfType() const {
     return selfTy;
 }

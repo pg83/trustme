@@ -203,12 +203,33 @@ HIRArraySize HIRArraySize::clone() const {
     throw "";
 }
 
-HIRTypeDataErasedTypeAliasInner::HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& params)
+HIRTypeDataErasedTypeAliasInner::HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& paramsOuter, const HIRGenericParams* paramsInner)
     : path(p.getSimplePath())
     , type()
 {
-    this->generics = params.clone();
+    this->generics = paramsOuter.clone();
     this->generics.bounds.clear();
+    if (!paramsInner) {
+        return;
+    }
+
+    this->generics.types.reserve(this->generics.types.size() + paramsInner->types.size());
+    for (const auto& type : paramsInner->types) {
+        this->generics.types.push_back(HIRTypeParamDef{type.name, type.defaultValue, type.isSized});
+    }
+    this->generics.values.reserve(this->generics.values.size() + paramsInner->values.size());
+    for (const auto& value : paramsInner->values) {
+        this->generics.values.push_back(HIRValueParamDef{value.name, value.type, value.defaultValue.clone()});
+    }
+
+    this->generics.paramKinds.clear();
+    this->generics.paramKinds.grow(paramsOuter.paramCount() + paramsInner->paramCount());
+    for (size_t i = 0; i < paramsOuter.paramCount(); i++) {
+        this->generics.paramKinds.pushBack(paramsOuter.paramKindAt(i));
+    }
+    for (size_t i = 0; i < paramsInner->paramCount(); i++) {
+        this->generics.paramKinds.pushBack(paramsInner->paramKindAt(i));
+    }
 }
 
 bool HIRTypeDataErasedTypeAliasInner::isLocalTo(const HIRSimplePath& p) const {

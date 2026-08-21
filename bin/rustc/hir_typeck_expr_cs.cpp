@@ -1602,17 +1602,8 @@ default: {
                 if (t->is_ErasedType() && t->as_ErasedType().inner.is_Alias() && t->as_ErasedType().inner.as_Alias().inner.get() == ent.first) {
                     continue;
                 }
-                // TODO: Enforce/validate that the parmas match this function's params, then convert method-level to type-level
-                // - Get the path params used to construct this path in the first place, and then do a `clone_ty_with`
-                auto ty = cloneTyWith(context.crate.types, node.span(), t, [&](const HIRTypeData* tpl, HIRTypeRef& outTy) -> bool {
-                    for (size_t i = 0; i < ent.second.params.types.size(); i++) {
-                        if (tpl == ent.second.params.types[i]) {
-                            outTy = context.crate.types.generic(ent.first->generics.types.at(i).name, i);
-                            return true;
-                        }
-                    }
-                    return false;
-                });
+                OpaqueAliasParamMonomorph aliasMonomorph{context.crate.types, *ent.first, ent.second.params};
+                auto ty = aliasMonomorph.monomorphType(node.span(), t);
                 {
                     auto p = ent.first->generics.makeNopParams(context.crate.types, 0);
                     MonomorphStatePtr(context.crate.types, nullptr, &p, nullptr).monomorphType(node.span(), ty);

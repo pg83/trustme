@@ -97,7 +97,7 @@ struct HIRTypeDataErasedTypeAliasInner {
     HIRSimplePath path;
     HIRTypeRef type;
 
-    HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& params);
+    HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& paramsOuter, const HIRGenericParams* paramsInner = nullptr);
     bool isLocalTo(const HIRSimplePath& p) const;
 };
 

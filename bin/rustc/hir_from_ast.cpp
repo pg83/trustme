@@ -1529,10 +1529,19 @@ default:
             }
             TypeDataErasedTypeInner inner;
             if (implTraitSource.path) {
-                if (implTraitSource.paramsInner && implTraitSource.paramsInner->isGeneric()) {
-                    TODO(ty->span(), "Handle multi-layered generic erased type (used in a GAT)");
+                auto aliasParams = implTraitSource.paramsOuter->makeNopParams(crate->types, 0);
+                if (implTraitSource.paramsInner) {
+                    auto innerParams = implTraitSource.paramsInner->makeNopParams(crate->types, 1);
+                    aliasParams.types.reserve(aliasParams.types.size() + innerParams.types.size());
+                    for (auto type : innerParams.types) {
+                        aliasParams.types.push_back(type);
+                    }
+                    aliasParams.values.reserve(aliasParams.values.size() + innerParams.values.size());
+                    for (const auto& value : innerParams.values) {
+                        aliasParams.values.push_back(value.clone());
+                    }
                 }
-                inner = TypeDataErasedTypeInner(TypeDataErasedTypeInner::Data_Alias{implTraitSource.paramsOuter->makeNopParams(crate->types, 0), std::make_shared<HIRTypeDataErasedTypeAliasInner>(*implTraitSource.path, *implTraitSource.paramsOuter)});
+                inner = TypeDataErasedTypeInner(TypeDataErasedTypeInner::Data_Alias{mv$(aliasParams), std::make_shared<HIRTypeDataErasedTypeAliasInner>(*implTraitSource.path, *implTraitSource.paramsOuter, implTraitSource.paramsInner)});
             } else {
                 inner = TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}; // Populated in bind, could be populated now?
             }
