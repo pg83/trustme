@@ -98,9 +98,10 @@ hygiene in item and path names, with ordinary-name fallback only when no exact
 binding exists, closed `hygiene/items` and `hygiene/trait_items-2`; marking a
 potentially-unsized associated projection as a structural DST tail and
 checking its monomorphised field type closed
-`unsized/unsize-coerce-multiple-adt-params`; honoring the crate-level
+`unsized/unsize-coerce-multiple-adt-params` and, on a later point rerun,
+`unsized/issue-75899-but-gats`; honoring the crate-level
 `rustc_no_implicit_bounds` attribute while lowering generic parameters closed
-`traits/next-solver/supertrait-alias-1`. Thus 51 of the 98 sweep failures
+`traits/next-solver/supertrait-alias-1`. Thus 50 of the 98 sweep failures
 remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -115,19 +116,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 76 |
-| fixed, or no longer reproducing, since the gate | 555 |
+| still failing or still carried from the last full sweep | 75 |
+| fixed, or no longer reproducing, since the gate | 556 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed forty-seven nodes, leaving 51. The remaining
+subsequent point fixes and reruns have closed forty-eight nodes, leaving 50. The remaining
 25 are in groups outside that sweep and are still carried from the last full
 sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 15 |
+| accepted Rust rejected by the compiler or driver | 14 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -135,13 +136,13 @@ sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 15 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 14 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 13 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 12 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 
 An async closure's future now takes the captures with it instead of borrowing
@@ -266,6 +267,12 @@ by the projection may change together. Sizedness, `Unsize` selection, and MIR
 metadata cleanup use the same normalized tail; the generated fat pointer
 therefore carries the slice length instead of treating one arbitrary generic
 parameter as the unsizing parameter.
+
+The same projected-tail representation also closes
+`unsized/issue-75899-but-gats.rs`: a GAT instantiated as `T` remains the
+struct's unsized tail when `T` changes from a concrete sized type to a trait
+object. The dedicated unit uses an array-to-slice coercion through that GAT and
+checks the resulting slice length, covering metadata as well as type checking.
 
 `Box<_>` is no reason to commit to the only fuzzy method currently visible.
 In `explicit-self-generic`, the blanket `ExactSizeIterator for Box<I>` looked
