@@ -939,6 +939,10 @@ MIRRValue MIRCleanupUnsize(const MIRTypeResolve& state, MirMutator& mutator, con
 
 MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutator, const HIRTypeData* dstTy, const HIRTypeData* srcTy, MIRLValue value) {
     TRACE_FUNCTION_F(dstTy << " <- " << srcTy << " ( " << value << " )");
+    if (dstTy == srcTy) {
+        return MIRRValue::make_Use(mv$(value));
+    }
+
     //  > Path -> Path = Unsize
     // (path being destination is otherwise invalid)
     if (dstTy->is_Path()) {

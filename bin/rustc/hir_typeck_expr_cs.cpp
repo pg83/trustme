@@ -6236,13 +6236,28 @@ default:
             }
         };
 
+        const auto langCoerceUnsized = context.crate.getLangItemPathOpt("coerce_unsized"); // TODO: Pre-load
+        if (!langCoerceUnsized.components().empty()) {
+            HIRPathParams params{dst};
+            bool fuzzyBound = false;
+            const bool foundBound = context.resolve.findTraitImplsBound(sp, langCoerceUnsized, params, src, [&](auto, auto cmp) {
+                fuzzyBound |= cmp == HIRCompare::Fuzzy;
+                return cmp == HIRCompare::Equal;
+            });
+            if (foundBound) {
+                return CoerceResult::Unsize;
+            }
+            if (fuzzyBound) {
+                return CoerceResult::Unknown;
+            }
+        }
+
         // A CoerceUnsized generic/aty/erased on one side
         // - If other side is an ivar, do a possible equality and return Unknown
         // - If impl is found, emit _Unsize
         // - Else, equate and return
         // TODO: Should ErasedType be counted here? probably not.
         if (H::typeIsBounded(src) || H::typeIsBounded(dst)) {
-            const auto langCoerceUnsized = context.crate.getLangItemPathOpt("coerce_unsized"); // TODO: Pre-load
             // `CoerceUnsized<U> for T` means `T -> U`
 
             if (!langCoerceUnsized.components().empty()) {
