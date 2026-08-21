@@ -123,7 +123,9 @@ const-evaluating nested array lengths, closed
 `const-generics/generic_const_exprs/issue-96699`; allowing overlapping
 zero-sized fields in transmutability layouts while retaining their
 inhabitation NFA closed `transmutability/enums/uninhabited_optimization`.
-Thus 37 of
+Deferring `try`, `?`, and `do yeet` lowering until macro expansion has
+stabilised closed the coretests future case where `join!` reached a nested
+module through a glob import. Thus 36 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -138,19 +140,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 62 |
-| fixed, or no longer reproducing, since the gate | 569 |
+| still failing or still carried from the last full sweep | 61 |
+| fixed, or no longer reproducing, since the gate | 570 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed sixty-one nodes, leaving 37. The
+subsequent point fixes and reruns have closed sixty-two nodes, leaving 36. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 1 |
+| accepted Rust rejected by the compiler or driver | 0 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -158,13 +160,14 @@ last full sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 1 positive program accepted by Rust 1.90.
+The current eight-corpus rerun has no remaining positive programs that Rust
+1.90 accepts.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| AST/HIR lowering, type checking, and resolution | 1 | trait/impl selection and type mismatch dominate |
+| AST/HIR lowering, type checking, and resolution | 0 | none remain in the current sweep |
 
 An async closure's future now takes the captures with it instead of borrowing
 the frame of the call that made it, which is what made a capture read freed

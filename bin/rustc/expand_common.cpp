@@ -1264,6 +1264,15 @@ struct CExpandExpr: public ASTNodeVisitor {
     }
 
     void visit(ASTExprNodeTry& node) override {
+        // Macro lookup can be deferred to a later expansion pass (for example,
+        // through a glob import).  Keep the lexical try scope until macro
+        // expansion has stabilised, so a `?` supplied as a macro argument is
+        // not lowered as a return from the surrounding function.
+        if (expandState.mode != ExpandMode::Final) {
+            this->visitNodelete(node, node.inner);
+            return;
+        }
+
         // Desugar into
         // ```
         // loop '#tryNNN {
@@ -1330,6 +1339,10 @@ struct CExpandExpr: public ASTNodeVisitor {
         this->visitNodelete(node, node.value);
 
         if (node.type == ASTExprNodeFlow::YEET) {
+            if (expandState.mode != ExpandMode::Final) {
+                return;
+            }
+
             auto coreCrate = crate.extCratenameCore;
             auto pathOpsYeet = getPath(coreCrate, "ops", "Yeet");
             auto pathFromResidualFromResidual = getPath(coreCrate, "ops", "FromResidual", "from_residual");
@@ -2096,6 +2109,10 @@ default:
         }
         // - Desugar question mark operator before resolve so it can create names
         if (node.type == ASTExprNodeUniOp::QMARK) {
+            if (expandState.mode != ExpandMode::Final) {
+                return;
+            }
+
             auto coreCrate = crate.extCratenameCore;
 
             // TODO: Find a way of creating bindings during HIR lower instead (so lang items are available)
