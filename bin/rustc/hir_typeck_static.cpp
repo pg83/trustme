@@ -184,6 +184,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     case HIRStructMarkings::DstType::None:
                         return foundCb(ImplRef(type, traitParams, &assocUnit), false);
                     case HIRStructMarkings::DstType::Possible:
+                    case HIRStructMarkings::DstType::Projection:
                     case HIRStructMarkings::DstType::TraitObject: {
                         const HIRTypeData* tailTpl = nullptr;
                         switch (str.data.tag()) {
@@ -3063,10 +3064,44 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
                 return false;
             } else if (dstGp.path == srcGp.path) {
                 DEBUG("Checking for Unsize " << dstGp << " <- " << srcGp);
-                // Structures are equal, add the requirement that the ?Sized parameter also impl Unsize
-                const auto& dstInner = dstGp.params.types.at(str.structMarkings.unsizedParam);
-                const auto& srcInner = srcGp.params.types.at(str.structMarkings.unsizedParam);
-                return this->canUnsize(sp, dstInner, srcInner);
+                if (str.structMarkings.dstType == HIRStructMarkings::DstType::Possible) {
+                    const auto& dstInner = dstGp.params.types.at(str.structMarkings.unsizedParam);
+                    const auto& srcInner = srcGp.params.types.at(str.structMarkings.unsizedParam);
+                    return this->canUnsize(sp, dstInner, srcInner);
+                }
+
+                auto monomorphField = [&](const HIRTypeData* self, const HIRPathParams& params, const HIRTypeData* tpl) {
+                    return this->monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, self, &params, nullptr));
+                };
+                auto checkField = [&](const HIRTypeData* tpl) {
+                    return monomorphField(dstTy, dstGp.params, tpl) == monomorphField(srcTy, srcGp.params, tpl);
+                };
+                const HIRTypeData* tailTpl = nullptr;
+                switch (str.data.tag()) {
+                    case HIRStructData::TAG_Unit:
+                        BUG(sp, "Potentially-unsized unit struct " << dstTy);
+                    case HIRStructData::TAG_Tuple: {
+                        const auto& fields = str.data.as_Tuple();
+                        tailTpl = fields.at(str.structMarkings.unsizedField).ent;
+                        for (size_t i = 0; i < fields.size(); i++) {
+                            if (i != str.structMarkings.unsizedField && !checkField(fields[i].ent)) {
+                                return false;
+                            }
+                        }
+                        break;
+                    }
+                    case HIRStructData::TAG_Named: {
+                        const auto& fields = str.data.as_Named();
+                        tailTpl = fields.at(str.structMarkings.unsizedField).ty;
+                        for (size_t i = 0; i < fields.size(); i++) {
+                            if (i != str.structMarkings.unsizedField && !checkField(fields[i].ty)) {
+                                return false;
+                            }
+                        }
+                        break;
+                    }
+                }
+                return this->canUnsize(sp, monomorphField(dstTy, dstGp.params, tailTpl), monomorphField(srcTy, srcGp.params, tailTpl));
             } else {
                 DEBUG("Can't Unsize, destination and source are different structs");
                 return false;
@@ -3457,7 +3492,13 @@ default:
                     return MetadataType::Unknown;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    // TODO: This can only be with UfcsKnown, so check if the trait specifies ?Sized
+                    if (const auto* pe = e.path.data.opt_UfcsKnown()) {
+                        const auto& trait = crate.getTraitByPath(sp, pe->trait.path);
+                        const auto* aty = trait.getAtyDef(pe->item).first;
+                        if (aty && !aty->isSized) {
+                            return MetadataType::Unknown;
+                        }
+                    }
                     return MetadataType::None;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
@@ -3468,7 +3509,8 @@ default:
                         case HIRStructMarkings::DstType::TraitObject:
                             return MetadataType::TraitObject;
                         case HIRStructMarkings::DstType::None:
-                        case HIRStructMarkings::DstType::Possible: {
+                        case HIRStructMarkings::DstType::Possible:
+                        case HIRStructMarkings::DstType::Projection: {
                             const auto& params = e.path.data.as_Generic().params;
                             auto monomorph = [&](const auto& tpl) {
                                 return this->monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &params, nullptr));
@@ -4116,6 +4158,7 @@ NullOnDrop<const HIRGenericParams> StaticTraitResolve::setImplGenerics(HIRStruct
         case HIRStructMarkings::DstType::None:
             break;
         case HIRStructMarkings::DstType::Possible:
+        case HIRStructMarkings::DstType::Projection:
             mt = MetadataType::Unknown;
             break;
         case HIRStructMarkings::DstType::Slice:

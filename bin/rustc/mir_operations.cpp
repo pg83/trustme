@@ -43,7 +43,8 @@ namespace {
                 switch (tep->binding.as_Struct()->structMarkings.dstType) {
                     case HIRStructMarkings::DstType::None:
                         return HIRTypeRef();
-                    case HIRStructMarkings::DstType::Possible: {
+                    case HIRStructMarkings::DstType::Possible:
+                    case HIRStructMarkings::DstType::Projection: {
                         const auto& path = tep->path.data.as_Generic();
                         const auto& str = *tep->binding.as_Struct();
                         auto monomorph = [&](const auto& tpl) {
@@ -831,6 +832,11 @@ default:
 
                 auto monomorphCbD = MonomorphStatePtr(state.crate.types, dstTy, &de.path.data.as_Generic().params, nullptr);
                 auto monomorphCbS = MonomorphStatePtr(state.crate.types, srcTy, &se.path.data.as_Generic().params, nullptr);
+                auto monomorphField = [&](const MonomorphStatePtr& monomorph, const HIRTypeData* fieldTpl) {
+                    auto fieldTy = monomorph.monomorphType(state.sp, fieldTpl, false);
+                    state.resolve.expandAssociatedTypes(state.sp, fieldTy);
+                    return fieldTy;
+                };
 
                 // Return GetMetadata on the inner type
             switch (str.data.tag()) {
@@ -841,16 +847,16 @@ default:
                 case HIRStructData::TAG_Tuple: {
                     auto& se = str.data.as_Tuple();
                     const auto& tyTpl = se.at(str.structMarkings.unsizedField).ent;
-                    auto tyD = monomorphCbD.monomorphType(state.sp, tyTpl, false);
-                    auto tyS = monomorphCbS.monomorphType(state.sp, tyTpl, false);
+                    auto tyD = monomorphField(monomorphCbD, tyTpl);
+                    auto tyS = monomorphField(monomorphCbS, tyTpl);
 
                     return MIRCleanupUnsizeGetMetadata(state, mutator, tyD, tyS, ptrValue, outMetaVal, outMetaTy, outSrcIsDst);
                 }
                 case HIRStructData::TAG_Named: {
                     auto& se = str.data.as_Named();
                     const auto& tyTpl = se.at(str.structMarkings.unsizedField).ty;
-                    auto tyD = monomorphCbD.monomorphType(state.sp, tyTpl, false);
-                    auto tyS = monomorphCbS.monomorphType(state.sp, tyTpl, false);
+                    auto tyD = monomorphField(monomorphCbD, tyTpl);
+                    auto tyS = monomorphField(monomorphCbS, tyTpl);
 
                     return MIRCleanupUnsizeGetMetadata(state, mutator, tyD, tyS, ptrValue, outMetaVal, outMetaTy, outSrcIsDst);
                 }

@@ -9673,7 +9673,8 @@ default:
                                     return HIRTypeRef();
                                 case HIRStructMarkings::DstType::Slice:
                                 case HIRStructMarkings::DstType::TraitObject:
-                                case HIRStructMarkings::DstType::Possible: {
+                                case HIRStructMarkings::DstType::Possible:
+                                case HIRStructMarkings::DstType::Projection: {
                                     // TODO: How to figure out? Lazy way is to check the monomorpised type of the last field (structs only)
                                     const auto& path = ty->as_Path().path.data.as_Generic();
                                     const auto& str = *ty->as_Path().binding.as_Struct();

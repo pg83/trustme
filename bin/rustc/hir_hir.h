@@ -290,9 +290,10 @@ struct HIRStructMarkings {
     /// generic arguments when searching for a local key parameter.
     bool isFundamental = false;
 
-    /// This type has a <T: ?Sized> parameter that is used directly
+    /// This type has a tail field whose type can be unsized.
     bool canUnsize = false;
-    /// Index of the parameter that is ?Sized
+    /// Index of the single ?Sized parameter controlling the tail.
+    /// Associated-type tails can depend on multiple parameters and leave this unset.
     unsigned int unsizedParam = ~0u;
 
     // TODO: This would have to be changed for custom DSTs
@@ -301,6 +302,7 @@ struct HIRStructMarkings {
         Possible,    // A ?Sized parameter
         Slice,       // [T]
         TraitObject, // (Trait)
+        Projection,  // A potentially-unsized associated type
     } dstType = DstType::None;
     unsigned int unsizedField = ~0u;
 

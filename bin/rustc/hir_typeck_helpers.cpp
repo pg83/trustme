@@ -1847,6 +1847,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                             hasMetaTy = true;
                             break;
                         case HIRStructMarkings::DstType::Possible:
+                        case HIRStructMarkings::DstType::Projection:
                         case HIRStructMarkings::DstType::TraitObject: {
                             const HIRTypeData* tailTpl = nullptr;
                             switch (str.data.tag()) {
@@ -7449,7 +7450,13 @@ default:
                     break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    // TODO: Check bounds
+                    if (const auto* pe = e.path.data.opt_UfcsKnown()) {
+                        const auto& trait = crate.getTraitByPath(sp, pe->trait.path);
+                        const auto* aty = trait.getAtyDef(pe->item).first;
+                        if (aty && !aty->isSized) {
+                            return HIRCompare::Unequal;
+                        }
+                    }
                     break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
@@ -7471,8 +7478,24 @@ default:
                         case HIRStructMarkings::DstType::None:
                             break;
                         case HIRStructMarkings::DstType::Possible:
-                            // Check sized-ness of the unsized param
                             return typeIsSized(sp, e.path.data.as_Generic().params.types.at(pb->structMarkings.unsizedParam));
+                        case HIRStructMarkings::DstType::Projection: {
+                            const HIRTypeData* tailTpl = nullptr;
+                            switch (pb->data.tag()) {
+                                case HIRStructData::TAG_Unit:
+                                    BUG(sp, "Potentially-unsized unit struct " << type);
+                                case HIRStructData::TAG_Tuple:
+                                    tailTpl = pb->data.as_Tuple().at(pb->structMarkings.unsizedField).ent;
+                                    break;
+                                case HIRStructData::TAG_Named:
+                                    tailTpl = pb->data.as_Named().at(pb->structMarkings.unsizedField).ty;
+                                    break;
+                            }
+                            const auto& params = e.path.data.as_Generic().params;
+                            auto tailTy = MonomorphStatePtr(crate.types, type, &params, nullptr).monomorphType(sp, tailTpl);
+                            tailTy = this->expandAssociatedTypes(sp, mv$(tailTy));
+                            return typeIsSized(sp, tailTy);
+                        }
                         case HIRStructMarkings::DstType::Slice:
                         case HIRStructMarkings::DstType::TraitObject:
                             return HIRCompare::Unequal;
@@ -7797,24 +7820,70 @@ default: {
                         return HIRCompare::Unequal;
                     } else if (dstGp.path == srcGp.path) {
                         DEBUG("Checking for Unsize " << dstGp << " <- " << srcGp);
-                        // Structures are equal, add the requirement that the ?Sized parameter also impl Unsize
-                        const auto& dstInner = ivars.getType(dstGp.params.types.at(str.structMarkings.unsizedParam));
-                        const auto& srcInner = ivars.getType(srcGp.params.types.at(str.structMarkings.unsizedParam));
+                        if (str.structMarkings.dstType == HIRStructMarkings::DstType::Possible) {
+                            const auto& dstInner = ivars.getType(dstGp.params.types.at(str.structMarkings.unsizedParam));
+                            const auto& srcInner = ivars.getType(srcGp.params.types.at(str.structMarkings.unsizedParam));
 
-                        auto cb = [&](auto d) {
-                            assert(newTypeCallback);
+                            auto cb = [&](auto d) {
+                                assert(newTypeCallback);
 
-                            // Re-create structure with s/d
-                            auto dstGpNew = dstGp.clone();
-                            dstGpNew.params.types.at(str.structMarkings.unsizedParam) = mv$(d);
-                            (*newTypeCallback)(crate.types.path(HIRPath(mv$(dstGpNew)), HIRTypePathBinding::make_Struct(&str)));
-                        };
-                        if (newTypeCallback) {
-                            ::std::function<void(HIRTypeRef)> cbP = cb;
-                            return this->canUnsize(sp, dstInner, srcInner, &cbP, inferCallback);
-                        } else {
-                            return this->canUnsize(sp, dstInner, srcInner, nullptr, inferCallback);
+                                // Re-create structure with s/d
+                                auto dstGpNew = dstGp.clone();
+                                dstGpNew.params.types.at(str.structMarkings.unsizedParam) = mv$(d);
+                                (*newTypeCallback)(crate.types.path(HIRPath(mv$(dstGpNew)), HIRTypePathBinding::make_Struct(&str)));
+                            };
+                            if (newTypeCallback) {
+                                ::std::function<void(HIRTypeRef)> cbP = cb;
+                                return this->canUnsize(sp, dstInner, srcInner, &cbP, inferCallback);
+                            } else {
+                                return this->canUnsize(sp, dstInner, srcInner, nullptr, inferCallback);
+                            }
                         }
+
+                        auto monomorphField = [&](const HIRTypeData* self, const HIRPathParams& params, const HIRTypeData* tpl) {
+                            auto fieldTy = MonomorphStatePtr(crate.types, self, &params, nullptr).monomorphType(sp, tpl);
+                            return this->expandAssociatedTypes(sp, mv$(fieldTy));
+                        };
+                        HIRCompare fieldsCmp = HIRCompare::Equal;
+                        auto compareField = [&](const HIRTypeData* tpl) {
+                            auto dstField = monomorphField(dstTy, dstGp.params, tpl);
+                            auto srcField = monomorphField(srcTy, srcGp.params, tpl);
+                            fieldsCmp &= dstField->compareWithPlaceholders(sp, srcField, ivars.callbackResolveInfer());
+                            return fieldsCmp != HIRCompare::Unequal;
+                        };
+                        const HIRTypeData* tailTpl = nullptr;
+                        switch (str.data.tag()) {
+                            case HIRStructData::TAG_Unit:
+                                BUG(sp, "Potentially-unsized unit struct " << dstTy);
+                            case HIRStructData::TAG_Tuple: {
+                                const auto& fields = str.data.as_Tuple();
+                                tailTpl = fields.at(str.structMarkings.unsizedField).ent;
+                                for (size_t i = 0; i < fields.size(); i++) {
+                                    if (i != str.structMarkings.unsizedField && !compareField(fields[i].ent)) {
+                                        return HIRCompare::Unequal;
+                                    }
+                                }
+                                break;
+                            }
+                            case HIRStructData::TAG_Named: {
+                                const auto& fields = str.data.as_Named();
+                                tailTpl = fields.at(str.structMarkings.unsizedField).ty;
+                                for (size_t i = 0; i < fields.size(); i++) {
+                                    if (i != str.structMarkings.unsizedField && !compareField(fields[i].ty)) {
+                                        return HIRCompare::Unequal;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                        auto dstTail = monomorphField(dstTy, dstGp.params, tailTpl);
+                        auto srcTail = monomorphField(srcTy, srcGp.params, tailTpl);
+                        auto rv = this->canUnsize(sp, dstTail, srcTail, nullptr, inferCallback);
+                        rv &= fieldsCmp;
+                        if (rv == HIRCompare::Fuzzy && newTypeCallback) {
+                            (*newTypeCallback)(HIRTypeRef(dstTy));
+                        }
+                        return rv;
                     } else {
                         DEBUG("Can't Unsize, destination and source are different structs");
                         return HIRCompare::Unequal;

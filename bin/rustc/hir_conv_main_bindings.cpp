@@ -2611,6 +2611,8 @@ namespace {
                 }
                 ASSERT_BUG(Span(), str.structMarkings.unsizedParam != ~0u, "No unsized param for type " << ip);
                 str.structMarkings.canUnsize = true;
+            } else if (str.structMarkings.dstType == HIRStructMarkings::DstType::Projection) {
+                str.structMarkings.canUnsize = true;
             }
         }
 
@@ -2633,7 +2635,11 @@ namespace {
             } else if (const auto* te = ty->opt_Path()) {
                 // If the type is a struct, check it (recursively)
                 if (!te->path.data.is_Generic()) {
-                    // Associated type, TODO: Check this better.
+                    if (const auto* pe = te->path.data.opt_UfcsKnown()) {
+                        const auto& trait = crate.getTraitByPath(Span(), pe->trait.path);
+                        const auto* aty = trait.getAtyDef(pe->item).first;
+                        return aty && !aty->isSized ? HIRStructMarkings::DstType::Projection : HIRStructMarkings::DstType::None;
+                    }
                     return HIRStructMarkings::DstType::None;
                 } else if (te->binding.is_Struct()) {
                     const auto& paramsTpl = te->path.data.as_Generic().params;

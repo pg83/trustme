@@ -5463,9 +5463,32 @@ void Context::requireSized(const Span& sp, const HIRTypeData* ty_) {
                 auto& pb = e->binding.as_Struct();
                 paramsDef = &pb->params;
 
-                if (pb->structMarkings.dstType == HIRStructMarkings::DstType::Possible) {
-                    // Check sized-ness of the unsized param
-                    this->requireSized(sp, e->path.data.as_Generic().params.types.at(pb->structMarkings.unsizedParam));
+                switch (pb->structMarkings.dstType) {
+                    case HIRStructMarkings::DstType::Possible:
+                        this->requireSized(sp, e->path.data.as_Generic().params.types.at(pb->structMarkings.unsizedParam));
+                        break;
+                    case HIRStructMarkings::DstType::Projection: {
+                        const HIRTypeData* tailTpl = nullptr;
+                        switch (pb->data.tag()) {
+                            case HIRStructData::TAG_Unit:
+                                BUG(sp, "Potentially-unsized unit struct " << ty);
+                            case HIRStructData::TAG_Tuple:
+                                tailTpl = pb->data.as_Tuple().at(pb->structMarkings.unsizedField).ent;
+                                break;
+                            case HIRStructData::TAG_Named:
+                                tailTpl = pb->data.as_Named().at(pb->structMarkings.unsizedField).ty;
+                                break;
+                        }
+                        const auto& params = e->path.data.as_Generic().params;
+                        auto tailTy = MonomorphStatePtr(crate.types, ty, &params, nullptr).monomorphType(sp, tailTpl);
+                        tailTy = resolve.expandAssociatedTypes(sp, mv$(tailTy));
+                        this->requireSized(sp, tailTy);
+                        break;
+                    }
+                    case HIRStructMarkings::DstType::None:
+                    case HIRStructMarkings::DstType::Slice:
+                    case HIRStructMarkings::DstType::TraitObject:
+                        break;
                 }
                 break;
             }
@@ -6175,12 +6198,34 @@ default:
                                 auto& dbe = de.binding.as_Struct();
                                 if (sbe == dbe) {
                                     const auto& sm = sbe->structMarkings;
-                                    if (sm.dstType == HIRStructMarkings::DstType::Possible) {
+                                    if (sm.dstType == HIRStructMarkings::DstType::Possible || sm.dstType == HIRStructMarkings::DstType::Projection) {
                                         DEBUG("Possible DST");
                                         const auto& pSrc = se.path.data.as_Generic().params;
                                         const auto& pDst = de.path.data.as_Generic().params;
-                                        const auto& isrc = pSrc.types.at(sm.unsizedParam);
-                                        const auto& idst = pDst.types.at(sm.unsizedParam);
+                                        HIRTypeRef srcTail;
+                                        HIRTypeRef dstTail;
+                                        const HIRTypeData* isrc;
+                                        const HIRTypeData* idst;
+                                        if (sm.dstType == HIRStructMarkings::DstType::Possible) {
+                                            isrc = pSrc.types.at(sm.unsizedParam);
+                                            idst = pDst.types.at(sm.unsizedParam);
+                                        } else {
+                                            const HIRTypeData* tailTpl = nullptr;
+                                            switch (sbe->data.tag()) {
+                                                case HIRStructData::TAG_Unit:
+                                                    BUG(sp, "Potentially-unsized unit struct " << src);
+                                                case HIRStructData::TAG_Tuple:
+                                                    tailTpl = sbe->data.as_Tuple().at(sm.unsizedField).ent;
+                                                    break;
+                                                case HIRStructData::TAG_Named:
+                                                    tailTpl = sbe->data.as_Named().at(sm.unsizedField).ty;
+                                                    break;
+                                            }
+                                            srcTail = context.resolve.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, src, &pSrc, nullptr).monomorphType(sp, tailTpl));
+                                            dstTail = context.resolve.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, dst, &pDst, nullptr).monomorphType(sp, tailTpl));
+                                            isrc = srcTail;
+                                            idst = dstTail;
+                                        }
                                         auto rv = checkUnsizeTys(context, sp, idst, isrc, contextMut, nullptr);
                                         switch (rv) {
                                             case CoerceResult::Fail:
@@ -6188,14 +6233,42 @@ default:
                                                 break;
                                             default:
                                                 if (contextMut) {
-                                                    for (size_t i = 0; i < pSrc.types.size(); i++) {
-                                                        if (i != sm.unsizedParam) {
-                                                            contextMut->equateTypes(sp, pDst.types.at(i), pSrc.types[i]);
+                                                    if (sm.dstType == HIRStructMarkings::DstType::Possible) {
+                                                        for (size_t i = 0; i < pSrc.types.size(); i++) {
+                                                            if (i != sm.unsizedParam) {
+                                                                contextMut->equateTypes(sp, pDst.types.at(i), pSrc.types[i]);
+                                                            }
                                                         }
-                                                    }
-                                                    for (size_t i = 0; i < pSrc.values.size(); i++) {
-                                                        if (i != sm.unsizedParam) {
+                                                        for (size_t i = 0; i < pSrc.values.size(); i++) {
                                                             contextMut->equateValues(sp, pDst.values.at(i), pSrc.values[i]);
+                                                        }
+                                                    } else {
+                                                        auto equateField = [&](const HIRTypeData* fieldTpl) {
+                                                            auto srcField = context.resolve.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, src, &pSrc, nullptr).monomorphType(sp, fieldTpl));
+                                                            auto dstField = context.resolve.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, dst, &pDst, nullptr).monomorphType(sp, fieldTpl));
+                                                            contextMut->equateTypes(sp, dstField, srcField);
+                                                        };
+                                                        switch (sbe->data.tag()) {
+                                                            case HIRStructData::TAG_Unit:
+                                                                break;
+                                                            case HIRStructData::TAG_Tuple: {
+                                                                const auto& fields = sbe->data.as_Tuple();
+                                                                for (size_t i = 0; i < fields.size(); i++) {
+                                                                    if (i != sm.unsizedField) {
+                                                                        equateField(fields[i].ent);
+                                                                    }
+                                                                }
+                                                                break;
+                                                            }
+                                                            case HIRStructData::TAG_Named: {
+                                                                const auto& fields = sbe->data.as_Named();
+                                                                for (size_t i = 0; i < fields.size(); i++) {
+                                                                    if (i != sm.unsizedField) {
+                                                                        equateField(fields[i].ty);
+                                                                    }
+                                                                }
+                                                                break;
+                                                            }
                                                         }
                                                     }
                                                 }
