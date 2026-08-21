@@ -38,7 +38,8 @@ fragment fix closed `macro-bare-trait-object-maybe-trait-bound`; deferring an
 identity `DiscriminantKind` projection until numeric fallback also closed
 `enum-discriminant/discriminant_value`; preserving arbitrary trait-alias
 where-clauses through argument-position `impl Trait` also closed
-`traits/alias/bounds`; completing default const arguments in trait impl heads
+`traits/alias/bounds` and, on a later point rerun,
+`closures/self-supertrait-bounds`; completing default const arguments in trait impl heads
 closed `const-generics/defaults/rp_impl_trait` and
 `const-generics/defaults/trait_objects`; excluding an import's own future
 binding while resolving its target also closed `imports/issue-62767`; making a
@@ -97,7 +98,7 @@ hygiene in item and path names, with ordinary-name fallback only when no exact
 binding exists, closed `hygiene/items` and `hygiene/trait_items-2`; marking a
 potentially-unsized associated projection as a structural DST tail and
 checking its monomorphised field type closed
-`unsized/unsize-coerce-multiple-adt-params`. Thus 53 of the 98 sweep failures
+`unsized/unsize-coerce-multiple-adt-params`. Thus 52 of the 98 sweep failures
 remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -112,19 +113,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 78 |
-| fixed, or no longer reproducing, since the gate | 553 |
+| still failing or still carried from the last full sweep | 77 |
+| fixed, or no longer reproducing, since the gate | 554 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed forty-five nodes, leaving 53. The remaining
+subsequent point fixes and reruns have closed forty-six nodes, leaving 52. The remaining
 25 are in groups outside that sweep and are still carried from the last full
 sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 17 |
+| accepted Rust rejected by the compiler or driver | 16 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -132,13 +133,13 @@ sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 17 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 16 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 15 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 14 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 
 An async closure's future now takes the captures with it instead of borrowing
@@ -150,6 +151,13 @@ rustc solves this with a second, by-reference coroutine body; we have one body.
 
 The tests routed through the trait-selection and type-mismatch lines are not
 one root cause. Minimise each before grouping.
+
+`closures/self-supertrait-bounds.rs` is also closed by the earlier trait-alias
+where-clause preservation. Expanding `T: Confusing<F>` now keeps both the
+alias's `T: Fn(i32)` supertrait and its independent `F: Fn(u32)` where-bound,
+so each unannotated closure receives the signature belonging to its own type
+parameter. A point rerun exposed that the old classification was stale; the
+dedicated unit calls both closures and checks their distinct integer types.
 
 `impl-trait/recursive-impl-trait-type-direct.rs` is closed at the shared RPIT
 inference boundary. A return opaque constrained only by a direct recursive
