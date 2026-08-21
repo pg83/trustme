@@ -4,6 +4,8 @@
 #include "hir_expr.h" // t_trait_list
 #include "hir_typeck_common.h"
 #include "hir_typeck_resolve_common.h"
+#include <std/mem/obj_pool.h>
+#include <std/sym/i_map.h>
 
 bool typeIsUnboundedInfer(const HIRTypeData* ty);
 
@@ -57,6 +59,9 @@ public: // ?? - Needed once, anymore?
     HIRTypeInterner& types;
     bool hasChanged;
     ::std::vector<HIRTypeRef> expandStack;
+    stl::ObjPool::Ref aliasIvarPool;
+    stl::IntMap<HIRTypeRef> aliasTypeIvars;
+    stl::IntMap<HIRConstGeneric> aliasValueIvars;
 
 public:
     explicit HMTypeInferrence(HIRTypeInterner& types);
@@ -262,7 +267,7 @@ public:
     /// assembly is exhaustive, impl where-clauses are evaluated recursively,
     /// and only a merged response is exposed to the caller.  `assoc_name` and
     /// `assoc_type` add an associated-type equality to the goal.
-    bool findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, const char* assocName = nullptr, const HIRTypeData* assocType = nullptr, const HIRPathParams* assocParams = nullptr) const;
+    bool findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, const char* assocName = nullptr, const HIRTypeData* assocType = nullptr, const HIRPathParams* assocParams = nullptr, bool allowInferInputs = false) const;
 
     /// Whether two concrete impl candidates may apply to one canonical goal.
     /// With next-solver coherence enabled this unifies both headers and proves

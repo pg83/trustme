@@ -1531,6 +1531,12 @@ void ConvertHIRBind(const WireBoard& wb, HIRCrate& crate) {
 HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, const HIRGenericPath& path, bool isExpr) {
     auto pp = path.params.clone();
 
+    static unsigned nextAliasInputInfer = ~1u;
+    auto newAliasInputInfer = [&]() {
+        ASSERT_BUG(sp, isAliasInputInfer(nextAliasInputInfer), "exhausted alias inference placeholder range");
+        return nextAliasInputInfer--;
+    };
+
     // Empty list, fill with ivars
     if (isExpr && pp.types.empty()) {
         while (pp.types.size() < paramsDef.types.size()) {
@@ -1539,6 +1545,19 @@ HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& 
     }
     if (isExpr && pp.values.empty()) {
         pp.values.resize(paramsDef.values.size());
+    }
+
+    if (isExpr) {
+        for (auto& type : pp.types) {
+            if (const auto* infer = type->opt_Infer(); infer && infer->index == ~0u) {
+                type = types.infer(newAliasInputInfer(), infer->tyClass);
+            }
+        }
+        for (auto& value : pp.values) {
+            if (value.is_Infer() && value.as_Infer().index == ~0u) {
+                value.as_Infer().index = newAliasInputInfer();
+            }
+        }
     }
 
     pp.types.reserve(paramsDef.types.size());

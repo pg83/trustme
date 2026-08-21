@@ -743,11 +743,23 @@ void HMTypeInferrence::expandIvarsTraitPath(HIRTraitPath& path) {
 }
 
 void HMTypeInferrence::addIvars(HIRTypeRef& type) {
-    if (type->is_Infer() && type->as_Infer().index == ~0u) {
-        type = newIvarTr(type->as_Infer().tyClass);
-        this->markChange();
-        DEBUG("New ivar " << type);
-        return;
+    if (const auto* infer = type->opt_Infer()) {
+        if (infer->index == ~0u) {
+            type = newIvarTr(infer->tyClass);
+            this->markChange();
+            DEBUG("New ivar " << type);
+            return;
+        }
+        if (isAliasInputInfer(infer->index)) {
+            auto* mapped = aliasTypeIvars.find(infer->index);
+            if (!mapped) {
+                aliasTypeIvars.insert(infer->index, newIvarTr(infer->tyClass));
+                mapped = aliasTypeIvars.find(infer->index);
+            }
+            type = *mapped;
+            this->markChange();
+            return;
+        }
     }
 
     auto data = type->cloneData();
@@ -872,6 +884,14 @@ void HMTypeInferrence::addIvars(HIRConstGeneric& val) {
             val.as_Infer().index = newIvarVal();
             this->markChange();
             DEBUG("New ivar " << val);
+        } else if (isAliasInputInfer(val.as_Infer().index)) {
+            auto* mapped = aliasValueIvars.find(val.as_Infer().index);
+            if (!mapped) {
+                aliasValueIvars.insert(val.as_Infer().index, HIRConstGeneric::make_Infer({newIvarVal()}));
+                mapped = aliasValueIvars.find(val.as_Infer().index);
+            }
+            val = mapped->clone();
+            this->markChange();
         }
     }
 }
@@ -983,6 +1003,9 @@ const HIRTypeData* HMTypeInferrence::getType(const HIRTypeData* type) const {
             return *current;
         }
         ASSERT_BUG(Span(), e->index != ~0u, "Encountered non-populated IVar");
+        if (isAliasInputInfer(e->index)) {
+            return *current;
+        }
 
         const auto* next = &getPointedIvar(e->index).type;
         if (*next == *current) {
@@ -1170,6 +1193,9 @@ void HMTypeInferrence::ivarUnify(unsigned int leftSlot, unsigned int rightSlot) 
 
 const HIRConstGeneric& HMTypeInferrence::getValue(const HIRConstGeneric& val) const {
     if (val.is_Infer()) {
+        if (isAliasInputInfer(val.as_Infer().index)) {
+            return val;
+        }
         return getValue(val.as_Infer().index);
     } else {
         return val;
@@ -3567,7 +3593,7 @@ default:
                             }
                             candidateOutput = ::std::move(output);
                             return true;
-                        }, requirement.first.c_str(), nullptr, &requirement.second.atyParams);
+                        }, requirement.first.c_str(), nullptr, &requirement.second.atyParams, false);
                     }
                     if (candidateOutput == HIRTypeRef()) {
                         candidateOutput = makeAssociatedProjection(nestedType, requirement.second.sourceTrait, requirement.first, requirement.second.atyParams);
@@ -3979,7 +4005,7 @@ default:
                                 bindCandidateResponse(*candidate, nestedType, nestedParams, response);
                                 responseCertainty = certainty == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous;
                                 return true;
-                            }, "", nullptr, nullptr);
+                            }, "", nullptr, nullptr, false);
                             if (!hasResponse) {
                                 return Certainty::NoSolution;
                             }
@@ -4406,7 +4432,7 @@ default:
                 return rightResult != Certainty::NoSolution;
             }
 
-            bool evaluate(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitResolution::tCbTraitImplR callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams) {
+            bool evaluate(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitResolution::tCbTraitImplR callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams, bool allowInferInputs) {
                 const bool outermost = span_ == nullptr;
                 if (outermost) {
                     ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked between evaluations");
@@ -4444,7 +4470,7 @@ default:
                     ambiguous.markAmbiguousIdentity();
                     return callback(materializeRootAssociated(::std::move(ambiguous), trait, assocName, assocParams), HIRCompare::Fuzzy);
                 };
-                if (goalHasUnassignedInfer(goalParams, goalType, nullptr)) {
+                if (!allowInferInputs && goalHasUnassignedInfer(goalParams, goalType, nullptr)) {
                     return emitForcedAmbiguity();
                 }
                 goalType = resolve_.expandAssociatedTypes(span(), goalType);
@@ -4632,11 +4658,20 @@ default:
                 }
 
                 // rustc prefers all ParamEnv responses when any applicable
-                // non-global where-bound exists. In particular, `T:
-                // Pointee<Metadata = ()>` must retain the environment response
-                // instead of normalising through the generic builtin fallback.
+                // non-global where-bound can answer this goal. In particular,
+                // `T: Pointee<Metadata = ()>` must retain the environment
+                // response instead of normalising through the generic builtin
+                // fallback. A bare `T: Trait` bound proves the trait but cannot
+                // shadow an impl when the goal asks to normalise `Trait::Assoc`.
                 const bool hasNonGlobalParamEnv = ::std::any_of(frame.viable.begin(), frame.viable.end(), [&](const Candidate* candidate) {
-                    return paramEnvCandidateIsNonGlobal(*candidate);
+                    if (!paramEnvCandidateIsNonGlobal(*candidate)) {
+                        return false;
+                    }
+                    if (!assocName || !assocName[0]) {
+                        return true;
+                    }
+                    const static HIRPathParams noParams;
+                    return candidate->impl.getType(crate.types, assocName, assocParams ? *assocParams : noParams) != HIRTypeRef();
                 });
                 if (hasNonGlobalParamEnv) {
                     auto& viable = frame.viable;
@@ -4880,13 +4915,13 @@ default:
             return coherenceResolve->nextSolver->evaluateOverlap(sp, *leftImpl->traitPath, *leftImpl->impl, *rightImpl->impl);
         }
 
-        bool TraitResolution::findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams) const {
+        bool TraitResolution::findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams, bool allowInferInputs) const {
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
             if (!nextSolver) {
                 ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
                 nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*this, crate);
             }
-            return nextSolver->evaluate(sp, trait, params, type, ::std::move(callback), assocName, assocType, assocParams);
+            return nextSolver->evaluate(sp, trait, params, type, ::std::move(callback), assocName, assocType, assocParams, allowInferInputs);
         }
 
         bool TraitResolution::findTraitImpls(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, bool magicTraitImpls) const {
@@ -8932,6 +8967,9 @@ default: {
         HMTypeInferrence::HMTypeInferrence(HIRTypeInterner& types)
             : types(types)
             , hasChanged(false)
+            , aliasIvarPool(stl::ObjPool::fromMemory())
+            , aliasTypeIvars(aliasIvarPool.mutPtr())
+            , aliasValueIvars(aliasIvarPool.mutPtr())
         {
         }
 

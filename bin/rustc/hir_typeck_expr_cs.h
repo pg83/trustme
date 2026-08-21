@@ -196,6 +196,10 @@ struct Context {
         equateTypesAssoc(sp, crate.types.infer(), trait, mv$(params), implTy, "", {}, false);
     }
 
+    /// Apply the constraints available from proving projections in `type`
+    /// well-formed before fully-qualified path lookup.
+    void selectWellFormed(const Span& sp, const HIRTypeData* type);
+
     /// Get the `possible_ivar_vals` entry for the given ivar index
     /// Returns `nullptr` if the ivar is already known
     IVarPossible* getIvarPossibilities(const Span& sp, unsigned int ivarIndex);

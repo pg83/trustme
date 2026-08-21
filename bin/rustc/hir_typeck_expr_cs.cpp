@@ -5366,6 +5366,36 @@ void Context::equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSi
     this->ivars.markChange();
 }
 
+void Context::selectWellFormed(const Span& sp, const HIRTypeData* type) {
+    if (!resolve.board().settings->solver.globally) {
+        return;
+    }
+    visitTyWith(type, [&](const HIRTypeData* inner) {
+        const auto* path = inner->opt_Path();
+        const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
+        if (!projection) {
+            return false;
+        }
+        resolve.findTraitImplsNext(sp, projection->trait.path, projection->trait.params, projection->type, [&](ImplRef impl, HIRCompare certainty) {
+            if (certainty != HIRCompare::Equal || impl.isAmbiguousIdentity()) {
+                return false;
+            }
+            equateTypes(sp, projection->type, impl.getImplType(crate.types));
+            auto responseParams = impl.getTraitParams(crate.types);
+            ASSERT_BUG(sp, projection->trait.params.types.size() == responseParams.types.size(), "WF response type parameter count mismatch");
+            ASSERT_BUG(sp, projection->trait.params.values.size() == responseParams.values.size(), "WF response const parameter count mismatch");
+            for (size_t i = 0; i < responseParams.types.size(); i++) {
+                equateTypes(sp, projection->trait.params.types[i], responseParams.types[i]);
+            }
+            for (size_t i = 0; i < responseParams.values.size(); i++) {
+                equateValues(sp, projection->trait.params.values[i], responseParams.values[i]);
+            }
+            return true;
+        }, "", nullptr, nullptr, true);
+        return false;
+    });
+}
+
 void Context::addRevisit(HIRExprNode& node) {
     this->toVisit.push_back(&node);
 }
@@ -10812,7 +10842,9 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
 
 bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr) {
     auto& e = path.data.as_UfcsInherent();
-    const auto lookupType = context.revealOpaqueTypes(e.type);
+    context.selectWellFormed(sp, e.type);
+    auto lookupType = context.revealOpaqueTypes(e.type);
+    lookupType = context.resolve.expandAssociatedTypes(sp, mv$(lookupType));
     e.type = lookupType;
 
     const HIRTypeImpl* implPtr = nullptr;
@@ -12728,7 +12760,9 @@ public:
                 }
                 case HIRPathData::TAG_UfcsInherent: {
                     auto& e = node.path.data.as_UfcsInherent();
-                    const auto lookupType = this->context.revealOpaqueTypes(e.type);
+                    this->context.selectWellFormed(sp, e.type);
+                    auto lookupType = this->context.revealOpaqueTypes(e.type);
+                    lookupType = this->context.resolve.expandAssociatedTypes(sp, mv$(lookupType));
                     e.type = lookupType;
                     // TODO: Share code with visit_call_populate_cache
 

@@ -76,6 +76,14 @@ enum class HIRInferClass {
     Float,
 };
 
+// Alias expansion happens before expression type checking has an inference
+// table. Tagged placeholders retain the identity of one alias argument until
+// HMTypeInferrence replaces every occurrence with the same body-local ivar.
+constexpr unsigned HIR_INFER_ALIAS_INPUT_MIN = 1u << 31;
+inline bool isAliasInputInfer(unsigned index) {
+    return index >= HIR_INFER_ALIAS_INPUT_MIN && index != ~0u;
+}
+
 enum class HIRCoreType;
 enum class HIRBorrowType;
 struct HIRTypeDataFunctionPointer;
