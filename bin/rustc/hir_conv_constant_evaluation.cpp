@@ -5066,6 +5066,18 @@ namespace {
             HIRVisitor::visitPathParams(p);
         }
 
+        void visitConstgeneric(HIRConstGeneric& value) override {
+            if (auto* unevaluated = value.opt_Unevaluated()) {
+                // `selfType` is the captured evaluation environment, not a
+                // child of the expression.  In an impl header it contains a
+                // pre-binding snapshot of this same const argument; walking
+                // that snapshot would evaluate it without its impl params.
+                visitPathParams((*unevaluated)->paramsImpl);
+                visitPathParams((*unevaluated)->paramsItem);
+                visitExpr(*(*unevaluated)->expr);
+            }
+        }
+
         void visitParams(HIRGenericParams& params) override {
             static Span sp;
             for (auto& v : params.values) {
