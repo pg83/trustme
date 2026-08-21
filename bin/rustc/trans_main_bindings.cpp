@@ -616,6 +616,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
             HIRFunction newFcn;
             newFcn.markings.trackCaller = fcnDef.markings.trackCaller;
+            newFcn.markings.alignment = fcnDef.markings.alignment;
             newFcn.returnType = ms.monomorphType(sp, fcnDef.returnType);
             state.resolve.expandAssociatedTypes(sp, newFcn.returnType);
             for (const auto& arg : fcnDef.args) {
@@ -2325,6 +2326,7 @@ void TransEnumerateCommonPostRun(EnumState& state) {
 
         TransEnumerateFillFromFunction(state, *fcnOut.path, *fcnOut.ptr, fcnOut.pp);
     }
+
 }
 
 TransList TransEnumerateCommonPost(EnumState& state) {
@@ -2872,7 +2874,24 @@ default:
                                     }
                                 }
                                 return false;
-                }
+                        }
+
+                        bool visitConst(const MIRConstant& c) override {
+                            // A byte string can introduce a type that appears
+                            // in neither a local nor the callee signature.  A
+                            // byte string passed through C varargs is emitted
+                            // as a pointer to its inferred `[u8; N]` type, so
+                            // make that type reachable before codegen asks
+                            // emitCtype for it.  Other constant kinds can name
+                            // generic parameters that are not available in
+                            // this signature-only traversal.
+                            if (c.is_Bytes()) {
+                                HIRTypeRef tmp;
+                                auto ty = localMirRes.getConstType(c);
+                                tv.visitType(pp.maybeMonomorph(tv.resolve, tmp, ty));
+                            }
+                            return MIRVisitor::visitConst(c);
+                        }
 
                 void visitPath(const HIRPath& /*p*/) override {
                     // Paths don't need visiting?
@@ -2928,6 +2947,17 @@ void TransEnumerateTypes(EnumState& state) {
     TRACE_FUNCTION;
     static Span sp;
     TypeVisitor tv{state.resolve.board(), state.rv, state.origList};
+
+    // Taking `<dyn Trait>::method` as a function item creates a dispatch
+    // wrapper without creating any concrete vtable instance.  The wrapper
+    // dereferences the vtable, so visit its complete type and all field
+    // dependencies explicitly.  This runs in both initial enumeration and
+    // cleanup's re-derivation of the reachable list.
+    for (const auto& path : state.rv.traitObjectMethods) {
+        const auto& pe = path.data.as_UfcsKnown();
+        const auto& tyDyn = pe.type->as_TraitObject();
+        tv.visitType(tyDyn.trait.traitPtr->getVtableType(sp, state.crate, tyDyn));
+    }
 
     unsigned int typesCount = 0;
     size_t constructorsVisited = 0;

@@ -2365,6 +2365,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     // #[must_use] - The caller has to use the return value
     markings.mustUse = attrs.has("must_use");
     markings.isNaked = f.markings.isNaked;
+    markings.alignment = f.markings.alignment;
     // Lint levels set on this function, which the lints consult before the
     // crate's own settings.
     markings.lintLevels = f.markings.lintLevels;

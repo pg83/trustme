@@ -53,6 +53,11 @@ namespace {
         bool inBorrow = false;
 
         struct GeneratorState {
+            static constexpr unsigned UNRESUMED = 0;
+            static constexpr unsigned RETURNED = 1;
+            static constexpr unsigned POISONED = 2;
+            static constexpr unsigned FIRST_SUSPENSION = 3;
+
             struct State {
                 /// Entrypoint for the state
                 MIRBasicBlockId entrypoint;
@@ -299,7 +304,7 @@ namespace {
 
             HIRGenericPath returnPollPath = builder.valType(sp, MIRLValue::newReturn())->as_Path().path.data.as_Generic().clone();
             builder.pushStmtAssign(sp, MIRLValue::newReturn(), MIRRValue::make_EnumVariant({std::move(returnPollPath), 1, {}}));
-            builder.pushStmtAssign(sp, generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), stateValue, {}}));
+            builder.pushStmtAssign(sp, generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), stateValue + GeneratorState::POISONED, {}}));
             builder.endBlock(MIRTerminator::make_Return({}));
             builder.setCurBlock(bbReady);
 
@@ -500,34 +505,43 @@ namespace {
         std::set<unsigned> generatorFinalise(const Span& sp, HIREnum& stateEnm) {
             std::set<unsigned> usedVars;
             std::vector<MIRBasicBlockId> armTargets;
-            armTargets.reserve(generatorState.states.size() + 1);
+            armTargets.reserve(generatorState.states.size() + 2);
             ::std::vector<HIREnum::ValueVariant> enumVariants;
-            enumVariants.reserve(generatorState.states.size() + 1);
-            for (const auto& s : generatorState.states) {
+            enumVariants.reserve(generatorState.states.size() + 2);
+
+            auto addStateArm = [&](const GeneratorState::State& state, RcString name) {
                 armTargets.push_back(builder.newBbUnlinked());
-
                 builder.setCurBlock(armTargets.back());
-                builder.pushStmtAssign(sp, generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath, static_cast<unsigned>(generatorState.states.size()), {}}));
-                builder.endBlock(MIRTerminator::make_Goto(s.entrypoint));
-
-                enumVariants.push_back(HIREnum::ValueVariant{RcString(), HIRExprPtr(), U128(armTargets.size() - 1)});
-                for (const auto& e : s.saved) {
+                builder.pushStmtAssign(sp, generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath, GeneratorState::POISONED, {}}));
+                builder.endBlock(MIRTerminator::make_Goto(state.entrypoint));
+                enumVariants.push_back(HIREnum::ValueVariant{mv$(name), HIRExprPtr(), U128(armTargets.size() - 1)});
+                for (const auto& e : state.saved) {
                     usedVars.insert(e.first);
                 }
-            }
-            // Final arm is the end/panic state - it's a bug to reach this
+            };
+
+            addStateArm(generatorState.states.front(), RcString::newInterned("UNRESUMED"));
+
+            // A completed async iterator is fused. Other completed coroutines,
+            // and all poisoned coroutines, cannot be resumed.
             armTargets.push_back(builder.newBbUnlinked());
             builder.setCurBlock(armTargets.back());
             if (generatorState.isAsyncGen) {
-                // An `async gen` iterator is fused: once the body has run out it
-                // keeps handing back `Poll::Ready(None)`.
                 asyncGenPollReady(sp, "None", {});
                 builder.endBlock(MIRTerminator::make_Return({}));
             } else {
                 builder.endBlock(MIRTerminator::make_Unreachable({}));
             }
+            enumVariants.push_back(HIREnum::ValueVariant{RcString::newInterned("RETURNED"), HIRExprPtr(), U128(GeneratorState::RETURNED)});
 
-            enumVariants.push_back(HIREnum::ValueVariant{RcString::newInterned("END"), HIRExprPtr(), U128(armTargets.size() - 1)});
+            armTargets.push_back(builder.newBbUnlinked());
+            builder.setCurBlock(armTargets.back());
+            builder.endBlock(MIRTerminator::make_Unreachable({}));
+            enumVariants.push_back(HIREnum::ValueVariant{RcString::newInterned("POISONED"), HIRExprPtr(), U128(GeneratorState::POISONED)});
+
+            for (size_t i = 1; i < generatorState.states.size(); i++) {
+                addStateArm(generatorState.states[i], RcString());
+            }
             stateEnm.data = HIREnum::Class::make_Value({mv$(enumVariants)});
 
             builder.setCurBlock(generatorState.bbOpen);
@@ -543,7 +557,7 @@ namespace {
 
             assert(generatorState.states.size() > 0);
             std::vector<MIRBasicBlockId> arms;
-            arms.reserve(generatorState.states.size() + 1);
+            arms.reserve(generatorState.states.size() + 2);
 
             // Set all drop flags from input
             if (!dropFlagMapping.empty()) {
@@ -588,8 +602,17 @@ namespace {
                 return rv;
             };
 
-            // Else, drop yield saves (Note: final state has no saves, so acts as the "completed" state)
-            for (size_t i = 0; i < generatorState.states.size(); i++) {
+            // Returned and poisoned states have no live coroutine locals.
+            for (unsigned i = GeneratorState::RETURNED; i <= GeneratorState::POISONED; i++) {
+                arms.push_back(outBuilder.newBbUnlinked());
+                outBuilder.setCurBlock(arms.back());
+                outBuilder.endBlock(MIRTerminator::make_Return({}));
+            }
+
+            // Each stored suspension discriminant corresponds to the locals
+            // saved immediately before that yield/await. The final in-body
+            // state is never stored: successful completion uses RETURNED.
+            for (size_t i = 0; i + 1 < generatorState.states.size(); i++) {
                 arms.push_back(outBuilder.newBbUnlinked());
                 outBuilder.setCurBlock(arms.back());
                 for (const auto& v : generatorState.states[i].saved) {
@@ -1089,6 +1112,7 @@ namespace {
                 // Its own value is unit, and is dropped here.
                 builder.getResultInParam(sp, valueTy);
                 asyncGenPollReady(sp, "None", {});
+                builder.pushStmtAssign(sp, generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), GeneratorState::RETURNED, {}}));
                 return;
             }
             const auto& variantName = generatorState.isFuture ? rcstringReady : rcstringComplete;
@@ -1103,6 +1127,7 @@ namespace {
             values.push_back(builder.getResultInParam(sp, valueTy));
             auto res = MIRRValue::make_EnumVariant({std::move(enmPath), static_cast<unsigned>(variantIndex), std::move(values)});
             builder.pushStmtAssign(sp, MIRLValue::newReturn(), std::move(res));
+            builder.pushStmtAssign(sp, generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), GeneratorState::RETURNED, {}}));
         }
 
         void visit(HIRExprNodeReturn& node) override {
@@ -1174,7 +1199,7 @@ namespace {
                     return;
                 }
                 asyncGenPollReady(node.span(), "Some", ::makeVec1(builder.getResultInParam(node.span(), node.value->resType)));
-                builder.pushStmtAssign(node.span(), generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), static_cast<unsigned>(generatorState.states.size()), {}}));
+                builder.pushStmtAssign(node.span(), generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), static_cast<unsigned>(generatorState.states.size()) + GeneratorState::POISONED, {}}));
                 // NOTE: No scope terminate
                 builder.endBlock(MIRTerminator::make_Return({}));
 
@@ -1202,7 +1227,7 @@ namespace {
                      mv$(values)}
                 );
                 builder.pushStmtAssign(node.span(), MIRLValue::newReturn(), mv$(res));
-                builder.pushStmtAssign(node.span(), generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), static_cast<unsigned>(generatorState.states.size()), {}}));
+                builder.pushStmtAssign(node.span(), generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), static_cast<unsigned>(generatorState.states.size()) + GeneratorState::POISONED, {}}));
                 // NOTE: No scope terminate
                 builder.endBlock(MIRTerminator::make_Return({}));
 
@@ -4348,21 +4373,21 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
             // Create aliases for every binding that only allows shared/immutable access (for use in the guard)
             auto aliases = builder.saveAliases();
             std::vector<unsigned> bindingTemps;
-            std::vector<unsigned> bindingTempsAlt(bindings0.size(), ~0u);
             for (const auto& b : bindings0) {
                 HIRTypeRef finalTy = conv.getBindingType(sp, b.binding->slot);
                 const Span& sp = arm.code->span();
                 auto val = getPatternBindingValue(conv, sp, armRules[firstArmRuleIdx], matchTy, matchVal, b);
                 DEBUG("Set alias for: " << *b.binding << " := " << val);
                 if (b.binding->type != HIRPatternBinding::Type::Move) {
-                    const auto& borrow = finalTy->as_Borrow();
-                    finalTy = builder.resolve().crate.types.borrow(HIRBorrowType::Shared, borrow.inner);
-                    // Not a move binding, still need to borrow but no deref
-                    // - Or, make another temporary for the borrow (no scope needed)
-                    auto tmp2 = builder.newTemporary(finalTy);
-                    bindingTempsAlt[bindingTemps.size()] = tmp2.as_Local();
-                    builder.pushStmtAssign(sp, tmp2.clone(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, std::move(val)}));
-                    val = std::move(tmp2);
+                    // A reference binding has an identity which is observable
+                    // in both the guard and the arm (`&binding`). Initialise
+                    // its real local before the guard, but don't activate its
+                    // arm drop state until the pattern is selected. The guard
+                    // below only receives a shared alias to this local.
+                    const auto borrow = b.binding->type == HIRPatternBinding::Type::MutRef ? HIRBorrowType::Unique : HIRBorrowType::Shared;
+                    auto bindingVal = builder.getVariable(sp, b.binding->slot);
+                    builder.pushStmtAssign(sp, bindingVal.clone(), MIRRValue::make_Borrow({borrow, false, std::move(val)}), /*updateState=*/false);
+                    val = std::move(bindingVal);
                 }
                 // Allocate a temporary to hold a borrow of that type
                 auto tmp = builder.newTemporary(builder.resolve().crate.types.borrow(HIRBorrowType::Shared, finalTy));
@@ -4527,18 +4552,10 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                         const auto& b = armRules[i].bindings[j];
                         auto val = getPatternBindingValue(conv, sp, armRules[i], matchTy, matchVal, b);
                         if (b.binding->type != HIRPatternBinding::Type::Move) {
-                            MIRLValue tmp2;
-                            if (bindingTempsAlt[j] == ~0u) {
-                                auto finalTy = conv.getBindingType(sp, b.binding->slot);
-                                const auto& borrow = finalTy->as_Borrow();
-                                finalTy = builder.resolve().crate.types.borrow(HIRBorrowType::Shared, borrow.inner);
-                                tmp2 = builder.newTemporary(finalTy);
-                                bindingTempsAlt[j] = tmp2.as_Local();
-                            } else {
-                                tmp2 = MIRLValue::newLocal(bindingTempsAlt[j]);
-                            }
-                            builder.pushStmtAssign(sp, tmp2.clone(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, std::move(val)}));
-                            val = std::move(tmp2);
+                            const auto borrow = b.binding->type == HIRPatternBinding::Type::MutRef ? HIRBorrowType::Unique : HIRBorrowType::Shared;
+                            auto bindingVal = builder.getVariable(sp, b.binding->slot);
+                            builder.pushStmtAssign(sp, bindingVal.clone(), MIRRValue::make_Borrow({borrow, false, std::move(val)}), /*updateState=*/false);
+                            val = std::move(bindingVal);
                         }
                         builder.pushStmtAssign(sp, MIRLValue::newLocal(bindingTemps[j]), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, std::move(val)}));
                     }
@@ -4628,20 +4645,10 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                     auto val = getPatternBindingValue(conv, sp, armRules[i], matchTy, matchVal, b);
                     DEBUG("Set alias for: " << *b.binding << " := " << val);
                     if (b.binding->type != HIRPatternBinding::Type::Move) {
-                        MIRLValue tmp2;
-                        if (bindingTempsAlt[j] == ~0u) {
-                            // Not a move binding, still need to borrow but no deref
-                            // - Or, make another temporary for the borrow (no scope needed)
-                            auto finalTy = conv.getBindingType(sp, b.binding->slot);
-                            const auto& borrow = finalTy->as_Borrow();
-                            finalTy = builder.resolve().crate.types.borrow(HIRBorrowType::Shared, borrow.inner);
-                            tmp2 = builder.newTemporary(finalTy);
-                            bindingTempsAlt[j] = tmp2.as_Local();
-                        } else {
-                            tmp2 = MIRLValue::newLocal(bindingTempsAlt[j]);
-                        }
-                        builder.pushStmtAssign(sp, tmp2.clone(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, std::move(val)}));
-                        val = std::move(tmp2);
+                        const auto borrow = b.binding->type == HIRPatternBinding::Type::MutRef ? HIRBorrowType::Unique : HIRBorrowType::Shared;
+                        auto bindingVal = builder.getVariable(sp, b.binding->slot);
+                        builder.pushStmtAssign(sp, bindingVal.clone(), MIRRValue::make_Borrow({borrow, false, std::move(val)}), /*updateState=*/false);
+                        val = std::move(bindingVal);
                     }
                     builder.pushStmtAssign(sp, MIRLValue::newLocal(bindingTemps[j]), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, std::move(val)}));
                 }

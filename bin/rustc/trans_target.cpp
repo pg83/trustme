@@ -1181,6 +1181,14 @@ namespace {
             break;
             case HIRTypeData::TAG_Path: {
                 auto& te = (*ty).as_Path();
+                // rustc deliberately hides every validity niche inside a
+                // coroutine from an enclosing enum.  The saved state and
+                // locals change across suspension points, so treating an
+                // invalid value in the current layout as a stable niche can
+                // make `Option<coroutine>` overwrite a live coroutine state.
+                if (te.isGenerator() || te.isFuture()) {
+                    return false;
+                }
                 if (te.binding.is_Struct()) {
                     const auto* str = te.binding.as_Struct();
                     const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
@@ -1335,6 +1343,11 @@ namespace {
             break;
             case HIRTypeData::TAG_Path: {
                 auto& te = (*ty).as_Path();
+                // Coroutines do not expose the niches of their captures or
+                // internal state to an outer enum (see getNonzeroPath too).
+                if (te.isGenerator() || te.isFuture()) {
+                    return false;
+                }
                 if (te.binding.is_Struct()) {
                     const auto* str = te.binding.as_Struct();
                     const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);

@@ -41,6 +41,11 @@ struct Settings {
     /// follows debug assertions unless it is given).
     bool ubChecks = false;
 
+    /// Whether `#[link]` attributes contribute native linker directives.
+    /// `-Zlink-directives=no` disables only that contribution; the attribute
+    /// is still parsed and validated.
+    bool linkDirectives = true;
+
     /// How deep macro expansion may nest (`#![recursion_limit]`). rustc's
     /// default is 128.
     unsigned int recursionLimit = 128;

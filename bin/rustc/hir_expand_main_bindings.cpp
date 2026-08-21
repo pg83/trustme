@@ -2912,6 +2912,60 @@ namespace {
             }
         }
 
+        unsigned countCoroutineSuspensions(HIRExprNodeP& code, bool countYields, bool countAwaits) const {
+            struct Visitor: public HIRExprVisitorDef {
+                bool countYields;
+                bool countAwaits;
+                unsigned count = 0;
+
+                Visitor(HIRTypeInterner& types, bool countYields, bool countAwaits)
+                    : HIRExprVisitorDef(types)
+                    , countYields(countYields)
+                    , countAwaits(countAwaits)
+                {
+                }
+
+                void visit(HIRExprNodeClosure&) override {
+                }
+
+                void visit(HIRExprNodeGenerator&) override {
+                }
+
+                void visit(HIRExprNodeAsyncBlock&) override {
+                }
+
+                void visit(HIRExprNodeYield& node) override {
+                    if (countYields) {
+                        count += 1;
+                    }
+                    HIRExprVisitorDef::visit(node);
+                }
+
+                void visit(HIRExprNodeAWait& node) override {
+                    if (countAwaits) {
+                        count += 1;
+                    }
+                    HIRExprVisitorDef::visit(node);
+                }
+            } visitor(resolve_.hirCrate().types, countYields, countAwaits);
+
+            visitor.visitNodePtr(code);
+            return visitor.count;
+        }
+
+        static HIREnum makeCoroutineStateEnum(unsigned suspensionCount) {
+            auto stateEnum = HIREnum{HIRGenericParams(), false, HIREnum::Repr(), HIREnum::Class::make_Value({})};
+            auto& variants = stateEnum.data.as_Value().variants;
+            variants.reserve(static_cast<size_t>(suspensionCount) + 3);
+            variants.push_back(HIREnum::ValueVariant{RcString::newInterned("UNRESUMED"), HIRExprPtr(), U128(0)});
+            variants.push_back(HIREnum::ValueVariant{RcString::newInterned("RETURNED"), HIRExprPtr(), U128(1)});
+            variants.push_back(HIREnum::ValueVariant{RcString::newInterned("POISONED"), HIRExprPtr(), U128(2)});
+            for (unsigned i = 0; i < suspensionCount; i++) {
+                variants.push_back(HIREnum::ValueVariant{RcString(), HIRExprPtr(), U128(static_cast<u64>(i) + 3)});
+            }
+            return stateEnum;
+        }
+
         /// <summary>
         /// Main extraction generator visitor
         /// </summary>
@@ -2956,8 +3010,12 @@ namespace {
 
             monomorphCb.addBounds(sp, resolve_);
 
-            // Create state index enum
-            auto stateIdxType = out.newType("gen_state_idx#", newTypeSuffix, HIREnum{HIRGenericParams(), false, HIREnum::Repr(), HIREnum::Class::make_Value({})});
+            // Rust reserves the unresumed, returned, and poisoned states before
+            // assigning one discriminant to each suspension point.  Populate
+            // the enum now so layout queries performed before MIR lowering see
+            // the final tag width.
+            auto suspensionCount = countCoroutineSuspensions(node.code, true, false);
+            auto stateIdxType = out.newType("gen_state_idx#", newTypeSuffix, makeCoroutineStateEnum(suspensionCount));
             auto stateIdxTy = resolve_.hirCrate().types.path(stateIdxType.first, &stateIdxType.second->as_Enum());
 
             // Create the captures structure here, and update it afterwards with the state
@@ -3117,8 +3175,10 @@ namespace {
 
             monomorphCb.addBounds(sp, resolve_);
 
-            // Create state index enum
-            auto stateIdxType = out.newType("async_state_idx#", newTypeSuffix, HIREnum{HIRGenericParams(), false, HIREnum::Repr(), HIREnum::Class::make_Value({})});
+            // Async blocks use the same three reserved states.  `async gen`
+            // adds a suspension for each yield as well as each await.
+            auto suspensionCount = countCoroutineSuspensions(node.code, node.isAsyncGen, true);
+            auto stateIdxType = out.newType("async_state_idx#", newTypeSuffix, makeCoroutineStateEnum(suspensionCount));
             auto stateIdxTy = resolve_.hirCrate().types.path(stateIdxType.first, &stateIdxType.second->as_Enum());
 
             // Create the captures structure here, and update it afterwards with the state
@@ -4292,7 +4352,10 @@ public:
 
     void visit(HIRExprNodeConstParam& node) override {
         HIRExprVisitorDef::visit(node);
-        // While yes, it is constant, don't want to turn it into a static borrow
+        // A const parameter is constant for each monomorphisation.  Keep it in
+        // a promotion candidate; the lifted generic static is evaluated into
+        // its per-path monomorphCache before codegen.
+        isConstant = true;
     }
 
     void visit(HIRExprNodeUnitVariant& node) override {

@@ -196,6 +196,8 @@ public:
         /// crate, so it travels with the item.
         bool mustUse = false;
         bool isNaked = false;
+        /// Requested function entry alignment from `#[rustc_align(N)]`.
+        u64 alignment = 0;
         // Calls to functions with #[rustc_intrinsic] must remain visible to
         // CTFE even when the function also provides a runtime fallback body.
         bool isRustcIntrinsic = false;

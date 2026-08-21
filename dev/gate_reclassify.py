@@ -64,9 +64,9 @@ def main() -> int:
         {
             "RUSTC": str(root / ".build-clang" / "bin" / "rustc"),
             "CARGO": str(root / ".build-clang" / "bin" / "cargo"),
-            "CC": "clang",
-            "CXX": "clang++",
-            "LDFLAGS": "-fuse-ld=lld",
+            "CC": os.environ.get("CC", "clang"),
+            "CXX": os.environ.get("CXX", "clang++"),
+            "LDFLAGS": os.environ.get("LDFLAGS", "-fuse-ld=lld"),
         }
     )
 

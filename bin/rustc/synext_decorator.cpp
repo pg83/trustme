@@ -89,6 +89,23 @@ public:
 
 STATIC_DECORATOR("cold", CHandlerCold);
 
+class CHandlerRustcAlign: public CommonFunction {
+public:
+    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override {
+        TTStream lex(mi.span(), ParseState(), mi.data());
+        lex.getTokenCheck(TOK_PAREN_OPEN);
+        auto value = lex.getTokenCheck(TOK_INTEGER).intval();
+        ASSERT_BUG(lex.pointSpan(), value > U128(0), "#[rustc_align(" << value << ")] - alignment must be non-zero");
+        ASSERT_BUG(lex.pointSpan(), (value & (value - 1)) == U128(0), "#[rustc_align(" << value << ")] - alignment must be a power of two");
+        ASSERT_BUG(lex.pointSpan(), value < U128(UINT64_MAX), "#[rustc_align(" << value << ")] - alignment is too large");
+        fcn.markings.alignment = value.truncateU64();
+        lex.getTokenCheck(TOK_PAREN_CLOSE);
+        lex.getTokenCheck(TOK_EOF);
+    }
+};
+
+STATIC_DECORATOR("rustc_align", CHandlerRustcAlign);
+
 class CHandlerRustcLegacyConstGenerics: public CommonFunction {
     void handle(const ASTAttribute& mi, ASTFunction& fcn) const override {
         TTStream lex(mi.span(), ParseState(), mi.data());
@@ -503,7 +520,7 @@ class CHandlerLink: public ExpandDecorator {
             if (link.libName == "") {
                 ERROR(sp, E0000, "No name in `#[link]`");
             }
-            if (emit) {
+            if (emit && wb.settings->linkDirectives) {
                 b->libraries.push_back(std::move(link));
             }
             lex.getTokenCheck(TOK_PAREN_CLOSE);
@@ -1470,7 +1487,24 @@ public:
         auto block = newBlock(sp);
 
         this->iterateStructFields(str, [&](RcString fldName) {
-            block->pushStmt(this->compareAndRet(sp, opts.coreName, NEWNODE(Field, NEWNODE(NamedValue, ASTPath(rcstringSelfLower)), fldName), NEWNODE(Field, NEWNODE(NamedValue, ASTPath(rcstringV)), fldName)));
+            auto lhs = NEWNODE(Field, NEWNODE(NamedValue, ASTPath(rcstringSelfLower)), fldName);
+            auto rhs = NEWNODE(Field, NEWNODE(NamedValue, ASTPath(rcstringV)), fldName);
+
+            // Comparing a field normally autoref-borrows it. A packed field
+            // may not satisfy that reference's alignment, so rustc first
+            // evaluates the field in its own block. This makes a Copy field a
+            // value before the comparison takes references to the operands.
+            if (str.markings.maxFieldAlign != 0) {
+                auto lhsBlock = newBlock(sp);
+                lhsBlock->pushTailExpr(mv$(lhs));
+                lhs = mkExprnodep(lhsBlock.release());
+
+                auto rhsBlock = newBlock(sp);
+                rhsBlock->pushTailExpr(mv$(rhs));
+                rhs = mkExprnodep(rhsBlock.release());
+            }
+
+            block->pushStmt(this->compareAndRet(sp, opts.coreName, mv$(lhs), mv$(rhs)));
         });
         block->pushTailExpr(this->equalValue(sp, opts.coreName));
 

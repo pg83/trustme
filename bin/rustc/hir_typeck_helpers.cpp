@@ -1761,6 +1761,11 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     HIRTraitPath::assocListT assocList;
                     assocList.insert(std::make_pair(nameDiscriminant, HIRTraitPath::AtyEqual{trait, {}, std::move(tagTy)}));
                     return callback(ImplRef(type, {}, std::move(assocList)), HIRCompare::Equal);
+                } else if ((type->is_NodeType() && (type->as_NodeType().is_Generator() || type->as_NodeType().is_Async()))
+                    || (type->is_Path() && (type->as_Path().isGenerator() || type->as_Path().isFuture()))) {
+                    HIRTraitPath::assocListT assocList;
+                    assocList.insert(std::make_pair(nameDiscriminant, HIRTraitPath::AtyEqual{trait, {}, crate.types.primitive(HIRCoreType::U32)}));
+                    return callback(ImplRef(type, {}, std::move(assocList)), HIRCompare::Equal);
                 } else {
                     HIRTraitPath::assocListT assocList;
                     assocList.insert(std::make_pair(nameDiscriminant, HIRTraitPath::AtyEqual{trait, {}, crate.types.primitive(HIRCoreType::U8)}));

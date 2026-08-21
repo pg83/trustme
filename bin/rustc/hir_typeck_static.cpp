@@ -129,8 +129,14 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             } else {
             }
             static HIRTraitPath::assocListT assocU8;
+            static HIRTraitPath::assocListT assocU32;
             if (assocU8.empty()) {
                 assocU8.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{langDiscriminantKind(), {}, crate.types.primitive(HIRCoreType::U8)}));
+                assocU32.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{langDiscriminantKind(), {}, crate.types.primitive(HIRCoreType::U32)}));
+            }
+            if ((type->is_NodeType() && (type->as_NodeType().is_Generator() || type->as_NodeType().is_Async()))
+                || (type->is_Path() && (type->as_Path().isGenerator() || type->as_Path().isFuture()))) {
+                return foundCb(ImplRef(type, traitParams, &assocU32), false);
             }
             return foundCb(ImplRef(type, traitParams, &assocU8), false);
         } else if (traitPath == langPointee()) {

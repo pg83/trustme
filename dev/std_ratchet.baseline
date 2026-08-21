@@ -267,7 +267,7 @@
 19	std::map	bin/rustc/mir_from_hir.cpp
 7	std::set	bin/rustc/mir_from_hir.cpp
 4	std::string	bin/rustc/mir_from_hir.cpp
-135	std::vector	bin/rustc/mir_from_hir.cpp
+134	std::vector	bin/rustc/mir_from_hir.cpp
 4	unique_ptr	bin/rustc/mir_from_hir.cpp
 1	std::function	bin/rustc/mir_from_hir.h
 11	std::map	bin/rustc/mir_from_hir.h

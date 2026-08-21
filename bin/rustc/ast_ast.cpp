@@ -285,6 +285,7 @@ ASTFunction ASTFunction::clone() const {
         }
         rv.setDelegation(mv$(delegation));
     }
+    rv.markings = markings;
     return rv;
 }
 

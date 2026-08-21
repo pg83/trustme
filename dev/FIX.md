@@ -24,11 +24,17 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
   rustc cargo libstd rust_test_helpers rust_lib_dependencies
 ```
 
-All 631 failed nodes were independently rerun for that snapshot. Current
-eight-corpus rerun data is in `.build-clang/reclass-20260820g`; classified
-records are in `.build-clang/classification-20260820g`. The 25 failures outside
-those corpora are still carried from the complete snapshot rather than
-silently dropped from the total.
+All 631 failed nodes were independently rerun for that snapshot. A fresh
+whole-group eight-corpus sweep on 2026-08-21 found 98 failures before the
+latest fix. Its current-compiler rerun data is in
+`.build-clang/reclass-20260821c`; classified records are in
+`.build-clang/classification-20260821c`. One node was green in that
+classification, and the subsequent point reruns of `niche-in-coroutine`,
+`link-directives`, `fn-align-dyn`, gccrs `issue-2187`, and const-generic
+promotion, `deriving-with-repr-packed`, and `match-ref-mut-stability` are green
+after their fixes; 90 of the 98 sweep failures
+remain. The 25 failures outside those corpora are still carried from the
+complete snapshot rather than silently dropped from the total.
 
 Reruns and the whole-group sweeps are the only regression check there is
 between full gates. Sweep all eight groups (`rust_ui_compile rust_1_90
@@ -40,33 +46,32 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 118 |
-| fixed, or no longer reproducing, since the gate | 513 |
+| still failing or still carried from the last full sweep | 115 |
+| fixed, or no longer reproducing, since the gate | 516 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
-whole on 2026-08-20. All 99 failures reproduced independently before the
-latest fixes and 93 after them. The remaining 25 are in groups outside that
-sweep and are still carried from the last full sweep.
+whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
+subsequent point fixes have closed eight nodes, leaving 90. The remaining 25 are in
+groups outside that sweep and are still carried from the last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 49 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 21 |
-| wrong runtime behaviour, panic, abort, or output | 16 |
-| generated C++ or link failure | 3 |
-| stable timeout | 4 |
+| accepted Rust rejected by the compiler or driver | 52 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
+| wrong runtime behaviour, panic, abort, or output | 13 |
+| stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 49 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 52 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 45 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 48 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 | parser | 1 | named variadic parameter |
 | macro and attribute expansion | 1 | bare trait object in a macro fragment |
@@ -106,7 +111,7 @@ impl, and a `use` of an item declared in the same block.
 
 ## P1: internal compiler failures
 
-There are 21 compiler-internal failures in 20 stable signatures in the current
+There are 22 compiler-internal failures in 21 stable signatures in the current
 eight-corpus rerun.
 
 | compiler area | tests |
@@ -114,13 +119,14 @@ eight-corpus rerun.
 | type checking and HIR lowering | 13 |
 | MIR lowering, CTFE MIR, and optimisation | 5 |
 | translation and code generation | 3 |
+| unattributed compiler abort | 1 |
 
 Only one signature covers more than one test, so the class is a long tail:
 
 | signature | tests |
 |---|---:|
 | `BUG hir_typeck_common.cpp:824` | 2 |
-| nineteen one-test signatures | 19 |
+| twenty one-test signatures | 20 |
 
 The line numbers in a signature move with every commit that touches the file:
 the ones here are read from the classification named above, and are worth
@@ -131,12 +137,12 @@ took the signal.
 
 ## P1: runtime semantics
 
-Sixteen programs in the current eight-corpus rerun build but execute
+Thirteen programs in the current eight-corpus rerun build but execute
 incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 14 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 11 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 1 | async-drop ordering |
 | generated executable SIGABRT | 1 | library allocation failure |
 
@@ -155,7 +161,7 @@ Grouping the panics by the rule they check finds these multi-test families:
 
 | family | tests | rule |
 |---|---:|---|
-| coroutine and future size | 4 | `niche-in-coroutine`, `overlap-locals`, `resume-arg-size`, `future-as-arg`: locals that cannot be live together must share storage |
+| coroutine and future size | 3 | `overlap-locals`, `resume-arg-size`, `future-as-arg`: locals that cannot be live together must share storage |
 | `TypeId` of a higher-ranked type | 2 | `type-id-higher-rank` and `any-lifetime-escape-higher-rank`: not reachable, see below |
 
 The two `TypeId` ones are not reachable at all: they require `fn(&'static isize)`
@@ -201,21 +207,14 @@ function items -- stops on a mismatch between them. The fix belongs in the
 match/`if` result type, as a least upper bound over the arms, not in the
 pairwise coercion.
 
-## P2: generated code and linking
-
-Two tests emit C++ rejected by clang: `fn-align-dyn` uses an incomplete vtable
-type and gccrs `issue-2187` emits invalid code. One test reaches the linker:
-`link-directives` exercises native-link directives.
-
 ## P3: performance and flakes
 
-Four nodes in the current eight-corpus rerun time out even in isolation. The
+Three nodes in the current eight-corpus rerun time out even in isolation. The
 harness gives compile and run 60 seconds each:
 
 | node | measured | what it really is |
 |---|---|---|
 | `coroutine/issue-87142.rs` | over 60s | not yet minimised |
-| `mir/mir_heavy_promoted.rs` | 93s compile, runs fine | genuinely slow |
 | `consts/large-zst-array-77062.rs` | over 300s | genuinely slow |
 | `impl-trait/recursive-type-alias-impl-trait-declaration-too-subtle-2.rs` | over 60s | unbounded recursive alias resolution |
 

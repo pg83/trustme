@@ -1406,6 +1406,16 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             ::std::cerr << "invalid value for -Z fmt-debug: '" << optval << "' (expected 'full', 'shallow', or 'none')" << ::std::endl;
                             exit(1);
                         }
+                    } else if (optname == "link-directives") {
+                        getOptval();
+                        if (optval == "yes") {
+                            settings.linkDirectives = true;
+                        } else if (optval == "no") {
+                            settings.linkDirectives = false;
+                        } else {
+                            ::std::cerr << "invalid value for -Z link-directives: '" << optval << "' (expected 'yes' or 'no')" << ::std::endl;
+                            exit(1);
+                        }
                     } else if (optname == "next-solver") {
                         if (eqPos == ::std::string::npos || optval == "globally") {
                             this->traitSolver.coherence = true;

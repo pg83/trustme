@@ -5995,6 +5995,9 @@ default:
             if (item.markings.isNaked) {
                 of << "__attribute__((naked)) ";
             }
+            if (item.markings.alignment != 0) {
+                of << "__attribute__((aligned(" << item.markings.alignment << "))) ";
+            }
             auto cb = FMT_CB(
                 ss,
                 ss << " " << compilerAbiAttribute(item.abi) << TransMangle(p) << nameSuffix << "(";
@@ -6826,7 +6829,23 @@ default:
                 const auto& ty = params.types.at(0);
                 emitLvalue(e.retVal);
                 of << " = ";
-                if (!(ty->is_Path() && ty->as_Path().binding.is_Enum())) {
+                if (ty->is_Path() && (ty->as_Path().isGenerator() || ty->as_Path().isFuture())) {
+                    auto state = [&]() -> MIRLValue {
+                        if (const auto* value = e.args.at(0).opt_LValue()) {
+                            return MIRLValue::newDeref(value->clone());
+                        }
+                        if (const auto* value = e.args.at(0).opt_Borrow()) {
+                            return value->val.clone();
+                        }
+                        MIR_BUG(localMirRes, "Generator passed to `discriminant_value` by constant: " << e.args.at(0));
+                    }();
+                    state = MIRLValue::newField(mv$(state), 0);    // MaybeUninit<state>
+                    state = MIRLValue::newDowncast(mv$(state), 1); // MaybeUninit::value
+                    state = MIRLValue::newField(mv$(state), 0);    // ManuallyDrop::value
+                    state = MIRLValue::newField(mv$(state), 0);    // state discriminant
+                    emitLvalue(state);
+                    of << ".TAG";
+                } else if (!(ty->is_Path() && ty->as_Path().binding.is_Enum())) {
                     of << "0";
                 } else {
                     const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);

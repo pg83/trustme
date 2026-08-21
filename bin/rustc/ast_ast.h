@@ -238,6 +238,8 @@ public:
 
         bool isCold = false;
         bool isNaked = false;
+        /// Requested function entry alignment from `#[rustc_align(N)]`.
+        u64 alignment = 0;
         std::vector<unsigned> rustcLegacyConstGenerics;
 
         std::string linkName;

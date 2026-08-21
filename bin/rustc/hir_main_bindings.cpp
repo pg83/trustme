@@ -779,6 +779,7 @@ public:
         rv.isRustcIntrinsic = in.readBool();
         rv.isRustcPromotable = in.readBool();
         rv.mustUse = in.readBool();
+        rv.alignment = in.readCount();
         return rv;
     }
 
@@ -3991,6 +3992,7 @@ break;
         // `#[must_use]` is reported at the call site, which may be in another
         // crate, so it has to travel with the function.
         out.writeBool(m.mustUse);
+        out.writeCount(m.alignment);
     }
 
     void serialise(const HIRConstant& item) {
