@@ -79,7 +79,9 @@ normalizing their projections closed
 `traits/next-solver/global-param-env-after-norm`; preserving one inference
 input across expression type-alias expansion, then proving the receiver
 well-formed before inherent lookup, closed
-`traits/next-solver/method/path_lookup_wf_constraints`. Thus 63
+`traits/next-solver/method/path_lookup_wf_constraints`; proving projected
+inherent method return types well-formed during next-solver probing closed
+`traits/next-solver/non-wf-ret`. Thus 62
 of the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -94,19 +96,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 88 |
-| fixed, or no longer reproducing, since the gate | 543 |
+| still failing or still carried from the last full sweep | 87 |
+| fixed, or no longer reproducing, since the gate | 544 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed thirty-five nodes, leaving 63. The remaining
+subsequent point fixes have closed thirty-six nodes, leaving 62. The remaining
 25 are in groups outside that sweep and are still carried from the last full
 sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 27 |
+| accepted Rust rejected by the compiler or driver | 26 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -114,13 +116,13 @@ sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 27 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 26 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 25 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 24 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 
 An async closure's future now takes the captures with it instead of borrowing
@@ -177,6 +179,14 @@ projection become one body-local inference variable. A bare ParamEnv trait
 predicate still proves well-formedness, but it no longer hides an applicable
 impl when only that impl supplies the associated-type value being normalized;
 an explicit ParamEnv associated equality remains authoritative.
+
+`traits/next-solver/non-wf-ret.rs` is closed by checking projected return
+types while probing inherent methods under the next solver. A candidate whose
+return projection has no solution is discarded before autoderef commits to
+that receiver level, allowing the well-formed slice method one dereference
+further in to win. Ambiguous projections remain candidates, and a definite
+failure involving fresh method-generic placeholders is kept ambiguous until
+call-site arguments are known.
 
 `Box<_>` is no reason to commit to the only fuzzy method currently visible.
 In `explicit-self-generic`, the blanket `ExactSizeIterator for Box<I>` looked

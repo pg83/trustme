@@ -4331,6 +4331,42 @@ default:
                 goalCacheIndex.reserve(128);
             }
 
+            HIRCompare evaluateCertainty(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) {
+                const bool outermost = span_ == nullptr;
+                if (outermost) {
+                    ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked between evaluations");
+                    ASSERT_BUG(callSpan, activeGoalIndex.empty(), "next-solver active goal index leaked between evaluations");
+                    ASSERT_BUG(callSpan, frameDepth == 0, "next-solver candidate frames leaked between evaluations");
+                    clearGoalCache();
+                    span_ = &callSpan;
+                }
+
+                struct SessionGuard {
+                    NextTraitGoalEvaluator& self;
+                    bool outermost;
+
+                    ~SessionGuard() {
+                        if (outermost) {
+                            assert(self.goalStack.empty());
+                            assert(self.activeGoalIndex.empty());
+                            self.clearGoalCache();
+                            self.frameDepth = 0;
+                            self.span_ = nullptr;
+                        }
+                    }
+                } sessionGuard{*this, outermost};
+
+                switch (solveGoal(trait, params, type, nullptr)) {
+                    case Certainty::NoSolution:
+                        return HIRCompare::Unequal;
+                    case Certainty::Ambiguous:
+                        return HIRCompare::Fuzzy;
+                    case Certainty::Proven:
+                        return HIRCompare::Equal;
+                }
+                throw "";
+            }
+
             bool evaluateOverlap(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right) {
                 // The probe is a pure function of the impl pair (impls are
                 // immutable after conversion), so cache it by identity.
@@ -8368,13 +8404,60 @@ default: {
                 || erased->inner.is_Known();
             if (opaqueCanReveal) {
                 this->wb.inherentMethods->find(sp, methodName, ty, this->ivars.callbackResolveInfer(), [&](const HIRTypeData* selfTy, const HIRTypeImpl& impl) {
-                    if (!impl.methods.at(methodName).publicity.isVisible(this->visPath)) {
+                    const auto& method = impl.methods.at(methodName);
+                    if (!method.publicity.isVisible(this->visPath)) {
                         // Ignore method: Not visibile
                         return;
                     }
                     HIRPathParams implParams;
                     auto cmp = fticCheckParams(sp, HIRSimplePath(), nullptr, selfTy, impl.params, {}, impl.type, implParams);
                     if (cmp != HIRCompare::Unequal) {
+                        if (this->wb.settings->solver.globally) {
+                            HIRPathParams methodParams;
+                            RcString placeholderName;
+                            if (method.data.params.isGeneric()) {
+                                placeholderName = RcString(FMT("method_wf_" << &method.data << "_" << freshImplPlaceholderCounter++));
+                            }
+                            methodParams.types.reserve(method.data.params.types.size());
+                            for (size_t i = 0; i < method.data.params.types.size(); i++) {
+                                methodParams.types.push_back(crate.types.generic(placeholderName, GENERICPlaceholder * 256 + i));
+                            }
+                            methodParams.values.reserve(method.data.params.values.size());
+                            for (size_t i = 0; i < method.data.params.values.size(); i++) {
+                                methodParams.values.push_back(HIRGenericRef(placeholderName, GENERICPlaceholder, i));
+                            }
+
+                            const auto monomorph = MonomorphStatePtr(crate.types, selfTy, &implParams, &methodParams);
+                            const auto returnType = monomorph.monomorphType(sp, method.data.returnType, true);
+                            auto wf = HIRCompare::Equal;
+                            visitTyWith(returnType, [&](const HIRTypeData* inner) {
+                                const auto* path = inner->opt_Path();
+                                const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
+                                if (!projection) {
+                                    return false;
+                                }
+                                if (!nextSolver) {
+                                    ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
+                                    nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*this, crate);
+                                }
+                                auto projectionWf = nextSolver->evaluateCertainty(sp, projection->trait.path, projection->trait.params, projection->type);
+                                if (projectionWf == HIRCompare::Unequal && placeholderName != RcString()) {
+                                    const bool dependsOnMethodParam = visitTyWith(inner, [&](const HIRTypeData* part) {
+                                        const auto* generic = part->opt_Generic();
+                                        return generic && generic->isPlaceholder() && generic->name == placeholderName;
+                                    });
+                                    if (dependsOnMethodParam) {
+                                        projectionWf = HIRCompare::Fuzzy;
+                                    }
+                                }
+                                wf &= projectionWf;
+                                return wf == HIRCompare::Unequal;
+                            });
+                            if (wf == HIRCompare::Unequal) {
+                                DEBUG("Rejected inherent method `" << methodName << "`: return type " << returnType << " is not well formed");
+                                return;
+                            }
+                        }
                         DEBUG("Found `impl" << impl.params.fmtArgs() << " " << impl.type << "` fn " << methodName /* << " - " << top_ty*/);
                         possibilities.push_back(::std::make_pair(borrowType, HIRPath(selfTy, methodName, {})));
                         DEBUG("++ " << possibilities.back());
