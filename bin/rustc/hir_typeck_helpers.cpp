@@ -816,6 +816,14 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
             if (typeContainsIvars(type, /*only_unbound=*/true)) {
                 BUG(Span(), "ErasedType getting ivars added - " << type);
             }
+            auto& e = data.as_ErasedType();
+            if (auto* alias = e.inner.opt_Alias()) {
+                addIvarsParams(alias->params);
+                for (auto& trait : e.traits) {
+                    addIvarsTraitPath(trait);
+                }
+                addIvarsParams(e.use);
+            }
             break;
         }
         case HIRTypeData::TAG_Array: {
