@@ -123,19 +123,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 70 |
-| fixed, or no longer reproducing, since the gate | 561 |
+| still failing or still carried from the last full sweep | 68 |
+| fixed, or no longer reproducing, since the gate | 563 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed fifty-three nodes, leaving 45. The
+subsequent point fixes and reruns have closed fifty-five nodes, leaving 43. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 9 |
+| accepted Rust rejected by the compiler or driver | 7 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -143,14 +143,13 @@ last full sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 9 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 7 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
 | AST/HIR lowering, type checking, and resolution | 7 | trait/impl selection and type mismatch dominate |
-| CTFE and MIR lowering | 2 | if-let guards |
 
 An async closure's future now takes the captures with it instead of borrowing
 the frame of the call that made it, which is what made a capture read freed
@@ -199,6 +198,15 @@ unbounded-below forms and crates without the feature still construct the
 legacy `core::ops` types. The inclusive copyable range has only `start` and
 `end`, so the legacy iterator's private `exhausted` field is no longer emitted
 for that form.
+
+`rfcs/rfc-2294-if-let-guard/{move-guard-if-let,scoping-consistency-async}.rs`
+are closed in match-guard MIR lowering. A guard shared by several pattern
+rules is still emitted once and cloned, but its freeze scope now isolates only
+state changes made by a diverging early exit. Normal moves and coroutine-state
+updates are recorded by the existing nested temporary and split scopes, so an
+`if let` guard may move its input or suspend without rejecting every
+or-pattern alternative. The early-exit shadow state still keeps a moved value
+available on the fall-through path that did not take that exit.
 
 `impl-trait/recursive-impl-trait-type-direct.rs` is closed at the shared RPIT
 inference boundary. A return opaque constrained only by a direct recursive

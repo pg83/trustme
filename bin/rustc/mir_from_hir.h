@@ -351,7 +351,8 @@ public:
     ScopeHandle newScopeSplit(const Span& sp);
     /// Scope for escapable code paths (e.g. `loop`)
     ScopeHandle newScopeLoop(const Span& sp);
-    /// Prevent any mutation of states above this scope until `unfreeze_scope` is called
+    /// Keep state changes made by an early exit out of saved guard code local
+    /// until `unfreezeScope` is called.
     ScopeHandle newScopeFreeze(const Span& sp);
 
     /// Raises every variable defined in the source scope into the target scope
@@ -366,7 +367,7 @@ public:
     void endSplitArmEarly(const Span& sp);
     /// Terminates the current split condition clause (used for the conditional portion of a match arm)
     void endSplitCondition(const Span& sp, const ScopeHandle&);
-    /// Allows mutation through a freeze scope (see `new_scope_freeze`)
+    /// Stops isolating early exits through a freeze scope (see `newScopeFreeze`).
     void unfreezeScope(const Span& sp, const ScopeHandle&);
 
     const ScopeHandle& fcnScope() const {

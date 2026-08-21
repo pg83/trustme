@@ -34,6 +34,6 @@ generate(
                            " before a loopback)"),
         v("Freeze", fields=[
             ("bool", "unfrozen", "false"),
-        ], doc="unfrozen records whether unfreeze_scope has run on this entry"),
+        ], doc="unfrozen records whether early exits may update outer state"),
     ],
 )

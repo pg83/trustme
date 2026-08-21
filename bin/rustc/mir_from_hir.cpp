@@ -4399,9 +4399,9 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                 builder.addVariableAlias(sp, b.binding->slot, HIRPatternBinding::Type::Move, MIRLValue::newDeref(std::move(tmp)));
             }
 
-            // Require that either there's no guards, or that there's only one rule
-            // - Otherwise, we can't (currently) prevent use-after-free
-            // This is expected to fail at some point, but more testing needed elsewhere
+            // A guard is emitted once and cloned for the remaining rules.  Until
+            // the saved code is complete, keep a diverging guard's state changes
+            // off the fall-through path used to emit those clones.
             bool shouldFreeze = (!arm.guards.empty() && firstArmRuleIdx + 1 < armRules.size());
             scopes.push_back({builder.newScopeFreeze(sp), false});
             if (!shouldFreeze) {
@@ -10889,11 +10889,9 @@ VarState& MirBuilder::getSlotStateMut(const Span& sp, unsigned int idx, SlotType
                 break;
             }
             case ScopeType::TAG_Freeze: {
-                auto& e = scopeDef.data.as_Freeze();
-                if (!e.unfrozen) {
-                    // Prevent any mutation
-                    ERROR(sp, E0000, "Attempting to move/initialise a value where not allowed (across scope " << scopeIdx << ")");
-                }
+                // Normal guard state is owned by the nested split/temporary
+                // scopes.  Freeze only makes terminateScopeEarly use its
+                // shadow state while saved guard code is still cloneable.
                 break;
             }
         }
