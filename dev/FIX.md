@@ -68,7 +68,9 @@ the custom coercion check closed
 `self/phantomdata-in-coerce-and-dispatch-impls`; preserving a defining opaque
 projection until type checking and committing the selected fuzzy impl's
 associated equality closed
-`type-alias-impl-trait/defined-by-user-annotation`. Thus 68
+`type-alias-impl-trait/defined-by-user-annotation`; falling back a directly
+self-referenced unresolved RPIT to `()` after ordinary inference closed
+`impl-trait/recursive-impl-trait-type-direct`. Thus 67
 of the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
