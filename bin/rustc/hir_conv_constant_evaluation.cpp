@@ -5178,6 +5178,34 @@ namespace {
             getParams = saved;
         }
 
+        void visitAtyParams(const HIRGenericPath& sourceTrait, const RcString& name, HIRPathParams& params) {
+            auto saved = getParams;
+            getParams = [&](const Span& sp) -> const HIRGenericParams& {
+                const auto& trait = crate.getTraitByPath(sp, sourceTrait.path);
+                auto it = trait.types.find(name);
+                ASSERT_BUG(sp, it != trait.types.end(), "Trait " << sourceTrait.path << " has no associated type " << name);
+                return it->second.generics;
+            };
+            visitPathParams(params);
+            getParams = saved;
+        }
+
+        void visitTraitPath(HIRTraitPath& p) override {
+            visitGenericPath(p.path, HIRVisitor::PathContext::TRAIT);
+            for (auto& assoc : p.typeBounds) {
+                visitGenericPath(assoc.second.sourceTrait, HIRVisitor::PathContext::TRAIT);
+                visitAtyParams(assoc.second.sourceTrait, assoc.first, assoc.second.atyParams);
+                assoc.second.type = visitType(assoc.second.type);
+            }
+            for (auto& assoc : p.traitBounds) {
+                visitGenericPath(assoc.second.sourceTrait, HIRVisitor::PathContext::TRAIT);
+                visitAtyParams(assoc.second.sourceTrait, assoc.first, assoc.second.atyParams);
+                for (auto& trait : assoc.second.traits) {
+                    visitTraitPath(trait);
+                }
+            }
+        }
+
         void visitPath(HIRPath& p, HIRVisitor::PathContext pc) override {
             auto saved = getParams;
             getParams = [&](const Span& sp) -> const HIRGenericParams& {

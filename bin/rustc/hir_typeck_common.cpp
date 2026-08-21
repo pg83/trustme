@@ -35,15 +35,21 @@ struct TyVisitor {
             return true;
         }
         for (auto& assoc : tpl.typeBounds) {
-            visitPathParams(assoc.second.sourceTrait.params);
-            if (visitType(assoc.second.type)) {
+            if (visitPathParams(assoc.second.sourceTrait.params)
+                || visitPathParams(assoc.second.atyParams)
+                || visitType(assoc.second.type)) {
                 return true;
             }
         }
         for (auto& assoc : tpl.traitBounds) {
-            visitPathParams(assoc.second.sourceTrait.params);
+            if (visitPathParams(assoc.second.sourceTrait.params)
+                || visitPathParams(assoc.second.atyParams)) {
+                return true;
+            }
             for (auto& t : assoc.second.traits) {
-                visitTraitPath(t);
+                if (visitTraitPath(t)) {
+                    return true;
+                }
             }
         }
         return false;
@@ -662,7 +668,10 @@ HIRTraitPath Monomorphiser::monomorphTraitpath(const Span& sp, const HIRTraitPat
         rv.typeBounds.insert(::std::make_pair(assoc.first, this->monomorphTpAtyEqual(sp, assoc.second, allowInfer)));
     }
     for (const auto& assoc : tpl.traitBounds) {
-        auto v = HIRTraitPath::AtyBound{this->monomorphGenericpath(sp, assoc.second.sourceTrait, allowInfer), {}};
+        auto v = HIRTraitPath::AtyBound{
+            this->monomorphGenericpath(sp, assoc.second.sourceTrait, allowInfer),
+            this->monomorphPathParams(sp, assoc.second.atyParams, allowInfer),
+            {}};
         for (const auto& trait : assoc.second.traits) {
             v.traits.push_back(monomorphTraitpath(sp, trait, allowInfer));
         }
@@ -673,7 +682,10 @@ HIRTraitPath Monomorphiser::monomorphTraitpath(const Span& sp, const HIRTraitPat
 }
 
 HIRTraitPath::AtyEqual Monomorphiser::monomorphTpAtyEqual(const Span& sp, const HIRTraitPath::AtyEqual& tpl, bool allowInfer) const {
-    return HIRTraitPath::AtyEqual{this->monomorphGenericpath(sp, tpl.sourceTrait, allowInfer), {}, this->monomorphType(sp, tpl.type, allowInfer)};
+    return HIRTraitPath::AtyEqual{
+        this->monomorphGenericpath(sp, tpl.sourceTrait, allowInfer),
+        this->monomorphPathParams(sp, tpl.atyParams, allowInfer),
+        this->monomorphType(sp, tpl.type, allowInfer)};
 }
 
 HIRConstGeneric Monomorphiser::monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const {

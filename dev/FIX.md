@@ -135,7 +135,10 @@ ordinary trait impl closed
 `CoerceUnsized` field before classifying its nested coercion closed
 `coercion/codegen-smart-pointer-with-alias`; routing arrays and pattern types
 embedded in expression types through const-eval's owned-structure hooks closed
-`const-generics/generic_const_exprs/impl-bounds`. Thus 31 of
+`const-generics/generic_const_exprs/impl-bounds`; carrying bounded associated
+type arguments through HIR lowering, visitors, monomorphisation, and solver
+projections, and matching bounded equalities by those arguments, closed
+`generic-associated-types/issue-102333`. Thus 30 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -150,20 +153,20 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 56 |
-| fixed, or no longer reproducing, since the gate | 575 |
+| still failing or still carried from the last full sweep | 55 |
+| fixed, or no longer reproducing, since the gate | 576 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed sixty-seven nodes, leaving 31. The
+subsequent point fixes and reruns have closed sixty-eight nodes, leaving 30. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 0 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 17 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 16 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
@@ -388,12 +391,12 @@ coercion. This closes both `arbitrary_self_types_niche_deshadowing.rs` and
 
 ## P1: internal compiler failures
 
-There are 17 compiler-internal failures in 17 stable signatures in the current
+There are 16 compiler-internal failures in 16 stable signatures in the current
 eight-corpus rerun.
 
 | compiler area | tests |
 |---|---:|
-| type checking and HIR lowering | 9 |
+| type checking and HIR lowering | 8 |
 | MIR lowering, CTFE MIR, and optimisation | 4 |
 | translation and code generation | 3 |
 | unattributed compiler abort | 1 |
@@ -402,7 +405,7 @@ Every remaining signature covers one test, so the class is a long tail:
 
 | signature | tests |
 |---|---:|
-| one-test signatures | 17 |
+| one-test signatures | 16 |
 
 The former two-test `BUG hir_typeck_common.cpp:824` cluster was one const-eval
 root cause. An unevaluated const captures `selfType` as its evaluation

@@ -2450,7 +2450,10 @@ default:
 
                     HIRTraitPath::assocListT bAtys;
                     for (const auto& aty : bound.typeBounds) {
-                        bAtys.insert(::std::make_pair(aty.first, HIRTraitPath::AtyEqual{monomorphCb.monomorphGenericpath(sp, aty.second.sourceTrait, false), {}, monomorphCb.monomorphType(sp, aty.second.type)}));
+                        bAtys.insert(::std::make_pair(aty.first, HIRTraitPath::AtyEqual{
+                            monomorphCb.monomorphGenericpath(sp, aty.second.sourceTrait, false),
+                            monomorphCb.monomorphPathParams(sp, aty.second.atyParams, false),
+                            monomorphCb.monomorphType(sp, aty.second.type)}));
                     }
 
                     if (bound.path.path == trait) {

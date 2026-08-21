@@ -611,16 +611,19 @@ default:
                         if (H::checkParams(sp, bParamsMono, traitParams)) {
                             // Optimisation: If this was a monomorphised path, then move ownership into the ImplRef
                             if (&bParamsMono == &paramsMonoO || ::std::any_of(bound.typeBounds.begin(), bound.typeBounds.end(), [&](const auto& x) {
-                                return monomorphiseTypeNeeded(x.second.type);
+                                return monomorphisePathparamsNeeded(x.second.atyParams)
+                                    || monomorphiseTypeNeeded(x.second.type);
                             })) {
                                 HIRTraitPath::assocListT atys;
                                 if (!bound.typeBounds.empty()) {
                                     for (const auto& tb : bound.typeBounds) {
                                         auto src = monomorphCb.monomorphGenericpath(sp, tb.second.sourceTrait, false);
+                                        auto atyParams = monomorphCb.monomorphPathParams(sp, tb.second.atyParams, false);
                                         auto aty = monomorphCb.monomorphType(sp, tb.second.type, false);
                                         expandAssociatedTypes(sp, aty);
                                         expandAssociatedTypesParams(sp, src.params);
-                                        atys.insert(::std::make_pair(tb.first, HIRTraitPath::AtyEqual{mv$(src), {}, mv$(aty)}));
+                                        expandAssociatedTypesParams(sp, atyParams);
+                                        atys.insert(::std::make_pair(tb.first, HIRTraitPath::AtyEqual{mv$(src), mv$(atyParams), mv$(aty)}));
                                     }
                                 }
                                 if (foundCb(ImplRef(type, mv$(paramsMonoO), mv$(atys), bound.constness), false)) {

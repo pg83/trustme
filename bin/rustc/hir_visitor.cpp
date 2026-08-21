@@ -780,6 +780,11 @@ namespace {
                 ensureOut();
                 out.typeBounds.at(assoc.first).sourceTrait = mv$(ns);
             }
+            HIRPathParams np;
+            if (walkTypesInPathParams(v, assoc.second.atyParams, np)) {
+                ensureOut();
+                out.typeBounds.at(assoc.first).atyParams = mv$(np);
+            }
             auto nt = v.visitType(assoc.second.type);
             if (nt != assoc.second.type) {
                 ensureOut();
@@ -791,6 +796,11 @@ namespace {
             if (walkTypesInGenericPath(v, assoc.second.sourceTrait, ns)) {
                 ensureOut();
                 out.traitBounds.at(assoc.first).sourceTrait = mv$(ns);
+            }
+            HIRPathParams np;
+            if (walkTypesInPathParams(v, assoc.second.atyParams, np)) {
+                ensureOut();
+                out.traitBounds.at(assoc.first).atyParams = mv$(np);
             }
             for (size_t i = 0; i < assoc.second.traits.size(); i++) {
                 HIRTraitPath ntp;
@@ -1178,10 +1188,12 @@ void HIRVisitor::visitTraitPath(HIRTraitPath& p) {
     this->visitGenericPath(p.path, HIRVisitor::PathContext::TRAIT);
     for (auto& assoc : p.typeBounds) {
         this->visitGenericPath(assoc.second.sourceTrait, HIRVisitor::PathContext::TRAIT);
+        this->visitPathParams(assoc.second.atyParams);
         updateType(assoc.second.type);
     }
     for (auto& assoc : p.traitBounds) {
         this->visitGenericPath(assoc.second.sourceTrait, HIRVisitor::PathContext::TRAIT);
+        this->visitPathParams(assoc.second.atyParams);
         for (auto& trait : assoc.second.traits) {
             this->visitTraitPath(trait);
         }

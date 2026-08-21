@@ -242,7 +242,9 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
             if (it == e.assoc->end()) {
                 return HIRTypeRef();
             }
-            ASSERT_BUG(Span(), !params.hasParams(), "TODO: BoundedPtr ATY with params?");
+            if (!it->second.atyParams.equalsIgnoringRegions(params)) {
+                return HIRTypeRef();
+            }
             return it->second.type;
         }
         case ImplRefData::TAG_Bounded: {
@@ -251,7 +253,9 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
             if (it == e.assoc.end()) {
                 return HIRTypeRef();
             }
-            ASSERT_BUG(Span(), !params.hasParams(), "TODO: Bounded ATY with params?");
+            if (!it->second.atyParams.equalsIgnoringRegions(params)) {
+                return HIRTypeRef();
+            }
             return it->second.type;
         }
     }

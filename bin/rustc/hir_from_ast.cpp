@@ -1006,11 +1006,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
         }
 
         std::pair<RcString, HIRPathParams> getAtyNode(const Span& sp, const ASTPathNode& pn) {
-            auto args = ctx.LowerHIRPathParams(sp, pn.args(), false);
-            if (args.hasParams()) {
-                TODO(sp, "Handle ATYs with args");
-            }
-            return std::make_pair(pn.name(), std::move(args));
+            return std::make_pair(pn.name(), ctx.LowerHIRPathParams(sp, pn.args(), false));
         }
     };
 

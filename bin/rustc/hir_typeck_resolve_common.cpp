@@ -88,14 +88,14 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, HIRTypeRef typ
         DEBUG("Equality (TB) - <" << type << " as " << tb.second.sourceTrait << ">::" << tb.first << " = " << tb.second);
         pushType(tb.first, tb.second);
 
-        auto tyL = crate.types.path(HIRPath(type, tb.second.sourceTrait.clone(), tb.first), HIRTypePathBinding::make_Opaque({}));
+        auto tyL = crate.types.path(HIRPath(type, tb.second.sourceTrait.clone(), tb.first, tb.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
         prepIndexesAddEquality(sp, tyL, tb.second.type);
     }
 
     // ATY Trait bounds
     for (const auto& tb : traitPath.traitBounds) {
         for (const auto& trait : tb.second.traits) {
-            auto tyL = crate.types.path(HIRPath(type, tb.second.sourceTrait.clone(), tb.first), HIRTypePathBinding::make_Opaque({}));
+            auto tyL = crate.types.path(HIRPath(type, tb.second.sourceTrait.clone(), tb.first, tb.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
             DEBUG("Bound (TB) - <" << type << " as " << tb.second.sourceTrait << ">::" << tb.first << " : " << trait);
             prepIndexesAddTraitBound(sp, std::move(tyL), trait.clone());
         }
