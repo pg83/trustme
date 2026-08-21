@@ -1758,6 +1758,20 @@ public:
             DEBUG("Return Literal::Defer for constastatic " << p << " which references a generic parameter");
             throw Defer();
         }
+
+        // A trait-object method function pointer names the generated vtable
+        // dispatch shim.  Resolving it as an ordinary trait item can only see
+        // the object bound (or a fuzzy blanket impl), but the symbolic path is
+        // exactly what translation needs in order to generate that shim.
+        if (const auto* pe = p.data.opt_UfcsKnown()) {
+            if (const auto* tyDyn = pe->type->opt_TraitObject()) {
+                if (pe->item != "vtable#" && tyDyn->trait.traitPtr
+                    && tyDyn->trait.traitPtr->getVtableValueIndex(pe->trait, pe->item) > 0) {
+                    return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, 0);
+                }
+            }
+        }
+
         MonomorphState constMs(rootResolve.crate.types);
 
         const HIRGenericParams* implParamsDef = nullptr;
