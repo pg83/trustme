@@ -2020,12 +2020,14 @@ default:
         }
         static const RcString rcstringStart = RcString::newInterned("start");
         static const RcString rcstringEnd = RcString::newInterned("end");
+        static const RcString rcstringNewRange = RcString::newInterned("new_range");
+        const bool newRange = crate.features.count(rcstringNewRange) != 0;
         switch (node.type) {
             case ASTExprNodeBinOp::RANGE: {
                 // NOTE: Not language items pre 1.39
                 auto coreCrate = crate.extCratenameCore;
-                auto pathRange = getPath(coreCrate, "ops", "Range");
-                auto pathRangeFrom = getPath(coreCrate, "ops", "RangeFrom");
+                auto pathRange = getPath(coreCrate, newRange ? "range" : "ops", "Range");
+                auto pathRangeFrom = getPath(coreCrate, newRange ? "range" : "ops", "RangeFrom");
                 auto pathRangeTo = getPath(coreCrate, "ops", "RangeTo");
                 auto pathRangeFull = getPath(coreCrate, "ops", "RangeFull");
 
@@ -2049,14 +2051,16 @@ default:
             case ASTExprNodeBinOp::RANGE_INC: {
                 // NOTE: Not language items pre 1.54
                 auto coreCrate = crate.extCratenameCore;
-                auto pathRangeInclusiveNonEmpty = getPath(coreCrate, "ops", "RangeInclusive");
+                auto pathRangeInclusiveNonEmpty = getPath(coreCrate, newRange ? "range" : "ops", "RangeInclusive");
                 auto pathRangeToInclusive = getPath(coreCrate, "ops", "RangeToInclusive");
 
                 if (node.left) {
                     ASTExprNodeStructLiteral::tValues values;
                     values.push_back({{}, rcstringStart, mv$(node.left)});
                     values.push_back({{}, rcstringEnd, mv$(node.right)});
-                    values.push_back({{}, RcString::newInterned("exhausted"), ASTExprNodeP(new ASTExprNodeBool(false))});
+                    if (!newRange) {
+                        values.push_back({{}, RcString::newInterned("exhausted"), ASTExprNodeP(new ASTExprNodeBool(false))});
+                    }
                     replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeInclusiveNonEmpty), nullptr, mv$(values)));
                 } else {
                     ASTExprNodeStructLiteral::tValues values;

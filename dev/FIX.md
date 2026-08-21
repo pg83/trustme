@@ -106,7 +106,9 @@ own generic parameter scope closed
 `impl-trait/in-trait/shorthand-projection-in-rpitit-bound`; preserving whether
 an item predicate was trivial before lifetimes and `Self` were erased closed
 `associated-types/issue-71113`, `associated-types/issue-91234`, and, on a
-later point rerun, `mir/issue-107691`. Thus 46 of the 98 sweep failures
+later point rerun, `mir/issue-107691`; selecting the copyable range lang-item
+family while desugaring under `new_range` closed `new-range/enabled`. Thus 45
+of the 98 sweep failures
 remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -121,19 +123,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 71 |
-| fixed, or no longer reproducing, since the gate | 560 |
+| still failing or still carried from the last full sweep | 70 |
+| fixed, or no longer reproducing, since the gate | 561 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed fifty-two nodes, leaving 46. The
+subsequent point fixes and reruns have closed fifty-three nodes, leaving 45. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 10 |
+| accepted Rust rejected by the compiler or driver | 9 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -141,13 +143,13 @@ last full sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 10 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 9 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 8 | trait/impl selection and type mismatch dominate |
+| AST/HIR lowering, type checking, and resolution | 7 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 
 An async closure's future now takes the captures with it instead of borrowing
@@ -189,6 +191,14 @@ dependencies disappear from its lowered type, while a genuinely trivial
 predicate such as `i32: Iterator` is still proved and rejected at the
 declaration. The marker is preserved through cloning, monomorphisation, alias
 expansion, and HIR metadata.
+
+`new-range/enabled.rs` is closed in range-expression desugaring. With
+`new_range` enabled, the three bounded-below forms now construct the copyable
+`core::range::{RangeFrom, Range, RangeInclusive}` types; the unchanged
+unbounded-below forms and crates without the feature still construct the
+legacy `core::ops` types. The inclusive copyable range has only `start` and
+`end`, so the legacy iterator's private `exhausted` field is no longer emitted
+for that form.
 
 `impl-trait/recursive-impl-trait-type-direct.rs` is closed at the shared RPIT
 inference boundary. A return opaque constrained only by a direct recursive
