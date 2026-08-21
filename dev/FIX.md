@@ -32,8 +32,9 @@ latest fix. Its current-compiler rerun data is in
 classification, and the subsequent point reruns of `niche-in-coroutine`,
 `link-directives`, `fn-align-dyn`, gccrs `issue-2187`, and const-generic
 promotion, `deriving-with-repr-packed`, and `match-ref-mut-stability` are green
-after their fixes; 90 of the 98 sweep failures
-remain. The 25 failures outside those corpora are still carried from the
+after their fixes; the specialization impl-head fix also closed
+`specialization-basics` and `impl-trait/equality-rpass`, so 88 of the 98 sweep
+failures remain. The 25 failures outside those corpora are still carried from the
 complete snapshot rather than silently dropped from the total.
 
 Reruns and the whole-group sweeps are the only regression check there is
@@ -46,20 +47,20 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 115 |
-| fixed, or no longer reproducing, since the gate | 516 |
+| still failing or still carried from the last full sweep | 113 |
+| fixed, or no longer reproducing, since the gate | 518 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed eight nodes, leaving 90. The remaining 25 are in
-groups outside that sweep and are still carried from the last full sweep.
+subsequent point fixes have closed ten nodes, leaving 88. The remaining 25 are
+in groups outside that sweep and are still carried from the last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 52 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
-| wrong runtime behaviour, panic, abort, or output | 13 |
+| wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
 
@@ -137,12 +138,12 @@ took the signal.
 
 ## P1: runtime semantics
 
-Thirteen programs in the current eight-corpus rerun build but execute
+Eleven programs in the current eight-corpus rerun build but execute
 incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 11 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 9 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 1 | async-drop ordering |
 | generated executable SIGABRT | 1 | library allocation failure |
 

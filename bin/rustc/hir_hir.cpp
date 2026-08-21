@@ -862,6 +862,10 @@ namespace {
             // TODO
             return HIRCompare::Equal;
         }
+
+        HIRTypeRef mappedType(unsigned binding) const {
+            return binding < implTypes.length() ? implTypes[binding] : HIRTypeRef();
+        }
     };
 
     bool matchesTypeRoot(const HIRGenericParams& params, const HIRTypeData* implTy, const HIRTypeData* matchType, tCbResolveType tyRes) {
@@ -1175,6 +1179,74 @@ namespace {
         });
         return rv;
     }
+
+    bool matchImplHead(const Span& sp, const HIRTraitImpl& pattern, const HIRTraitImpl& value, ImplMatcher& matcher) {
+        auto resolve = HIRResolvePlaceholdersNop();
+        if (pattern.type->matchTestGenericsFuzz(sp, value.type, resolve, matcher) == HIRCompare::Unequal) {
+            return false;
+        }
+        return pattern.traitArgs.matchTestGenericsFuzz(sp, value.traitArgs, resolve, matcher) != HIRCompare::Unequal;
+    }
+
+    class ImplHeadMonomorphiser: public Monomorphiser {
+        const ImplMatcher& matcher;
+        mutable bool complete_ = true;
+
+    public:
+        ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplMatcher& matcher)
+            : Monomorphiser(types)
+            , matcher(matcher)
+        {
+        }
+
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
+            if (generic.group() == 0) {
+                auto mapped = matcher.mappedType(generic.binding);
+                if (mapped) {
+                    return mapped;
+                }
+            }
+            complete_ = false;
+            return types.generic(generic.name, generic.binding);
+        }
+
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
+            complete_ = false;
+            return HIRConstGeneric(generic);
+        }
+
+        bool complete() const {
+            return complete_;
+        }
+    };
+
+    bool mappedBoundsImplied(const Span& sp, HIRTypeInterner& types, const HIRTraitImpl& child, const HIRTraitImpl& parent, const ImplMatcher& parentMatcher) {
+        const auto childBounds = flattenBounds(types, child.params.bounds);
+        const auto parentBounds = flattenBounds(types, parent.params.bounds);
+        ImplHeadMonomorphiser monomorph(types, parentMatcher);
+
+        for (const auto& bound : parentBounds) {
+            const auto* traitBound = bound.opt_TraitBound();
+            if (!traitBound) {
+                return false;
+            }
+
+            auto type = monomorph.monomorphType(sp, traitBound->type);
+            auto trait = monomorph.monomorphTraitpath(sp, traitBound->trait, true);
+            if (!monomorph.complete()) {
+                return false;
+            }
+
+            const bool found = std::any_of(childBounds.begin(), childBounds.end(), [&](const HIRGenericBound& candidate) {
+                const auto* childTrait = candidate.opt_TraitBound();
+                return childTrait && childTrait->type == type && childTrait->trait == trait && childTrait->constness == traitBound->constness;
+            });
+            if (!found) {
+                return false;
+            }
+        }
+        return true;
+    }
 }
 
 bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& other) const {
@@ -1200,6 +1272,24 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
         }
     } catch (const TypeOrdSpecificMixedOrdering& e) {
         BUG(sp, "Mixed ordering in more_specific_than");
+    }
+
+    // The syntax-only ordering above treats every generic as equally open.
+    // It therefore cannot see that `(T, T)` accepts a strict subset of the
+    // values accepted by `(T, U)`. Match both impl heads while preserving each
+    // pattern generic's assignments. A one-way match is a strict head
+    // relation; the parent's predicates are then compared after applying that
+    // assignment, so `T: Clone, U: Clone` correctly collapses to one bound.
+    stl::Vector<HIRTypeRef> parentMappings;
+    ImplMatcher parentMatcher(parentMappings, other.params);
+    const bool parentMatchesChild = matchImplHead(sp, other, *this, parentMatcher);
+
+    stl::Vector<HIRTypeRef> childMappings;
+    ImplMatcher childMatcher(childMappings, params);
+    const bool childMatchesParent = matchImplHead(sp, *this, other, childMatcher);
+
+    if (parentMatchesChild != childMatchesParent) {
+        return parentMatchesChild && mappedBoundsImplied(sp, types, *this, other, parentMatcher);
     }
 
     //}
