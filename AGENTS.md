@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 trustme: a standalone Rust compiler (hard fork of mrustc), C++26. The
 compiler lives in `bin/rustc/`, the C++ standard-library replacement in
