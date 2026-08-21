@@ -2696,13 +2696,16 @@ namespace {
             auto rv = nfa.empty();
             size_t offset = 0;
             for (const auto& segment : segments) {
-                if (segment.offset < offset || segment.offset > totalSize || segment.value.size > totalSize - segment.offset) {
+                if (segment.offset > totalSize || segment.value.size > totalSize - segment.offset
+                    || (segment.value.size != 0 && segment.offset < offset)) {
                     supported = false;
                     return {nfa.uninhabited(), totalSize};
                 }
-                rv = nfa.then(rv, padding(segment.offset - offset).fragment);
+                if (segment.offset > offset) {
+                    rv = nfa.then(rv, padding(segment.offset - offset).fragment);
+                }
                 rv = nfa.then(rv, segment.value.fragment);
-                offset = segment.offset + segment.value.size;
+                offset = ::std::max(offset, segment.offset + segment.value.size);
             }
             rv = nfa.then(rv, padding(totalSize - offset).fragment);
             return {rv, totalSize};
