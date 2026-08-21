@@ -3348,11 +3348,22 @@ default:
                 if (candidate.source != CandidateSource::ParamEnv) {
                     return false;
                 }
-                if (typeHasUnknown(candidate.impl.getImplType(crate.types)) || paramsHaveUnknownTypes(candidate.impl.getTraitParams(crate.types))) {
+                auto typeIsNonGlobal = [&](const HIRTypeData* type) {
+                    return typeHasUnknown(resolve_.expandAssociatedTypes(span(), type));
+                };
+                auto paramsAreNonGlobal = [&](const HIRPathParams& params) {
+                    for (const auto& type : params.types) {
+                        if (typeIsNonGlobal(type)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+                if (typeIsNonGlobal(candidate.impl.getImplType(crate.types)) || paramsAreNonGlobal(candidate.impl.getTraitParams(crate.types))) {
                     return true;
                 }
                 for (const auto& associated : boundedAssociated(candidate.impl)) {
-                    if (paramsHaveUnknownTypes(associated.second.sourceTrait.params) || paramsHaveUnknownTypes(associated.second.atyParams) || typeHasUnknown(associated.second.type)) {
+                    if (paramsAreNonGlobal(associated.second.sourceTrait.params) || paramsAreNonGlobal(associated.second.atyParams) || typeIsNonGlobal(associated.second.type)) {
                         return true;
                     }
                 }
@@ -4641,12 +4652,11 @@ default:
                     );
                 }
 
-                // A proven ParamEnv or builtin candidate shadows impl candidates.
-                // This is the central next-solver candidate preference used for
-                // projection normalization and dyn-object builtins.
+                // A proven builtin or alias-bound candidate shadows impl
+                // candidates. ParamEnv candidates use the globalness rule below.
                 bool hasPreferredNonImpl = false;
                 for (const auto* candidate : frame.viable) {
-                    hasPreferredNonImpl |= isEnvironmentOrBuiltin(candidate->impl) && candidate->certainty == Certainty::Proven;
+                    hasPreferredNonImpl |= candidate->source != CandidateSource::ParamEnv && isEnvironmentOrBuiltin(candidate->impl) && candidate->certainty == Certainty::Proven;
                 }
                 if (hasPreferredNonImpl) {
                     auto& viable = frame.viable;
@@ -4656,6 +4666,26 @@ default:
                             viable.end(),
                             [&](Candidate* candidate) {
                         return !isEnvironmentOrBuiltin(candidate->impl);
+                    }
+                        ),
+                        viable.end()
+                    );
+                }
+
+                // Global where-bounds are a fallback. If any other candidate
+                // applies, drop the global ParamEnv response before merging;
+                // unlike a non-global where-bound, it must not guide inference.
+                const bool hasNonParamEnv = ::std::any_of(frame.viable.begin(), frame.viable.end(), [](const Candidate* candidate) {
+                    return candidate->source != CandidateSource::ParamEnv;
+                });
+                if (hasNonParamEnv) {
+                    auto& viable = frame.viable;
+                    viable.erase(
+                        ::std::remove_if(
+                            viable.begin(),
+                            viable.end(),
+                            [](const Candidate* candidate) {
+                        return candidate->source == CandidateSource::ParamEnv;
                     }
                         ),
                         viable.end()
@@ -8324,6 +8354,30 @@ default: {
             // - If there is a bound on the receiver, then that bound is usable no-matter what
             DEBUG("> Bounds");
             bool foundBound = false;
+            bool foundNonGlobalBound = false;
+            auto typeIsNonGlobalAfterNormalization = [&](const HIRTypeData* type) {
+                auto normalized = this->expandAssociatedTypes(sp, type);
+                return monomorphiseTypeNeeded(normalized) || this->typeContainsIvars(normalized);
+            };
+            auto paramsAreNonGlobalAfterNormalization = [&](const HIRPathParams& params) {
+                for (const auto& type : params.types) {
+                    if (typeIsNonGlobalAfterNormalization(type)) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            auto recordBoundGlobalness = [&](const HIRTypeData* type, const HIRGenericPath& trait, const CachedBound& info) {
+                if (!this->wb.settings->solver.globally) {
+                    return;
+                }
+                foundNonGlobalBound |= typeIsNonGlobalAfterNormalization(type) || paramsAreNonGlobalAfterNormalization(trait.params);
+                for (const auto& associated : info.assoc) {
+                    foundNonGlobalBound |= paramsAreNonGlobalAfterNormalization(associated.second.sourceTrait.params)
+                        || paramsAreNonGlobalAfterNormalization(associated.second.atyParams)
+                        || typeIsNonGlobalAfterNormalization(associated.second.type);
+                }
+            };
             for (const auto& tb : traitBounds) {
                 const auto& eType = tb.first.first;
                 const auto& eTraitGp = tb.first.second;
@@ -8378,6 +8432,7 @@ default: {
                         DEBUG("++ " << possibilities.back());
                         rv = true;
                         foundBound = true;
+                        recordBoundGlobalness(eType, eTraitGp, eTraitInfo);
                     } else if (cmp == HIRCompare::Fuzzy) {
                         DEBUG("Fuzzy match checking bounded method - " << *selfTy << " != " << eType);
 
@@ -8386,6 +8441,7 @@ default: {
                         DEBUG("++ " << possibilities.back());
                         rv = true;
                         foundBound = true;
+                        recordBoundGlobalness(eType, eTraitGp, eTraitInfo);
                     } else {
                         DEBUG("> Type mismatch - " << *selfTy << " != " << eType);
                     }
@@ -8393,7 +8449,10 @@ default: {
                     DEBUG("> Receiver mismatch");
                 }
             }
-            if (foundBound) {
+            // The next solver only lets a non-global where-bound shadow crate
+            // impls. A global bound remains a method candidate, but probing must
+            // continue so the call signature can disambiguate it from an impl.
+            if (foundBound && (!this->wb.settings->solver.globally || foundNonGlobalBound)) {
                 return rv;
             }
 

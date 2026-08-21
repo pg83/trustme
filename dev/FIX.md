@@ -74,7 +74,9 @@ self-referenced unresolved RPIT to `()` after ordinary inference closed
 for inherent lookup in their defining scope closed
 `methods/opaque_param_in_ufc`; preserving associated-type projections in item
 declarations until each use can normalize them with its own parameter
-environment closed `mir/issue-99866`. Thus 65
+environment closed `mir/issue-99866`; classifying where-bounds only after
+normalizing their projections closed
+`traits/next-solver/global-param-env-after-norm`. Thus 64
 of the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -89,19 +91,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 90 |
-| fixed, or no longer reproducing, since the gate | 541 |
+| still failing or still carried from the last full sweep | 89 |
+| fixed, or no longer reproducing, since the gate | 542 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed thirty-three nodes, leaving 65. The remaining
+subsequent point fixes have closed thirty-four nodes, leaving 64. The remaining
 25 are in groups outside that sweep and are still carried from the last full
 sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 29 |
+| accepted Rust rejected by the compiler or driver | 28 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -109,13 +111,13 @@ sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 29 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 28 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 27 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 26 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 
 An async closure's future now takes the captures with it instead of borrowing
@@ -153,6 +155,15 @@ associated-type equality still cannot constrain an arbitrary return type. The
 final type-resolution walk also treats interned types as a graph: a pointer
 chain cuts the back-edge from an unevaluated const's captured `selfType` to the
 same preserved projection without allocating a recursion container.
+
+`traits/next-solver/global-param-env-after-norm.rs` is closed by classifying
+ParamEnv bounds only after normalizing their projected types. The method probe
+keeps a global where-bound as a candidate but continues to crate impls, and the
+solver drops that global response when another candidate applies. Thus
+`OldSolver: Into<T::Item>` with `T::Item = NewSolver` no longer hides the
+blanket identity `Into<OldSolver>` before the expected result can disambiguate
+the call. A genuinely non-global ParamEnv bound remains authoritative over
+impl and builtin candidates.
 
 `Box<_>` is no reason to commit to the only fuzzy method currently visible.
 In `explicit-self-generic`, the blanket `ExactSizeIterator for Box<I>` looked
