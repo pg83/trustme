@@ -77,6 +77,14 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
     TRACE_FUNCTION_F(traitPath << FMT_CB(os, if (traitParams) { os << *traitParams; } else { os << "<?>"; }) << " for " << type);
     auto cbIdent = HIRResolvePlaceholdersNop();
 
+    if (const auto* path = type->opt_Path(); path && path->path.data.is_UfcsKnown()) {
+        HIRTypeRef normalizedType = type;
+        this->expandAssociatedTypes(sp, normalizedType);
+        if (normalizedType != type) {
+            return this->findImpl(sp, traitPath, traitParams, normalizedType, ::std::move(foundCb), dontHandoffToSpecialised);
+        }
+    }
+
     if (this->wb.settings->solver.globally && !dontHandoffToSpecialised) {
         if (!nextSolver) {
             ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");

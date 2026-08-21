@@ -842,7 +842,8 @@ namespace {
                             // Check the type.
                             // - Also, fix lifetime elision?
                             const auto& expTy = maybeMonomorph(traitFcn.args[i].second);
-                            /*const*/ auto& hasTy = implFcn.args[i].second;
+                            HIRTypeRef hasTy = implFcn.args[i].second;
+                            resolve_.expandAssociatedTypes(sp, hasTy);
 
                             if (expTy != hasTy && !expTy->equalsIgnoringRegions(hasTy)) {
                                 failures.push_back(FMT("Argument " << 1 + i << " mismatch - expected " << expTy << ", got " << hasTy));
@@ -889,11 +890,13 @@ namespace {
                     } matchCb;
 
                     const auto& expRetTy1 = maybeMonomorph(traitFcn.returnType);
-                    if (!expRetTy1->matchTestGenerics(sp, implFcn.returnType, HIRResolvePlaceholdersNop(), matchCb)) {
+                    auto implRetTy = implFcn.returnType;
+                    resolve_.expandAssociatedTypes(sp, implRetTy);
+                    if (!expRetTy1->matchTestGenerics(sp, implRetTy, HIRResolvePlaceholdersNop(), matchCb)) {
                         failures.push_back(
                             FMT("Mismatched return type:\n"
                                 << "  Expected " << expRetTy1 << "\n"
-                                << "  Found    " << implFcn.returnType)
+                                << "  Found    " << implRetTy)
                         );
                     }
                     HIRTypeRef expRetTyReal;

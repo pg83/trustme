@@ -2012,9 +2012,15 @@ default:
 
         void checkTypeResolved(const Span& sp, HIRTypeRef& ty, const HIRTypeData* topType) const {
             class InnerVisitor: public HIRVisitor {
+                struct ActiveType {
+                    const HIRTypeData* type;
+                    const ActiveType* parent;
+                };
+
                 const ExprVisitorApply& parent;
                 const Span& sp;
                 const HIRTypeData* topType;
+                const ActiveType* activeTypes = nullptr;
 
             public:
                 InnerVisitor(const ExprVisitorApply& parent, const Span& sp, const HIRTypeData* topType)
@@ -2052,7 +2058,15 @@ default:
                         }
                     }
 
+                    for (auto* active = activeTypes; active; active = active->parent) {
+                        if (active->type == ty) {
+                            return ty;
+                        }
+                    }
+                    const ActiveType activeType { ty, activeTypes };
+                    activeTypes = &activeType;
                     ty = visitTypeDefaultViaHooks(ty);
+                    activeTypes = activeType.parent;
 
                     if (ty->is_Array()) {
                         auto data = ty->cloneData();

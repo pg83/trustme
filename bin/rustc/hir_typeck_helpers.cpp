@@ -1598,11 +1598,20 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
 
         bool TraitResolution::iterateBoundsTraits(const Span& sp, const HIRTypeData* type, tCbBound cb) const {
             for (const auto& b : traitBounds) {
-                auto cmp = b.first.first->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
+                const HIRTypeData* boundType = b.first.first;
+                auto cmp = boundType->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
+                HIRTypeRef normalizedBound;
+                if (cmp == HIRCompare::Unequal && this->hasAssociatedType(boundType)) {
+                    normalizedBound = this->expandAssociatedTypes(sp, boundType);
+                    if (normalizedBound != boundType) {
+                        boundType = normalizedBound;
+                        cmp = boundType->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
+                    }
+                }
                 if (cmp == HIRCompare::Unequal) {
                     continue;
                 }
-                if (cb(cmp, b.first.first, b.first.second, b.second)) {
+                if (cb(cmp, boundType, b.first.second, b.second)) {
                     return true;
                 }
             }
@@ -4853,18 +4862,14 @@ default:
         bool TraitResolution::findTraitImpls(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, bool magicTraitImpls) const {
             if (const auto* path = type->opt_Path()) {
                 if (const auto* projection = path->path.data.opt_UfcsKnown()) {
-                    if (projection->item.compare(0, strlen(ATY_PREFIX_ERASED), ATY_PREFIX_ERASED) == 0) {
-                        auto normalized = this->expandAssociatedTypes(sp, type);
-                        if (normalized != type) {
-                            if (normalized->is_ErasedType()) {
-                                StaticTraitResolve staticResolve(wb);
-                                staticResolve.setBothGenericsRaw(implGenerics_, itemGenerics_);
-                                staticResolve.revealOpaqueTypes(sp, normalized);
-                            }
-                            if (normalized != type) {
-                                return findTraitImpls(sp, trait, params, normalized, std::move(callback), magicTraitImpls);
-                            }
+                    auto normalized = this->expandAssociatedTypes(sp, type);
+                    if (normalized != type) {
+                        if (projection->item.compare(0, strlen(ATY_PREFIX_ERASED), ATY_PREFIX_ERASED) == 0 && normalized->is_ErasedType()) {
+                            StaticTraitResolve staticResolve(wb);
+                            staticResolve.setBothGenericsRaw(implGenerics_, itemGenerics_);
+                            staticResolve.revealOpaqueTypes(sp, normalized);
                         }
+                        return findTraitImpls(sp, trait, params, normalized, std::move(callback), magicTraitImpls);
                     }
                 }
             }

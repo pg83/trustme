@@ -2942,6 +2942,7 @@ class UfcsVisitor: public HIRVisitor {
     const HIRItemPath* currentTraitPath_ = nullptr;
     const HIRSimplePath* definingOpaqueAliases_ = nullptr;
     size_t definingOpaqueAliasCount_ = 0;
+    bool preserveDeclaredProjections_ = false;
     bool inExpr = false;
     HIRSimplePath curModPath;
 
@@ -2960,6 +2961,22 @@ public:
         traits = state.traits;
         curModPath = state.modPath;
     }
+
+    struct DeclaredTypeGuard {
+        UfcsVisitor& visitor;
+        bool saved;
+
+        explicit DeclaredTypeGuard(UfcsVisitor& visitor)
+            : visitor(visitor)
+            , saved(visitor.preserveDeclaredProjections_)
+        {
+            visitor.preserveDeclaredProjections_ = true;
+        }
+
+        ~DeclaredTypeGuard() {
+            visitor.preserveDeclaredProjections_ = saved;
+        }
+    };
 
     struct ModTraitsGuard {
         UfcsVisitor* v;
@@ -3009,13 +3026,10 @@ public:
     void visitParams(HIRGenericParams& params) {
         TRACE_FUNCTION_F(params.fmtArgs() << params.fmtBounds());
 
-        // Custom visitor to prevent running of EAT on type paramerter defaults
-        auto savedRunEat = runEat;
-        runEat = false;
+        DeclaredTypeGuard declaredTypes(*this);
         for (auto& tps : params.types) {
             tps.defaultValue = this->visitType(tps.defaultValue);
         }
-        runEat = savedRunEat;
 
         for (auto& bound : params.bounds) {
             visitGenericBound(bound);
@@ -3029,6 +3043,7 @@ public:
         auto _ = resolve_.setImplGenerics(MetadataType::None, item.params);
         auto ty = crate.types.path(HIRGenericPath(p.getSimplePath()), &item);
         currentType_ = ty;
+        DeclaredTypeGuard declaredTypes(*this);
         HIRVisitor::visitUnion(p, item);
         currentType_ = nullptr;
     }
@@ -3037,6 +3052,7 @@ public:
         auto _ = resolve_.setImplGenerics(item.structMarkings.dstType, item.params);
         auto ty = crate.types.path(HIRGenericPath(p.getSimplePath()), &item);
         currentType_ = ty;
+        DeclaredTypeGuard declaredTypes(*this);
         HIRVisitor::visitStruct(p, item);
         currentType_ = nullptr;
     }
@@ -3045,24 +3061,34 @@ public:
         auto _ = resolve_.setImplGenerics(MetadataType::None, item.params);
         auto ty = crate.types.path(HIRGenericPath(p.getSimplePath()), &item);
         currentType_ = ty;
+        DeclaredTypeGuard declaredTypes(*this);
         HIRVisitor::visitEnum(p, item);
         currentType_ = nullptr;
     }
 
     void visitFunction(HIRItemPath p, HIRFunction& item) override {
         auto _ = resolve_.setItemGenerics(item.params);
+        DeclaredTypeGuard declaredTypes(*this);
         HIRVisitor::visitFunction(p, item);
     }
 
     void visitConstant(HIRItemPath p, HIRConstant& item) override {
         auto _ = resolve_.setItemGenerics(item.params);
+        DeclaredTypeGuard declaredTypes(*this);
         HIRVisitor::visitConstant(p, item);
+    }
+
+    void visitStatic(HIRItemPath p, HIRStatic& item) override {
+        auto _ = resolve_.setItemGenerics(item.params);
+        DeclaredTypeGuard declaredTypes(*this);
+        HIRVisitor::visitStatic(p, item);
     }
 
     void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override {
         // NOTE: Disabled, because generics in type aliases are never checked
         // Re-enabled to resolve a UFCS properly (1.90.0 libcore)
         auto _ = resolve_.setImplGenerics(MetadataType::Unknown, item.params);
+        DeclaredTypeGuard declaredTypes(*this);
         HIRVisitor::visitTypeAlias(p, item);
     }
 
@@ -3071,6 +3097,7 @@ public:
         currentTrait = &trait;
         currentTraitPath_ = &p;
         auto _ = resolve_.setImplGenerics(MetadataType::TraitObject, trait.params);
+        DeclaredTypeGuard declaredTypes(*this);
         HIRVisitor::visitTrait(p, trait);
         currentTrait = nullptr;
         inTraitDef_ = false;
@@ -3079,6 +3106,7 @@ public:
     void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override {
         // The alias's own parameters are in scope in the traits it names.
         auto _ = resolve_.setImplGenerics(MetadataType::Unknown, item.params);
+        DeclaredTypeGuard declaredTypes(*this);
         HIRVisitor::visitTraitAlias(p, item);
     }
 
@@ -3097,6 +3125,7 @@ public:
 
     void visitInherentType(HIRItemPath p, HIRTypeAlias& item) override {
         auto _ = resolve_.setItemGenerics(item.params);
+        DeclaredTypeGuard declaredTypes(*this);
         HIRVisitor::visitInherentType(p, item);
     }
 
@@ -3660,7 +3689,19 @@ public:
 
         // TODO: If this an associated type, check for default trait params
 
-        if (runEat && !definesContainedOpaque) {
+        // Item declarations keep projections for the param-env of each use.
+        // Mark them as rigid aliases so generic matching doesn't treat an
+        // unnormalised projection as an inference candidate.
+        if (runEat && preserveDeclaredProjections_ && !inExpr) {
+            const auto* path = ty->opt_Path();
+            if (path && path->binding.is_Unbound() && path->path.data.is_UfcsKnown()) {
+                auto data = ty->cloneData();
+                data.as_Path().binding = HIRTypePathBinding::make_Opaque({});
+                ty = crate.types.intern(mv$(data));
+            }
+        }
+
+        if (runEat && (!preserveDeclaredProjections_ || inExpr) && !definesContainedOpaque) {
             TRACE_FUNCTION_FR(ty, ty);
             std::vector<HIRTypeRef> stack;
             if (ty->is_Path()) {
