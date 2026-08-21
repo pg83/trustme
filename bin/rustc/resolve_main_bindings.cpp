@@ -5205,6 +5205,35 @@ enum class Lookup {
 
 namespace {
     const RcString rcstringCrateBuiltins = RcString::newInterned(CRATE_BUILTINS);
+
+    struct ActiveUseResolution;
+    const ActiveUseResolution* activeUseResolution = nullptr;
+
+    struct ActiveUseResolution {
+        const ASTPath* path;
+        const ActiveUseResolution* parent;
+
+        explicit ActiveUseResolution(const ASTPath& path)
+            : path(&path)
+            , parent(activeUseResolution)
+        {
+            activeUseResolution = this;
+        }
+
+        ~ActiveUseResolution() {
+            assert(activeUseResolution == this);
+            activeUseResolution = parent;
+        }
+    };
+
+    bool isUseResolutionActive(const ASTPath& path) {
+        for (auto* active = activeUseResolution; active; active = active->parent) {
+            if (active->path == &path) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::span<const ASTModule*> parentModules = {});
@@ -5422,6 +5451,7 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
             // - values ("value namespace")
             // - macros ("macro namespace")
             // TODO: Have Resolve_Use_GetBinding return the actual path
+            ActiveUseResolution activeUse(useEnt.path);
             useEnt.path.bindings = ResolveUseGetBinding(span, settings, crate, mod.path(), useEnt.path, parentModules);
             if (!useEnt.path.bindings.hasBinding()) {
                 ERROR(span, E0000, "Unable to resolve `use` target " << useEnt.path);
@@ -5842,11 +5872,9 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                 }
                 if (!impE.path.bindings.hasBinding()) {
                     DEBUG(" > Needs resolve p=" << &impE.path);
-                    static ::std::vector<const ASTPath*> sMods;
-                    if (::std::find(sMods.begin(), sMods.end(), &impE.path) == sMods.end()) {
-                        sMods.push_back(&impE.path);
+                    if (!isUseResolutionActive(impE.path)) {
+                        ActiveUseResolution activeUse(impE.path);
                         rv.mergeFrom(ResolveUseGetBinding(sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(sp2, settings, crate, mod.path(), impE.path), parentModules));
-                        sMods.pop_back();
                     } else {
                         DEBUG("Recursion on path " << &impE.path << " " << impE.path);
                     }

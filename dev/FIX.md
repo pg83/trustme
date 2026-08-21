@@ -40,9 +40,11 @@ identity `DiscriminantKind` projection until numeric fallback also closed
 where-clauses through argument-position `impl Trait` also closed
 `traits/alias/bounds`; completing default const arguments in trait impl heads
 closed `const-generics/defaults/rp_impl_trait` and
-`const-generics/defaults/trait_objects`. Thus 83 of the 98 sweep failures
-remain. The 25 failures outside those corpora are still carried from the
-complete snapshot rather than silently dropped from the total.
+`const-generics/defaults/trait_objects`; excluding an import's own future
+binding while resolving its target also closed `imports/issue-62767`. Thus 82
+of the 98 sweep failures remain. The 25 failures outside those corpora are
+still carried from the complete snapshot rather than silently dropped from the
+total.
 
 Reruns and the whole-group sweeps are the only regression check there is
 between full gates. Sweep all eight groups (`rust_ui_compile rust_1_90
@@ -54,18 +56,18 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 108 |
-| fixed, or no longer reproducing, since the gate | 523 |
+| still failing or still carried from the last full sweep | 107 |
+| fixed, or no longer reproducing, since the gate | 524 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed fifteen nodes, leaving 83. The remaining 25 are
+subsequent point fixes have closed sixteen nodes, leaving 82. The remaining 25 are
 in groups outside that sweep and are still carried from the last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 47 |
+| accepted Rust rejected by the compiler or driver | 46 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -73,13 +75,13 @@ in groups outside that sweep and are still carried from the last full sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 47 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 46 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 44 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 43 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 | parser | 1 | named variadic parameter |
 
@@ -114,7 +116,7 @@ What is left of the unresolved-name group splits by rule: two
 `non_lifetime_binders` (the `for<T>` trap above), `T` in a const trait bound
 under `-Zunpretty=hir` (which runs the passes that build the HIR, so it cannot
 stop before resolution), `Self` as a constructor from an item nested inside the
-impl, and a `use` of an item declared in the same block.
+impl.
 
 ## P1: internal compiler failures
 

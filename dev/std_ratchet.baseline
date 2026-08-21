@@ -337,7 +337,7 @@
 5	new	bin/rustc/resolve_main_bindings.cpp
 4	std::set	bin/rustc/resolve_main_bindings.cpp
 1	std::unordered	bin/rustc/resolve_main_bindings.cpp
-20	std::vector	bin/rustc/resolve_main_bindings.cpp
+19	std::vector	bin/rustc/resolve_main_bindings.cpp
 3	std::map	bin/rustc/settings.h
 7	std::string	bin/rustc/settings.h
 1	std::vector	bin/rustc/settings.h
