@@ -9988,14 +9988,28 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
             DEBUG("--- IVar possibilities");
             // TODO: De-duplicate this with the block ~80 lines below
             ::std::unique_ptr<IvarDependencyIndex> dependencyIndex;
-            for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarBoundIndex, i, context.possibleIvarVals[i])) {
-                    // Look at all other ivar possibility sets, and disable processing if they depend on this ivar (prevents races)
-                    if (!dependencyIndex) {
-                        dependencyIndex = ::std::make_unique<IvarDependencyIndex>(context);
+            // Facts flowing from expressions must settle before expected-type
+            // destinations. The dependency index then keeps a linked trait
+            // variable from racing ahead on a weaker destination constraint.
+            for (unsigned int sourcePass = 0; sourcePass < 2; sourcePass++) {
+                for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
+                    bool hasConcreteSource = false;
+                    for (const auto& source : context.possibleIvarVals[i].typesCoerceFrom) {
+                        if (!context.ivars.typeContainsIvars(context.getType(source.ty))) {
+                            hasConcreteSource = true;
+                            break;
+                        }
                     }
-                    dependencyIndex->disableDependents(i);
-                } else {
+                    if (hasConcreteSource != (sourcePass == 0)) {
+                        continue;
+                    }
+                    if (checkIvarPoss(context, *ivarBoundIndex, i, context.possibleIvarVals[i])) {
+                        // Look at all other ivar possibility sets, and disable processing if they depend on this ivar (prevents races)
+                        if (!dependencyIndex) {
+                            dependencyIndex = ::std::make_unique<IvarDependencyIndex>(context);
+                        }
+                        dependencyIndex->disableDependents(i);
+                    }
                 }
             }
         } // `if peek_changed` (ivar possibilities)
