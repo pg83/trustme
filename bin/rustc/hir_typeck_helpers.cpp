@@ -7183,6 +7183,25 @@ default:
                             // `ty` = Monomorphised actual type (< `be.type` as `be.trait` >::`assoc_bound.first`)
                             // `assoc_bound.second` = Desired type (monomorphised too)
                             auto cmpI = assocBound.second.type->matchTestGenericsFuzz(sp, ty, cbInfer, matcher);
+                            const auto containsOpaqueInScope = [&](const HIRTypeData* type, bool defining) {
+                                return visitTyWith(type, [&](const HIRTypeData* inner) {
+                                    const auto* erased = inner->opt_ErasedType();
+                                    const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+                                    return alias && (this->isOpaqueAliasDefiningScope(*alias->inner) == defining);
+                                });
+                            };
+                            const bool containsDefiningOpaque = containsOpaqueInScope(ty, true)
+                                || containsOpaqueInScope(assocBound.second.type, true);
+                            // Generic matching keeps an unresolved opaque fuzzy so a
+                            // defining scope can select an impl that reveals its hidden
+                            // type. Outside that scope the opaque is rigid: a structural
+                            // mismatch is enough to discard this conditional impl.
+                            if (cmpI == HIRCompare::Fuzzy
+                                && !containsDefiningOpaque
+                                && (containsOpaqueInScope(ty, false) || containsOpaqueInScope(assocBound.second.type, false))
+                                && assocBound.second.type->compareWithPlaceholders(sp, ty, cbInfer) == HIRCompare::Unequal) {
+                                cmpI = HIRCompare::Unequal;
+                            }
                             switch (cmpI) {
                                 case HIRCompare::Equal:
                                     DEBUG("Equal");
@@ -7195,17 +7214,8 @@ default:
                                     // TODO: When a fuzzy match is encountered on a conditional bound, returning `false` can lead to an false negative (and a compile error)
                                     // BUT, returning `true` could lead to it being selected. (Is this a problem, should a later validation pass check?)
                                     DEBUG("[ftic_check_params] Fuzzy match assoc bound between " << ty << " and " << assocBound.second.type);
-                                    if (commitDefiningOpaque && typeConstraint) {
-                                        const auto containsDefiningOpaque = [&](const HIRTypeData* type) {
-                                            return visitTyWith(type, [&](const HIRTypeData* inner) {
-                                                const auto* erased = inner->opt_ErasedType();
-                                                const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
-                                                return alias && this->isOpaqueAliasDefiningScope(*alias->inner);
-                                            });
-                                        };
-                                        if (containsDefiningOpaque(ty) || containsDefiningOpaque(assocBound.second.type)) {
-                                            candidateTypeConstraints.emplace_back(ty, assocBound.second.type);
-                                        }
+                                    if (commitDefiningOpaque && typeConstraint && containsDefiningOpaque) {
+                                        candidateTypeConstraints.emplace_back(ty, assocBound.second.type);
                                     }
                                     cmp = HIRCompare::Fuzzy;
                                     break;

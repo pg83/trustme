@@ -87,7 +87,9 @@ trait declaration on demand closed
 associated-type declaration bounds on demand closed
 `associated-type-bounds/bad-bounds-on-assoc-in-trait`; allowing nested
 defining opaque outputs to reach the selected impl's associated equality
-closed `type-alias-impl-trait/issue-89952`. Thus 59
+closed `type-alias-impl-trait/issue-89952`; treating non-defining opaque
+aliases as rigid while checking associated where-clause outputs closed
+`type-alias-impl-trait/tait-param-inference-issue-117310`. Thus 58
 of the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -102,19 +104,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 84 |
-| fixed, or no longer reproducing, since the gate | 547 |
+| still failing or still carried from the last full sweep | 83 |
+| fixed, or no longer reproducing, since the gate | 548 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed thirty-nine nodes, leaving 59. The remaining
+subsequent point fixes have closed forty nodes, leaving 58. The remaining
 25 are in groups outside that sweep and are still carried from the last full
 sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 23 |
+| accepted Rust rejected by the compiler or driver | 22 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -122,13 +124,13 @@ sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 23 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 22 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 21 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 20 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 
 An async closure's future now takes the captures with it instead of borrowing
@@ -214,6 +216,13 @@ impl candidates. A provisional structural mismatch can then reach the
 selected impl's associated equality, which defines the nested hidden type;
 outside the defining scope the same opaque remains rigid and still rejects
 access to its hidden type.
+
+`type-alias-impl-trait/tait-param-inference-issue-117310.rs` is closed by
+restoring that outside-scope rigidity while checking an impl's associated
+where-clause equality. The generic matcher still keeps an opaque fuzzy in its
+defining scope, but a structural mismatch against a non-defining opaque now
+discards the conditional impl and leaves the fallback impl to determine the
+remaining integer parameter.
 
 `Box<_>` is no reason to commit to the only fuzzy method currently visible.
 In `explicit-self-generic`, the blanket `ExactSizeIterator for Box<I>` looked
