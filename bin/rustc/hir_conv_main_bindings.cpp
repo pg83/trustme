@@ -2952,6 +2952,11 @@ public:
     {
     }
 
+    void restoreExprContext(const HIRExprState& state) {
+        traits = state.traits;
+        curModPath = state.modPath;
+    }
+
     struct ModTraitsGuard {
         UfcsVisitor* v;
         tTraitImports oldImports;
@@ -4079,6 +4084,8 @@ void ConvertHIRResolveUFCSExpr(const WireBoard& wb, const HIRCrate& crate, const
     TRACE_FUNCTION_F(ip);
     // Check innards but NOT the value
     UfcsVisitor exp{wb, true};
+    ASSERT_BUG(Span(), exprPtr.state, "No ExprState for " << ip);
+    exp.restoreExprContext(*exprPtr.state);
     exp.visitExpr(exprPtr);
 }
 
