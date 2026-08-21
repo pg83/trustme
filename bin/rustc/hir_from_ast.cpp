@@ -118,6 +118,7 @@ HIRPublicity AST2HIR::LowerHIRVis(const HIRSimplePath& modPath, const ASTVisibil
 
 HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsSized) {
     HIRGenericParams rv;
+    const bool implicitSized = !astCrate->attrs.has("rustc_no_implicit_bounds");
 
     for (const auto& param : gp.params) {
         switch (param.tag()) {
@@ -131,7 +132,7 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
             case GenericParam::TAG_Type: {
                 auto& tp = param.as_Type();
                 rv.paramKinds.pushBack(HIRGenericParamKind::Type);
-                rv.types.push_back({tp.name(), LowerHIRType(tp.getDefault()), true});
+                rv.types.push_back({tp.name(), LowerHIRType(tp.getDefault()), implicitSized});
                 break;
             }
             case GenericParam::TAG_Value: {
