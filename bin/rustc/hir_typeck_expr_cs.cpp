@@ -7602,6 +7602,21 @@ default:
                 if (v.name != "") {
                     outputType = context.resolve.expandAssociatedTypes(sp, mv$(*outputType));
 
+                    // A magic trait response can be the identity projection
+                    // while its input is still a numeric literal ivar.  That
+                    // response has not resolved the associated type: keep the
+                    // rule until literal fallback fixes the input and lets the
+                    // magic impl return its concrete output.
+                    if (const auto* outputPath = (*outputType)->opt_Path();
+                        outputPath && outputPath->path.data.is_UfcsKnown()) {
+                        const auto& pe = outputPath->path.data.as_UfcsKnown();
+                        if (pe.type == v.implTy && pe.trait.path == v.trait && pe.trait.params == v.params && pe.item == v.name
+                            && context.getType(v.implTy)->is_Infer()) {
+                            DEBUG("Identity associated projection still depends on an ivar");
+                            return AssociatedCheckResult::Stalled;
+                        }
+                    }
+
                     // If the output type is just < v.impl_ty as v.trait >::v.name, return false
                     if (((**outputType).is_Path() && ((**outputType).as_Path().path.data.is_UfcsKnown()))) {
                         auto& pe = (*outputType)->as_Path().path.data.as_UfcsKnown();
