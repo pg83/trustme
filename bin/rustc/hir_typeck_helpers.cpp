@@ -6273,6 +6273,52 @@ default:
                 }
             }
 
+            // The associated-type path below elaborates one projection layer.
+            // Match declaration predicates on demand only when their subject
+            // is itself a projection over another projection; putting every
+            // declared predicate in the candidate set changes ordinary generic
+            // inference and specialization.
+            for (const auto& environment : traitBounds) {
+                const auto& environmentType = environment.first.first;
+                const auto& environmentTrait = environment.first.second;
+                const auto& environmentInfo = environment.second;
+                ASSERT_BUG(sp, environmentInfo.traitPtr, "Cached trait bound has no trait definition");
+
+                auto monomorph = MonomorphStatePtr(crate.types, environmentType, &environmentTrait.params, nullptr);
+                for (const auto& declaredBound : environmentInfo.traitPtr->params.bounds) {
+                    const auto* declaredTrait = declaredBound.opt_TraitBound();
+                    if (!declaredTrait) {
+                        continue;
+                    }
+
+                    auto impliedType = monomorph.monomorphType(sp, declaredTrait->type);
+                    const auto* impliedPath = impliedType->opt_Path();
+                    const auto* impliedProjection = impliedPath ? impliedPath->path.data.opt_UfcsKnown() : nullptr;
+                    if (!impliedProjection || !visitTyWith(impliedProjection->type, [](const HIRTypeData* inner) {
+                        const auto* path = inner->opt_Path();
+                        return path && path->path.data.is_UfcsKnown();
+                    })) {
+                        continue;
+                    }
+                    auto ord = impliedType->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
+                    if (ord == HIRCompare::Unequal) {
+                        continue;
+                    }
+                    auto impliedTrait = monomorph.monomorphTraitpath(sp, declaredTrait->trait, false);
+                    if (impliedTrait.path.path != trait) {
+                        continue;
+                    }
+                    ord &= this->comparePp(sp, impliedTrait.path.params, params);
+                    if (ord == HIRCompare::Unequal) {
+                        continue;
+                    }
+                    DEBUG("[find_trait_impls_bound] Implied by " << environmentType << " : " << environmentTrait << " => " << impliedType << " : " << impliedTrait);
+                    if (callback(ImplRef(mv$(impliedType), mv$(impliedTrait.path.params), mv$(impliedTrait.typeBounds), impliedTrait.constness), ord)) {
+                        return true;
+                    }
+                }
+            }
+
             if (assocInfo) {
                 bool rv = this->iterateBoundsTraits(sp, assocInfo->type, assocInfo->trait.path, [&](HIRCompare cmp, const HIRTypeData* boundTy, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
                     // Check the trait params
