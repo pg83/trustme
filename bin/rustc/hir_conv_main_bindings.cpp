@@ -2542,23 +2542,23 @@ namespace {
 
     class MarkingsVisitor: public HIRVisitor {
         const HIRCrate& crate;
+        StaticTraitResolve resolve_;
         const HIRSimplePath& langUnsize_;
         const HIRSimplePath& langCoerceUnsized_;
         const HIRSimplePath& langCopy_;
         const HIRSimplePath& langDeref_;
         const HIRSimplePath& langDrop_;
-        const HIRSimplePath& langPhantomData_;
 
     public:
-        MarkingsVisitor(const HIRCrate& crate)
-            : HIRVisitor(nullptr, crate.types)
-            , crate(crate)
+        MarkingsVisitor(const WireBoard& wb)
+            : HIRVisitor(nullptr, wb.crate->types)
+            , crate(*wb.crate)
+            , resolve_(wb)
             , langUnsize_(crate.getLangItemPathOpt("unsize"))
             , langCoerceUnsized_(crate.getLangItemPathOpt("coerce_unsized"))
             , langCopy_(crate.getLangItemPathOpt("copy"))
             , langDeref_(crate.getLangItemPathOpt("deref"))
             , langDrop_(crate.getLangItemPathOpt("drop"))
-            , langPhantomData_(crate.getLangItemPathOpt("phantom_data"))
         {
         }
 
@@ -2667,6 +2667,7 @@ namespace {
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
             static Span sp;
 
+            auto implGenerics = resolve_.setImplGenerics(impl.type, impl.params);
             HIRVisitor::visitTraitImpl(traitPath, impl);
 
             if (impl.type->is_Path()) {
@@ -2725,13 +2726,13 @@ namespace {
                         case HIRStructData::TAG_Tuple: {
                             auto& se = str->data.as_Tuple();
                             for (unsigned int i = 0; i < se.size(); i++) {
-                                // If the data is PhantomData, ignore it.
-                                if (((*se[i].ent).is_Path() && (*se[i].ent).as_Path().path.data.is_Generic() && (*se[i].ent).as_Path().path.data.as_Generic().path == langPhantomData_)) {
-                                    continue;
-                                }
                                 if (monomorphiseTypeNeeded(se[i].ent)) {
-                                    auto tyL = monomorphCbL.monomorphType(sp, se[i].ent, false);
-                                    auto tyR = monomorphCbR.monomorphType(sp, se[i].ent, false);
+                                    auto tyL = resolve_.monomorphExpand(sp, se[i].ent, monomorphCbL);
+                                    auto tyR = resolve_.monomorphExpand(sp, se[i].ent, monomorphCbR);
+                                    // Associated type projections can resolve to PhantomData too.
+                                    if (resolve_.isTypePhantomData(tyL) && resolve_.isTypePhantomData(tyR)) {
+                                        continue;
+                                    }
                                     if (tyL != tyR) {
                                         if (field != ~0u) {
                                             ERROR(sp, E0000, "CoerceUnsized impls can only differ by one field");
@@ -2745,13 +2746,13 @@ namespace {
                         case HIRStructData::TAG_Named: {
                             auto& se = str->data.as_Named();
                             for (unsigned int i = 0; i < se.size(); i++) {
-                                // If the data is PhantomData, ignore it.
-                                if (((*se[i].ty).is_Path() && (*se[i].ty).as_Path().path.data.is_Generic() && (*se[i].ty).as_Path().path.data.as_Generic().path == langPhantomData_)) {
-                                    continue;
-                                }
                                 if (monomorphiseTypeNeeded(se[i].ty)) {
-                                    auto tyL = monomorphCbL.monomorphType(sp, se[i].ty, false);
-                                    auto tyR = monomorphCbR.monomorphType(sp, se[i].ty, false);
+                                    auto tyL = resolve_.monomorphExpand(sp, se[i].ty, monomorphCbL);
+                                    auto tyR = resolve_.monomorphExpand(sp, se[i].ty, monomorphCbR);
+                                    // Associated type projections can resolve to PhantomData too.
+                                    if (resolve_.isTypePhantomData(tyL) && resolve_.isTypePhantomData(tyR)) {
+                                        continue;
+                                    }
                                     if (tyL != tyR) {
                                         if (field != ~0u) {
                                             ERROR(sp, E0000, "CoerceUnsized impls can only differ by one field");
@@ -2884,8 +2885,8 @@ namespace {
 
 } // namespace
 
-void ConvertHIRMarkings(HIRCrate& crate) {
-    MarkingsVisitor exp{crate};
+void ConvertHIRMarkings(const WireBoard& wb, HIRCrate& crate) {
+    MarkingsVisitor exp{wb};
     exp.visitCrate(crate);
 
     // Visit again, visiting all structs and filling the coerce_unsized data

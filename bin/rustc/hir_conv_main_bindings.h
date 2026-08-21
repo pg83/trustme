@@ -35,7 +35,7 @@ extern void ConvertHIRResolveUFCSSortImpls(WireBoard& wb, HIRCrate& crate);
 extern void ConvertHIRIndexInherentMethods(const WireBoard& wb, const HIRCrate& crate);
 extern void ConvertHIRResolveUFCSOuter(const WireBoard& wb, HIRCrate& crate);
 extern void ConvertHIRResolveUFCS(const WireBoard& wb, HIRCrate& crate);
-extern void ConvertHIRMarkings(HIRCrate& crate);
+extern void ConvertHIRMarkings(const WireBoard& wb, HIRCrate& crate);
 extern void ConvertHIRConstantEvaluate(const WireBoard& wb, HIRCrate& hirCrate);
 
 extern void ConvertHIRResolveUFCSExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exprPtr);

@@ -737,7 +737,7 @@ static int compile(int argc, char* argv[]) {
         });
         // Enumerate marker impls on types and other useful metadata
         CompilePhaseV("Resolve HIR Markings", [&]() {
-            ConvertHIRMarkings(*hirCrate);
+            ConvertHIRMarkings(wb, *hirCrate);
         });
         CompilePhaseV("Sort Impls", [&]() {
             ConvertHIRResolveUFCSSortImpls(wb, *hirCrate);
