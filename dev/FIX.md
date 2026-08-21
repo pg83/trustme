@@ -101,7 +101,9 @@ checking its monomorphised field type closed
 `unsized/unsize-coerce-multiple-adt-params` and, on a later point rerun,
 `unsized/issue-75899-but-gats`; honoring the crate-level
 `rustc_no_implicit_bounds` attribute while lowering generic parameters closed
-`traits/next-solver/supertrait-alias-1`. Thus 50 of the 98 sweep failures
+`traits/next-solver/supertrait-alias-1`; resolving an associated type under its
+own generic parameter scope closed
+`impl-trait/in-trait/shorthand-projection-in-rpitit-bound`. Thus 49 of the 98 sweep failures
 remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -116,19 +118,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 75 |
-| fixed, or no longer reproducing, since the gate | 556 |
+| still failing or still carried from the last full sweep | 74 |
+| fixed, or no longer reproducing, since the gate | 557 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed forty-eight nodes, leaving 50. The remaining
+subsequent point fixes and reruns have closed forty-nine nodes, leaving 49. The remaining
 25 are in groups outside that sweep and are still carried from the last full
 sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 14 |
+| accepted Rust rejected by the compiler or driver | 13 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -136,13 +138,13 @@ sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 14 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 13 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 12 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 11 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 
 An async closure's future now takes the captures with it instead of borrowing
@@ -168,6 +170,13 @@ now starts type parameters without the usual implicit `Sized` marker, so
 `bound::<dyn Trait<Output = <V as Super>::Output>>()` is legal and the
 projection involving the unrelated `V` stays untouched. Explicit `Sized` and
 `?Sized` bounds continue through the existing bound lowering.
+
+`impl-trait/in-trait/shorthand-projection-in-rpitit-bound.rs` is closed in the
+outer UFCS pass. Synthetic RPITIT associated types copy the method's generic
+parameters, but associated types were visited without making those parameters
+current; `X::Foo` therefore had no visible `X: Bar` bound. Associated types now
+enter their own generic scope and resolve its bounds before their declared
+trait bounds, matching the existing function and inherent-type handling.
 
 `impl-trait/recursive-impl-trait-type-direct.rs` is closed at the shared RPIT
 inference boundary. A return opaque constrained only by a direct recursive

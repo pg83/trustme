@@ -3135,6 +3135,13 @@ public:
         HIRVisitor::visitTraitAlias(p, item);
     }
 
+    void visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) override {
+        auto _ = resolve_.setItemGenerics(item.generics);
+        DeclaredTypeGuard declaredTypes(*this);
+        this->visitParams(item.generics);
+        HIRVisitor::visitAssociatedtype(p, item);
+    }
+
     void visitTypeImpl(HIRTypeImpl& impl) override {
         TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " " << impl.type << " (mod=" << impl.srcModule << ")");
         auto _t = this->pushModTraits(impl.srcModule, this->crate.getModByPath(Span(), impl.srcModule));
