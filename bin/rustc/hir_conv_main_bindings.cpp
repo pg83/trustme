@@ -3905,7 +3905,7 @@ public:
                 auto& innerPe = e.type->as_Path().path.data.as_UfcsKnown();
                 const auto& trait = crate.getTraitByPath(sp, innerPe.trait.path);
                 const auto& atyDef = trait.types.at(innerPe.item);
-                auto mstate = MonomorphStatePtr(crate.types, innerPe.type, &innerPe.trait.params, nullptr);
+                auto mstate = MonomorphStatePtr(crate.types, innerPe.type, &innerPe.trait.params, &innerPe.params);
                 for (const auto& t : atyDef.traitBounds) {
                     auto traitPath = mstate.monomorphGenericpath(sp, t.path, /*allow_infer*/ true);
                     DEBUG("Searching ATY bound: " << traitPath);

@@ -6372,7 +6372,7 @@ default:
                     const auto& at = traitRef.types.at(assocInfo->item);
                     for (const auto& bound : at.traitBounds) {
                         if (bound.path.path == trait) {
-                            auto monomorphCb = MonomorphStatePtr(crate.types, assocInfo->type, &assocInfo->trait.params, nullptr);
+                            auto monomorphCb = MonomorphStatePtr(crate.types, assocInfo->type, &assocInfo->trait.params, &assocInfo->params);
 
                             DEBUG("- Found an associated type bound for this trait via another bound");
                             HIRCompare ord = outerOrd;

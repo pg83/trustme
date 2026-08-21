@@ -7790,7 +7790,7 @@ default:
                             // Edge case: Might be just outright identical
                             if (possibleImpl.implTy == implTy && possibleImpl.params == implParams) {
                                 auto t1 = v.name == "" ? HIRTypeRef() : possibleImpl.implRef.getType(context.crate.types, v.name.c_str(), v.atyPp);
-                                auto t2 = v.name == "" ? HIRTypeRef() : impl.getType(context.crate.types, v.name.c_str(), {});
+                                auto t2 = v.name == "" ? HIRTypeRef() : impl.getType(context.crate.types, v.name.c_str(), v.atyPp);
                                 if (v.name == "" || t1 == t2 || t2 == HIRTypeRef()) {
                                     DEBUG("[check_associated] HACK: Same type and params, and ATY matches or this impl doesn't have it");
                                     wasUsed = true;
@@ -7806,7 +7806,7 @@ default:
                                     count -= 1;
                                     break;
                                 } else {
-                                    DEBUG("[check_associated] HACK: Same type and params, but ATY mismatch - " << possibleImpl.implRef.getType(context.crate.types, v.name.c_str(), {}) << " != " << impl.getType(context.crate.types, v.name.c_str(), {}));
+                                    DEBUG("[check_associated] HACK: Same type and params, but ATY mismatch - " << possibleImpl.implRef.getType(context.crate.types, v.name.c_str(), v.atyPp) << " != " << impl.getType(context.crate.types, v.name.c_str(), v.atyPp));
                                 }
                             }
                         }
@@ -8514,7 +8514,7 @@ namespace {
             context.resolve.findTraitImpls(sp, bound->trait, p, t, [&](const auto impl, auto cmp) {
                 // If this bound specifies an associated type, then check that that type could match
                 if (bound->name != "") {
-                    auto aty = impl.getType(context.crate.types, bound->name.c_str(), {});
+                    auto aty = impl.getType(context.crate.types, bound->name.c_str(), bound->atyPp);
                     // The associated type is not present, what does that mean?
                     if (aty == HIRTypeRef()) {
                         DEBUG("[check_ivar_poss__fails_bounds] No ATY for " << bound->name << " in impl");
