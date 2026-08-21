@@ -73,7 +73,14 @@ void InherentCacheImpl::Lowest::iterate(const HIRTypeData* type, InherentCacheIm
 
     visit(this->generic);
 
-    if (const auto* path = type->getSortPath()) {
+    if (type->is_Infer() && !type->as_Infer().isLit()) {
+        // An unbound `Self` cannot select a named bucket yet. The full custom
+        // receiver shape is checked before any of these candidates is used.
+        for (const auto& entry : this->named) {
+            visit(entry.second);
+        }
+        visit(this->nonNamed);
+    } else if (const auto* path = type->getSortPath()) {
         auto it = this->named.find(*path);
         if (it != this->named.end()) {
             visit(it->second);
@@ -298,7 +305,16 @@ void InherentCacheImpl::find(const Span& sp, const RcString& name, const HIRType
             if ((*fcn.receiverType)->matchTestGenerics(sp, ty, HIRResolvePlaceholdersNop(), getself)) {
                 // A receiver that names no `Self` says nothing about it, and the
                 // impl it belongs to is the answer.
-                cb(getself.detectedSelfTy ? *getself.detectedSelfTy : impl.type, impl);
+                auto selfTy = getself.detectedSelfTy ? *getself.detectedSelfTy : impl.type;
+                const auto* resolvedSelfTy = tyRes.getType(sp, selfTy);
+                // The matched concrete impl is enough to turn `<_>::method`
+                // into a resolvable path. Keep generic impls on the old path:
+                // their parameters have not been monomorphised here.
+                if (resolvedSelfTy->is_Infer() && !resolvedSelfTy->as_Infer().isLit()
+                    && !impl.type->needsMonomorphisation()) {
+                    selfTy = impl.type;
+                }
+                cb(selfTy, impl);
             }
         } else {
             // No extra checks required?
