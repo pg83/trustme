@@ -83,7 +83,9 @@ well-formed before inherent lookup, closed
 inherent method return types well-formed during next-solver probing closed
 `traits/next-solver/non-wf-ret`; matching nested projection predicates from a
 trait declaration on demand closed
-`associated-type-bounds/nested-gat-projection`. Thus 61
+`associated-type-bounds/nested-gat-projection`; recursively matching nested
+associated-type declaration bounds on demand closed
+`associated-type-bounds/bad-bounds-on-assoc-in-trait`. Thus 60
 of the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -98,19 +100,19 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 86 |
-| fixed, or no longer reproducing, since the gate | 545 |
+| still failing or still carried from the last full sweep | 85 |
+| fixed, or no longer reproducing, since the gate | 546 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes have closed thirty-seven nodes, leaving 61. The remaining
+subsequent point fixes have closed thirty-eight nodes, leaving 60. The remaining
 25 are in groups outside that sweep and are still carried from the last full
 sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 25 |
+| accepted Rust rejected by the compiler or driver | 24 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 22 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
@@ -118,13 +120,13 @@ sweep.
 
 ## P0: accepted Rust rejected by the front end
 
-The current eight-corpus rerun has 25 positive programs accepted by Rust 1.90.
+The current eight-corpus rerun has 24 positive programs accepted by Rust 1.90.
 A normal trustme error is a compiler deficiency, not an expected corpus
 result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 23 | trait/impl selection and type mismatch dominate |
+| type checking, HIR lowering, and resolution | 22 | trait/impl selection and type mismatch dominate |
 | CTFE and MIR lowering | 2 | if-let guards |
 
 An async closure's future now takes the captures with it instead of borrowing
@@ -196,6 +198,13 @@ over another projection. The existing ParamEnv path already elaborates one
 associated-type layer; the additional lookup supplies the deeper declared
 bound without eagerly inserting every trait predicate, which would perturb
 ordinary generic inference and specialization.
+
+`associated-type-bounds/bad-bounds-on-assoc-in-trait.rs` is closed by walking
+an associated type declaration's nested `traitBounds` on demand and building
+the exact projection subject at every layer. This exposes bounds such as
+`Iterator::Item: Iterator` and its deeper associated constraints without
+eagerly adding declaration predicates to the ParamEnv candidate set, so
+ordinary inference and specialization keep their existing ordering.
 
 `Box<_>` is no reason to commit to the only fuzzy method currently visible.
 In `explicit-self-generic`, the blanket `ExactSizeIterator for Box<I>` looked

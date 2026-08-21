@@ -6273,11 +6273,36 @@ default:
                 }
             }
 
-            // The associated-type path below elaborates one projection layer.
-            // Match declaration predicates on demand only when their subject
-            // is itself a projection over another projection; putting every
-            // declared predicate in the candidate set changes ordinary generic
-            // inference and specialization.
+            // Match nested declaration predicates on demand. Putting every
+            // declared predicate in the cached ParamEnv changes ordinary
+            // generic inference and specialization, while the declaration
+            // tree already gives each nested predicate its exact subject.
+            auto visitDeclaredTrait = [&](auto&& visit, const HIRTypeData* subject, const HIRTraitPath& declaredTrait, bool matchCurrent) -> bool {
+                if (matchCurrent && declaredTrait.path.path == trait) {
+                    auto ord = subject->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
+                    if (ord != HIRCompare::Unequal) {
+                        ord &= this->comparePp(sp, declaredTrait.path.params, params);
+                        if (ord != HIRCompare::Unequal) {
+                            DEBUG("[find_trait_impls_bound] Implied declaration bound " << subject << " : " << declaredTrait);
+                            auto response = declaredTrait.clone();
+                            if (callback(ImplRef(subject, mv$(response.path.params), mv$(response.typeBounds), response.constness), ord)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                for (const auto& associated : declaredTrait.traitBounds) {
+                    auto nestedSubject = crate.types.path(HIRPath(subject, associated.second.sourceTrait.clone(), associated.first, associated.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
+                    for (const auto& nestedTrait : associated.second.traits) {
+                        if (visit(visit, nestedSubject, nestedTrait, true)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            };
+
             for (const auto& environment : traitBounds) {
                 const auto& environmentType = environment.first.first;
                 const auto& environmentTrait = environment.first.second;
@@ -6292,6 +6317,7 @@ default:
                     }
 
                     auto impliedType = monomorph.monomorphType(sp, declaredTrait->type);
+                    auto impliedTrait = monomorph.monomorphTraitpath(sp, declaredTrait->trait, false);
                     const auto* impliedPath = impliedType->opt_Path();
                     const auto* impliedProjection = impliedPath ? impliedPath->path.data.opt_UfcsKnown() : nullptr;
                     if (!impliedProjection || !visitTyWith(impliedProjection->type, [](const HIRTypeData* inner) {
@@ -6300,20 +6326,28 @@ default:
                     })) {
                         continue;
                     }
-                    auto ord = impliedType->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
-                    if (ord == HIRCompare::Unequal) {
+                    if (visitDeclaredTrait(visitDeclaredTrait, impliedType, impliedTrait, true)) {
+                        return true;
+                    }
+                }
+
+                for (const auto& associated : environmentInfo.traitPtr->types) {
+                    const auto& definition = associated.second;
+                    if (definition.generics.isGeneric() || !definition.generics.isEmpty()) {
                         continue;
                     }
-                    auto impliedTrait = monomorph.monomorphTraitpath(sp, declaredTrait->trait, false);
-                    if (impliedTrait.path.path != trait) {
-                        continue;
+                    auto associatedType = crate.types.path(HIRPath(environmentType, environmentTrait.clone(), associated.first, {}), HIRTypePathBinding::make_Opaque({}));
+                    monomorph.ppMethod = &associatedType->as_Path().path.data.as_UfcsKnown().params;
+                    bool found = false;
+                    for (const auto& declaredTrait : definition.traitBounds) {
+                        auto impliedTrait = monomorph.monomorphTraitpath(sp, declaredTrait, false);
+                        if (visitDeclaredTrait(visitDeclaredTrait, associatedType, impliedTrait, false)) {
+                            found = true;
+                            break;
+                        }
                     }
-                    ord &= this->comparePp(sp, impliedTrait.path.params, params);
-                    if (ord == HIRCompare::Unequal) {
-                        continue;
-                    }
-                    DEBUG("[find_trait_impls_bound] Implied by " << environmentType << " : " << environmentTrait << " => " << impliedType << " : " << impliedTrait);
-                    if (callback(ImplRef(mv$(impliedType), mv$(impliedTrait.path.params), mv$(impliedTrait.typeBounds), impliedTrait.constness), ord)) {
+                    monomorph.ppMethod = nullptr;
+                    if (found) {
                         return true;
                     }
                 }
