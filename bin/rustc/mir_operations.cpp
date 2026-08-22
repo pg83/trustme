@@ -5004,46 +5004,51 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
     // hash map of buckets.
     static ThinVector<HashedBlock> hashedBlocks;
     static ThinVector<unsigned int> groupReps;
-    hashedBlocks.clear();
-    for (unsigned int bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
-        if (fcn.blocks[bbIdx].terminator.isDead()) {
-            continue;
+    for (;;) {
+        replacements.clear();
+        hashedBlocks.clear();
+        for (unsigned int bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
+            if (fcn.blocks[bbIdx].terminator.isDead()) {
+                continue;
+            }
+            if (fcn.blocks[bbIdx].terminator.is_Incomplete() && fcn.blocks[bbIdx].statements.size() == 0) {
+                continue;
+            }
+            hashedBlocks.push_back(HashedBlock{H::blockHash(fcn.blocks[bbIdx]), bbIdx});
         }
-        if (fcn.blocks[bbIdx].terminator.is_Incomplete() && fcn.blocks[bbIdx].statements.size() == 0) {
-            continue;
-        }
-        hashedBlocks.push_back(HashedBlock{H::blockHash(fcn.blocks[bbIdx]), bbIdx});
-    }
-    ::std::sort(hashedBlocks.begin(), hashedBlocks.end(), [](const HashedBlock& a, const HashedBlock& b) {
-        return a.hash != b.hash ? a.hash < b.hash : a.bbIdx < b.bbIdx;
-    });
-    for (size_t i = 0; i < hashedBlocks.size();) {
-        size_t j = i;
-        while (j < hashedBlocks.size() && hashedBlocks[j].hash == hashedBlocks[i].hash) {
-            j++;
-        }
-        if (j - i > 1) {
-            // Within a group, the earliest equal block becomes the candidate.
-            groupReps.clear();
-            for (size_t k = i; k < j; k++) {
-                auto bbIdx = hashedBlocks[k].bbIdx;
-                bool found = false;
-                for (auto candidate : groupReps) {
-                    if (H::blocksEqual(fcn.blocks[candidate], fcn.blocks[bbIdx])) {
-                        replacements[bbIdx] = candidate;
-                        found = true;
-                        break;
+        ::std::sort(hashedBlocks.begin(), hashedBlocks.end(), [](const HashedBlock& a, const HashedBlock& b) {
+            return a.hash != b.hash ? a.hash < b.hash : a.bbIdx < b.bbIdx;
+        });
+        for (size_t i = 0; i < hashedBlocks.size();) {
+            size_t j = i;
+            while (j < hashedBlocks.size() && hashedBlocks[j].hash == hashedBlocks[i].hash) {
+                j++;
+            }
+            if (j - i > 1) {
+                // Within a group, the earliest equal block becomes the candidate.
+                groupReps.clear();
+                for (size_t k = i; k < j; k++) {
+                    auto bbIdx = hashedBlocks[k].bbIdx;
+                    bool found = false;
+                    for (auto candidate : groupReps) {
+                        if (H::blocksEqual(fcn.blocks[candidate], fcn.blocks[bbIdx])) {
+                            replacements[bbIdx] = candidate;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        groupReps.push_back(bbIdx);
                     }
                 }
-                if (!found) {
-                    groupReps.push_back(bbIdx);
-                }
             }
+            i = j;
         }
-        i = j;
-    }
 
-    if (!replacements.empty()) {
+        if (replacements.empty()) {
+            break;
+        }
+
         //MIR_TODO(state, "Unify blocks - " << replacements);
         DEBUG("Unify blocks (old: new) - " << replacements);
         auto patchTgt = [&replacements](MIRBasicBlockId& tgt) {
