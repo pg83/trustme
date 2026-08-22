@@ -450,7 +450,33 @@ namespace {
             return generatorState.savedDropFlags;
         }
 
-        bool generatorStorageSlotConflicts(unsigned local, unsigned slot, unsigned firstStoredLocal, const stl::IntMap<unsigned>& storageSlots) const {
+        bool generatorStorageSlotConflicts(
+            const Span& sp,
+            const StaticTraitResolve& resolve,
+            const MIRFunction& fcn,
+            unsigned local,
+            unsigned slot,
+            unsigned firstStoredLocal,
+            const stl::IntMap<unsigned>& storageSlots,
+            const MIRValueLifetimes& lifetimes
+        ) const {
+            // An async-drop future can borrow the value used to construct it
+            // between adjacent suspension states. Keep that pair disjoint;
+            // ordinary locals in disjoint states must remain overlappable.
+            const auto* localPath = fcn.locals[local]->opt_Path();
+            const bool localIsFuture = localPath && localPath->isFuture();
+            for (unsigned other = firstStoredLocal; other < local; other++) {
+                const auto* assignedSlot = storageSlots.find(other);
+                if (!assignedSlot || *assignedSlot != slot || !lifetimes.slots[local].overlaps(lifetimes.slots[other])) {
+                    continue;
+                }
+                const auto* otherPath = fcn.locals[other]->opt_Path();
+                const bool otherIsFuture = otherPath && otherPath->isFuture();
+                if ((localIsFuture && resolve.typeNeedsAsyncDrop(sp, fcn.locals[other]))
+                    || (otherIsFuture && resolve.typeNeedsAsyncDrop(sp, fcn.locals[local]))) {
+                    return true;
+                }
+            }
             for (const auto& state : generatorState.states) {
                 if (state.saved.count(local) == 0) {
                     continue;
@@ -468,7 +494,7 @@ namespace {
             return false;
         }
 
-        void generatorPruneInactiveLocals(
+        MIRValueLifetimes generatorPruneInactiveLocals(
             const Span& sp,
             const StaticTraitResolve& resolve,
             const HIRItemPath& path,
@@ -550,6 +576,7 @@ namespace {
                     }
                 }
             }
+            return lifetimes;
         }
 
         std::set<unsigned> generatorFinalise(const Span& sp, HIREnum& stateEnm) {
@@ -3816,7 +3843,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
 
             // 1. Discard initialised-but-dead locals, then generate the state
             // machine switch and enumerate the values that really cross it.
-            ev.generatorPruneInactiveLocals(sp, resolve, path, retTy, args, fcn);
+            auto lifetimes = ev.generatorPruneInactiveLocals(sp, resolve, path, retTy, args, fcn);
             std::set<unsigned> saved = ev.generatorFinalise(genNode->span(), const_cast<HIREnum&>(resolve.hirCrate().getEnumByPath(sp, genNode->stateIdxEnum)));
             // 2. Populate state structure
             auto& stateTy = const_cast<HIRStruct&>(*genNode->stateDataType->as_Path().binding.as_Struct());
@@ -3863,7 +3890,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
                 ASSERT_BUG(sp, idx < fcn.locals.size(), idx << " >= " << fcn.locals.size());
 
                 unsigned storageSlot = 0;
-                while (ev.generatorStorageSlotConflicts(idx, storageSlot, firstStoredLocal, storageSlots)) {
+                while (ev.generatorStorageSlotConflicts(sp, resolve, fcn, idx, storageSlot, firstStoredLocal, storageSlots, lifetimes)) {
                     storageSlot += 1;
                 }
                 if (storageSlot == storageSlotCount) {

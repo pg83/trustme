@@ -42,7 +42,8 @@ The graph contained 15,139 nodes. The full run completed 15,090 and reported
 49 broken targets. All 49 target commands were rerun independently against
 the published roots. Forty-eight failures reproduced; RustSmith seed 36
 completed in isolation and is the only load-sensitive result. The subsequent
-ThinBox point fix closed six independently rerun nodes, leaving 42.
+ThinBox and async-drop storage point fixes closed nine independently rerun
+nodes, leaving 39.
 
 | result | nodes |
 |---|---:|
@@ -51,8 +52,8 @@ ThinBox point fix closed six independently rerun nodes, leaving 42.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 6 |
-| still failing independently | 42 |
+| fixed by subsequent point reruns | 9 |
+| still failing independently | 39 |
 
 Manual inspection normalised two mechanical classifier labels:
 
@@ -67,10 +68,10 @@ The resulting current population is:
 | current result | nodes |
 |---|---:|
 | accepted Rust rejected during type checking | 8 |
-| compiler BUG, MIR error, signal, or generated C++ failure | 13 |
+| compiler BUG, MIR error, signal, or generated C++ failure | 10 |
 | wrong runtime behaviour, panic, abort, or output | 13 |
 | stable timeout | 8 |
-| **total independently reproduced** | **42** |
+| **total independently reproduced** | **39** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -78,18 +79,15 @@ accounting.
 
 ## P0: async/coroutine storage and drop
 
-Five nodes fail in this area, across three observable routes:
+Two nodes remain in this area, on distinct observable routes:
 
 | route | nodes | cases |
 |---|---:|---|
-| `MIR ERROR trans_codegen_c.cpp:6673`: async-drop future has no suspension storage | 3 | `async-drop-future-from-future`, `async-drop-middle-drop`, `async-drop-open` |
 | generated C++ names a missing coroutine-state field | 1 | UI `async-await/non-trivial-drop.rs` |
 | runtime `SIGABRT` while polling async-drop glue | 1 | `async-drop-initial.rs` |
 
-The three identical MIR errors are one strong cluster. The state-field compile
-failure and runtime abort are adjacent evidence, not yet proof of the same
-root cause. The earlier point-rerun claim that async-drop initial and middle
-were closed is stale; both reproduce against the fresh full-gate toolchain.
+The state-field compile failure and runtime abort are adjacent evidence, not
+yet proof of the same root cause.
 
 Two additional runtime cases concern ordinary coroutine layout:
 

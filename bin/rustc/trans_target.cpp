@@ -942,6 +942,55 @@ namespace {
         return true;
     }
 
+    bool addAsyncDropCoroutineStateFieldLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* fieldTy, AsyncDropFieldLayout& out) {
+        const auto* path = fieldTy->opt_Path();
+        if (!path || !path->binding.is_Union() || !path->path.data.is_Generic()) {
+            return addAsyncDropFieldLayout(sp, resolve, outerTy, fieldTy, out);
+        }
+
+        // Coroutine lowering overlaps mutually exclusive saved locals in a
+        // generated union. The union itself has no drop glue, but each of its
+        // variants can need suspension storage in the coroutine's drop future.
+        const auto& generic = path->path.data.as_Generic();
+        auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, fieldTy, &generic.params, nullptr);
+        for (const auto& variant : path->binding.as_Union()->variants) {
+            auto variantTy = resolve.monomorphExpand(sp, variant.ty, monomorph);
+            if (!addAsyncDropFieldLayout(sp, resolve, outerTy, variantTy, out)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool asyncDropCoroutineStateLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* stateTy, AsyncDropFieldLayout& out) {
+        const auto* path = stateTy->opt_Path();
+        ASSERT_BUG(sp, path && path->binding.is_Struct() && path->path.data.is_Generic(), "invalid coroutine state type " << stateTy);
+        const auto& generic = path->path.data.as_Generic();
+        const auto& str = *path->binding.as_Struct();
+        auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, stateTy, &generic.params, nullptr);
+        switch (str.data.tag()) {
+            case HIRStructData::TAG_Unit:
+                break;
+            case HIRStructData::TAG_Tuple:
+                for (const auto& field : str.data.as_Tuple()) {
+                    auto fieldTy = resolve.monomorphExpand(sp, field.ent, monomorph);
+                    if (!addAsyncDropCoroutineStateFieldLayout(sp, resolve, outerTy, fieldTy, out)) {
+                        return false;
+                    }
+                }
+                break;
+            case HIRStructData::TAG_Named:
+                for (const auto& field : str.data.as_Named()) {
+                    auto fieldTy = resolve.monomorphExpand(sp, field.ty, monomorph);
+                    if (!addAsyncDropCoroutineStateFieldLayout(sp, resolve, outerTy, fieldTy, out)) {
+                        return false;
+                    }
+                }
+                break;
+        }
+        return true;
+    }
+
     bool asyncDropCoroutineFieldsLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* ty, AsyncDropFieldLayout& out) {
         const auto& pathTy = ty->as_Path();
         ASSERT_BUG(sp, (pathTy.isFuture() || pathTy.isGenerator()) && pathTy.binding.is_Struct() && pathTy.path.data.is_Generic(),
@@ -957,7 +1006,7 @@ namespace {
                     && fieldPath->path.data.as_Generic().path == resolve.hirCrate().getLangItemPath(sp, "maybe_uninit")
                     && fieldPath->path.data.as_Generic().params.types.size() == 1,
                     "coroutine state is not MaybeUninit<State>: " << fieldTy);
-                if (!asyncDropStructFieldsLayout(sp, resolve, outerTy, fieldPath->path.data.as_Generic().params.types[0], out)) {
+                if (!asyncDropCoroutineStateLayout(sp, resolve, outerTy, fieldPath->path.data.as_Generic().params.types[0], out)) {
                     return false;
                 }
             } else if (!addAsyncDropFieldLayout(sp, resolve, outerTy, fieldTy, out)) {
