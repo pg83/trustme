@@ -42,8 +42,8 @@ The graph contained 15,139 nodes. The full run completed 15,090 and reported
 49 broken targets. All 49 target commands were rerun independently against
 the published roots. Forty-eight failures reproduced; RustSmith seed 36
 completed in isolation and is the only load-sensitive result. The subsequent
-ThinBox and async-drop storage point fixes closed nine independently rerun
-nodes, leaving 39.
+ThinBox, async-drop storage, and coroutine storage point fixes closed twelve
+independently rerun nodes, leaving 36.
 
 | result | nodes |
 |---|---:|
@@ -52,8 +52,8 @@ nodes, leaving 39.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 9 |
-| still failing independently | 39 |
+| fixed by subsequent point reruns | 12 |
+| still failing independently | 36 |
 
 Manual inspection normalised two mechanical classifier labels:
 
@@ -68,33 +68,19 @@ The resulting current population is:
 | current result | nodes |
 |---|---:|
 | accepted Rust rejected during type checking | 8 |
-| compiler BUG, MIR error, signal, or generated C++ failure | 10 |
-| wrong runtime behaviour, panic, abort, or output | 13 |
+| compiler BUG, MIR error, signal, or generated C++ failure | 9 |
+| wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 8 |
-| **total independently reproduced** | **39** |
+| **total independently reproduced** | **36** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
 accounting.
 
-## P0: async/coroutine storage and drop
+## P0: async/coroutine storage
 
-Two nodes remain in this area, on distinct observable routes:
-
-| route | nodes | cases |
-|---|---:|---|
-| generated C++ names a missing coroutine-state field | 1 | UI `async-await/non-trivial-drop.rs` |
-| runtime `SIGABRT` while polling async-drop glue | 1 | `async-drop-initial.rs` |
-
-The state-field compile failure and runtime abort are adjacent evidence, not
-yet proof of the same root cause.
-
-Two additional runtime cases concern ordinary coroutine layout:
-
-- `async-await/future-sizes/future-as-arg.rs` produces a 63-byte nested
-  future where the test requires more than 550 bytes;
-- `async-await/issue-73137.rs` overwrites a saved reference field with the
-  neighbouring integer field across an await.
+One runtime layout case remains: `async-await/future-sizes/future-as-arg.rs`
+produces a 63-byte nested future where the test requires more than 550 bytes.
 
 ## P0: trait objects and upcasting
 
@@ -144,15 +130,14 @@ The two `hir_hir.cpp:600` cases resolve different missing paths
 
 ## P1: runtime semantics
 
-Thirteen programs compile but execute incorrectly:
+Eleven programs compile but execute incorrectly:
 
 | family | nodes | cases |
 |---|---:|---|
 | lifetime-erased `TypeId` / `Any` distinctions | 3 | `type-id-higher-rank`, `any-lifetime-escape-higher-rank`, doctest `core/src/any.rs:660` |
 | anonymous-scope `type_name` paths | 2 | `issues/issue-61894.rs`, coretest `any::dyn_type_name` |
 | RustSmith stdout mismatch | 2 | seeds 19 and 102 |
-| coroutine layout/state | 2 | `future-as-arg`, `issue-73137` |
-| async-drop runtime abort | 1 | `async-drop-initial` |
+| coroutine layout/state | 1 | `future-as-arg` |
 | drop elaboration after a raw-pointer write | 1 | `drop/issue-90752-raw-ptr-shenanigans.rs` |
 | generic-assert captured diagnostic text | 1 | `feature-gate-generic_assert.rs` |
 | adjacent stack allocation layout | 1 | Miri `adjacent-allocs.rs` |

@@ -9008,10 +9008,14 @@ default:
                                 emitBorrow(*mirRes, HIRBorrowType::Unique, slot);
                                 of << ");\n";
                             } else if (this->typeIsBadZst(ty) && (slot.is_Field() || slot.is_Downcast())) {
-                                // May need to back the slot out too, as we might be dropping a ZST tuple
+                                // Elided ZST projections can be nested through
+                                // tuples, generated coroutine storage unions,
+                                // and their downcasts. Back out to the first
+                                // materialized ancestor before taking an
+                                // address for drop glue.
                                 auto v = MIRLValue::CRef(slot).innerRef();
                                 HIRTypeRef tmp;
-                                if (this->typeIsBadZst(mirRes->getLvalueType(tmp, v)) && (v.is_Field() || v.is_Downcast())) {
+                                while (this->typeIsBadZst(mirRes->getLvalueType(tmp, v)) && (v.is_Field() || v.is_Downcast())) {
                                     v = v.innerRef();
                                 }
                                 of << indent << TransMangle(p) << "((";

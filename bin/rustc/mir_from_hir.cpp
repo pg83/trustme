@@ -453,6 +453,62 @@ namespace {
             return generatorState.savedDropFlags;
         }
 
+        static u64 generatorStorageConflictKey(unsigned left, unsigned right) {
+            const u64 first = left < right ? left : right;
+            const u64 second = left < right ? right : left;
+            return (first << 32) | second;
+        }
+
+        void generatorFindCompositeStorageConflicts(
+            const MIRFunction& fcn,
+            unsigned firstStoredLocal,
+            stl::IntMap<bool>& conflicts
+        ) const {
+            for (const auto& block : fcn.blocks) {
+                for (const auto& statement : block.statements) {
+                    const auto* assign = statement.opt_Assign();
+                    if (!assign || !assign->dst.root.is_Local()) {
+                        continue;
+                    }
+                    switch (assign->src.tag()) {
+                        case MIRRValue::TAG_SizedArray:
+                        case MIRRValue::TAG_Tuple:
+                        case MIRRValue::TAG_Array:
+                        case MIRRValue::TAG_EnumVariant:
+                        case MIRRValue::TAG_Struct:
+                            break;
+                        default:
+                            continue;
+                    }
+
+                    const auto destination = assign->dst.root.as_Local();
+                    if (destination < firstStoredLocal) {
+                        continue;
+                    }
+                    auto addSource = [&](unsigned source) {
+                        if (source < firstStoredLocal || source == destination) {
+                            return;
+                        }
+                        const auto key = generatorStorageConflictKey(destination, source);
+                        if (!conflicts.find(key)) {
+                            conflicts.insert(key, true);
+                        }
+                    };
+                    visitMirLvalues(assign->src, [&](const MIRLValue& lvalue, MIRValUsage) {
+                        if (lvalue.root.is_Local()) {
+                            addSource(lvalue.root.as_Local());
+                        }
+                        for (const auto& wrapper : lvalue.wrappers) {
+                            if (wrapper.is_Index()) {
+                                addSource(wrapper.as_Index());
+                            }
+                        }
+                        return false;
+                    });
+                }
+            }
+        }
+
         bool generatorStorageSlotConflicts(
             const Span& sp,
             const StaticTraitResolve& resolve,
@@ -461,6 +517,7 @@ namespace {
             unsigned slot,
             unsigned firstStoredLocal,
             const stl::IntMap<unsigned>& storageSlots,
+            const stl::IntMap<bool>& compositeConflicts,
             const MIRValueLifetimes& lifetimes
         ) const {
             // An async-drop future can borrow the value used to construct it
@@ -470,7 +527,13 @@ namespace {
             const bool localIsFuture = localPath && localPath->isFuture();
             for (unsigned other = firstStoredLocal; other < local; other++) {
                 const auto* assignedSlot = storageSlots.find(other);
-                if (!assignedSlot || *assignedSlot != slot || !lifetimes.slots[local].overlaps(lifetimes.slots[other])) {
+                if (!assignedSlot || *assignedSlot != slot) {
+                    continue;
+                }
+                if (compositeConflicts.find(generatorStorageConflictKey(local, other))) {
+                    return true;
+                }
+                if (!lifetimes.slots[local].overlaps(lifetimes.slots[other])) {
                     continue;
                 }
                 const auto* otherPath = fcn.locals[other]->opt_Path();
@@ -3857,6 +3920,8 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
             const auto firstStoredLocal = static_cast<unsigned>(1 + genNode->captureUsages.size());
             auto storagePool = stl::ObjPool::fromMemory();
             stl::IntMap<unsigned> storageSlots{storagePool.mutPtr()};
+            stl::IntMap<bool> compositeConflicts{storagePool.mutPtr()};
+            ev.generatorFindCompositeStorageConflicts(fcn, firstStoredLocal, compositeConflicts);
             ThinVector<HIRTypeRef> storageTypes;
             unsigned storageSlotCount = 0;
             auto makeStorageType = [&]() {
@@ -3888,7 +3953,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
                 ASSERT_BUG(sp, idx < fcn.locals.size(), idx << " >= " << fcn.locals.size());
 
                 unsigned storageSlot = 0;
-                while (ev.generatorStorageSlotConflicts(sp, resolve, fcn, idx, storageSlot, firstStoredLocal, storageSlots, lifetimes)) {
+                while (ev.generatorStorageSlotConflicts(sp, resolve, fcn, idx, storageSlot, firstStoredLocal, storageSlots, compositeConflicts, lifetimes)) {
                     storageSlot += 1;
                 }
                 if (storageSlot == storageSlotCount) {
