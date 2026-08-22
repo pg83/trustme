@@ -509,76 +509,143 @@ default:
     return baseOfs;
 }
 
-std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
-    // The type printer decorates a path with crate tags; `type_name` wants the
-    // path as written.
-    auto plainPath = [this](const HIRSimplePath& path) {
-        ::std::string rv;
-        const auto& crate = path.crateName();
-        if (crate != "") {
+MIRTypeResolve::TypeNameString MIRTypeResolve::typeNameForSimplePath(const HIRSimplePath& path) const {
+    const HIRCrate* pathCrate = nullptr;
+    if (path.crateName() == crate.crateName) {
+        pathCrate = &crate;
+    } else {
+        auto crateIt = crate.extCrates.find(path.crateName());
+        if (crateIt != crate.extCrates.end()) {
+            pathCrate = crateIt->second.data;
+        }
+    }
+
+    const HIRLocalItemTypeNamePath* localOwner = nullptr;
+    size_t localModuleSize = 0;
+    if (pathCrate) {
+        const auto components = path.components();
+        for (const auto* candidate = pathCrate->localItemTypeNamePaths; candidate; candidate = candidate->next) {
+            const auto moduleComponents = candidate->modulePath.components();
+            if (candidate->modulePath.crateName() != path.crateName()
+                || moduleComponents.size() <= localModuleSize
+                || moduleComponents.size() > components.size()) {
+                continue;
+            }
+            size_t i = 0;
+            while (i < moduleComponents.size() && moduleComponents[i] == components[i]) {
+                i++;
+            }
+            if (i == moduleComponents.size()) {
+                localOwner = candidate;
+                localModuleSize = i;
+            }
+        }
+    }
+
+    ::std::string rv;
+    if (localOwner) {
+        rv = typeNameForItemPath(*localOwner->ownerPath, true);
+    } else {
+        const auto& crateName = path.crateName();
+        if (crateName != "") {
             // An executable's crate name is the placeholder `bin#`, and the
             // others carry a version tag (`core-0_0_0`) that the name of the
             // type does not.
-            if (crate == this->crate.crateName && this->crate.crateNameDisplay != "") {
-                rv += this->crate.crateNameDisplay.c_str();
+            if (crateName == crate.crateName && crate.crateNameDisplay != "") {
+                rv += crate.crateNameDisplay.c_str();
             } else {
-                ::std::string name(crate.c_str());
+                ::std::string name(crateName.c_str());
                 const auto tag = name.rfind('-');
                 rv += (tag == ::std::string::npos ? name : name.substr(0, tag));
             }
         }
-        for (const auto& comp : path.components()) {
-            if (!rv.empty()) {
-                rv += "::";
-            }
-            // A closure is a generated type named `closure#<item>_<n>`; rustc
-            // names it after the item that holds it instead.
-            auto text = FMT(comp);
-            if (text.compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0) {
-                auto owner = text.substr(strlen(CLOSURE_PATH_PREFIX));
-                // `npos` compares greater than any index, so the digits check
-                // also covers a name with no `_` in it at all.
-                const auto index = owner.rfind('_');
-                if (index < owner.size() && owner.find_first_not_of("0123456789", index + 1) >= owner.size()) {
-                    owner = owner.substr(0, index);
-                }
-                rv += owner;
-                rv += "::{{closure}}";
-                continue;
-            }
-            rv += text;
-        }
-        return rv;
-    };
-    // The arguments of a path, as `<A, B>`, empty when there are none.
-    auto pathArgs = [this](const HIRPathParams& params, const HIRTraitPath::assocListT* typeBounds) {
-        auto rv = FMT("");
-        auto add = [&](const auto& text) {
-            rv += (rv.empty() ? "<" : ", ");
-            rv += text;
-        };
-        for (const auto& t : params.types) {
-            add(this->intrinsicTypeName(t));
-        }
-        // Const generic arguments are part of the name too: `S<3>`. An
-        // evaluated one prints as its encoded bytes otherwise.
-        for (const auto& v : params.values) {
-            if (const auto* e = v.opt_Evaluated()) {
-                add(FMT(EncodedLiteralSlice(**e).readUint()));
-            } else {
-                add(FMT(v));
-            }
-        }
-        if (typeBounds) {
-            for (const auto& b : *typeBounds) {
-                add(FMT(b.first << " = " << this->intrinsicTypeName(b.second.type)));
-            }
-        }
+    }
+
+    const auto components = path.components();
+    for (size_t i = localModuleSize; i < components.size(); i++) {
         if (!rv.empty()) {
-            rv += ">";
+            rv += "::";
         }
-        return rv;
+        // A closure is a generated type named `closure#<item>_<n>`; rustc
+        // names it after the item that holds it instead.
+        auto text = FMT(components[i]);
+        if (text.compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0) {
+            auto owner = text.substr(strlen(CLOSURE_PATH_PREFIX));
+            // `npos` compares greater than any index, so the digits check
+            // also covers a name with no `_` in it at all.
+            const auto index = owner.rfind('_');
+            if (index < owner.size() && owner.find_first_not_of("0123456789", index + 1) >= owner.size()) {
+                owner = owner.substr(0, index);
+            }
+            rv += owner;
+            rv += "::{{closure}}";
+            continue;
+        }
+        rv += text;
+    }
+    return rv;
+}
+
+MIRTypeResolve::TypeNameString MIRTypeResolve::typeNameForPathArgs(const HIRPathParams& params, const HIRTraitPath::assocListT* typeBounds, bool genericPlaceholders) const {
+    auto rv = FMT("");
+    auto add = [&rv](const auto& text) {
+        rv += (rv.empty() ? "<" : ", ");
+        rv += text;
     };
+    for (const auto& t : params.types) {
+        add(intrinsicTypeNameImpl(t, genericPlaceholders));
+    }
+    // Const generic arguments are part of the name too: `S<3>`. An
+    // evaluated one prints as its encoded bytes otherwise.
+    for (const auto& v : params.values) {
+        if (genericPlaceholders && v.is_Generic()) {
+            add("_");
+        } else if (const auto* e = v.opt_Evaluated()) {
+            add(FMT(EncodedLiteralSlice(**e).readUint()));
+        } else {
+            add(FMT(v));
+        }
+    }
+    if (typeBounds) {
+        for (const auto& b : *typeBounds) {
+            add(FMT(b.first << " = " << intrinsicTypeNameImpl(b.second.type, genericPlaceholders)));
+        }
+    }
+    if (!rv.empty()) {
+        rv += ">";
+    }
+    return rv;
+}
+
+MIRTypeResolve::TypeNameString MIRTypeResolve::typeNameForItemPath(const HIRPath& path, bool genericPlaceholders) const {
+    switch (path.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            const auto& pe = path.data.as_Generic();
+            return typeNameForSimplePath(pe.path) + typeNameForPathArgs(pe.params, nullptr, genericPlaceholders);
+        }
+        case HIRPathData::TAG_UfcsInherent: {
+            const auto& pe = path.data.as_UfcsInherent();
+            return FMT(intrinsicTypeNameImpl(pe.type, genericPlaceholders) << "::" << pe.item << typeNameForPathArgs(pe.params, nullptr, genericPlaceholders));
+        }
+        case HIRPathData::TAG_UfcsKnown: {
+            const auto& pe = path.data.as_UfcsKnown();
+            auto trait = typeNameForSimplePath(pe.trait.path) + typeNameForPathArgs(pe.trait.params, nullptr, genericPlaceholders);
+            return FMT("<" << intrinsicTypeNameImpl(pe.type, genericPlaceholders) << " as " << trait << ">::" << pe.item << typeNameForPathArgs(pe.params, nullptr, genericPlaceholders));
+        }
+        case HIRPathData::TAG_UfcsUnknown:
+            break;
+    }
+    return FMT(path);
+}
+
+MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
+    return intrinsicTypeNameImpl(ty, false);
+}
+
+MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTypeData* ty, bool genericPlaceholders) const {
+    if (genericPlaceholders && ty->is_Generic()) {
+        return "_";
+    }
 
     if (const auto* te = ty->opt_Tuple()) {
         auto rv = FMT("(");
@@ -586,23 +653,23 @@ std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
             if (i > 0) {
                 rv += ", ";
             }
-            rv += this->intrinsicTypeName((*te)[i]);
+            rv += intrinsicTypeNameImpl((*te)[i], genericPlaceholders);
         }
         return rv + ")";
     }
     if (const auto* te = ty->opt_Slice()) {
-        return "[" + this->intrinsicTypeName(te->inner) + "]";
+        return "[" + intrinsicTypeNameImpl(te->inner, genericPlaceholders) + "]";
     }
     if (const auto* te = ty->opt_Array()) {
-        return FMT("[" << this->intrinsicTypeName(te->inner) << "; " << te->size << "]");
+        return FMT("[" << intrinsicTypeNameImpl(te->inner, genericPlaceholders) << "; " << te->size << "]");
     }
     if (const auto* te = ty->opt_Borrow()) {
         const char* prefix = te->type == HIRBorrowType::Shared ? "&" : (te->type == HIRBorrowType::Unique ? "&mut " : "&move ");
-        return prefix + this->intrinsicTypeName(te->inner);
+        return prefix + intrinsicTypeNameImpl(te->inner, genericPlaceholders);
     }
     if (const auto* te = ty->opt_Pointer()) {
         const char* prefix = te->type == HIRBorrowType::Shared ? "*const " : (te->type == HIRBorrowType::Unique ? "*mut " : "*move ");
-        return prefix + this->intrinsicTypeName(te->inner);
+        return prefix + intrinsicTypeNameImpl(te->inner, genericPlaceholders);
     }
     if (const auto* te = ty->opt_Function()) {
         // rustc leaves the default ABI and an empty return type unwritten.
@@ -615,12 +682,12 @@ std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
             if (i > 0) {
                 rv += ", ";
             }
-            rv += this->intrinsicTypeName(te->argTypes[i]);
+            rv += intrinsicTypeNameImpl(te->argTypes[i], genericPlaceholders);
         }
         rv += ")";
         if (!(te->rettype->is_Tuple() && te->rettype->as_Tuple().empty())) {
             rv += " -> ";
-            rv += this->intrinsicTypeName(te->rettype);
+            rv += intrinsicTypeNameImpl(te->rettype, genericPlaceholders);
         }
         return rv;
     }
@@ -630,34 +697,16 @@ std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
         // or of an enum variant is a function item whose path is the type's,
         // and rustc keeps the two apart by naming the constructor.
         const char* suffix = te->def.is_Function() ? "" : "::{{constructor}}";
-        switch (te->path.data.tag()) {
-            case HIRPathData::TAG_Generic: {
-                const auto& pe = te->path.data.as_Generic();
-                return plainPath(pe.path) + pathArgs(pe.params, nullptr) + suffix;
-            }
-            case HIRPathData::TAG_UfcsInherent: {
-                const auto& pe = te->path.data.as_UfcsInherent();
-                return FMT(this->intrinsicTypeName(pe.type) << "::" << pe.item << pathArgs(pe.params, nullptr) << suffix);
-            }
-            case HIRPathData::TAG_UfcsKnown: {
-                const auto& pe = te->path.data.as_UfcsKnown();
-                auto trait = plainPath(pe.trait.path) + pathArgs(pe.trait.params, nullptr);
-                return FMT("<" << this->intrinsicTypeName(pe.type) << " as " << trait << ">::" << pe.item << pathArgs(pe.params, nullptr) << suffix);
-            }
-            case HIRPathData::TAG_UfcsUnknown: {
-                break;
-            }
-        }
-        return FMT(ty);
+        return typeNameForItemPath(te->path, genericPlaceholders) + suffix;
     }
     if (ty->is_Path() && ty->as_Path().path.data.is_Generic()) {
         const auto& gp = ty->as_Path().path.data.as_Generic();
-        return plainPath(gp.path) + pathArgs(gp.params, nullptr);
+        return typeNameForSimplePath(gp.path) + typeNameForPathArgs(gp.params, nullptr, genericPlaceholders);
     }
     if (const auto* te = ty->opt_TraitObject()) {
         ::std::vector<::std::string> bounds;
         if (te->trait.path.path.crateName() != "" || !te->trait.path.path.components().empty()) {
-            auto principal = plainPath(te->trait.path.path);
+            auto principal = typeNameForSimplePath(te->trait.path.path);
             // The callable traits keep their parenthesised sugar.
             const auto& comps = te->trait.path.path.components();
             const auto& last = comps.empty() ? RcString() : comps.back();
@@ -669,21 +718,21 @@ std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
                     if (i > 0) {
                         principal += ", ";
                     }
-                    principal += this->intrinsicTypeName(args[i]);
+                    principal += intrinsicTypeNameImpl(args[i], genericPlaceholders);
                 }
                 principal += ")";
                 auto it = te->trait.typeBounds.find(RcString::newInterned("Output"));
                 if (it != te->trait.typeBounds.end() && !(it->second.type->is_Tuple() && it->second.type->as_Tuple().empty())) {
                     principal += " -> ";
-                    principal += this->intrinsicTypeName(it->second.type);
+                    principal += intrinsicTypeNameImpl(it->second.type, genericPlaceholders);
                 }
             } else {
-                principal += pathArgs(params, &te->trait.typeBounds);
+                principal += typeNameForPathArgs(params, &te->trait.typeBounds, genericPlaceholders);
             }
             bounds.push_back(std::move(principal));
         }
         for (const auto& marker : te->markers) {
-            bounds.push_back(plainPath(marker.path));
+            bounds.push_back(typeNameForSimplePath(marker.path));
         }
         auto rv = FMT("dyn ");
         for (size_t i = 0; i < bounds.size(); i++) {

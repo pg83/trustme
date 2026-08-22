@@ -73,6 +73,7 @@ struct MIRPathCb final: MIRPathCallback {
 class MIRTypeResolve {
 public:
     typedef ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> argsT;
+    using TypeNameString = std::string;
 
 private:
     const unsigned int STMT_TERM = ~0u;
@@ -99,6 +100,11 @@ private:
 
     unsigned int bbIdx = 0;
     unsigned int stmtIdx = 0;
+
+    TypeNameString typeNameForSimplePath(const HIRSimplePath& path) const;
+    TypeNameString typeNameForPathArgs(const HIRPathParams& params, const HIRTraitPath::assocListT* typeBounds, bool genericPlaceholders) const;
+    TypeNameString typeNameForItemPath(const HIRPath& path, bool genericPlaceholders) const;
+    TypeNameString intrinsicTypeNameImpl(const HIRTypeData* ty, bool genericPlaceholders) const;
 
 public:
     MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, const MIRPathCallback& path, const HIRTypeData* retType, const argsT& args, const MIRFunction& fcn);
@@ -164,7 +170,7 @@ public:
     /// @brief Handler for the `type_name` intrinsic, strips out trustme's helper comments
     /// @param ty Type
     /// @return Clean string form of the type
-    std::string intrinsicTypeName(const HIRTypeData* ty) const;
+    TypeNameString intrinsicTypeName(const HIRTypeData* ty) const;
 
     friend ::std::ostream& operator<<(::std::ostream& os, const MIRTypeResolve& x);
 };

@@ -1617,6 +1617,14 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     rv.edition = static_cast<ASTEdition>(in.readTag());
     rv.rootModule = deserialiseModule();
 
+    size_t localItemTypeNamePathCount = in.readCount();
+    for (size_t i = 0; i < localItemTypeNamePathCount; i++) {
+        auto modulePath = deserialiseSimplepath();
+        auto* ownerPath = rv.pool->make<HIRPath>(deserialisePath());
+        rv.localItemTypeNamePaths = rv.pool->make<HIRLocalItemTypeNamePath>(
+            modulePath, ownerPath, rv.localItemTypeNamePaths);
+    }
+
     rv.typeImpls = D<HIRCrate::ImplGroup<std::unique_ptr<HIRTypeImpl>>>::des(*this);
     rv.traitImpls = deserialisePathmap<HIRCrate::ImplGroup<std::unique_ptr<HIRTraitImpl>>>();
     rv.markerImpls = deserialisePathmap<HIRCrate::ImplGroup<std::unique_ptr<HIRMarkerImpl>>>();
@@ -3013,6 +3021,16 @@ break;
         out.writeString(crate.crateName);
         out.writeTag(static_cast<int>(crate.edition));
         serialiseModule(crate.rootModule);
+
+        size_t localItemTypeNamePathCount = 0;
+        for (const auto* path = crate.localItemTypeNamePaths; path; path = path->next) {
+            localItemTypeNamePathCount++;
+        }
+        out.writeCount(localItemTypeNamePathCount);
+        for (const auto* path = crate.localItemTypeNamePaths; path; path = path->next) {
+            serialiseSimplepath(path->modulePath);
+            serialisePath(*path->ownerPath);
+        }
 
         serialise(crate.typeImpls);
         serialisePathmap(crate.traitImpls);

@@ -755,6 +755,19 @@ struct HIRTypeImplCb final: HIRTypeImplCallback {
     }
 };
 
+struct HIRLocalItemTypeNamePath {
+    HIRSimplePath modulePath;
+    const HIRPath* ownerPath;
+    const HIRLocalItemTypeNamePath* next;
+
+    HIRLocalItemTypeNamePath(HIRSimplePath modulePath, const HIRPath* ownerPath, const HIRLocalItemTypeNamePath* next)
+        : modulePath(modulePath)
+        , ownerPath(ownerPath)
+        , next(next)
+    {
+    }
+};
+
 class HIRCrate {
 public:
     stl::ObjPool* pool;
@@ -784,6 +797,10 @@ public:
     // Current-crate functions carrying #[define_opaque(...)].  The map is a
     // query index for lazy type checking and is intentionally not serialised.
     std::map<HIRSimplePath, std::vector<HIRPath>> opaqueTypeDefiners;
+
+    // Anonymous modules hold block-local items for name resolution.  Their
+    // source spelling is the item that owns the block, not `#N`.
+    const HIRLocalItemTypeNamePath* localItemTypeNamePaths = nullptr;
 
     bool isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias, const HIRSimplePath* names, size_t nameCount) const;
 
