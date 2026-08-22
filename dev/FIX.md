@@ -41,15 +41,18 @@ Artifacts:
 The graph contained 15,139 nodes. The full run completed 15,090 and reported
 49 broken targets. All 49 target commands were rerun independently against
 the published roots. Forty-eight failures reproduced; RustSmith seed 36
-completed in isolation and is the only load-sensitive result.
+completed in isolation and is the only load-sensitive result. The subsequent
+ThinBox point fix closed six independently rerun nodes, leaving 42.
 
 | result | nodes |
 |---|---:|
 | complete fast-gate graph | 15,139 |
 | green in the full parallel run | 15,090 |
 | failed in the full parallel run | 49 |
-| still failing independently | 48 |
+| reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
+| fixed by subsequent point reruns | 6 |
+| still failing independently | 42 |
 
 Manual inspection normalised two mechanical classifier labels:
 
@@ -59,34 +62,19 @@ Manual inspection normalised two mechanical classifier labels:
   takes `SIGABRT` while polling generated async-drop glue, so it is a runtime
   failure rather than a compiler abort.
 
-The resulting stable population is:
+The resulting current population is:
 
 | current result | nodes |
 |---|---:|
 | accepted Rust rejected during type checking | 8 |
-| compiler BUG, MIR error, signal, or generated C++ failure | 19 |
+| compiler BUG, MIR error, signal, or generated C++ failure | 13 |
 | wrong runtime behaviour, panic, abort, or output | 13 |
 | stable timeout | 8 |
-| **total independently reproduced** | **48** |
+| **total independently reproduced** | **42** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
 accounting.
-
-## P0: duplicate const-eval static monomorphisation
-
-Six nodes have the identical
-`BUG trans_monomorphise.cpp:721: Generated static
-ConstEvalMonomorph#0 already in TransList` assertion:
-
-- `rust_1_90/box/{thin_align,thin_new,thin_drop,thin_zst}.rs`;
-- doctests `alloc/src/boxed/thin.rs:26` and
-  `alloc/src/boxed/thin.rs:103`.
-
-This is the largest exact compiler signature. The four run-pass cases and two
-doctests all exercise `ThinBox`; minimise one representative and verify that
-the generated const-eval static is inserted exactly once rather than merely
-suppressing the duplicate assertion.
 
 ## P0: async/coroutine storage and drop
 
@@ -204,8 +192,9 @@ slow generated-program compilation are not interchangeable root causes.
 
 RustSmith seed 36 exceeded its 10-minute node limit during the 78-way full
 run, then compiled and passed in isolation in roughly eight minutes. It is not
-included in the 48 current failures. Keep it as a gate-capacity signal; do not
-turn it into a compiler-correctness issue unless it becomes a stable timeout.
+included in the current failure count. Keep it as a gate-capacity signal; do
+not turn it into a compiler-correctness issue unless it becomes a stable
+timeout.
 
 ## Fix discipline
 

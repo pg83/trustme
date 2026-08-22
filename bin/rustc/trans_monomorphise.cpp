@@ -657,6 +657,10 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
     bool changed;
     do {
         changed = false;
+        // A generated literal can relocate to a static that Newval has added
+        // to HIR but that the insertion loop below has not put in TransList
+        // yet. Defer relocation enumeration until those statics are present.
+        stl::Vector<const EncodedLiteral*> generatedLiterals;
 
         // Reverse order is intentional: const-eval commonly needs constants
         // referenced by a later entry to have been evaluated first.
@@ -680,9 +684,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             try {
                 auto newLit = eval.evaluateConstant(path, c.value, ::std::move(ty), ::std::move(ms));
                 auto inserted = c.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
-                if (TransEnumerateGeneratedLiteral(wb, list, inserted.first->second)) {
-                    TransAutoImpls(wb, crate, list);
-                }
+                generatedLiterals.pushBack(&inserted.first->second);
             } catch (...) {
                 BUG(Span(), "Exception thrown during evaluation of: " << path);
             }
@@ -723,9 +725,17 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             generated.push_back(HIRPath(value.first));
         }
 
+        bool enumeratedItems = false;
         if (!generated.empty()) {
             changed = true;
             TransEnumerateGeneratedStatics(wb, list, generated);
+            enumeratedItems = true;
+        }
+        for (const auto* literal : generatedLiterals) {
+            enumeratedItems |= TransEnumerateGeneratedLiteral(wb, list, *literal);
+        }
+        if (enumeratedItems) {
+            changed = true;
             TransAutoImpls(wb, crate, list);
         }
     } while (changed);
