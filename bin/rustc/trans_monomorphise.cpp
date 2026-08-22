@@ -170,7 +170,10 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             ms.ppMethod = &pp.ppMethod;
             try {
                 auto newLit = eval.evaluateConstant(path, c.value, ::std::move(ty), ::std::move(ms));
-                c.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
+                auto inserted = c.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
+                if (TransEnumerateGeneratedLiteral(wb, list, inserted.first->second)) {
+                    TransAutoImpls(wb, crate, list);
+                }
             } catch (...) {
                 BUG(Span(), "Exception thrown during evaluation of: " << path);
             }

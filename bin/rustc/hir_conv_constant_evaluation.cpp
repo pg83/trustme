@@ -5394,6 +5394,14 @@ namespace {
 
             // NOTE: Consteval needed here for MIR match generation to work
             if (pass != Pass::Values) {
+            } else if (item.valueState == HIRConstant::ValueState::Generic
+                || item.params.isGeneric()
+                || monomorphisePathNeeded(p.getFullPath())) {
+                // Generic constants are evaluated for each concrete path.  A
+                // body that happens not to read its parameters must not run
+                // while visiting the definition: the instantiation may be
+                // unused or occur only in a dead branch.
+                item.valueState = HIRConstant::ValueState::Generic;
             } else if (item.value || item.value.mir) {
                 auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << "#")};
                 auto eval = getEval(item.value.span(), nvs);

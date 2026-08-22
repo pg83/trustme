@@ -3511,7 +3511,16 @@ namespace {
 
         void visitConstant(HIRItemPath p, HIRConstant& item) override {
             if (item.value) {
-                //::std::vector< ::HIR::ASTType*>  tmp;
+                auto _ = this->resolve_.setItemGenerics(item.params);
+                ClosureExprVisitorExtract ev(resolve_, selfType, item.value.bindings, item.value, out, p.name);
+                ev.visitRoot(*item.value);
+
+                {
+                    MonomorphiserNop mm(resolve_.hirCrate().types);
+                    ClosureExprVisitorFixup fixup{resolve_.board(), nullptr, mm, &out};
+                    fixup.visitRoot(item.value);
+                    item.type = fixup.visitType(item.type);
+                }
             }
         }
 

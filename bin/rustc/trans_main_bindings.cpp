@@ -2415,6 +2415,18 @@ void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const 
     mergeEnumeratedItems(state.crate.types, list, TransEnumerateCommonPost(state));
 }
 
+bool TransEnumerateGeneratedLiteral(const WireBoard& wb, TransList& list, const EncodedLiteral& literal) {
+    EnumState state{wb};
+    for (const auto& relocation : literal.relocations) {
+        if (relocation.p && !transListContainsPath(list, *relocation.p)) {
+            ASSERT_BUG(Span(), !monomorphisePathNeeded(*relocation.p),
+                "Generated literal contains a generic translation path: " << *relocation.p);
+            TransEnumerateFillFromPathMono(state, relocation.p->clone());
+        }
+    }
+    return mergeEnumeratedItems(state.crate.types, list, TransEnumerateCommonPost(state));
+}
+
 bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const ::std::vector<const MIRFunction*>& functions) {
     EnumState state{wb};
     for (const auto* function : functions) {
@@ -3528,9 +3540,6 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                     BUG(sp, "Unevaluated constant: " << pathMono);
                 case HIRConstant::ValueState::Generic:
                     if (auto* slot = state.rv.addConst(state.crate.types, mv$(pathMono))) {
-                        MIREnumCache es;
-                        TransEnumerateFillFromMIR(es, *e->value.mir);
-                        es.apply(state, subPp);
                         slot->ptr = e;
                         slot->pp = ::std::move(subPp);
                     }

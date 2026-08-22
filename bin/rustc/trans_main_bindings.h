@@ -56,6 +56,7 @@ extern void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, Tr
 extern void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList);
 
 extern void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const ::std::vector<HIRPath>& paths);
+extern bool TransEnumerateGeneratedLiteral(const WireBoard& wb, TransList& list, const EncodedLiteral& literal);
 extern bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const ::std::vector<const MIRFunction*>& functions);
 extern void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list, unsigned mirOptLevel);
 
