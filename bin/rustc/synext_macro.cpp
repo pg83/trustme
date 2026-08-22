@@ -949,6 +949,227 @@ STATIC_MACRO("asm", CAsmExpander);
 STATIC_MACRO("global_asm", CGlobalAsmExpander);
 STATIC_MACRO("naked_asm", CNakedAsmExpander);
 
+class GenericAssertCaptureVisitor: public ASTNodeVisitor {
+public:
+    struct Capture {
+        ASTPath path;
+        RcString name;
+        RcString captureName;
+        RcString localBindName;
+        bool deferred;
+    };
+
+    ThinVector<Capture> captures;
+
+    GenericAssertCaptureVisitor(RcString coreCrate, Ident::Hygiene hygiene)
+        : coreCrate(coreCrate)
+        , hygiene(hygiene)
+    {
+    }
+
+    void manage(ASTExprNodeP& node) {
+        if (!node) {
+            return;
+        }
+        auto* previous = current;
+        current = &node;
+        node->visit(*this);
+        current = previous;
+    }
+
+    void visit(ASTExprNodeArray& node) override {
+        manage(node.size);
+        for (auto& value : node.values) {
+            manage(value);
+        }
+    }
+
+    void visit(ASTExprNodeBinOp& node) override {
+        const bool wasConsumed = consumed;
+        switch (node.type) {
+            case ASTExprNodeBinOp::CMPEQU:
+            case ASTExprNodeBinOp::CMPNEQU:
+            case ASTExprNodeBinOp::CMPLT:
+            case ASTExprNodeBinOp::CMPLTE:
+            case ASTExprNodeBinOp::CMPGT:
+            case ASTExprNodeBinOp::CMPGTE:
+            case ASTExprNodeBinOp::RANGE:
+            case ASTExprNodeBinOp::RANGE_INC:
+                consumed = false;
+                break;
+            default:
+                consumed = true;
+                break;
+        }
+        manage(node.left);
+        manage(node.right);
+        consumed = wasConsumed;
+    }
+
+    void visit(ASTExprNodeCallPath& node) override {
+        for (auto& arg : node.args) {
+            manage(arg);
+        }
+    }
+
+    void visit(ASTExprNodeCallMethod& node) override {
+        manage(node.val);
+        for (auto& arg : node.args) {
+            manage(arg);
+        }
+    }
+
+    void visit(ASTExprNodeCallObject& node) override {
+        for (auto& arg : node.args) {
+            manage(arg);
+        }
+    }
+
+    void visit(ASTExprNodeCast& node) override {
+        manage(node.value);
+    }
+
+    void visit(ASTExprNodeDeref& node) override {
+        const bool wasConsumed = consumed;
+        consumed = false;
+        manage(node.value);
+        consumed = wasConsumed;
+    }
+
+    void visit(ASTExprNodeIf& node) override {
+        for (auto& arm : node.arms) {
+            for (auto& condition : arm.conditions) {
+                manage(condition.value);
+            }
+        }
+    }
+
+    void visit(ASTExprNodeIndex& node) override {
+        manage(node.obj);
+        manage(node.idx);
+    }
+
+    void visit(ASTExprNodeLetBinding& node) override {
+        manage(node.value);
+    }
+
+    void visit(ASTExprNodeMatch& node) override {
+        manage(node.val);
+    }
+
+    void visit(ASTExprNodeUniOp& node) override {
+        const bool wasConsumed = consumed;
+        consumed = node.type != ASTExprNodeUniOp::REF;
+        manage(node.value);
+        consumed = wasConsumed;
+    }
+
+    void visit(ASTExprNodeNamedValue& node) override {
+        if (!node.path.isTrivial()) {
+            return;
+        }
+        const auto& name = node.path.asTrivial();
+        for (const auto& capture : captures) {
+            if (capture.path == node.path) {
+                return;
+            }
+        }
+
+        const auto captureIndex = captures.size();
+        const auto captureName = RcString::newInterned(FMT("__capture" << captureIndex));
+        const auto localBindName = RcString::newInterned(FMT("__local_bind" << captureIndex));
+        captures.push_back({ASTPath(node.path), name, captureName, localBindName, !consumed});
+
+        if (consumed) {
+            ASTExprNodeBlock captureBlock;
+            captureBlock.setSpan(node.span());
+            captureBlock.pushStmt(makeTryCapture(captureName, localBindName, node.span()));
+            captureBlock.pushTailExpr(makeGeneratedValue(localBindName, node.span()));
+            *current = ASTExprNodeP(box$(ASTExprNodeDeref(ASTExprNodeP(box$(captureBlock)))));
+        } else {
+            *current = ASTExprNodeP(box$(ASTExprNodeDeref(makeGeneratedValue(localBindName, node.span()))));
+        }
+        (*current)->setSpan(node.span());
+    }
+
+    void visit(ASTExprNodeStructLiteral& node) override {
+        for (auto& value : node.values) {
+            manage(value.value);
+        }
+        manage(node.baseValue);
+    }
+
+    void visit(ASTExprNodeTuple& node) override {
+        for (auto& value : node.values) {
+            manage(value);
+        }
+    }
+
+#define NO_GENERIC_ASSERT_CAPTURE(Node) void visit(Node&) override {}
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeBlock);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeAsyncBlock);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeGeneratorBlock);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeTry);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeMacro);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeAsm);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeAsm2);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeFlow);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeAssign);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeLoop);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeFor);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeWhile);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeWildcardPattern);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeInteger);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeFloat);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeBool);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeString);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeByteString);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeCString);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeSuffixedLiteral);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeClosure);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeStructLiteralPattern);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeField);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeTypeAnnotation);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeMacroDefinition);
+#undef NO_GENERIC_ASSERT_CAPTURE
+
+    ASTExprNodeP makeTryCapture(RcString captureName, RcString localBindName, const Span& sp) const {
+        auto wrapper = ASTExprNodeP(box$(ASTExprNodeCallPath(
+            ASTPath(ASTAbsolutePath(coreCrate, {RcString::newInterned("asserting"), RcString::newInterned("Wrapper")})),
+            makeVec1(makeGeneratedValue(localBindName, sp))
+        )));
+        wrapper->setSpan(sp);
+
+        auto wrapperRef = ASTExprNodeP(box$(ASTExprNodeUniOp(ASTExprNodeUniOp::REF, ASTExprNodeP(wrapper.release()))));
+        wrapperRef->setSpan(sp);
+        auto captureRef = ASTExprNodeP(box$(ASTExprNodeUniOp(ASTExprNodeUniOp::REFMUT, makeGeneratedValue(captureName, sp))));
+        captureRef->setSpan(sp);
+        auto call = ASTExprNodeP(box$(ASTExprNodeCallMethod(
+            ASTExprNodeP(wrapperRef.release()),
+            ASTPathNode(hygiene, RcString::newInterned("try_capture")),
+            makeVec1(ASTExprNodeP(captureRef.release()))
+        )));
+        call->setSpan(sp);
+        return call;
+    }
+
+private:
+    ASTPath generatedPath(RcString name) const {
+        return ASTPath::newRelative(hygiene, {ASTPathNode(hygiene, name)});
+    }
+
+    ASTExprNodeP makeGeneratedValue(RcString name, const Span& sp) const {
+        auto value = ASTExprNodeP(box$(ASTExprNodeNamedValue(generatedPath(name))));
+        value->setSpan(sp);
+        return value;
+    }
+
+    RcString coreCrate;
+    Ident::Hygiene hygiene;
+    ASTExprNodeP* current = nullptr;
+    bool consumed = true;
+};
+
 class CExpanderAssert: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
@@ -962,15 +1183,17 @@ class CExpanderAssert: public ExpandProcMacro {
         ASSERT_BUG(sp, n, "No expression returned");
 
         ::std::vector<TokenTree> toks;
+        const auto expansionHygiene = Ident::Hygiene::newScope(*wb.pool);
 
-        toks.push_back(Token(TOK_RWORD_IF));
-        toks.push_back(Token(TOK_EXCLAM));
+        bool closeOuterBlock = false;
 
         GET_TOK(tok, lex);
         if (tok == TOK_COMMA && lex.lookahead(0) == TOK_EOF) {
             GET_TOK(tok, lex);
         }
         if (tok == TOK_COMMA) {
+            toks.push_back(Token(TOK_RWORD_IF));
+            toks.push_back(Token(TOK_EXCLAM));
             toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
             toks.push_back(Token(TOK_BRACE_OPEN));
             // User-provided message
@@ -1007,25 +1230,106 @@ class CExpanderAssert: public ExpandProcMacro {
         } else if (tok == TOK_EOF) {
             ::std::stringstream ss;
             n->print(ss);
+            auto conditionText = ss.str();
 
-            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
+            const auto genericAssert = RcString::newInterned("generic_assert");
+            if (crate.features.count(genericAssert) != 0) {
+                if (n->nodeKind() == ASTExprNodeBinOp::kind && conditionText.size() >= 2) {
+                    conditionText.erase(conditionText.begin());
+                    conditionText.pop_back();
+                }
+                GenericAssertCaptureVisitor captureVisitor(crate.extCratenameCore, expansionHygiene);
+                captureVisitor.manage(n);
 
-            toks.push_back(Token(TOK_BRACE_OPEN));
-            // Auto-generated message
-            toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
-            toks.push_back(Token(TOK_EXCLAM));
-            toks.push_back(Token(TOK_PAREN_OPEN));
-            toks.push_back(Token(TOK_STRING, std::string("assertion failed: {}"), {}));
-            toks.push_back(Token(TOK_COMMA));
-            toks.push_back(Token(TOK_STRING, ss.str(), {}));
-            toks.push_back(Token(TOK_PAREN_CLOSE));
+                toks.push_back(Token(TOK_BRACE_OPEN));
+                closeOuterBlock = true;
+
+                toks.push_back(Token(TOK_RWORD_USE));
+                toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, {RcString::newInterned("asserting"), RcString::newInterned("TryCaptureGeneric")})))));
+                toks.push_back(Token(TOK_SEMICOLON));
+                toks.push_back(Token(TOK_RWORD_USE));
+                toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, {RcString::newInterned("asserting"), RcString::newInterned("TryCapturePrintable")})))));
+                toks.push_back(Token(TOK_SEMICOLON));
+
+                for (size_t i = 0; i < captureVisitor.captures.size(); i++) {
+                    const auto& capture = captureVisitor.captures[i];
+                    toks.push_back(Token(TOK_RWORD_LET));
+                    toks.push_back(Token(TOK_RWORD_MUT));
+                    toks.push_back(Token(TOK_IDENT, capture.captureName));
+                    toks.push_back(Token(TOK_EQUAL));
+                    toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, {RcString::newInterned("asserting"), RcString::newInterned("Capture"), RcString::newInterned("new")})))));
+                    toks.push_back(Token(TOK_PAREN_OPEN));
+                    toks.push_back(Token(TOK_PAREN_CLOSE));
+                    toks.push_back(Token(TOK_SEMICOLON));
+
+                    toks.push_back(Token(TOK_RWORD_LET));
+                    toks.push_back(Token(TOK_IDENT, capture.localBindName));
+                    toks.push_back(Token(TOK_EQUAL));
+                    toks.push_back(Token(TOK_AMP));
+                    toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(capture.path), sp)));
+                    toks.push_back(Token(TOK_SEMICOLON));
+                }
+
+                toks.push_back(Token(TOK_RWORD_IF));
+                toks.push_back(Token(TOK_EXCLAM));
+                toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
+                toks.push_back(Token(TOK_BRACE_OPEN));
+
+                for (size_t i = 0; i < captureVisitor.captures.size(); i++) {
+                    const auto& capture = captureVisitor.captures[i];
+                    if (!capture.deferred) {
+                        continue;
+                    }
+                    toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, captureVisitor.makeTryCapture(capture.captureName, capture.localBindName, sp).release())));
+                    toks.push_back(Token(TOK_SEMICOLON));
+                }
+
+                for (size_t i = 0; i < conditionText.size(); i++) {
+                    if (conditionText[i] == '{' || conditionText[i] == '}') {
+                        conditionText.insert(conditionText.begin() + i, conditionText[i]);
+                        i += 1;
+                    }
+                }
+                auto message = FMT("Assertion failed: " << conditionText);
+                if (!captureVisitor.captures.empty()) {
+                    message += "\nWith captures:\n";
+                    for (const auto& capture : captureVisitor.captures) {
+                        message += FMT("  " << capture.name << " = {:?}\n");
+                    }
+                }
+                toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
+                toks.push_back(Token(TOK_EXCLAM));
+                toks.push_back(Token(TOK_PAREN_OPEN));
+                toks.push_back(Token(TOK_STRING, message, {}));
+                for (size_t i = 0; i < captureVisitor.captures.size(); i++) {
+                    toks.push_back(Token(TOK_COMMA));
+                    toks.push_back(Token(TOK_IDENT, captureVisitor.captures[i].captureName));
+                }
+                toks.push_back(Token(TOK_PAREN_CLOSE));
+            } else {
+                toks.push_back(Token(TOK_RWORD_IF));
+                toks.push_back(Token(TOK_EXCLAM));
+                toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
+                toks.push_back(Token(TOK_BRACE_OPEN));
+                // Auto-generated message
+                toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
+                toks.push_back(Token(TOK_EXCLAM));
+                toks.push_back(Token(TOK_PAREN_OPEN));
+                toks.push_back(Token(TOK_STRING, std::string("assertion failed: {}"), {}));
+                toks.push_back(Token(TOK_COMMA));
+                toks.push_back(Token(TOK_STRING, ss.str(), {}));
+                toks.push_back(Token(TOK_PAREN_CLOSE));
+            }
         } else {
             throw ParseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
         }
 
         toks.push_back(Token(TOK_BRACE_CLOSE));
+        if (closeOuterBlock) {
+            toks.push_back(Token(TOK_BRACE_CLOSE));
+        }
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(*wb.pool), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, expansionHygiene, mv$(toks))));
     }
 };
 
