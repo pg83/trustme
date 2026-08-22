@@ -438,7 +438,7 @@ namespace {
         }
         case HIRPatternData::TAG_Ref: {
             auto& e = data.as_Ref();
-            return HIRPattern::Data::make_Ref({e.type, box$(e.sub->clone())});
+            return HIRPattern::Data::make_Ref({e.type, e.isSkipped, box$(e.sub->clone())});
         }
         case HIRPatternData::TAG_Tuple: {
             auto& e = data.as_Tuple();

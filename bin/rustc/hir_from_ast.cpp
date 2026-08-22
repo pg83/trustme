@@ -431,7 +431,7 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
         }
         case ASTPatternData::TAG_Ref: {
             auto& e = pat.data().as_Ref();
-            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Ref({(e.mut ? HIRBorrowType::Unique : HIRBorrowType::Shared), box$(LowerHIRPattern(*e.sub))})};
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Ref({(e.mut ? HIRBorrowType::Unique : HIRBorrowType::Shared), false, box$(LowerHIRPattern(*e.sub))})};
         }
         case ASTPatternData::TAG_Tuple: {
             auto& e = pat.data().as_Tuple();

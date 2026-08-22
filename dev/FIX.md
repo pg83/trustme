@@ -164,7 +164,9 @@ expressions, and enumerating only the evaluated literal's relocations closed
 terminators in CTFE closed
 `consts/control-flow/feature-gate-const-if-match`; repeatedly unifying duplicate
 MIR blocks until their newly identical predecessors also converge closed
-`deriving/issue-58319`. Thus 19 of
+`deriving/issue-58319`; preserving when a Rust 2024 explicit reference pattern
+consumes the reference already peeled by match ergonomics closed
+`pattern/skipped-ref-pats-issue-125058`. Thus 18 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -179,20 +181,20 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 44 |
-| fixed, or no longer reproducing, since the gate | 587 |
+| still failing or still carried from the last full sweep | 43 |
+| fixed, or no longer reproducing, since the gate | 588 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed seventy-nine nodes, leaving 19. The
+subsequent point fixes and reruns have closed eighty nodes, leaving 18. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 0 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 5 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 4 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
@@ -417,12 +419,12 @@ coercion. This closes both `arbitrary_self_types_niche_deshadowing.rs` and
 
 ## P1: internal compiler failures
 
-There are 5 compiler-internal failures in 5 stable signatures in the current
+There are 4 compiler-internal failures in 4 stable signatures in the current
 eight-corpus rerun.
 
 | compiler area | tests |
 |---|---:|
-| type checking and HIR lowering | 2 |
+| type checking and HIR lowering | 1 |
 | MIR lowering, CTFE MIR, and optimisation | 1 |
 | translation and code generation | 1 |
 | unattributed compiler abort | 1 |
@@ -431,7 +433,7 @@ Every remaining signature covers one test, so the class is a long tail:
 
 | signature | tests |
 |---|---:|
-| one-test signatures | 5 |
+| one-test signatures | 4 |
 
 The former `No repr for struct` assertion in `sized/coinductive-2` came from
 caching an associated projection as complete while its recursive `Sized`
@@ -493,6 +495,15 @@ derived `Clone` with 101 fields therefore exhausted the 100-pass guard. The
 unification pass now repeats its existing hash-and-group step until no new
 duplicate blocks remain, so the whole cascade converges inside one optimiser
 pass without weakening the guard.
+
+The former `BUG hir_typeck_helpers.cpp` in
+`pattern/skipped-ref-pats-issue-125058` came from treating an explicit `&mut`
+pattern as one more borrow after Rust 2024 match ergonomics had already peeled
+the inherited reference. Type checking now marks that reference pattern as
+consumed and resets the default binding mode while keeping the adjusted inner
+type. The marker survives HIR cloning and reaches usage analysis and MIR
+pattern lowering, where the source pattern is retained but no second
+dereference is emitted.
 
 The former translation-time CTFE exception in
 `dont-propagate-generic-instance-2` came from resolving a function pointer to

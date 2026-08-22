@@ -5771,6 +5771,12 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
         return;
     }
 
+    if (const auto* pe = pat.data.opt_Ref(); pe && pe->isSkipped) {
+        this->appendFrom(sp, *pe->sub, ty);
+        for (size_t i = 0; i < pat.implicitDerefCount; i++) fieldPath.pop_back();
+        return;
+    }
+
     if (pat.data.is_Or()) {
         // Multiply the current pattern (sub)set out, visit with sub-sets
         const auto& e = pat.data.as_Or();

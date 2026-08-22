@@ -1167,7 +1167,7 @@ namespace {
                 }
                 case HIRPatternData::TAG_Ref: {
                     auto& pe = pat.data.as_Ref();
-                    return getUsageForPattern(sp, *pe.sub, ty->as_Borrow().inner);
+                    return getUsageForPattern(sp, *pe.sub, pe.isSkipped ? ty : ty->as_Borrow().inner);
                 }
                 case HIRPatternData::TAG_Tuple: {
                     auto& pe = pat.data.as_Tuple();

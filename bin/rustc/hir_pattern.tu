@@ -17,6 +17,7 @@ generate(
         ], copy=False),
         v("Ref", fields=[
             ("HIRBorrowType", "type"),
+            ("bool", "isSkipped"),
             ("::std::unique_ptr<HIRPattern>", "sub"),
         ], copy=False),
         v("Tuple", fields=[

@@ -4003,6 +4003,22 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         && !context.crate.featureEnabled("mut_ref")) {
                         ERROR(sp, E0000, "cannot explicitly dereference within an implicitly-borrowing pattern - " << pattern);
                     }
+
+                    // Under the Rust 2024 one-layer rule an explicit reference
+                    // pattern consumes the inherited reference represented by
+                    // the default binding mode, not another reference in the
+                    // already-adjusted field type.
+                    if (bindingMode != HIRPatternBinding::Type::Move
+                        && context.crate.edition >= ASTEdition::Rust2024
+                        && context.crate.featureEnabled("ref_pat_eat_one_layer_2024")) {
+                        if (pe->type == HIRBorrowType::Unique
+                            && bindingMode != HIRPatternBinding::Type::MutRef) {
+                            ERROR(sp, E0000, "cannot match an inherited shared reference with an `&mut` pattern");
+                        }
+                        pe->isSkipped = true;
+                        return this->revisitInner(context, *pe->sub, type, HIRPatternBinding::Type::Move);
+                    }
+
                     // Require a &-ptr (hard requirement), then visit sub-pattern
                     auto innerTy = context.ivars.newIvarTr();
                     auto newTy = context.crate.types.borrow(pe->type, innerTy);
