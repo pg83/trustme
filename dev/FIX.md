@@ -4,19 +4,22 @@ This file contains unfinished work only. Priorities are ordered by the number
 of independently reproduced failures that a shared fix can plausibly remove.
 Source locations are routing signatures, not proof of a shared root cause.
 
-The baseline full gate ran at commit `79582dd3f` in the clang Nix environment
-on all 78 available cores; its last complete reclassification snapshot was
-made on 2026-08-18 at commit `4094b67bc`:
+## Current baseline
+
+The complete fast gate was run on 2026-08-22 at commit `1c8482622` in the
+clang Nix environment on all 78 available cores:
 
 ```text
 nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
   ./build -B .build-clang -j 78 -k test
 ```
 
-Full log: `/tmp/trustme-full-gate-20260815.log`.
+The `test` group is the complete fast semantic gate. `resvg` is not a
+dependency of that group: it lives in the separate `slow_tests` group and
+was not run or counted here. The gate log contains no `resvg` invocation.
 
-Before rerunning failures, the current CAS dependency roots were published so
-the rerun could not pick up an older global compiler or standard library:
+Before the gate, and again before reclassification, the current CAS dependency
+roots were built:
 
 ```text
 nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
@@ -24,595 +27,185 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
   rustc cargo libstd rust_test_helpers rust_lib_dependencies
 ```
 
-All 631 failed nodes were independently rerun for that snapshot. A fresh
-whole-group eight-corpus sweep on 2026-08-21 found 98 failures before the
-latest fix. Its current-compiler rerun data is in
-`.build-clang/reclass-20260821c`; classified records are in
-`.build-clang/classification-20260821c`. One node was green in that
-classification, and the subsequent point reruns of `niche-in-coroutine`,
-`link-directives`, `fn-align-dyn`, gccrs `issue-2187`, and const-generic
-promotion, `deriving-with-repr-packed`, and `match-ref-mut-stability` are green
-after their fixes; the specialization impl-head fix also closed
-`specialization-basics` and `impl-trait/equality-rpass`, and the macro type
-fragment fix closed `macro-bare-trait-object-maybe-trait-bound`; deferring an
-identity `DiscriminantKind` projection until numeric fallback also closed
-`enum-discriminant/discriminant_value`; preserving arbitrary trait-alias
-where-clauses through argument-position `impl Trait` also closed
-`traits/alias/bounds` and, on a later point rerun,
-`closures/self-supertrait-bounds`; completing default const arguments in trait impl heads
-closed `const-generics/defaults/rp_impl_trait` and
-`const-generics/defaults/trait_objects`; excluding an import's own future
-binding while resolving its target also closed `imports/issue-62767`; making a
-fuzzy blanket-method candidate wait until its receiver is known, then checking
-the impl bounds, closed `self/explicit-self-generic`; recovering a concrete
-inherent `Self` when a custom receiver reaches an unbound type argument closed
-`self/arbitrary_self_types_lifetime_elision`; probing the pin-ergonomics shared
-reborrow during method lookup closed `self/arbitrary_self_types_niche_deshadowing`
-and `pin-ergonomics/reborrow-self`; preserving `for<T>` type binders through
-name resolution and matching their bound parameters closed
-`traits/non_lifetime_binders/method-probe` and
-`traits/non_lifetime_binders/on-rpit`; restoring the saved module and trait
-context before lazily resolving a function body closed
-`traits/const-traits/ice-113375-index-out-of-bounds-generics`; preserving a
-named C-variadic binding as a body-only `VaListImpl` argument and lowering its
-stdarg operations in the C backend closed `abi/variadic-ffi`; settling
-inference variables with concrete expression sources before variables
-constrained only by expected coercion destinations closed
-`issues/issue-23433`; preserving declaration order for generic type and const
-parameters, then using it while path argument order still exists, closed
-`const-generics/min_const_generics/inferred_const` and
-`const-generics/generic_arg_infer/infer_arg_and_const_arg`; honoring explicit
-param-env `CoerceUnsized` bounds before structural coercion, then folding
-identity coercions after monomorphization, closed `mir/mir_coercions`;
-normalizing field types before excluding semantic `PhantomData` fields from
-the custom coercion check closed
-`self/phantomdata-in-coerce-and-dispatch-impls`; preserving a defining opaque
-projection until type checking and committing the selected fuzzy impl's
-associated equality closed
-`type-alias-impl-trait/defined-by-user-annotation`; falling back a directly
-self-referenced unresolved RPIT to `()` after ordinary inference closed
-`impl-trait/recursive-impl-trait-type-direct`; revealing nested opaque aliases
-for inherent lookup in their defining scope closed
-`methods/opaque_param_in_ufc`; preserving associated-type projections in item
-declarations until each use can normalize them with its own parameter
-environment closed `mir/issue-99866`; classifying where-bounds only after
-normalizing their projections closed
-`traits/next-solver/global-param-env-after-norm`; preserving one inference
-input across expression type-alias expansion, then proving the receiver
-well-formed before inherent lookup, closed
-`traits/next-solver/method/path_lookup_wf_constraints`; proving projected
-inherent method return types well-formed during next-solver probing closed
-`traits/next-solver/non-wf-ret`; matching nested projection predicates from a
-trait declaration on demand closed
-`associated-type-bounds/nested-gat-projection`; recursively matching nested
-associated-type declaration bounds on demand closed
-`associated-type-bounds/bad-bounds-on-assoc-in-trait`; allowing nested
-defining opaque outputs to reach the selected impl's associated equality
-closed `type-alias-impl-trait/issue-89952`; treating non-defining opaque
-aliases as rigid while checking associated where-clause outputs closed
-`type-alias-impl-trait/tait-param-inference-issue-117310`; revealing the
-current body's RPIT before filtering a callable impl's associated output
-closed `impl-trait/defined-by-trait-resolution` and
-`impl-trait/different_where_bounds`; retaining opaque declaration-macro
-hygiene in item and path names, with ordinary-name fallback only when no exact
-binding exists, closed `hygiene/items` and `hygiene/trait_items-2`; marking a
-potentially-unsized associated projection as a structural DST tail and
-checking its monomorphised field type closed
-`unsized/unsize-coerce-multiple-adt-params` and, on a later point rerun,
-`unsized/issue-75899-but-gats`; honoring the crate-level
-`rustc_no_implicit_bounds` attribute while lowering generic parameters closed
-`traits/next-solver/supertrait-alias-1`; resolving an associated type under its
-own generic parameter scope closed
-`impl-trait/in-trait/shorthand-projection-in-rpitit-bound`; preserving whether
-an item predicate was trivial before lifetimes and `Self` were erased closed
-`associated-types/issue-71113`, `associated-types/issue-91234`, and, on a
-later point rerun, `mir/issue-107691`; selecting the copyable range lang-item
-family while desugaring under `new_range` closed `new-range/enabled`; keeping
-normal match-guard moves and coroutine state outside the early-exit shadow
-scope closed both `rfcs/rfc-2294-if-let-guard` nodes; relating concrete struct
-applications through their represented field types, while leaving unused type
-parameters bivariant, closed `mir/important-higher-ranked-regions`; a point
-rerun after the structural-coercion fixes also found
-`mir/inline-causes-trimmed-paths` green; visiting trait predicates with trait
-rather than type-constructor context closed
-`traits/trait-upcasting/mono-impossible`; projecting a trait object's requested
-supertrait during expression coercion and equating its monomorphised arguments
-closed `traits/trait-upcasting/type-checking-test-opaques`; instantiating a
-fully determined impl's trait arguments before comparing them, including
-const-evaluating nested array lengths, closed
-`const-generics/generic_const_exprs/issue-96699`; allowing overlapping
-zero-sized fields in transmutability layouts while retaining their
-inhabitation NFA closed `transmutability/enums/uninhabited_optimization`.
-Deferring `try`, `?`, and `do yeet` lowering until macro expansion has
-stabilised closed the coretests future case where `join!` reached a nested
-module through a glob import. Treating an unevaluated const's captured
-`selfType` as evaluation context rather than as a nested expression closed
-`const-generics/issues/issue-89304` and
-`const-generics/generic_const_exprs/abstract-const-as-cast-4`; routing a
-marker impl's trait arguments through the same trait-path visitor as an
-ordinary trait impl closed
-`coherence/negative-coherence/regions-in-canonical`; normalizing the selected
-`CoerceUnsized` field before classifying its nested coercion closed
-`coercion/codegen-smart-pointer-with-alias`; routing arrays and pattern types
-embedded in expression types through const-eval's owned-structure hooks closed
-`const-generics/generic_const_exprs/impl-bounds`; carrying bounded associated
-type arguments through HIR lowering, visitors, monomorphisation, and solver
-projections, and matching bounded equalities by those arguments, closed
-`generic-associated-types/issue-102333`; supplying a projected GAT's own
-arguments while instantiating its declared bounds, and retaining those
-arguments through solver candidate checks, closed
-`generic-associated-types/collections`; retaining a trait-object method as a
-symbolic function relocation through CTFE closed
-`const_prop/dont-propagate-generic-instance-2`; keeping a provisional opaque
-associated projection out of the completed normalisation cache closed
-`sized/coinductive-2`; completing omitted defaulted `Coroutine` parameters in
-solver rules, marking the generated `resume` receiver, rebasing a defining
-opaque alias from its application arguments before generic scope is lost,
-making lazy coroutine extraction idempotent, and evaluating the internal
-zero-initialisation intrinsic in CTFE closed
-`type-alias-impl-trait/issue-53678-coroutine-and-const-fn`; reconstructing each
-missing generic substitution layer independently before CTFE closed
-`generic-const-items/associated-const-equality`; localizing tagged alias-input
-placeholders inside an erased alias through the existing body-local inference
-maps closed `type-alias-impl-trait/multiple-def-uses-in-one-fn-pass`; applying
-a generic type default through ordinary type equality after resolving its
-captured inference variables closed
-`type-alias-impl-trait/multiple_definitions`; deferring generic constant bodies
-until a concrete path exists, extracting closures from deferred constant
-expressions, and enumerating only the evaluated literal's relocations closed
-`consts/control-flow/dead_branches_dont_eval`; evaluating signed `SwitchValue`
-terminators in CTFE closed
-`consts/control-flow/feature-gate-const-if-match`; repeatedly unifying duplicate
-MIR blocks until their newly identical predecessors also converge closed
-`deriving/issue-58319`; preserving when a Rust 2024 explicit reference pattern
-consumes the reference already peeled by match ergonomics closed
-`pattern/skipped-ref-pats-issue-125058`; generating and polling structural
-async-drop glue, including state-aware coroutine destruction and owned future
-storage, closed `async-await/async-drop/async-drop-initial` and
-`async-await/async-drop/async-drop-middle-drop`; pruning locals that are dead
-at suspension and overlapping the remaining non-conflicting locals in union
-storage closed `coroutine/overlap-locals` and
-`coroutine/resume-arg-size`; propagating a match expression's expected type
-into each arm before resolving their common result closed `alloctests`'
-`test_shrink_to_unwind`, and a point rerun against the refreshed standard
-library found `test_format_int_exp_precision` already green. Thus 12 of the 98
-sweep failures remain. The 25 failures outside those corpora are
-still carried from the complete snapshot rather than silently dropped from the
-total.
+Artifacts:
 
-Reruns and the whole-group sweeps are the only regression check there is
-between full gates. Sweep all eight groups (`rust_ui_compile rust_1_90
-rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`): a
-whole-group sweep can find regressions that rerunning only known failures
-cannot.
+- full log:
+  `.build-clang/full-gate-20260822-no-resvg.log`;
+- independent reruns:
+  `.build-clang/reclass-20260822-full-no-resvg/results.jsonl`;
+- classified records:
+  `.build-clang/classification-20260822-full-no-resvg/records.jsonl`;
+- signature clusters:
+  `.build-clang/classification-20260822-full-no-resvg/clusters.json`.
 
-| result | tests |
+The graph contained 15,139 nodes. The full run completed 15,090 and reported
+49 broken targets. All 49 target commands were rerun independently against
+the published roots. Forty-eight failures reproduced; RustSmith seed 36
+completed in isolation and is the only load-sensitive result.
+
+| result | nodes |
 |---|---:|
-| total active fast-gate nodes | 14,115 |
-| failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 37 |
-| fixed, or no longer reproducing, since the gate | 594 |
+| complete fast-gate graph | 15,139 |
+| green in the full parallel run | 15,090 |
+| failed in the full parallel run | 49 |
+| still failing independently | 48 |
+| passed in isolation | 1 |
 
-The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
-rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
-whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed eighty-six nodes, leaving 12. The
-remaining 25 are in groups outside that sweep and are still carried from the
-last full sweep.
+Manual inspection normalised two mechanical classifier labels:
 
-| current eight-corpus result | tests |
+- `coroutine/issue-93161.rs` exits 248 because the compiler takes
+  `SIGFPE`; the crashing stack reaches layout from MIR constant propagation;
+- `async-drop/async-drop-initial.rs` compiles successfully, then its program
+  takes `SIGABRT` while polling generated async-drop glue, so it is a runtime
+  failure rather than a compiler abort.
+
+The resulting stable population is:
+
+| current result | nodes |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 0 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 3 |
-| wrong runtime behaviour, panic, abort, or output | 6 |
-| stable timeout | 3 |
-| carried from groups outside the sweep | 25 |
+| accepted Rust rejected during type checking | 8 |
+| compiler BUG, MIR error, signal, or generated C++ failure | 19 |
+| wrong runtime behaviour, panic, abort, or output | 13 |
+| stable timeout | 8 |
+| **total independently reproduced** | **48** |
 
-## P0: accepted Rust rejected by the front end
+There are no carried failures from an older sweep. This full run supersedes
+the previous 631-node baseline and the later “12 current + 25 carried”
+accounting.
 
-The current eight-corpus rerun has no remaining positive programs that Rust
-1.90 accepts.
-A normal trustme error is a compiler deficiency, not an expected corpus
-result.
+## P0: duplicate const-eval static monomorphisation
 
-| shared area | tests | largest routes |
+Six nodes have the identical
+`BUG trans_monomorphise.cpp:721: Generated static
+ConstEvalMonomorph#0 already in TransList` assertion:
+
+- `rust_1_90/box/{thin_align,thin_new,thin_drop,thin_zst}.rs`;
+- doctests `alloc/src/boxed/thin.rs:26` and
+  `alloc/src/boxed/thin.rs:103`.
+
+This is the largest exact compiler signature. The four run-pass cases and two
+doctests all exercise `ThinBox`; minimise one representative and verify that
+the generated const-eval static is inserted exactly once rather than merely
+suppressing the duplicate assertion.
+
+## P0: async/coroutine storage and drop
+
+Five nodes fail in this area, across three observable routes:
+
+| route | nodes | cases |
 |---|---:|---|
-| AST/HIR lowering, type checking, and resolution | 0 | none remain in the current sweep |
+| `MIR ERROR trans_codegen_c.cpp:6673`: async-drop future has no suspension storage | 3 | `async-drop-future-from-future`, `async-drop-middle-drop`, `async-drop-open` |
+| generated C++ names a missing coroutine-state field | 1 | UI `async-await/non-trivial-drop.rs` |
+| runtime `SIGABRT` while polling async-drop glue | 1 | `async-drop-initial.rs` |
 
-An async closure's future now takes the captures with it instead of borrowing
-the frame of the call that made it, which is what made a capture read freed
-stack. What is still wrong is a capture the closure holds by *reference*: the
-future takes a copy of the referent rather than the reference, so a write
-through it is lost (`async |i| { seen += i; i }` leaves `seen` untouched).
-rustc solves this with a second, by-reference coroutine body; we have one body.
+The three identical MIR errors are one strong cluster. The state-field compile
+failure and runtime abort are adjacent evidence, not yet proof of the same
+root cause. The earlier point-rerun claim that async-drop initial and middle
+were closed is stale; both reproduce against the fresh full-gate toolchain.
 
-The tests routed through the trait-selection and type-mismatch lines are not
-one root cause. Minimise each before grouping.
+Two additional runtime cases concern ordinary coroutine layout:
 
-`closures/self-supertrait-bounds.rs` is also closed by the earlier trait-alias
-where-clause preservation. Expanding `T: Confusing<F>` now keeps both the
-alias's `T: Fn(i32)` supertrait and its independent `F: Fn(u32)` where-bound,
-so each unannotated closure receives the signature belonging to its own type
-parameter. A point rerun exposed that the old classification was stale; the
-dedicated unit calls both closures and checks their distinct integer types.
+- `async-await/future-sizes/future-as-arg.rs` produces a 63-byte nested
+  future where the test requires more than 550 bytes;
+- `async-await/issue-73137.rs` overwrites a saved reference field with the
+  neighbouring integer field across an await.
 
-`traits/next-solver/supertrait-alias-1.rs` is closed before solver probing, at
-AST-to-HIR generic lowering. The crate's `rustc_no_implicit_bounds` attribute
-now starts type parameters without the usual implicit `Sized` marker, so
-`bound::<dyn Trait<Output = <V as Super>::Output>>()` is legal and the
-projection involving the unrelated `V` stays untouched. Explicit `Sized` and
-`?Sized` bounds continue through the existing bound lowering.
+## P0: trait objects and upcasting
 
-`impl-trait/in-trait/shorthand-projection-in-rpitit-bound.rs` is closed in the
-outer UFCS pass. Synthetic RPITIT associated types copy the method's generic
-parameters, but associated types were visited without making those parameters
-current; `X::Foo` therefore had no visible `X: Bar` bound. Associated types now
-enter their own generic scope and resolve its bounds before their declared
-trait bounds, matching the existing function and inherent-type handling.
+Four accepted programs fail at different stages:
 
-`associated-types/issue-71113.rs`, `associated-types/issue-91234.rs`, and
-`mir/issue-107691.rs` are closed by retaining a trait predicate's lowering-time
-trivial-bound classification in HIR. A predicate depending on an item's
-lifetime or on `Self` is an assumption of that item even after those
-dependencies disappear from its lowered type, while a genuinely trivial
-predicate such as `i32: Iterator` is still proved and rejected at the
-declaration. The marker is preserved through cloning, monomorphisation, alias
-expansion, and HIR metadata.
+| stage | nodes | cases |
+|---|---:|---|
+| generated vtable references an undeclared `Middle::say_hello` symbol | 2 | `trait-upcasting/multiple-supertraits-modulo-normalization.rs`, Miri `dyn-upcast.rs` |
+| trait-object relation rejects accepted upcasts | 2 | UI `impl-trait/trait_upcasting.rs`, `trait-upcasting/issue-11515-upcast-fn_mut-fn.rs` |
 
-`new-range/enabled.rs` is closed in range-expression desugaring. With
-`new_range` enabled, the three bounded-below forms now construct the copyable
-`core::range::{RangeFrom, Range, RangeInclusive}` types; the unchanged
-unbounded-below forms and crates without the feature still construct the
-legacy `core::ops` types. The inclusive copyable range has only `start` and
-`end`, so the legacy iterator's private `exhausted` field is no longer emitted
-for that form.
+The two generated-C++ failures have the same missing-method pattern. The two
+type-check failures involve distinct relations (opaque
+principal/auto-trait composition and `FnMut` to `Fn`) and must be minimised
+before grouping them with vtable construction.
 
-`rfcs/rfc-2294-if-let-guard/{move-guard-if-let,scoping-consistency-async}.rs`
-are closed in match-guard MIR lowering. A guard shared by several pattern
-rules is still emitted once and cloned, but its freeze scope now isolates only
-state changes made by a diverging early exit. Normal moves and coroutine-state
-updates are recorded by the existing nested temporary and split scopes, so an
-`if let` guard may move its input or suspend without rejecting every
-or-pattern alternative. The early-exit shadow state still keeps a moved value
-available on the fall-through path that did not take that exit.
+## P1: other accepted Rust rejected by type checking
 
-`mir/important-higher-ranked-regions.rs` is closed in structural coercion of
-ordinary structs. Bounds do not contribute to variance, so once both
-applications are concrete the coercion relates their monomorphised field types
-instead of requiring every declared type argument to be equal. An argument
-used only by a where-clause is therefore bivariant, while represented fields
-and const arguments remain constrained. Applications containing inference
-variables retain the existing equality path so ordinary type inference is
-unchanged.
+Six further positive programs are rejected:
 
-`traits/trait-upcasting/mono-impossible.rs` is closed by preserving trait-path
-context while visiting HIR trait predicates. A `dyn Trait<P>` predicate carries
-the bounds required by `Trait` and may intentionally describe a type with no
-possible concrete implementation; the surrounding function does not have to
-repeat those bounds. Only ordinary type-constructor applications go through
-the eager declaration-bound check, so the existing rejection of
-`Needs<T: Required>` without `T: Required` remains intact.
+| route | case | diagnostic |
+|---|---|---|
+| `hir_typeck_expr_cs.cpp:4151` | UI `next-solver/normalize/normalize-place-elem.rs` | projected `AstKind::Inner` does not match the place pattern |
+| `hir_typeck_main_bindings.cpp:227` | UI `const_kind_expr/relate_ty_with_infer_2.rs` | loses the `C: Tokenize` bound |
+| `hir_typeck_expr_cs.cpp:11203` | `self/ufcs-explicit-self.rs` | cannot locate `<_>::baz` |
+| `hir_typeck_expr_cs.cpp:7892` | `impl-trait/equality-rpass.rs` | infers `() == bool` |
+| `hir_typeck_expr_cs.cpp:7894` | doctest `core/src/future/into_future.rs:34` | cannot prove the local `Multiply: Future` |
+| `hir_typeck_expr_cs.cpp:7892` | doctest `core/src/pin.rs:654` | cannot select `From<&mut [T; 0]>` for `NonNull<[T]>` |
 
-`traits/trait-upcasting/type-checking-test-opaques.rs` is closed in expression
-coercion. A trait-object upcast now projects the requested supertrait from the
-source principal and relates its type, const, and associated-type arguments to
-the destination. That relation can define a TAIT used by the supertrait before
-MIR construction asks for its hidden type, avoiding the defining function's
-self-recursive MIR request. A defining opaque is fuzzy only at its own type
-node while candidate paths are compared, and a concrete parameter mismatch is
-still rejected.
+The repeated source line at 7892 has unrelated diagnostics and is not a
+cluster by itself.
 
-`impl-trait/recursive-impl-trait-type-direct.rs` is closed at the shared RPIT
-inference boundary. A return opaque constrained only by a direct recursive
-call now falls back to `()` after ordinary body inference has stopped making
-progress. The fallback is limited to the current self-referenced RPIT, so an
-unrelated unconstrained inference variable is still an error, and the normal
-trait solver still rejects `()` when it does not satisfy the opaque bounds.
+## P1: remaining compiler-internal failures
 
-`methods/opaque_param_in_ufc.rs` is closed in the shared inherent-UFCS lookup.
-Inside a `#[define_opaque]` body, nested opaque aliases in the receiver are
-revealed before matching impls; after the selected impl constrains the hidden
-type, the receiver stored in the HIR path is canonicalized for later passes.
-The same receiver outside its defining scope remains opaque and cannot use the
-hidden type's inherent items.
+After the P0 routing above, seven compiler failures remain:
 
-`mir/issue-99866.rs` is closed by keeping associated-type projections rigid in
-HIR item declarations instead of replacing them during the second UFCS pass.
-Function bodies and trait lookup normalize those projections at the use site,
-where the current parameter environment is available; an equality such as
-`Back: Backend<DescriptorSetLayout = DSL>` can therefore relate the declared
-field type to `DSL`. Trait-bound matching also normalizes a stored projected
-bound when its concrete form is requested, while an unrelated generic
-associated-type equality still cannot constrain an arbitrary return type. The
-final type-resolution walk also treats interned types as a graph: a pointer
-chain cuts the back-edge from an unevaluated const's captured `selfType` to the
-same preserved projection without allocating a recursion container.
+| signature or route | nodes | cases |
+|---|---:|---|
+| `BUG hir_hir.cpp:600`: missing local type path | 2 | `macros/macro-nested_expr.rs`, UI `privacy/decl-macro-infinite-global-import-cycle-ice-64784.rs` |
+| `BUG hir_hir.cpp:733`: enum path resolves to a struct | 1 | UI `derives/derive-hygiene.rs` |
+| `BUG hir_typeck_resolve_common.cpp:164`: missing generic list | 1 | UI `default-field-values/field-references-param.rs` |
+| `BUG hir_typeck_static.cpp:3469`: item generic without item context | 1 | UI `pattern/unused-parameters-const-pattern.rs` |
+| `MIR ERROR hir_conv_constant_evaluation.cpp:4615`: non-const `Default::default` selected | 1 | UI `default-field-values/const-trait-default-field-value.rs` |
+| compiler `SIGFPE` in layout reached from MIR const propagation | 1 | `coroutine/issue-93161.rs` |
 
-`traits/next-solver/global-param-env-after-norm.rs` is closed by classifying
-ParamEnv bounds only after normalizing their projected types. The method probe
-keeps a global where-bound as a candidate but continues to crate impls, and the
-solver drops that global response when another candidate applies. Thus
-`OldSolver: Into<T::Item>` with `T::Item = NewSolver` no longer hides the
-blanket identity `Into<OldSolver>` before the expected result can disambiguate
-the call. A genuinely non-global ParamEnv bound remains authoritative over
-impl and builtin candidates.
-
-`traits/next-solver/method/path_lookup_wf_constraints.rs` is closed by proving
-the fully-qualified receiver well-formed before inherent item lookup and then
-normalizing its projections with the resulting constraints. Expression
-type-alias inputs retain their identity through default-argument expansion, so
-the receiver's direct argument and the same argument inside an associated-type
-projection become one body-local inference variable. A bare ParamEnv trait
-predicate still proves well-formedness, but it no longer hides an applicable
-impl when only that impl supplies the associated-type value being normalized;
-an explicit ParamEnv associated equality remains authoritative.
-
-`traits/next-solver/non-wf-ret.rs` is closed by checking projected return
-types while probing inherent methods under the next solver. A candidate whose
-return projection has no solution is discarded before autoderef commits to
-that receiver level, allowing the well-formed slice method one dereference
-further in to win. Ambiguous projections remain candidates, and a definite
-failure involving fresh method-generic placeholders is kept ambiguous until
-call-site arguments are known.
-
-`associated-type-bounds/nested-gat-projection.rs` is closed by matching a
-trait declaration's predicates on demand when their subject is a projection
-over another projection. The existing ParamEnv path already elaborates one
-associated-type layer; the additional lookup supplies the deeper declared
-bound without eagerly inserting every trait predicate, which would perturb
-ordinary generic inference and specialization.
-
-`associated-type-bounds/bad-bounds-on-assoc-in-trait.rs` is closed by walking
-an associated type declaration's nested `traitBounds` on demand and building
-the exact projection subject at every layer. This exposes bounds such as
-`Iterator::Item: Iterator` and its deeper associated constraints without
-eagerly adding declaration predicates to the ParamEnv candidate set, so
-ordinary inference and specialization keep their existing ordering.
-
-`type-alias-impl-trait/issue-89952.rs` is closed by recognizing a defining
-opaque alias anywhere inside the expected associated output while filtering
-impl candidates. A provisional structural mismatch can then reach the
-selected impl's associated equality, which defines the nested hidden type;
-outside the defining scope the same opaque remains rigid and still rejects
-access to its hidden type.
-
-`type-alias-impl-trait/tait-param-inference-issue-117310.rs` is closed by
-restoring that outside-scope rigidity while checking an impl's associated
-where-clause equality. The generic matcher still keeps an opaque fuzzy in its
-defining scope, but a structural mismatch against a non-defining opaque now
-discards the conditional impl and leaves the fallback impl to determine the
-remaining integer parameter.
-
-`impl-trait/defined-by-trait-resolution.rs` and
-`impl-trait/different_where_bounds.rs` are closed at the shared callable
-associated-output filter. A function item's `Fn`/`FnOnce::Output` is now
-revealed through the existing current-body RPIT registration before a
-provisional structural comparison can reject the callable impl. The selected
-associated equality can therefore constrain the hidden return type, while an
-RPIT from another function origin remains opaque and does not share the
-current body's inference state.
-
-`unsized/unsize-coerce-multiple-adt-params.rs` is closed by representing a
-potentially-unsized associated projection as its own structural DST-tail
-kind. Structural unsizing now monomorphises the source and destination tail
-fields and compares every non-tail field, so all nominal parameters used only
-by the projection may change together. Sizedness, `Unsize` selection, and MIR
-metadata cleanup use the same normalized tail; the generated fat pointer
-therefore carries the slice length instead of treating one arbitrary generic
-parameter as the unsizing parameter.
-
-The same projected-tail representation also closes
-`unsized/issue-75899-but-gats.rs`: a GAT instantiated as `T` remains the
-struct's unsized tail when `T` changes from a concrete sized type to a trait
-object. The dedicated unit uses an array-to-slice coercion through that GAT and
-checks the resulting slice length, covering metadata as well as type checking.
-
-`Box<_>` is no reason to commit to the only fuzzy method currently visible.
-In `explicit-self-generic`, the blanket `ExactSizeIterator for Box<I>` looked
-applicable before the inner type was known, but its `I: ExactSizeIterator`
-bound failed once `I` became `HashMap`; the inherent `HashMap::len` was one
-autoderef further in. The probe now waits even for one fuzzy candidate, and a
-known receiver uses the regular impl lookup without a prior loose result
-masking a failed where-clause.
-
-
-The direct `self: SmartPtr<Self>` lifetime-elision case is closed: for the
-exact custom-receiver shape, an unbound cache key now visits the concrete
-inherent candidates, and a non-generic impl supplies its concrete `Self`
-instead of producing `<_>::method`. The superficially related Pin cases are
-also closed, but through a separate adjustment: method lookup now probes the
-shared `Pin<&T>` receiver for a `Pin<&mut T>` value under `pin_ergonomics`,
-then lowers the selected call through the existing transparent-wrapper
-coercion. This closes both `arbitrary_self_types_niche_deshadowing.rs` and
-`pin-ergonomics/reborrow-self.rs`.
-
-## P1: internal compiler failures
-
-There are 3 compiler-internal failures in 3 stable signatures in the current
-eight-corpus rerun.
-
-| compiler area | tests |
-|---|---:|
-| type checking and HIR lowering | 1 |
-| MIR lowering, CTFE MIR, and optimisation | 1 |
-| unattributed compiler abort | 1 |
-
-Every remaining signature covers one test, so the class is a long tail:
-
-| signature | tests |
-|---|---:|
-| one-test signatures | 3 |
-
-The former `No repr for struct` assertion in `sized/coinductive-2` came from
-caching an associated projection as complete while its recursive `Sized`
-probe had only marked it opaque. Opaque is a provisional cycle result, so it
-now stays out of `atyCache`; the later layout query retries the projection,
-selects the concrete `CollectionFactory` impl, and obtains `Vec<Node<_>>`.
-
-The former `BUG hir_typeck_expr_cs.cpp` in
-`issue-53678-coroutine-and-const-fn` exposed several latent coroutine paths.
-The solver now completes `Coroutine<R = ()>`'s omitted default parameter, the
-generated `resume` method carries its custom receiver type, and defining-opaque
-fixup uses the alias application's arguments while the function substitution
-still exists. Lazy CTFE no longer revisits an already-extracted coroutine body,
-and its internal generator-state `init` has the same zero-fill semantics as
-the C backend.
-
-The former `Method parameters were not expected` BUG in
-`associated-const-equality` came from CTFE restoring generic substitutions
-only when both the impl and item layers were absent. An associated generic
-const already arrived with its impl layer, so its own `N/*M:0*/` was left
-unmapped. CTFE now reconstructs each missing layer independently before
-evaluating the constant body.
-
-The former `std::out_of_range` in `multiple-def-uses-in-one-fn-pass` came from
-tagged `_` placeholders surviving inside an `ErasedType::Alias` application.
-Expression inference now visits the alias arguments, opaque bounds, and
-`use<>` parameters through the existing body-local alias maps before any
-consumer can mistake a tagged placeholder for an inference-vector index.
-
-The former inference-list loop in `multiple_definitions` came from applying a
-generic default such as `S = T` after `T` had already resolved. Directly
-linking `S` to the stale `T` ivar discarded `T`'s concrete root and a later
-pass linked that root to itself. Generic defaults now use ordinary type
-equality, which resolves both sides before linking or assigning them.
-
-The former eager CTFE and translation failure in
-`dead_branches_dont_eval` exposed three layers. A generic associated constant
-was evaluated while its declaration was visited even when no concrete use
-needed it; a closure inside the deferred constant had skipped the normal
-closure extraction pass; and translation enumerated dependencies from every
-MIR branch before evaluating the concrete constant. Generic constant bodies
-now stay generic until a concrete path exists, constants use the standard
-closure extraction and fixup lifecycle, and translation enumerates only the
-relocations in the evaluated literal, so dead branches reach neither CTFE nor
-code generation.
-
-The former `SwitchValue - Signed` TODO in `feature-gate-const-if-match` came
-from CTFE implementing only the unsigned value-table variant. Matches with one
-explicit signed value lower to an equality test and hid the gap; two or more
-values retain a signed `SwitchValue`. CTFE now reads the operand through the
-existing width-aware signed scalar path and compares it with the MIR's `i64`
-keys, including correct sign extension for negative values.
-
-The former `Too many MIR optimisation iterations` error in `issue-58319` came
-from duplicate-block unification collapsing only the deepest equal blocks in a
-call chain per invocation. Patching those targets made the predecessor pair
-equal, but the pass deferred that new equality to the next outer iteration; a
-derived `Clone` with 101 fields therefore exhausted the 100-pass guard. The
-unification pass now repeats its existing hash-and-group step until no new
-duplicate blocks remain, so the whole cascade converges inside one optimiser
-pass without weakening the guard.
-
-The former `BUG hir_typeck_helpers.cpp` in
-`pattern/skipped-ref-pats-issue-125058` came from treating an explicit `&mut`
-pattern as one more borrow after Rust 2024 match ergonomics had already peeled
-the inherited reference. Type checking now marks that reference pattern as
-consumed and resets the default binding mode while keeping the adjusted inner
-type. The marker survives HIR cloning and reaches usage analysis and MIR
-pattern lowering, where the source pattern is retained but no second
-dereference is emitted.
-
-`async-await/async-drop/async-drop-initial.rs` and
-`async-await/async-drop/async-drop-middle-drop.rs` are closed by carrying the
-generated async-drop future through HIR and lowering its poll to structural
-drop glue. Trait resolution finds explicit and field-recursive `AsyncDrop`
-work, monomorphisation builds the corresponding poll MIR (including the live
-state of a suspended coroutine), and the C backend retains the glue state and
-future storage until polling completes. Match bodies use independent move
-states while a failed guard passes its evaluated state to the following arm,
-so cleanup neither reorders async drops nor drops a moved capture twice.
-
-The former translation-time CTFE exception in
-`dont-propagate-generic-instance-2` came from resolving a function pointer to
-`<dyn Trait as Trait>::method` as an ordinary trait item. Such a pointer names
-the generated vtable-dispatch shim, so CTFE now preserves its symbolic method
-path for translation instead of choosing between the object bound and a fuzzy
-blanket impl.
-
-The former multi-layered erased-type TODO in `issue-89008` came from treating
-an opaque GAT as though it had only the impl's generic layer. Its opaque alias
-now has one flat definition over the impl and GAT parameters while each alias
-application retains the original impl/item bindings. Hidden-type
-generalisation rebases both type and const parameters, including generic
-arguments added to an async block's generated type after closure expansion.
-
-The former two-test `BUG hir_typeck_common.cpp:824` cluster was one const-eval
-root cause. An unevaluated const captures `selfType` as its evaluation
-environment; an impl header can make that type contain a pre-binding snapshot
-of the same const argument. The global const-evaluation walk now visits the
-captured impl/item parameters and expression without recursively evaluating
-that context with an empty impl substitution.
-
-The former `bad_function_call` in `regions-in-canonical` came from the marker
-impl visitor handing const trait arguments directly to `visitPathParams`.
-Unlike an ordinary trait impl, that lost the trait path and left const-eval's
-parameter-definition callback unset. Both impl forms now visit their trait
-arguments as a `HIRGenericPath` with trait context.
-
-The former `CoerceUnsized` marking assertion in
-`codegen-smart-pointer-with-alias` was in the second markings pass. The first
-pass already normalized projected fields while locating the single differing
-field, but the second read the declaration type again and required it to be a
-struct. It now normalizes each field reached while classifying the nested
-passthrough or pointer coercion.
-
-The former const-eval assertion in `impl-bounds` was a visitor-dispatch
-regression. Array and pattern types embedded in expression types took the pure
-type walk, bypassing const-eval's override for unevaluated values and trying to
-evaluate their captured `selfType` as a nested expression. They now use the
-same owned-structure hook dispatch as paths and trait objects, preserving that
-captured type as evaluation context.
-
-The line numbers in a signature move with every commit that touches the file:
-the ones here are read from the classification named above, and are worth
-re-deriving rather than trusting. Attribution needs the crashing thread's
-frames, which is not thread 1 any more -- the compiler runs on a thread of its
-own for the bigger stack, so `dev/gate_classify.py` now picks the thread that
-took the signal.
+The two `hir_hir.cpp:600` cases resolve different missing paths
+(`#0::S` and `x::A`); treat the common line as a routing hint only.
 
 ## P1: runtime semantics
 
-Six programs in the current eight-corpus rerun build but execute
-incorrectly:
+Thirteen programs compile but execute incorrectly:
 
-| runtime result | tests | note |
+| family | nodes | cases |
 |---|---:|---|
-| Rust panic, exit 101 | 6 | group by the failed semantic assertion, never by exit code |
+| lifetime-erased `TypeId` / `Any` distinctions | 3 | `type-id-higher-rank`, `any-lifetime-escape-higher-rank`, doctest `core/src/any.rs:660` |
+| anonymous-scope `type_name` paths | 2 | `issues/issue-61894.rs`, coretest `any::dyn_type_name` |
+| RustSmith stdout mismatch | 2 | seeds 19 and 102 |
+| coroutine layout/state | 2 | `future-as-arg`, `issue-73137` |
+| async-drop runtime abort | 1 | `async-drop-initial` |
+| drop elaboration after a raw-pointer write | 1 | `drop/issue-90752-raw-ptr-shenanigans.rs` |
+| generic-assert captured diagnostic text | 1 | `feature-gate-generic_assert.rs` |
+| adjacent stack allocation layout | 1 | Miri `adjacent-allocs.rs` |
 
-The repeated high-yield areas inside the panic set are enum/DST/layout, drop
-order, and coroutine layout. Two remaining `type_name` failures concern the
-anonymous scope: an item declared inside a function body sits under `#N` in
-its path, where rustc names it after the function, so `issue-61894` still
-prints `issue_61894::#0::f` for
-`issue_61894::Bar<_>::foo::f` and `any::dyn_type_name` prints `any::#2::Foo`.
-Naming those scopes is a parser change (`ASTModule::addAnon`) that moves every
-such path, and with it every mangled name. Minimise representatives before
-treating nearby assertions as one root cause.
+The three `TypeId`/`Any` cases depend on distinguishing higher-ranked and
+`'static` function/trait-object types. trustme currently erases lifetimes
+from HIR path parameters, so this family needs a representation change rather
+than three point fixes.
 
-Grouping the panics by the rule they check finds these multi-test families:
+The two type-name cases both expose unnamed `#N` scopes, but expected output
+differs by context: `issue-61894` needs the containing inherent method in the
+path, while `dyn_type_name` expects the anonymous marker itself. Minimise
+both before changing all anonymous path naming.
 
-| family | tests | rule |
-|---|---:|---|
-| nested future size | 1 | `future-as-arg`: the awaited future argument must remain represented in each active async frame; the current layout grows only to 63 bytes instead of more than 550 |
-| `TypeId` of a higher-ranked type | 2 | `type-id-higher-rank` and `any-lifetime-escape-higher-rank`: not reachable, see below |
+## P2: stable timeouts
 
-The two `TypeId` ones are not reachable at all: they require `fn(&'static isize)`
-and `for<'a> fn(&'a isize)` to have different type ids, and this compiler erases
-lifetimes -- `HIRPathParams` has no lifetime list to carry them. Nothing short of
-carrying lifetimes through HIR would separate those types, so do not count these
-two as independent work.
+Eight nodes hit their timeout again in isolation:
 
-## P3: performance and flakes
+| limit | case |
+|---:|---|
+| 60 s | UI `impl-trait/recursive-type-alias-impl-trait-declaration-too-subtle-2.rs` |
+| 60 s | UI `associated-type-bounds/trait-params.rs` |
+| 60 s | Exercism `palindrome-products` |
+| 60 s | UI `next-solver/normalize/normalize-allow-too-many-vars.rs` |
+| 60 s | UI `consts/large-zst-array-77062.rs` |
+| 60 s | UI `coroutine/issue-87142.rs` |
+| 10 min | RustSmith seed 7 |
+| 60 s | `mir/mir_heavy_promoted.rs` |
 
-Three nodes in the current eight-corpus rerun time out even in isolation. The
-harness gives compile and run 60 seconds each:
+Classify each timeout by its last progressing compiler phase before attempting
+a fix. Recursive alias resolution, solver explosion, large generated MIR, and
+slow generated-program compilation are not interchangeable root causes.
 
-| node | measured | what it really is |
-|---|---|---|
-| `coroutine/issue-87142.rs` | over 60s | not yet minimised |
-| `consts/large-zst-array-77062.rs` | over 300s | genuinely slow |
-| `impl-trait/recursive-type-alias-impl-trait-declaration-too-subtle-2.rs` | over 60s | unbounded recursive alias resolution |
+## Load-sensitive result
+
+RustSmith seed 36 exceeded its 10-minute node limit during the 78-way full
+run, then compiled and passed in isolation in roughly eight minutes. It is not
+included in the 48 current failures. Keep it as a gate-capacity signal; do not
+turn it into a compiler-correctness issue unless it becomes a stable timeout.
 
 ## Fix discipline
 
@@ -622,19 +215,15 @@ For every compiler fix:
    compiler before changing trustme.
 2. Confirm that unit is red on current trustme.
 3. Fix the shared compiler path, not the corpus expectation.
-4. Run only the new unit, the affected original triggers, and the unit group.
+4. Run only the new unit, the affected original triggers, and the `unit`
+   group.
 5. Remove completed rows from this file instead of commenting them out.
-6. Decrement a baseline node only once; a latent failure exposed after an
-   earlier root disappears is not an additional old-gate node.
+6. Re-run every affected original node against freshly published CAS roots.
 
 A generic type that derives `Copy` and `Clone` still clones field by field:
 `*self` needs `Self: Copy`, which the bounds a derived `Clone` adds do not
 give, and emitting it breaks the standard library.
 
-`resvg` is outside this file: its node is wrapped in the 60-second
-`TEST_TIMEOUT` (`build.py`), which no from-source project build can meet, so it
-cannot pass regardless of the compiler.
-
-Do not run another full gate until this file is exhausted. Reclassification is
-performed by `dev/gate_reclassify.py` inside the clang Nix environment and then
-by `dev/gate_classify.py`.
+Refresh this baseline only with a complete `test` run followed by
+`dev/gate_reclassify.py` and `dev/gate_classify.py`. Keep `resvg` and the
+other `slow_tests` explicitly outside the fast-gate counts.
