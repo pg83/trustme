@@ -10502,7 +10502,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                         if (ent.typesDefault.size() != 1) {
                             // TODO: Error?
                         } else {
-                            context.ivars.setIvarTo(i, *ent.typesDefault.begin());
+                            context.equateTypes(rootPtr->span(), tyL, *ent.typesDefault.begin());
                         }
                     }
                 }

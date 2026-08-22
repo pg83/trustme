@@ -154,7 +154,10 @@ zero-initialisation intrinsic in CTFE closed
 missing generic substitution layer independently before CTFE closed
 `generic-const-items/associated-const-equality`; localizing tagged alias-input
 placeholders inside an erased alias through the existing body-local inference
-maps closed `type-alias-impl-trait/multiple-def-uses-in-one-fn-pass`. Thus 23 of
+maps closed `type-alias-impl-trait/multiple-def-uses-in-one-fn-pass`; applying
+a generic type default through ordinary type equality after resolving its
+captured inference variables closed
+`type-alias-impl-trait/multiple_definitions`. Thus 22 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -169,20 +172,20 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 48 |
-| fixed, or no longer reproducing, since the gate | 583 |
+| still failing or still carried from the last full sweep | 47 |
+| fixed, or no longer reproducing, since the gate | 584 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed seventy-five nodes, leaving 23. The
+subsequent point fixes and reruns have closed seventy-six nodes, leaving 22. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 0 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 9 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 8 |
 | wrong runtime behaviour, panic, abort, or output | 11 |
 | stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
@@ -407,12 +410,12 @@ coercion. This closes both `arbitrary_self_types_niche_deshadowing.rs` and
 
 ## P1: internal compiler failures
 
-There are 9 compiler-internal failures in 9 stable signatures in the current
+There are 8 compiler-internal failures in 8 stable signatures in the current
 eight-corpus rerun.
 
 | compiler area | tests |
 |---|---:|
-| type checking and HIR lowering | 3 |
+| type checking and HIR lowering | 2 |
 | MIR lowering, CTFE MIR, and optimisation | 4 |
 | translation and code generation | 1 |
 | unattributed compiler abort | 1 |
@@ -421,7 +424,7 @@ Every remaining signature covers one test, so the class is a long tail:
 
 | signature | tests |
 |---|---:|
-| one-test signatures | 9 |
+| one-test signatures | 8 |
 
 The former `No repr for struct` assertion in `sized/coinductive-2` came from
 caching an associated projection as complete while its recursive `Sized`
@@ -450,6 +453,12 @@ tagged `_` placeholders surviving inside an `ErasedType::Alias` application.
 Expression inference now visits the alias arguments, opaque bounds, and
 `use<>` parameters through the existing body-local alias maps before any
 consumer can mistake a tagged placeholder for an inference-vector index.
+
+The former inference-list loop in `multiple_definitions` came from applying a
+generic default such as `S = T` after `T` had already resolved. Directly
+linking `S` to the stale `T` ivar discarded `T`'s concrete root and a later
+pass linked that root to itself. Generic defaults now use ordinary type
+equality, which resolves both sides before linking or assigning them.
 
 The former translation-time CTFE exception in
 `dont-propagate-generic-instance-2` came from resolving a function pointer to
