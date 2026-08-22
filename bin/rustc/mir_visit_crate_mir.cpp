@@ -16,7 +16,7 @@ HIRTypeRef MIROuterVisitor::visitType(HIRTypeRef ty) {
         DEBUG("Array size " << ty);
         if (auto* se1 = e->size.opt_Unevaluated()) {
             if (auto* se = se1->opt_Unevaluated()) {
-                cb(resolve_, HIRItemPath(""), *(*se)->expr, {}, resolve_.hirCrate().types.primitive(HIRCoreType::Usize));
+                cb.visit(resolve_, HIRItemPath(""), *(*se)->expr, {}, resolve_.hirCrate().types.primitive(HIRCoreType::Usize));
             }
         }
         return resolve_.hirCrate().types.intern(mv$(data));
@@ -29,7 +29,7 @@ HIRTypeRef MIROuterVisitor::visitType(HIRTypeRef ty) {
 void MIROuterVisitor::visitConstgeneric(HIRConstGeneric& value) {
     if (auto* unevaluated = value.opt_Unevaluated()) {
         auto& expr = *(**unevaluated).expr;
-        cb(resolve_, HIRItemPath(""), expr, {}, expr->resType);
+        cb.visit(resolve_, HIRItemPath(""), expr, {}, expr->resType);
     }
 }
 
@@ -41,7 +41,7 @@ void MIROuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
         HIRTypeRef tmp;
         const auto& sp = item.code ? item.code->span() : Span();
         const auto& retTy = resolve_.fixTraitDefaultReturn(sp, p, item.returnType, tmp);
-        cb(resolve_, p, item.code, item.args, retTy);
+        cb.visit(resolve_, p, item.code, item.args, retTy);
     }
 }
 
@@ -49,7 +49,7 @@ void MIROuterVisitor::visitStatic(HIRItemPath p, HIRStatic& item) {
     auto _ = this->resolve_.setItemGenerics(item.params);
     if (item.value) {
         DEBUG("`static` value " << p);
-        cb(resolve_, p, item.value, {}, item.type);
+        cb.visit(resolve_, p, item.value, {}, item.type);
     }
 }
 
@@ -57,7 +57,7 @@ void MIROuterVisitor::visitConstant(HIRItemPath p, HIRConstant& item) {
     auto _ = this->resolve_.setItemGenerics(item.params);
     if (item.value) {
         DEBUG("`const` value " << p);
-        cb(resolve_, p, item.value, {}, item.type);
+        cb.visit(resolve_, p, item.value, {}, item.type);
     }
 }
 
@@ -79,7 +79,7 @@ void MIROuterVisitor::visitEnum(HIRItemPath p, HIREnum& item) {
 
         for (auto& var : e->variants) {
             if (var.expr) {
-                cb(resolve_, p + var.name, var.expr, {}, enumType);
+                cb.visit(resolve_, p + var.name, var.expr, {}, enumType);
             }
         }
     }
@@ -105,7 +105,7 @@ void MIROuterVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImp
     HIRVisitor::visitTraitImpl(traitPath, impl);
 }
 
-MIROuterVisitor::MIROuterVisitor(const WireBoard& wb, const HIRCrate& crate, cbT cb)
+MIROuterVisitor::MIROuterVisitor(const WireBoard& wb, const HIRCrate& crate, MIRExprCallback& cb)
     : HIRVisitor(nullptr, crate.types)
     , resolve_(wb)
     , cb(cb)

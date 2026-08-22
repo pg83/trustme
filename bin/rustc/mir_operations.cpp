@@ -1210,8 +1210,9 @@ void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam&
 void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
     Span sp;
     TRACE_FUNCTION_F(path);
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
     MIRTypeResolve state {
-        sp, resolve, FMT_CB(ss, ss << path;), retType, args, fcn
+        sp, resolve, pathCallback, retType, args, fcn
     };
 
     MirMutator mutator{fcn, 0, 0};
@@ -1772,11 +1773,12 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
 }
 
 void MIRCleanupCrate(const WireBoard& wb, HIRCrate& crate) {
-    MIROuterVisitor ov{wb, crate, [&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
+    auto callback = makeCallable<MIRExprCb>([&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
         if (exprPtr) {
             MIRCleanup(res, p, exprPtr.getMirOrErrorMut(Span()), args, ty);
         }
-    }};
+    });
+    MIROuterVisitor ov{wb, crate, callback};
     ov.visitCrate(crate);
 }
 
@@ -1820,8 +1822,9 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn);
 void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
     static Span sp;
     TRACE_FUNCTION_F(path);
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
     MIRTypeResolve state {
-        sp, resolve, FMT_CB(ss, ss << path;), retType, args, fcn
+        sp, resolve, pathCallback, retType, args, fcn
     };
 
     while (MIROptimiseInlining(state, fcn, true)) {
@@ -1848,8 +1851,9 @@ bool MIROptimiseInline(const StaticTraitResolve& resolve, const HIRItemPath& pat
     static Span sp;
     bool rv = false;
     TRACE_FUNCTION_FR(path, rv);
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
     MIRTypeResolve state {
-        sp, resolve, FMT_CB(ss, ss << path;), retType, args, fcn
+        sp, resolve, pathCallback, retType, args, fcn
     };
 
     while (MIROptimiseInlining(state, fcn, false, &list)) {
@@ -1868,8 +1872,9 @@ void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIR
     static Span sp;
     assert(optLevel > 0);
     TRACE_FUNCTION_F(path);
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
     MIRTypeResolve state {
-        sp, resolve, FMT_CB(ss, ss << path;), retType, args, fcn
+        sp, resolve, pathCallback, retType, args, fcn
     };
 
     bool changeHappened;
@@ -2072,7 +2077,7 @@ void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIR
 
 namespace {
     // Callback interfaces for the lvalue-visit family: plain virtual structs
-    // (the std::function versions allocated per visited statement).
+    // (the old erased wrappers allocated per visited statement).
     struct LvalueVisitor {
         virtual bool visitLvalue(const MIRLValue& lv, MIRValUsage u) = 0;
     };
@@ -2565,8 +2570,8 @@ default:
     struct MIRBlockCb final: MIRBlockCallback {
         F f;
 
-        MIRBlockCb(F&& f)
-            : f(static_cast<F&&>(f))
+        explicit MIRBlockCb(F f)
+            : f(f)
         {
         }
 
@@ -2583,8 +2588,8 @@ default:
     struct MIRBlockConstCb final: MIRBlockConstCallback {
         F f;
 
-        MIRBlockConstCb(F&& f)
-            : f(static_cast<F&&>(f))
+        explicit MIRBlockConstCb(F f)
+            : f(f)
         {
         }
 
@@ -3373,7 +3378,32 @@ namespace {
         Complete,
     };
 
-    IterPathRes iterPath(const MIRFunction& fcn, const OptimiseStmtRef& start, const OptimiseStmtRef& end, ::std::function<bool(OptimiseStmtRef, const MIRStatement&)> cbStmt, ::std::function<bool(OptimiseStmtRef, const MIRTerminator&)> cbTerm) {
+    struct IterPathCallback {
+        virtual bool visitStatement(OptimiseStmtRef location, const MIRStatement& statement) = 0;
+        virtual bool visitTerminator(OptimiseStmtRef location, const MIRTerminator& terminator) = 0;
+    };
+
+    template <typename S, typename T>
+    struct IterPathCb final: IterPathCallback {
+        S statement;
+        T terminator;
+
+        IterPathCb(S statement, T terminator)
+            : statement(statement)
+            , terminator(terminator)
+        {
+        }
+
+        bool visitStatement(OptimiseStmtRef location, const MIRStatement& value) override {
+            return statement(location, value);
+        }
+
+        bool visitTerminator(OptimiseStmtRef location, const MIRTerminator& value) override {
+            return terminator(location, value);
+        }
+    };
+
+    IterPathRes iterPathWith(const MIRFunction& fcn, const OptimiseStmtRef& start, const OptimiseStmtRef& end, IterPathCallback& cb) {
         if (start.bbIdx == end.bbIdx) {
             assert(start.stmtIdx <= end.stmtIdx);
         }
@@ -3384,7 +3414,7 @@ namespace {
             const auto& bb = fcn.blocks.at(ref.bbIdx);
             if (ref.stmtIdx < bb.statements.size()) {
                 DEBUG(ref << " " << bb.statements.at(ref.stmtIdx));
-                if (cbStmt(ref, bb.statements.at(ref.stmtIdx))) {
+                if (cb.visitStatement(ref, bb.statements.at(ref.stmtIdx))) {
                     DEBUG("> Early true");
                     return IterPathRes::EarlyTrue;
                 }
@@ -3392,7 +3422,7 @@ namespace {
                 ref.stmtIdx++;
             } else {
                 DEBUG(ref << " " << bb.terminator);
-                if (cbTerm(ref, bb.terminator)) {
+                if (cb.visitTerminator(ref, bb.terminator)) {
                     DEBUG("> Early true");
                     return IterPathRes::EarlyTrue;
                 }
@@ -3431,6 +3461,12 @@ namespace {
             }
         }
         return IterPathRes::Complete;
+    }
+
+    template <typename S, typename T>
+    IterPathRes iterPath(const MIRFunction& fcn, const OptimiseStmtRef& start, const OptimiseStmtRef& end, S statement, T terminator) {
+        IterPathCb<S, T> cb(statement, terminator);
+        return iterPathWith(fcn, start, end, cb);
     }
 
     // Value is invalidated if it's used with MIRValUsage::Write or MIRValUsage::Borrow
@@ -8455,7 +8491,7 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
 }
 
 void MIROptimiseCrate(const WireBoard& wb, HIRCrate& crate, unsigned optLevel, bool enableInlining) {
-    MIROuterVisitor ov{wb, crate, [optLevel, enableInlining](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
+    auto callback = makeCallable<MIRExprCb>([optLevel, enableInlining](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
         //}
         auto& mir = expr.getMirOrErrorMut(Span());
         if (optLevel == 0) {
@@ -8467,7 +8503,8 @@ void MIROptimiseCrate(const WireBoard& wb, HIRCrate& crate, unsigned optLevel, b
         }
         // Run cleanup to handle now-monomoprhised inlined constants
         MIRCleanup(res, p, mir, args, ty);
-    }};
+    });
+    MIROuterVisitor ov{wb, crate, callback};
     ov.visitCrate(crate);
 }
 

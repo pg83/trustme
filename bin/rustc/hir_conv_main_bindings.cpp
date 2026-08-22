@@ -4090,8 +4090,8 @@ default:
     }
 };
 
-template <typename T>
-void sortImplGroup(HIRCrate::ImplGroup<std::unique_ptr<T>>& ig, ::std::function<void(::std::ostream& os, const T&)> fmt) {
+template <typename T, typename F>
+void sortImplGroup(HIRCrate::ImplGroup<std::unique_ptr<T>>& ig, F fmt) {
     auto newEnd = ::std::remove_if(ig.generic.begin(), ig.generic.end(), [&ig, &fmt](::std::unique_ptr<T>& tyImpl) {
         const auto& type = tyImpl->type; // Using field accesses in templates feels so dirty
         const HIRSimplePath* path = type->getSortPath();

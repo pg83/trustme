@@ -10,7 +10,8 @@
 
 void MIRTypeResolve::fmtPos(::std::ostream& os, bool includePath /*=false*/) const {
     if (includePath) {
-        os << this->path_ << " ";
+        this->path_.write(os);
+        os << " ";
     }
     os << "BB" << this->bbIdx << "/";
     if (this->stmtIdx == STMT_TERM) {
@@ -21,11 +22,11 @@ void MIRTypeResolve::fmtPos(::std::ostream& os, bool includePath /*=false*/) con
     os << ": ";
 }
 
-void MIRTypeResolve::printMsg(const char* tag, ::std::function<void(::std::ostream& os)> cb) const {
+void MIRTypeResolve::printMsgCb(const char* tag, SpanMessageCallback& cb) const {
     auto& os = ::std::cerr;
     os << "MIR " << tag << ": ";
     fmtPos(os, true);
-    cb(os);
+    cb.write(os);
     os << ::std::endl;
     abort();
     //throw CheckFailure {};
@@ -697,43 +698,43 @@ std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
 }
 
 struct LValueCbVisitor: public MIRVisitor {
-    ::std::function<bool(const MIRLValue&, MIRValUsage)> cb;
+    const MIRLvalueCallback& cb;
 
-    LValueCbVisitor(::std::function<bool(const MIRLValue&, MIRValUsage)> cb)
-        : cb(std::move(cb))
+    explicit LValueCbVisitor(const MIRLvalueCallback& cb)
+        : cb(cb)
     {
     }
 
     bool visitLvalue(const MIRLValue& lv, MIRValUsage u) override {
-        if (cb(lv, u)) {
+        if (cb.visitLvalue(lv, u)) {
             return true;
         }
         return MIRVisitor::visitLvalue(lv, u);
     }
 };
 
-bool visitMirLvalue(const MIRLValue& lv, MIRValUsage u, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-    LValueCbVisitor v{mv$(cb)};
+bool visitMirLvalueWith(const MIRLValue& lv, MIRValUsage u, const MIRLvalueCallback& cb) {
+    LValueCbVisitor v{cb};
     return v.visitLvalue(lv, u);
 }
 
-bool visitMirLvalue(const MIRParam& p, MIRValUsage u, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-    LValueCbVisitor v{mv$(cb)};
+bool visitMirLvalueWith(const MIRParam& p, MIRValUsage u, const MIRLvalueCallback& cb) {
+    LValueCbVisitor v{cb};
     return v.visitParam(p, u);
 }
 
-bool visitMirLvalues(const MIRRValue& rval, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-    LValueCbVisitor v{mv$(cb)};
+bool visitMirLvaluesWith(const MIRRValue& rval, const MIRLvalueCallback& cb) {
+    LValueCbVisitor v{cb};
     return v.visitRvalue(rval);
 }
 
-bool visitMirLvalues(const MIRStatement& stmt, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-    LValueCbVisitor v{mv$(cb)};
+bool visitMirLvaluesWith(const MIRStatement& stmt, const MIRLvalueCallback& cb) {
+    LValueCbVisitor v{cb};
     return v.visitStmt(stmt);
 }
 
-bool visitMirLvalues(const MIRTerminator& term, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-    LValueCbVisitor v{mv$(cb)};
+bool visitMirLvaluesWith(const MIRTerminator& term, const MIRLvalueCallback& cb) {
+    LValueCbVisitor v{cb};
     return v.visitTerminator(term);
 }
 
@@ -1918,7 +1919,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 }
 #endif
 
-MIRTypeResolve::MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const HIRTypeData* retType, const argsT& args, const MIRFunction& fcn)
+MIRTypeResolve::MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, const MIRPathCallback& path, const HIRTypeData* retType, const argsT& args, const MIRFunction& fcn)
     : sp(sp)
     , resolve(resolve)
     , crate(resolve.hirCrate())

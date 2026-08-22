@@ -416,8 +416,9 @@ break;
         void emitType(const HIRTypeData* ty) override {
             TRACE_FUNCTION_F(ty);
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "type " << ty; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "type " << ty;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -512,8 +513,9 @@ break;
 
         void emitStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "struct " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "struct " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -641,8 +643,9 @@ break;
 
         void emitUnion(const Span& sp, const HIRGenericPath& p, const HIRUnion& item) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "union " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "union " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -667,8 +670,9 @@ break;
 
         void emitEnum(const Span& sp, const HIRGenericPath& p, const HIREnum& item) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "enum " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "enum " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -792,8 +796,9 @@ break;
 
         void emitStaticLocal(const HIRPath& p, const HIRStatic& item, const TransParams& params, const EncodedLiteral& encoded) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "static " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "static " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -824,8 +829,9 @@ break;
 
         void emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "extern fn " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "extern fn " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
             TRACE_FUNCTION_F(p);
@@ -860,8 +866,9 @@ break;
             HIRTypeRef retTypeTmp;
             const auto& retType = monomorphiseFcnReturn(retTypeTmp, item, params);
 
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << p; });
             MIRTypeResolve localMirRes {
-                sp, resolve_, FMT_CB(ss, ss << p;), retType, argTypes, *code
+                sp, resolve_, pathCallback, retType, argTypes, *code
             };
             mirRes = &localMirRes;
 

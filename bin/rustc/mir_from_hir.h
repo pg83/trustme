@@ -5,10 +5,14 @@
 #include "hir_type.h"
 #include "hir_typeck_static.h" // StaticTraitResolve for Copy
 
-#include <functional>
 #include <map>
 
 class MirBuilder;
+
+struct MIRDropEmitter {
+    virtual bool emitDeepDrop(const Span& sp, const MIRLValue& value, unsigned int flag) = 0;
+    virtual bool emitShallowDrop(const Span& sp, const MIRLValue& value, unsigned int flag) = 0;
+};
 
 class ScopeHandle {
     friend class MirBuilder;
@@ -177,9 +181,7 @@ class MirBuilder {
     //   the optimiser.
     MIRLValue ifCondLval;
 
-    using DeepDropEmitter = ::std::function<bool(const Span&, MIRLValue, unsigned int)>;
-    DeepDropEmitter deepDropEmitter;
-    DeepDropEmitter shallowDropEmitter;
+    MIRDropEmitter* dropEmitter = nullptr;
 
 public:
     MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* retTy, const HIRFunction::argsT& args, MIRFunction& output);
@@ -272,12 +274,8 @@ public:
 
     void pushStmt(const Span& sp, MIRStatement stmt);
 
-    void setDeepDropEmitter(DeepDropEmitter emitter) {
-        deepDropEmitter = ::std::move(emitter);
-    }
-
-    void setShallowDropEmitter(DeepDropEmitter emitter) {
-        shallowDropEmitter = ::std::move(emitter);
+    void setDropEmitter(MIRDropEmitter* emitter) {
+        dropEmitter = emitter;
     }
 
     // - Block management

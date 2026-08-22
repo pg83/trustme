@@ -12,7 +12,8 @@ namespace {
     /// The plain lint names listed in `(...)`. The list also carries entries
     /// this compiler has no lint for -- tool lints (`clippy::foo`) and keyed
     /// entries (`reason = "..."`) -- so the scan skips whatever it cannot read.
-    void collectLintNames(const ASTAttribute& mi, const ::std::function<void(const RcString&)>& cb) {
+    template <typename F>
+    void collectLintNames(const ASTAttribute& mi, const F& cb) {
         TTStream lex(mi.span(), ParseState(), mi.data());
         if (!lex.getTokenIf(TOK_PAREN_OPEN)) {
             return;
@@ -50,7 +51,8 @@ namespace {
 
     /// Read one item's lint attributes: what it forbids, and what it tries to
     /// set to a level below forbid.
-    void readLintAttrs(const ASTAttributeList& attrs, ::std::set<RcString>& forbidden, const ::std::function<void(const Span&, const RcString&)>& lowered) {
+    template <typename F>
+    void readLintAttrs(const ASTAttributeList& attrs, ::std::set<RcString>& forbidden, const F& lowered) {
         for (const auto& a : attrs.items) {
             const auto& name = a.name();
             if (name == "forbid") {

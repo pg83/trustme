@@ -1451,6 +1451,20 @@ namespace {
     const unsigned TERM_RET_RETURN = UINT_MAX;
 } // namespace <anon>
 
+class MIREvalPathCallback final: public MIRPathCallback {
+    HIRItemPath path;
+
+public:
+    explicit MIREvalPathCallback(const HIRItemPath& path)
+        : path(path)
+    {
+    }
+
+    void write(::std::ostream& os) const override {
+        os << path;
+    }
+};
+
 class MIREvalCallStackEntry {
 public:
     stl::ObjPool* const valuePool;
@@ -1463,6 +1477,7 @@ public:
     // MIR Resolve Helper
     const StaticTraitResolve& rootResolve;
     StaticTraitResolve resolve;
+    MIREvalPathCallback pathCallback;
     MIRTypeResolve state;
     // Monomorphiser from the function
     MonomorphState ms;
@@ -1484,7 +1499,7 @@ public:
         unsigned frameIndex,
         const Span& rootSpan,
         const StaticTraitResolve& resolve,
-        ::FmtLambda pathStr,
+        const MIREvalPathCallback& printPath,
         // Pre-monomorphised function signature (as this may be a `static`)
         HIRTypeRef expTy,
         std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs,
@@ -1506,7 +1521,8 @@ public:
         , tracksCaller(tracksCaller)
         , rootResolve(resolve)
         , resolve(resolve.board())
-        , state{rootSpan, this->resolve, std::move(pathStr), this->retType, this->argDefs, fcn}
+        , pathCallback(printPath)
+        , state{rootSpan, this->resolve, pathCallback, this->retType, this->argDefs, fcn}
         , ms(std::move(ms))
         , retval(MIREvalAllocationPtr::allocate(valuePool, rootResolve, state, retType))
         , args(args)
@@ -2920,8 +2936,9 @@ HIREvaluator::CsePtr::~CsePtr() {
     }
 }
 
-void HIREvaluator::pushStackEntry(::FmtLambda printPath, const MIRFunction& fcn, MonomorphState ms, HIRTypeRef exp, HIRFunction::argsT argDefs, ::std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller) {
-    this->callStack.push_back(new MIREvalCallStackEntry(this->valuePool.mutPtr(), this->numFrames, this->rootSpan, this->resolve, std::move(printPath), std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef, std::move(callerLocation), tracksCaller));
+void HIREvaluator::pushStackEntry(HIRItemPath printPath, const MIRFunction& fcn, MonomorphState ms, HIRTypeRef exp, HIRFunction::argsT argDefs, ::std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller) {
+    MIREvalPathCallback pathCallback(printPath);
+    this->callStack.push_back(new MIREvalCallStackEntry(this->valuePool.mutPtr(), this->numFrames, this->rootSpan, this->resolve, pathCallback, std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef, std::move(callerLocation), tracksCaller));
     this->numFrames += 1;
 }
 
@@ -3650,7 +3667,7 @@ default:
             case MIRTerminator::TAG_Call: {
                 auto& e = terminator.as_Call();
                 const auto& ms = localState.ms;
-                auto callPath = [&](::std::shared_ptr<HIRPath> fcnp, bool indirect) -> unsigned {
+                auto callPath = [&](HIRPath* fcnp, bool indirect) -> unsigned {
                     ::std::vector<MIREvalAllocationPtr> callArgs;
                     callArgs.reserve(e.args.size());
                     for (const auto& a : e.args) {
@@ -3660,7 +3677,7 @@ default:
                         localState.writeParam(MIREvalValueRef(callArgs.back()), a);
                     }
 
-                    if (this->callFunction(localState, e.retVal, std::move(fcnp), std::move(callArgs), e.source, indirect)) {
+                    if (this->callFunction(localState, e.retVal, fcnp, std::move(callArgs), e.source, indirect)) {
                         return TERM_RET_PUSHED;
                     }
                     DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.retVal << " := " << localState.getLval(e.retVal));
@@ -4077,7 +4094,7 @@ default:
                         }
                         auto argVal = localState.getLval(e.args.at(0).as_LValue());
                         const auto& fcnArg = e.args.at(1);
-                        std::shared_ptr<HIRPath> fcnPath;
+                        HIRPath* fcnPath = nullptr;
 
                         switch (fcnArg.tag()) {
                             case MIRParam::TAG_LValue: {
@@ -4087,7 +4104,7 @@ default:
 
                                 const auto* fcnSr = fcnVal.second.asStaticref();
                                 MIR_ASSERT(state, fcnSr, "");
-                                fcnPath = std::make_shared<HIRPath>(fcnSr->path().clone());
+                                fcnPath = localState.valuePool->make<HIRPath>(fcnSr->path().clone());
                                 break;
                             }
                             case MIRParam::TAG_Borrow: {
@@ -4097,10 +4114,10 @@ default:
                             case MIRParam::TAG_Constant: {
                                 auto& e = fcnArg.as_Constant();
                                 if (const auto* ce = e.opt_Function()) {
-                                    fcnPath = std::make_shared<HIRPath>(ms.monomorphPath(state.sp, *ce->p));
+                                    fcnPath = localState.valuePool->make<HIRPath>(ms.monomorphPath(state.sp, *ce->p));
                                 } else if (const auto* ce = e.opt_ItemAddr()) {
                                     MIR_ASSERT(state, ce->offset == U128(0), "Function pointer has a non-zero offset: " << ce->offset);
-                                    fcnPath = std::make_shared<HIRPath>(ms.monomorphPath(state.sp, **ce));
+                                    fcnPath = localState.valuePool->make<HIRPath>(ms.monomorphPath(state.sp, **ce));
                                 } else {
                                     MIR_BUG(state, "Invalid argument for function pointer to `const_eval_select`: " << fcnArg);
                                 }
@@ -4118,7 +4135,7 @@ default:
                             vr.copyFrom(state, argVal.slice(f.offset, size));
                         }
 
-                        if( this->callFunction(localState, e.retVal, std::move(fcnPath), std::move(callArgs), e.source, true) ) {
+                        if( this->callFunction(localState, e.retVal, fcnPath, std::move(callArgs), e.source, true) ) {
                             return TERM_RET_PUSHED;
                         }
                     }
@@ -4413,7 +4430,7 @@ default:
                 } else if (const auto* te = e.fcn.opt_Path()) {
                     const auto& fcnpRaw = *te;
                     DEBUG("ms=" << ms);
-                    auto fcnp = std::make_shared<HIRPath>(ms.monomorphPath(state.sp, fcnpRaw));
+                    auto* fcnp = localState.valuePool->make<HIRPath>(ms.monomorphPath(state.sp, fcnpRaw));
 
                     const auto* rustcIntrinsic = getRustcIntrinsicName(state.sp, resolve, *fcnp);
                     if (rustcIntrinsic && *rustcIntrinsic == "ptr_guaranteed_cmp") {
@@ -4486,7 +4503,7 @@ default:
                         return e.retBlock;
                     }
 
-                    return callPath(std::move(fcnp), false);
+                    return callPath(fcnp, false);
                 } else if (const auto* te = e.fcn.opt_Value()) {
                     HIRTypeRef tmp;
                     const auto& ty = state.getLvalueType(tmp, *te);
@@ -4496,7 +4513,7 @@ default:
                     MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, "Function pointer has a nonzero offset");
                     const auto* function = pointer.second.asStaticref();
                     MIR_ASSERT(state, function, "Function pointer has no symbolic function relocation");
-                    return callPath(::std::make_shared<HIRPath>(function->path().clone()), true);
+                    return callPath(localState.valuePool->make<HIRPath>(function->path().clone()), true);
                 } else {
                     MIR_BUG(state, "Unexpected terminator - " << terminator);
                 }
@@ -4504,7 +4521,7 @@ default:
             }
             case MIRTerminator::TAG_TailCall: {
                 auto& e = terminator.as_TailCall();
-                auto callPath = [&](::std::shared_ptr<HIRPath> fcnp, bool indirect) -> unsigned {
+                auto callPath = [&](HIRPath* fcnp, bool indirect) -> unsigned {
                     ::std::vector<MIREvalAllocationPtr> callArgs;
                     callArgs.reserve(e.args.size());
                     for (const auto& arg : e.args) {
@@ -4515,7 +4532,7 @@ default:
                     }
 
                     const auto oldFrame = this->callStack.size() - 1;
-                    if (!this->callFunction(localState, MIRLValue::newReturn(), std::move(fcnp), std::move(callArgs), e.source, indirect)) {
+                    if (!this->callFunction(localState, MIRLValue::newReturn(), fcnp, std::move(callArgs), e.source, indirect)) {
                         return TERM_RET_RETURN;
                     }
                     this->callStack.erase(this->callStack.begin() + oldFrame);
@@ -4523,7 +4540,7 @@ default:
                 };
 
                 if (const auto* path = e.fcn.opt_Path()) {
-                    return callPath(::std::make_shared<HIRPath>(path->clone()), false);
+                    return callPath(localState.valuePool->make<HIRPath>(path->clone()), false);
                 }
                 if (const auto* value = e.fcn.opt_Value()) {
                     HIRTypeRef tmp;
@@ -4534,7 +4551,7 @@ default:
                     MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, "Function pointer has a nonzero offset");
                     const auto* function = pointer.second.asStaticref();
                     MIR_ASSERT(state, function, "Function pointer has no symbolic function relocation");
-                    return callPath(::std::make_shared<HIRPath>(function->path().clone()), true);
+                    return callPath(localState.valuePool->make<HIRPath>(function->path().clone()), true);
                 }
                 MIR_BUG(state, "Intrinsic used as an explicit tail-call target");
                 break;
@@ -4549,13 +4566,13 @@ default:
 /// @param fcn_path
 /// @param call_args
 /// @return `true` is a new stack frame was pushed
-bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, ::std::shared_ptr<HIRPath> fcnPath, ::std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect) {
+bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, HIRPath* fcnPath, ::std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect) {
     const auto& state = localState.state;
     resolve.revealOpaqueTypesPath(state.sp, *fcnPath);
     MonomorphState fcnMs(resolve.hirCrate().types);
     const HIRGenericParams* implParamsDef = nullptr;
 
-    const auto* pathP = fcnPath.get();
+    const auto* pathP = fcnPath;
     if (const auto* e = pathP->data.opt_UfcsKnown()) {
         if (e->type->is_Function() || e->type->is_NamedFunction()) {
             if (e->trait.path == resolve.langFn() || e->trait.path == resolve.langFnMut() || e->trait.path == resolve.langFnOnce()) {
@@ -4668,9 +4685,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         }
 
         pushStackEntry(
-            ::FmtLambda([=](std::ostream& os) {
-            os << *fcnPath;
-        }),
+            HIRItemPath(*fcnPath),
             *mir,
             std::move(fcnMs),
             std::move(retTy),
@@ -4725,14 +4740,14 @@ void HIREvaluator::callConstDestructor(MIREvalCallStackEntry& localState, HIRTyp
     ::std::vector<MIREvalAllocationPtr> callArgs;
     callArgs.push_back(MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, types.borrow(HIRBorrowType::Unique, ty)));
     localState.writeParam(MIREvalValueRef(callArgs.back()), MIRParam::make_Borrow({HIRBorrowType::Unique, slot.clone()}));
-    auto path = ::std::make_shared<HIRPath>(ty, HIRGenericPath(resolve.langDrop()), RcString::newInterned("drop"), HIRPathParams{});
+    auto* path = localState.valuePool->make<HIRPath>(ty, HIRGenericPath(resolve.langDrop()), RcString::newInterned("drop"), HIRPathParams{});
 
     // The destructor runs to completion on a stack of its own: a `Drop`
     // terminator has no return slot for the evaluator to resume into.
     auto saved = ::std::move(this->callStack);
     this->callStack.clear();
     try {
-        if (this->callFunction(localState, MIRLValue::newReturn(), ::std::move(path), ::std::move(callArgs), localState.callerLocation, false)) {
+        if (this->callFunction(localState, MIRLValue::newReturn(), path, ::std::move(callArgs), localState.callerLocation, false)) {
             this->runUntilStackEmpty();
         }
     } catch (...) {
@@ -4910,7 +4925,7 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
         assert(this->callStack.empty());
         this->numFrames = 0;
         // Note: Since this is the entrypoint, `this->resolve` has the correct GenericParams
-        this->pushStackEntry(FMT_CB(os, os << ip), *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenericsPtr(), resolve.implGenericsPtr(), SourceLocation(this->rootSpan), false);
+        this->pushStackEntry(ip, *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenericsPtr(), resolve.implGenericsPtr(), SourceLocation(this->rootSpan), false);
         auto rvRaw = this->runUntilStackEmpty();
 
         ASSERT_BUG(this->rootSpan, rvRaw, "evaluate_constant_mir returned null allocation");
@@ -4923,6 +4938,24 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
 }
 
 namespace {
+    struct GenericParamsCallback {
+        virtual const HIRGenericParams& get(const Span& sp) = 0;
+    };
+
+    template <typename F>
+    struct GenericParamsCb final: GenericParamsCallback {
+        F f;
+
+        explicit GenericParamsCb(F f)
+            : f(f)
+        {
+        }
+
+        const HIRGenericParams& get(const Span& sp) override {
+            return f(sp);
+        }
+    };
+
     struct Expander: public HIRVisitor {
         const WireBoard& wb;
         const HIRCrate& crate;
@@ -4934,7 +4967,7 @@ namespace {
         const HIRGenericParams* implParams;
         const HIRGenericParams* itemParams;
 
-        std::function<const HIRGenericParams&(const Span& sp)> getParams;
+        GenericParamsCallback* getParams = nullptr;
 
         enum class Pass {
             OuterOnly,
@@ -5078,7 +5111,8 @@ namespace {
             for (auto& v : p.values) {
                 if (v.is_Unevaluated()) {
                     try {
-                        const auto& paramsDef = getParams(sp);
+                        ASSERT_BUG(sp, getParams, "Path parameters visited without their definition");
+                        const auto& paramsDef = getParams->get(sp);
                         auto idx = static_cast<size_t>(&v - &p.values.front());
                         ASSERT_BUG(sp, idx < paramsDef.values.size(), "");
                         const auto& ty = paramsDef.values[idx].type;
@@ -5120,7 +5154,7 @@ namespace {
         void visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext pc) override {
             TRACE_FUNCTION_FR(p, p);
             auto saved = getParams;
-            getParams = [&](const Span& sp) -> const HIRGenericParams& {
+            auto callback = makeCallable<GenericParamsCb>([&](const Span& sp) -> const HIRGenericParams& {
                 DEBUG("visit_generic_path[m_get_params] " << p);
                 switch (pc) {
                     case HIRVisitor::PathContext::VALUE: {
@@ -5204,19 +5238,21 @@ namespace {
                     }
                 }
                 TODO(sp, "visit_generic_path[m_get_params] - " << p);
-            };
+            });
+            getParams = &callback;
             HIRVisitor::visitGenericPath(p, pc);
             getParams = saved;
         }
 
         void visitAtyParams(const HIRGenericPath& sourceTrait, const RcString& name, HIRPathParams& params) {
             auto saved = getParams;
-            getParams = [&](const Span& sp) -> const HIRGenericParams& {
+            auto callback = makeCallable<GenericParamsCb>([&](const Span& sp) -> const HIRGenericParams& {
                 const auto& trait = crate.getTraitByPath(sp, sourceTrait.path);
                 auto it = trait.types.find(name);
                 ASSERT_BUG(sp, it != trait.types.end(), "Trait " << sourceTrait.path << " has no associated type " << name);
                 return it->second.generics;
-            };
+            });
+            getParams = &callback;
             visitPathParams(params);
             getParams = saved;
         }
@@ -5239,7 +5275,7 @@ namespace {
 
         void visitPath(HIRPath& p, HIRVisitor::PathContext pc) override {
             auto saved = getParams;
-            getParams = [&](const Span& sp) -> const HIRGenericParams& {
+            auto callback = makeCallable<GenericParamsCb>([&](const Span& sp) -> const HIRGenericParams& {
                 DEBUG("visit_path[m_get_params] " << p);
                 StaticTraitResolve resolve(wb);
                 resolve.setBothGenericsRaw(implParams, itemParams);
@@ -5300,7 +5336,8 @@ namespace {
                     }
                 }
                 TODO(sp, "visit_path[m_get_params] - " << p);
-            };
+            });
+            getParams = &callback;
             HIRVisitor::visitPath(p, pc);
             getParams = saved;
         }
@@ -5524,12 +5561,13 @@ namespace {
 
                 void visit(HIRExprNodeCallMethod& node) override {
                     auto saved = exp.getParams;
-                    exp.getParams = [&](const Span& sp) -> const HIRGenericParams& {
+                    auto callback = makeCallable<GenericParamsCb>([&](const Span& sp) -> const HIRGenericParams& {
                         DEBUG("visit(ExprNodeCallMethod)[m_get_params] Defer until after main typecheck");
                         throw Defer();
-                    };
+                    });
+                    exp.getParams = &callback;
                     HIRExprVisitorDef::visit(node);
-                    exp.getParams = std::move(saved);
+                    exp.getParams = saved;
                 }
 
                 void visit(HIRExprNodeArraySized& node) override {

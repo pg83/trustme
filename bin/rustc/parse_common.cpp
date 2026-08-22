@@ -2961,8 +2961,8 @@ ASTPattern ParsePatternStruct(TokenStream& lex, ProtoSpan ps, ASTPath path) {
 
 #undef NEWNODE
 
-template <typename T>
-Spanned<T> getSpanned(TokenStream& lex, ::std::function<T()> f) {
+template <typename T, typename F>
+Spanned<T> getSpanned(TokenStream& lex, F f) {
     auto ps = lex.startSpan();
     auto v = f();
     return Spanned<T>{lex.endSpan(ps), mv$(v)};

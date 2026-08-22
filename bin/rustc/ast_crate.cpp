@@ -20,7 +20,8 @@ namespace {
         return true;
     }
 
-    void iterateModule(const Settings& settings, ASTModule& mod, ::std::function<void(ASTModule& mod)> fcn) {
+    template <typename F>
+    void iterateModule(const Settings& settings, ASTModule& mod, F fcn) {
         fcn(mod);
         for (auto& sm : mod.items) {
             if (auto* e = sm->data.opt_Module()) {

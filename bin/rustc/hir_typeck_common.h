@@ -5,23 +5,116 @@
 #include "hir_typeck_impl_ref.h"
 #include "hir_typeck_monomorph.h"
 
-typedef ::std::function<bool(const HIRTypeData*)> tCbVisitTy;
+struct HIRTypeVisitorCallback {
+    virtual bool visit(const HIRTypeData* type) = 0;
+};
+
+template <typename F>
+struct HIRTypeVisitorCb final: HIRTypeVisitorCallback {
+    F f;
+
+    explicit HIRTypeVisitorCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(const HIRTypeData* type) override {
+        return f(type);
+    }
+};
+
 /// Calls the provided callback on every type seen when recursing the type.
 /// If the callback returns `true`, no further types are visited and the function returns `true`.
-extern bool visitTyWith(const HIRTypeData*, tCbVisitTy callback);
-extern bool visitTraitPathTysWith(const HIRTraitPath&, tCbVisitTy callback);
-extern bool visitPathTysWith(const HIRPath&, tCbVisitTy callback);
+extern bool visitTyWithCb(const HIRTypeData*, HIRTypeVisitorCallback& callback);
+extern bool visitTraitPathTysWithCb(const HIRTraitPath&, HIRTypeVisitorCallback& callback);
+extern bool visitPathTysWithCb(const HIRPath&, HIRTypeVisitorCallback& callback);
 
-typedef ::std::function<bool(HIRTypeRef& rewritten, HIRTypeData& data)> tCbRewriteTy;
-extern bool rewriteTyWith(HIRTypeInterner& types, HIRTypeRef& ty, tCbRewriteTy callback);
-extern bool rewritePathTysWith(HIRTypeInterner& types, HIRPath& path, tCbRewriteTy callback);
+template <typename F>
+bool visitTyWith(const HIRTypeData* type, F f) {
+    HIRTypeVisitorCb<F> cb(f);
+    return visitTyWithCb(type, cb);
+}
 
-typedef ::std::function<bool(const HIRTypeData*, HIRTypeRef&)> tCbCloneTy;
+template <typename F>
+bool visitTraitPathTysWith(const HIRTraitPath& path, F f) {
+    HIRTypeVisitorCb<F> cb(f);
+    return visitTraitPathTysWithCb(path, cb);
+}
+
+template <typename F>
+bool visitPathTysWith(const HIRPath& path, F f) {
+    HIRTypeVisitorCb<F> cb(f);
+    return visitPathTysWithCb(path, cb);
+}
+
+struct HIRTypeRewriteCallback {
+    virtual bool rewrite(HIRTypeRef& rewritten, HIRTypeData& data) = 0;
+};
+
+template <typename F>
+struct HIRTypeRewriteCb final: HIRTypeRewriteCallback {
+    F f;
+
+    explicit HIRTypeRewriteCb(F f)
+        : f(f)
+    {
+    }
+
+    bool rewrite(HIRTypeRef& rewritten, HIRTypeData& data) override {
+        return f(rewritten, data);
+    }
+};
+
+extern bool rewriteTyWithCb(HIRTypeInterner& types, HIRTypeRef& ty, HIRTypeRewriteCallback& callback);
+extern bool rewritePathTysWithCb(HIRTypeInterner& types, HIRPath& path, HIRTypeRewriteCallback& callback);
+
+template <typename F>
+bool rewriteTyWith(HIRTypeInterner& types, HIRTypeRef& ty, F f) {
+    HIRTypeRewriteCb<F> cb(f);
+    return rewriteTyWithCb(types, ty, cb);
+}
+
+template <typename F>
+bool rewritePathTysWith(HIRTypeInterner& types, HIRPath& path, F f) {
+    HIRTypeRewriteCb<F> cb(f);
+    return rewritePathTysWithCb(types, path, cb);
+}
+
+struct HIRTypeCloneCallback {
+    virtual bool clone(const HIRTypeData* type, HIRTypeRef& replacement) = 0;
+};
+
+template <typename F>
+struct HIRTypeCloneCb final: HIRTypeCloneCallback {
+    F f;
+
+    explicit HIRTypeCloneCb(F f)
+        : f(f)
+    {
+    }
+
+    bool clone(const HIRTypeData* type, HIRTypeRef& replacement) override {
+        return f(type, replacement);
+    }
+};
+
 /// Clones a type, calling the provided callback on every type (optionally providing a replacement)
 ///
 /// Closure should return `true` if the passed output slot was populated.
-extern HIRTypeRef cloneTyWith(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, tCbCloneTy callback);
-extern HIRPathParams clonePathParamsWith(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, tCbCloneTy callback);
+extern HIRTypeRef cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, HIRTypeCloneCallback& callback);
+extern HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, HIRTypeCloneCallback& callback);
+
+template <typename F>
+HIRTypeRef cloneTyWith(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, F f) {
+    HIRTypeCloneCb<F> cb(f);
+    return cloneTyWithCb(types, sp, tpl, cb);
+}
+
+template <typename F>
+HIRPathParams clonePathParamsWith(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, F f) {
+    HIRTypeCloneCb<F> cb(f);
+    return clonePathParamsWithCb(types, sp, tpl, cb);
+}
 
 extern void checkTypeClassPrimitive(const Span& sp, const HIRTypeData* type, HIRInferClass ic, HIRCoreType ct);
 

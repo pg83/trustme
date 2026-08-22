@@ -7,8 +7,8 @@ HIRVisitor::~HIRVisitor() {
 }
 
 namespace {
-    template <typename T>
-    void visitImpls(HIRCrate::ImplGroup<std::unique_ptr<T>>& g, ::std::function<void(T&)> cb) {
+    template <typename T, typename F>
+    void visitImpls(HIRCrate::ImplGroup<std::unique_ptr<T>>& g, F cb) {
         for (auto& implGroup : g.named) {
             for (auto& impl : implGroup.second) {
                 cb(*impl);

@@ -347,8 +347,6 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTPath& path);
 
 private:
-    static void resolveArgsNl(::std::vector<ASTPathNode>& nodes, ::std::function<ASTType*(const char*)> fcn);
-
     void checkParamCounts(const ASTGenericParams& params, bool expectParams, ASTPathNode& node);
 
 public:

@@ -11,7 +11,7 @@
 #include <unordered_map>
 
 // PLAN: Build up a set of conditions that are easier to solve
-struct Context {
+struct Context: TraitTypeConstraintCallback {
     class Revisitor {
     public:
         virtual ~Revisitor() = default;
@@ -175,6 +175,10 @@ struct Context {
     //  > Forces types if one side is an infer
     void equateTypes(const Span& sp, const HIRTypeData* l, const HIRTypeData* r);
     void equateTypesInner(const Span& sp, const HIRTypeData* l, const HIRTypeData* r);
+
+    void constrain(const Span& sp, const HIRTypeData* receiver, const HIRTypeData* implType) override {
+        equateTypesInner(sp, receiver, implType);
+    }
     // - Equate two types, allowing inferrence
     void equateTypesCoerce(const Span& sp, const HIRTypeData* l, HIRExprNodeP& nodePtr);
     void recordCoercionHint(const HIRTypeData* type, HIRExprNodeP& nodePtr);

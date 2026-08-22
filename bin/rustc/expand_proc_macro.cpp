@@ -1991,7 +1991,8 @@ default:
     };
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree* attrInput, std::function<void(Visitor& v)> cb) {
+template <typename F>
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree* attrInput, F cb) {
     // 1. Create ProcMacroInv instance
     auto pmi = ProcMacroInvokeInt(sp, wb, crate, macPath);
     if (!pmi.checkGood()) {

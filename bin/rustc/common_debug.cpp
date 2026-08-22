@@ -59,7 +59,7 @@ void DebugEnablePhase(const char* phaseName) {
     }
 }
 
-void DebugPrint(::std::function<void(::std::ostream& os)> cb) {
+void DebugPrintCb(DebugStreamCallback& cb) {
     if (!DebugIsEnabled()) {
         return;
     }
@@ -69,11 +69,11 @@ void DebugPrint(::std::function<void(::std::ostream& os)> cb) {
     for (auto i = giIndentLevel; i--;) {
         ::std::cout << " ";
     }
-    cb(::std::cout);
+    cb.write(::std::cout);
     ::std::cout << ::std::endl;
 }
 
-void DebugEnterScope(const char* name, dbgCbT cb) {
+void DebugEnterScopeCb(const char* name, DebugStreamCallback& cb) {
     if (!DebugIsEnabled()) {
         return;
     }
@@ -84,12 +84,12 @@ void DebugEnterScope(const char* name, dbgCbT cb) {
         ::std::cout << " ";
     }
     ::std::cout << ">>> " << name << "(";
-    cb(::std::cout);
+    cb.write(::std::cout);
     ::std::cout << ")" << ::std::endl;
     giIndentLevel++;
 }
 
-void DebugLeaveScope(const char* name, dbgCbT cb) {
+void DebugLeaveScope(const char* name) {
     if (!DebugIsEnabled()) {
         return;
     }
@@ -103,10 +103,6 @@ void DebugLeaveScope(const char* name, dbgCbT cb) {
     ::std::cout << "<<< " << name << ::std::endl;
 }
 
-DebugFunctionScope::DebugFunctionScope(const char* name, dbgCbT cb)
-    : name(name) {
-    DebugEnterScope(name, cb);
-}
 DebugFunctionScope::~DebugFunctionScope() {
-    DebugLeaveScope(name, [](auto&) {});
+    DebugLeaveScope(name);
 }

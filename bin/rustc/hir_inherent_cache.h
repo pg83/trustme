@@ -2,8 +2,6 @@
 
 #include "hir_type_ref.h"
 
-#include <functional>
-
 class HIRTypeImpl;
 
 namespace stl {
@@ -16,14 +14,33 @@ namespace stl {
 /// reads it.
 class HIRInherentCache {
 public:
-    /// Callback arguments:
-    /// `self_ty`: Type for `Self` within the `impl` block
-    /// `impl`: TypeImpl containing this method
-    typedef ::std::function<void(const HIRTypeData* selfTy, const HIRTypeImpl& impl)> callbackT;
+    struct Callback {
+        virtual void visit(const HIRTypeData* selfTy, const HIRTypeImpl& impl) = 0;
+    };
+
+    template <typename F>
+    struct Cb final: Callback {
+        F f;
+
+        explicit Cb(F f)
+            : f(f)
+        {
+        }
+
+        void visit(const HIRTypeData* selfTy, const HIRTypeImpl& impl) override {
+            f(selfTy, impl);
+        }
+    };
 
     virtual void insertAll(const Span& sp, const HIRTypeImpl& impl, const HIRSimplePath& langBox) = 0;
     /// Locates methods matching the specified type
-    virtual void find(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, callbackT cb) const = 0;
+    virtual void findWith(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, Callback& cb) const = 0;
+
+    template <typename F>
+    void find(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, F f) const {
+        Cb<F> cb(f);
+        findWith(sp, name, ty, tyRes, cb);
+    }
 
     static HIRInherentCache* create(stl::ObjPool& pool);
 };

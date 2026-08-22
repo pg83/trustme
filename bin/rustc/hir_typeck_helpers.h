@@ -153,6 +153,88 @@ private:
 
 class NextTraitGoalEvaluator;
 
+struct TraitTypeConstraintCallback {
+    virtual void constrain(const Span& sp, const HIRTypeData* receiver, const HIRTypeData* implType) = 0;
+};
+
+struct TraitBoundCallback {
+    virtual bool visit(HIRCompare cmp, const HIRTypeData* type, const HIRGenericPath& traitPath, const TraitResolveCommon::CachedBound& info) = 0;
+};
+
+template <typename F>
+struct TraitBoundCb final: TraitBoundCallback {
+    F f;
+
+    explicit TraitBoundCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(HIRCompare cmp, const HIRTypeData* type, const HIRGenericPath& traitPath, const TraitResolveCommon::CachedBound& info) override {
+        return f(cmp, type, traitPath, info);
+    }
+};
+
+struct TraitPathCallback {
+    virtual bool visit(const HIRTraitPath& trait) = 0;
+};
+
+template <typename F>
+struct TraitPathCb final: TraitPathCallback {
+    F f;
+
+    explicit TraitPathCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(const HIRTraitPath& trait) override {
+        return f(trait);
+    }
+};
+
+struct TraitImplCallback {
+    virtual bool visit(ImplRef impl, HIRCompare cmp) = 0;
+};
+
+template <typename F>
+struct TraitImplCb final: TraitImplCallback {
+    F f;
+
+    explicit TraitImplCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(ImplRef impl, HIRCompare cmp) override {
+        // ImplRef is a move-only solver response; the callable itself is still
+        // stored by an ordinary copy.
+        return f(mv$(impl), cmp);
+    }
+};
+
+struct UnsizeTypeCallback {
+    virtual void visit(HIRTypeRef newDst) = 0;
+};
+
+template <typename F>
+struct UnsizeTypeCb final: UnsizeTypeCallback {
+    F f;
+
+    explicit UnsizeTypeCb(F f)
+        : f(f)
+    {
+    }
+
+    void visit(HIRTypeRef newDst) override {
+        f(newDst);
+    }
+};
+
+struct UnsizeInferCallback {
+    virtual void visit(const HIRTypeData* dst, const HIRTypeData* src) = 0;
+};
+
 class TraitResolution: public TraitResolveCommon {
     const HIRSimplePath& langDeref_;
     const HMTypeInferrence& ivars;
@@ -189,7 +271,7 @@ private:
     // cannot bind or append variables in the caller's type-checking context.
     mutable HMTypeInferrence coherenceIvars;
     mutable TraitResolution* coherenceResolve = nullptr;
-    ::std::function<void(const Span&, const HIRTypeData*, const HIRTypeData*)> typeConstraint;
+    TraitTypeConstraintCallback* typeConstraint = nullptr;
     ::std::vector<HIRSimplePath> opaqueAliasScopes;
     ::std::vector<HIRSimplePath> definingOpaqueAliases;
 
@@ -209,8 +291,8 @@ public:
 
     bool isOpaqueAliasDefiningScope(const HIRTypeDataErasedTypeAliasInner& alias) const;
 
-    void setTypeConstraint(::std::function<void(const Span&, const HIRTypeData*, const HIRTypeData*)> constraint) {
-        typeConstraint = mv$(constraint);
+    void setTypeConstraint(TraitTypeConstraintCallback* constraint) {
+        typeConstraint = constraint;
     }
 
     const HIRGenericPath* currentTraitPath() const {
@@ -246,51 +328,124 @@ public:
 
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const;
 
-    typedef ::std::function<bool(HIRCompare cmp, const HIRTypeData*, const HIRGenericPath& traitPath, const CachedBound& info)> tCbBound;
-    bool iterateBoundsTraits(const Span& sp, const HIRTypeData* type, const HIRSimplePath& trait, tCbBound cb) const;
-    bool iterateBoundsTraits(const Span& sp, const HIRTypeData* type, tCbBound cb) const;
-    bool iterateBoundsTraits(const Span& sp, tCbBound cb) const;
-    bool iterateAtyBounds(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, ::std::function<bool(const HIRTraitPath&)> cb) const;
+    bool iterateBoundsTraitsCb(const Span& sp, const HIRTypeData* type, const HIRSimplePath& trait, TraitBoundCallback& cb) const;
+    bool iterateBoundsTraitsCb(const Span& sp, const HIRTypeData* type, TraitBoundCallback& cb) const;
+    bool iterateBoundsTraitsCb(const Span& sp, TraitBoundCallback& cb) const;
+    bool iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, TraitPathCallback& cb) const;
 
-    typedef ::std::function<bool(const HIRTypeData*, const HIRPathParams&, const HIRTraitPath::assocListT&)> tCbTraitImpl;
-    typedef ::std::function<bool(ImplRef, HIRCompare)> tCbTraitImplR;
+    template <typename F>
+    bool iterateBoundsTraits(const Span& sp, const HIRTypeData* type, const HIRSimplePath& trait, F f) const {
+        TraitBoundCb<F> cb(f);
+        return iterateBoundsTraitsCb(sp, type, trait, cb);
+    }
+
+    template <typename F>
+    bool iterateBoundsTraits(const Span& sp, const HIRTypeData* type, F f) const {
+        TraitBoundCb<F> cb(f);
+        return iterateBoundsTraitsCb(sp, type, cb);
+    }
+
+    template <typename F>
+    bool iterateBoundsTraits(const Span& sp, F f) const {
+        TraitBoundCb<F> cb(f);
+        return iterateBoundsTraitsCb(sp, cb);
+    }
+
+    template <typename F>
+    bool iterateAtyBounds(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, F f) const {
+        TraitPathCb<F> cb(f);
+        return iterateAtyBoundsCb(sp, pe, cb);
+    }
 
     /// Searches for a trait impl using the solver selected for this session.
-    bool findTraitImpls(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, bool magicTraitImpls = true) const;
+    bool findTraitImplsCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, bool magicTraitImpls) const;
+
+    template <typename F>
+    bool findTraitImpls(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, bool magicTraitImpls = true) const {
+        TraitImplCb<F> cb(f);
+        return findTraitImplsCb(sp, trait, params, type, cb, magicTraitImpls);
+    }
 
     /// Candidate lookup used by the legacy selector and by next-solver
     /// candidate assembly.  Callers performing trait selection must use
     /// `find_trait_impls`, not this assembly primitive.
-    bool findTraitImplsLegacy(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, bool magicTraitImpls = true, bool searchCrate = true, bool searchBounds = true) const;
+    bool findTraitImplsLegacyCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, bool magicTraitImpls = true, bool searchCrate = true, bool searchBounds = true) const;
+
+    template <typename F>
+    bool findTraitImplsLegacy(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, bool magicTraitImpls = true, bool searchCrate = true, bool searchBounds = true) const {
+        TraitImplCb<F> cb(f);
+        return findTraitImplsLegacyCb(sp, trait, params, type, cb, magicTraitImpls, searchCrate, searchBounds);
+    }
 
     /// Evaluate a trait goal using the next-solver candidate model.  Candidate
     /// assembly is exhaustive, impl where-clauses are evaluated recursively,
     /// and only a merged response is exposed to the caller.  `assoc_name` and
     /// `assoc_type` add an associated-type equality to the goal.
-    bool findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, const char* assocName = nullptr, const HIRTypeData* assocType = nullptr, const HIRPathParams* assocParams = nullptr, bool allowInferInputs = false) const;
+    bool findTraitImplsNextCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const char* assocName = nullptr, const HIRTypeData* assocType = nullptr, const HIRPathParams* assocParams = nullptr, bool allowInferInputs = false) const;
+
+    template <typename F>
+    bool findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, const char* assocName = nullptr, const HIRTypeData* assocType = nullptr, const HIRPathParams* assocParams = nullptr, bool allowInferInputs = false) const {
+        TraitImplCb<F> cb(f);
+        return findTraitImplsNextCb(sp, trait, params, type, cb, assocName, assocType, assocParams, allowInferInputs);
+    }
 
     /// Whether two concrete impl candidates may apply to one canonical goal.
     /// With next-solver coherence enabled this unifies both headers and proves
     /// both sets of where-clauses in an isolated inference context.
     bool implsOverlap(const Span& sp, const ImplRef& left, const ImplRef& right) const;
 
-    typedef ::std::function<bool(const HIRTraitPath&)> tCbFindTrait;
     /// Locate a named trait in the provied trait (either itself or as a parent trait)
-    bool findNamedTraitInTrait(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, tCbFindTrait callback) const;
+    bool findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, TraitPathCallback& callback) const;
+
+    template <typename F>
+    bool findNamedTraitInTrait(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, F f) const {
+        TraitPathCb<F> cb(f);
+        return findNamedTraitInTraitCb(sp, des, params, traitPtr, traitPath, pp, selfType, cb);
+    }
     /// Search for a trait implementation in current bounds
-    bool findTraitImplsBound(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback) const;
+    bool findTraitImplsBoundCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
+
+    template <typename F>
+    bool findTraitImplsBound(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
+        TraitImplCb<F> cb(f);
+        return findTraitImplsBoundCb(sp, trait, params, type, cb);
+    }
 
     /// Search for a trait implementation in the crate
-    bool findTraitImplsCrate(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback) const {
-        return findTraitImplsCrate(sp, trait, &params, type, callback);
+    bool findTraitImplsCrateCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const {
+        return findTraitImplsCrateCb(sp, trait, &params, type, callback);
     }
 
     /// Search for a trait implementation in the crate (allows nullptr to ignore params)
-    bool findTraitImplsCrate(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, tCbTraitImplR callback) const;
+    bool findTraitImplsCrateCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, TraitImplCallback& callback) const;
+
+    template <typename F>
+    bool findTraitImplsCrate(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
+        TraitImplCb<F> cb(f);
+        return findTraitImplsCrateCb(sp, trait, params, type, cb);
+    }
+
+    template <typename F>
+    bool findTraitImplsCrate(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, F f) const {
+        TraitImplCb<F> cb(f);
+        return findTraitImplsCrateCb(sp, trait, params, type, cb);
+    }
     /// Check for magic (automatically determined) trait implementations
-    bool findTraitImplsMagic(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback) const;
+    bool findTraitImplsMagicCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
+
+    template <typename F>
+    bool findTraitImplsMagic(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
+        TraitImplCb<F> cb(f);
+        return findTraitImplsMagicCb(sp, trait, params, type, cb);
+    }
     /// Check for trait implementations on magical types (closures, generators, fn pointers, ...)
-    bool findTraitImplsTypes(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback) const;
+    bool findTraitImplsTypesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
+
+    template <typename F>
+    bool findTraitImplsTypes(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
+        TraitImplCb<F> cb(f);
+        return findTraitImplsTypesCb(sp, trait, params, type, cb);
+    }
 
     struct RecursionDetected {};
 
@@ -387,11 +542,13 @@ public:
 
     // If `new_type_callback` is populated, it will be called with the actual/possible dst_type
     // If `infer_callback` is populated, it will be called when either side is an ivar
-    HIRCompare canUnsize(const Span& sp, const HIRTypeData* dstTy, const HIRTypeData* srcTy, ::std::function<void(HIRTypeRef newDst)> newTypeCallback) const {
-        return canUnsize(sp, dstTy, srcTy, &newTypeCallback);
+    template <typename F>
+    HIRCompare canUnsize(const Span& sp, const HIRTypeData* dstTy, const HIRTypeData* srcTy, F f) const {
+        UnsizeTypeCb<F> cb(f);
+        return canUnsizeCb(sp, dstTy, srcTy, &cb);
     }
 
-    HIRCompare canUnsize(const Span& sp, const HIRTypeData* dstTy, const HIRTypeData* srcTy, ::std::function<void(HIRTypeRef newDst)>* newTypeCallback, ::std::function<void(const HIRTypeData* dst, const HIRTypeData* src)>* inferCallback = nullptr) const;
+    HIRCompare canUnsizeCb(const Span& sp, const HIRTypeData* dstTy, const HIRTypeData* srcTy, UnsizeTypeCallback* newTypeCallback, UnsizeInferCallback* inferCallback = nullptr) const;
 
     const HIRTypeData* typeIsOwnedBox(const Span& sp, const HIRTypeData* ty) const;
 

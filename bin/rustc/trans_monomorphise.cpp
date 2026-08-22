@@ -378,7 +378,8 @@ namespace {
             }
 
             CoroutineDropCloner cloner(*this, monomorph, std::move(value), bbBase, localBase, dropFlagBase, returnLocal);
-            MIRTypeResolve sourceTypes(sp, resolve, FMT_CB(os, os << dropPath), function->returnType, function->args, source);
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << dropPath; });
+            MIRTypeResolve sourceTypes(sp, resolve, pathCallback, function->returnType, function->args, source);
             for (size_t i = 0; i < source.blocks.size(); i++) {
                 const auto& sourceBlock = source.blocks[i];
                 const auto targetIdx = static_cast<MIRBasicBlockId>(bbBase + i);

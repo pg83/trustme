@@ -4,7 +4,6 @@
 #include "hir_typeck_static.h"
 
 #include <vector>
-#include <functional>
 #include <type_traits>
 
 class HIRCrate;
@@ -25,6 +24,24 @@ class MIRParam;
 typedef unsigned int MIRBasicBlockId;
 
 struct CheckFailure: public ::std::exception {};
+
+struct MIRPathCallback {
+    virtual void write(::std::ostream& os) const = 0;
+};
+
+template <typename F>
+struct MIRPathCb final: MIRPathCallback {
+    F f;
+
+    explicit MIRPathCb(F f)
+        : f(f)
+    {
+    }
+
+    void write(::std::ostream& os) const override {
+        f(os);
+    }
+};
 
 #define MIR_BUG(state, ...)                      \
     do {                                         \
@@ -66,7 +83,7 @@ public:
     const HIRCrate& crate;
 
 private:
-    ::FmtLambda path_;
+    const MIRPathCallback& path_;
 
 public:
     const HIRTypeData* retType;
@@ -84,7 +101,7 @@ private:
     unsigned int stmtIdx = 0;
 
 public:
-    MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const HIRTypeData* retType, const argsT& args, const MIRFunction& fcn);
+    MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, const MIRPathCallback& path, const HIRTypeData* retType, const argsT& args, const MIRFunction& fcn);
 
     void setCurStmt(const MIRBasicBlock& bb, const MIRStatement& stmt);
 
@@ -104,15 +121,19 @@ public:
 
     void fmtPos(::std::ostream& os, bool includePath = false) const;
 
-    void printBug(::std::function<void(::std::ostream& os)> cb) const {
-        printMsg("ERROR", cb);
+    template <typename F>
+    void printBug(F f) const {
+        SpanMessageCb<F> cb(f);
+        printMsgCb("ERROR", cb);
     }
 
-    void printTodo(::std::function<void(::std::ostream& os)> cb) const {
-        printMsg("TODO", cb);
+    template <typename F>
+    void printTodo(F f) const {
+        SpanMessageCb<F> cb(f);
+        printMsgCb("TODO", cb);
     }
 
-    void printMsg(const char* tag, ::std::function<void(::std::ostream& os)> cb) const;
+    void printMsgCb(const char* tag, SpanMessageCallback& cb) const;
 
     const MIRBasicBlock& getBlock(MIRBasicBlockId id) const;
 
@@ -185,16 +206,63 @@ enum class MIRValUsage {
     Borrow,
 };
 
-extern bool visitMirLvalue(const MIRLValue& lv, MIRValUsage u, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb);
-extern bool visitMirLvalue(const MIRParam& p, MIRValUsage u, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb);
-extern bool visitMirLvalues(const MIRRValue& rval, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb);
-extern bool visitMirLvalues(const MIRStatement& stmt, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb);
-extern bool visitMirLvalues(const MIRTerminator& term, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb);
+struct MIRLvalueCallback {
+    virtual bool visitLvalue(const MIRLValue& lv, MIRValUsage usage) const = 0;
+};
+
+template <typename F>
+struct MIRLvalueCb final: MIRLvalueCallback {
+    F f;
+
+    explicit MIRLvalueCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visitLvalue(const MIRLValue& lv, MIRValUsage usage) const override {
+        return f(lv, usage);
+    }
+};
+
+extern bool visitMirLvalueWith(const MIRLValue& lv, MIRValUsage u, const MIRLvalueCallback& cb);
+extern bool visitMirLvalueWith(const MIRParam& p, MIRValUsage u, const MIRLvalueCallback& cb);
+extern bool visitMirLvaluesWith(const MIRRValue& rval, const MIRLvalueCallback& cb);
+extern bool visitMirLvaluesWith(const MIRStatement& stmt, const MIRLvalueCallback& cb);
+extern bool visitMirLvaluesWith(const MIRTerminator& term, const MIRLvalueCallback& cb);
+
+template <typename F>
+bool visitMirLvalue(const MIRLValue& lv, MIRValUsage u, F f) {
+    MIRLvalueCb<F> cb(f);
+    return visitMirLvalueWith(lv, u, cb);
+}
+
+template <typename F>
+bool visitMirLvalue(const MIRParam& p, MIRValUsage u, F f) {
+    MIRLvalueCb<F> cb(f);
+    return visitMirLvalueWith(p, u, cb);
+}
+
+template <typename F>
+bool visitMirLvalues(const MIRRValue& rval, F f) {
+    MIRLvalueCb<F> cb(f);
+    return visitMirLvaluesWith(rval, cb);
+}
+
+template <typename F>
+bool visitMirLvalues(const MIRStatement& stmt, F f) {
+    MIRLvalueCb<F> cb(f);
+    return visitMirLvaluesWith(stmt, cb);
+}
+
+template <typename F>
+bool visitMirLvalues(const MIRTerminator& term, F f) {
+    MIRLvalueCb<F> cb(f);
+    return visitMirLvaluesWith(term, cb);
+}
 
 /// Callbacks for visitTerminatorTarget(Mut): invoked once per branch target
-/// of the terminator. An interface instead of std::function - the visit is
-/// called for every terminator of every block in several optimise passes,
-/// and a std::function wrapper heap-allocates on each call.
+/// of the terminator. The visit is called for every terminator of every block
+/// in several optimise passes, so the adapter must stay allocation-free.
 struct MIRTargetVisitorMut {
     virtual void visitTarget(MIRBasicBlockId& target) = 0;
 };

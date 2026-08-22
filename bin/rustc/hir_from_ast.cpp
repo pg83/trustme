@@ -50,6 +50,24 @@ struct GenericParamLayout {
     const HIRGenericParams* hir = nullptr;
 };
 
+struct EnumStructCallback {
+    virtual void push(RcString name, HIRStruct value) = 0;
+};
+
+template <typename F>
+struct EnumStructCb final: EnumStructCallback {
+    F f;
+
+    explicit EnumStructCb(F f)
+        : f(f)
+    {
+    }
+
+    void push(RcString name, HIRStruct value) override {
+        f(name, mv$(value));
+    }
+};
+
 // All HIR-lowering state, threaded via `this` instead of file-scope globals.
 // Every `LowerHIR*` is a method; helper structs hold an `AST2HIR&` back-ref.
 struct AST2HIR {
@@ -79,7 +97,7 @@ struct AST2HIR {
     HIRTypeAlias LowerHIRTypeAlias(const HIRItemPath& p, const ASTTypeAlias& ta);
     tStructFields LowerHIRStructFields(HIRItemPath path, const HIRGenericParams& params, const ::std::vector<ASTStructItem>& inFields, HIRModule& outMod);
     HIRStruct LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStruct& ent, const ASTAttributeList& attrs, HIRModule& outMod);
-    HIREnum LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAttributeList& attrs, ::std::function<void(RcString, HIRStruct)> pushStruct, HIRModule& outMod);
+    HIREnum LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAttributeList& attrs, EnumStructCallback& pushStruct, HIRModule& outMod);
     HIRUnion LowerHIRUnion(HIRItemPath path, const ASTUnion& f, const ASTAttributeList& attrs);
     HIRTrait LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttributeList& attrs);
     HIRTraitAlias LowerHIRTraitAlias(const Span& sp, HIRItemPath p, const ASTTraitAlias& f);
@@ -1442,7 +1460,7 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
             };
 
             HIRTypePattern pattern;
-            std::function<void(const ASTPattern&)> lowerPattern = [&](const ASTPattern& pat) {
+            auto lowerPattern = [&](this auto& lowerPattern, const ASTPattern& pat) -> void {
                 switch (pat.data().tag()) {
                     case ASTPatternData::TAG_Value: {
                         auto& range = pat.data().as_Value();
@@ -1879,7 +1897,7 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
     return rv;
 }
 
-HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAttributeList& attrs, ::std::function<void(RcString, HIRStruct)> pushStruct, HIRModule& outMod) {
+HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAttributeList& attrs, EnumStructCallback& pushStruct, HIRModule& outMod) {
     // 1. Figure out what sort of enum this is (value or data)
     bool hasData = false;
     for (const auto& var : ent.variants()) {
@@ -1975,7 +1993,7 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
                 auto tyName = RcString::newInterned(FMT(path.name << "#" << var.name));
                 auto variantStruct = HIRStruct{LowerHIRGenericParams(ent.params(), nullptr), variantRepr, mv$(data)};
                 variantStruct.forcedAlignment = ent.markings.alignValue;
-                pushStruct(tyName, mv$(variantStruct));
+                pushStruct.push(tyName, mv$(variantStruct));
                 auto tyIpath = path;
                 tyIpath.name = tyName.c_str();
                 auto tyPath = tyIpath.getFullPath();
@@ -2055,13 +2073,14 @@ namespace {
     /// The return-position `impl Trait` types of a signature, outermost first --
     /// the order the binding pass numbers them in (`hir_conv_main_bindings.cpp`),
     /// so that the associated type named after a position is that position's.
+    template <typename F>
     class RpititTypeCollector: public HIRVisitor {
-        ::std::function<void(HIRTypeRef)> callback;
+        F callback;
 
     public:
-        RpititTypeCollector(HIRTypeInterner& types, ::std::function<void(HIRTypeRef)> callback)
+        RpititTypeCollector(HIRTypeInterner& types, F callback)
             : HIRVisitor(nullptr, types)
-            , callback(std::move(callback))
+            , callback(callback)
         {
         }
 
@@ -2077,15 +2096,16 @@ namespace {
     /// Replace each nested `impl Trait` with the associated type that names it.
     /// A nested one belongs to no function of its own, so it cannot stay an
     /// erased type once it is copied out into a bound.
+    template <typename F>
     class RpititNestedRewrite: public HIRVisitor {
         const HIRTypeRefMap<size_t>& indices;
-        ::std::function<HIRTypeRef(size_t)> projection;
+        F projection;
 
     public:
-        RpititNestedRewrite(HIRTypeInterner& types, const HIRTypeRefMap<size_t>& indices, ::std::function<HIRTypeRef(size_t)> projection)
+        RpititNestedRewrite(HIRTypeInterner& types, const HIRTypeRefMap<size_t>& indices, F projection)
             : HIRVisitor(nullptr, types)
             , indices(indices)
-            , projection(std::move(projection))
+            , projection(projection)
         {
         }
 
@@ -2957,9 +2977,10 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
             }
             case ASTItem::TAG_Enum: {
                 auto& e = item.data.as_Enum();
-                auto enm = LowerHIREnum(itemPath, e, item.attrs, [&](auto name, auto str) {
+                auto pushStruct = makeCallable<EnumStructCb>([&](auto name, auto str) {
                     _add_mod_ns_item(*crate->pool, mod, name, getVis(item.vis), mv$(str));
-                }, mod);
+                });
+                auto enm = LowerHIREnum(itemPath, e, item.attrs, pushStruct, mod);
                 _add_mod_ns_item(*crate->pool, mod, item.name, getVis(item.vis), mv$(enm));
                 break;
             }

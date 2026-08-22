@@ -701,6 +701,60 @@ public:
     ::std::string name;
 };
 
+struct HIRTraitImplCallback {
+    virtual bool visit(const HIRTraitImpl& impl) = 0;
+};
+
+template <typename F>
+struct HIRTraitImplCb final: HIRTraitImplCallback {
+    F f;
+
+    explicit HIRTraitImplCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(const HIRTraitImpl& impl) override {
+        return f(impl);
+    }
+};
+
+struct HIRMarkerImplCallback {
+    virtual bool visit(const HIRMarkerImpl& impl) = 0;
+};
+
+template <typename F>
+struct HIRMarkerImplCb final: HIRMarkerImplCallback {
+    F f;
+
+    explicit HIRMarkerImplCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(const HIRMarkerImpl& impl) override {
+        return f(impl);
+    }
+};
+
+struct HIRTypeImplCallback {
+    virtual bool visit(const HIRTypeImpl& impl) = 0;
+};
+
+template <typename F>
+struct HIRTypeImplCb final: HIRTypeImplCallback {
+    F f;
+
+    explicit HIRTypeImplCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(const HIRTypeImpl& impl) override {
+        return f(impl);
+    }
+};
+
 class HIRCrate {
 public:
     stl::ObjPool* pool;
@@ -832,9 +886,27 @@ public:
 
     const HIRConstant& getConstantByPath(const Span& sp, const HIRSimplePath& path) const;
 
-    bool findTraitImpls(const HIRSimplePath& path, const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const HIRTraitImpl&)> callback) const;
-    bool findAutoTraitImpls(const HIRSimplePath& path, const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const HIRMarkerImpl&)> callback) const;
-    bool findTypeImpls(const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const HIRTypeImpl&)> callback) const;
+    bool findTraitImplsCb(const HIRSimplePath& path, const HIRTypeData* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) const;
+    bool findAutoTraitImplsCb(const HIRSimplePath& path, const HIRTypeData* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) const;
+    bool findTypeImplsCb(const HIRTypeData* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) const;
+
+    template <typename F>
+    bool findTraitImpls(const HIRSimplePath& path, const HIRTypeData* type, tCbResolveType tyRes, F f) const {
+        HIRTraitImplCb<F> cb(f);
+        return findTraitImplsCb(path, type, tyRes, cb);
+    }
+
+    template <typename F>
+    bool findAutoTraitImpls(const HIRSimplePath& path, const HIRTypeData* type, tCbResolveType tyRes, F f) const {
+        HIRMarkerImplCb<F> cb(f);
+        return findAutoTraitImplsCb(path, type, tyRes, cb);
+    }
+
+    template <typename F>
+    bool findTypeImpls(const HIRTypeData* type, tCbResolveType tyRes, F f) const {
+        HIRTypeImplCb<F> cb(f);
+        return findTypeImplsCb(type, tyRes, cb);
+    }
 
     const MIRFunction* getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, HIRTypeRef& retTy) const;
 

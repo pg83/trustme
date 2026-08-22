@@ -3,7 +3,6 @@
 #include "rc_string.h"
 
 #include <memory>
-#include <functional>
 
 enum ErrorType {
     E0000,
@@ -16,6 +15,24 @@ enum WarningType {
 class Position;
 struct SpanInner;
 struct SpanInnerSource;
+
+struct SpanMessageCallback {
+    virtual void write(::std::ostream& os) = 0;
+};
+
+template <typename F>
+struct SpanMessageCb final: SpanMessageCallback {
+    F f;
+
+    explicit SpanMessageCb(F f)
+        : f(f)
+    {
+    }
+
+    void write(::std::ostream& os) override {
+        f(os);
+    }
+};
 
 struct Span {
 private:
@@ -60,15 +77,39 @@ public:
 
     const SpanInnerSource& getTopFileSpan() const;
 
-    void bug(::std::function<void(::std::ostream&)> msg) const;
-    void error(ErrorType tag, ::std::function<void(::std::ostream&)> msg) const;
-    void warning(WarningType tag, ::std::function<void(::std::ostream&)> msg) const;
-    void note(::std::function<void(::std::ostream&)> msg) const;
+    void bugCb(SpanMessageCallback& msg) const;
+    void errorCb(ErrorType tag, SpanMessageCallback& msg) const;
+    void warningCb(WarningType tag, SpanMessageCallback& msg) const;
+    void noteCb(SpanMessageCallback& msg) const;
+
+    template <typename F>
+    void bug(F f) const {
+        SpanMessageCb<F> cb(f);
+        bugCb(cb);
+    }
+
+    template <typename F>
+    void error(ErrorType tag, F f) const {
+        SpanMessageCb<F> cb(f);
+        errorCb(tag, cb);
+    }
+
+    template <typename F>
+    void warning(WarningType tag, F f) const {
+        SpanMessageCb<F> cb(f);
+        warningCb(tag, cb);
+    }
+
+    template <typename F>
+    void note(F f) const {
+        SpanMessageCb<F> cb(f);
+        noteCb(cb);
+    }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const Span& sp);
 
 private:
-    void printSpanMessage(::std::function<void(::std::ostream&)> tag, ::std::function<void(::std::ostream&)> msg) const;
+    void printSpanMessage(SpanMessageCallback& tag, SpanMessageCallback& msg) const;
 };
 
 struct SourceLocation {

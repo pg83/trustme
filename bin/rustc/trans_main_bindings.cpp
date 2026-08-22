@@ -993,7 +993,8 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 DEBUG("> Generate shim: " << itemPath);
 
                                 newFcn.code.mir = generatedBody();
-                                MIRTypeResolve localMirRes{sp, state.resolve, FMT_CB(ss, ss << itemPath), newFcn.returnType, newFcn.args, *newFcn.code.mir};
+                                auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << itemPath; });
+                                MIRTypeResolve localMirRes{sp, state.resolve, pathCallback, newFcn.returnType, newFcn.args, *newFcn.code.mir};
                                 Builder builder(state, *newFcn.code.mir);
                                 // bb0:
                                 //   rv = CALL ...
@@ -1079,7 +1080,8 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             fcn.args.push_back(std::make_pair(HIRPattern(), crate.types.borrow(HIRBorrowType::Owned, ty)));
 
             fcn.code.mir = generatedBody();
-            MIRTypeResolve localMirRes{sp, state.resolve, FMT_CB(ss, ss << path), fcn.returnType, fcn.args, *fcn.code.mir};
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
+            MIRTypeResolve localMirRes{sp, state.resolve, pathCallback, fcn.returnType, fcn.args, *fcn.code.mir};
             Builder builder(state, *fcn.code.mir);
             builder.pushStmtAssign(MIRLValue::newReturn(), MIRRValue::make_Tuple({}));
             auto ownedBoxPointeeDrop = static_cast<MIRBasicBlockId>(~0u);
@@ -1737,8 +1739,26 @@ namespace {
         }
     }
 
-    void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool isVisible, ::std::function<HIRSimplePath()> getPath) {
-        TRACE_FUNCTION_F(getPath() << " : " << vi.tagStr() << " is_visible=" << isVisible);
+    struct TransPathCallback {
+        virtual HIRSimplePath get() = 0;
+    };
+
+    template <typename F>
+    struct TransPathCb final: TransPathCallback {
+        F f;
+
+        explicit TransPathCb(F f)
+            : f(f)
+        {
+        }
+
+        HIRSimplePath get() override {
+            return f();
+        }
+    };
+
+    void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool isVisible, TransPathCallback& getPath) {
+        TRACE_FUNCTION_F(getPath.get() << " : " << vi.tagStr() << " is_visible=" << isVisible);
         const Span sp;
         switch (vi.tag()) {
                 break;
@@ -1748,9 +1768,10 @@ namespace {
                     if (isVisible) {
                         if (!e.isVariant && e.path.crateName() == state.crate.crateName) {
                             const auto& vi2 = state.crate.getValitemByPath(sp, e.path, false);
-                            TransEnumerateValItem(state, vi2, isVisible, [&]() {
+                            auto callback = makeCallable<TransPathCb>([&]() {
                                 return e.path;
                             });
+                            TransEnumerateValItem(state, vi2, isVisible, callback);
                         }
                     }
 
@@ -1804,12 +1825,12 @@ namespace {
                         if (e.type->is_Infer()) {
                             break;
                         }
-                        auto* ptr = state.rv.addStatic(state.crate.types, getPath());
+                        auto* ptr = state.rv.addStatic(state.crate.types, getPath.get());
                         if (ptr) {
                             TransEnumerateFillFromStatic(state, e, *ptr, TransParams(state.crate.types));
                         }
 
-                        state.rv.roots.push_back(getPath());
+                        state.rv.roots.push_back(getPath.get());
                     }
 
                 }
@@ -1843,9 +1864,9 @@ namespace {
                         if (isVisible) {
                             TransParams pp(state.crate.types);
                             pp.ppMethod = HIRPathParams();
-                            state.enumFcn(getPath(), e, mv$(pp));
+                            state.enumFcn(getPath.get(), e, mv$(pp));
 
-                            state.rv.roots.push_back(getPath());
+                            state.rv.roots.push_back(getPath.get());
                         }
                     }
                     // Enumerate concrete items used
@@ -1869,9 +1890,10 @@ namespace {
             }
             if (hasExplicitLinkage) {
                 auto path = modPath + vi.first;
-                TransEnumerateValItem(state, vi.second->ent, false, [path]() {
+                auto callback = makeCallable<TransPathCb>([path]() {
                     return path;
                 });
+                TransEnumerateValItem(state, vi.second->ent, false, callback);
             }
         }
 
@@ -1892,9 +1914,10 @@ namespace {
             })) {
                 emit = true;
             }
-            TransEnumerateValItem(state, vi.second->ent, emit, [&]() {
+            auto callback = makeCallable<TransPathCb>([&]() {
                 return p;
             });
+            TransEnumerateValItem(state, vi.second->ent, emit, callback);
         }
 
         for (auto& ti : mod.modItems) {
@@ -2752,8 +2775,9 @@ default:
             auto& tv = *this;
 
             HIRTypeRef tmp;
-            std::function<const HIRTypeData*(const HIRTypeData*)> monomorph = [&](const HIRTypeData* ty) -> const HIRTypeData* {
-                return pp.maybeMonomorph(resolve, tmp, ty);
+            bool useMonomorph = true;
+            auto monomorph = [&](const HIRTypeData* ty) -> const HIRTypeData* {
+                return useMonomorph ? pp.maybeMonomorph(resolve, tmp, ty) : ty;
             };
             DEBUG(fcn.returnType);
             bool hasErased = visitTyWith(fcn.returnType, [&](const auto& x) {
@@ -2797,9 +2821,7 @@ default:
                 ASSERT_BUG(sp, transFcn, "Unable to find " << path << " in first-pass enumerate result");
                 if (transFcn && transFcn->monomorphised.code) {
                     mirP = &*transFcn->monomorphised.code;
-                    monomorph = [](const HIRTypeData* ty) {
-                        return ty;
-                    };
+                    useMonomorph = false;
                 }
             }
             if (mirP) {
@@ -2811,7 +2833,8 @@ default:
                 // Find all LValue::Deref instances and get the result type
                 MIRTypeResolve::argsT emptyArgs;
                 HIRTypeRef emptyTy;
-                MIRTypeResolve localMirRes(sp, tv.resolve, FMT_CB(fcnPath), /*ret_ty=*/emptyTy, emptyArgs, mir);
+                auto pathCallback = makeCallable<MIRPathCb>([](auto&) {});
+                MIRTypeResolve localMirRes(sp, tv.resolve, pathCallback, /*ret_ty=*/emptyTy, emptyArgs, mir);
                 for (const auto& block : mir.blocks) {
                     struct MirVisitor: public MIRVisitor {
                         const Span& sp;

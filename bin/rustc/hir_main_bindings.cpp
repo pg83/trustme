@@ -177,8 +177,8 @@ public:
         return rv;
     }
 
-    template <typename T>
-    ::std::vector<T> deserialiseVecC(::std::function<T()> cb) {
+    template <typename T, typename F>
+    ::std::vector<T> deserialiseVecC(F cb) {
         TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.getPos());
         auto _ = in.openObject(typeid(::std::vector<T>).name());
         size_t n = in.readCount();
@@ -198,8 +198,8 @@ public:
         });
     }
 
-    template <typename T>
-    ThinVector<T> deserialiseThinvecC(::std::function<T()> cb) {
+    template <typename T, typename F>
+    ThinVector<T> deserialiseThinvecC(F cb) {
         TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.getPos());
         auto _ = in.openObject(typeid(ThinVector<T>).name());
         size_t n = in.readCount();

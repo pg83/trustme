@@ -29,7 +29,7 @@ static const size_t PARTIAL_ARRAY_MIN = 32;
 #include <std/sym/i_map.h>
 
 namespace {
-    class ExprVisitorConv: public MirConverter {
+    class ExprVisitorConv: public MirConverter, public MIRDropEmitter {
         MirBuilder& builder;
 
         const ::std::vector<HIRTypeRef>& variableTypes;
@@ -109,12 +109,7 @@ namespace {
                 generatorState.states.push_back(GeneratorState::State(builder.newBbUnlinked()));
                 builder.setCurBlock(generatorState.states.back().entrypoint);
                 if (generatorState.isFuture) {
-                    builder.setDeepDropEmitter([this](const Span& sp, MIRLValue value, unsigned int flag) {
-                        return emitAsyncDrop(sp, std::move(value), flag);
-                    });
-                    builder.setShallowDropEmitter([this](const Span& sp, MIRLValue value, unsigned int flag) {
-                        return emitAsyncBoxShallowDrop(sp, std::move(value), flag);
-                    });
+                    builder.setDropEmitter(this);
                 }
             }
         }
@@ -429,6 +424,14 @@ namespace {
             return true;
         }
 
+        bool emitDeepDrop(const Span& sp, const MIRLValue& value, unsigned int flag) override {
+            return emitAsyncDrop(sp, value.clone(), flag);
+        }
+
+        bool emitShallowDrop(const Span& sp, const MIRLValue& value, unsigned int flag) override {
+            return emitAsyncBoxShallowDrop(sp, value.clone(), flag);
+        }
+
         SaveAndEditVal<const ScopeHandle*> disableBorrowExtension() override {
             return saveAndEdit(borrowRaiseTarget, nullptr);
         }
@@ -554,7 +557,8 @@ namespace {
                 ASSERT_BUG(sp, foundReturn, "Coroutine suspension path from BB" << state.suspensionBlock << " does not return");
             }
 
-            MIRTypeResolve mirResolve{sp, resolve, FMT_CB(os, os << path;), retTy, args, fcn};
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
+            MIRTypeResolve mirResolve{sp, resolve, pathCallback, retTy, args, fcn};
             auto lifetimes = MIRHelperGetLifetimes(mirResolve, fcn, false);
 
             for (const auto block : bridgedReturnBlocks) {
@@ -713,28 +717,22 @@ namespace {
             outBuilder.endBlock(MIRTerminator::make_Switch({mv$(stmtIdxLv), mv$(arms)}));
         }
 
-        void visitPatternSlots(const HIRPattern& pat, PatternDropOrder order, const std::function<void(unsigned)>& visitSlot) {
+        void schedulePatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) override {
             for (const auto slot : patternBindingSlots(pat, order)) {
-                visitSlot(slot);
+                builder.scheduleVariableDrop(slot);
             }
         }
 
-        void schedulePatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) override {
-            visitPatternSlots(pat, order, [&](unsigned slot) {
-                builder.scheduleVariableDrop(slot);
-            });
-        }
-
         void registerPatternVariables(const Span& sp, const HIRPattern& pat, PatternDropOrder order) override {
-            visitPatternSlots(pat, order, [&](unsigned slot) {
+            for (const auto slot : patternBindingSlots(pat, order)) {
                 builder.registerVariableState(slot);
-            });
+            }
         }
 
         void scheduleRegisteredPatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) override {
-            visitPatternSlots(pat, order, [&](unsigned slot) {
+            for (const auto slot : patternBindingSlots(pat, order)) {
                 builder.scheduleRegisteredVariableDrop(slot);
-            });
+            }
         }
 
         MIRLValue getValueForBindingPath(const Span& sp, const HIRTypeData* outerTy, const MIRLValue& outerLval, const PatternBinding& b) {
@@ -4113,11 +4111,12 @@ void HIRGenerateMIRExpr(const WireBoard& wb, const HIRCrate& crate, const HIRIte
 }
 
 void HIRGenerateMIR(const WireBoard& wb, HIRCrate& crate) {
-    MIROuterVisitor ov{wb, crate, [&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
+    auto callback = makeCallable<MIRExprCb>([&](const auto& res, const auto& p, HIRExprPtr& exprPtr, const auto& args, const auto& ty) {
         if (!exprPtr.getMirOpt()) {
             exprPtr.setMir(LowerMIR(res, p, exprPtr, ty, args));
         }
-    }};
+    });
+    MIROuterVisitor ov{wb, crate, callback};
     ov.visitCrate(crate);
 }
 
@@ -4220,6 +4219,42 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
 void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRTypeData* matchTy, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock);
 void MIRLowerHIRMatchDecisionTree(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armCode, MIRBasicBlockId firstCmpBlock);
 
+struct PatternSubsetCallback {
+    virtual void visitSubset(size_t index) = 0;
+};
+
+template <typename F>
+struct PatternSubsetCb final: PatternSubsetCallback {
+    F f;
+
+    explicit PatternSubsetCb(F f)
+        : f(f)
+    {
+    }
+
+    void visitSubset(size_t index) override {
+        f(index);
+    }
+};
+
+struct PatternTypeCallback {
+    virtual const HIRTypeData* map(const HIRTypeData* type) = 0;
+};
+
+template <typename F>
+struct PatternTypeCb final: PatternTypeCallback {
+    F f;
+
+    explicit PatternTypeCb(F f)
+        : f(f)
+    {
+    }
+
+    const HIRTypeData* map(const HIRTypeData* type) override {
+        return f(type);
+    }
+};
+
 /// Helper to construct rules from a passed pattern
 struct PatternRulesetBuilder {
     const StaticTraitResolve& resolve;
@@ -4284,7 +4319,13 @@ private:
     void pushDerefs(std::vector<PatternRuleset::Deref> derefs);
     void setImpossible();
 
-    void multiplyRulesets(size_t n, std::function<void(size_t idx)> cb);
+    void multiplyRulesetsWith(size_t n, PatternSubsetCallback& cb);
+
+    template <typename F>
+    void multiplyRulesets(size_t n, F f) {
+        PatternSubsetCb<F> cb(f);
+        multiplyRulesetsWith(n, cb);
+    }
 };
 
 class RulesetRef {
@@ -5294,10 +5335,10 @@ void PatternRulesetBuilder::setImpossible() {
 }
 
 /// Multiply the current subset of the ruleset, then visit every new subset
-void PatternRulesetBuilder::multiplyRulesets(size_t n, std::function<void(size_t idx)> cb) {
+void PatternRulesetBuilder::multiplyRulesetsWith(size_t n, PatternSubsetCallback& cb) {
     assert(n > 0);
     if (n == 1) {
-        cb(0);
+        cb.visitSubset(0);
         return;
     }
     TRACE_FUNCTION_F(n);
@@ -5344,7 +5385,7 @@ void PatternRulesetBuilder::multiplyRulesets(size_t n, std::function<void(size_t
         for (size_t j = this->subsetStart; j < this->subsetEnd; j++) {
             rulesets[j].orPath.push_back(static_cast<unsigned>(i));
         }
-        cb(i);
+        cb.visitSubset(i);
         DEBUG("-- " << i);
         assert(this->subsetStart == origStart);                    // This should always be unchanged (even if the callback splits again). The end can change though.
         assert(this->subsetEnd >= this->subsetStart + subsetSize); // The end should always be at least equal to start + size (i.e. hasn't shrunk)
@@ -6074,7 +6115,7 @@ default:
         case HIRTypeData::TAG_Path: {
             auto& e = (*ty).as_Path();
             struct PH {
-                    static void pushPatternTuple(PatternRulesetBuilder& builder, const Span& sp, const HIRPattern::Data::Data_PathTuple& pe, std::function<const HIRTypeData*(const HIRTypeData*)> maybeMonomorph) {
+                    static void pushPatternTuple(PatternRulesetBuilder& builder, const Span& sp, const HIRPattern::Data::Data_PathTuple& pe, PatternTypeCallback& maybeMonomorph) {
                         const auto& sd = patternGetTuple(sp, pe.path, pe.binding);
                         assert(sd.size() >= pe.leading.size() + pe.trailing.size());
                         size_t trailingStart = sd.size() - pe.trailing.size();
@@ -6082,20 +6123,20 @@ default:
                             const auto& fld = sd[i];
 
                             if (i < pe.leading.size()) {
-                                builder.appendFrom(sp, pe.leading[i], maybeMonomorph(fld.ent));
+                                builder.appendFrom(sp, pe.leading[i], maybeMonomorph.map(fld.ent));
                             } else if (i < trailingStart) {
-                                builder.appendFrom(sp, emptyPattern, maybeMonomorph(fld.ent));
+                                builder.appendFrom(sp, emptyPattern, maybeMonomorph.map(fld.ent));
                             } else {
-                                builder.appendFrom(sp, pe.trailing[i - trailingStart], maybeMonomorph(fld.ent));
+                                builder.appendFrom(sp, pe.trailing[i - trailingStart], maybeMonomorph.map(fld.ent));
                             }
                             builder.fieldPath.back()++;
                         }
                     }
-                    static void pushPatternStruct(PatternRulesetBuilder& builder, const Span& sp, const HIRPattern::Data::Data_PathNamed& pe, std::function<const HIRTypeData*(const HIRTypeData*)> maybeMonomorph) {
+                    static void pushPatternStruct(PatternRulesetBuilder& builder, const Span& sp, const HIRPattern::Data::Data_PathNamed& pe, PatternTypeCallback& maybeMonomorph) {
                         const auto& sd = patternGetNamed(sp, pe.path, pe.binding);
                         // NOTE: Iterates in field order (not pattern order) to ensure that patterns are in order between arms
                         for (const auto& fld : sd) {
-                            const auto& styMono = maybeMonomorph(fld.ty);
+                            const auto& styMono = maybeMonomorph.map(fld.ty);
 
                             auto it = ::std::find_if(pe.subPatterns.begin(), pe.subPatterns.end(), [&](const auto& x) {
                                 return x.first == fld.name;
@@ -6119,6 +6160,7 @@ default:
                         return ty;
                     }
                 };
+                PatternTypeCb<decltype(maybeMonomorph)> patternType(maybeMonomorph);
                 // This is either a struct destructure or an enum
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
@@ -6220,7 +6262,7 @@ default:
                                 case HIRPatternData::TAG_PathTuple: {
                                     auto& pe = pat.data.as_PathTuple();
                                     assert(pe.binding.is_Struct());
-                                    PH::pushPatternTuple(*this, sp, pe, maybeMonomorph);
+                                    PH::pushPatternTuple(*this, sp, pe, patternType);
                                     break;
                                 }
                             }
@@ -6246,7 +6288,7 @@ default:
                                     auto& pe = pat.data.as_PathNamed();
                                     assert(pe.binding.is_Struct());
                                     fieldPath.push_back(0);
-                                    PH::pushPatternStruct(*this, sp, pe, maybeMonomorph);
+                                    PH::pushPatternStruct(*this, sp, pe, patternType);
                                     fieldPath.pop_back();
                                     break;
                                 }
@@ -6333,7 +6375,7 @@ default:
                             subBuilder.fieldPath.push_back(be.varIdx);
                             subBuilder.fieldPath.push_back(0);
 
-                            PH::pushPatternTuple(subBuilder, sp, pe, maybeMonomorph);
+                            PH::pushPatternTuple(subBuilder, sp, pe, patternType);
 
                             this->multiplyRulesets(subBuilder.rulesets.size(), [&](size_t i) {
                                 auto& sr = subBuilder.rulesets[i];
@@ -6372,7 +6414,7 @@ default:
                                     subBuilder.fieldPath.back()++;
                                 }
                             } else {
-                                PH::pushPatternStruct(subBuilder, sp, pe, maybeMonomorph);
+                                PH::pushPatternStruct(subBuilder, sp, pe, patternType);
                             }
 
                             this->multiplyRulesets(subBuilder.rulesets.size(), [&](size_t i) {
@@ -9298,7 +9340,7 @@ void MirBuilder::pushStmtDrop(const Span& sp, MIRLValue val, unsigned int flag /
         return;
     }
 
-    if (!buildingCleanup && deepDropEmitter && deepDropEmitter(sp, val.clone(), flag)) {
+    if (!buildingCleanup && dropEmitter && dropEmitter->emitDeepDrop(sp, val, flag)) {
         return;
     }
 
@@ -9315,7 +9357,7 @@ void MirBuilder::pushStmtDropShallow(const Span& sp, MIRLValue val, unsigned int
 
     // TODO: Ensure that the type is a Box?
 
-    if (!buildingCleanup && shallowDropEmitter && shallowDropEmitter(sp, val.clone(), flag)) {
+    if (!buildingCleanup && dropEmitter && dropEmitter->emitShallowDrop(sp, val, flag)) {
         return;
     }
 
@@ -10505,7 +10547,7 @@ void MirBuilder::terminateLoopEarly(const Span& sp, ScopeType::Data_Loop& sdLoop
     if (sdLoop.exitStateValid) {
         // Insert copies of parent state for newly changed values
         // and Merge all changed values
-        auto mergeList = [sp, this](const auto& changed, auto& exitStates, ::std::function<MIRLValue(unsigned)> valCb, auto type) {
+        auto mergeList = [sp, this](const auto& changed, auto& exitStates, auto valCb, auto type) {
             for (const auto& ent : changed) {
                 auto idx = ent.first;
                 auto it = exitStates.find(idx);

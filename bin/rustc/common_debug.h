@@ -4,19 +4,47 @@
  * Generic debug interface
  */
 
-#include <functional>
 #include <vector>
 #include <sstream>
 
-typedef ::std::function<void(::std::ostream& os)> dbgCbT;
+struct DebugStreamCallback {
+    virtual void write(::std::ostream& os) = 0;
+};
+
+template <typename F>
+struct DebugStreamCb final: DebugStreamCallback {
+    F f;
+
+    explicit DebugStreamCb(F f)
+        : f(f)
+    {
+    }
+
+    void write(::std::ostream& os) override {
+        f(os);
+    }
+};
+
 extern void DebugSetPhase(const char* phaseName);
 extern void DebugProcessEnable(const char* enableString);
 extern void DebugDisablePhase(const char* phaseName);
 extern void DebugEnablePhase(const char* phaseName);
 extern bool DebugIsEnabled();
-extern void DebugEnterScope(const char* name, dbgCbT);
-extern void DebugLeaveScope(const char* name, dbgCbT);
-extern void DebugPrint(dbgCbT cb);
+extern void DebugEnterScopeCb(const char* name, DebugStreamCallback& cb);
+extern void DebugLeaveScope(const char* name);
+extern void DebugPrintCb(DebugStreamCallback& cb);
+
+template <typename F>
+void DebugEnterScope(const char* name, F f) {
+    DebugStreamCb<F> cb(f);
+    DebugEnterScopeCb(name, cb);
+}
+
+template <typename F>
+void DebugPrint(F f) {
+    DebugStreamCb<F> cb(f);
+    DebugPrintCb(cb);
+}
 
 #if defined(NOLOG)
     #define DEBUG(fmt) \
@@ -63,7 +91,12 @@ namespace {
 struct DebugFunctionScope {
     const char* name;
 
-    DebugFunctionScope(const char* name, dbgCbT cb);
+    template <typename F>
+    DebugFunctionScope(const char* name, F f)
+        : name(name)
+    {
+        DebugEnterScope(name, f);
+    }
 
     ~DebugFunctionScope();
 };

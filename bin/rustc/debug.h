@@ -2,7 +2,6 @@
 
 #include <sstream>
 #include <cassert>
-#include <functional>
 #include <type_traits>
 #include <utility>
 
@@ -152,12 +151,23 @@ auto makeTraceLogRet(const char* tag, Info&& infoCb, Ret&& ret) {
     );
 }
 
+template <typename F>
 struct FmtLambda {
-    ::std::function<void(::std::ostream&)> cb;
+    F f;
 
-    FmtLambda(::std::function<void(::std::ostream&)> cb);
+    explicit FmtLambda(F f)
+        : f(f)
+    {
+    }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const FmtLambda& x);
+    void operator()(::std::ostream& os) const {
+        f(os);
+    }
+
+    friend ::std::ostream& operator<<(::std::ostream& os, const FmtLambda& x) {
+        x(os);
+        return os;
+    }
 };
 
 #define FMT_CB(os, ...)         \

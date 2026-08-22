@@ -5765,7 +5765,8 @@ HIRExprNodeP Context::createAutoderef(HIRExprNodeP valNode, HIRTypeRef tyDst) co
 }
 
 namespace {
-    void addCoerceBorrow(Context& context, HIRExprNodeP& origNodePtr, const HIRTypeData* desBorrowInner, ::std::function<void(HIRExprNodeP& n)> cb) {
+    template <typename F>
+    void addCoerceBorrow(Context& context, HIRExprNodeP& origNodePtr, const HIRTypeData* desBorrowInner, F cb) {
         auto borrowType = context.ivars.getType(origNodePtr->resType)->as_Borrow().type;
 
         // Since this function operates on destructured &-ptrs, the dereferences have to be added behind a borrow
@@ -13625,9 +13626,7 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
             });
         }
     }
-    resolve.setTypeConstraint([this](const Span& sp, const HIRTypeData* receiver, const HIRTypeData* implType) {
-        this->equateTypesInner(sp, receiver, implType);
-    });
+    resolve.setTypeConstraint(this);
 }
 
 namespace {

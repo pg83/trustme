@@ -1,7 +1,6 @@
 #include "hir_pattern.h"
 
 #include <cassert>
-#include <functional>
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRPattern::Value& x) {
     switch (x.tag()) {
@@ -276,8 +275,7 @@ namespace {
 
     void visitPatternCandidateSlots(const HIRPattern& pattern, bool useLastAlternative, ::std::vector<unsigned>& slots) {
         ::std::vector<const HIRPattern*> deferredOrPatterns;
-        ::std::function<void(const HIRPattern&)> visitImmediate;
-        visitImmediate = [&](const HIRPattern& current) {
+        auto visitImmediate = [&](this auto& visitImmediate, const HIRPattern& current) -> void {
             switch (current.data.tag()) {
                 case HIRPatternData::TAG_Any: {
                     break;

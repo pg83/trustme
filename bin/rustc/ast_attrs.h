@@ -7,6 +7,24 @@ class ASTCrate;
 struct WireBoard;
 class ASTModule;
 
+struct ASTAttributeIdentCallback {
+    virtual void visit(const Span& sp, RcString ident) = 0;
+};
+
+template <typename F>
+struct ASTAttributeIdentCb final: ASTAttributeIdentCallback {
+    F f;
+
+    explicit ASTAttributeIdentCb(F f)
+        : f(f)
+    {
+    }
+
+    void visit(const Span& sp, RcString ident) override {
+        f(sp, ident);
+    }
+};
+
 class ASTAttribute;
 ::std::ostream& operator<<(::std::ostream& os, const ASTAttribute& x);
 
@@ -124,7 +142,13 @@ public:
     /// Parses the data as a `("string")` and returns the string
     std::string parseParenString() const;
 
-    void parseParenIdentList(std::function<void(const Span& sp, RcString ident)> itemCb) const;
+    void parseParenIdentListCb(ASTAttributeIdentCallback& itemCb) const;
+
+    template <typename F>
+    void parseParenIdentList(F f) const {
+        ASTAttributeIdentCb<F> cb(f);
+        parseParenIdentListCb(cb);
+    }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTAttribute& x);
 };

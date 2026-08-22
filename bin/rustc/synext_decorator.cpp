@@ -983,7 +983,8 @@ static inline ASTExprNodeP mkExprnodep(ASTExprNode* en) {
 //#define NEWNODE(type, ...)  mk_exprnodep(new type(__VA_ARGS__))
 #define NEWNODE(type, ...) mkExprnodep(new ASTExprNode##type(__VA_ARGS__))
 
-static void makeRefpatA(const Span& sp, ASTExprNodeBlock& block, ::std::vector<ASTPattern>& patsA, const ::std::vector<ASTTupleItem>& subTypes, ::std::function<ASTExprNodeP(size_t, ASTExprNodeP)> cb) {
+template <typename F>
+static void makeRefpatA(const Span& sp, ASTExprNodeBlock& block, ::std::vector<ASTPattern>& patsA, const ::std::vector<ASTTupleItem>& subTypes, F cb) {
     ::std::vector<ASTExprNodeBlock::Line> nodes;
     for (size_t idx = 0; idx < subTypes.size(); idx++) {
         auto nameA = RcString::newInterned(FMT("a" << idx));
@@ -992,7 +993,8 @@ static void makeRefpatA(const Span& sp, ASTExprNodeBlock& block, ::std::vector<A
     }
 }
 
-static void makeRefpatA(const Span& sp, ASTExprNodeBlock& block, ::std::vector<ASTStructPatternEntry>& patsA, const ::std::vector<ASTStructItem>& fields, ::std::function<ASTExprNodeP(size_t, ASTExprNodeP)> cb) {
+template <typename F>
+static void makeRefpatA(const Span& sp, ASTExprNodeBlock& block, ::std::vector<ASTStructPatternEntry>& patsA, const ::std::vector<ASTStructItem>& fields, F cb) {
     ::std::vector<ASTExprNodeBlock::Line> nodes;
     size_t idx = 0;
     for (const auto& fld : fields) {
@@ -1003,7 +1005,8 @@ static void makeRefpatA(const Span& sp, ASTExprNodeBlock& block, ::std::vector<A
     }
 }
 
-static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, ::std::vector<ASTPattern>& patsA, ::std::vector<ASTPattern>& patsB, const ::std::vector<ASTTupleItem>& subTypes, ::std::function<ASTExprNodeP(size_t, ASTExprNodeP, ASTExprNodeP)> cb) {
+template <typename F>
+static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, ::std::vector<ASTPattern>& patsA, ::std::vector<ASTPattern>& patsB, const ::std::vector<ASTTupleItem>& subTypes, F cb) {
     for (size_t idx = 0; idx < subTypes.size(); idx++) {
         auto nameA = RcString::newInterned(FMT("a" << idx));
         auto nameB = RcString::newInterned(FMT("b" << idx));
@@ -1013,7 +1016,8 @@ static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, ::std::vector<
     }
 }
 
-static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, ::std::vector<ASTStructPatternEntry>& patsA, ::std::vector<ASTStructPatternEntry>& patsB, const ::std::vector<ASTStructItem>& fields, ::std::function<ASTExprNodeP(size_t, ASTExprNodeP, ASTExprNodeP)> cb) {
+template <typename F>
+static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, ::std::vector<ASTStructPatternEntry>& patsA, ::std::vector<ASTStructPatternEntry>& patsB, const ::std::vector<ASTStructItem>& fields, F cb) {
     size_t idx = 0;
     for (const auto& fld : fields) {
         auto nameA = RcString::newInterned(FMT("a" << fld.name));
@@ -1045,7 +1049,8 @@ struct Deriver {
         ERROR(sp, E0000, "Cannot derive(" << traitName() << ") on union");
     }
 
-    void iterateStructFields(const ASTStruct& str, ::std::function<void(RcString)> cb) const {
+    template <typename F>
+    void iterateStructFields(const ASTStruct& str, F cb) const {
         switch (str.data.tag()) {
             case ASTStructData::TAG_Unit: {
                 break;
@@ -4034,7 +4039,8 @@ class CMultiHandlerLint: public ExpandDecorator {
     /// this compiler has no lint for — tool lints (`clippy::foo`) and keyed
     /// entries (`reason = "..."`) — so the scan skips whatever it cannot read
     /// instead of rejecting the attribute.
-    static void collectLintNames(const ASTAttribute& mi, const std::function<void(const RcString&)>& cb) {
+    template <typename F>
+    static void collectLintNames(const ASTAttribute& mi, const F& cb) {
         TTStream lex(mi.span(), ParseState(), mi.data());
         if (!lex.getTokenIf(TOK_PAREN_OPEN)) {
             return;

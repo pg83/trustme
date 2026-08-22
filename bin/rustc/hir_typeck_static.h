@@ -16,6 +16,78 @@ enum class MetadataType {
 
 std::ostream& operator<<(std::ostream& os, const MetadataType& x);
 
+struct StaticImplCallback {
+    virtual bool visit(ImplRef impl, bool isFuzzed) = 0;
+};
+
+template <typename F>
+struct StaticImplCb final: StaticImplCallback {
+    F f;
+
+    explicit StaticImplCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(ImplRef impl, bool isFuzzed) override {
+        return f(mv$(impl), isFuzzed);
+    }
+};
+
+struct StaticImplMatchCallback {
+    virtual bool visit(HIRPathParams params, HIRCompare cmp) = 0;
+};
+
+template <typename F>
+struct StaticImplMatchCb final: StaticImplMatchCallback {
+    F f;
+
+    explicit StaticImplMatchCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(HIRPathParams params, HIRCompare cmp) override {
+        return f(mv$(params), cmp);
+    }
+};
+
+struct StaticNamedTraitCallback {
+    virtual bool visit(const HIRPathParams& params, HIRTraitPath::assocListT assoc) = 0;
+};
+
+template <typename F>
+struct StaticNamedTraitCb final: StaticNamedTraitCallback {
+    F f;
+
+    explicit StaticNamedTraitCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(const HIRPathParams& params, HIRTraitPath::assocListT assoc) override {
+        return f(params, mv$(assoc));
+    }
+};
+
+struct StaticTraitPathCallback {
+    virtual bool visit(const HIRTraitPath& trait) = 0;
+};
+
+template <typename F>
+struct StaticTraitPathCb final: StaticTraitPathCallback {
+    F f;
+
+    explicit StaticTraitPathCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(const HIRTraitPath& trait) override {
+        return f(trait);
+    }
+};
+
 // Definitions generated from hir_typeck_static.tu.
 #include "hir_typeck_static_tu.h"
 
@@ -110,18 +182,40 @@ public:
 
     /// \brief Lookups
     /// \{
-    typedef ::std::function<bool(ImplRef, bool isFuzzed)> tCbFindImpl;
-
-    bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRTypeData* type, tCbFindImpl foundCb) const {
-        return this->findImpl(sp, traitPath, &traitParams, type, foundCb);
+    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRTypeData* type, StaticImplCallback& foundCb) const {
+        return this->findImplCb(sp, traitPath, &traitParams, type, foundCb);
     }
 
-    bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, tCbFindImpl foundCb, bool dontHandoffToSpecialised = false) const;
+    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, bool dontHandoffToSpecialised = false) const;
+
+    template <typename F>
+    bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRTypeData* type, F f) const {
+        StaticImplCb<F> cb(f);
+        return findImplCb(sp, traitPath, traitParams, type, cb);
+    }
+
+    template <typename F>
+    bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, F f, bool dontHandoffToSpecialised = false) const {
+        StaticImplCb<F> cb(f);
+        return findImplCb(sp, traitPath, traitParams, type, cb, dontHandoffToSpecialised);
+    }
 
 private:
-    bool findImplBounds(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, tCbFindImpl foundCb) const;
-    bool findImplCheckCrate(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, tCbFindImpl foundCb, const HIRTraitImpl& impl) const;
-    bool findImplCheckCrateRaw(const Span& sp, const HIRSimplePath& desTraitPath, const HIRPathParams* desTraitParams, const HIRTypeData* desType, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitParams, const HIRTypeData* implType, ::std::function<bool(HIRPathParams, HIRCompare)>) const;
+    bool findImplBoundsCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb) const;
+    bool findImplCheckCrateCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, const HIRTraitImpl& impl) const;
+    bool findImplCheckCrateRawCb(const Span& sp, const HIRSimplePath& desTraitPath, const HIRPathParams* desTraitParams, const HIRTypeData* desType, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitParams, const HIRTypeData* implType, StaticImplMatchCallback& foundCb) const;
+
+    template <typename F>
+    bool findImplBounds(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, F f) const {
+        StaticImplCb<F> cb(f);
+        return findImplBoundsCb(sp, traitPath, traitParams, type, cb);
+    }
+
+    template <typename F>
+    bool findImplCheckCrateRaw(const Span& sp, const HIRSimplePath& desTraitPath, const HIRPathParams* desTraitParams, const HIRTypeData* desType, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitParams, const HIRTypeData* implType, F f) const {
+        StaticImplMatchCb<F> cb(f);
+        return findImplCheckCrateRawCb(sp, desTraitPath, desTraitParams, desType, implParamsDef, implTraitParams, implType, cb);
+    }
     HIRCompare checkAutoTraitImplDestructure(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* paramsPtr, const HIRTypeData* type) const;
     bool typeNeedsAsyncDropInner(const Span& sp, const HIRTypeData* ty, HIRTypeRefSet& stack) const;
 
@@ -158,10 +252,22 @@ public:
     /// \}
 
     /// Locate a named trait in the provied trait (either itself or as a parent trait)
-    bool findNamedTraitInTrait(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, ::std::function<bool(const HIRPathParams&, HIRTraitPath::assocListT)> callback) const;
+    bool findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, StaticNamedTraitCallback& callback) const;
+
+    template <typename F>
+    bool findNamedTraitInTrait(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, F f) const {
+        StaticNamedTraitCb<F> cb(f);
+        return findNamedTraitInTraitCb(sp, des, params, traitPtr, traitPath, pp, selfType, cb);
+    }
     ///
     bool traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const;
-    bool iterateAtyBounds(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, ::std::function<bool(const HIRTraitPath&)> cb) const;
+    bool iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, StaticTraitPathCallback& cb) const;
+
+    template <typename F>
+    bool iterateAtyBounds(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, F f) const {
+        StaticTraitPathCb<F> cb(f);
+        return iterateAtyBoundsCb(sp, pe, cb);
+    }
 
     // --------------
     // Common bounds

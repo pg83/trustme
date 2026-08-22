@@ -1605,7 +1605,24 @@ namespace {
 
 namespace {
 
-    typedef ::std::function<::std::pair<HIRSimplePath, const HIRTypeItem*>(const char* prefix, const char* suffix, HIRTypeItem)> newTypeCbT;
+    struct ClosureTypeCallback {
+        virtual ::std::pair<HIRSimplePath, const HIRTypeItem*> create(const char* prefix, const char* suffix, HIRTypeItem item) = 0;
+    };
+
+    template <typename F>
+    struct ClosureTypeCb final: ClosureTypeCallback {
+        F f;
+
+        explicit ClosureTypeCb(F f)
+            : f(f)
+        {
+        }
+
+        ::std::pair<HIRSimplePath, const HIRTypeItem*> create(const char* prefix, const char* suffix, HIRTypeItem item) override {
+            return f(prefix, suffix, mv$(item));
+        }
+    };
+
     typedef ::std::vector<::std::pair<HIRExprNodeClosure::Class, HIRTraitImpl>> outImplsClosureT;
     /// <Trait LangItem> and <TraitImpl>
     typedef ::std::vector<::std::pair<const char*, HIRTraitImpl>> outTraitImplsT;
@@ -1615,7 +1632,7 @@ namespace {
         outTraitImplsT traitImpls;
         std::vector<std::unique_ptr<HIRTypeImpl>> implsType;
 
-        newTypeCbT newType;
+        ClosureTypeCallback* newType = nullptr;
 
         void pushNewImpls(const Span& sp, HIRCrate& crate);
 
@@ -2317,44 +2334,48 @@ namespace {
                 Required,
             };
 
-            ::std::function<bool(const HIRTypeData*)> getNeededCb(TypeNeed& rv) const {
+            bool updateTypeNeed(TypeNeed& rv, const HIRTypeData* t) const {
                 // Only include if a used generic is present AND there are no unused generics
                 // - Visit the type, if there's a generic then determine if the
-                return [this, &rv](const HIRTypeData* t) -> bool {
-                    if (t->is_Generic()) {
-                        if (contains(constructorPathParams.types, t)) {
-                            if (rv == TypeNeed::NoGenerics) {
-                                rv = TypeNeed::Required;
-                            }
-                        } else {
-                            // Trigger an early-return
-                            rv = TypeNeed::UsesOthers;
-                            return true;
+                if (t->is_Generic()) {
+                    if (contains(constructorPathParams.types, t)) {
+                        if (rv == TypeNeed::NoGenerics) {
+                            rv = TypeNeed::Required;
                         }
+                    } else {
+                        // Trigger an early-return
+                        rv = TypeNeed::UsesOthers;
+                        return true;
                     }
-                    return false;
-                };
+                }
+                return false;
             }
 
             TypeNeed typeBoundNeeded(const Span& sp, const HIRTypeData* ty) const {
                 // Only include if a used generic is present AND there are no unused generics
                 // - Visit the type, if there's a generic then determine if the
                 auto rv = TypeNeed::NoGenerics;
-                visitTyWith(ty, getNeededCb(rv));
+                visitTyWith(ty, [this, &rv](const HIRTypeData* type) {
+                    return updateTypeNeed(rv, type);
+                });
                 return rv;
             }
 
             TypeNeed typeBoundNeeded(const Span& sp, const HIRGenericPath& tp) const {
                 auto rv = TypeNeed::NoGenerics;
                 for (const auto& ty : tp.params.types) {
-                    visitTyWith(ty, getNeededCb(rv));
+                    visitTyWith(ty, [this, &rv](const HIRTypeData* type) {
+                        return updateTypeNeed(rv, type);
+                    });
                 }
                 return rv;
             }
 
             TypeNeed typeBoundNeeded(const Span& sp, const HIRTraitPath& tp) const {
                 auto rv = TypeNeed::NoGenerics;
-                visitTraitPathTysWith(tp, getNeededCb(rv));
+                visitTraitPathTysWith(tp, [this, &rv](const HIRTypeData* type) {
+                    return updateTypeNeed(rv, type);
+                });
                 return rv;
             }
 
@@ -2560,7 +2581,7 @@ namespace {
             str.markings.isCopy = node.isCopy;
             HIRSimplePath closureStructPath;
             const HIRTypeItem* closureStructPtr;
-            ::std::tie(closureStructPath, closureStructPtr) = out.newType(CLOSURE_PATH_PREFIX, newTypeSuffix, mv$(str));
+            ::std::tie(closureStructPath, closureStructPtr) = out.newType->create(CLOSURE_PATH_PREFIX, newTypeSuffix, mv$(str));
             const auto& closureStructRef = closureStructPtr->as_Struct();
 
             // Mark the object pathname in the closure.
@@ -3051,7 +3072,7 @@ namespace {
             // the enum now so layout queries performed before MIR lowering see
             // the final tag width.
             auto suspensionCount = countCoroutineSuspensions(node.code, true, false);
-            auto stateIdxType = out.newType("gen_state_idx#", newTypeSuffix, makeCoroutineStateEnum(suspensionCount));
+            auto stateIdxType = out.newType->create("gen_state_idx#", newTypeSuffix, makeCoroutineStateEnum(suspensionCount));
             auto stateIdxTy = resolve_.hirCrate().types.path(stateIdxType.first, &stateIdxType.second->as_Enum());
 
             // Create the captures structure here, and update it afterwards with the state
@@ -3064,7 +3085,7 @@ namespace {
             stateStr.data.as_Tuple().push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), stateIdxTy});
             HIRSimplePath stateStructPath;
             const HIRTypeItem* stateStructPtr;
-            ::std::tie(stateStructPath, stateStructPtr) = out.newType("gen_state#", newTypeSuffix, std::move(stateStr));
+            ::std::tie(stateStructPath, stateStructPtr) = out.newType->create("gen_state#", newTypeSuffix, std::move(stateStr));
             auto stateType = resolve_.hirCrate().types.path(HIRGenericPath(stateStructPath, params.makeNopParams(resolve_.hirCrate().types, 0)), &stateStructPtr->as_Struct());
             DEBUG("state_type = " << stateType);
             setStateType(sp, crVars, stateType);
@@ -3073,7 +3094,7 @@ namespace {
             genStr.markings.hasDropImpl = true;
             HIRSimplePath genStructPath;
             const HIRTypeItem* genStructPtr;
-            ::std::tie(genStructPath, genStructPtr) = out.newType(GENERATOR_PATH_PREFIX, newTypeSuffix, mv$(genStr));
+            ::std::tie(genStructPath, genStructPtr) = out.newType->create(GENERATOR_PATH_PREFIX, newTypeSuffix, mv$(genStr));
             const auto& genStructRef = genStructPtr->as_Struct();
             DEBUG(genStructPath << " -> args=" << params.fmtArgs() << " where " << params.fmtBounds());
 
@@ -3238,7 +3259,7 @@ namespace {
             // Async blocks use the same three reserved states.  `async gen`
             // adds a suspension for each yield as well as each await.
             auto suspensionCount = countCoroutineSuspensions(node.code, node.isAsyncGen, true);
-            auto stateIdxType = out.newType("async_state_idx#", newTypeSuffix, makeCoroutineStateEnum(suspensionCount));
+            auto stateIdxType = out.newType->create("async_state_idx#", newTypeSuffix, makeCoroutineStateEnum(suspensionCount));
             auto stateIdxTy = resolve_.hirCrate().types.path(stateIdxType.first, &stateIdxType.second->as_Enum());
 
             // Create the captures structure here, and update it afterwards with the state
@@ -3251,7 +3272,7 @@ namespace {
             stateStr.data.as_Tuple().push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), stateIdxTy});
             HIRSimplePath stateStructPath;
             const HIRTypeItem* stateStructPtr;
-            ::std::tie(stateStructPath, stateStructPtr) = out.newType("async_state#", newTypeSuffix, std::move(stateStr));
+            ::std::tie(stateStructPath, stateStructPtr) = out.newType->create("async_state#", newTypeSuffix, std::move(stateStr));
             auto stateType = resolve_.hirCrate().types.path(HIRGenericPath(stateStructPath, params.makeNopParams(resolve_.hirCrate().types, 0)), &stateStructPtr->as_Struct());
 
             // Update the state type entry, now that it's known
@@ -3266,7 +3287,7 @@ namespace {
             genStr.structMarkings.isAsyncDropGlue = isAsyncDropGlue;
             HIRSimplePath genStructPath;
             const HIRTypeItem* genStructPtr;
-            ::std::tie(genStructPath, genStructPtr) = out.newType(PATH_PREFIX_FUTURE, newTypeSuffix, mv$(genStr));
+            ::std::tie(genStructPath, genStructPtr) = out.newType->create(PATH_PREFIX_FUTURE, newTypeSuffix, mv$(genStr));
             const auto& genStructRef = genStructPtr->as_Struct();
 
             DEBUG(genStructPath << " -> args=" << params.fmtArgs() << " where " << params.fmtBounds());
@@ -3408,14 +3429,15 @@ namespace {
             HIRSimplePath rootModPath(crate.crateName, {});
             curModPath = &rootModPath;
             // Type construction helper used for impl blocks
-            out.newType = [&](const char* prefix, const char* suffix, auto s) -> auto {
+            auto newType = makeCallable<ClosureTypeCb>([&](const char* prefix, const char* suffix, auto s) -> auto {
                 auto name = RcString::newInterned(FMT(prefix << "I_" << suffix << (suffix[0] ? "_" : "") << closureCount));
                 closureCount += 1;
                 auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{HIRPublicity::newNone(), mv$(s)});
                 auto* retPtr = &boxed->ent;
                 crate.rootModule.modItems.insert(::std::make_pair(name, boxed));
                 return ::std::make_pair(HIRSimplePath(crate.crateName, {}) + name, retPtr);
-            };
+            });
+            out.newType = &newType;
 
             auto emptyCounts = out.saveCounts();
 
@@ -3437,8 +3459,8 @@ namespace {
             auto prevImpls = out.saveCounts();
 
             unsigned int closureCount = 0;
-            auto savedNt = mv$(out.newType);
-            out.newType = [&](const char* prefix, const char* suffix, auto s) -> auto {
+            auto savedNt = out.newType;
+            auto newType = makeCallable<ClosureTypeCb>([&](const char* prefix, const char* suffix, auto s) -> auto {
                 // TODO: Use a function on `mod` that adds a closure and makes the indexes be per suffix
                 auto name = RcString::newInterned(FMT(prefix << suffix << (suffix[0] ? "_" : "") << closureCount));
                 closureCount += 1;
@@ -3446,12 +3468,13 @@ namespace {
                 auto* retPtr = &boxed->ent;
                 newTypes.push_back(::std::make_pair(name, boxed));
                 return ::std::make_pair((p + name).getSimplePath(), retPtr);
-            };
+            });
+            out.newType = &newType;
 
             HIRVisitor::visitModule(p, mod);
 
             curModPath = saved;
-            out.newType = mv$(savedNt);
+            out.newType = savedNt;
 
             for (auto& e : newTypes) {
                 DEBUG(p << ": Push " << e.first);
@@ -3605,14 +3628,15 @@ void HIRExpandClosuresExpr(const WireBoard& wb, const HIRCrate& crateRo, HIRType
 
     static int closureCount = 0;
     OutState out;
-    out.newType = [&](const char* prefix, const char* suffix, auto s) -> auto {
+    auto newType = makeCallable<ClosureTypeCb>([&](const char* prefix, const char* suffix, auto s) -> auto {
         auto name = RcString::newInterned(FMT(prefix << "C_" << closureCount));
         closureCount += 1;
         auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{HIRPublicity::newNone(), HIRTypeItem(mv$(s))});
         auto* retPtr = &boxed->ent;
         crate.newTypes.push_back(::std::make_pair(name, boxed));
         return ::std::make_pair(HIRSimplePath(crate.crateName, {}) + name, retPtr);
-    };
+    });
+    out.newType = &newType;
 
     {
         ClosureExprVisitorExtract ev(resolve, selfType, exp.bindings, exp, out, "");
@@ -4696,24 +4720,40 @@ public:
     }
 };
 
+struct NewStaticCallback {
+    virtual HIRSimplePath create(Span sp, HIRTypeRef type, HIRExprPtr value, HIRGenericParams generics, bool isConst) = 0;
+};
+
+template <typename F>
+struct NewStaticCb final: NewStaticCallback {
+    F f;
+
+    explicit NewStaticCb(F f)
+        : f(f)
+    {
+    }
+
+    HIRSimplePath create(Span sp, HIRTypeRef type, HIRExprPtr value, HIRGenericParams generics, bool isConst) override {
+        return f(sp, mv$(type), mv$(value), mv$(generics), isConst);
+    }
+};
+
 class StaticBorrowExprVisitorMutate: public HIRExprVisitorDef {
-public:
-    typedef std::function<HIRSimplePath(Span, HIRTypeRef, HIRExprPtr, HIRGenericParams, bool)> tNewStaticCb;
 
 private:
     const StaticTraitResolve& resolve_;
     const HIRTypeData* selfType;
-    tNewStaticCb newStaticCb;
+    NewStaticCallback& newStaticCb;
     const HIRExprPtr& exprPtr;
 
     HIRSimplePath langRangeFull_;
 
 public:
-    StaticBorrowExprVisitorMutate(const StaticTraitResolve& resolve, const HIRTypeData* selfType, tNewStaticCb newStaticCb, const HIRExprPtr& exprPtr)
+    StaticBorrowExprVisitorMutate(const StaticTraitResolve& resolve, const HIRTypeData* selfType, NewStaticCallback& newStaticCb, const HIRExprPtr& exprPtr)
         : HIRExprVisitorDef(resolve.hirCrate().types)
         , resolve_(resolve)
         , selfType(selfType)
-        , newStaticCb(mv$(newStaticCb))
+        , newStaticCb(newStaticCb)
         , exprPtr(exprPtr)
     {
         langRangeFull_ = resolve_.hirCrate().getLangItemPathOpt("range_full");
@@ -5023,7 +5063,7 @@ public:
             auto staticTy = MonomorphLifetimesStatic(resolve_.hirCrate().types).monomorphType(sp, valExpr->resType, /*allow_infer=*/false);
             resolve.expandAssociatedTypes(sp, staticTy);
 
-            auto path = newStaticCb(sp, mv$(staticTy), mv$(valExpr), mv$(paramsDef), false);
+            auto path = newStaticCb.create(sp, mv$(staticTy), mv$(valExpr), mv$(paramsDef), false);
             DEBUG("> " << path << constrParams);
             // Update the `m_value` to point to a new node
             auto newNode = NEWNODE(std::move(newResTy), PathValue, sp, HIRGenericPath(mv$(path), mv$(constrParams)), HIRExprNodePathValue::STATIC);
@@ -5057,7 +5097,7 @@ public:
             auto newResTy = m2.monomorphType(sp, staticTy, false);
             DEBUG("ConstBlock: new_res_ty = " << newResTy);
 
-            auto path = newStaticCb(sp, mv$(staticTy), mv$(valExpr), mv$(paramsDef), true);
+            auto path = newStaticCb.create(sp, mv$(staticTy), mv$(valExpr), mv$(paramsDef), true);
             DEBUG("> " << path << constrParams);
             // Update the `m_value` to point to a new node
             auto newNode = NEWNODE(std::move(newResTy), PathValue, sp, HIRGenericPath(std::move(path), mv$(constrParams)), HIRExprNodePathValue::CONSTANT);
@@ -5067,7 +5107,7 @@ public:
     }
 };
 
-class StaticBorrowOuterVisitor: public HIRVisitor {
+class StaticBorrowOuterVisitor: public HIRVisitor, public NewStaticCallback {
     const HIRCrate& crate;
     StaticTraitResolve resolve_;
 
@@ -5094,30 +5134,28 @@ public:
     {
     }
 
-    StaticBorrowExprVisitorMutate::tNewStaticCb getNewTyCb() {
-        return [this](Span sp, HIRTypeRef ty, HIRExprPtr valExpr, HIRGenericParams generics, bool isConst) -> HIRSimplePath {
-            ASSERT_BUG(sp, currentModule, "");
-            // Assign a path (based on the current list)
-            auto& list = newStatics[currentModule];
-            auto idx = list.size();
-            auto name = RcString::newInterned(FMT((isConst ? "lifted#" : "const#") << idx));
-            auto path = (*currentModulePath + name).getSimplePath();
-            auto newStatic = HIRStatic(
-                HIRLinkage(),
-                /*is_mut=*/false,
-                mv$(ty),
-                /*m_value=*/mv$(valExpr)
-            );
-            newStatic.params = mv$(generics);
-            newStatic.isPromoted = true;
-            // Downstream const evaluation can execute saved `const fn` MIR that
-            // refers to this promoted static. Non-generic statics have no HIR
-            // body in an rlib, so their evaluated bytes must travel with it.
-            newStatic.saveLiteral = !newStatic.params.isGeneric();
-            DEBUG(path << " = " << newStatic.valueRes);
-            list.push_back(NewStatic{path, std::move(newStatic), isConst});
-            return path;
-        };
+    HIRSimplePath create(Span sp, HIRTypeRef ty, HIRExprPtr valExpr, HIRGenericParams generics, bool isConst) override {
+        ASSERT_BUG(sp, currentModule, "");
+        // Assign a path (based on the current list)
+        auto& list = newStatics[currentModule];
+        auto idx = list.size();
+        auto name = RcString::newInterned(FMT((isConst ? "lifted#" : "const#") << idx));
+        auto path = (*currentModulePath + name).getSimplePath();
+        auto newStatic = HIRStatic(
+            HIRLinkage(),
+            /*is_mut=*/false,
+            mv$(ty),
+            /*m_value=*/mv$(valExpr)
+        );
+        newStatic.params = mv$(generics);
+        newStatic.isPromoted = true;
+        // Downstream const evaluation can execute saved `const fn` MIR that
+        // refers to this promoted static. Non-generic statics have no HIR
+        // body in an rlib, so their evaluated bytes must travel with it.
+        newStatic.saveLiteral = !newStatic.params.isGeneric();
+        DEBUG(path << " = " << newStatic.valueRes);
+        list.push_back(NewStatic{path, std::move(newStatic), isConst});
+        return path;
     }
 
     void visitCrate(HIRCrate& crate) override {
@@ -5283,7 +5321,7 @@ public:
 
     void visitConstgeneric(HIRConstGeneric& c) override {
         if (auto* e = c.opt_Unevaluated()) {
-            StaticBorrowExprVisitorMutate ev(resolve_, selfType, this->getNewTyCb(), *(*e)->expr);
+            StaticBorrowExprVisitorMutate ev(resolve_, selfType, *this, *(*e)->expr);
             ev.visitNodePtr(*(*e)->expr);
         }
     }
@@ -5301,7 +5339,7 @@ public:
             auto _ = resolve_.setItemGenerics(item.params);
             isConst = item.isConst;
             DEBUG("Function code " << p);
-            StaticBorrowExprVisitorMutate ev(resolve_, selfType, this->getNewTyCb(), item.code);
+            StaticBorrowExprVisitorMutate ev(resolve_, selfType, *this, item.code);
             ev.visitNodePtr(item.code);
             isConst = false;
         } else {
@@ -5311,7 +5349,7 @@ public:
 
     void visitStatic(HIRItemPath p, HIRStatic& item) override {
         if (item.value) {
-            StaticBorrowExprVisitorMutate ev(resolve_, selfType, this->getNewTyCb(), item.value);
+            StaticBorrowExprVisitorMutate ev(resolve_, selfType, *this, item.value);
             ev.visitNodePtr(item.value);
 
             if (!item.isMut && resolve_.typeIsCopy(item.value->span(), item.type) && resolve_.typeIsInteriorMutable(item.value->span(), item.type) == HIRCompare::Unequal) {
@@ -5323,7 +5361,7 @@ public:
     void visitConstant(HIRItemPath p, HIRConstant& item) override {
         if (item.value) {
             isConst = true;
-            StaticBorrowExprVisitorMutate ev(resolve_, selfType, this->getNewTyCb(), item.value);
+            StaticBorrowExprVisitorMutate ev(resolve_, selfType, *this, item.value);
             ev.visitNodePtr(item.value);
             isConst = false;
         }
@@ -5336,7 +5374,7 @@ public:
                 DEBUG("Enum value " << p << " - " << var.name);
 
                 if (var.expr) {
-                    StaticBorrowExprVisitorMutate ev(resolve_, selfType, this->getNewTyCb(), var.expr);
+                    StaticBorrowExprVisitorMutate ev(resolve_, selfType, *this, var.expr);
                     ev.visitNodePtr(var.expr);
                 }
             }
@@ -5380,7 +5418,7 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
         DEBUG("self_type = NONE");
     }
 
-    StaticBorrowExprVisitorMutate ev(resolve, selfType, [&](Span sp, HIRTypeRef ty, HIRExprPtr valExpr, HIRGenericParams generics, bool isConst) -> HIRSimplePath {
+    auto callback = makeCallable<NewStaticCb>([&](Span sp, HIRTypeRef ty, HIRExprPtr valExpr, HIRGenericParams generics, bool isConst) -> HIRSimplePath {
         auto name = RcString::newInterned(FMT("lifted#C_" << staticCount++));
 
         auto path = HIRSimplePath(crate.crateName, {name});
@@ -5458,7 +5496,8 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
             v.state->itemGenerics = &p;
         }
         return path;
-    }, exp);
+    });
+    StaticBorrowExprVisitorMutate ev(resolve, selfType, callback, exp);
     ev.visitNodePtr(exp);
 }
 
@@ -6337,11 +6376,22 @@ namespace {
     };
 
     class VtableOuterVisitor: public HIRVisitor {
+        using NewTypes = ::std::vector<::std::pair<RcString, HIRVisEnt<HIRTypeItem>*>>;
+
         const WireBoard& wb;
         const HIRCrate& crate;
-        //StaticTraitResolve  m_resolve;
-        ::std::function<HIRSimplePath(bool, RcString, HIRStruct)> newType;
+        const HIRItemPath* currentModulePath = nullptr;
+        NewTypes* currentNewTypes = nullptr;
         HIRSimplePath langSized_;
+
+        HIRSimplePath createType(bool isPublic, RcString name, HIRStruct value) {
+            assert(currentModulePath);
+            assert(currentNewTypes);
+            auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{(isPublic ? HIRPublicity::newGlobal() : HIRPublicity::newNone()), HIRTypeItem(mv$(value))});
+            auto result = (*currentModulePath + name).getSimplePath();
+            currentNewTypes->push_back(::std::make_pair(mv$(name), boxed));
+            return result;
+        }
 
     public:
         VtableOuterVisitor(const WireBoard& wb)
@@ -6353,22 +6403,20 @@ namespace {
         }
 
         void visitModule(HIRItemPath p, HIRModule& mod) override {
-            auto savedNt = mv$(newType);
+            auto savedPath = currentModulePath;
+            auto savedTypes = currentNewTypes;
 
-            ::std::vector<decltype(mod.modItems)::value_type> newTypes;
-            newType = [&](bool pub, auto name, auto s) -> auto {
-                auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{(pub ? HIRPublicity::newGlobal() : HIRPublicity::newNone()), HIRTypeItem(mv$(s))});
-                auto ret = (p + name).getSimplePath();
-                newTypes.push_back(::std::make_pair(mv$(name), boxed));
-                return ret;
-            };
+            NewTypes newTypes;
+            currentModulePath = &p;
+            currentNewTypes = &newTypes;
 
             HIRVisitor::visitModule(p, mod);
             for (auto& i : newTypes) {
                 mod.modItems.insert(mv$(i));
             }
 
-            newType = mv$(savedNt);
+            currentModulePath = savedPath;
+            currentNewTypes = savedTypes;
         }
 
         void visitTrait(HIRItemPath p, HIRTrait& tr) override {
@@ -6634,7 +6682,7 @@ namespace {
             }
             ASSERT_BUG(sp, args.types.size() == params.types.size() && args.values.size() == params.values.size(), "Count mismatch args=" << args.fmtArgs() << " params=" << params);
             // TODO: Would like to have access to the publicity marker
-            auto itemPath = newType(true, RcString::newInterned(FMT(p.getName() << "#vtable")), HIRStruct(std::move(args), HIRStruct::Repr::C, HIRStruct::Data(mv$(fields))));
+            auto itemPath = createType(true, RcString::newInterned(FMT(p.getName() << "#vtable")), HIRStruct(std::move(args), HIRStruct::Repr::C, HIRStruct::Data(mv$(fields))));
             tr.vtablePath = itemPath;
             DEBUG("Vtable structure created - " << itemPath);
             HIRGenericPath path(mv$(itemPath), std::move(params));

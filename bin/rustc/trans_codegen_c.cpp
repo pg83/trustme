@@ -107,6 +107,80 @@ namespace {
             strings.push_back(s);
         }
     };
+
+    struct CUnwindOperationCallback {
+        virtual void emit(unsigned indentLevel) = 0;
+    };
+
+    template <typename F>
+    struct CUnwindOperationCb final: CUnwindOperationCallback {
+        F f;
+
+        explicit CUnwindOperationCb(F f)
+            : f(f)
+        {
+        }
+
+        void emit(unsigned indentLevel) override {
+            f(indentLevel);
+        }
+    };
+
+    struct CSlotCallback {
+        virtual void emit() = 0;
+    };
+
+    using MIRParamList = ::std::vector<MIRParam>;
+
+    template <typename F>
+    struct CSlotCb final: CSlotCallback {
+        F f;
+
+        explicit CSlotCb(F f)
+            : f(f)
+        {
+        }
+
+        void emit() override {
+            f();
+        }
+    };
+
+    struct CSwitchArmCallback {
+        virtual void emit(size_t arm) = 0;
+    };
+
+    template <typename F>
+    struct CSwitchArmCb final: CSwitchArmCallback {
+        F f;
+
+        explicit CSwitchArmCb(F f)
+            : f(f)
+        {
+        }
+
+        void emit(size_t arm) override {
+            f(arm);
+        }
+    };
+
+    struct CDestructorCountCallback {
+        virtual void emit() = 0;
+    };
+
+    template <typename F>
+    struct CDestructorCountCb final: CDestructorCountCallback {
+        F f;
+
+        explicit CDestructorCountCb(F f)
+            : f(f)
+        {
+        }
+
+        void emit() override {
+            f();
+        }
+    };
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const FmtShell& x) {
@@ -1281,8 +1355,9 @@ default:
 
         void emitType(const HIRTypeData* ty) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "type " << ty; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "type " << ty;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -1373,8 +1448,9 @@ default:
 
         void emitStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "struct " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "struct " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
             // TODO: repr(transparent) and repr(align(foo))
@@ -1399,8 +1475,9 @@ default:
 
         void emitUnion(const Span& sp, const HIRGenericPath& p, const HIRUnion& item) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "union " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "union " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -1493,8 +1570,9 @@ default:
 
         void emitEnum(const Span& sp, const HIRGenericPath& p, const HIREnum& item) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "enum " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "enum " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -1651,8 +1729,9 @@ default:
             }
 
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "enum cons " << path; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "enum cons " << path;), ty, args, emptyFcn
+                sp, resolve_, pathCallback, ty, args, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -1761,8 +1840,9 @@ default:
 
         void emitStaticExt(const HIRPath& p, const HIRStatic& item, const TransParams& params) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "extern static " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "extern static " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
             TRACE_FUNCTION_F(p);
@@ -1812,8 +1892,9 @@ default:
 
         void emitStaticProto(const HIRPath& p, const HIRStatic& item, const TransParams& params) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "static " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "static " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -1930,8 +2011,9 @@ default:
 
         void emitStaticLocal(const HIRPath& p, const HIRStatic& item, const TransParams& params, const EncodedLiteral& encoded) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "static " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "static " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -2100,8 +2182,9 @@ default:
 
         void emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "extern fn " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "extern fn " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
             TRACE_FUNCTION_F(p);
@@ -2736,8 +2819,9 @@ default:
 
         void emitFunctionProto(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef) override {
             MIRFunction emptyFcn;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "/*proto*/ fn " << p; });
             MIRTypeResolve topMirRes {
-                sp, resolve_, FMT_CB(ss, ss << "/*proto*/ fn " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -2787,8 +2871,9 @@ default:
             HIRTypeRef retTypeTmp;
             const auto& retType = monomorphiseFcnReturn(retTypeTmp, item, params);
 
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << p; });
             MIRTypeResolve localMirRes {
-                sp, resolve_, FMT_CB(ss, ss << p;), retType, argTypes, *code
+                sp, resolve_, pathCallback, retType, argTypes, *code
             };
             mirRes = &localMirRes;
             currentFunctionTracksCaller = trackedFunctions.count(p) != 0;
@@ -2976,18 +3061,18 @@ default:
             of << "}\n";
         }
 
-        void emitOperationWithUnwind(const MIRUnwindAction& action, unsigned indentLevel, ::std::function<void(unsigned)> emitOperation) {
+        void emitOperationWithUnwindCb(const MIRUnwindAction& action, unsigned indentLevel, CUnwindOperationCallback& emitOperation) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
             switch (action.tag()) {
                 case MIRUnwindAction::TAG_Continue: {
                     auto& _ = action.as_Continue();
-                    emitOperation(indentLevel);
+                    emitOperation.emit(indentLevel);
                     break;
                 }
                 case MIRUnwindAction::TAG_Cleanup: {
                     auto& target = action.as_Cleanup();
                     of << indent << "try {\n";
-                    emitOperation(indentLevel + 1);
+                    emitOperation.emit(indentLevel + 1);
                     of << indent << "} catch (...) {\n";
                     of << indent << "\ttry { trustme_run_cleanup(" << target << "); } catch (...) { abort(); }\n";
                     of << indent << "\tthrow;\n";
@@ -2997,18 +3082,24 @@ default:
                 case MIRUnwindAction::TAG_Terminate: {
                     auto& _ = action.as_Terminate();
                     of << indent << "try {\n";
-                    emitOperation(indentLevel + 1);
+                    emitOperation.emit(indentLevel + 1);
                     of << indent << "} catch (...) { abort(); }\n";
                     break;
                 }
                 case MIRUnwindAction::TAG_Unreachable: {
                     auto& _ = action.as_Unreachable();
                     of << indent << "try {\n";
-                    emitOperation(indentLevel + 1);
+                    emitOperation.emit(indentLevel + 1);
                     of << indent << "} catch (...) { abort(); }\n";
                     break;
                 }
             }
+        }
+
+        template <typename F>
+        void emitOperationWithUnwind(const MIRUnwindAction& action, unsigned indentLevel, F f) {
+            CUnwindOperationCb<F> cb(f);
+            emitOperationWithUnwindCb(action, indentLevel, cb);
         }
 
         void emitBlockTerminator(MIRTypeResolve& localMirRes, const MIRTerminator& term, unsigned blockIndex, bool cleanup, unsigned indentLevel) {
@@ -3371,7 +3462,7 @@ default:
             }
         }
 
-        void emitCompositeAssign(const MIRTypeResolve& localMirRes, ::std::function<void()> emitSlot, const ::std::vector<MIRParam>& vals, unsigned indentLevel, bool prependNewline = true) {
+        void emitCompositeAssignCb(const MIRTypeResolve& localMirRes, CSlotCallback& emitSlot, const MIRParamList& vals, unsigned indentLevel, bool prependNewline) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
             bool hasEmitted = prependNewline;
             for (unsigned int j = 0; j < vals.size(); j++) {
@@ -3395,10 +3486,16 @@ default:
                 }
                 hasEmitted = true;
 
-                emitSlot();
+                emitSlot.emit();
                 of << "._" << j << " = ";
                 emitParam(vals[j]);
             }
+        }
+
+        template <typename F>
+        void emitCompositeAssign(const MIRTypeResolve& localMirRes, F f, const MIRParamList& vals, unsigned indentLevel, bool prependNewline = true) {
+            CSlotCb<F> cb(f);
+            emitCompositeAssignCb(localMirRes, cb, vals, indentLevel, prependNewline);
         }
 
         void emitDropOperation(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_Drop& e, unsigned indentLevel) {
@@ -4427,7 +4524,7 @@ default:
             }
         }
 
-        void emitTermSwitch(const MIRTypeResolve& localMirRes, const MIRLValue& val, size_t nArms, unsigned indentLevel, ::std::function<void(size_t)> cb, size_t oddArm = -1) {
+        void emitTermSwitchCb(const MIRTypeResolve& localMirRes, const MIRLValue& val, size_t nArms, unsigned indentLevel, CSwitchArmCallback& cb, size_t oddArm) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
 
             HIRTypeRef tmp;
@@ -4478,11 +4575,11 @@ default:
                     }
                     of << " != 0 )\n";
                     of << indent << "\t";
-                    cb(1 - e.zeroVariant);
+                    cb.emit(1 - e.zeroVariant);
                     of << "\n";
                     of << indent << "else\n";
                     of << indent << "\t";
-                    cb(e.zeroVariant);
+                    cb.emit(e.zeroVariant);
                     of << "\n";
                     break;
                 }
@@ -4534,9 +4631,9 @@ default:
                             of << " == " << tagOf(oddArm) << "ull";
                         }
                         of << ") {";
-                        cb(oddArm);
+                        cb.emit(oddArm);
                         of << "} else {";
-                        cb(oddArm == 0 ? 1 : 0);
+                        cb.emit(oddArm == 0 ? 1 : 0);
                         of << "}\n";
                     } else {
                         of << indent << "switch(";
@@ -4547,12 +4644,12 @@ default:
                                 continue;
                             }
                             of << indent << "case " << tagOf(j) << "ull: ";
-                            cb(j);
+                            cb.emit(j);
                             of << "break;\n";
                         }
                         of << indent << "default: ";
                         if (e.usesNiche()) {
-                            cb(e.field.index);
+                            cb.emit(e.field.index);
                             of << "break;";
                         } else {
                             of << "abort();";
@@ -4620,9 +4717,9 @@ default:
                         of << indent << "if(";
                         emitEqual(oddArm);
                         of << ") {";
-                        cb(oddArm);
+                        cb.emit(oddArm);
                         of << "} else {";
-                        cb(oddArm == 0 ? 1 : 0);
+                        cb.emit(oddArm == 0 ? 1 : 0);
                         of << "}\n";
                         return;
                     }
@@ -4632,7 +4729,7 @@ default:
                             of << indent << (j == 0 ? "if(" : "else if(");
                             emitEqual(j);
                             of << ") {";
-                            cb(j);
+                            cb.emit(j);
                             of << "}\n";
                         }
                         of << indent << "else { abort(); }\n";
@@ -4657,7 +4754,7 @@ default:
                         } else {
                             of << indent << "case " << e.values[j].truncateU64() << "ull: ";
                         }
-                        cb(j);
+                        cb.emit(j);
                         of << "break;\n";
                     }
                     of << indent << "default: abort();\n";
@@ -4666,14 +4763,20 @@ default:
                 }
                 case TypeReprVariantMode::TAG_None: {
                     of << indent;
-                    cb(0);
+                    cb.emit(0);
                     of << "\n";
                     break;
                 }
             }
         }
 
-        void emitTermSwitchvalue(const MIRTypeResolve& localMirRes, const MIRLValue& val, const MIRSwitchValues& values, unsigned indentLevel, ::std::function<void(size_t)> cb) {
+        template <typename F>
+        void emitTermSwitch(const MIRTypeResolve& localMirRes, const MIRLValue& val, size_t nArms, unsigned indentLevel, F f, size_t oddArm = -1) {
+            CSwitchArmCb<F> cb(f);
+            emitTermSwitchCb(localMirRes, val, nArms, indentLevel, cb, oddArm);
+        }
+
+        void emitTermSwitchvalueCb(const MIRTypeResolve& localMirRes, const MIRLValue& val, const MIRSwitchValues& values, unsigned indentLevel, CSwitchArmCallback& cb) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
 
             HIRTypeRef tmp;
@@ -4691,11 +4794,11 @@ default:
                 of << ", " << ve->size() << ", switch_strings) ) {\n";
                 for (size_t i = 0; i < ve->size(); i++) {
                     of << indent << "case " << i << ": ";
-                    cb(i);
+                    cb.emit(i);
                     of << " break;\n";
                 }
                 of << indent << "default: ";
-                cb(SIZE_MAX);
+                cb.emit(SIZE_MAX);
                 of << "\n";
                 of << indent << "} }\n";
             } else if (const auto* ve = values.opt_ByteString()) {
@@ -4720,11 +4823,11 @@ default:
                 of << ", " << ve->size() << ", switch_strings) ) {\n";
                 for (size_t i = 0; i < ve->size(); i++) {
                     of << indent << "case " << i << ": ";
-                    cb(i);
+                    cb.emit(i);
                     of << " break;\n";
                 }
                 of << indent << "default: ";
-                cb(SIZE_MAX);
+                cb.emit(SIZE_MAX);
                 of << "\n";
                 of << indent << "} }\n";
             } else if (const auto* ve = values.opt_Unsigned()) {
@@ -4733,7 +4836,7 @@ default:
                     of << indent << "if(";
                     emitLvalue(val);
                     of << ".hi != 0) { ";
-                    cb(SIZE_MAX);
+                    cb.emit(SIZE_MAX);
                     of << " }\n";
                 }
                 of << indent << (emulatedU128 ? "else " : "") << "switch(";
@@ -4744,11 +4847,11 @@ default:
                 of << ") {\n";
                 for (size_t i = 0; i < ve->size(); i++) {
                     of << indent << "\tcase " << (*ve)[i] << "ull: ";
-                    cb(i);
+                    cb.emit(i);
                     of << " break;\n";
                 }
                 of << indent << "\tdefault: ";
-                cb(SIZE_MAX);
+                cb.emit(SIZE_MAX);
                 of << "\n";
                 of << indent << "}\n";
             } else if (const auto* ve = values.opt_Signed()) {
@@ -4759,7 +4862,7 @@ default:
                     of << ".hi != ((i64)";
                     emitLvalue(val);
                     of << ".lo < 0 ? UINT64_MAX : 0)) { ";
-                    cb(SIZE_MAX);
+                    cb.emit(SIZE_MAX);
                     of << " }\n";
                 }
                 of << indent << (emulatedI128 ? "else " : "") << "switch(";
@@ -4779,11 +4882,11 @@ default:
                         of << (*ve)[i] << "ll";
                     }
                     of << ": ";
-                    cb(i);
+                    cb.emit(i);
                     of << " break;\n";
                 }
                 of << indent << "\tdefault: ";
-                cb(SIZE_MAX);
+                cb.emit(SIZE_MAX);
                 of << "\n";
                 of << indent << "}\n";
             } else {
@@ -8731,18 +8834,24 @@ default:
             of << ";\n";
         }
 
-        void emitDestructorLoop(const MIRLValue& slot, const HIRTypeData* elementTy, ::std::function<void()> emitCount, unsigned indentLevel) {
+        template <typename F>
+        void emitTermSwitchvalue(const MIRTypeResolve& localMirRes, const MIRLValue& val, const MIRSwitchValues& values, unsigned indentLevel, F f) {
+            CSwitchArmCb<F> cb(f);
+            emitTermSwitchvalueCb(localMirRes, val, values, indentLevel, cb);
+        }
+
+        void emitDestructorLoopCb(const MIRLValue& slot, const HIRTypeData* elementTy, CDestructorCountCallback& emitCount, unsigned indentLevel) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
             auto element = MIRLValue::newIndex(slot.clone(), MIRLValue::Storage::MAX_ARG);
 
             of << indent << "for(unsigned i = 0; i < ";
-            emitCount();
+            emitCount.emit();
             of << "; i++) {\n";
             of << indent << "\ttry {\n";
             emitDestructorCall(element, elementTy, false, indentLevel + 2);
             of << "\n" << indent << "\t} catch (...) {\n";
             of << indent << "\t\tfor(i++; i < ";
-            emitCount();
+            emitCount.emit();
             of << "; i++) {\n";
             of << indent << "\t\t\ttry {\n";
             emitDestructorCall(element, elementTy, false, indentLevel + 4);
@@ -8751,6 +8860,12 @@ default:
             of << indent << "\t\tthrow;\n";
             of << indent << "\t}\n";
             of << indent << "}";
+        }
+
+        template <typename F>
+        void emitDestructorLoop(const MIRLValue& slot, const HIRTypeData* elementTy, F f, unsigned indentLevel) {
+            CDestructorCountCb<F> cb(f);
+            emitDestructorLoopCb(slot, elementTy, cb, indentLevel);
         }
 
         void emitTupleDestructor(const MIRLValue& slot, const HIRTypeData::Data_Tuple& tuple, bool unsizedValid, unsigned indentLevel) {
@@ -9488,11 +9603,41 @@ default:
             }
         }
 
+        struct CTypeCallback {
+            virtual void write(::std::ostream& os) const = 0;
+
+            friend ::std::ostream& operator<<(::std::ostream& os, const CTypeCallback& callback) {
+                callback.write(os);
+                return os;
+            }
+        };
+
+        template <typename F>
+        struct CTypeCb final: CTypeCallback {
+            F f;
+
+            explicit CTypeCb(F f)
+                : f(f)
+            {
+            }
+
+            void write(::std::ostream& os) const override {
+                f(os);
+            }
+        };
+
         void emitCtype(const HIRTypeData* ty) {
-            emitCtype(ty, FMT_CB(_, ));
+            auto callback = makeCallable<CTypeCb>([](auto&) {});
+            emitCtypeCb(ty, callback);
         }
 
-        void emitCtype(const HIRTypeData* ty, ::FmtLambda inner, bool isExternC = false) {
+        template <typename F>
+        void emitCtype(const HIRTypeData* ty, F inner, bool isExternC = false) {
+            auto callback = makeCallable<CTypeCb>(inner);
+            emitCtypeCb(ty, callback, isExternC);
+        }
+
+        void emitCtypeCb(const HIRTypeData* ty, CTypeCallback& inner, bool isExternC = false) {
             auto normalizedIt = normalizedCtypes.find(ty);
             if (normalizedIt == normalizedCtypes.end()) {
                 HIRTypeRef normalized = ty;
@@ -9500,7 +9645,7 @@ default:
                 normalizedIt = normalizedCtypes.emplace(ty, mv$(normalized)).first;
             }
             if (normalizedIt->second != ty) {
-                emitCtype(normalizedIt->second, mv$(inner), isExternC);
+                emitCtypeCb(normalizedIt->second, inner, isExternC);
                 return;
             }
 
@@ -9663,7 +9808,7 @@ default:
                 }
                 case HIRTypeData::TAG_Pattern: {
                     auto& te = (*ty).as_Pattern();
-                    emitCtype(te.inner, mv$(inner), isExternC);
+                    emitCtypeCb(te.inner, inner, isExternC);
                     break;
                 }
 break;
@@ -9849,13 +9994,19 @@ default:
             return resolve_.metadataType(mirRes ? mirRes->sp : sp, ty);
         }
 
-        void emitFunctionArgument(const HIRTypeData* ty, const ::FmtLambda& inner) {
+        template <typename F>
+        void emitFunctionArgument(const HIRTypeData* ty, F inner) {
+            auto callback = makeCallable<CTypeCb>(inner);
+            emitFunctionArgumentCb(ty, callback);
+        }
+
+        void emitFunctionArgumentCb(const HIRTypeData* ty, CTypeCallback& inner) {
             switch (this->metadataType(ty)) {
                 case MetadataType::Unknown:
                     MIR_BUG(*mirRes, ty << " has unknown function-argument metadata");
                 case MetadataType::None:
                 case MetadataType::Zero:
-                    emitCtype(ty, inner);
+                    emitCtypeCb(ty, inner);
                     break;
                 case MetadataType::Slice:
                     of << "void* " << inner << "_ptr, uintptr_t " << inner << "_meta";
@@ -9956,7 +10107,7 @@ default:
             MIR_BUG(*mirRes, "Unsized function argument isn't an lvalue - " << param);
         }
 
-        void emitCtypePtr(const HIRTypeData* innerTy, ::FmtLambda inner) {
+        void emitCtypePtr(const HIRTypeData* innerTy, CTypeCallback& inner) {
             //}
             //else
             {
@@ -9964,9 +10115,11 @@ default:
                     case MetadataType::Unknown:
                         BUG(sp, innerTy << " unknown metadata type");
                     case MetadataType::None:
-                    case MetadataType::Zero:
-                        emitCtype(innerTy, FMT_CB(ss, ss << "*" << inner;));
+                    case MetadataType::Zero: {
+                        auto callback = makeCallable<CTypeCb>([&](auto& os) { os << "*" << inner; });
+                        emitCtypeCb(innerTy, callback);
                         break;
+                    }
                     case MetadataType::Slice:
                         of << "SLICE_PTR " << inner;
                         break;

@@ -56,7 +56,7 @@ struct ExpandState {
 
 // Per-attribute action for ExpandAttrs/ExpandAttr. Call sites keep their
 // lambdas via makeCallable<ExpandAttrCb>(...); the API sees only this
-// interface - no std::function, no allocation.
+// interface, with no allocation.
 struct ExpandAttrCallback {
     virtual void run(const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) const = 0;
 };
@@ -65,8 +65,8 @@ template <typename F>
 struct ExpandAttrCb final: ExpandAttrCallback {
     F f;
 
-    ExpandAttrCb(F&& f)
-        : f(static_cast<F&&>(f))
+    explicit ExpandAttrCb(F f)
+        : f(f)
     {
     }
 

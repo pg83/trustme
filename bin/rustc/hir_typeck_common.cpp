@@ -218,42 +218,44 @@ struct TyVisitor {
 };
 
 struct TyVisitorCbConst: TyVisitor<WConst> {
-    tCbVisitTy callback;
+    HIRTypeVisitorCallback& callback;
+
+    explicit TyVisitorCbConst(HIRTypeVisitorCallback& callback)
+        : callback(callback)
+    {
+    }
 
     const HIRTypeData& getTyData(const HIRTypeData* ty) const override {
         return *ty;
     }
 
     bool visitType(const HIRTypeData* ty) override {
-        if (callback(ty)) {
+        if (callback.visit(ty)) {
             return true;
         }
         return TyVisitor::visitType(ty);
     }
 };
 
-bool visitTyWith(const HIRTypeData* ty, tCbVisitTy callback) {
-    TyVisitorCbConst v;
-    v.callback = callback;
+bool visitTyWithCb(const HIRTypeData* ty, HIRTypeVisitorCallback& callback) {
+    TyVisitorCbConst v(callback);
     return v.visitType(ty);
 }
 
-bool visitTraitPathTysWith(const HIRTraitPath& path, tCbVisitTy callback) {
-    TyVisitorCbConst v;
-    v.callback = callback;
+bool visitTraitPathTysWithCb(const HIRTraitPath& path, HIRTypeVisitorCallback& callback) {
+    TyVisitorCbConst v(callback);
     return v.visitTraitPath(path);
 }
 
-bool visitPathTysWith(const HIRPath& path, tCbVisitTy callback) {
-    TyVisitorCbConst v;
-    v.callback = callback;
+bool visitPathTysWithCb(const HIRPath& path, HIRTypeVisitorCallback& callback) {
+    TyVisitorCbConst v(callback);
     return v.visitPath(path);
 }
 
 namespace {
     struct TyRewriter {
         HIRTypeInterner& types;
-        tCbRewriteTy callback;
+        HIRTypeRewriteCallback& callback;
         ::std::vector<HIRTypeRef> stack;
 
         bool rewritePathParams(HIRPathParams& params) {
@@ -316,7 +318,7 @@ namespace {
             const auto original = type;
             auto data = original->cloneData();
             HIRTypeRef rewritten = original;
-            const bool stop = callback(rewritten, data);
+            const bool stop = callback.rewrite(rewritten, data);
             if (rewritten != original) {
                 type = rewritten;
                 return stop;
@@ -446,13 +448,13 @@ namespace {
     };
 }
 
-bool rewriteTyWith(HIRTypeInterner& types, HIRTypeRef& ty, tCbRewriteTy callback) {
-    TyRewriter rewriter{types, mv$(callback), {}};
+bool rewriteTyWithCb(HIRTypeInterner& types, HIRTypeRef& ty, HIRTypeRewriteCallback& callback) {
+    TyRewriter rewriter{types, callback, {}};
     return rewriter.rewriteType(ty);
 }
 
-bool rewritePathTysWith(HIRTypeInterner& types, HIRPath& path, tCbRewriteTy callback) {
-    TyRewriter rewriter{types, mv$(callback), {}};
+bool rewritePathTysWithCb(HIRTypeInterner& types, HIRPath& path, HIRTypeRewriteCallback& callback) {
+    TyRewriter rewriter{types, callback, {}};
     return rewriter.rewritePath(path);
 }
 
@@ -753,10 +755,11 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
 }
 
 struct CloneTyWithMonomorph: Monomorphiser {
-    tCbCloneTy callback;
+    HIRTypeCloneCallback& callback;
 
-    explicit CloneTyWithMonomorph(HIRTypeInterner& types)
+    CloneTyWithMonomorph(HIRTypeInterner& types, HIRTypeCloneCallback& callback)
         : Monomorphiser(types)
+        , callback(callback)
     {
     }
 
@@ -771,18 +774,18 @@ struct CloneTyWithMonomorph: Monomorphiser {
     HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const {
         HIRTypeRef rv;
 
-        if (callback(ty, rv)) {
+        if (callback.clone(ty, rv)) {
             return rv;
         }
         return Monomorphiser::monomorphType(sp, ty, allowInfer);
     }
 };
 
-HIRPathParams clonePathParamsWith(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, tCbCloneTy callback) {
+HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, HIRTypeCloneCallback& callback) {
     HIRPathParams rv;
     rv.types.reserve(tpl.types.size());
     for (const auto& ty : tpl.types) {
-        rv.types.push_back(cloneTyWith(types, sp, ty, callback));
+        rv.types.push_back(cloneTyWithCb(types, sp, ty, callback));
     }
     for (const auto& v : tpl.values) {
         rv.values.push_back(v.clone());
@@ -790,9 +793,8 @@ HIRPathParams clonePathParamsWith(HIRTypeInterner& types, const Span& sp, const 
     return rv;
 }
 
-HIRTypeRef cloneTyWith(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, tCbCloneTy callback) {
-    CloneTyWithMonomorph m(types);
-    m.callback = std::move(callback);
+HIRTypeRef cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, HIRTypeCloneCallback& callback) {
+    CloneTyWithMonomorph m(types, callback);
     return m.monomorphType(sp, tpl, true);
 }
 

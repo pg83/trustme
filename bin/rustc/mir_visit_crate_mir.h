@@ -4,16 +4,31 @@ struct WireBoard;
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"
 
-class MIROuterVisitor: public HIRVisitor {
-public:
-    typedef ::std::function<void(const StaticTraitResolve& resolve, const HIRItemPath& ip, HIRExprPtr& expr, const HIRFunction::argsT& args, const HIRTypeData* retType)> cbT;
+struct MIRExprCallback {
+    virtual void visit(const StaticTraitResolve& resolve, const HIRItemPath& ip, HIRExprPtr& expr, const HIRFunction::argsT& args, const HIRTypeData* retType) = 0;
+};
 
+template <typename F>
+struct MIRExprCb final: MIRExprCallback {
+    F f;
+
+    explicit MIRExprCb(F f)
+        : f(f)
+    {
+    }
+
+    void visit(const StaticTraitResolve& resolve, const HIRItemPath& ip, HIRExprPtr& expr, const HIRFunction::argsT& args, const HIRTypeData* retType) override {
+        f(resolve, ip, expr, args, retType);
+    }
+};
+
+class MIROuterVisitor: public HIRVisitor {
 private:
     StaticTraitResolve resolve_;
-    cbT cb;
+    MIRExprCallback& cb;
 
 public:
-    MIROuterVisitor(const WireBoard& wb, const HIRCrate& crate, cbT cb);
+    MIROuterVisitor(const WireBoard& wb, const HIRCrate& crate, MIRExprCallback& cb);
 
     void visitExpr(HIRExprPtr& exp) override;
 

@@ -29,13 +29,19 @@ namespace {}
 // --check-cfg expectations with their lint settings. Opaque outside this
 // file; Settings holds a pointer.
 struct CfgState {
+    stl::ObjPool* pool;
     ::std::multimap<::std::string, ::std::string> values;
-    ::std::map<::std::string, ::std::function<bool(const ::std::string&)>> valueFcns;
+    ::std::map<::std::string, CfgValueCallback*> valueFcns;
     ::std::set<::std::string> flags;
+
+    explicit CfgState(stl::ObjPool& pool)
+        : pool(&pool)
+    {
+    }
 };
 
 CfgState* CfgCreateState(stl::ObjPool& pool) {
-    return pool.make<CfgState>();
+    return pool.make<CfgState>(pool);
 }
 
 namespace {
@@ -215,9 +221,9 @@ void CfgSetValue(Settings& settings, ::std::string name, ::std::string val) {
     cfg.values.insert(::std::make_pair(mv$(name), mv$(val)));
 }
 
-void CfgSetValueCb(Settings& settings, ::std::string name, ::std::function<bool(const ::std::string&)> cb) {
+void CfgSetValueCallback(Settings& settings, CfgString name, const CfgValueCallback& cb) {
     auto& cfg = *settings.cfg;
-    cfg.valueFcns.insert(::std::make_pair(mv$(name), mv$(cb)));
+    cfg.valueFcns.insert(::std::make_pair(mv$(name), cb.cloneIn(*cfg.pool)));
 }
 
 bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& hasValue, ::std::string& value, ::std::string& error) {
@@ -304,7 +310,7 @@ namespace {
                 auto it2 = cfg.valueFcns.find(name.c_str());
                 if (it2 != cfg.valueFcns.end()) {
                     DEBUG(name << ": ('" << val << "')?");
-                    return it2->second(val);
+                    return it2->second->matches(val);
                 }
 
                 return false;

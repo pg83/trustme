@@ -4,7 +4,6 @@
 #include "parse_lex.h"
 
 #include <iostream>
-#include <functional>
 
 Span::Span(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs)
     : ptr(SpanInnerSource::alloc(parent, ::std::move(filename), startLine, startOfs, endLine, endOfs))
@@ -61,13 +60,13 @@ const SpanInnerSource& Span::getTopFileSpan() const {
     TODO(*this, "Top span isn't source?");
 }
 
-void Span::printSpanMessage(::std::function<void(::std::ostream&)> tag, ::std::function<void(::std::ostream&)> msg) const {
+void Span::printSpanMessage(SpanMessageCallback& tag, SpanMessageCallback& msg) const {
     const Span& sp = *this;
     auto& sink = ::std::cerr;
     sink << sp << " ";
-    tag(sink);
+    tag.write(sink);
     sink << ": ";
-    msg(sink);
+    msg.write(sink);
     sink << ::std::endl;
 
     if (sp.get()) {
@@ -79,30 +78,34 @@ void Span::printSpanMessage(::std::function<void(::std::ostream&)> tag, ::std::f
     sink << ::std::flush;
 }
 
-void Span::bug(::std::function<void(::std::ostream&)> msg) const {
-    printSpanMessage([](auto& os) {
+void Span::bugCb(SpanMessageCallback& msg) const {
+    auto tag = makeCallable<SpanMessageCb>([](auto& os) {
         os << "BUG";
-    }, msg);
+    });
+    printSpanMessage(tag, msg);
     abort();
 }
 
-void Span::error(ErrorType tag, ::std::function<void(::std::ostream&)> msg) const {
-    printSpanMessage([&](auto& os) {
-        os << "error:" << tag;
-    }, msg);
+void Span::errorCb(ErrorType errorTag, SpanMessageCallback& msg) const {
+    auto tag = makeCallable<SpanMessageCb>([errorTag](auto& os) {
+        os << "error:" << errorTag;
+    });
+    printSpanMessage(tag, msg);
     abort();
 }
 
-void Span::warning(WarningType tag, ::std::function<void(::std::ostream&)> msg) const {
-    printSpanMessage([&](auto& os) {
-        os << "warn:" << tag;
-    }, msg);
+void Span::warningCb(WarningType warningTag, SpanMessageCallback& msg) const {
+    auto tag = makeCallable<SpanMessageCb>([warningTag](auto& os) {
+        os << "warn:" << warningTag;
+    });
+    printSpanMessage(tag, msg);
 }
 
-void Span::note(::std::function<void(::std::ostream&)> msg) const {
-    printSpanMessage([](auto& os) {
+void Span::noteCb(SpanMessageCallback& msg) const {
+    auto tag = makeCallable<SpanMessageCb>([](auto& os) {
         os << "note";
-    }, msg);
+    });
+    printSpanMessage(tag, msg);
 }
 
 SpanInner::~SpanInner() {

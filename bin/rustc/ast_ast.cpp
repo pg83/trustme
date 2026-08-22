@@ -131,11 +131,11 @@ std::string ASTAttribute::parseParenString() const {
     return rv;
 }
 
-void ASTAttribute::parseParenIdentList(std::function<void(const Span& sp, RcString ident)> itemCb) const {
+void ASTAttribute::parseParenIdentListCb(ASTAttributeIdentCallback& itemCb) const {
     TTStream lex(this->span_, ParseState(), this->data());
     lex.getTokenCheck(TOK_PAREN_OPEN);
     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-        itemCb(lex.pointSpan(), lex.getTokenCheck(TOK_IDENT).ident().name);
+        itemCb.visit(lex.pointSpan(), lex.getTokenCheck(TOK_IDENT).ident().name);
         if (lex.lookahead(0) != TOK_COMMA) {
             break;
         }

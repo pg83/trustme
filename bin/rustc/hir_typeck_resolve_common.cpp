@@ -204,14 +204,14 @@ const HIRGenericParams& TraitResolveCommon::itemGenerics() const {
 }
 
 /// Iterate over in-scope bounds (function then type)
-bool TraitResolveCommon::iterateBounds(::std::function<bool(const HIRGenericBound&)> cb) const {
+bool TraitResolveCommon::iterateBoundsCb(HIRGenericBoundCallback& cb) const {
     const HIRGenericParams* v[2] = {itemGenerics_, implGenerics_};
     for (auto p : v) {
         if (!p) {
             continue;
         }
         for (const auto& b : p->bounds) {
-            if (cb(b)) {
+            if (cb.visit(b)) {
                 return true;
             }
         }

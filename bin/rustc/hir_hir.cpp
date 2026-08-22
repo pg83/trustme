@@ -1800,23 +1800,11 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
 }
 
 namespace {
-    template <typename ImplType>
-    bool findImplsList(const typename HIRCrate::ImplGroup<::std::unique_ptr<ImplType>>::listT& implList, const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const ImplType&)> callback) {
+    template <typename List, typename Callback>
+    bool findImplsList(const List& implList, const HIRTypeData* type, tCbResolveType tyRes, Callback& callback) {
         for (const auto& impl : implList) {
             if (impl->matchesType(type, tyRes)) {
-                if (callback(*impl)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    template <typename ImplType>
-    bool findImplsList(const typename HIRCrate::ImplGroup<const ImplType*>::listT& implList, const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const ImplType&)> callback) {
-        for (const auto& impl : implList) {
-            if (impl->matchesType(type, tyRes)) {
-                if (callback(*impl)) {
+                if (callback.visit(*impl)) {
                     return true;
                 }
             }
@@ -1826,7 +1814,7 @@ namespace {
 }
 
 namespace {
-    bool findTraitImplsInt(const HIRCrate& crate, const HIRSimplePath& trait, const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const HIRTraitImpl&)> callback) {
+    bool findTraitImplsInt(const HIRCrate& crate, const HIRSimplePath& trait, const HIRTypeData* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) {
         auto it = crate.traitImpls.find(trait);
         if (it != crate.traitImpls.end()) {
             // 1. Find named impls (associated with named types)
@@ -1856,7 +1844,7 @@ namespace {
 
 }
 
-bool HIRCrate::findTraitImpls(const HIRSimplePath& trait, const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const HIRTraitImpl&)> callback) const {
+bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRTypeData* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) const {
     if (this->allTraitImpls.size() > 0) {
         auto it = this->allTraitImpls.find(trait);
         if (it != this->allTraitImpls.end()) {
@@ -1898,7 +1886,7 @@ bool HIRCrate::findTraitImpls(const HIRSimplePath& trait, const HIRTypeData* typ
 }
 
 namespace {
-    bool findAutoTraitImplsInt(const HIRCrate& crate, const HIRSimplePath& trait, const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const HIRMarkerImpl&)> callback) {
+    bool findAutoTraitImplsInt(const HIRCrate& crate, const HIRSimplePath& trait, const HIRTypeData* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) {
         auto it = crate.markerImpls.find(trait);
         if (it != crate.markerImpls.end()) {
             // 1. Find named impls (associated with named types)
@@ -1918,7 +1906,7 @@ namespace {
     }
 }
 
-bool HIRCrate::findAutoTraitImpls(const HIRSimplePath& trait, const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const HIRMarkerImpl&)> callback) const {
+bool HIRCrate::findAutoTraitImplsCb(const HIRSimplePath& trait, const HIRTypeData* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) const {
     if (this->allMarkerImpls.size() > 0) {
         auto it = this->allMarkerImpls.find(trait);
         if (it != this->allMarkerImpls.end()) {
@@ -1950,7 +1938,7 @@ bool HIRCrate::findAutoTraitImpls(const HIRSimplePath& trait, const HIRTypeData*
 }
 
 namespace {
-    bool findTypeImplsInt(const HIRCrate& crate, const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const HIRTypeImpl&)> callback) {
+    bool findTypeImplsInt(const HIRCrate& crate, const HIRTypeData* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) {
         // 1. Find named impls (associated with named types)
         if (const auto* implList = crate.typeImpls.getListForType(type)) {
             if (findImplsList(*implList, type, tyRes, callback)) {
@@ -1967,7 +1955,7 @@ namespace {
     }
 }
 
-bool HIRCrate::findTypeImpls(const HIRTypeData* type, tCbResolveType tyRes, ::std::function<bool(const HIRTypeImpl&)> callback) const {
+bool HIRCrate::findTypeImplsCb(const HIRTypeData* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) const {
     if (allTraitImpls.size() > 0) {
         // 1. Find named impls (associated with named types)
         if (const auto* implList = this->allTypeImpls.getListForType(type)) {
