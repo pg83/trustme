@@ -3604,6 +3604,17 @@ default:
                         }
                         break;
                     }
+                    case MIRSwitchValues::TAG_Signed: {
+                        auto& vals = e.values.as_Signed();
+                        auto v = lit.readSint(state, ti.bits);
+                        for (size_t i = 0; i < vals.size(); i++) {
+                            if (v == S128(vals[i])) {
+                                targetIdx = i;
+                                break;
+                            }
+                        }
+                        break;
+                    }
                 }
                 if( targetIdx == ~0u ) {
                     return e.defTarget;
