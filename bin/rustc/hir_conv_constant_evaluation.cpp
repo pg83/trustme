@@ -5904,8 +5904,8 @@ void ConvertHIRConstantEvaluateEnum(const WireBoard& wb, const HIRCrate& crate, 
     Expander::visitEnumInner(wb, crate, ip, mod, modPath, itemName.c_str(), item);
 }
 
-void ConvertHIRConstantEvaluateConstant(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRConstant& e) {
-    Expander exp{wb};
+void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRConstant& e) {
+    Expander exp{callerResolve.board()};
     exp.pass = Expander::Pass::Values;
     exp.implParams = implParams;
     exp.visitConstant(ip, e);
@@ -5915,7 +5915,9 @@ void ConvertHIRConstantEvaluateConstant(const WireBoard& wb, const HIRCrate& cra
         return;
     }
 
-    StaticTraitResolve resolve(wb);
+    StaticTraitResolve resolve(callerResolve.board());
+    resolve.setBothGenericsRaw(callerResolve.implGenericsPtr(), callerResolve.itemGenericsPtr());
+    const auto& crate = callerResolve.hirCrate();
     MonomorphState constMs(crate.types);
     const HIRGenericParams* resolvedImplParams = nullptr;
     auto value = resolve.getValue(e.value.span(), path, constMs, false, &resolvedImplParams);
@@ -5924,7 +5926,7 @@ void ConvertHIRConstantEvaluateConstant(const WireBoard& wb, const HIRCrate& cra
 
     HIRItemPath modIp{e.value.state->modPath};
     auto nvs = NewvalState(e.value.state->module, modIp, FMT("const" << &e << "#"));
-    auto eval = HIREvaluator(e.value.span(), wb, nvs);
+    auto eval = HIREvaluator(e.value.span(), callerResolve.board(), nvs);
     eval.resolve.setBothGenericsRaw(resolvedImplParams, &e.params);
     auto type = constMs.monomorphType(e.value.span(), e.type);
     auto literal = eval.evaluateConstant(HIRItemPath(path), e.value, std::move(type), std::move(constMs));

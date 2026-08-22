@@ -45,7 +45,8 @@ completed in isolation and is the only load-sensitive result. The subsequent
 ThinBox, async-drop, coroutine-storage, async-argument, trait-object,
 projection-bound, specialization, `IntoFuture`, and empty-array coercion point
 fixes, followed by the declarative-macro hygiene fix, closed twenty-eight
-independently rerun nodes, leaving 20.
+independently rerun nodes; preserving the generic context while evaluating an
+associated const pattern closed one more, leaving 19.
 
 | result | nodes |
 |---|---:|
@@ -54,8 +55,8 @@ independently rerun nodes, leaving 20.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 28 |
-| still failing independently | 20 |
+| fixed by subsequent point reruns | 29 |
+| still failing independently | 19 |
 
 Manual inspection normalised two mechanical classifier labels:
 
@@ -69,10 +70,10 @@ The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| compiler BUG, MIR error, signal, or generated C++ failure | 2 |
+| compiler BUG, MIR error, signal, or generated C++ failure | 1 |
 | wrong runtime behaviour, panic, abort, or output | 10 |
 | stable timeout | 8 |
-| **total independently reproduced** | **20** |
+| **total independently reproduced** | **19** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -80,11 +81,10 @@ accounting.
 
 ## P1: remaining compiler-internal failures
 
-After the P0 routing above, two compiler failures remain:
+After the P0 routing above, one compiler failure remains:
 
 | signature or route | nodes | cases |
 |---|---:|---|
-| `BUG hir_typeck_static.cpp:3469`: item generic without item context | 1 | UI `pattern/unused-parameters-const-pattern.rs` |
 | compiler `SIGFPE` in layout reached from MIR const propagation | 1 | `coroutine/issue-93161.rs` |
 
 ## P1: runtime semantics

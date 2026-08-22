@@ -21,6 +21,7 @@ class HIRGenericParams;
 struct HIRPathParams;
 class HIRConstGeneric;
 class HIRArraySize;
+class StaticTraitResolve;
 
 extern HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, const HIRGenericPath& path, bool isExpr);
 extern void ConvertHIRExpandAliases(HIRCrate& crate);
@@ -41,7 +42,7 @@ extern void ConvertHIRConstantEvaluate(const WireBoard& wb, HIRCrate& hirCrate);
 extern void ConvertHIRResolveUFCSExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exprPtr);
 extern void ConvertHIRConstantEvaluateExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp);
 extern void ConvertHIRConstantEvaluateEnum(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, const HIREnum& enm);
-extern void ConvertHIRConstantEvaluateConstant(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRConstant& e);
+extern void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRConstant& e);
 extern void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* paramsDef, HIRPathParams& params);
 extern void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRTypeData* ty, HIRConstGeneric& cg);
 extern void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, HIRConstGeneric& cg);

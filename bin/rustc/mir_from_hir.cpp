@@ -5802,7 +5802,7 @@ namespace {
         }
         if (binding->valueState == HIRConstant::ValueState::Unknown
             || (binding->valueState == HIRConstant::ValueState::Generic && !binding->monomorphCache.count(pve->path))) {
-            ConvertHIRConstantEvaluateConstant(resolve.board(), resolve.hirCrate(), implDef, pve->path, const_cast<HIRConstant&>(*binding));
+            ConvertHIRConstantEvaluateConstant(resolve, implDef, pve->path, const_cast<HIRConstant&>(*binding));
         }
         if (binding->valueState == HIRConstant::ValueState::Known) {
             return &binding->valueRes;
