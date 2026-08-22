@@ -2,6 +2,7 @@
 #include "wire_board.h"
 #include "settings.h"
 #include <std/mem/obj_pool.h>
+#include <std/lib/vector.h>
 
 #include "toml.h" // tools/common
 #include "hir_hir.h"
@@ -857,6 +858,240 @@ namespace {
         All,
     };
 
+    struct AsyncDropFieldLayout {
+        struct Future {
+            size_t size;
+            size_t align;
+        };
+
+        stl::Vector<Future> futures;
+
+        bool empty() const {
+            return futures.empty();
+        }
+    };
+
+    size_t alignTo(size_t offset, size_t align) {
+        return (offset + align - 1) / align * align;
+    }
+
+    HIRTypeRef asyncDropGlueType(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* dropeeTy) {
+        const auto* outerPath = outerTy->opt_Path();
+        ASSERT_BUG(sp, outerPath && outerPath->binding.is_Struct() && outerPath->path.data.is_Generic(), "invalid async-drop glue type " << outerTy);
+        auto path = outerPath->path.data.as_Generic().clone();
+        ASSERT_BUG(sp, !path.params.types.empty(), "async-drop glue type without its dropee argument: " << outerTy);
+        path.params.types[0] = dropeeTy;
+        return resolve.hirCrate().types.path(std::move(path), outerPath->binding.as_Struct());
+    }
+
+    bool addAsyncDropFieldLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* fieldTy, AsyncDropFieldLayout& out) {
+        if (!resolve.typeNeedsAsyncDrop(sp, fieldTy)) {
+            return true;
+        }
+        auto glueTy = asyncDropGlueType(sp, resolve, outerTy, fieldTy);
+        size_t size = 0;
+        size_t align = 0;
+        if (!TargetGetSizeAndAlignOf(sp, resolve, glueTy, size, align)) {
+            return false;
+        }
+        out.futures.pushBack({size, align});
+        return true;
+    }
+
+    bool asyncDropStructFieldsLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* ty, AsyncDropFieldLayout& out) {
+        if (const auto* tuple = ty->opt_Tuple()) {
+            for (const auto& fieldTy : *tuple) {
+                if (!addAsyncDropFieldLayout(sp, resolve, outerTy, fieldTy, out)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        const auto* pathTy = ty->opt_Path();
+        if (!pathTy || !pathTy->binding.is_Struct() || !pathTy->path.data.is_Generic()) {
+            return true;
+        }
+        const auto& generic = pathTy->path.data.as_Generic();
+        if (generic.path == resolve.hirCrate().getLangItemPathOpt("manually_drop")) {
+            return true;
+        }
+
+        const auto& str = *pathTy->binding.as_Struct();
+        auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, ty, &generic.params, nullptr);
+        switch (str.data.tag()) {
+            case HIRStructData::TAG_Unit:
+                break;
+            case HIRStructData::TAG_Tuple:
+                for (const auto& field : str.data.as_Tuple()) {
+                    auto fieldTy = resolve.monomorphExpand(sp, field.ent, monomorph);
+                    if (!addAsyncDropFieldLayout(sp, resolve, outerTy, fieldTy, out)) {
+                        return false;
+                    }
+                }
+                break;
+            case HIRStructData::TAG_Named:
+                for (const auto& field : str.data.as_Named()) {
+                    auto fieldTy = resolve.monomorphExpand(sp, field.ty, monomorph);
+                    if (!addAsyncDropFieldLayout(sp, resolve, outerTy, fieldTy, out)) {
+                        return false;
+                    }
+                }
+                break;
+        }
+        return true;
+    }
+
+    bool asyncDropCoroutineFieldsLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* ty, AsyncDropFieldLayout& out) {
+        const auto& pathTy = ty->as_Path();
+        ASSERT_BUG(sp, (pathTy.isFuture() || pathTy.isGenerator()) && pathTy.binding.is_Struct() && pathTy.path.data.is_Generic(),
+            "invalid coroutine type " << ty);
+        const auto* fields = pathTy.binding.as_Struct()->data.opt_Tuple();
+        ASSERT_BUG(sp, fields && !fields->empty(), "coroutine without its state field: " << ty);
+        auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, ty, &pathTy.path.data.as_Generic().params, nullptr);
+        for (size_t i = 0; i < fields->size(); i++) {
+            auto fieldTy = resolve.monomorphExpand(sp, fields->at(i).ent, monomorph);
+            if (i == 0) {
+                const auto* fieldPath = fieldTy->opt_Path();
+                ASSERT_BUG(sp, fieldPath && fieldPath->path.data.is_Generic()
+                    && fieldPath->path.data.as_Generic().path == resolve.hirCrate().getLangItemPath(sp, "maybe_uninit")
+                    && fieldPath->path.data.as_Generic().params.types.size() == 1,
+                    "coroutine state is not MaybeUninit<State>: " << fieldTy);
+                if (!asyncDropStructFieldsLayout(sp, resolve, outerTy, fieldPath->path.data.as_Generic().params.types[0], out)) {
+                    return false;
+                }
+            } else if (!addAsyncDropFieldLayout(sp, resolve, outerTy, fieldTy, out)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    size_t appendAsyncDropFields(size_t offset, size_t& align, const AsyncDropFieldLayout& fields, bool hasDropline) {
+        size_t slotSize = 0;
+        size_t slotAlign = 1;
+        for (const auto& future : fields.futures) {
+            offset = alignTo(offset, future.align);
+            offset += future.size;
+            align = ::std::max(align, future.align);
+            slotSize = ::std::max(slotSize, future.size);
+            slotAlign = ::std::max(slotAlign, future.align);
+        }
+        if (hasDropline) {
+            offset = alignTo(offset, slotAlign);
+            offset += alignTo(slotSize, slotAlign);
+            align = ::std::max(align, slotAlign);
+        }
+        return offset;
+    }
+
+    bool extendAsyncDropGlueRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, TypeRepr& repr) {
+        const auto& pathTy = ty->as_Path();
+        const auto& path = pathTy.path.data.as_Generic();
+        ASSERT_BUG(sp, !path.params.types.empty(), "async-drop glue type without its dropee argument: " << ty);
+        const auto* dropeeTy = path.params.types[0];
+
+        HIRPath dropPath{HIRSimplePath()};
+        HIRTypeRef customFutureTy;
+        const bool hasCustom = resolve.findAsyncDrop(sp, dropeeTy, dropPath, customFutureTy);
+        size_t customSize = 0;
+        size_t customAlign = 1;
+        if (hasCustom && !TargetGetSizeAndAlignOf(sp, resolve, customFutureTy, customSize, customAlign)) {
+            return false;
+        }
+
+        size_t offset = repr.size;
+        size_t align = repr.align;
+        bool hasAsyncFields = false;
+        if (const auto* array = dropeeTy->opt_Array()) {
+            if (!array->size.is_Known()) {
+                return false;
+            }
+            if (array->size.as_Known() != 0 && resolve.typeNeedsAsyncDrop(sp, array->inner)) {
+                AsyncDropFieldLayout element;
+                if (!addAsyncDropFieldLayout(sp, resolve, ty, array->inner, element)) {
+                    return false;
+                }
+                ASSERT_BUG(sp, element.futures.length() == 1, "async array element did not produce one glue future");
+                hasAsyncFields = true;
+                const size_t pointerSize = TargetGetPointerBits() / 8;
+                offset = alignTo(offset, pointerSize);
+                offset += pointerSize * 3; // slice data/length and the current index
+                align = ::std::max(align, pointerSize);
+                offset = appendAsyncDropFields(offset, align, element, true);
+            }
+        } else if (const auto* path = dropeeTy->opt_Path(); path && path->binding.is_Enum() && path->path.data.is_Generic()) {
+            const auto& enm = *path->binding.as_Enum();
+            if (const auto* variants = enm.data.opt_Data()) {
+                auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, dropeeTy, &path->path.data.as_Generic().params, nullptr);
+                size_t largestOffset = offset;
+                size_t largestAlign = align;
+                for (const auto& variant : *variants) {
+                    auto variantTy = resolve.monomorphExpand(sp, variant.type, monomorph);
+                    AsyncDropFieldLayout fields;
+                    if (!asyncDropStructFieldsLayout(sp, resolve, ty, variantTy, fields)) {
+                        return false;
+                    }
+                    if (fields.empty()) {
+                        continue;
+                    }
+                    hasAsyncFields = true;
+                    size_t variantOffset = offset;
+                    size_t variantAlign = align;
+                    const bool hasDropline = hasCustom || fields.futures.length() > 1;
+                    if (hasDropline) {
+                        const size_t pointerSize = TargetGetPointerBits() / 8;
+                        variantOffset = alignTo(variantOffset, pointerSize) + pointerSize;
+                        variantAlign = ::std::max(variantAlign, pointerSize);
+                    }
+                    variantOffset = appendAsyncDropFields(variantOffset, variantAlign, fields, hasDropline);
+                    if (alignTo(variantOffset, variantAlign) > alignTo(largestOffset, largestAlign)) {
+                        largestOffset = variantOffset;
+                        largestAlign = variantAlign;
+                    }
+                }
+                offset = largestOffset;
+                align = largestAlign;
+            }
+        } else {
+            AsyncDropFieldLayout fields;
+            const auto* coroutinePath = dropeeTy->opt_Path();
+            const bool ok = coroutinePath && (coroutinePath->isFuture() || coroutinePath->isGenerator())
+                ? asyncDropCoroutineFieldsLayout(sp, resolve, ty, dropeeTy, fields)
+                : asyncDropStructFieldsLayout(sp, resolve, ty, dropeeTy, fields);
+            if (!ok) {
+                return false;
+            }
+            if (!fields.empty()) {
+                hasAsyncFields = true;
+                const bool hasDropline = hasCustom || fields.futures.length() > 1;
+                if (hasDropline) {
+                    const size_t pointerSize = TargetGetPointerBits() / 8;
+                    offset = alignTo(offset, pointerSize) + pointerSize;
+                    align = ::std::max(align, pointerSize);
+                }
+                offset = appendAsyncDropFields(offset, align, fields, hasDropline);
+            }
+        }
+
+        if (!hasCustom && !hasAsyncFields) {
+            return true;
+        }
+        if (hasCustom) {
+            offset = alignTo(offset, customAlign);
+            offset += customSize;
+            align = ::std::max(align, customAlign);
+        }
+        const size_t outerSize = alignTo(offset, align);
+        const size_t storageOffset = alignTo(repr.size, align);
+        ASSERT_BUG(sp, storageOffset < outerSize, "async-drop glue has no suspension storage: " << ty);
+        auto storageTy = resolve.hirCrate().types.array(resolve.hirCrate().types.primitive(HIRCoreType::U8), outerSize - storageOffset);
+        repr.fields.push_back(TypeRepr::Field{storageOffset, std::move(storageTy)});
+        repr.align = align;
+        repr.size = outerSize;
+        return true;
+    }
+
     size_t structFieldAlignmentGroup(const Ent& e, unsigned maxAlignment) {
         if (maxAlignment > 0) {
             return ::std::min<size_t>(e.align, maxAlignment);
@@ -1032,7 +1267,16 @@ namespace {
             BUG(sp, "Unexpected type in creating type repr - " << ty);
         }
 
-        return makeTypeReprStructInner(sp, ty, ents, sorting, forcedAlignment, maxAlignment);
+        auto repr = makeTypeReprStructInner(sp, ty, ents, sorting, forcedAlignment, maxAlignment);
+        if (ty->is_Path() && ty->as_Path().binding.is_Struct()) {
+            const auto& te = ty->as_Path();
+            const auto& str = *te.binding.as_Struct();
+            if (str.structMarkings.isAsyncDropGlue && !monomorphiseTypeNeeded(ty)
+                && !extendAsyncDropGlueRepr(sp, resolve, ty, *repr)) {
+                return nullptr;
+            }
+        }
+        return repr;
     }
 
     bool boundedMaxIsFullRange(const HIRTypeData* ty, U128 boundedMax) {

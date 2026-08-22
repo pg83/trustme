@@ -286,6 +286,9 @@ struct HIRTraitMarkings {
 
 // Trait implementations relevant only to structs
 struct HIRStructMarkings {
+    /// Compiler-owned future returned by the `async_drop_in_place` lang item.
+    bool isAsyncDropGlue = false;
+
     /// `#[fundamental]`: orphan checking may look through this type's
     /// generic arguments when searching for a local key parameter.
     bool isFundamental = false;

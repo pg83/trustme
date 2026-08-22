@@ -115,31 +115,7 @@ namespace {
         }
 
         bool findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path, HIRTypeRef& futureTy) const {
-            const auto& trait = builder.crate().getLangItemPathOpt("async_drop");
-            if (trait.components().empty() || monomorphiseTypeNeeded(ty)) {
-                return false;
-            }
-
-            bool found = false;
-            builder.resolve().findImpl(sp, trait, HIRPathParams{}, ty, [&](ImplRef impl, bool fuzzed) {
-                if (!fuzzed && impl.data.is_TraitImpl()) {
-                    found = true;
-                    return true;
-                }
-                return false;
-            });
-            if (!found) {
-                return false;
-            }
-
-            path = HIRPath(ty, HIRGenericPath(trait), RcString::newInterned("drop"), HIRPathParams{});
-            MonomorphState params(builder.crate().types);
-            auto value = builder.resolve().getValue(sp, path, params);
-            const auto* function = value.opt_Function();
-            ASSERT_BUG(sp, function, "AsyncDrop::drop did not resolve for " << ty);
-            futureTy = params.monomorphType(sp, (*function)->returnType);
-            builder.resolve().expandAssociatedTypes(sp, futureTy);
-            return true;
+            return builder.resolve().findAsyncDrop(sp, ty, path, futureTy);
         }
 
         bool hasDropImpl(const Span& sp, const HIRTypeData* ty) const {
@@ -152,81 +128,8 @@ namespace {
             });
         }
 
-        bool typeNeedsAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRTypeRefSet& stack) const {
-            HIRPath path{HIRSimplePath()};
-            HIRTypeRef futureTy;
-            if (findAsyncDrop(sp, ty, path, futureTy)) {
-                return true;
-            }
-            if (!stack.insert(ty).second) {
-                return false;
-            }
-
-            bool rv = false;
-            if (const auto* array = ty->opt_Array()) {
-                rv = typeNeedsAsyncDrop(sp, array->inner, stack);
-            } else if (const auto* tuple = ty->opt_Tuple()) {
-                for (const auto& field : *tuple) {
-                    if (typeNeedsAsyncDrop(sp, field, stack)) {
-                        rv = true;
-                        break;
-                    }
-                }
-            } else if (const auto* pathTy = ty->opt_Path()) {
-                const auto* generic = pathTy->path.data.opt_Generic();
-                if (generic && generic->path != builder.crate().getLangItemPathOpt("manually_drop")) {
-                    auto monomorph = MonomorphStatePtr(builder.crate().types, ty, &generic->params, nullptr);
-                    if (const auto* str = pathTy->binding.opt_Struct()) {
-                        switch (((*str)->data).tag()) {
-                            case HIRStructData::TAG_Unit: {
-                                break;
-                            }
-                            case HIRStructData::TAG_Tuple: {
-                                auto& fields = ((*str)->data).as_Tuple();
-                                for (const auto& field : fields) {
-                                    auto fieldTy = monomorph.monomorphType(sp, field.ent);
-                                    builder.resolve().expandAssociatedTypes(sp, fieldTy);
-                                    if (typeNeedsAsyncDrop(sp, fieldTy, stack)) {
-                                        rv = true;
-                                        break;
-                                    }
-                                }
-                                break;
-                            }
-                            case HIRStructData::TAG_Named: {
-                                auto& fields = ((*str)->data).as_Named();
-                                for (const auto& field : fields) {
-                                    auto fieldTy = monomorph.monomorphType(sp, field.ty);
-                                    builder.resolve().expandAssociatedTypes(sp, fieldTy);
-                                    if (typeNeedsAsyncDrop(sp, fieldTy, stack)) {
-                                        rv = true;
-                                        break;
-                                    }
-                                }
-                                break;
-                            }
-                        }
-                    } else if (const auto* enm = pathTy->binding.opt_Enum()) {
-                        if (const auto* variants = (*enm)->data.opt_Data()) {
-                            for (const auto& variant : *variants) {
-                                auto fieldTy = monomorph.monomorphType(sp, variant.type);
-                                builder.resolve().expandAssociatedTypes(sp, fieldTy);
-                                if (typeNeedsAsyncDrop(sp, fieldTy, stack)) {
-                                    rv = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            stack.erase(ty);
-            return rv;
-        }
-
         bool typeNeedsAsyncDrop(const Span& sp, const HIRTypeData* ty) const {
-            HIRTypeRefSet stack;
-            return typeNeedsAsyncDrop(sp, ty, stack);
+            return builder.resolve().typeNeedsAsyncDrop(sp, ty);
         }
 
         void emitSyncDestructor(const Span& sp, const HIRTypeData* ty, MIRLValue value) {
@@ -378,6 +281,40 @@ namespace {
             }
         }
 
+        void emitCoroutineAsyncDrop(const Span& sp, const HIRTypeData* ty, MIRLValue value) {
+            auto& types = builder.crate().types;
+            const auto& path = builder.crate().getLangItemPath(sp, "async_drop_in_place");
+            auto dropPath = HIRPath(HIRGenericPath(path, HIRPathParams(ty)));
+            MonomorphState monomorph(types);
+            auto item = builder.resolve().getValue(sp, dropPath, monomorph);
+            const auto* function = item.opt_Function();
+            ASSERT_BUG(sp, function, "async_drop_in_place did not resolve for " << ty);
+            auto futureTy = monomorph.monomorphType(sp, (*function)->returnType);
+            builder.resolve().expandAssociatedTypes(sp, futureTy);
+
+            auto pointerTy = types.pointer(HIRBorrowType::Unique, ty);
+            auto pointer = builder.lvalueOrTemp(sp, pointerTy, MIRRValue::make_Borrow({HIRBorrowType::Unique, true, std::move(value)}));
+            auto future = builder.newTemporary(futureTy);
+            auto bbRet = builder.newBbUnlinked();
+            auto bbPanic = builder.newBbUnlinked();
+            builder.endBlock(MIRTerminator::make_Call({
+                bbRet,
+                MIRUnwindAction::make_Cleanup(bbPanic),
+                future.clone(),
+                std::move(dropPath),
+                makeVec1(MIRParam(pointer.clone())),
+            }));
+            builder.movedLvalue(sp, std::move(pointer));
+            builder.setCurBlock(bbPanic);
+            emitUnwind(sp);
+            builder.setCurBlock(bbRet);
+            builder.markValueAssigned(sp, future);
+
+            (void)awaitFuture(sp, futureTy, future.clone(), types.unit());
+            builder.movedLvalue(sp, future.clone());
+            builder.pushStmtDropRaw(sp, std::move(future));
+        }
+
         bool emitAsyncDrop(const Span& sp, MIRLValue value, unsigned int flag) {
             const HIRTypeData* ty = builder.valType(sp, value);
             HIRPath dropPath{HIRSimplePath()};
@@ -401,6 +338,11 @@ namespace {
                 ASSERT_BUG(sp, emitted, "conditional async drop stopped being async for " << ty);
                 builder.endBlock(MIRTerminator::make_Goto(nextBb));
                 builder.setCurBlock(nextBb);
+                return true;
+            }
+
+            if (const auto* pathTy = ty->opt_Path(); pathTy && (pathTy->isFuture() || pathTy->isGenerator())) {
+                emitCoroutineAsyncDrop(sp, ty, std::move(value));
                 return true;
             }
 
@@ -3645,8 +3587,55 @@ default:
     };
 }
 
+namespace {
+    MIRFunctionPointer lowerAsyncDropGluePoll(const StaticTraitResolve& resolve, const HIRItemPath& path, HIRExprNodeGeneratorWrapper& node, const HIRTypeData* retTy) {
+        const Span& sp = node.span();
+        ASSERT_BUG(sp, node.objPtr, "async-drop glue future without its generated type");
+        ASSERT_BUG(sp, path.getTopIp().ty, "async-drop glue poll without its impl Self type");
+        const auto& fields = node.objPtr->data.as_Tuple();
+        ASSERT_BUG(sp, fields.size() == 2, "async-drop glue future must contain state and the dropee pointer, got " << fields.size());
+        const auto* pointer = fields[1].ent->opt_Pointer();
+        ASSERT_BUG(sp, pointer, "async-drop glue capture is not a raw pointer: " << fields[1].ent);
+
+        MIRFunction fcn;
+        HIRPathParams intrinsicParams;
+        intrinsicParams.types.push_back(pointer->inner);
+        intrinsicParams.types.push_back(path.getTopIp().ty);
+
+        MIRBasicBlock poll;
+        poll.terminator = MIRTerminator::make_Call({
+            1,
+            MIRUnwindAction::make_Continue({}),
+            MIRLValue::newReturn(),
+            MIRCallTarget::make_Intrinsic({"async_drop_glue_poll", std::move(intrinsicParams)}),
+            ::makeVec2<MIRParam>(MIRLValue::newArgument(0), MIRLValue::newArgument(1)),
+        });
+        fcn.blocks.push_back(std::move(poll));
+        MIRBasicBlock done;
+        done.terminator = MIRTerminator::make_Return({});
+        fcn.blocks.push_back(std::move(done));
+
+        if (!node.dropFcnPtr->code.mir) {
+            MIRFunction dropFcn;
+            MIRBasicBlock block;
+            block.statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), MIRRValue::make_Tuple({})}));
+            block.terminator = MIRTerminator::make_Return({});
+            dropFcn.blocks.push_back(std::move(block));
+            node.dropFcnPtr->code.mir = MIRFunctionPointer(box$(std::move(dropFcn)).release());
+        }
+        return MIRFunctionPointer(box$(std::move(fcn)).release());
+    }
+}
+
 MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath& path, const HIRExprPtr& ptr, const HIRTypeData* retTy, const HIRFunction::argsT& args) {
     TRACE_FUNCTION_F(path);
+
+    HIRExprNode& rootNode = const_cast<HIRExprNode&>(*ptr);
+    if (auto* generator = cast<HIRExprNodeGeneratorWrapper>(&rootNode)) {
+        if (generator->objPtr && generator->objPtr->structMarkings.isAsyncDropGlue) {
+            return lowerAsyncDropGluePoll(resolve, path, *generator, retTy);
+        }
+    }
 
     MIRFunction fcn;
     fcn.locals.reserve(ptr.bindings.size());
@@ -3658,7 +3647,6 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
     {
         const Span& sp = ptr->span();
 
-        HIRExprNode& rootNode = const_cast<HIRExprNode&>(*ptr);
         MirBuilder builder{ptr->span(), resolve, retTy, args, fcn};
         ExprVisitorConv ev{builder, ptr.bindings, cast<HIRExprNodeGeneratorWrapper>(&rootNode)};
 
@@ -4295,6 +4283,11 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 
     /// Top level scope for the match
     auto matchScope = builder.newScopeLoop(node.span());
+    // Match bodies are emitted one after another, but each is reached from the
+    // same pre-match state.  Keep their states in separate split arms; the
+    // surrounding loop still owns drop-flag reinitialisation for a match that
+    // is executed more than once.
+    auto matchArmScope = builder.newScopeSplit(node.span());
 
     // 1. Stop the current block so we can generate code before generating the pattern matching code
     auto firstCmpBlock = builder.pauseCurBlock();
@@ -4494,6 +4487,10 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                     builder.terminateScopeEarly(sp, scopes.front().handle);
                     // Indicate an exit point to the split
                     builder.endSplitArm(arm.code->span(), patScope, /*reachable*/ true, /*early*/ true);
+                    // A failed guard continues with the following match arm.
+                    // Preserve moves performed while evaluating the guard as
+                    // that arm's entry state; arm bodies remain isolated.
+                    builder.endSplitCondition(sp, patScope, matchArmScope);
                     builder.endBlock(MIRTerminator::make_Goto(condFalseBlockPat0));
 
                     // Introduce a local variable scope for the new bindings
@@ -4525,7 +4522,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                 }
                 builder.endSplitArm(arm.code->span(), patScope, /*reachable=*/false);
                 builder.terminateScope(sp, std::move(patScope), false);
-                builder.terminateScopeEarly(sp, matchScope);
+                builder.endSplitArm(sp, matchArmScope, /*reachable=*/false);
 
                 ac.rules.push_back(ArmCode::Pattern{entryBlockPat0, ~0u});
                 for (size_t i = firstArmRuleIdx + 1; i < armRules.size(); i++) {
@@ -4704,7 +4701,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
             }
             builder.endSplitArm(arm.code->span(), patScope, /*reachable*/ builder.blockActive());
             builder.terminateScope(sp, std::move(patScope), builder.blockActive());
-            builder.terminateScopeEarly(sp, matchScope);
+            builder.endSplitArm(sp, matchArmScope, /*reachable=*/builder.blockActive());
 
             // Go to the next block (out of the match) (if the body didn't diverge)
             if (builder.blockActive()) {
@@ -4819,6 +4816,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
     }
 
     builder.setCurBlock(nextBlock);
+    builder.terminateScope(node.span(), mv$(matchArmScope), /*emit_cleanup=*/false);
     builder.setResult(node.span(), mv$(resultVal));
     builder.terminateScope(node.span(), mv$(matchScope));
 }
@@ -10484,19 +10482,28 @@ void MirBuilder::endSplitArmEarly(const Span& sp) {
     }
 }
 
-void MirBuilder::endSplitCondition(const Span& sp, const ScopeHandle& handle) {
-    ASSERT_BUG(sp, handle.idx < scopes.size(), "Handle passed to end_split_arm is invalid");
-    auto& sd = scopes.at(handle.idx);
-    ASSERT_BUG(sp, sd.data.is_Split(), "Ending split arm on non-Split arm - " << sd.data.tagStr());
-    auto& sdSplit = sd.data.as_Split();
-    ASSERT_BUG(sp, !sdSplit.arms.empty(), "Split arm list is empty (impossible)");
+void MirBuilder::endSplitCondition(const Span& sp, const ScopeHandle& condition, const ScopeHandle& outer) {
+    ASSERT_BUG(sp, condition.idx < scopes.size(), "Condition handle passed to end_split_condition is invalid");
+    ASSERT_BUG(sp, outer.idx < scopes.size(), "Outer handle passed to end_split_condition is invalid");
+    auto& conditionDef = scopes.at(condition.idx);
+    auto& outerDef = scopes.at(outer.idx);
+    ASSERT_BUG(sp, conditionDef.data.is_Split(), "Condition scope is not Split - " << conditionDef.data.tagStr());
+    ASSERT_BUG(sp, outerDef.data.is_Split(), "Outer scope is not Split - " << outerDef.data.tagStr());
+    const auto& conditionSplit = conditionDef.data.as_Split();
+    auto& outerSplit = outerDef.data.as_Split();
+    ASSERT_BUG(sp, conditionSplit.endStateValid, "Condition split has no reachable exit");
 
-    const auto& thisArmState = sdSplit.arms.back();
+    DEBUG("Split condition clause end (scope " << condition.idx << " => " << outer.idx << ")");
 
-    DEBUG("Split condition clause end (scope " << handle.idx << "): merging");
-
-    mergeSplitLists(sp, handle, thisArmState.states, sdSplit.condState.states, SlotType::Local);
-    mergeSplitLists(sp, handle, thisArmState.argStates, sdSplit.condState.argStates, SlotType::Argument);
+    // The condition end state already merges pattern failure with every guard
+    // failure seen so far.  It is the sequential state for the next arm, not
+    // another alternative to merge with the previous condition state.
+    for (const auto& ent : conditionSplit.endState.states) {
+        outerSplit.condState.states[ent.first] = ent.second.clone();
+    }
+    for (const auto& ent : conditionSplit.endState.argStates) {
+        outerSplit.condState.argStates[ent.first] = ent.second.clone();
+    }
 }
 
 void MirBuilder::unfreezeScope(const Span& sp, const ScopeHandle& handle) {

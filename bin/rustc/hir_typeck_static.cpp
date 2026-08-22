@@ -3765,6 +3765,130 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
     throw "";
 }
 
+bool StaticTraitResolve::findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path, HIRTypeRef& futureTy) const {
+    const auto& trait = crate.getLangItemPathOpt("async_drop");
+    if (trait.components().empty() || monomorphiseTypeNeeded(ty)) {
+        return false;
+    }
+
+    bool found = false;
+    findImpl(sp, trait, HIRPathParams{}, ty, [&](ImplRef impl, bool fuzzed) {
+        if (!fuzzed && impl.data.is_TraitImpl()) {
+            found = true;
+            return true;
+        }
+        return false;
+    });
+    if (!found) {
+        return false;
+    }
+
+    path = HIRPath(ty, HIRGenericPath(trait), RcString::newInterned("drop"), HIRPathParams{});
+    MonomorphState params(crate.types);
+    auto value = getValue(sp, path, params);
+    const auto* function = value.opt_Function();
+    ASSERT_BUG(sp, function, "AsyncDrop::drop did not resolve for " << ty);
+    futureTy = params.monomorphType(sp, (*function)->returnType);
+    expandAssociatedTypes(sp, futureTy);
+    return true;
+}
+
+bool StaticTraitResolve::typeNeedsAsyncDropInner(const Span& sp, const HIRTypeData* ty, HIRTypeRefSet& stack) const {
+    HIRPath path{HIRSimplePath()};
+    HIRTypeRef futureTy;
+    if (findAsyncDrop(sp, ty, path, futureTy)) {
+        return true;
+    }
+    if (!stack.insert(ty).second) {
+        return false;
+    }
+
+    bool rv = false;
+    if (const auto* array = ty->opt_Array()) {
+        rv = !array->size.is_Known() || array->size.as_Known() != 0
+            ? typeNeedsAsyncDropInner(sp, array->inner, stack)
+            : false;
+    } else if (const auto* tuple = ty->opt_Tuple()) {
+        for (const auto& field : *tuple) {
+            if (typeNeedsAsyncDropInner(sp, field, stack)) {
+                rv = true;
+                break;
+            }
+        }
+    } else if (const auto* pathTy = ty->opt_Path()) {
+        const auto* generic = pathTy->path.data.opt_Generic();
+        if (generic && generic->path != crate.getLangItemPathOpt("manually_drop")) {
+            auto monomorph = MonomorphStatePtr(crate.types, ty, &generic->params, nullptr);
+            if (const auto* str = pathTy->binding.opt_Struct()) {
+                if (pathTy->isFuture() || pathTy->isGenerator()) {
+                    const auto* fields = (*str)->data.opt_Tuple();
+                    ASSERT_BUG(sp, fields && !fields->empty(), "coroutine without its state field: " << ty);
+                    for (size_t i = 0; i < fields->size(); i++) {
+                        auto fieldTy = monomorph.monomorphType(sp, fields->at(i).ent);
+                        expandAssociatedTypes(sp, fieldTy);
+                        if (i == 0) {
+                            const auto* fieldPath = fieldTy->opt_Path();
+                            ASSERT_BUG(sp, fieldPath && fieldPath->path.data.is_Generic()
+                                && fieldPath->path.data.as_Generic().path == crate.getLangItemPath(sp, "maybe_uninit")
+                                && fieldPath->path.data.as_Generic().params.types.size() == 1,
+                                "coroutine state is not MaybeUninit<State>: " << fieldTy);
+                            fieldTy = fieldPath->path.data.as_Generic().params.types[0];
+                        }
+                        if (typeNeedsAsyncDropInner(sp, fieldTy, stack)) {
+                            rv = true;
+                            break;
+                        }
+                    }
+                    stack.erase(ty);
+                    return rv;
+                }
+                switch (((*str)->data).tag()) {
+                    case HIRStructData::TAG_Unit:
+                        break;
+                    case HIRStructData::TAG_Tuple:
+                        for (const auto& field : ((*str)->data).as_Tuple()) {
+                            auto fieldTy = monomorph.monomorphType(sp, field.ent);
+                            expandAssociatedTypes(sp, fieldTy);
+                            if (typeNeedsAsyncDropInner(sp, fieldTy, stack)) {
+                                rv = true;
+                                break;
+                            }
+                        }
+                        break;
+                    case HIRStructData::TAG_Named:
+                        for (const auto& field : ((*str)->data).as_Named()) {
+                            auto fieldTy = monomorph.monomorphType(sp, field.ty);
+                            expandAssociatedTypes(sp, fieldTy);
+                            if (typeNeedsAsyncDropInner(sp, fieldTy, stack)) {
+                                rv = true;
+                                break;
+                            }
+                        }
+                        break;
+                }
+            } else if (const auto* enm = pathTy->binding.opt_Enum()) {
+                if (const auto* variants = (*enm)->data.opt_Data()) {
+                    for (const auto& variant : *variants) {
+                        auto fieldTy = monomorph.monomorphType(sp, variant.type);
+                        expandAssociatedTypes(sp, fieldTy);
+                        if (typeNeedsAsyncDropInner(sp, fieldTy, stack)) {
+                            rv = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    stack.erase(ty);
+    return rv;
+}
+
+bool StaticTraitResolve::typeNeedsAsyncDrop(const Span& sp, const HIRTypeData* ty) const {
+    HIRTypeRefSet stack;
+    return typeNeedsAsyncDropInner(sp, ty, stack);
+}
+
 const HIRTypeData* StaticTraitResolve::isTypeOwnedBox(const HIRTypeData* ty) const {
     if (!ty->is_Path()) {
         return nullptr;

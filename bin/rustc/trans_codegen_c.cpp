@@ -6655,6 +6655,24 @@ default:
                 return;
             } else if (name == "forget") {
                 // Nothing needs to be done, this just stops the destructor from running.
+            } else if (name == "async_drop_state") {
+                MIR_ASSERT(localMirRes, params.types.size() == 1, "async_drop_state expects its outer future type");
+                const auto* repr = TargetGetTypeRepr(sp, resolve_, params.types[0]);
+                MIR_ASSERT(localMirRes, repr && !repr->fields.empty(), "async-drop future has no state field");
+                emitLvalue(e.retVal);
+                of << " = (u8*)((u8*)";
+                emitParam(e.args.at(0));
+                of << " + " << repr->fields[0].offset << ")";
+            } else if (name == "async_drop_storage") {
+                MIR_ASSERT(localMirRes, params.types.size() == 2, "async_drop_storage expects outer and stored future types");
+                const auto* repr = TargetGetTypeRepr(sp, resolve_, params.types[0]);
+                MIR_ASSERT(localMirRes, repr && repr->fields.size() >= 3, "async-drop future has no suspension storage");
+                emitLvalue(e.retVal);
+                of << " = (";
+                emitCtype(params.types[1]);
+                of << "*)((u8*)";
+                emitParam(e.args.at(0));
+                of << " + " << repr->fields[2].offset << ")";
             } else if (name == "drop_in_place") {
                 emitDestructorCall(MIRLValue::newDeref(e.args.at(0).as_LValue().clone()), params.types.at(0), true, /*indent_level=*/1 /* TODO: get from caller */);
             }

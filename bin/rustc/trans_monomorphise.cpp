@@ -4,11 +4,512 @@
 #include "mir_mir.h"
 #include "wire_board.h"
 #include "mir_operations.h" // Needed for post-monomorph checks and optimisations
+#include "mir_helpers.h"
 #include "hir_typeck_static.h"
 #include "hir_conv_constant_evaluation.h"
 #include "trans_main_bindings.h"
+#include <std/lib/vector.h>
 
 namespace {
+    class AsyncDropPollBuilder {
+        const Span& sp;
+        const StaticTraitResolve& resolve;
+        const HIRTypeData* dropeeTy;
+        const HIRTypeData* outerTy;
+        MIRFunction output;
+        unsigned statePtrLocal;
+        unsigned nextPhase = 3;
+        stl::Vector<::std::pair<unsigned, MIRBasicBlockId>> resumeTargets;
+
+        class CoroutineDropCloner: public MIRCloner {
+            const AsyncDropPollBuilder& owner;
+            const MonomorphState& params;
+            MIRLValue dropee;
+            unsigned bbBase;
+            unsigned localBase;
+            unsigned dropFlagBase;
+            unsigned returnLocal;
+
+        public:
+            CoroutineDropCloner(const AsyncDropPollBuilder& owner, const MonomorphState& monomorph, MIRLValue dropee,
+                unsigned bbBase, unsigned localBase, unsigned dropFlagBase, unsigned returnLocal)
+                : MIRCloner(owner.sp, owner.resolve.hirCrate().types)
+                , owner(owner)
+                , params(monomorph)
+                , dropee(std::move(dropee))
+                , bbBase(bbBase)
+                , localBase(localBase)
+                , dropFlagBase(dropFlagBase)
+                , returnLocal(returnLocal)
+            {
+            }
+
+            MIRBasicBlockId mapBbIdx(MIRBasicBlockId idx) const override {
+                return bbBase + idx;
+            }
+
+            unsigned mapLocal(unsigned idx) const override {
+                return localBase + idx;
+            }
+
+            unsigned mapDropFlag(unsigned idx) const override {
+                return dropFlagBase + idx;
+            }
+
+            const Monomorphiser& monomorphiser() const override {
+                return params;
+            }
+
+            const StaticTraitResolve* resolve() const override {
+                return &owner.resolve;
+            }
+
+            MIRStatement cloneStmt(const MIRStatement& src) const override {
+                if (const auto* save = src.opt_SaveDropFlag()) {
+                    return MIRStatement::make_SaveDropFlag({cloneLval(save->slot), save->bitIndex, mapDropFlag(save->idx)});
+                }
+                if (const auto* load = src.opt_LoadDropFlag()) {
+                    return MIRStatement::make_LoadDropFlag({mapDropFlag(load->idx), cloneLval(load->slot), load->bitIndex});
+                }
+                return MIRCloner::cloneStmt(src);
+            }
+
+            MIRLValue cloneLval(const MIRLValue& src) const override {
+                if (src.root.is_Argument()) {
+                    ASSERT_BUG(sp, src.root.as_Argument() == 0 && !src.wrappers.empty() && src.wrappers.front().is_Deref(),
+                        "unexpected coroutine Drop argument lvalue " << src);
+                    auto rv = dropee.clone();
+                    for (size_t i = 1; i < src.wrappers.size(); i++) {
+                        auto wrapper = src.wrappers[i];
+                        if (wrapper.is_Index()) {
+                            wrapper = MIRLValue::Wrapper::newIndex(mapLocal(wrapper.as_Index()));
+                        }
+                        rv.wrappers.push_back(std::move(wrapper));
+                    }
+                    return rv;
+                }
+                if (src.root.is_Return()) {
+                    auto rv = src.clone();
+                    rv.root = MIRLValue::Storage::newLocal(returnLocal);
+                    for (auto& wrapper : rv.wrappers) {
+                        if (wrapper.is_Index()) {
+                            wrapper = MIRLValue::Wrapper::newIndex(mapLocal(wrapper.as_Index()));
+                        }
+                    }
+                    return rv;
+                }
+                return MIRCloner::cloneLval(src);
+            }
+        };
+
+        MIRBasicBlockId newBlock() {
+            output.blocks.push_back(MIRBasicBlock{});
+            return static_cast<MIRBasicBlockId>(output.blocks.size() - 1);
+        }
+
+        unsigned newLocal(HIRTypeRef ty) {
+            const auto rv = static_cast<unsigned>(output.locals.size());
+            output.locals.push_back(std::move(ty));
+            return rv;
+        }
+
+        MIRLValue outerValue() const {
+            return MIRLValue::newDeref(MIRLValue::newField(MIRLValue::newArgument(0), 0));
+        }
+
+        MIRLValue stateValue() const {
+            return MIRLValue::newDeref(MIRLValue::newLocal(statePtrLocal));
+        }
+
+        MIRRValue pollResult(unsigned variant) const {
+            HIRPathParams params(resolve.hirCrate().types.unit());
+            const auto& path = resolve.hirCrate().getLangItemPath(sp, "Poll");
+            return MIRRValue::make_EnumVariant({HIRGenericPath(path, std::move(params)), variant, {}});
+        }
+
+        MIRStatement setState(unsigned state) const {
+            return MIRStatement::make_Assign({
+                stateValue(),
+                MIRRValue::make_Constant(MIRConstant::make_Uint({U128(state), HIRCoreType::U8})),
+            });
+        }
+
+        bool hasDropImpl(const HIRTypeData* ty) const {
+            const auto& trait = resolve.langDrop();
+            return !trait.components().empty() && resolve.findImpl(sp, trait, HIRPathParams{}, ty, [](ImplRef impl, bool fuzzed) {
+                return !fuzzed && impl.data.is_TraitImpl();
+            });
+        }
+
+        MIRBasicBlockId buildSyncDestructor(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) {
+            auto& types = resolve.hirCrate().types;
+            const auto refLocal = newLocal(types.borrow(HIRBorrowType::Unique, ty));
+            const auto resultLocal = newLocal(types.unit());
+            const auto entry = newBlock();
+            output.blocks[entry].statements.push_back(MIRStatement::make_Assign({
+                MIRLValue::newLocal(refLocal),
+                MIRRValue::make_Borrow({HIRBorrowType::Unique, false, std::move(value)}),
+            }));
+            output.blocks[entry].terminator = MIRTerminator::make_Call({
+                next,
+                MIRUnwindAction::make_Continue({}),
+                MIRLValue::newLocal(resultLocal),
+                HIRPath(ty, HIRGenericPath(resolve.langDrop()), RcString::newInterned("drop"), HIRPathParams{}),
+                ::makeVec1<MIRParam>(MIRLValue::newLocal(refLocal)),
+            });
+            return entry;
+        }
+
+        MIRBasicBlockId buildAsyncDestructor(const HIRTypeData* ty, MIRLValue value, HIRPath dropPath, HIRTypeRef futureTy, MIRBasicBlockId next) {
+            auto& types = resolve.hirCrate().types;
+            const auto& pinPath = resolve.hirCrate().getLangItemPathOpt("pin");
+            const auto& pollPath = resolve.hirCrate().getLangItemPathOpt("Poll");
+            ASSERT_BUG(sp, !pinPath.components().empty(), "AsyncDrop poll for " << ty << " without the Pin lang item");
+            ASSERT_BUG(sp, !pollPath.components().empty(), "AsyncDrop poll for " << ty << " without the Poll lang item");
+            ASSERT_BUG(sp, !resolve.langFuture().components().empty(), "AsyncDrop poll for " << ty << " without the Future lang item");
+            const auto storagePtrLocal = newLocal(types.pointer(HIRBorrowType::Unique, futureTy));
+            const auto valueRefTy = types.borrow(HIRBorrowType::Unique, ty);
+            const auto valueRefLocal = newLocal(valueRefTy);
+            const auto valuePinTy = types.path(HIRGenericPath(pinPath, HIRPathParams(valueRefTy)), &resolve.hirCrate().getStructByPath(sp, pinPath));
+            const auto valuePinLocal = newLocal(valuePinTy);
+            const auto futureRefTy = types.borrow(HIRBorrowType::Unique, futureTy);
+            const auto futureRefLocal = newLocal(futureRefTy);
+            const auto futurePinTy = types.path(HIRGenericPath(pinPath, HIRPathParams(futureRefTy)), &resolve.hirCrate().getStructByPath(sp, pinPath));
+            const auto futurePinLocal = newLocal(futurePinTy);
+            const auto pollTy = types.path(HIRGenericPath(pollPath, HIRPathParams(types.unit())), &resolve.hirCrate().getEnumByPath(sp, pollPath));
+            const auto pollLocal = newLocal(pollTy);
+
+            const auto phase = nextPhase++;
+            const auto getStorage = newBlock();
+            const auto makeValuePin = newBlock();
+            const auto construct = newBlock();
+            const auto markPolling = newBlock();
+            const auto resumeGetStorage = newBlock();
+            const auto makeFuturePin = newBlock();
+            const auto poll = newBlock();
+            const auto inspect = newBlock();
+            const auto ready = newBlock();
+            const auto pending = newBlock();
+
+            HIRPathParams storageParams;
+            storageParams.types.push_back(outerTy);
+            storageParams.types.push_back(futureTy);
+            output.blocks[getStorage].terminator = MIRTerminator::make_Call({
+                makeValuePin,
+                MIRUnwindAction::make_Continue({}),
+                MIRLValue::newLocal(storagePtrLocal),
+                MIRCallTarget::make_Intrinsic({"async_drop_storage", storageParams.clone()}),
+                ::makeVec1<MIRParam>(MIRParam::make_Borrow({HIRBorrowType::Unique, outerValue()})),
+            });
+            output.blocks[makeValuePin].statements.push_back(MIRStatement::make_Assign({
+                MIRLValue::newLocal(valueRefLocal),
+                MIRRValue::make_Borrow({HIRBorrowType::Unique, false, value.clone()}),
+            }));
+            output.blocks[makeValuePin].terminator = MIRTerminator::make_Call({
+                construct,
+                MIRUnwindAction::make_Continue({}),
+                MIRLValue::newLocal(valuePinLocal),
+                HIRPath(valuePinTy, "new_unchecked"),
+                ::makeVec1<MIRParam>(MIRLValue::newLocal(valueRefLocal)),
+            });
+            output.blocks[construct].terminator = MIRTerminator::make_Call({
+                markPolling,
+                MIRUnwindAction::make_Continue({}),
+                MIRLValue::newDeref(MIRLValue::newLocal(storagePtrLocal)),
+                std::move(dropPath),
+                ::makeVec1<MIRParam>(MIRLValue::newLocal(valuePinLocal)),
+            });
+            output.blocks[markPolling].statements.push_back(setState(phase));
+            output.blocks[markPolling].terminator = MIRTerminator::make_Goto(makeFuturePin);
+
+            output.blocks[resumeGetStorage].terminator = MIRTerminator::make_Call({
+                makeFuturePin,
+                MIRUnwindAction::make_Continue({}),
+                MIRLValue::newLocal(storagePtrLocal),
+                MIRCallTarget::make_Intrinsic({"async_drop_storage", std::move(storageParams)}),
+                ::makeVec1<MIRParam>(MIRParam::make_Borrow({HIRBorrowType::Unique, outerValue()})),
+            });
+            resumeTargets.pushBack(std::make_pair(phase, resumeGetStorage));
+
+            output.blocks[makeFuturePin].statements.push_back(MIRStatement::make_Assign({
+                MIRLValue::newLocal(futureRefLocal),
+                MIRRValue::make_Borrow({HIRBorrowType::Unique, false, MIRLValue::newDeref(MIRLValue::newLocal(storagePtrLocal))}),
+            }));
+            output.blocks[makeFuturePin].terminator = MIRTerminator::make_Call({
+                poll,
+                MIRUnwindAction::make_Continue({}),
+                MIRLValue::newLocal(futurePinLocal),
+                HIRPath(futurePinTy, "new_unchecked"),
+                ::makeVec1<MIRParam>(MIRLValue::newLocal(futureRefLocal)),
+            });
+            output.blocks[poll].terminator = MIRTerminator::make_Call({
+                inspect,
+                MIRUnwindAction::make_Continue({}),
+                MIRLValue::newLocal(pollLocal),
+                HIRPath(futureTy, resolve.langFuture(), "poll"),
+                ::makeVec2<MIRParam>(
+                    MIRLValue::newLocal(futurePinLocal),
+                    MIRParam::make_Borrow({HIRBorrowType::Unique, MIRLValue::newDeref(MIRLValue::newArgument(1))})
+                ),
+            });
+            output.blocks[inspect].terminator = MIRTerminator::make_Switch({MIRLValue::newLocal(pollLocal), ::makeVec2(ready, pending)});
+            output.blocks[pending].statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), pollResult(1)}));
+            output.blocks[pending].terminator = MIRTerminator::make_Return({});
+            output.blocks[ready].terminator = MIRTerminator::make_Drop({
+                MIRDropKind::DEEP,
+                MIRLValue::newDeref(MIRLValue::newLocal(storagePtrLocal)),
+                ~0u,
+                next,
+                MIRUnwindAction::make_Continue({}),
+            });
+            return getStorage;
+        }
+
+        MIRBasicBlockId buildDeepDrop(MIRLValue value, MIRBasicBlockId next) {
+            const auto entry = newBlock();
+            output.blocks[entry].terminator = MIRTerminator::make_Drop({
+                MIRDropKind::DEEP,
+                std::move(value),
+                ~0u,
+                next,
+                MIRUnwindAction::make_Continue({}),
+            });
+            return entry;
+        }
+
+        MIRBasicBlockId buildField(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) {
+            if (resolve.typeNeedsAsyncDrop(sp, ty)) {
+                return buildType(ty, std::move(value), next);
+            }
+            return resolve.typeNeedsDropGlue(sp, ty) ? buildDeepDrop(std::move(value), next) : next;
+        }
+
+        MIRBasicBlockId buildStructFields(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) {
+            if (const auto* tuple = ty->opt_Tuple()) {
+                for (size_t i = tuple->size(); i > 0; i--) {
+                    next = buildField(tuple->at(i - 1), MIRLValue::newField(value.clone(), static_cast<unsigned>(i - 1)), next);
+                }
+                return next;
+            }
+
+            const auto* pathTy = ty->opt_Path();
+            if (!pathTy || !pathTy->binding.is_Struct() || !pathTy->path.data.is_Generic()) {
+                return next;
+            }
+            const auto& generic = pathTy->path.data.as_Generic();
+            if (generic.path == resolve.hirCrate().getLangItemPathOpt("manually_drop")) {
+                return next;
+            }
+
+            const auto& str = *pathTy->binding.as_Struct();
+            auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, ty, &generic.params, nullptr);
+            switch (str.data.tag()) {
+                case HIRStructData::TAG_Unit:
+                    break;
+                case HIRStructData::TAG_Tuple: {
+                    const auto& fields = str.data.as_Tuple();
+                    for (size_t i = fields.size(); i > 0; i--) {
+                        auto fieldTy = resolve.monomorphExpand(sp, fields[i - 1].ent, monomorph);
+                        next = buildField(fieldTy, MIRLValue::newField(value.clone(), static_cast<unsigned>(i - 1)), next);
+                    }
+                    break;
+                }
+                case HIRStructData::TAG_Named: {
+                    const auto& fields = str.data.as_Named();
+                    for (size_t i = fields.size(); i > 0; i--) {
+                        auto fieldTy = resolve.monomorphExpand(sp, fields[i - 1].ty, monomorph);
+                        next = buildField(fieldTy, MIRLValue::newField(value.clone(), static_cast<unsigned>(i - 1)), next);
+                    }
+                    break;
+                }
+            }
+            return next;
+        }
+
+        MIRBasicBlockId buildFields(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) {
+            if (const auto* array = ty->opt_Array()) {
+                ASSERT_BUG(sp, array->size.is_Known(), "async drop of an array with unevaluated length: " << ty);
+                for (size_t i = array->size.as_Known(); i > 0; i--) {
+                    next = buildField(array->inner, MIRLValue::newField(value.clone(), static_cast<unsigned>(i - 1)), next);
+                }
+                return next;
+            }
+
+            const auto* pathTy = ty->opt_Path();
+            if (pathTy && pathTy->binding.is_Enum() && pathTy->path.data.is_Generic()) {
+                const auto* variants = pathTy->binding.as_Enum()->data.opt_Data();
+                if (!variants) {
+                    return next;
+                }
+                auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, ty, &pathTy->path.data.as_Generic().params, nullptr);
+                auto targets = ::std::vector<MIRBasicBlockId>(); // escape: MIR enum-switch storage is a generated std::vector interface
+                targets.reserve(variants->size());
+                for (size_t i = 0; i < variants->size(); i++) {
+                    auto variantTy = resolve.monomorphExpand(sp, variants->at(i).type, monomorph);
+                    targets.push_back(buildStructFields(variantTy, MIRLValue::newDowncast(value.clone(), static_cast<unsigned>(i)), next));
+                }
+                const auto entry = newBlock();
+                output.blocks[entry].terminator = MIRTerminator::make_Switch({std::move(value), std::move(targets)});
+                return entry;
+            }
+            return buildStructFields(ty, std::move(value), next);
+        }
+
+        MIRBasicBlockId buildCoroutineDrop(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) {
+            auto& types = resolve.hirCrate().types;
+            auto dropPath = HIRPath(ty, HIRGenericPath(resolve.langDrop()), RcString::newInterned("drop"), HIRPathParams{});
+            MonomorphState monomorph(types);
+            auto item = resolve.getValue(sp, dropPath, monomorph);
+            const auto* functionPtr = item.opt_Function();
+            ASSERT_BUG(sp, functionPtr && (*functionPtr)->code.mir, "coroutine Drop MIR is unavailable for " << ty);
+            const auto* function = *functionPtr;
+            const auto& source = *function->code.mir;
+
+            const auto localBase = static_cast<unsigned>(output.locals.size());
+            for (const auto* localTy : source.locals) {
+                output.locals.push_back(resolve.monomorphExpand(sp, localTy, monomorph));
+            }
+            const auto dropFlagBase = static_cast<unsigned>(output.dropFlags.size());
+            output.dropFlags.insert(output.dropFlags.end(), source.dropFlags.begin(), source.dropFlags.end());
+            const auto returnLocal = newLocal(types.unit());
+            const auto bbBase = static_cast<unsigned>(output.blocks.size());
+            for (size_t i = 0; i < source.blocks.size(); i++) {
+                newBlock();
+            }
+
+            CoroutineDropCloner cloner(*this, monomorph, std::move(value), bbBase, localBase, dropFlagBase, returnLocal);
+            MIRTypeResolve sourceTypes(sp, resolve, FMT_CB(os, os << dropPath), function->returnType, function->args, source);
+            for (size_t i = 0; i < source.blocks.size(); i++) {
+                const auto& sourceBlock = source.blocks[i];
+                const auto targetIdx = static_cast<MIRBasicBlockId>(bbBase + i);
+                output.blocks[targetIdx].isCleanup = sourceBlock.isCleanup;
+                output.blocks[targetIdx].statements.reserve(sourceBlock.statements.size());
+                for (const auto& statement : sourceBlock.statements) {
+                    output.blocks[targetIdx].statements.push_back(cloner.cloneStmt(statement));
+                }
+
+                if (sourceBlock.terminator.is_Return()) {
+                    output.blocks[targetIdx].terminator = MIRTerminator::make_Goto(next);
+                    continue;
+                }
+                const auto* drop = sourceBlock.terminator.opt_Drop();
+                if (!drop) {
+                    output.blocks[targetIdx].terminator = cloner.cloneTerm(sourceBlock.terminator);
+                    continue;
+                }
+
+                sourceTypes.setCurStmtTerm(static_cast<unsigned>(i));
+                HIRTypeRef slotTyTmp;
+                auto slotTy = cloner.monomorph(sourceTypes.getLvalueType(slotTyTmp, drop->slot));
+                if (!resolve.typeNeedsAsyncDrop(sp, slotTy)) {
+                    output.blocks[targetIdx].terminator = cloner.cloneTerm(sourceBlock.terminator);
+                    continue;
+                }
+
+                const auto normalTarget = cloner.mapBbIdx(drop->target);
+                const auto asyncTarget = buildType(slotTy, cloner.cloneLval(drop->slot), normalTarget);
+                if (drop->flagIdx == ~0u) {
+                    output.blocks[targetIdx].terminator = MIRTerminator::make_Goto(asyncTarget);
+                    continue;
+                }
+
+                HIRPathParams params(types.unit());
+                const auto& pollPath = resolve.hirCrate().getLangItemPath(sp, "Poll");
+                auto conditionTy = types.path(HIRGenericPath(pollPath, std::move(params)), &resolve.hirCrate().getEnumByPath(sp, pollPath));
+                const auto conditionLocal = newLocal(conditionTy);
+                output.blocks[targetIdx].statements.push_back(MIRStatement::make_Assign({
+                    MIRLValue::newLocal(conditionLocal),
+                    MIRRValue::make_EnumVariant({conditionTy->as_Path().path.data.as_Generic().clone(), 1, {}}),
+                }));
+                output.blocks[targetIdx].terminator = MIRTerminator::make_Switch({
+                    MIRLValue::newLocal(conditionLocal),
+                    ::makeVec2(asyncTarget, asyncTarget),
+                    cloner.mapDropFlag(drop->flagIdx),
+                    normalTarget,
+                });
+            }
+            return bbBase;
+        }
+
+        MIRBasicBlockId buildType(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next) {
+            if (const auto* pathTy = ty->opt_Path(); pathTy && (pathTy->isFuture() || pathTy->isGenerator())) {
+                return buildCoroutineDrop(ty, std::move(value), next);
+            }
+            const auto fields = buildFields(ty, value.clone(), next);
+            HIRPath dropPath{HIRSimplePath()};
+            HIRTypeRef futureTy;
+            if (resolve.findAsyncDrop(sp, ty, dropPath, futureTy)) {
+                return buildAsyncDestructor(ty, std::move(value), std::move(dropPath), std::move(futureTy), fields);
+            }
+            if (hasDropImpl(ty)) {
+                return buildSyncDestructor(ty, std::move(value), fields);
+            }
+            return fields;
+        }
+
+    public:
+        AsyncDropPollBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* dropeeTy, const HIRTypeData* outerTy)
+            : sp(sp)
+            , resolve(resolve)
+            , dropeeTy(dropeeTy)
+            , outerTy(outerTy)
+            , statePtrLocal(newLocal(resolve.hirCrate().types.pointer(HIRBorrowType::Unique, resolve.hirCrate().types.primitive(HIRCoreType::U8))))
+        {
+        }
+
+        MIRFunctionPointer build() {
+            const auto acquireState = newBlock();
+            const auto dispatch = newBlock();
+            const auto finish = newBlock();
+            const auto returned = newBlock();
+            const auto poisoned = newBlock();
+            const auto invalid = newBlock();
+
+            output.blocks[finish].statements.push_back(setState(1));
+            output.blocks[finish].statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), pollResult(0)}));
+            output.blocks[finish].terminator = MIRTerminator::make_Return({});
+            output.blocks[returned].statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), pollResult(0)}));
+            output.blocks[returned].terminator = MIRTerminator::make_Return({});
+            output.blocks[poisoned].terminator = MIRTerminator::make_Unreachable({});
+            output.blocks[invalid].terminator = MIRTerminator::make_Unreachable({});
+
+            auto dropee = MIRLValue::newDeref(MIRLValue::newField(outerValue(), 1));
+            const auto start = buildType(dropeeTy, std::move(dropee), finish);
+
+            HIRPathParams stateParams(outerTy);
+            output.blocks[acquireState].terminator = MIRTerminator::make_Call({
+                dispatch,
+                MIRUnwindAction::make_Continue({}),
+                MIRLValue::newLocal(statePtrLocal),
+                MIRCallTarget::make_Intrinsic({"async_drop_state", std::move(stateParams)}),
+                ::makeVec1<MIRParam>(MIRParam::make_Borrow({HIRBorrowType::Unique, outerValue()})),
+            });
+
+            auto values = ::makeVec3<u64>(0, 1, 2);
+            auto targets = ::makeVec3<MIRBasicBlockId>(start, returned, poisoned);
+            for (const auto& target : resumeTargets) {
+                values.push_back(target.first);
+                targets.push_back(target.second);
+            }
+            output.blocks[dispatch].terminator = MIRTerminator::make_SwitchValue({
+                stateValue(), invalid, std::move(targets), MIRSwitchValues(std::move(values)),
+            });
+            return MIRFunctionPointer(box$(std::move(output)).release());
+        }
+    };
+
+    const MIRCallTarget::Data_Intrinsic* asyncDropPollMarker(const MIRFunctionPointer& tpl) {
+        if (!tpl || tpl->blocks.empty()) {
+            return nullptr;
+        }
+        const auto* call = tpl->blocks.front().terminator.opt_Call();
+        if (!call) {
+            return nullptr;
+        }
+        const auto* intrinsic = call->fcn.opt_Intrinsic();
+        return intrinsic && intrinsic->name == "async_drop_glue_poll" ? intrinsic : nullptr;
+    }
+
     class Cloner: public MIRCloner {
         const ::StaticTraitResolve& resolve_;
         const TransParams& params;
@@ -48,6 +549,14 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
     static Span sp;
     TRACE_FUNCTION;
     assert(tpl);
+
+    if (const auto* marker = asyncDropPollMarker(tpl)) {
+        ASSERT_BUG(sp, marker->params.types.size() == 2, "async-drop poll marker has " << marker->params.types.size() << " type arguments");
+        auto dropeeTy = params.monomorph(resolve, marker->params.types[0]);
+        auto outerTy = params.monomorph(resolve, marker->params.types[1]);
+        ASSERT_BUG(sp, !monomorphiseTypeNeeded(dropeeTy) && !monomorphiseTypeNeeded(outerTy), "async-drop poll remained generic after monomorphisation: " << dropeeTy << " in " << outerTy);
+        return AsyncDropPollBuilder(sp, resolve, dropeeTy, outerTy).build();
+    }
 
     MIRFunction output;
 

@@ -365,8 +365,9 @@ public:
     void endSplitArm(const Span& sp, const ScopeHandle&, bool reachable, bool early = false);
     /// Terminates the current split early (TODO: What does this mean?)
     void endSplitArmEarly(const Span& sp);
-    /// Terminates the current split condition clause (used for the conditional portion of a match arm)
-    void endSplitCondition(const Span& sp, const ScopeHandle&);
+    /// Makes the exits merged by `condition` the entry state for the next arm
+    /// of `outer` (used for a failed match guard).
+    void endSplitCondition(const Span& sp, const ScopeHandle& condition, const ScopeHandle& outer);
     /// Stops isolating early exits through a freeze scope (see `newScopeFreeze`).
     void unfreezeScope(const Span& sp, const ScopeHandle&);
 

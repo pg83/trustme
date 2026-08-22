@@ -2162,9 +2162,10 @@ namespace {
         // Outputs
         OutState& out;
         const char* newTypeSuffix;
+        bool isAsyncDropIntrinsic;
 
     public:
-        ClosureExprVisitorExtract(const StaticTraitResolve& resolve, const HIRTypeData* selfType, const ::std::vector<HIRTypeRef>& varTypes, const HIRExprPtr& exprPtr, OutState& out, const char* newTypeSuffix)
+        ClosureExprVisitorExtract(const StaticTraitResolve& resolve, const HIRTypeData* selfType, const ::std::vector<HIRTypeRef>& varTypes, const HIRExprPtr& exprPtr, OutState& out, const char* newTypeSuffix, bool isAsyncDropIntrinsic = false)
             : HIRExprVisitorDef(resolve.hirCrate().types)
             , resolve_(resolve)
             , pool(resolve.hirCrate().pool)
@@ -2173,6 +2174,7 @@ namespace {
             , exprPtr(exprPtr)
             , out(out)
             , newTypeSuffix(newTypeSuffix)
+            , isAsyncDropIntrinsic(isAsyncDropIntrinsic)
         {
         }
 
@@ -3189,11 +3191,28 @@ namespace {
             }
 
             const auto& sp = node.span();
+            const bool isAsyncDropGlue = isAsyncDropIntrinsic;
+            isAsyncDropIntrinsic = false;
 
             TRACE_FUNCTION_F("Extract async - " << node.resType);
 
             // 1. Recurse to obtain useful metadata
             HIRExprVisitorDef::visit(node);
+
+            // The lang-item body is intentionally empty: rustc replaces it
+            // with async drop glue.  Its generated future still has to retain
+            // the pointer supplied as argument zero.
+            if (isAsyncDropGlue) {
+                auto capture = ::std::find_if(node.avuCache.capturedVars.begin(), node.avuCache.capturedVars.end(), [](const auto& ent) {
+                    return ent.first == 0;
+                });
+                if (capture == node.avuCache.capturedVars.end()) {
+                    node.avuCache.capturedVars.push_back(::std::make_pair(0u, HIRValueUsage::Move));
+                    ::std::sort(node.avuCache.capturedVars.begin(), node.avuCache.capturedVars.end(), [](const auto& a, const auto& b) {
+                        return a.first < b.first;
+                    });
+                }
+            }
 
             // -- Prepare type params for rewriting the expression tree
             HIRGenericParams params;
@@ -3244,6 +3263,7 @@ namespace {
 
             auto genStr = HIRStruct{params.clone(), HIRStruct::Repr::Rust, HIRStruct::Data::make_Tuple(std::move(crVars.structEnts))};
             genStr.markings.hasDropImpl = true;
+            genStr.structMarkings.isAsyncDropGlue = isAsyncDropGlue;
             HIRSimplePath genStructPath;
             const HIRTypeItem* genStructPtr;
             ::std::tie(genStructPath, genStructPtr) = out.newType(PATH_PREFIX_FUTURE, newTypeSuffix, mv$(genStr));
@@ -3479,7 +3499,12 @@ namespace {
                 DEBUG("Function code " << p);
 
                 {
-                    ClosureExprVisitorExtract ev(resolve_, selfType, item.code.bindings, item.code, out, p.name);
+                    const bool isAsyncDropIntrinsic = !p.getTopIp().ty
+                        && p.getSimplePath() == resolve_.hirCrate().getLangItemPathOpt("async_drop_in_place");
+                    ClosureExprVisitorExtract ev(
+                        resolve_, selfType, item.code.bindings, item.code, out, p.name,
+                        isAsyncDropIntrinsic
+                    );
                     ev.visitRoot(*item.code);
                 }
 

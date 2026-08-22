@@ -2478,6 +2478,7 @@ namespace {
         void visitStruct(const HIRTypeData* selfType, const HIRGenericPath& path, const HIRStruct& item) {
             static Span sp;
             HIRTypeRef tmp;
+            size_t fieldCount = 0;
             MonomorphStatePtr ms(crate.types, selfType, &path.params, nullptr);
             auto monomorph = [&](const auto& x) {
                 DEBUG(x);
@@ -2489,13 +2490,22 @@ namespace {
                 }
                 case HIRStructData::TAG_Tuple: {
                     auto& e = item.data.as_Tuple();
+                    fieldCount = e.size();
                     for (const auto& fld : e) { visitType(monomorph(fld.ent)); }
                     break;
                 }
                 case HIRStructData::TAG_Named: {
                     auto& e = item.data.as_Named();
+                    fieldCount = e.size();
                     for (const auto& fld : e) visitType(monomorph(fld.ty));
                     break;
+                }
+            }
+            if (item.structMarkings.isAsyncDropGlue) {
+                const auto* repr = TargetGetTypeRepr(sp, resolve, selfType);
+                ASSERT_BUG(sp, repr && repr->fields.size() >= fieldCount, "invalid async-drop glue representation for " << selfType);
+                for (size_t i = fieldCount; i < repr->fields.size(); i++) {
+                    visitType(repr->fields[i].ty);
                 }
             }
         }

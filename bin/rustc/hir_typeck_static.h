@@ -123,6 +123,7 @@ private:
     bool findImplCheckCrate(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, tCbFindImpl foundCb, const HIRTraitImpl& impl) const;
     bool findImplCheckCrateRaw(const Span& sp, const HIRSimplePath& desTraitPath, const HIRPathParams* desTraitParams, const HIRTypeData* desType, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitParams, const HIRTypeData* implType, ::std::function<bool(HIRPathParams, HIRCompare)>) const;
     HIRCompare checkAutoTraitImplDestructure(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* paramsPtr, const HIRTypeData* type) const;
+    bool typeNeedsAsyncDropInner(const Span& sp, const HIRTypeData* ty, HIRTypeRefSet& stack) const;
 
 public:
     const HIRTypeData* fixTraitDefaultReturn(const Span& sp, const HIRItemPath& p, const HIRTypeData* tpl, HIRTypeRef& tmp) const;
@@ -181,6 +182,12 @@ public:
 
     /// Returns `true` if the passed type either implements Drop, or contains a type that implements Drop
     bool typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty) const;
+
+    /// Resolve a concrete `AsyncDrop::drop` method and its returned future.
+    bool findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path, HIRTypeRef& futureTy) const;
+
+    /// Returns `true` if async drop glue for this concrete type can suspend.
+    bool typeNeedsAsyncDrop(const Span& sp, const HIRTypeData* ty) const;
 
     const HIRTypeData* isTypeOwnedBox(const HIRTypeData* ty) const;
     const HIRTypeData* isTypePhantomData(const HIRTypeData* ty) const;

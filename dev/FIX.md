@@ -166,7 +166,10 @@ terminators in CTFE closed
 MIR blocks until their newly identical predecessors also converge closed
 `deriving/issue-58319`; preserving when a Rust 2024 explicit reference pattern
 consumes the reference already peeled by match ergonomics closed
-`pattern/skipped-ref-pats-issue-125058`. Thus 18 of
+`pattern/skipped-ref-pats-issue-125058`; generating and polling structural
+async-drop glue, including state-aware coroutine destruction and owned future
+storage, closed `async-await/async-drop/async-drop-initial` and
+`async-await/async-drop/async-drop-middle-drop`. Thus 16 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -181,21 +184,21 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 43 |
-| fixed, or no longer reproducing, since the gate | 588 |
+| still failing or still carried from the last full sweep | 41 |
+| fixed, or no longer reproducing, since the gate | 590 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed eighty nodes, leaving 18. The
+subsequent point fixes and reruns have closed eighty-two nodes, leaving 16. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
 | current eight-corpus result | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 0 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 4 |
-| wrong runtime behaviour, panic, abort, or output | 11 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 3 |
+| wrong runtime behaviour, panic, abort, or output | 10 |
 | stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
 
@@ -419,21 +422,20 @@ coercion. This closes both `arbitrary_self_types_niche_deshadowing.rs` and
 
 ## P1: internal compiler failures
 
-There are 4 compiler-internal failures in 4 stable signatures in the current
+There are 3 compiler-internal failures in 3 stable signatures in the current
 eight-corpus rerun.
 
 | compiler area | tests |
 |---|---:|
 | type checking and HIR lowering | 1 |
 | MIR lowering, CTFE MIR, and optimisation | 1 |
-| translation and code generation | 1 |
 | unattributed compiler abort | 1 |
 
 Every remaining signature covers one test, so the class is a long tail:
 
 | signature | tests |
 |---|---:|
-| one-test signatures | 4 |
+| one-test signatures | 3 |
 
 The former `No repr for struct` assertion in `sized/coinductive-2` came from
 caching an associated projection as complete while its recursive `Sized`
@@ -505,6 +507,16 @@ type. The marker survives HIR cloning and reaches usage analysis and MIR
 pattern lowering, where the source pattern is retained but no second
 dereference is emitted.
 
+`async-await/async-drop/async-drop-initial.rs` and
+`async-await/async-drop/async-drop-middle-drop.rs` are closed by carrying the
+generated async-drop future through HIR and lowering its poll to structural
+drop glue. Trait resolution finds explicit and field-recursive `AsyncDrop`
+work, monomorphisation builds the corresponding poll MIR (including the live
+state of a suspended coroutine), and the C backend retains the glue state and
+future storage until polling completes. Match bodies use independent move
+states while a failed guard passes its evaluated state to the following arm,
+so cleanup neither reorders async drops nor drops a moved capture twice.
+
 The former translation-time CTFE exception in
 `dont-propagate-generic-instance-2` came from resolving a function pointer to
 `<dyn Trait as Trait>::method` as an ordinary trait item. Such a pointer names
@@ -555,13 +567,12 @@ took the signal.
 
 ## P1: runtime semantics
 
-Eleven programs in the current eight-corpus rerun build but execute
+Ten programs in the current eight-corpus rerun build but execute
 incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
 | Rust panic, exit 101 | 9 | group by the failed semantic assertion, never by exit code |
-| stdout mismatch | 1 | async-drop ordering |
 | generated executable SIGABRT | 1 | library allocation failure |
 
 The repeated high-yield areas inside the panic set are enum/DST/layout, drop

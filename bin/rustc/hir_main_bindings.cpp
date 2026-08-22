@@ -871,6 +871,7 @@ public:
         BIT(2, m.boundedMax)
         BIT(3, m.isFundamental)
         BIT(4, m.isNoNiche)
+        BIT(5, m.isAsyncDropGlue)
 #undef BIT
         m.dstType = static_cast<HIRStructMarkings::DstType>(in.readTag());
         m.coerceUnsized = static_cast<HIRStructMarkings::Coerce>(in.readTag());
@@ -4136,6 +4137,7 @@ break;
         BIT(2, m.boundedMax)
         BIT(3, m.isFundamental)
         BIT(4, m.isNoNiche)
+        BIT(5, m.isAsyncDropGlue)
 #undef BIT
         out.writeU8(bitflag1);
 
