@@ -11844,6 +11844,10 @@ public:
         TRACE_FUNCTION_F(&node << " match ...");
 
         auto valType = this->context.ivars.newIvarTr();
+        const auto* armResultType = this->context.coercionHint(node);
+        if (!armResultType) {
+            armResultType = node.resType;
+        }
 
         {
             auto _ = this->pushInnerCoerceScoped(true);
@@ -11887,7 +11891,12 @@ public:
             }
 
             this->context.addIvars(arm.code->resType);
-            this->context.equateTypesCoerce(node.span(), node.resType, arm.code);
+            // A match is a coercion-propagating expression. Feed its expected
+            // type into every arm while their types are still independent;
+            // routing them through the match's fresh result ivar lets the
+            // first function item fix that ivar before a later inferred
+            // function pointer has a chance to decay it.
+            this->context.equateTypesCoerce(node.span(), armResultType, arm.code);
             arm.code->visit(*this);
         }
 

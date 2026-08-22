@@ -172,8 +172,11 @@ storage, closed `async-await/async-drop/async-drop-initial` and
 `async-await/async-drop/async-drop-middle-drop`; pruning locals that are dead
 at suspension and overlapping the remaining non-conflicting locals in union
 storage closed `coroutine/overlap-locals` and
-`coroutine/resume-arg-size`. Thus 14 of
-the 98 sweep failures remain. The 25 failures outside those corpora are
+`coroutine/resume-arg-size`; propagating a match expression's expected type
+into each arm before resolving their common result closed `alloctests`'
+`test_shrink_to_unwind`, and a point rerun against the refreshed standard
+library found `test_format_int_exp_precision` already green. Thus 12 of the 98
+sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
 
@@ -187,13 +190,13 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 39 |
-| fixed, or no longer reproducing, since the gate | 592 |
+| still failing or still carried from the last full sweep | 37 |
+| fixed, or no longer reproducing, since the gate | 594 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed eighty-four nodes, leaving 14. The
+subsequent point fixes and reruns have closed eighty-six nodes, leaving 12. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
@@ -201,7 +204,7 @@ last full sweep.
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 0 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 3 |
-| wrong runtime behaviour, panic, abort, or output | 8 |
+| wrong runtime behaviour, panic, abort, or output | 6 |
 | stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
 
@@ -570,13 +573,12 @@ took the signal.
 
 ## P1: runtime semantics
 
-Eight programs in the current eight-corpus rerun build but execute
+Six programs in the current eight-corpus rerun build but execute
 incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 7 | group by the failed semantic assertion, never by exit code |
-| generated executable SIGABRT | 1 | library allocation failure |
+| Rust panic, exit 101 | 6 | group by the failed semantic assertion, never by exit code |
 
 The repeated high-yield areas inside the panic set are enum/DST/layout, drop
 order, and coroutine layout. Two remaining `type_name` failures concern the
@@ -585,8 +587,7 @@ its path, where rustc names it after the function, so `issue-61894` still
 prints `issue_61894::#0::f` for
 `issue_61894::Bar<_>::foo::f` and `any::dyn_type_name` prints `any::#2::Foo`.
 Naming those scopes is a parser change (`ASTModule::addAnon`) that moves every
-such path, and with it every mangled name. Separately,
-`test_format_int_exp_precision` still fails. Minimise representatives before
+such path, and with it every mangled name. Minimise representatives before
 treating nearby assertions as one root cause.
 
 Grouping the panics by the rule they check finds these multi-test families:
@@ -601,27 +602,6 @@ and `for<'a> fn(&'a isize)` to have different type ids, and this compiler erases
 lifetimes -- `HIRPathParams` has no lifetime list to carry them. Nothing short of
 carrying lifetimes through HIR would separate those types, so do not count these
 two as independent work.
-
-## P2: isolated front-end rules
-
-A function item and something else meeting in one `if`/`match` settle on the
-item, and the other arm is then read as the item too. `let f: fn(u8) = if c {
-fallback } else { transmute(p) }` calls `fallback` whatever `p` holds, because
-the transmute's target became the item's zero-sized type and the load was
-dropped; that is why `set_alloc_error_hook` has no effect on
-`handle_alloc_error` (`std::alloc::rust_oom` reads `HOOK` and then discards it),
-which `alloctests`' `test_shrink_to_unwind` measures. rustc gives the arms a
-least upper bound and decays a function item to a pointer where the arms
-differ; here the first arm equates the result ivar to the item and the rest
-follows.
-
-Offering the decayed pointer beside the item as a coercion possibility was
-tried and reverted: it fixes the case above, but the possibility resolver then
-has two function-pointer types to order where it had none, and `core`'s
-`Filter::next_chunk` -- `const { if needs_drop { a } else { b } }` over two
-function items -- stops on a mismatch between them. The fix belongs in the
-match/`if` result type, as a least upper bound over the arms, not in the
-pairwise coercion.
 
 ## P3: performance and flakes
 
