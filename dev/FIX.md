@@ -43,8 +43,8 @@ The graph contained 15,139 nodes. The full run completed 15,090 and reported
 the published roots. Forty-eight failures reproduced; RustSmith seed 36
 completed in isolation and is the only load-sensitive result. The subsequent
 ThinBox, async-drop, coroutine-storage, async-argument, trait-object,
-projection-bound, and specialization point fixes closed twenty-three
-independently rerun nodes, leaving 25.
+projection-bound, specialization, and `IntoFuture` point fixes closed
+twenty-four independently rerun nodes, leaving 24.
 
 | result | nodes |
 |---|---:|
@@ -53,8 +53,8 @@ independently rerun nodes, leaving 25.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 23 |
-| still failing independently | 25 |
+| fixed by subsequent point reruns | 24 |
+| still failing independently | 24 |
 
 Manual inspection normalised two mechanical classifier labels:
 
@@ -68,23 +68,22 @@ The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| accepted Rust rejected during type checking | 2 |
+| accepted Rust rejected during type checking | 1 |
 | compiler BUG, MIR error, signal, or generated C++ failure | 5 |
 | wrong runtime behaviour, panic, abort, or output | 10 |
 | stable timeout | 8 |
-| **total independently reproduced** | **25** |
+| **total independently reproduced** | **24** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
 accounting.
 
-## P1: other accepted Rust rejected by type checking
+## P1: accepted Rust rejected by type checking
 
-Two further positive programs are rejected:
+One further positive program is rejected:
 
 | route | case | diagnostic |
 |---|---|---|
-| `hir_typeck_expr_cs.cpp:7894` | doctest `core/src/future/into_future.rs:34` | cannot prove the local `Multiply: Future` |
 | `hir_typeck_expr_cs.cpp:7892` | doctest `core/src/pin.rs:654` | cannot select `From<&mut [T; 0]>` for `NonNull<[T]>` |
 
 ## P1: remaining compiler-internal failures

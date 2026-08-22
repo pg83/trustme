@@ -4428,9 +4428,20 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 rv.reset(ctx.crate->pool->make<HIRExprNodeRawBorrow>(v.span(), HIRBorrowType::Unique, lower(v.value)));
                 break;
 
-            case ASTExprNodeUniOp::AWait:
-                rv.reset(ctx.crate->pool->make<HIRExprNodeAWait>(v.span(), lower(v.value)));
+            case ASTExprNodeUniOp::AWait: {
+                auto value = lower(v.value);
+                const auto& intoFutureMethod = ctx.crate->getLangItemPathOpt("into_future");
+                if (!intoFutureMethod.components().empty()) {
+                    auto* operand = value.release();
+                    auto call = mkNode<HIRExprNodeCallPath>(
+                        v.span(),
+                        HIRPath(operand->resType, HIRGenericPath(intoFutureMethod.parent()), intoFutureMethod.components().back()),
+                        makeVec1(HIRExprNodeP(operand)));
+                    value.reset(call.release());
+                }
+                rv.reset(ctx.crate->pool->make<HIRExprNodeAWait>(v.span(), HIRExprNodeP(value.release())));
                 break;
+            }
             case ASTExprNodeUniOp::AWaitNext: {
                 auto* node = ctx.crate->pool->make<HIRExprNodeAWait>(v.span(), lower(v.value));
                 node->isNext = true;

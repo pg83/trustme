@@ -3650,6 +3650,8 @@ void handleLangItem(const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path
             H::add("async_drop", Handler(ITEM_TRAIT, handleSave));       // ::core::future::async_drop::AsyncDrop
             H::add("async_drop_in_place", Handler(ITEM_FN, handleSave)); // ::core::future::async_drop::async_drop_in_place
 
+            H::add("into_future", Handler(ITEM_FN, handleSave)); // ::core::future::IntoFuture::into_future
+
             H::add("global_alloc_ty", Handler(ITEM_STRUCT, handleSave)); // ::alloc::alloc::Global
         }
     }
@@ -3893,7 +3895,11 @@ default:
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
-        // TODO: Trait ATYs (a sub-item of others)
+        auto name = mi.parseEqualsString(wb, crate, crate.rootModule_);
+        if (name == "into_future") {
+            ASSERT_BUG(sp, i.is_Function(), "#[lang = \"into_future\"] on non-function trait item " << path);
+            handleLangItem(sp, crate, path, name, ITEM_FN, i);
+        }
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override {
