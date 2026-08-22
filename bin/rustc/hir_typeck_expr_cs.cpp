@@ -8838,6 +8838,18 @@ namespace {
     };
 
     struct TypeRestrictiveOrdering {
+        static bool hasSamePointerTarget(const HIRTypeData* l, const HIRTypeData* r) {
+            if (const auto* lBorrow = l->opt_Borrow()) {
+                const auto* rBorrow = r->opt_Borrow();
+                return rBorrow && lBorrow->inner == rBorrow->inner;
+            }
+            if (const auto* lPointer = l->opt_Pointer()) {
+                const auto* rPointer = r->opt_Pointer();
+                return rPointer && lPointer->inner == rPointer->inner;
+            }
+            return false;
+        }
+
         /// Get the inner type of a pointer (if it matches a template)
         static const HIRTypeData* matchAndExtractPtrTy(const HIRTypeData* ptrTpl, const HIRTypeData* ty) {
             if (ty->tag() != ptrTpl->tag()) {
@@ -9376,6 +9388,10 @@ default:
                 unsigned int strongestExactBounds = 0;
                 bool foundTwo = false;
                 bool strongestTied = false;
+                bool hasCoercionSource = false;
+                for (const auto& possibleTy : possibleTys) {
+                    hasCoercionSource |= possibleTy.hasType() && possibleTy.isSource();
+                }
                 for (const auto& bTy : ivarEnt.bounded) {
                     // Check bound against bounds
                     unsigned int exactBounds = 0;
@@ -9392,7 +9408,14 @@ default:
                             strongestExactBounds = exactBounds;
                             strongestTied = false;
                         } else if (exactBounds == strongestExactBounds) {
-                            strongestTied = true;
+                            if (hasCoercionSource && TypeRestrictiveOrdering::hasSamePointerTarget(bTy, strongestTy)) {
+                                bool unordered = false;
+                                if (TypeRestrictiveOrdering::getOrderingPtr(sp, context, bTy, strongestTy, unordered, /*deep=*/false) == OrdGreater && !unordered) {
+                                    strongestTy = bTy;
+                                }
+                            } else {
+                                strongestTied = true;
+                            }
                         }
                     } else {
                         DEBUG(bTy << " failed bounds");
@@ -9405,7 +9428,7 @@ default:
                     context.equateTypes(sp, tyL, bestTy);
                     return true;
                 } else if (strongestTy && !strongestTied) {
-                    DEBUG("Only one bound has the strongest exact obligation match");
+                    DEBUG("Only one bound remains after exact and coercion-strength ranking");
                     context.equateTypes(sp, tyL, strongestTy);
                     return true;
                 } else {
