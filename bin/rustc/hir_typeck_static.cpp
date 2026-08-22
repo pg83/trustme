@@ -929,15 +929,23 @@ bool StaticTraitResolve::findImplBoundsCb(const Span& sp, const HIRSimplePath& t
         const auto& bType = it->first.first;
         const auto& bParams = it->first.second.params;
 
+        HIRTypeRef normalizedBound;
+        const HIRTypeData* comparableBound = bType;
+        if (bType->mayHaveAssociatedType()) {
+            normalizedBound = bType;
+            this->expandAssociatedTypes(sp, normalizedBound);
+            comparableBound = normalizedBound;
+        }
+
         if (typeHasInfer) {
-            DEBUG("ivar present: type ?= " << bType);
-            if (bType->compareWithPlaceholders(sp, type, HIRResolvePlaceholdersNop()) == HIRCompare::Unequal) {
+            DEBUG("ivar present: type ?= " << comparableBound);
+            if (comparableBound->compareWithPlaceholders(sp, type, HIRResolvePlaceholdersNop()) == HIRCompare::Unequal) {
                 continue;
             }
-        } else if (bType != type && !bType->equalsIgnoringRegions(type)) {
+        } else if (comparableBound != type && !comparableBound->equalsIgnoringRegions(type)) {
             continue;
         }
-        DEBUG(bType << ": " << traitPath << bParams);
+        DEBUG(comparableBound << ": " << traitPath << bParams);
         // Check against `params`
         if (traitParams) {
             if (!H::comparePp(sp, *traitParams, bParams)) {
@@ -945,7 +953,7 @@ bool StaticTraitResolve::findImplBoundsCb(const Span& sp, const HIRSimplePath& t
             }
         }
         // Hand off to the closure, and return true if it does
-        if (foundCb.visit(ImplRef(bType, &bParams, &it->second.assoc, it->second.constness), false)) {
+        if (foundCb.visit(ImplRef(type, &bParams, &it->second.assoc, it->second.constness), false)) {
             return true;
         }
     }

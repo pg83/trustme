@@ -42,8 +42,9 @@ The graph contained 15,139 nodes. The full run completed 15,090 and reported
 49 broken targets. All 49 target commands were rerun independently against
 the published roots. Forty-eight failures reproduced; RustSmith seed 36
 completed in isolation and is the only load-sensitive result. The subsequent
-ThinBox, async-drop, coroutine-storage, async-argument, and trait-object point
-fixes closed twenty-one independently rerun nodes, leaving 27.
+ThinBox, async-drop, coroutine-storage, async-argument, trait-object, and
+projection-bound point fixes closed twenty-two independently rerun nodes,
+leaving 26.
 
 | result | nodes |
 |---|---:|
@@ -52,8 +53,8 @@ fixes closed twenty-one independently rerun nodes, leaving 27.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 21 |
-| still failing independently | 27 |
+| fixed by subsequent point reruns | 22 |
+| still failing independently | 26 |
 
 Manual inspection normalised two mechanical classifier labels:
 
@@ -67,11 +68,11 @@ The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| accepted Rust rejected during type checking | 4 |
+| accepted Rust rejected during type checking | 3 |
 | compiler BUG, MIR error, signal, or generated C++ failure | 5 |
 | wrong runtime behaviour, panic, abort, or output | 10 |
 | stable timeout | 8 |
-| **total independently reproduced** | **27** |
+| **total independently reproduced** | **26** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -79,11 +80,10 @@ accounting.
 
 ## P1: other accepted Rust rejected by type checking
 
-Four further positive programs are rejected:
+Three further positive programs are rejected:
 
 | route | case | diagnostic |
 |---|---|---|
-| `hir_typeck_main_bindings.cpp:227` | UI `const_kind_expr/relate_ty_with_infer_2.rs` | loses the `C: Tokenize` bound |
 | `hir_typeck_expr_cs.cpp:7892` | `impl-trait/equality-rpass.rs` | infers `() == bool` |
 | `hir_typeck_expr_cs.cpp:7894` | doctest `core/src/future/into_future.rs:34` | cannot prove the local `Multiply: Future` |
 | `hir_typeck_expr_cs.cpp:7892` | doctest `core/src/pin.rs:654` | cannot select `From<&mut [T; 0]>` for `NonNull<[T]>` |
