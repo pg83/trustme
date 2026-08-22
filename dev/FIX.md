@@ -43,7 +43,7 @@ The graph contained 15,139 nodes. The full run completed 15,090 and reported
 the published roots. Forty-eight failures reproduced; RustSmith seed 36
 completed in isolation and is the only load-sensitive result. The subsequent
 ThinBox, async-drop, coroutine-storage, async-argument, and trait-object point
-fixes closed eighteen independently rerun nodes, leaving 30.
+fixes closed nineteen independently rerun nodes, leaving 29.
 
 | result | nodes |
 |---|---:|
@@ -52,8 +52,8 @@ fixes closed eighteen independently rerun nodes, leaving 30.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 18 |
-| still failing independently | 30 |
+| fixed by subsequent point reruns | 19 |
+| still failing independently | 29 |
 
 Manual inspection normalised two mechanical classifier labels:
 
@@ -68,10 +68,10 @@ The resulting current population is:
 | current result | nodes |
 |---|---:|
 | accepted Rust rejected during type checking | 6 |
-| compiler BUG, MIR error, signal, or generated C++ failure | 6 |
+| compiler BUG, MIR error, signal, or generated C++ failure | 5 |
 | wrong runtime behaviour, panic, abort, or output | 10 |
 | stable timeout | 8 |
-| **total independently reproduced** | **30** |
+| **total independently reproduced** | **29** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -95,14 +95,13 @@ cluster by itself.
 
 ## P1: remaining compiler-internal failures
 
-After the P0 routing above, six compiler failures remain:
+After the P0 routing above, five compiler failures remain:
 
 | signature or route | nodes | cases |
 |---|---:|---|
 | `BUG hir_hir.cpp:600`: missing local type path | 2 | `macros/macro-nested_expr.rs`, UI `privacy/decl-macro-infinite-global-import-cycle-ice-64784.rs` |
 | `BUG hir_hir.cpp:733`: enum path resolves to a struct | 1 | UI `derives/derive-hygiene.rs` |
 | `BUG hir_typeck_static.cpp:3469`: item generic without item context | 1 | UI `pattern/unused-parameters-const-pattern.rs` |
-| `MIR ERROR hir_conv_constant_evaluation.cpp:4615`: non-const `Default::default` selected | 1 | UI `default-field-values/const-trait-default-field-value.rs` |
 | compiler `SIGFPE` in layout reached from MIR const propagation | 1 | `coroutine/issue-93161.rs` |
 
 The two `hir_hir.cpp:600` cases resolve different missing paths

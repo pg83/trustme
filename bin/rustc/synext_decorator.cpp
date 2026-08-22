@@ -3239,6 +3239,7 @@ static void deriveItem(const Span& sp, const WireBoard& wb, const ASTCrate& crat
     if (deriveItems.empty()) {
         return;
     }
+    const bool isConstDerive = attr.name() == "derive_const";
 
     DEBUG("path = " << path);
 
@@ -3269,7 +3270,18 @@ static void deriveItem(const Span& sp, const WireBoard& wb, const ASTCrate& crat
         }
 
         if (auto dp = findBuiltinDerive(traitPath)) {
-            mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", dp->handleItem(sp, opts, item.params(), type, item), {});
+            auto derivedImpl = dp->handleItem(sp, opts, item.params(), type, item);
+            if (isConstDerive) {
+                derivedImpl.def().setIsConst();
+                const auto& implTrait = derivedImpl.def().trait().ent;
+                auto& bounds = derivedImpl.def().params().bounds;
+                for (size_t i = item.params().bounds.size(); i < bounds.size(); i++) {
+                    if (auto* bound = bounds[i].opt_IsTrait(); bound && bound->trait == implTrait) {
+                        bound->constness = ASTBoundConstness::Maybe;
+                    }
+                }
+            }
+            mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", mv$(derivedImpl), {});
             continue;
         }
 
@@ -3338,7 +3350,6 @@ public:
 
 STATIC_DECORATOR("derive", DecoratorDerive)
 
-// TODO: `derive_const` should generate const impls, but trustme doesn't care
 class DecoratorDeriveConst: public DecoratorDerive {};
 STATIC_DECORATOR("derive_const", DecoratorDeriveConst)
 
