@@ -6056,7 +6056,14 @@ namespace {
                     bool isDefiningOpaque(const HIRTypeData* type) const {
                         const auto* erased = type->opt_ErasedType();
                         const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
-                        return alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
+                        if (alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner)) {
+                            return true;
+                        }
+                        // A return-position opaque declared by the function
+                        // currently being checked is represented by its hidden
+                        // inference variable in this context.
+                        const auto* function = erased ? erased->inner.opt_Fcn() : nullptr;
+                        return function && context.revealOpaqueType(type)->is_Infer();
                     }
 
                 public:
@@ -6135,11 +6142,22 @@ namespace {
                 auto compareProjected = [&](const HIRTraitPath& projected) {
                     auto cmp = compareParams(projected.path.params, dep->trait.path.params);
                     for (const auto& required : dep->trait.typeBounds) {
-                        const auto source = projected.typeBounds.find(required.first);
-                        if (source == projected.typeBounds.end()) {
+                        const HIRTraitPath::AtyEqual* source = nullptr;
+                        if (const auto it = projected.typeBounds.find(required.first); it != projected.typeBounds.end()) {
+                            source = &it->second;
+                        } else if (const auto it = sep->trait.typeBounds.find(required.first); it != sep->trait.typeBounds.end()
+                            && it->second.sourceTrait.path == required.second.sourceTrait.path) {
+                            // Upcasting retains bindings from a shared ancestor.
+                            // `Fn` and `FnMut`, for example, both carry the
+                            // `FnOnce::Output` binding on the source object.
+                            source = &it->second;
+                        }
+                        if (!source) {
                             return HIRCompare::Unequal;
                         }
-                        cmp &= compareType(source->second.type, required.second.type);
+                        cmp &= compareParams(source->sourceTrait.params, required.second.sourceTrait.params);
+                        cmp &= compareParams(source->atyParams, required.second.atyParams);
+                        cmp &= compareType(source->type, required.second.type);
                     }
                     return cmp;
                 };
@@ -6194,7 +6212,11 @@ namespace {
                         contextMut->equateValues(sp, dep->trait.path.params.values[i], projected->path.params.values[i]);
                     }
                     for (const auto& required : dep->trait.typeBounds) {
-                        contextMut->equateTypes(sp, required.second.type, projected->typeBounds.at(required.first).type);
+                        if (const auto it = projected->typeBounds.find(required.first); it != projected->typeBounds.end()) {
+                            contextMut->equateTypes(sp, required.second.type, it->second.type);
+                        } else {
+                            contextMut->equateTypes(sp, required.second.type, sep->trait.typeBounds.at(required.first).type);
+                        }
                     }
                 }
 

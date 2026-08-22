@@ -42,8 +42,8 @@ The graph contained 15,139 nodes. The full run completed 15,090 and reported
 49 broken targets. All 49 target commands were rerun independently against
 the published roots. Forty-eight failures reproduced; RustSmith seed 36
 completed in isolation and is the only load-sensitive result. The subsequent
-ThinBox, async-drop storage, and coroutine storage point fixes closed thirteen
-independently rerun nodes, leaving 35.
+ThinBox, async-drop, coroutine-storage, async-argument, and trait-object point
+fixes closed seventeen independently rerun nodes, leaving 31.
 
 | result | nodes |
 |---|---:|
@@ -52,8 +52,8 @@ independently rerun nodes, leaving 35.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 13 |
-| still failing independently | 35 |
+| fixed by subsequent point reruns | 17 |
+| still failing independently | 31 |
 
 Manual inspection normalised two mechanical classifier labels:
 
@@ -67,29 +67,15 @@ The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| accepted Rust rejected during type checking | 8 |
-| compiler BUG, MIR error, signal, or generated C++ failure | 9 |
+| accepted Rust rejected during type checking | 6 |
+| compiler BUG, MIR error, signal, or generated C++ failure | 7 |
 | wrong runtime behaviour, panic, abort, or output | 10 |
 | stable timeout | 8 |
-| **total independently reproduced** | **35** |
+| **total independently reproduced** | **31** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
 accounting.
-
-## P0: trait objects and upcasting
-
-Four accepted programs fail at different stages:
-
-| stage | nodes | cases |
-|---|---:|---|
-| generated vtable references an undeclared `Middle::say_hello` symbol | 2 | `trait-upcasting/multiple-supertraits-modulo-normalization.rs`, Miri `dyn-upcast.rs` |
-| trait-object relation rejects accepted upcasts | 2 | UI `impl-trait/trait_upcasting.rs`, `trait-upcasting/issue-11515-upcast-fn_mut-fn.rs` |
-
-The two generated-C++ failures have the same missing-method pattern. The two
-type-check failures involve distinct relations (opaque
-principal/auto-trait composition and `FnMut` to `Fn`) and must be minimised
-before grouping them with vtable construction.
 
 ## P1: other accepted Rust rejected by type checking
 

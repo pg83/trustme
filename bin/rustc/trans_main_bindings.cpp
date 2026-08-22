@@ -963,6 +963,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
                     auto traitGpath = monomorphCbTrait.monomorphGenericpath(sp, m.second.second, false);
                     auto itemPath = HIRPath(type, mv$(traitGpath), m.first);
+                    state.resolve.expandAssociatedTypesPath(sp, itemPath);
 
                     auto srcTraitMs = MonomorphStatePtr(crate.types, type, &itemPath.data.as_UfcsKnown().trait.params, nullptr);
                     const auto& srcTrait = state.resolve.hirCrate().getTraitByPath(sp, m.second.second.path);
@@ -1032,6 +1033,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 if (!fld.ty->is_Tuple()) {
                     auto ptMono = MonomorphStatePtr(crate.types, type, &traitPath.params, nullptr).monomorphGenericpath(sp, pt.path);
                     auto ptVtablePath = HIRPath(type, mv$(ptMono), ent.first.data.as_UfcsKnown().item);
+                    state.resolve.expandAssociatedTypesPath(sp, ptVtablePath);
                     pushPtr(mv$(ptVtablePath));
                 }
             }
@@ -2261,6 +2263,7 @@ default:
 
                 auto traitGpath = monomorphCbTrait.monomorphGenericpath(sp, m.second.second, false);
                 auto itemPath = HIRPath(type, mv$(traitGpath), m.first);
+                state.resolve.expandAssociatedTypesPath(sp, itemPath);
 
                 DEBUG("++ " << itemPath);
                 newList.functions.insert(std::make_pair(std::move(itemPath), nullptr));
@@ -2271,6 +2274,7 @@ default:
                 if (item.is_Function() && item.as_Function().receiver == HIRFunction::Receiver::Value) {
                     traitGpath = monomorphCbTrait.monomorphGenericpath(sp, m.second.second, false);
                     auto itemPath = HIRPath(type, mv$(traitGpath), RcString::newInterned(FMT(m.first << "#ptr")));
+                    state.resolve.expandAssociatedTypesPath(sp, itemPath);
                     DEBUG("++ " << itemPath);
                     newList.functions.insert(std::make_pair(std::move(itemPath), nullptr));
                 }
@@ -3928,7 +3932,9 @@ void TransEnumerateFillFromVTable(EnumState& state, HIRPath vtablePath, const Tr
         DEBUG("- " << m.second.first << " = " << m.second.second << " :: " << m.first);
         auto gpath = monomorphCbTrait.monomorphGenericpath(sp, m.second.second, false);
         const auto& fcn = state.crate.getTraitByPath(sp, gpath.path).values.at(m.first).as_Function();
-        TransEnumerateFillFromPathMono(state, HIRPath(type, mv$(gpath), m.first, HIRPathParams()));
+        auto methodPath = HIRPath(type, gpath.clone(), m.first, HIRPathParams());
+        state.resolve.expandAssociatedTypesPath(sp, methodPath);
+        TransEnumerateFillFromPathMono(state, methodPath.clone());
     }
     for (const auto& ptPath : tr.allParentTraits) {
         ASSERT_BUG(sp, ptPath.traitPtr, "Unset trait pointer - " << ptPath);
