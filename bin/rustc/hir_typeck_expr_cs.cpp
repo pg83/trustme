@@ -7715,6 +7715,27 @@ default:
         ::std::vector<Possibility> possibleImpls;
         bool sawAmbiguousIdentity = false;
         try {
+            const HIRTraitImpl* specialisableImpl = nullptr;
+            bool selectSpecialisableFallback = false;
+            const auto selectExactImpl = [&](const ImplRef& impl) {
+                context.equateTypes(sp, v.implTy, impl.getImplType(context.crate.types));
+                auto implParams = impl.getTraitParams(context.crate.types);
+                ASSERT_BUG(sp, v.params.types.size() == implParams.types.size(), "Parameter count mismatch between impl and rule: r=" << v.params << " i=" << implParams);
+                for (unsigned int i = 0; i < v.params.types.size(); i++) {
+                    context.equateTypes(sp, v.params.types[i], implParams.types[i]);
+                }
+                for (unsigned int i = 0; i < v.params.values.size(); i++) {
+                    context.equateValues(sp, v.params.values[i], implParams.values[i]);
+                }
+                // The next solver has already evaluated the selected impl's
+                // where-clauses while building this response.  Re-exporting
+                // them into the legacy constraint loop evaluates the same
+                // proof a second time and turns a coinductive fixed point into
+                // an endless new rule.
+                if (!context.resolve.board().settings->solver.globally) {
+                    addImplBounds(context, sp, impl);
+                }
+            };
             auto candidateCallback = [&](ImplRef impl, HIRCompare cmp) {
                 DEBUG("[check_associated] Found cmp=" << cmp << " " << impl);
                 if (impl.isAmbiguousIdentity()) {
@@ -7760,24 +7781,25 @@ default:
                 }
                 if (cmp == HIRCompare::Equal) {
                     // NOTE: Sometimes equal can be returned when it's not 100% equal (TODO)
-                    // - Equate the types
-                    context.equateTypes(sp, v.implTy, impl.getImplType(context.crate.types));
-                    auto itp = impl.getTraitParams(context.crate.types);
-                    ASSERT_BUG(sp, v.params.types.size() == itp.types.size(), "Parameter count mismatch between impl and rule: r=" << v.params << " i=" << itp);
-                    for (unsigned int i = 0; i < v.params.types.size(); i++) {
-                        context.equateTypes(sp, v.params.types[i], itp.types[i]);
+                    const auto* traitImpl = impl.data.opt_TraitImpl();
+                    if (selectSpecialisableFallback) {
+                        if (!traitImpl || traitImpl->impl != specialisableImpl) {
+                            return false;
+                        }
+                        selectExactImpl(impl);
+                        return true;
                     }
-                    for (unsigned int i = 0; i < v.params.values.size(); i++) {
-                        context.equateValues(sp, v.params.values[i], itp.values[i]);
+                    // A default associated type is only a fallback.  Keep
+                    // looking for a proven child impl before committing its
+                    // output; the crate index is not ordered by specialization.
+                    if (!context.resolve.board().settings->solver.globally && v.name != "" && impl.typeIsSpecialisable(v.name.c_str()) && traitImpl && traitImpl->impl) {
+                        if (!specialisableImpl || traitImpl->impl->moreSpecificThan(context.crate.types, *specialisableImpl)) {
+                            DEBUG("[check_associated] - exact specialisable fallback " << impl);
+                            specialisableImpl = traitImpl->impl;
+                        }
+                        return false;
                     }
-                    // The next solver has already evaluated the selected
-                    // impl's where-clauses while building this response.
-                    // Re-exporting them into the legacy constraint loop
-                    // evaluates the same proof a second time and turns a
-                    // coinductive fixed point into an endless new rule.
-                    if (!context.resolve.board().settings->solver.globally) {
-                        addImplBounds(context, sp, impl);
-                    }
+                    selectExactImpl(impl);
                     return true;
                 } else {
                     count += 1;
@@ -7861,7 +7883,28 @@ default:
                     return false;
                 }
             };
-            const bool found = context.resolve.board().settings->solver.globally ? context.resolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp) : context.resolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
+            bool found = context.resolve.board().settings->solver.globally ? context.resolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp) : context.resolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
+            if (!found && specialisableImpl) {
+                // An applicability predicate on a more-specific impl can be
+                // resolved by later inference.  Do not select the default
+                // while such a child remains fuzzy.
+                bool hasFuzzySpecialisation = false;
+                for (const auto& possible : possibleImpls) {
+                    const auto* traitImpl = possible.implRef.data.opt_TraitImpl();
+                    if (traitImpl && traitImpl->impl && traitImpl->impl->moreSpecificThan(context.crate.types, *specialisableImpl)) {
+                        hasFuzzySpecialisation = true;
+                        break;
+                    }
+                }
+                if (!hasFuzzySpecialisation) {
+                    // ImplRef owns its inferred impl arguments, so locate the
+                    // stable HIR impl again instead of retaining a response
+                    // past its callback.
+                    selectSpecialisableFallback = true;
+                    found = context.resolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
+                    ASSERT_BUG(sp, found, "Selected specialisable impl disappeared during repeated lookup");
+                }
+            }
             if (found) {
                 // Fully-known impl
                 DEBUG("Fully-known impl located");

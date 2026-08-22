@@ -42,9 +42,9 @@ The graph contained 15,139 nodes. The full run completed 15,090 and reported
 49 broken targets. All 49 target commands were rerun independently against
 the published roots. Forty-eight failures reproduced; RustSmith seed 36
 completed in isolation and is the only load-sensitive result. The subsequent
-ThinBox, async-drop, coroutine-storage, async-argument, trait-object, and
-projection-bound point fixes closed twenty-two independently rerun nodes,
-leaving 26.
+ThinBox, async-drop, coroutine-storage, async-argument, trait-object,
+projection-bound, and specialization point fixes closed twenty-three
+independently rerun nodes, leaving 25.
 
 | result | nodes |
 |---|---:|
@@ -53,8 +53,8 @@ leaving 26.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 22 |
-| still failing independently | 26 |
+| fixed by subsequent point reruns | 23 |
+| still failing independently | 25 |
 
 Manual inspection normalised two mechanical classifier labels:
 
@@ -68,11 +68,11 @@ The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| accepted Rust rejected during type checking | 3 |
+| accepted Rust rejected during type checking | 2 |
 | compiler BUG, MIR error, signal, or generated C++ failure | 5 |
 | wrong runtime behaviour, panic, abort, or output | 10 |
 | stable timeout | 8 |
-| **total independently reproduced** | **26** |
+| **total independently reproduced** | **25** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -80,16 +80,12 @@ accounting.
 
 ## P1: other accepted Rust rejected by type checking
 
-Three further positive programs are rejected:
+Two further positive programs are rejected:
 
 | route | case | diagnostic |
 |---|---|---|
-| `hir_typeck_expr_cs.cpp:7892` | `impl-trait/equality-rpass.rs` | infers `() == bool` |
 | `hir_typeck_expr_cs.cpp:7894` | doctest `core/src/future/into_future.rs:34` | cannot prove the local `Multiply: Future` |
 | `hir_typeck_expr_cs.cpp:7892` | doctest `core/src/pin.rs:654` | cannot select `From<&mut [T; 0]>` for `NonNull<[T]>` |
-
-The repeated source line at 7892 has unrelated diagnostics and is not a
-cluster by itself.
 
 ## P1: remaining compiler-internal failures
 
