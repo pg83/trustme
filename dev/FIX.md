@@ -169,7 +169,10 @@ consumes the reference already peeled by match ergonomics closed
 `pattern/skipped-ref-pats-issue-125058`; generating and polling structural
 async-drop glue, including state-aware coroutine destruction and owned future
 storage, closed `async-await/async-drop/async-drop-initial` and
-`async-await/async-drop/async-drop-middle-drop`. Thus 16 of
+`async-await/async-drop/async-drop-middle-drop`; pruning locals that are dead
+at suspension and overlapping the remaining non-conflicting locals in union
+storage closed `coroutine/overlap-locals` and
+`coroutine/resume-arg-size`. Thus 14 of
 the 98 sweep failures remain. The 25 failures outside those corpora are
 still carried from the complete snapshot rather than silently dropped from the
 total.
@@ -184,13 +187,13 @@ cannot.
 |---|---:|
 | total active fast-gate nodes | 14,115 |
 | failed in the full gate | 631 |
-| still failing or still carried from the last full sweep | 41 |
-| fixed, or no longer reproducing, since the gate | 590 |
+| still failing or still carried from the last full sweep | 39 |
+| fixed, or no longer reproducing, since the gate | 592 |
 
 The eight corpus groups that hold most failures (`rust_ui_compile rust_1_90
 rust_reference rust_by_example gccrs gccrs_compile miri rust_lib`) were rerun
 whole on 2026-08-21. The sweep found 98 failures before the latest fixes; the
-subsequent point fixes and reruns have closed eighty-two nodes, leaving 16. The
+subsequent point fixes and reruns have closed eighty-four nodes, leaving 14. The
 remaining 25 are in groups outside that sweep and are still carried from the
 last full sweep.
 
@@ -198,7 +201,7 @@ last full sweep.
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 0 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 3 |
-| wrong runtime behaviour, panic, abort, or output | 10 |
+| wrong runtime behaviour, panic, abort, or output | 8 |
 | stable timeout | 3 |
 | carried from groups outside the sweep | 25 |
 
@@ -567,12 +570,12 @@ took the signal.
 
 ## P1: runtime semantics
 
-Ten programs in the current eight-corpus rerun build but execute
+Eight programs in the current eight-corpus rerun build but execute
 incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 9 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 7 | group by the failed semantic assertion, never by exit code |
 | generated executable SIGABRT | 1 | library allocation failure |
 
 The repeated high-yield areas inside the panic set are enum/DST/layout, drop
@@ -590,7 +593,7 @@ Grouping the panics by the rule they check finds these multi-test families:
 
 | family | tests | rule |
 |---|---:|---|
-| coroutine and future size | 3 | `overlap-locals`, `resume-arg-size`, `future-as-arg`: locals that cannot be live together must share storage |
+| nested future size | 1 | `future-as-arg`: the awaited future argument must remain represented in each active async frame; the current layout grows only to 63 bytes instead of more than 550 |
 | `TypeId` of a higher-ranked type | 2 | `type-id-higher-rank` and `any-lifetime-escape-higher-rank`: not reachable, see below |
 
 The two `TypeId` ones are not reachable at all: they require `fn(&'static isize)`

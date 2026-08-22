@@ -25,6 +25,9 @@ static const size_t PARTIAL_ARRAY_MIN = 32;
 #include <algorithm>
 #include <type_traits> // for TU_MATCHA
 
+#include <std/mem/obj_pool.h>
+#include <std/sym/i_map.h>
+
 namespace {
     class ExprVisitorConv: public MirConverter {
         MirBuilder& builder;
@@ -61,6 +64,8 @@ namespace {
             struct State {
                 /// Entrypoint for the state
                 MIRBasicBlockId entrypoint;
+                /// Block that returns the suspended value for this state.
+                MIRBasicBlockId suspensionBlock = ~0u;
                 /// List of saved variables when this state yields
                 std::map<unsigned, MirBuilder::SavedActiveLocal> saved;
 
@@ -208,6 +213,7 @@ namespace {
             HIRGenericPath returnPollPath = builder.valType(sp, MIRLValue::newReturn())->as_Path().path.data.as_Generic().clone();
             builder.pushStmtAssign(sp, MIRLValue::newReturn(), MIRRValue::make_EnumVariant({std::move(returnPollPath), 1, {}}));
             builder.pushStmtAssign(sp, generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), stateValue + GeneratorState::POISONED, {}}));
+            generatorState.states.at(stateValue - 1).suspensionBlock = bbPending;
             builder.endBlock(MIRTerminator::make_Return({}));
             builder.setCurBlock(bbReady);
 
@@ -442,6 +448,108 @@ namespace {
 
         const std::set<unsigned>& generatorDropFlags() const {
             return generatorState.savedDropFlags;
+        }
+
+        bool generatorStorageSlotConflicts(unsigned local, unsigned slot, unsigned firstStoredLocal, const stl::IntMap<unsigned>& storageSlots) const {
+            for (const auto& state : generatorState.states) {
+                if (state.saved.count(local) == 0) {
+                    continue;
+                }
+                for (const auto& saved : state.saved) {
+                    if (saved.first < firstStoredLocal) {
+                        continue;
+                    }
+                    const auto* assignedSlot = storageSlots.find(saved.first);
+                    if (assignedSlot && *assignedSlot == slot) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        void generatorPruneInactiveLocals(
+            const Span& sp,
+            const StaticTraitResolve& resolve,
+            const HIRItemPath& path,
+            const HIRTypeData* retTy,
+            const HIRFunction::argsT& args,
+            MIRFunction& fcn
+        ) {
+            ASSERT_BUG(sp, !generatorState.states.empty(), "Coroutine has no initial state");
+            auto traversalPool = stl::ObjPool::fromMemory();
+            stl::IntMap<bool> bridgedReturns{traversalPool.mutPtr()};
+            ThinVector<MIRBasicBlockId> bridgedReturnBlocks;
+            for (size_t i = 0; i + 1 < generatorState.states.size(); i++) {
+                auto& state = generatorState.states[i];
+                ASSERT_BUG(sp, state.suspensionBlock < fcn.blocks.size(), "Coroutine state " << i << " has no suspension block");
+
+                // Async-drop expansion can put a normal cleanup chain between
+                // the block that produces Pending and its eventual Return.
+                // Bridge every Return reachable from that suspension path so
+                // liveness sees execution continue at the resume entrypoint.
+                stl::IntMap<bool> visited{traversalPool.mutPtr()};
+                ThinVector<MIRBasicBlockId> pending;
+                pending.push_back(state.suspensionBlock);
+                bool foundReturn = false;
+                while (pending.size() != 0) {
+                    const auto block = pending.back();
+                    pending.pop_back();
+                    ASSERT_BUG(sp, block < fcn.blocks.size(), "Coroutine suspension target BB" << block << " is out of range");
+                    if (visited.find(block)) {
+                        continue;
+                    }
+                    visited.insert(block, true);
+
+                    auto& terminator = fcn.blocks[block].terminator;
+                    if (terminator.is_Return()) {
+                        ASSERT_BUG(sp, !bridgedReturns.find(block), "Coroutine suspension paths share return BB" << block);
+                        bridgedReturns.insert(block, true);
+                        bridgedReturnBlocks.push_back(block);
+                        terminator = MIRTerminator::make_Goto(generatorState.states[i + 1].entrypoint);
+                        foundReturn = true;
+                        continue;
+                    }
+
+                    struct TargetCollector final: MIRTargetVisitor {
+                        ThinVector<MIRBasicBlockId>& targets;
+
+                        explicit TargetCollector(ThinVector<MIRBasicBlockId>& targets)
+                            : targets(targets)
+                        {
+                        }
+
+                        void visitTarget(const MIRBasicBlockId& target) override {
+                            targets.push_back(target);
+                        }
+                    } collector{pending};
+                    visitTerminatorTarget(terminator, collector);
+                }
+                ASSERT_BUG(sp, foundReturn, "Coroutine suspension path from BB" << state.suspensionBlock << " does not return");
+            }
+
+            MIRTypeResolve mirResolve{sp, resolve, FMT_CB(os, os << path;), retTy, args, fcn};
+            auto lifetimes = MIRHelperGetLifetimes(mirResolve, fcn, false);
+
+            for (const auto block : bridgedReturnBlocks) {
+                fcn.blocks[block].terminator = MIRTerminator::make_Return({});
+            }
+
+            for (size_t i = 0; i + 1 < generatorState.states.size(); i++) {
+                auto& state = generatorState.states[i];
+                auto& block = fcn.blocks[state.suspensionBlock];
+
+                for (auto saved = state.saved.begin(); saved != state.saved.end();) {
+                    const auto local = saved->first;
+                    ASSERT_BUG(sp, local < fcn.locals.size(), "Saved coroutine local " << local << " is out of range");
+                    const bool liveAcrossSuspension = lifetimes.slotValid(local, state.suspensionBlock, block.statements.size());
+                    if (!liveAcrossSuspension && !resolve.typeNeedsDropGlue(sp, fcn.locals[local])) {
+                        saved = state.saved.erase(saved);
+                    } else {
+                        ++saved;
+                    }
+                }
+            }
         }
 
         std::set<unsigned> generatorFinalise(const Span& sp, HIREnum& stateEnm) {
@@ -1143,9 +1251,11 @@ namespace {
                 asyncGenPollReady(node.span(), "Some", ::makeVec1(builder.getResultInParam(node.span(), node.value->resType)));
                 builder.pushStmtAssign(node.span(), generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), static_cast<unsigned>(generatorState.states.size()) + GeneratorState::POISONED, {}}));
                 // NOTE: No scope terminate
+                const auto suspensionBlock = builder.activeBlock();
                 builder.endBlock(MIRTerminator::make_Return({}));
 
                 generatorState.states.back().saved = builder.getActiveLocals(node.span(), generatorState.savedDropFlags);
+                generatorState.states.back().suspensionBlock = suspensionBlock;
                 generatorState.states.push_back(builder.newBbUnlinked());
                 builder.setCurBlock(generatorState.states.back().entrypoint);
 
@@ -1171,9 +1281,11 @@ namespace {
                 builder.pushStmtAssign(node.span(), MIRLValue::newReturn(), mv$(res));
                 builder.pushStmtAssign(node.span(), generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), static_cast<unsigned>(generatorState.states.size()) + GeneratorState::POISONED, {}}));
                 // NOTE: No scope terminate
+                const auto suspensionBlock = builder.activeBlock();
                 builder.endBlock(MIRTerminator::make_Return({}));
 
                 generatorState.states.back().saved = builder.getActiveLocals(node.span(), generatorState.savedDropFlags);
+                generatorState.states.back().suspensionBlock = suspensionBlock;
                 generatorState.states.push_back(builder.newBbUnlinked());
                 builder.setCurBlock(generatorState.states.back().entrypoint);
 
@@ -3702,7 +3814,9 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
 
             // ------------
 
-            // 1. Generate the state machine switch (and enumerate saved variables)
+            // 1. Discard initialised-but-dead locals, then generate the state
+            // machine switch and enumerate the values that really cross it.
+            ev.generatorPruneInactiveLocals(sp, resolve, path, retTy, args, fcn);
             std::set<unsigned> saved = ev.generatorFinalise(genNode->span(), const_cast<HIREnum&>(resolve.hirCrate().getEnumByPath(sp, genNode->stateIdxEnum)));
             // 2. Populate state structure
             auto& stateTy = const_cast<HIRStruct&>(*genNode->stateDataType->as_Path().binding.as_Struct());
@@ -3714,28 +3828,67 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
                 }) - unmMaybeUninit.variants.begin();
             }
             ASSERT_BUG(sp, valueVarIdx == 1, "Assumption on MaybeUninit.value's variant index failed");
-            // - Any variables that are saved twice need to have a static address, others can share?
-            // - Lazy option (doesn't require making sub-types): Toss everything together
             auto& fields = stateTy.data.as_Tuple();
+            const auto firstStoredLocal = static_cast<unsigned>(1 + genNode->captureUsages.size());
+            auto storagePool = stl::ObjPool::fromMemory();
+            stl::IntMap<unsigned> storageSlots{storagePool.mutPtr()};
+            ThinVector<HIRTypeRef> storageTypes;
+            unsigned storageSlotCount = 0;
+            auto makeStorageType = [&]() {
+                auto& crate = const_cast<HIRCrate&>(resolve.hirCrate());
+                auto& items = crate.rootModule.modItems;
+                auto itemIndex = items.size();
+                RcString name;
+                do {
+                    name = RcString::newInterned(FMT("coroutine_storage#M_" << itemIndex));
+                    itemIndex += 1;
+                } while (items.count(name) != 0);
+
+                auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{
+                    HIRPublicity::newNone(),
+                    HIRUnion{stateTy.params.clone(), HIRUnion::Repr::Rust, {}}
+                });
+                auto* item = &boxed->ent;
+                items.insert(std::make_pair(name, boxed));
+                const auto& statePath = genNode->stateDataType->as_Path().path.data.as_Generic();
+                return crate.types.path(
+                    HIRGenericPath(HIRSimplePath(crate.crateName, {}) + name, statePath.params.clone()),
+                    &item->as_Union()
+                );
+            };
             for (auto idx : saved) {
-                if (idx < 1 + genNode->captureUsages.size()) {
-                } else {
-                    auto fieldIdx = fields.size();
-                    ASSERT_BUG(sp, idx < fcn.locals.size(), idx << " >= " << fcn.locals.size());
-                    fields.push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), fcn.locals.at(idx)});
-                    // self.state(0).value(?#1).value(?0).IDX
-                    mappings.insert(
-                        std::make_pair(
-                            idx,
-                            std::vector<MIRLValue::Wrapper>{
-                                MIRLValue::Wrapper::newField(0),
-                                MIRLValue::Wrapper::newDowncast(valueVarIdx), // MaybeUninit.value
-                                MIRLValue::Wrapper::newField(0),              // ManuallyDrop.value
-                                MIRLValue::Wrapper::newField(fieldIdx)
-                            }
-                        )
-                    );
+                if (idx < firstStoredLocal) {
+                    continue;
                 }
+                ASSERT_BUG(sp, idx < fcn.locals.size(), idx << " >= " << fcn.locals.size());
+
+                unsigned storageSlot = 0;
+                while (ev.generatorStorageSlotConflicts(idx, storageSlot, firstStoredLocal, storageSlots)) {
+                    storageSlot += 1;
+                }
+                if (storageSlot == storageSlotCount) {
+                    storageTypes.push_back(makeStorageType());
+                    fields.push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), storageTypes[storageSlot]});
+                    storageSlotCount += 1;
+                }
+                ASSERT_BUG(sp, storageSlot < storageSlotCount, "Non-contiguous coroutine storage slot " << storageSlot);
+                storageSlots.insert(idx, storageSlot);
+
+                auto& storageTy = const_cast<HIRUnion&>(*storageTypes[storageSlot]->as_Path().binding.as_Union());
+                auto storageVariant = static_cast<unsigned>(storageTy.variants.size());
+                storageTy.variants.push_back(HIRStructField{RcString(), HIRPublicity::newNone(), fcn.locals.at(idx), {}});
+                mappings.insert(
+                    std::make_pair(
+                        idx,
+                        std::vector<MIRLValue::Wrapper>{
+                            MIRLValue::Wrapper::newField(0),
+                            MIRLValue::Wrapper::newDowncast(valueVarIdx), // MaybeUninit.value
+                            MIRLValue::Wrapper::newField(0),              // ManuallyDrop.value
+                            MIRLValue::Wrapper::newField(1 + storageSlot),
+                            MIRLValue::Wrapper::newDowncast(storageVariant)
+                        }
+                    )
+                );
             }
             for (const auto& m : mappings) {
                 DEBUG("Mapping _" << m.first << " = " << m.second);

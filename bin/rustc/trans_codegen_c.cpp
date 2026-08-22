@@ -3268,9 +3268,13 @@ default:
                 special = true;
             }
 
-            if (!special && options.disallowEmptyStructs && val.is_Field() && this->typeIsBadZst(ty)) {
+            auto zstField = MIRLValue::CRef(val);
+            while (zstField.is_Downcast()) {
+                zstField.tryUnwrap();
+            }
+            if (!special && options.disallowEmptyStructs && zstField.is_Field() && this->typeIsBadZst(ty)) {
                 // Work backwards to the first non-ZST field
-                auto valFp = MIRLValue::CRef(val);
+                auto valFp = zstField;
                 assert(valFp.is_Field());
                 while (valFp.innerRef().is_Field()) {
                     HIRTypeRef tmp;

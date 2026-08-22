@@ -285,6 +285,11 @@ public:
         return blockActive_;
     }
 
+    MIRBasicBlockId activeBlock() const {
+        assert(blockActive_);
+        return currentBlock;
+    }
+
     // Mark a value as initialised (used for Call, because it has to be done after the panic block is populated)
     void markValueAssigned(const Span& sp, const MIRLValue& val);
 
