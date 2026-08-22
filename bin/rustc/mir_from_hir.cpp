@@ -510,21 +510,13 @@ namespace {
         }
 
         bool generatorStorageSlotConflicts(
-            const Span& sp,
-            const StaticTraitResolve& resolve,
-            const MIRFunction& fcn,
             unsigned local,
             unsigned slot,
             unsigned firstStoredLocal,
             const stl::IntMap<unsigned>& storageSlots,
             const stl::IntMap<bool>& compositeConflicts,
-            const MIRValueLifetimes& lifetimes
+            const MIRValueLifetimes& segmentLifetimes
         ) const {
-            // An async-drop future can borrow the value used to construct it
-            // between adjacent suspension states. Keep that pair disjoint;
-            // ordinary locals in disjoint states must remain overlappable.
-            const auto* localPath = fcn.locals[local]->opt_Path();
-            const bool localIsFuture = localPath && localPath->isFuture();
             for (unsigned other = firstStoredLocal; other < local; other++) {
                 const auto* assignedSlot = storageSlots.find(other);
                 if (!assignedSlot || *assignedSlot != slot) {
@@ -533,13 +525,7 @@ namespace {
                 if (compositeConflicts.find(generatorStorageConflictKey(local, other))) {
                     return true;
                 }
-                if (!lifetimes.slots[local].overlaps(lifetimes.slots[other])) {
-                    continue;
-                }
-                const auto* otherPath = fcn.locals[other]->opt_Path();
-                const bool otherIsFuture = otherPath && otherPath->isFuture();
-                if ((localIsFuture && resolve.typeNeedsAsyncDrop(sp, fcn.locals[other]))
-                    || (otherIsFuture && resolve.typeNeedsAsyncDrop(sp, fcn.locals[local]))) {
+                if (segmentLifetimes.slots[local].overlaps(segmentLifetimes.slots[other])) {
                     return true;
                 }
             }
@@ -572,6 +558,12 @@ namespace {
             auto traversalPool = stl::ObjPool::fromMemory();
             stl::IntMap<bool> bridgedReturns{traversalPool.mutPtr()};
             ThinVector<MIRBasicBlockId> bridgedReturnBlocks;
+            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
+            MIRTypeResolve mirResolve{sp, resolve, pathCallback, retTy, args, fcn};
+            // Keep the original, disconnected resume segments for storage
+            // conflicts. The bridges below deliberately make separate states
+            // adjacent for suspension pruning, but not simultaneously alive.
+            auto segmentLifetimes = MIRHelperGetLifetimes(mirResolve, fcn, false);
             for (size_t i = 0; i + 1 < generatorState.states.size(); i++) {
                 auto& state = generatorState.states[i];
                 ASSERT_BUG(sp, state.suspensionBlock < fcn.blocks.size(), "Coroutine state " << i << " has no suspension block");
@@ -620,8 +612,6 @@ namespace {
                 ASSERT_BUG(sp, foundReturn, "Coroutine suspension path from BB" << state.suspensionBlock << " does not return");
             }
 
-            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
-            MIRTypeResolve mirResolve{sp, resolve, pathCallback, retTy, args, fcn};
             auto lifetimes = MIRHelperGetLifetimes(mirResolve, fcn, false);
 
             for (const auto block : bridgedReturnBlocks) {
@@ -643,7 +633,7 @@ namespace {
                     }
                 }
             }
-            return lifetimes;
+            return segmentLifetimes;
         }
 
         std::set<unsigned> generatorFinalise(const Span& sp, HIREnum& stateEnm) {
@@ -3906,7 +3896,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
 
             // 1. Discard initialised-but-dead locals, then generate the state
             // machine switch and enumerate the values that really cross it.
-            auto lifetimes = ev.generatorPruneInactiveLocals(sp, resolve, path, retTy, args, fcn);
+            auto storageLifetimes = ev.generatorPruneInactiveLocals(sp, resolve, path, retTy, args, fcn);
             std::set<unsigned> saved = ev.generatorFinalise(genNode->span(), const_cast<HIREnum&>(resolve.hirCrate().getEnumByPath(sp, genNode->stateIdxEnum)));
             // 2. Populate state structure
             auto& stateTy = const_cast<HIRStruct&>(*genNode->stateDataType->as_Path().binding.as_Struct());
@@ -3955,7 +3945,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
                 ASSERT_BUG(sp, idx < fcn.locals.size(), idx << " >= " << fcn.locals.size());
 
                 unsigned storageSlot = 0;
-                while (ev.generatorStorageSlotConflicts(sp, resolve, fcn, idx, storageSlot, firstStoredLocal, storageSlots, compositeConflicts, lifetimes)) {
+                while (ev.generatorStorageSlotConflicts(idx, storageSlot, firstStoredLocal, storageSlots, compositeConflicts, storageLifetimes)) {
                     storageSlot += 1;
                 }
                 if (storageSlot == storageSlotCount) {
