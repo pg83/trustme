@@ -1611,6 +1611,86 @@ namespace {
         }
         return parentIp->getSimplePath();
     }
+
+    class DefaultFieldParamRebase final: public MonomorphiserNop {
+        const HIRPathParams& itemArgs;
+
+    public:
+        DefaultFieldParamRebase(HIRTypeInterner& types, const HIRPathParams& itemArgs)
+            : MonomorphiserNop(types)
+            , itemArgs(itemArgs)
+        {
+        }
+
+        HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override {
+            if (generic.group() != GENERICImpl) {
+                return MonomorphiserNop::getType(sp, generic);
+            }
+            ASSERT_BUG(sp, generic.idx() < itemArgs.types.size(), "Default-field type parameter out of range: " << generic);
+            return itemArgs.types[generic.idx()];
+        }
+
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override {
+            if (generic.group() != GENERICImpl) {
+                return MonomorphiserNop::getValue(sp, generic);
+            }
+            ASSERT_BUG(sp, generic.idx() < itemArgs.values.size(), "Default-field const parameter out of range: " << generic);
+            return itemArgs.values[generic.idx()].clone();
+        }
+    };
+
+    class RebaseDefaultFieldParams final: public HIRVisitor {
+        const Monomorphiser& monomorph;
+
+    public:
+        explicit RebaseDefaultFieldParams(const Monomorphiser& monomorph)
+            : HIRVisitor(nullptr, monomorph.typeInterner())
+            , monomorph(monomorph)
+        {
+        }
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override {
+            return monomorph.monomorphType(Span(), type);
+        }
+
+        void visitPathParams(HIRPathParams& params) override {
+            params = monomorph.monomorphPathParams(Span(), params, true);
+        }
+
+        void visitConstgeneric(HIRConstGeneric& value) override {
+            value = monomorph.monomorphConstgeneric(Span(), value, true);
+        }
+    };
+
+    class RebaseDefaultFieldExpr final: public HIRExprVisitorDef {
+        const Monomorphiser& monomorph;
+
+    public:
+        explicit RebaseDefaultFieldExpr(const Monomorphiser& monomorph)
+            : HIRExprVisitorDef(monomorph.typeInterner())
+            , monomorph(monomorph)
+        {
+        }
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override {
+            return monomorph.monomorphType(Span(), type);
+        }
+
+        void visitPathParams(HIRPathParams& params) override {
+            params = monomorph.monomorphPathParams(Span(), params, true);
+        }
+
+        void visit(HIRExprNodeConstParam& node) override {
+            auto value = monomorph.getValue(node.span(), HIRGenericRef(node.name, node.binding));
+            ASSERT_BUG(node.span(), value.is_Generic(), "Default-field const parameter became " << value);
+            node.binding = value.as_Generic().binding;
+        }
+
+        void visit(HIRExprNodeArraySized& node) override {
+            HIRExprVisitorDef::visit(node);
+            node.size = monomorph.monomorphArraysize(node.span(), node.size);
+        }
+    };
 }
 
 tStructFields AST2HIR::LowerHIRStructFields(HIRItemPath path, const HIRGenericParams& params, const ::std::vector<ASTStructItem>& inFields, HIRModule& outMod) {
@@ -1619,10 +1699,22 @@ tStructFields AST2HIR::LowerHIRStructFields(HIRItemPath path, const HIRGenericPa
         auto type = LowerHIRType(field.type);
         ::std::unique_ptr<HIRGenericPath> fieldDefault;
         if (field.defaultValue) {
-            // NOTE: I'd love to have this be a `Constant`, but that would require duplicating the type and the params
-            // meh. Lazy option is to just duplicate
+            // The expression was resolved in the struct's impl-level generic
+            // scope. Its synthetic module constant owns a cloned item-level
+            // scope, so rebase every captured parameter before publishing it.
             auto name = RcString::newInterned(FMT(path.getName() << "#default_" << field.name));
-            outMod.valueItems.insert(std::make_pair(name, crate->pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newGlobal(), HIRValueItem(crate->pool->make<HIRConstant>(HIRConstant(params.clone(), type, LowerHIRExpr(field.defaultValue))))})));
+            auto itemArgs = params.makeNopParams(crate->types, GENERICItem);
+            auto rebase = DefaultFieldParamRebase(crate->types, itemArgs);
+
+            auto constantParams = params.clone();
+            RebaseDefaultFieldParams(rebase).visitParams(constantParams);
+            auto constantType = rebase.monomorphType(field.defaultValue.node().span(), type);
+            auto constantValue = LowerHIRExpr(field.defaultValue);
+            RebaseDefaultFieldExpr exprRebase(rebase);
+            constantValue->visit(exprRebase);
+            constantValue->resType = exprRebase.visitType(constantValue->resType);
+
+            outMod.valueItems.insert(std::make_pair(name, crate->pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newGlobal(), HIRValueItem(crate->pool->make<HIRConstant>(HIRConstant(std::move(constantParams), constantType, std::move(constantValue))))})));
             fieldDefault = std::make_unique<HIRGenericPath>((*path.parent + name).getSimplePath(), params.makeNopParams(crate->types, 0));
         }
         fields.push_back(HIRStructField{field.name, LowerHIRVis(getParentModule(path), field.vis), std::move(type), std::move(fieldDefault)});
