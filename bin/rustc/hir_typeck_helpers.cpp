@@ -8603,6 +8603,14 @@ default: {
                     HIRPathParams implParams;
                     auto cmp = fticCheckParams(sp, HIRSimplePath(), nullptr, selfTy, impl.params, {}, impl.type, implParams);
                     if (cmp != HIRCompare::Unequal) {
+                        // A wrapper receiver such as `Box<_>` can reach a
+                        // concrete inherent-method bucket through its open
+                        // inner type.  That bucket is only a possibility until
+                        // inference identifies the inner type; selecting it now
+                        // would leave an unresolvable `<_>::method` path.
+                        if (outUndecided && typeIsUnboundedInfer(this->ivars.getType(selfTy))) {
+                            *outUndecided = true;
+                        }
                         if (this->wb.settings->solver.globally) {
                             HIRPathParams methodParams;
                             RcString placeholderName;
