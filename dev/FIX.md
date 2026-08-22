@@ -42,8 +42,8 @@ The graph contained 15,139 nodes. The full run completed 15,090 and reported
 49 broken targets. All 49 target commands were rerun independently against
 the published roots. Forty-eight failures reproduced; RustSmith seed 36
 completed in isolation and is the only load-sensitive result. The subsequent
-ThinBox, async-drop storage, and coroutine storage point fixes closed twelve
-independently rerun nodes, leaving 36.
+ThinBox, async-drop storage, and coroutine storage point fixes closed thirteen
+independently rerun nodes, leaving 35.
 
 | result | nodes |
 |---|---:|
@@ -52,8 +52,8 @@ independently rerun nodes, leaving 36.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 12 |
-| still failing independently | 36 |
+| fixed by subsequent point reruns | 13 |
+| still failing independently | 35 |
 
 Manual inspection normalised two mechanical classifier labels:
 
@@ -69,18 +69,13 @@ The resulting current population is:
 |---|---:|
 | accepted Rust rejected during type checking | 8 |
 | compiler BUG, MIR error, signal, or generated C++ failure | 9 |
-| wrong runtime behaviour, panic, abort, or output | 11 |
+| wrong runtime behaviour, panic, abort, or output | 10 |
 | stable timeout | 8 |
-| **total independently reproduced** | **36** |
+| **total independently reproduced** | **35** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
 accounting.
-
-## P0: async/coroutine storage
-
-One runtime layout case remains: `async-await/future-sizes/future-as-arg.rs`
-produces a 63-byte nested future where the test requires more than 550 bytes.
 
 ## P0: trait objects and upcasting
 
@@ -130,14 +125,13 @@ The two `hir_hir.cpp:600` cases resolve different missing paths
 
 ## P1: runtime semantics
 
-Eleven programs compile but execute incorrectly:
+Ten programs compile but execute incorrectly:
 
 | family | nodes | cases |
 |---|---:|---|
 | lifetime-erased `TypeId` / `Any` distinctions | 3 | `type-id-higher-rank`, `any-lifetime-escape-higher-rank`, doctest `core/src/any.rs:660` |
 | anonymous-scope `type_name` paths | 2 | `issues/issue-61894.rs`, coretest `any::dyn_type_name` |
 | RustSmith stdout mismatch | 2 | seeds 19 and 102 |
-| coroutine layout/state | 1 | `future-as-arg` |
 | drop elaboration after a raw-pointer write | 1 | `drop/issue-90752-raw-ptr-shenanigans.rs` |
 | generic-assert captured diagnostic text | 1 | `feature-gate-generic_assert.rs` |
 | adjacent stack allocation layout | 1 | Miri `adjacent-allocs.rs` |

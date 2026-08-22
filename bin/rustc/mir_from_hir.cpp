@@ -732,7 +732,9 @@ namespace {
             size_t argCount = 2;
             for (size_t i = 0; i < nCaptures; i++) {
                 // TODO: State tracking on captures, what if a by-value capture is moved?
-                if (mappings.count(argCount + i) == 0) {
+                // Only by-value captures have a mapping to an owned future
+                // field. Borrowed captures are aliases and must not be dropped.
+                if (mappings.count(argCount + i) != 0) {
                     outBuilder.pushStmtDrop(sp, MIRLValue::newField(self.clone(), 1 + i));
                 }
             }

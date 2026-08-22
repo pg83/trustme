@@ -3220,21 +3220,6 @@ namespace {
             // 1. Recurse to obtain useful metadata
             HIRExprVisitorDef::visit(node);
 
-            // The lang-item body is intentionally empty: rustc replaces it
-            // with async drop glue.  Its generated future still has to retain
-            // the pointer supplied as argument zero.
-            if (isAsyncDropGlue) {
-                auto capture = ::std::find_if(node.avuCache.capturedVars.begin(), node.avuCache.capturedVars.end(), [](const auto& ent) {
-                    return ent.first == 0;
-                });
-                if (capture == node.avuCache.capturedVars.end()) {
-                    node.avuCache.capturedVars.push_back(::std::make_pair(0u, HIRValueUsage::Move));
-                    ::std::sort(node.avuCache.capturedVars.begin(), node.avuCache.capturedVars.end(), [](const auto& a, const auto& b) {
-                        return a.first < b.first;
-                    });
-                }
-            }
-
             // -- Prepare type params for rewriting the expression tree
             HIRGenericParams params;
             HIRPathParams constructorPathParams;

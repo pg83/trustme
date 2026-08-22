@@ -2681,6 +2681,66 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
             rv.code = HIRExprPtr(loop);
         }
     }
+
+    if (rv.code && f.isAsync() && !rv.args.empty()) {
+        // Calling an async function only constructs its future. Argument
+        // patterns are evaluated when that future is first polled, and the
+        // complete arguments remain owned by the future until then. Lower
+        // each outer argument to a hidden binding and perform the source
+        // pattern matches at the start of the async body.
+        struct AsyncArgumentSlotVisitor final: HIRExprVisitorDef {
+            unsigned nextSlot = 0;
+
+            explicit AsyncArgumentSlotVisitor(HIRTypeInterner& types)
+                : HIRExprVisitorDef(types)
+            {
+            }
+
+            void noteSlot(unsigned slot) {
+                if (slot != ~0u && nextSlot <= slot) {
+                    nextSlot = slot + 1;
+                }
+            }
+
+            void visit(HIRExprNodeVariable& node) override {
+                noteSlot(node.slot);
+            }
+
+            void visitPattern(const Span& patternSpan, HIRPattern& pattern) override {
+                for (auto slot : patternBindingSlots(pattern, HIRPatternBindingOrder::FirstCandidate)) {
+                    noteSlot(slot);
+                }
+                HIRExprVisitorDef::visitPattern(patternSpan, pattern);
+            }
+        } slots(crate->types);
+
+        for (auto& arg : rv.args) {
+            slots.visitPattern(sp, arg.first);
+        }
+        rv.code->visit(slots);
+
+        auto* body = crate->pool->make<HIRExprNodeBlock>(sp);
+        body->resType = rv.code->resType;
+        for (auto& arg : rv.args) {
+            const auto slot = slots.nextSlot++;
+            auto* value = crate->pool->make<HIRExprNodeVariable>(sp, RcString(), slot);
+            value->resType = crate->types.infer();
+            auto* binding = crate->pool->make<HIRExprNodeLet>(
+                sp,
+                arg.first.clone(),
+                arg.second,
+                HIRExprNodeP(value)
+            );
+            binding->resType = crate->types.unit();
+            body->nodes.push_back(HIRExprNodeP(binding));
+            arg.first = HIRPattern(
+                HIRPatternBinding(false, HIRPatternBinding::Type::Move, RcString::newInterned("#async_arg"), slot),
+                HIRPattern::Data::make_Any({})
+            );
+        }
+        body->valueNode = rv.code.takeNode();
+        rv.code.reset(body);
+    }
     rv.defineOpaque = ::std::move(defineOpaque);
     rv.markings = markings;
 
