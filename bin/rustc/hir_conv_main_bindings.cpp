@@ -2273,13 +2273,19 @@ public:
 
     void visitStruct(HIRItemPath p, HIRStruct& str) override {
         HIRTypeRef ty = crate.types.path(HIRGenericPath(p.getSimplePath(), str.params.makeNopParams(crate.types, 0)), &str);
-        // HACK: If thre is a `#` in the path, it's en enum variant
-        if (const auto* n = ::std::strchr(p.name, '#')) {
-            if (n != p.name && n[1]) {
-                auto path = p.getSimplePath();
-                path.updateLastComponent(RcString::newInterned(p.name, n - p.name));
-                const auto& enm = crate.getEnumByPath(Span(), path);
-                ty = crate.types.path(HIRGenericPath(std::move(path), str.params.makeNopParams(crate.types, 0)), &enm);
+        // Data-carrying enum variants are stored as `Enum#Variant` structs.
+        // Other generated names also contain `#` (notably macro hygiene), so
+        // accept a separator only when its prefix names an actual enum.
+        for (const auto* separator = p.name; *separator; separator++) {
+            if (*separator != '#') {
+                continue;
+            }
+            auto path = p.getSimplePath();
+            path.updateLastComponent(RcString::newInterned(p.name, separator - p.name));
+            const auto* item = crate.getTypeitemByPathOpt(path);
+            if (item && item->is_Enum()) {
+                ty = crate.types.path(HIRGenericPath(path, str.params.makeNopParams(crate.types, 0)), &item->as_Enum());
+                break;
             }
         }
         implType = ty;
