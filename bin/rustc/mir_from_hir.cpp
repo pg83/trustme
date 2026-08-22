@@ -9384,7 +9384,11 @@ void MirBuilder::pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bo
 
     // Drop target if populated
     if (updateDestState) {
-        markValueAssigned(sp, dst);
+        if (const auto* enumVariant = val.opt_EnumVariant()) {
+            markValueAssignedVariant(sp, dst, enumVariant->index);
+        } else {
+            markValueAssigned(sp, dst);
+        }
     }
     this->pushStmt(sp, MIRStatement::make_Assign({mv$(dst), mv$(val)}));
 }
@@ -9462,11 +9466,40 @@ void MirBuilder::pushStmt(const Span& sp, MIRStatement stmt) {
 }
 
 void MirBuilder::markValueAssigned(const Span& sp, const MIRLValue& dst) {
+    markValueAssignedState(sp, dst, VarState::make_Valid({}));
+}
+
+void MirBuilder::markValueAssignedVariant(const Span& sp, const MIRLValue& dst, unsigned int variantIndex) {
     if (dst.root.is_Return()) {
         ASSERT_BUG(sp, dst.wrappers.empty(), "Assignment to a component of the return value should be impossible.");
         return;
     }
-    VarState* stateP = getValStateMutP(sp, dst, /*expect_valid=*/true);
+
+    const auto* ty = valType(sp, dst);
+    ASSERT_BUG(sp, ty->is_Path() && ty->as_Path().binding.is_Enum(), "Enum variant assigned to non-enum " << ty);
+    const auto& enm = *ty->as_Path().binding.as_Enum();
+    if (!enm.data.is_Data()) {
+        markValueAssigned(sp, dst);
+        return;
+    }
+    const auto variantCount = enm.numVariants();
+    ASSERT_BUG(sp, variantIndex < variantCount, "Enum variant index out of range");
+
+    VarState::Data_Partial partial{{}, ~0u};
+    partial.innerStates.reserve(variantCount);
+    for (size_t i = 0; i < variantCount; i++) {
+        partial.innerStates.push_back(VarState::make_Invalid(InvalidType::Uninit));
+    }
+    partial.innerStates[variantIndex] = VarState::make_Valid({});
+    markValueAssignedState(sp, dst, VarState::make_Partial(mv$(partial)));
+}
+
+void MirBuilder::markValueAssignedState(const Span& sp, const MIRLValue& dst, VarState newState) {
+    if (dst.root.is_Return()) {
+        ASSERT_BUG(sp, dst.wrappers.empty(), "Assignment to a component of the return value should be impossible.");
+        return;
+    }
+    VarState* stateP = getValStateMutP(sp, dst, /*expect_valid=*/newState.is_Valid());
 
     if (stateP) {
         if ((*stateP).is_Invalid()) {
@@ -9474,7 +9507,6 @@ void MirBuilder::markValueAssigned(const Span& sp, const MIRLValue& dst) {
             ASSERT_BUG(sp, se != InvalidType::Descoped, "Assining of descoped variable - " << dst);
         }
         dropValueFromState(sp, *stateP, dst.clone());
-        auto newState = VarState::make_Valid({});
         DEBUG("State " << dst << " " << *stateP << " => " << newState);
         *stateP = std::move(newState);
     } else {
@@ -11242,7 +11274,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                 VarState tpl;
                 switch (ivs.tag()) {
                     case VarState::TAG_Invalid: {
-                        tpl = VarState::make_Valid({});
+                        tpl = ivs.clone();
                         break;
                     }
                     case VarState::TAG_MovedOut: {

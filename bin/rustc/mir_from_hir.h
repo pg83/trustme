@@ -321,6 +321,9 @@ public:
     void insertCloned(const Span& sp, const SavedCode& c, CloneMapper& mapper);
 
 private:
+    void markValueAssignedState(const Span& sp, const MIRLValue& val, VarState newState);
+    void markValueAssignedVariant(const Span& sp, const MIRLValue& val, unsigned int variantIndex);
+
     struct CodeSaveStackEnt {
         /// Unique index to catch stack violations
         size_t index;

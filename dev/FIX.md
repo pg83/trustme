@@ -48,7 +48,8 @@ fixes, followed by the declarative-macro hygiene fix, closed twenty-eight
 independently rerun nodes; preserving the generic context while evaluating an
 associated const pattern closed one more; keeping simultaneously live locals
 in separate coroutine storage slots closed another; implementing captured
-generic assertions closed one more, leaving 17.
+generic assertions closed one more; tracking the initialized variant of data
+enums during drop elaboration closed another, leaving 16.
 
 | result | nodes |
 |---|---:|
@@ -57,8 +58,8 @@ generic assertions closed one more, leaving 17.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 31 |
-| still failing independently | 17 |
+| fixed by subsequent point reruns | 32 |
+| still failing independently | 16 |
 
 Manual inspection normalised one mechanical classifier label:
 
@@ -70,9 +71,9 @@ The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| wrong runtime behaviour, panic, abort, or output | 9 |
+| wrong runtime behaviour, panic, abort, or output | 8 |
 | stable timeout | 8 |
-| **total independently reproduced** | **17** |
+| **total independently reproduced** | **16** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -80,14 +81,13 @@ accounting.
 
 ## P1: runtime semantics
 
-Nine programs compile but execute incorrectly:
+Eight programs compile but execute incorrectly:
 
 | family | nodes | cases |
 |---|---:|---|
 | lifetime-erased `TypeId` / `Any` distinctions | 3 | `type-id-higher-rank`, `any-lifetime-escape-higher-rank`, doctest `core/src/any.rs:660` |
 | anonymous-scope `type_name` paths | 2 | `issues/issue-61894.rs`, coretest `any::dyn_type_name` |
 | RustSmith stdout mismatch | 2 | seeds 19 and 102 |
-| drop elaboration after a raw-pointer write | 1 | `drop/issue-90752-raw-ptr-shenanigans.rs` |
 | adjacent stack allocation layout | 1 | Miri `adjacent-allocs.rs` |
 
 The three `TypeId`/`Any` cases depend on distinguishing higher-ranked and
