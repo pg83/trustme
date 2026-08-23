@@ -580,6 +580,13 @@ zerocopy = add_project_test(
     lockfile="$(S)/tst/projects/zerocopy/Cargo.lock",
 )
 
+rustversion = add_project_test(
+    name="rustversion",
+    url="https://github.com/dtolnay/rustversion.git",
+    rev="9e86f839b6a34a7d9398f243d88bf400b7fa1f7c",
+    lockfile="$(S)/tst/projects/rustversion/Cargo.lock",
+)
+
 elain = add_project_test(
     name="elain",
     url="https://github.com/jswrenn/elain.git",
