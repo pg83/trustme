@@ -1342,23 +1342,19 @@ default:
                 }
                 MIR_ASSERT(*mirRes, curOfs == offset, "Current offset doesn't match expected (#" << fld << "): " << curOfs << " != " << offset);
 
-                of << "\t";
-                of << "/*@" << offset << "*/";
-                if (const auto* te = ty->opt_Slice()) {
-                    emitCtype(te->inner, FMT_CB(ss, ss << "_" << fld << "[0]";));
+                if ((*ty).is_Path() && (*ty).as_Path().binding.is_ExternType()) {
                     hasUnsized = true;
-                } else if (ty->is_TraitObject()) {
-                    of << "unsigned char _" << fld << "[0]";
-                    hasUnsized = true;
-                } else if (ty == HIRCoreType::Str) {
-                    of << "u8 _" << fld << "[0]";
-                    hasUnsized = true;
-                } else if (((*ty).is_Path() && ((*ty).as_Path().binding.is_ExternType()))) {
-                    of << "// External";
-                    hasUnsized = true;
-                } else {
-                    if (s == 0 && options.disallowEmptyStructs) {
-                        of << "// ZST";
+                } else if (!(s == 0 && options.disallowEmptyStructs)) {
+                    of << "\t";
+                    if (const auto* te = ty->opt_Slice()) {
+                        emitCtype(te->inner, FMT_CB(ss, ss << "_" << fld << "[0]";));
+                        hasUnsized = true;
+                    } else if (ty->is_TraitObject()) {
+                        of << "unsigned char _" << fld << "[0]";
+                        hasUnsized = true;
+                    } else if (ty == HIRCoreType::Str) {
+                        of << "u8 _" << fld << "[0]";
+                        hasUnsized = true;
                     } else {
                         // TODO: Nested unsized?
                         emitCtype(ty, FMT_CB(ss, ss << "_" << fld));
@@ -1366,8 +1362,8 @@ default:
 
                         hasUnsized |= (s == SIZE_MAX);
                     }
+                    of << ";\n";
                 }
-                of << "; // " << ty << "\n";
 
                 curOfs += s;
             }
@@ -1411,7 +1407,6 @@ default:
                 case HIRTypeData::TAG_Tuple: {
                     auto& te = (*ty).as_Tuple();
                     if (te.size() > 0) {
-                        of << " // " << ty << "\n";
                         const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
 
                         emitStructInner(ty, repr, /*packing_max_align=*/0);
@@ -1428,7 +1423,7 @@ default:
                 }
                 case HIRTypeData::TAG_Function: {
                     emitTypeFn(ty);
-                    of << " // " << ty << "\n";
+                    of << "\n";
                     break;
                 }
                 case HIRTypeData::TAG_NamedFunction: {
@@ -1475,8 +1470,7 @@ default:
                         of << "))";
                     }
                     emitCtype(ty);
-                    of << ";";
-                    of << " // " << ty << "\n";
+                    of << ";\n";
                     break;
                 }
                 case HIRTypeData::TAG_ErasedType: {
@@ -1501,8 +1495,6 @@ default:
             auto itemTy = crate.types.path(p.clone(), HIRTypePathBinding::make_Struct(&item));
             const auto* repr = TargetGetTypeRepr(sp, resolve_, itemTy);
             MIR_ASSERT(*mirRes, repr, "No repr for struct " << p);
-
-            of << "// struct " << p << "\n";
 
             emitStructInner(itemTy, repr, item.maxFieldAlignment);
 
@@ -1642,7 +1634,6 @@ default:
                 unionFields.insert(unionFields.begin(), 0);
             }
 
-            of << "// enum " << p << "\n";
             of << "struct e_" << TransMangle(p) << " {\n";
 
             // HACK: For NonZero optimised enums, emit a struct with a single field
@@ -1702,12 +1693,9 @@ default:
                 })) {
                     of << "\tunion {\n";
                     for (auto idx : unionFields) {
-                        of << "\t\t";
-
                         const auto& ty = repr->fields[idx].ty;
-                        if (this->typeIsBadZst(ty)) {
-                            of << "// ZST: " << ty << "\n";
-                        } else {
+                        if (!this->typeIsBadZst(ty)) {
+                            of << "\t\t";
                             if (isEnumTag(repr, idx)) {
                                 emitCtype(ty, FMT_CB(ss, ss << "TAG"));
                                 embeddedTags.insert(repr);
@@ -1906,7 +1894,6 @@ default:
 
                 emitStaticTy(type, p, /*is_proto=*/true, item.explicitAlignment);
                 of << " = { .raw = { (uintptr_t)" << linkageName << " } };";
-                of << "\t// static " << p << " : " << type;
                 of << "\n";
                 return;
             }
@@ -1925,9 +1912,7 @@ default:
                     of << " asm(\"" << linkageName << "\")";
                 }
             }
-            of << ";";
-            of << "\t// static " << p << " : " << type;
-            of << "\n";
+            of << ";\n";
 
             mirRes = nullptr;
         }
@@ -1977,9 +1962,7 @@ default:
             if (item.explicitAlignment != 0) {
                 of << " __attribute__((aligned(" << item.explicitAlignment << ")))";
             }
-            of << ";";
-            of << "\t// static " << p << " : " << type;
-            of << "\n";
+            of << ";\n";
 
             mirRes = nullptr;
         }
@@ -2094,7 +2077,6 @@ default:
                 of << "\".incbin \\\"" << outfilePath << ".blob\\\", " << blobOffset << ", " << encoded.bytes.size() << "\\n\"\n";
                 of << "\".size " << TransMangleValue(p) << "," << size << "\\n\"\n";
                 of << "\".popsection\\n\");\n";
-                of << "\t// static " << p << " : " << type << " (literal blob, " << size << " bytes)\n";
                 mirRes = nullptr;
                 return;
             }
@@ -2169,9 +2151,7 @@ default:
                 }
                 of << "} }";
             }
-            of << ";";
-            of << "\t// static " << p << " : " << type << " = " << encoded;
-            of << "\n";
+            of << ";\n";
             mirRes = nullptr;
         }
 
@@ -2271,7 +2251,6 @@ default:
                 trackedFunctions.insert(p.clone());
             }
 
-            of << "// EXTERN extern \"" << item.abi << "\" " << p << "\n";
             if (item.linkage.name.rfind("llvm.", 0) == 0) {
                 of << "static ";
                 emitFunctionHeader(p, item, params);
@@ -2868,7 +2847,6 @@ default:
                 mirRes = nullptr;
                 return;
             } else if (item.linkage.name == "_Unwind_RaiseException") {
-                of << "// - Magic compiler impl\n";
                 of << "static ";
                 emitFunctionHeader(p, item, params);
                 of << " {\n";
@@ -2929,7 +2907,6 @@ default:
             mirRes = &topMirRes;
 
             TRACE_FUNCTION_F(p);
-            of << "// PROTO extern \"" << item.abi << "\" " << p << "\n";
             emitFunctionLinkageAlias(p, item);
             emitFunctionDefinitionPrefix(item, isExternDef);
             emitFunctionHeader(p, item, params);
@@ -2969,7 +2946,6 @@ default:
             if (!hasPrototype) {
                 emitFunctionLinkageAlias(p, item);
             }
-            of << "// " << p << "\n";
             emitFunctionDefinitionPrefix(item, isExternDef);
             emitFunctionHeader(p, item, params);
             of << "\n";
@@ -2997,7 +2973,7 @@ default:
                 if (!argumentIsPassed(item.abi, argTy)) {
                     of << "\t";
                     emitCtype(argTy, FMT_CB(os, os << "arg" << i;));
-                    of << " = {};\t// zero-sized, not passed\n";
+                    of << " = {};\n";
                 }
             }
 
@@ -3053,9 +3029,7 @@ default:
                 DEBUG("var" << i << " : " << code->locals[i]);
                 of << "\t";
                 emitCtype(code->locals[i], FMT_CB(ss, ss << "var" << i;));
-                of << ";";
-                of << "\t// " << code->locals[i];
-                of << "\n";
+                of << ";\n";
             }
             for (unsigned int i = 0; i < code->dropFlags.size(); i++) {
                 of << "\tbool df" << i << " = " << code->dropFlags[i] << ";\n";
@@ -3649,7 +3623,6 @@ default:
                     break;
                 }
             }
-            of << indent << "// ^ " << term << "\n";
         }
 
         void emitCleanupRunner(MIRTypeResolve& localMirRes, const ::std::set<unsigned>& cleanupBlocks) {
@@ -3858,7 +3831,7 @@ default:
                             of << "& ";
                             emitLvalue(fieldInner);
                         }
-                        of << " + " << elementSize * valFp.as_Field() << ") /*ZST*/";
+                        of << " + " << elementSize * valFp.as_Field() << ")";
                     } else {
                         // Get the number of fields in parent
                         auto* repr = TargetGetTypeRepr(sp, resolve_, parentTy);
@@ -3885,13 +3858,13 @@ default:
                         if (!found) {
                             of << "(void*)( (u8*)& ";
                             emitLvalue(fieldInner);
-                            of << " + " << repr->fields[valFp.as_Field()].offset << ") /*ZST*/";
+                            of << " + " << repr->fields[valFp.as_Field()].offset << ")";
                         }
                         // Otherwise, use the next non-zero field
                         else {
                             of << "(void*)( &";
                             emitLvalue(tmpLv);
-                            of << ") /*ZST*/";
+                            of << ")";
                         }
                     }
                 }
@@ -3969,7 +3942,6 @@ default:
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
             switch (stmt.tag()) {
                 case MIRStatement::TAG_ScopeEnd:
-                    of << indent << "// " << stmt << "\n";
                     break;
                 case MIRStatement::TAG_SetDropFlag: {
                     const auto& e = stmt.as_SetDropFlag();
@@ -4007,25 +3979,20 @@ default:
                     break;
                 case MIRStatement::TAG_Asm:
                     this->emitAsmGcc(localMirRes, stmt.as_Asm(), indentLevel);
-
-                    of << indent << "// ^ " << stmt << "\n";
                     break;
                 case MIRStatement::TAG_Asm2:
                     this->emitAsm2Gcc(localMirRes, stmt, indentLevel);
-
-                    of << indent << "// ^ " << stmt << "\n";
                     break;
                 case MIRStatement::TAG_Assign: {
                     const auto& e = stmt.as_Assign();
                     DEBUG("- " << e.dst << " = " << e.src);
-                    of << indent;
 
                     HIRTypeRef tmp;
                     const auto& ty = localMirRes.getLvalueType(tmp, e.dst);
                     if (/*(e.dst.is_Deref() || e.dst.is_Field()) &&*/ this->typeIsBadZst(ty)) {
-                        of << "/* ZST assign */\n";
                         break;
                     }
+                    of << indent;
 
                 switch (e.src.tag()) {
                     case MIRRValue::TAG_Use: {
@@ -4038,7 +4005,6 @@ default:
                         }
 
                         if (ve.is_Field() && this->typeIsBadZst(ty)) {
-                            of << "/* ZST field */";
                             break;
                         }
 
@@ -4683,8 +4649,6 @@ default:
                                         of << re.tagValue(ve.index);
                                     }
                                     emitNewline = true;
-                                } else {
-                                    of << "/* Niche tag */";
                                 }
                                 if (enmP->isValue()) {
                                     // Value enums have no data fields
@@ -4733,9 +4697,7 @@ default:
                         break;
                     }
                 }
-                of << ";";
-                of << "\t// " << e.dst << " = " << e.src;
-                of << "\n";
+                of << ";\n";
                 break;
                 }
             }
@@ -4743,7 +4705,6 @@ default:
 
         void emitRvalueCast(const MIRTypeResolve& localMirRes, const MIRLValue& dst, const MIRRValue::Data_Cast& ve) {
             if (resolve_.isTypePhantomData(ve.type)) {
-                of << "/* PhantomData cast */\n";
                 return;
             }
 
@@ -6632,7 +6593,6 @@ default:
                         if (item.variadic || emitted < passedCount || hasCallerLocation) {
                             of << ",";
                         }
-                        of << " // " << ty;
                     }
 
                     if (item.variadic) {
@@ -6652,7 +6612,7 @@ default:
             } else {
                 of << "void " << cb;
             }
-            of << " // -> " << retTy << "\n";
+            of << "\n";
         }
 
         void emitTrackCallerReifyWrapper(const HIRPath& p, const HIRFunction& item, const TransParams& params) {
@@ -7065,14 +7025,14 @@ default:
                     return ty->is_Borrow() || ty->is_Pointer();
                 };
                 if (this->typeIsBadZst(tyDst)) {
-                    of << "/* zst */";
+                    return;
                 }
                 // A transmute keeps the size, so a zero-sized source has a
                 // zero-sized destination and no bytes to copy. The source has
                 // no storage to copy them from either, but C++ gives an empty
                 // struct a byte, so clear the destination rather than leave it
                 // holding whatever was in that byte.
-                else if (this->typeIsBadZst(tySrc)) {
+                if (this->typeIsBadZst(tySrc)) {
                     of << "memset( &";
                     emitLvalue(e.retVal);
                     of << ", 0, sizeof(";
@@ -7161,7 +7121,6 @@ default:
                 }
             } else if (name == "copy_nonoverlapping" || name == "copy") {
                 if (this->typeIsBadZst(params.types.at(0))) {
-                    of << "/* zst */";
                     return;
                 }
                 if (name == "copy") {
@@ -7184,7 +7143,6 @@ default:
             // NOTE: This is generic, and fills count*sizeof(T) (unlike memset)
             else if (name == "write_bytes") {
                 if (this->typeIsBadZst(params.types.at(0))) {
-                    of << "/* zst */";
                     return;
                 }
                 // 0: Destination, 1: Value, 2: Count
@@ -8503,7 +8461,6 @@ default:
                 size_t valueSize = 0;
                 MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, resolve_, params.types.at(0), valueSize), "Can't get size of " << params.types.at(0));
                 if (valueSize == 0) {
-                    of << "/* zst */";
                     return;
                 }
                 of << "__trustme_unaligned_volatile_load((void*)&";
@@ -8536,7 +8493,6 @@ default:
                 size_t valueSize = 0;
                 MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, resolve_, params.types.at(0), valueSize), "Can't get size of " << params.types.at(0));
                 if (valueSize == 0) {
-                    of << "/* zst */";
                     return;
                 }
                 of << "{ ";
@@ -8550,7 +8506,6 @@ default:
                 size_t elementSize = 0;
                 MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, resolve_, params.types.at(0), elementSize), "Can't get size of " << params.types.at(0));
                 if (elementSize == 0) {
-                    of << "/* zst */";
                     return;
                 }
                 of << (name == "volatile_copy_memory" ? "__trustme_volatile_memmove" : "__trustme_volatile_memcpy");
@@ -8565,7 +8520,6 @@ default:
                 size_t elementSize = 0;
                 MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, resolve_, params.types.at(0), elementSize), "Can't get size of " << params.types.at(0));
                 if (elementSize == 0) {
-                    of << "/* zst */";
                     return;
                 }
                 of << "__trustme_volatile_memset((void*)";

@@ -160,16 +160,70 @@ def check_link_args(rustc: str, src: str, work: str) -> None:
         raise RuntimeError(f"link args changed order: {actual!r} != {expected!r}")
 
 
-def generated_function(generated: str, crate: str, function: str) -> str:
-    marker = f'// ::"{crate}"::{function}'
-    start = generated.find(marker)
-    if start < 0:
-        raise RuntimeError(f"generated C++ has no function {function}")
-    marker_end = start + len(marker)
-    if marker_end == len(generated) or generated[marker_end] not in "<\n":
-        raise RuntimeError(f"generated C++ marker for {function} has an invalid suffix")
-    end = generated.find('\n// ::', start + len(marker))
-    return generated[start:] if end < 0 else generated[start:end]
+def generated_symbol(generated: str, function: str) -> str:
+    match = re.search(
+        rf"^#define (ZR[0-9a-f]{{16}}) {re.escape(function)}$",
+        generated,
+        re.MULTILINE,
+    )
+    if match is None:
+        raise RuntimeError(f"generated C++ has no exported function {function}")
+    return match.group(1)
+
+
+def generated_function_headers(generated: str, function: str) -> list[tuple[int, str]]:
+    symbol = generated_symbol(generated, function)
+    headers: list[tuple[int, str]] = []
+    for match in re.finditer(
+        rf"^(?!\s|#)[^\n;=]*\b{re.escape(symbol)}\(",
+        generated,
+        re.MULTILINE,
+    ):
+        opening = match.end() - 1
+        depth = 1
+        cursor = opening + 1
+        while cursor < len(generated) and depth:
+            if generated[cursor] == "(":
+                depth += 1
+            elif generated[cursor] == ")":
+                depth -= 1
+            cursor += 1
+        while cursor < len(generated) and generated[cursor].isspace():
+            cursor += 1
+        if cursor < len(generated) and generated[cursor] in ";{":
+            headers.append((match.start(), generated[cursor]))
+    return headers
+
+
+def generated_function(generated: str, function: str) -> str:
+    definitions = [
+        position
+        for position, terminator in generated_function_headers(generated, function)
+        if terminator == "{"
+    ]
+    if len(definitions) != 1:
+        raise RuntimeError(
+            f"generated C++ has {len(definitions)} definitions of {function}"
+        )
+    start = definitions[0]
+    end = generated.find("\n}\n", start)
+    if end < 0:
+        raise RuntimeError(f"generated C++ has no end of function {function}")
+    return generated[start:end + 3]
+
+
+def reject_detailed_codegen_comments(generated: str) -> None:
+    patterns = (
+        r"^// (?:PROTO|EXTERN|::|struct |enum )",
+        r"/\*@\d+\*/",
+        r"/\* ?(?:ZST|zst|Niche tag|PhantomData)",
+        r";[ \t]+// ",
+        r"^[ \t]*// \^ ",
+        r"// -> ",
+    )
+    for pattern in patterns:
+        if re.search(pattern, generated, re.MULTILINE):
+            raise RuntimeError(f"generated C++ contains detailed comment matching {pattern!r}")
 
 
 def check_unwind_cleanup(rustc: str, src: str, work: str) -> None:
@@ -182,30 +236,23 @@ def check_unwind_cleanup(rustc: str, src: str, work: str) -> None:
     )
     expect_ok(result, "unwind cleanup codegen")
     generated = Path(output + ".cpp").read_text()
+    reject_detailed_codegen_comments(generated)
 
-    no_op = generated_function(
-        generated, "codegen_unwind_cleanup", "trustme_noop_cleanup_probe"
-    )
+    no_op = generated_function(generated, "trustme_noop_cleanup_probe")
     if "trustme_run_cleanup" in no_op or "try {" in no_op:
         raise RuntimeError("no-op unwind cleanup emitted EH scaffolding")
 
-    monomorphized_no_op = generated_function(
-        generated, "codegen_unwind_cleanup", "generic_noop_cleanup"
-    )
+    monomorphized_no_op = generated_function(generated, "generic_noop_cleanup")
     if "trustme_run_cleanup" in monomorphized_no_op or "try {" in monomorphized_no_op:
         raise RuntimeError("monomorphized no-drop cleanup emitted EH scaffolding")
 
-    no_op_drop = generated_function(
-        generated, "codegen_unwind_cleanup", "generic_projected_noop_drop"
-    )
+    no_op_drop = generated_function(generated, "generic_projected_noop_drop")
     if re.search(r"try \{\s*\} catch", no_op_drop):
         raise RuntimeError("monomorphized no-drop operation emitted an empty handler")
     if re.search(r"if\( df\d+ \) \{\s*\}", no_op_drop):
         raise RuntimeError("monomorphized no-drop operation emitted an empty drop flag test")
 
-    real = generated_function(
-        generated, "codegen_unwind_cleanup", "trustme_real_cleanup_probe"
-    )
+    real = generated_function(generated, "trustme_real_cleanup_probe")
     if "auto trustme_run_cleanup" not in real or "try {" not in real:
         raise RuntimeError("real unwind cleanup lost its EH scaffolding")
     if "\n\t\ttrustme_run_cleanup(" not in real:
@@ -231,16 +278,13 @@ def check_enum_switch_compaction(rustc: str, src: str, work: str) -> None:
     )
     expect_ok(result, "enum switch compaction codegen")
     generated = Path(output + ".cpp").read_text()
+    reject_detailed_codegen_comments(generated)
 
-    all_same = generated_function(
-        generated, "codegen_enum_switch", "trustme_all_same_switch"
-    )
+    all_same = generated_function(generated, "trustme_all_same_switch")
     if "switch(" in all_same or "case " in all_same:
         raise RuntimeError("single-target enum match emitted a C++ switch")
 
-    one_odd = generated_function(
-        generated, "codegen_enum_switch", "trustme_one_odd_switch"
-    )
+    one_odd = generated_function(generated, "trustme_one_odd_switch")
     if "switch(" in one_odd or "case " in one_odd:
         raise RuntimeError("one-odd-target enum match emitted a C++ switch")
     if "if(" not in one_odd:
@@ -257,22 +301,17 @@ def check_cfg_compaction(rustc: str, src: str, work: str) -> None:
     )
     expect_ok(result, "CFG compaction codegen")
     generated = Path(output + ".cpp").read_text()
+    reject_detailed_codegen_comments(generated)
 
-    call_return = generated_function(
-        generated, "codegen_cfg_compaction", "trustme_call_then_return"
-    )
+    call_return = generated_function(generated, "trustme_call_then_return")
     if re.search(r"\bgoto bb\d+;", call_return) or "\nbb1:" in call_return:
         raise RuntimeError("call followed by a single-predecessor return was not merged")
 
-    no_op_drop = generated_function(
-        generated, "codegen_cfg_compaction", "trustme_noop_drop_chain"
-    )
+    no_op_drop = generated_function(generated, "trustme_noop_drop_chain")
     if re.search(r"\bgoto bb\d+;", no_op_drop) or "\nbb1:" in no_op_drop:
         raise RuntimeError("monomorphized no-op drop block was not forwarded")
 
-    branch = generated_function(
-        generated, "codegen_cfg_compaction", "trustme_branch_fallthrough"
-    )
+    branch = generated_function(generated, "trustme_branch_fallthrough")
     if len(re.findall(r"\bgoto bb\d+;", branch)) != 1:
         raise RuntimeError("conditional branch did not use one physical fallthrough")
 
@@ -287,6 +326,7 @@ def check_prototype_order(rustc: str, src: str, work: str) -> None:
     )
     expect_ok(result, "function prototype ordering codegen")
     generated = Path(output + ".cpp").read_text()
+    reject_detailed_codegen_comments(generated)
 
     mangled = re.findall(r"\bZR[A-Za-z0-9_$]*", generated)
     if not mangled or any(re.fullmatch(r"ZR[0-9a-f]{16}", symbol) is None for symbol in mangled):
@@ -294,17 +334,30 @@ def check_prototype_order(rustc: str, src: str, work: str) -> None:
     if "#define ZRe2bff76835446371 trustme_order_root\n" not in generated:
         raise RuntimeError("stable mangling changed for trustme_order_root")
 
-    prototypes = re.findall(r"^// PROTO[^\n]*::(trustme_[a-z_]+)$", generated, re.MULTILINE)
-    if set(prototypes) != {"trustme_recursive_a", "trustme_recursive_b"}:
-        raise RuntimeError(f"unexpected internal prototypes: {prototypes!r}")
+    functions = (
+        "trustme_order_leaf",
+        "trustme_order_middle",
+        "trustme_recursive_a",
+        "trustme_recursive_b",
+        "trustme_order_root",
+    )
+    headers = {name: generated_function_headers(generated, name) for name in functions}
+    prototypes = {
+        name
+        for name, entries in headers.items()
+        if any(terminator == ";" for _, terminator in entries)
+    }
+    if prototypes != {"trustme_recursive_a", "trustme_recursive_b"}:
+        raise RuntimeError(f"unexpected internal prototypes: {sorted(prototypes)!r}")
 
-    leaf = generated.find('// ::"codegen_prototype_order"::trustme_order_leaf\n')
-    middle = generated.find('// ::"codegen_prototype_order"::trustme_order_middle\n')
-    root = generated.find('// ::"codegen_prototype_order"::trustme_order_root\n')
-    if leaf < 0 or not leaf < middle < root:
+    definitions = {
+        name: next(position for position, terminator in entries if terminator == "{")
+        for name, entries in headers.items()
+    }
+    if not definitions["trustme_order_leaf"] < definitions["trustme_order_middle"] < definitions["trustme_order_root"]:
         raise RuntimeError("function definitions are not ordered callee before caller")
-    external = generated.find('// EXTERN extern "C" ::"codegen_prototype_order"::trustme_order_external\n')
-    if external < 0 or external > leaf:
+    external = generated.find('asm("trustme_order_external")')
+    if external < 0 or external > definitions["trustme_order_leaf"]:
         raise RuntimeError("external function declaration was not emitted before definitions")
 
 

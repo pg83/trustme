@@ -20,6 +20,7 @@ fn trustme_call_then_return(value: u32) -> u32 {
 }
 
 #[inline(never)]
+#[no_mangle]
 fn trustme_noop_drop_chain<T>(value: T) -> u32 {
     let result = unsafe { trustme_cfg_leaf(33) };
     let _ = &value;

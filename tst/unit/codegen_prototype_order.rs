@@ -15,16 +15,19 @@ unsafe extern "C" {
 }
 
 #[inline(never)]
+#[no_mangle]
 fn trustme_order_leaf(value: u32) -> u32 {
     value + 1
 }
 
 #[inline(never)]
+#[no_mangle]
 fn trustme_order_middle(value: u32) -> u32 {
     trustme_order_leaf(value)
 }
 
 #[inline(never)]
+#[no_mangle]
 fn trustme_recursive_a(value: u32) -> u32 {
     if value == 0 {
         0
@@ -34,6 +37,7 @@ fn trustme_recursive_a(value: u32) -> u32 {
 }
 
 #[inline(never)]
+#[no_mangle]
 fn trustme_recursive_b(value: u32) -> u32 {
     if value == 0 {
         0

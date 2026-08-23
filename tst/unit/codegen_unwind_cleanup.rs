@@ -58,12 +58,14 @@ pub fn trustme_noop_cleanup_probe(value: i32) -> i32 {
 }
 
 #[inline(never)]
+#[no_mangle]
 fn generic_noop_cleanup<T: Destruct>(value: T, argument: i32) -> i32 {
     let _value = value;
     unsafe { trustme_may_unwind(argument) }
 }
 
 #[inline(never)]
+#[no_mangle]
 fn generic_projected_noop_drop<T: Destruct>(choice: GenericChoice<T>, argument: i32) -> i32 {
     let _guard = Guard(argument);
     match choice {
