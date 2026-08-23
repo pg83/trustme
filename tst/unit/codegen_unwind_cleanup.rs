@@ -50,6 +50,17 @@ pub fn trustme_noop_cleanup_probe(value: i32) -> i32 {
     unsafe { trustme_may_unwind(value) }
 }
 
+#[inline(never)]
+fn generic_noop_cleanup<T>(value: T, argument: i32) -> i32 {
+    let _value = value;
+    unsafe { trustme_may_unwind(argument) }
+}
+
+#[no_mangle]
+pub fn trustme_monomorphized_noop_cleanup_probe(value: i32) -> i32 {
+    generic_noop_cleanup(value, value)
+}
+
 #[no_mangle]
 pub fn trustme_real_cleanup_probe(value: i32) -> i32 {
     let _guard = Guard(value);

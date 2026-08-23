@@ -160,10 +160,13 @@ def check_link_args(rustc: str, src: str, work: str) -> None:
 
 
 def generated_function(generated: str, crate: str, function: str) -> str:
-    marker = f'// ::"{crate}"::{function}\n'
+    marker = f'// ::"{crate}"::{function}'
     start = generated.find(marker)
     if start < 0:
         raise RuntimeError(f"generated C++ has no function {function}")
+    marker_end = start + len(marker)
+    if marker_end == len(generated) or generated[marker_end] not in "<\n":
+        raise RuntimeError(f"generated C++ marker for {function} has an invalid suffix")
     end = generated.find('\n// ::', start + len(marker))
     return generated[start:] if end < 0 else generated[start:end]
 
@@ -184,6 +187,12 @@ def check_unwind_cleanup(rustc: str, src: str, work: str) -> None:
     )
     if "trustme_run_cleanup" in no_op or "try {" in no_op:
         raise RuntimeError("no-op unwind cleanup emitted EH scaffolding")
+
+    monomorphized_no_op = generated_function(
+        generated, "codegen_unwind_cleanup", "generic_noop_cleanup"
+    )
+    if "trustme_run_cleanup" in monomorphized_no_op or "try {" in monomorphized_no_op:
+        raise RuntimeError("monomorphized no-drop cleanup emitted EH scaffolding")
 
     real = generated_function(
         generated, "codegen_unwind_cleanup", "trustme_real_cleanup_probe"

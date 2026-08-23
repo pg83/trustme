@@ -264,6 +264,8 @@ namespace {
         size_t literalBlobSize = 0;
         const MIRTypeResolve* mirRes = nullptr;
         stl::Vector<u8> noOpCleanupBlocks;
+        stl::Vector<u8> cleanupCandidateBlocks;
+        stl::Vector<MIRBasicBlockId> cleanupReachabilityWorklist;
         bool currentFunctionTracksCaller = false;
 
         struct {
@@ -3038,22 +3040,20 @@ default:
                 of << "\tbool df" << i << " = " << code->dropFlags[i] << ";\n";
             }
 
-            findNoOpCleanupBlocks(*code);
-            ::std::set<unsigned> cleanupBlocks;
-            ::std::vector<unsigned> pendingCleanupBlocks;
+            stl::Vector<MIRBasicBlockId> pendingCleanupBlocks;
             for (const auto& block : code->blocks) {
                 switch (block.terminator.tag()) {
                     case MIRTerminator::TAG_Drop: {
-                        auto& e = block.terminator.as_Drop();
-                        if (const auto* target = e.unwind.opt_Cleanup(); target && !cleanupBlockIsNoOp(*target)) {
-                            pendingCleanupBlocks.push_back(*target);
+                        const auto* target = block.terminator.as_Drop().unwind.opt_Cleanup();
+                        if (target) {
+                            pendingCleanupBlocks.pushBack(*target);
                         }
                         break;
                     }
                     case MIRTerminator::TAG_Call: {
-                        auto& e = block.terminator.as_Call();
-                        if (const auto* target = e.unwind.opt_Cleanup(); target && !cleanupBlockIsNoOp(*target)) {
-                            pendingCleanupBlocks.push_back(*target);
+                        const auto* target = block.terminator.as_Call().unwind.opt_Cleanup();
+                        if (target) {
+                            pendingCleanupBlocks.pushBack(*target);
                         }
                         break;
                     }
@@ -3061,18 +3061,19 @@ default:
                         break;
                 }
             }
+            findNoOpCleanupBlocks(localMirRes, *code, pendingCleanupBlocks);
+            ::std::set<unsigned> cleanupBlocks;
             while (!pendingCleanupBlocks.empty()) {
-                const auto blockIndex = pendingCleanupBlocks.back();
-                pendingCleanupBlocks.pop_back();
+                const auto blockIndex = pendingCleanupBlocks.popBack();
                 MIR_ASSERT(localMirRes, blockIndex < code->blocks.size(), "Cleanup target BB" << blockIndex << " is out of range");
-                if (!cleanupBlocks.insert(blockIndex).second) {
+                if (cleanupBlockIsNoOp(blockIndex) || !cleanupBlocks.insert(blockIndex).second) {
                     continue;
                 }
                 struct QueueTargets final: public MIRTargetVisitor {
-                    ::std::vector<MIRBasicBlockId>& pending;
+                    stl::Vector<MIRBasicBlockId>& pending;
                     const CodeGeneratorC& codegen;
 
-                    QueueTargets(::std::vector<MIRBasicBlockId>& pending, const CodeGeneratorC& codegen)
+                    QueueTargets(stl::Vector<MIRBasicBlockId>& pending, const CodeGeneratorC& codegen)
                         : pending(pending)
                         , codegen(codegen)
                     {
@@ -3080,7 +3081,7 @@ default:
 
                     void visitTarget(const MIRBasicBlockId& target) override {
                         if (!codegen.cleanupBlockIsNoOp(target)) {
-                            pending.push_back(target);
+                            pending.pushBack(target);
                         }
                     }
                 } queueTargets{pendingCleanupBlocks, *this};
@@ -3117,16 +3118,50 @@ default:
             return block < noOpCleanupBlocks.length() && noOpCleanupBlocks[block] != 0;
         }
 
-        void findNoOpCleanupBlocks(const MIRFunction& code) {
+        bool dropOperationIsNoOp(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_Drop& drop) const {
+            if (drop.kind != MIRDropKind::DEEP) {
+                return false;
+            }
+            HIRTypeRef tmp;
+            const auto& ty = localMirRes.getLvalueType(tmp, drop.slot);
+            return !resolve_.typeNeedsDropGlue(localMirRes.sp, ty);
+        }
+
+        void findNoOpCleanupBlocks(const MIRTypeResolve& localMirRes, const MIRFunction& code, const stl::Vector<MIRBasicBlockId>& cleanupEntries) {
             noOpCleanupBlocks.clear();
             noOpCleanupBlocks.zero(code.blocks.size());
+            cleanupCandidateBlocks.clear();
+            cleanupCandidateBlocks.zero(code.blocks.size());
+            cleanupReachabilityWorklist.clear();
+            cleanupReachabilityWorklist.append(cleanupEntries.begin(), cleanupEntries.end());
+            while (!cleanupReachabilityWorklist.empty()) {
+                const auto blockIndex = cleanupReachabilityWorklist.popBack();
+                MIR_ASSERT(localMirRes, blockIndex < code.blocks.size(), "Cleanup target BB" << blockIndex << " is out of range");
+                if (cleanupCandidateBlocks[blockIndex]) {
+                    continue;
+                }
+                cleanupCandidateBlocks.mut(blockIndex) = 1;
+                struct QueueTargets final: public MIRTargetVisitor {
+                    stl::Vector<MIRBasicBlockId>& pending;
+
+                    explicit QueueTargets(stl::Vector<MIRBasicBlockId>& pending)
+                        : pending(pending)
+                    {
+                    }
+
+                    void visitTarget(const MIRBasicBlockId& target) override {
+                        pending.pushBack(target);
+                    }
+                } queueTargets{cleanupReachabilityWorklist};
+                visitTerminatorTarget(code.blocks[blockIndex].terminator, queueTargets);
+            }
 
             bool changed;
             do {
                 changed = false;
                 for (MIRBasicBlockId blockIndex = 0; blockIndex < code.blocks.size(); blockIndex++) {
                     const auto& block = code.blocks[blockIndex];
-                    if (cleanupBlockIsNoOp(blockIndex) || !block.isCleanup || !block.statements.empty()) {
+                    if (!cleanupCandidateBlocks[blockIndex] || cleanupBlockIsNoOp(blockIndex) || !block.statements.empty()) {
                         continue;
                     }
 
@@ -3138,6 +3173,11 @@ default:
                         case MIRTerminator::TAG_Goto:
                             noOp = cleanupBlockIsNoOp(block.terminator.as_Goto());
                             break;
+                        case MIRTerminator::TAG_Drop: {
+                            const auto& drop = block.terminator.as_Drop();
+                            noOp = dropOperationIsNoOp(localMirRes, drop) && cleanupBlockIsNoOp(drop.target);
+                            break;
+                        }
                         case MIRTerminator::TAG_If: {
                             const auto& e = block.terminator.as_If();
                             noOp = cleanupBlockIsNoOp(e.bbTrue) && cleanupBlockIsNoOp(e.bbFalse);
