@@ -3018,7 +3018,10 @@ default:
             of << "\t";
             emitCtype(retType, FMT_CB(ss, ss << "rv";));
             of << ";\n";
-            for (unsigned int i = 0; i < code->locals.size(); i++) {
+            // Native C/C++ compilers place separate stack locals opposite to
+            // declaration order.  Reverse the declarations so consecutive
+            // MIR locals keep their order in memory.
+            for (size_t i = code->locals.size(); i-- > 0;) {
                 // If the type is a ZST, initialise it (to avoid warnings)
                 if (this->typeIsBadZst(code->locals[i])) {
                     continue;

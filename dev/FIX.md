@@ -57,7 +57,8 @@ closed one more; emitting large non-relocated static contents as assembler
 binary blobs closed one more; preserving opaque identity while expanding a
 recursive type-alias bound closed one more; preventing recursive normalization
 of sibling associated-type bounds closed one more; preserving Rust inline
-markings through metadata and C++ code generation closed one more, leaving 6.
+markings through metadata and C++ code generation closed one more; emitting
+MIR locals in native stack order closed one more, leaving 5.
 
 | result | nodes |
 |---|---:|
@@ -66,8 +67,8 @@ markings through metadata and C++ code generation closed one more, leaving 6.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 42 |
-| still failing independently | 6 |
+| fixed by subsequent point reruns | 43 |
+| still failing independently | 5 |
 
 Manual inspection normalised one mechanical classifier label:
 
@@ -79,9 +80,9 @@ The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| wrong runtime behaviour, panic, abort, or output | 3 |
+| wrong runtime behaviour, panic, abort, or output | 2 |
 | stable timeout | 3 |
-| **total independently reproduced** | **6** |
+| **total independently reproduced** | **5** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -89,12 +90,11 @@ accounting.
 
 ## P1: runtime semantics
 
-Three programs compile but execute incorrectly:
+Two programs compile but execute incorrectly:
 
 | family | nodes | cases |
 |---|---:|---|
 | RustSmith stdout mismatch | 2 | seeds 19 and 102 |
-| adjacent stack allocation layout | 1 | Miri `adjacent-allocs.rs` |
 
 ## P2: stable timeouts
 
