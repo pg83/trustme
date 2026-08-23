@@ -194,6 +194,13 @@ def check_unwind_cleanup(rustc: str, src: str, work: str) -> None:
         raise RuntimeError("real unwind cleanup is not called from the handler")
     if "try { trustme_run_cleanup" in real:
         raise RuntimeError("cleanup runner is redundantly wrapped in try/catch")
+    runner_start = real.index("auto trustme_run_cleanup")
+    runner_end = real.index("\n\t};", runner_start)
+    runner = real[runner_start:runner_end]
+    if "noexcept" not in runner:
+        raise RuntimeError("cleanup runner does not terminate a second unwind")
+    if "catch (...) { abort(); }" in runner:
+        raise RuntimeError("cleanup runner contains redundant per-operation handlers")
 
 
 def main() -> int:

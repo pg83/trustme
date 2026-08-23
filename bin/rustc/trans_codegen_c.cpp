@@ -3330,17 +3330,25 @@ default:
                 }
                 case MIRTerminator::TAG_Drop: {
                     auto& e = term.as_Drop();
-                    emitOperationWithUnwind(e.unwind, indentLevel, [&](unsigned operationIndent) {
-                        emitDropOperation(localMirRes, e, operationIndent);
-                    });
+                    if (cleanup) {
+                        emitDropOperation(localMirRes, e, indentLevel);
+                    } else {
+                        emitOperationWithUnwind(e.unwind, indentLevel, [&](unsigned operationIndent) {
+                            emitDropOperation(localMirRes, e, operationIndent);
+                        });
+                    }
                     emitTarget(e.target);
                     break;
                 }
                 case MIRTerminator::TAG_Call: {
                     auto& e = term.as_Call();
-                    emitOperationWithUnwind(e.unwind, indentLevel, [&](unsigned operationIndent) {
-                        emitTermCall(localMirRes, e, operationIndent);
-                    });
+                    if (cleanup) {
+                        emitTermCall(localMirRes, e, indentLevel);
+                    } else {
+                        emitOperationWithUnwind(e.unwind, indentLevel, [&](unsigned operationIndent) {
+                            emitTermCall(localMirRes, e, operationIndent);
+                        });
+                    }
                     emitTarget(e.retBlock);
                     break;
                 }
@@ -3365,7 +3373,7 @@ default:
         }
 
         void emitCleanupRunner(MIRTypeResolve& localMirRes, const ::std::set<unsigned>& cleanupBlocks) {
-            of << "\tauto trustme_run_cleanup = [&](unsigned trustme_cleanup_entry) {\n";
+            of << "\tauto trustme_run_cleanup = [&](unsigned trustme_cleanup_entry) noexcept {\n";
             of << "\t\tswitch(trustme_cleanup_entry) {\n";
             for (auto block : cleanupBlocks) {
                 of << "\t\tcase " << block << ": goto cleanup_bb" << block << ";\n";
