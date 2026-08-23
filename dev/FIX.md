@@ -52,7 +52,8 @@ generic assertions closed one more; tracking the initialized variant of data
 enums during drop elaboration closed another; preserving the source owner of
 block-local items in `type_name` closed two more; preserving higher-ranked
 lifetime identity in `TypeId` and enumerating the resulting generated drop
-glue dependencies closed three more, leaving 11.
+glue dependencies closed three more; keeping wildcard array patterns sparse
+closed one more, leaving 10.
 
 | result | nodes |
 |---|---:|
@@ -61,8 +62,8 @@ glue dependencies closed three more, leaving 11.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 37 |
-| still failing independently | 11 |
+| fixed by subsequent point reruns | 38 |
+| still failing independently | 10 |
 
 Manual inspection normalised one mechanical classifier label:
 
@@ -75,8 +76,8 @@ The resulting current population is:
 | current result | nodes |
 |---|---:|
 | wrong runtime behaviour, panic, abort, or output | 3 |
-| stable timeout | 8 |
-| **total independently reproduced** | **11** |
+| stable timeout | 7 |
+| **total independently reproduced** | **10** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -93,7 +94,7 @@ Three programs compile but execute incorrectly:
 
 ## P2: stable timeouts
 
-Eight nodes hit their timeout again in isolation:
+Seven nodes hit their timeout again in isolation:
 
 | limit | case |
 |---:|---|
@@ -101,7 +102,6 @@ Eight nodes hit their timeout again in isolation:
 | 60 s | UI `associated-type-bounds/trait-params.rs` |
 | 60 s | Exercism `palindrome-products` |
 | 60 s | UI `next-solver/normalize/normalize-allow-too-many-vars.rs` |
-| 60 s | UI `consts/large-zst-array-77062.rs` |
 | 60 s | UI `coroutine/issue-87142.rs` |
 | 10 min | RustSmith seed 7 |
 | 60 s | `mir/mir_heavy_promoted.rs` |

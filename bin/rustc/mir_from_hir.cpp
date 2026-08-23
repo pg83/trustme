@@ -6535,9 +6535,16 @@ default:
 default:
                 BUG(sp, "Matching array with invalid pattern - " << pat);
                 case HIRPatternData::TAG_Any: {
-                    for (unsigned int i = 0; i < e.size.as_Known(); i++) {
-                        this->appendFrom(sp, emptyPattern, e.inner);
-                        fieldPath.back()++;
+                    if (e.size.as_Known() < PARTIAL_ARRAY_MIN) {
+                        for (u64 i = 0; i < e.size.as_Known(); i++) {
+                            this->appendFrom(sp, emptyPattern, e.inner);
+                            fieldPath.back()++;
+                        }
+                    } else {
+                        // A wildcard neither reads nor binds any element. Keep
+                        // one placeholder rule instead of expanding the whole
+                        // array; its field path is irrelevant to codegen.
+                        this->pushRule(PatternRule::make_Any({}));
                     }
                     break;
                 }
