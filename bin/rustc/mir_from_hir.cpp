@@ -2781,12 +2781,22 @@ default:
 
             const auto& tyVal = node.value->resType;
             this->visitNodePtr(node.value);
-            auto val = builder.getResultInLvalue(node.value->span(), tyVal);
 
             bool useTrait = node.traitUsed == HIRExprNodeDeref::TraitUsed::Trait;
             if (node.traitUsed == HIRExprNodeDeref::TraitUsed::Unknown) {
                 useTrait = !tyVal->is_Pointer() && !tyVal->is_Borrow() && !builder.isTypeOwnedBox(tyVal);
             }
+
+            auto value = builder.getResult(node.value->span());
+            if (!useTrait) {
+                if (auto* borrow = value.opt_Borrow()) {
+                    // Preserve the original place for drop-state tracking instead of
+                    // hiding *(&place) behind a materialised reference temporary.
+                    builder.setResult(node.span(), MIRRValue::make_Use(mv$(borrow->val)));
+                    return;
+                }
+            }
+            auto val = builder.lvalueOrTemp(node.value->span(), tyVal, mv$(value));
 
             if (useTrait) {
                 // Do operator replacement here after handling scope-raising

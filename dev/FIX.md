@@ -47,8 +47,8 @@ seed 36 completed in isolation and remains the only load-sensitive result.
 | failed in the full parallel run | 114 |
 | reproduced immediately after the full gate | 113 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 98 |
-| still failing independently | 15 |
+| fixed by subsequent point reruns | 99 |
+| still failing independently | 14 |
 
 The 96 trait-object `Debug` link failures were closed by canonicalising concrete
 trait-impl value paths before translation enumeration and C symbol emission.
@@ -64,26 +64,31 @@ commands passed against the explicitly published compiler; the rerun is
 recorded in
 `.build-clang/reclass-20260823-enum-drop-fixed/results.jsonl`.
 
+The missing aggregate drop was closed by preserving the original place through
+a direct built-in borrow/dereference pair, so assignments through `*(&mut
+place)` update the same drop state later used by partial moves. The original
+command passed against the explicitly published compiler; the rerun is recorded
+in `.build-clang/reclass-20260823-partial-drop-fixed/results.jsonl`.
+
 The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| wrong runtime behaviour, panic, abort, or output | 5 |
+| wrong runtime behaviour, panic, abort, or output | 4 |
 | compiler abort or wrong compiler diagnostic | 5 |
 | stable timeout | 5 |
-| **total independently reproduced** | **15** |
+| **total independently reproduced** | **14** |
 
 This full run supersedes the 2026-08-22 15,139-node baseline and all subsequent
 point accounting.
 
 ## P1: runtime semantics
 
-Five programs compile but execute incorrectly:
+Four programs compile but execute incorrectly:
 
 | nodes | family | cases |
 |---:|---|---|
 | 2 | RustSmith stdout mismatch | seeds 19 and 102 |
-| 1 | missing aggregate drops | `drop/issue-90752.rs` |
 | 1 | linear inlined stack allocation | `codegen/StackColoring-not-blowup-stack-issue-40883.rs` |
 | 1 | stack overflow in threaded `OnceLock` list | `std/src/sync/once_lock.rs:53` |
 
