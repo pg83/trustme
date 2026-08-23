@@ -3066,7 +3066,7 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
     if (dstTy->is_Path() && srcTy->is_Path()) {
         bool dstIsUnsizable = dstTy->as_Path().binding.is_Struct() && dstTy->as_Path().binding.as_Struct()->structMarkings.canUnsize;
         bool srcIsUnsizable = srcTy->as_Path().binding.is_Struct() && srcTy->as_Path().binding.as_Struct()->structMarkings.canUnsize;
-        if (dstIsUnsizable || srcIsUnsizable) {
+        if (dstIsUnsizable && srcIsUnsizable) {
             DEBUG("Struct unsize? " << dstTy << " <- " << srcTy);
             const auto& str = *dstTy->as_Path().binding.as_Struct();
             const auto& dstGp = dstTy->as_Path().path.data.as_Generic();
