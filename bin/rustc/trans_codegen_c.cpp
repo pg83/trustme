@@ -272,6 +272,7 @@ namespace {
         stl::Vector<MIRBasicBlockId> forwardingPath;
         stl::Vector<u32> blockIncoming;
         stl::Vector<u8> asmLabelBlocks;
+        stl::Vector<u8> blockLabels;
         MIRBasicBlockId fallthroughBlock = ~0u;
         bool currentFunctionTracksCaller = false;
 
@@ -3079,6 +3080,7 @@ default:
                 visitTerminatorTarget(code->blocks[blockIndex].terminator, queueTargets);
             }
             findForwardedBlocks(localMirRes, *code);
+            findBlockLabels(*code, cleanupBlocks);
             if (!cleanupBlocks.empty()) {
                 emitCleanupRunner(localMirRes, cleanupBlocks);
             }
@@ -3097,7 +3099,9 @@ default:
                         break;
                     }
                 }
-                of << "bb" << i << ":\n";
+                if (blockLabels[i]) {
+                    of << "bb" << i << ":\n";
+                }
                 for (const auto& stmt : block.statements) {
                     localMirRes.setCurStmt(i, &stmt - block.statements.data());
                     emitStatement(localMirRes, stmt, 1);
@@ -3144,6 +3148,64 @@ default:
 
         bool blockIsInlinedReturn(MIRBasicBlockId block) const {
             return block < inlinedReturnBlocks.length() && inlinedReturnBlocks[block] != 0;
+        }
+
+        void markBlockLabel(MIRBasicBlockId target, MIRBasicBlockId fallthrough, bool allowFallthrough) {
+            target = forwardedBlockTarget(target);
+            if (target >= blockLabels.length() || cleanupCandidateBlocks[target]
+                || cleanupBlockIsNoOp(target) || blockIsInlinedReturn(target)
+                || (allowFallthrough && target == fallthrough)) {
+                return;
+            }
+            blockLabels.mut(target) = 1;
+        }
+
+        template <typename CleanupBlocks>
+        void findBlockLabels(const MIRFunction& code, const CleanupBlocks& cleanupBlocks) {
+            blockLabels.clear();
+            blockLabels.zero(code.blocks.size());
+            for (MIRBasicBlockId source = 0; source < code.blocks.size(); source++) {
+                if (cleanupBlocks.count(source) != 0 || cleanupBlockIsNoOp(source)
+                    || blockIsForwarded(source) || blockIsInlinedReturn(source)) {
+                    continue;
+                }
+                MIRBasicBlockId fallthrough = ~0u;
+                for (MIRBasicBlockId next = source + 1; next < code.blocks.size(); next++) {
+                    if (cleanupBlocks.count(next) == 0 && !cleanupBlockIsNoOp(next)
+                        && !blockIsForwarded(next) && !blockIsInlinedReturn(next)) {
+                        fallthrough = next;
+                        break;
+                    }
+                }
+                struct MarkTargets final: public MIRTargetVisitor {
+                    CodeGeneratorC& codegen;
+                    MIRBasicBlockId fallthrough;
+
+                    MarkTargets(CodeGeneratorC& codegen, MIRBasicBlockId fallthrough)
+                        : codegen(codegen)
+                        , fallthrough(fallthrough)
+                    {
+                    }
+
+                    void visitTarget(const MIRBasicBlockId& target) override {
+                        codegen.markBlockLabel(target, fallthrough, true);
+                    }
+                } markTargets{*this, fallthrough};
+                const auto& terminator = code.blocks[source].terminator;
+                visitTerminatorTarget(terminator, markTargets);
+                if (const auto* branch = terminator.opt_Switch()) {
+                    if (branch->validFlag != ~0u) {
+                        markBlockLabel(branch->invalidTarget, fallthrough, false);
+                    }
+                }
+                if (const auto* assembly = terminator.opt_Asm2()) {
+                    for (const auto& param : assembly->params) {
+                        if (const auto* label = param.opt_Label()) {
+                            markBlockLabel(*label, fallthrough, false);
+                        }
+                    }
+                }
+            }
         }
 
         void findForwardedBlocks(const MIRTypeResolve& localMirRes, const MIRFunction& code) {

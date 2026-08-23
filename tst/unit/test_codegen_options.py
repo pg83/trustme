@@ -378,16 +378,20 @@ def check_cfg_compaction(rustc: str, src: str, work: str) -> None:
     require_compact_cpp_syntax(generated)
 
     call_return = generated_function(generated, "trustme_call_then_return")
-    if re.search(r"\bgoto bb\d+;", call_return) or "\nbb1:" in call_return:
+    if re.search(r"\bgoto bb\d+;|^bb\d+:$", call_return, re.MULTILINE):
         raise RuntimeError("call followed by a single-predecessor return was not merged")
 
     no_op_drop = generated_function(generated, "trustme_noop_drop_chain")
-    if re.search(r"\bgoto bb\d+;", no_op_drop) or "\nbb1:" in no_op_drop:
+    if re.search(r"\bgoto bb\d+;|^bb\d+:$", no_op_drop, re.MULTILINE):
         raise RuntimeError("monomorphized no-op drop block was not forwarded")
 
     branch = generated_function(generated, "trustme_branch_fallthrough")
     if len(re.findall(r"\bgoto bb\d+;", branch)) != 1:
         raise RuntimeError("conditional branch did not use one physical fallthrough")
+    labels = set(re.findall(r"^bb(\d+):$", branch, re.MULTILINE))
+    targets = set(re.findall(r"\bgoto bb(\d+);", branch))
+    if labels != targets:
+        raise RuntimeError(f"basic block labels {labels!r} do not match goto targets {targets!r}")
 
     locations = re.search(
         r"const trustme_caller_location trustme_caller_locations\[\] = \{\n(.*?)\n\};",
