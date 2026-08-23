@@ -221,13 +221,39 @@ def check_unwind_cleanup(rustc: str, src: str, work: str) -> None:
         raise RuntimeError("cleanup runner contains redundant per-operation handlers")
 
 
+def check_enum_switch_compaction(rustc: str, src: str, work: str) -> None:
+    output = os.path.join(work, "enum-switch")
+    result = invoke(
+        rustc,
+        src,
+        output,
+        ["--crate-name", "codegen_enum_switch", "-Cemit-cpp-only"],
+    )
+    expect_ok(result, "enum switch compaction codegen")
+    generated = Path(output + ".cpp").read_text()
+
+    all_same = generated_function(
+        generated, "codegen_enum_switch", "trustme_all_same_switch"
+    )
+    if "switch(" in all_same or "case " in all_same:
+        raise RuntimeError("single-target enum match emitted a C++ switch")
+
+    one_odd = generated_function(
+        generated, "codegen_enum_switch", "trustme_one_odd_switch"
+    )
+    if "switch(" in one_odd or "case " in one_odd:
+        raise RuntimeError("one-odd-target enum match emitted a C++ switch")
+    if "if(" not in one_odd:
+        raise RuntimeError("one-odd-target enum match was not compacted to a condition")
+
+
 def main() -> int:
-    if len(sys.argv) != 7:
+    if len(sys.argv) != 8:
         raise SystemExit(
             "usage: test_codegen_options.py "
-            "RUSTC MIR_RS CFG_RS LINK_RS UNWIND_RS STAMP"
+            "RUSTC MIR_RS CFG_RS LINK_RS UNWIND_RS SWITCH_RS STAMP"
         )
-    rustc, mir_src, cfg_src, link_src, unwind_src, stamp = map(
+    rustc, mir_src, cfg_src, link_src, unwind_src, switch_src, stamp = map(
         os.path.abspath, sys.argv[1:]
     )
 
@@ -299,6 +325,7 @@ def main() -> int:
         check_codegen_prelude(rustc, mir_src, work)
         check_link_args(rustc, link_src, work)
         check_unwind_cleanup(rustc, unwind_src, work)
+        check_enum_switch_compaction(rustc, switch_src, work)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)
     Path(stamp).touch()

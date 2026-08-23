@@ -3353,10 +3353,48 @@ default:
                         emitTargetBody(e.invalidTarget);
                         of << ";\n";
                     }
+
+                    MIR_ASSERT(localMirRes, !e.targets.empty(), "Enum switch without variants");
+                    const auto firstTarget = e.targets[0];
+                    auto secondTarget = firstTarget;
+                    size_t firstTargetCount = 0;
+                    size_t secondTargetCount = 0;
+                    size_t secondTargetIndex = SIZE_MAX;
+                    bool hasSecondTarget = false;
+                    bool hasThirdTarget = false;
+                    for (size_t idx = 0; idx < e.targets.size(); idx++) {
+                        const auto target = e.targets[idx];
+                        if (target == firstTarget) {
+                            firstTargetCount++;
+                        } else if (!hasSecondTarget) {
+                            secondTarget = target;
+                            secondTargetCount = 1;
+                            secondTargetIndex = idx;
+                            hasSecondTarget = true;
+                        } else if (target == secondTarget) {
+                            secondTargetCount++;
+                        } else {
+                            hasThirdTarget = true;
+                        }
+                    }
+
+                    if (!hasSecondTarget) {
+                        emitTarget(firstTarget);
+                        break;
+                    }
+
+                    size_t oddArm = SIZE_MAX;
+                    if (!hasThirdTarget) {
+                        if (firstTargetCount == 1) {
+                            oddArm = 0;
+                        } else if (secondTargetCount == 1) {
+                            oddArm = secondTargetIndex;
+                        }
+                    }
                     emitTermSwitch(localMirRes, e.val, e.targets.size(), indentLevel, [&](size_t idx) {
                         emitTargetBody(e.targets[idx]);
                         of << ";";
-                    });
+                    }, oddArm);
                     break;
                 }
                 case MIRTerminator::TAG_SwitchValue: {
@@ -4829,11 +4867,22 @@ default:
                     // Optimisation: If there's only one arm with a different value, then emit an `if` isntead of a `switch`
                     if (oddArm != static_cast<size_t>(-1)) {
                         of << indent << "if( ";
-                        emitVariant();
                         if (e.isNiche(oddArm)) {
-                            MIR_ASSERT(localMirRes, nArms == 2, "Niche odd-arm switch without two arms");
-                            of << " != " << tagOf(oddArm == 0 ? 1 : 0) << "ull";
+                            bool firstComparison = true;
+                            for (size_t j = 0; j < nArms; j++) {
+                                if (j == oddArm || e.isNiche(j)) {
+                                    continue;
+                                }
+                                if (!firstComparison) {
+                                    of << " && ";
+                                }
+                                emitVariant();
+                                of << " != " << tagOf(j) << "ull";
+                                firstComparison = false;
+                            }
+                            MIR_ASSERT(localMirRes, !firstComparison, "Niche switch without explicit tag values");
                         } else {
+                            emitVariant();
                             of << " == " << tagOf(oddArm) << "ull";
                         }
                         of << ") {";
