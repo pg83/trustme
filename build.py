@@ -580,6 +580,13 @@ zerocopy = add_project_test(
     lockfile="$(S)/tst/projects/zerocopy/Cargo.lock",
 )
 
+elain = add_project_test(
+    name="elain",
+    url="https://github.com/jswrenn/elain.git",
+    rev="a28dc120e15b915502241eab078984b1315eb9aa",
+    lockfile="$(S)/tst/projects/elain/Cargo.lock",
+)
+
 zmij = add_project_test(
     name="zmij",
     url="https://github.com/dtolnay/zmij.git",
