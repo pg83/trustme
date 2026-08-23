@@ -571,6 +571,15 @@ alloca = add_project_test(
     lockfile="$(S)/tst/projects/alloca/Cargo.lock",
 )
 
+zerocopy = add_project_test(
+    name="zerocopy",
+    url="https://github.com/google/zerocopy.git",
+    rev="a986089ee73111d5bfda48b0c7d29d3f9301571c",
+    manifest="zerocopy",
+    adapter_args=["--features", "derive,simd"],
+    lockfile="$(S)/tst/projects/zerocopy/Cargo.lock",
+)
+
 zmij = add_project_test(
     name="zmij",
     url="https://github.com/dtolnay/zmij.git",
