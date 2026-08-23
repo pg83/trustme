@@ -1438,11 +1438,9 @@ default:
                         emitStructInner(ty, repr, /*packing_max_align=*/0);
 
                         if (repr->size > 0 && repr->size != SIZE_MAX) {
-                            of << "typedef char sizeof_assert_";
+                            of << "static_assert(sizeof(";
                             emitCtype(ty);
-                            of << "[ (sizeof(";
-                            emitCtype(ty);
-                            of << ") == " << repr->size << ") ? 1 : -1 ];\n";
+                            of << ")==" << repr->size << ");\n";
                         }
                     }
                     break;
@@ -1526,9 +1524,9 @@ default:
 
             if (repr->size > 0 && repr->size != SIZE_MAX) {
                 // TODO: Handle unsized (should check the size of the fixed-size region)
-                of << "typedef char sizeof_assert_" << TransMangle(p) << "[ (sizeof(struct s_" << TransMangle(p) << ") == " << repr->size << ") ? 1 : -1 ];\n";
+                of << "static_assert(sizeof(s_" << TransMangle(p) << ")==" << repr->size << ");\n";
             }
-            of << "typedef char alignof_assert_" << TransMangle(p) << "[ (ALIGNOF(struct s_" << TransMangle(p) << ") == " << repr->align << ") ? 1 : -1 ];\n";
+            of << "static_assert(ALIGNOF(s_" << TransMangle(p) << ")==" << repr->align << ");\n";
 
             mirRes = nullptr;
         }
@@ -1565,7 +1563,7 @@ default:
             }
             of << ";\n";
             if (true && repr->size > 0) {
-                of << "typedef char sizeof_assert_" << TransMangle(p) << "[ (sizeof(union u_" << TransMangle(p) << ") == " << repr->size << ") ? 1 : -1 ];\n";
+                of << "static_assert(sizeof(u_" << TransMangle(p) << ")==" << repr->size << ");\n";
             }
 
             mirRes = nullptr;
@@ -1754,7 +1752,7 @@ default:
             of << ";\n";
 
             size_t expSize = (repr->size > 0 ? repr->size : (options.disallowEmptyStructs ? 1 : 0));
-            of << "typedef char sizeof_assert_" << TransMangle(p) << "[ (sizeof(struct e_" << TransMangle(p) << ") == " << expSize << ") ? 1 : -1 ];\n";
+            of << "static_assert(sizeof(e_" << TransMangle(p) << ")==" << expSize << ");\n";
 
             mirRes = nullptr;
         }

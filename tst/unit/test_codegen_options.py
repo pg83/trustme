@@ -226,6 +226,13 @@ def reject_detailed_codegen_comments(generated: str) -> None:
             raise RuntimeError(f"generated C++ contains detailed comment matching {pattern!r}")
 
 
+def require_cpp_layout_asserts(generated: str) -> None:
+    if "typedef char sizeof_assert_" in generated or "typedef char alignof_assert_" in generated:
+        raise RuntimeError("generated C++ still uses typedef layout assertions")
+    if "static_assert(sizeof(" not in generated:
+        raise RuntimeError("generated C++ has no static layout assertion")
+
+
 def check_unwind_cleanup(rustc: str, src: str, work: str) -> None:
     output = os.path.join(work, "unwind-cleanup")
     result = invoke(
@@ -279,6 +286,7 @@ def check_enum_switch_compaction(rustc: str, src: str, work: str) -> None:
     expect_ok(result, "enum switch compaction codegen")
     generated = Path(output + ".cpp").read_text()
     reject_detailed_codegen_comments(generated)
+    require_cpp_layout_asserts(generated)
 
     all_same = generated_function(generated, "trustme_all_same_switch")
     if "switch(" in all_same or "case " in all_same:
