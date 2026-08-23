@@ -59,7 +59,8 @@ recursive type-alias bound closed one more; preventing recursive normalization
 of sibling associated-type bounds closed one more; preserving Rust inline
 markings through metadata and C++ code generation closed one more; emitting
 MIR locals in native stack order closed one more; the associated projection
-normalization fix also closed the next-solver stress case, leaving 4.
+normalization fix also closed the next-solver stress case; bounding wildcard
+expansion through recursive types closed the coroutine case, leaving 3.
 
 | result | nodes |
 |---|---:|
@@ -68,8 +69,8 @@ normalization fix also closed the next-solver stress case, leaving 4.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 44 |
-| still failing independently | 4 |
+| fixed by subsequent point reruns | 45 |
+| still failing independently | 3 |
 
 Manual inspection normalised one mechanical classifier label:
 
@@ -82,8 +83,8 @@ The resulting current population is:
 | current result | nodes |
 |---|---:|
 | wrong runtime behaviour, panic, abort, or output | 2 |
-| stable timeout | 2 |
-| **total independently reproduced** | **4** |
+| stable timeout | 1 |
+| **total independently reproduced** | **3** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -99,11 +100,10 @@ Two programs compile but execute incorrectly:
 
 ## P2: stable timeouts
 
-Two nodes hit their timeout again in isolation:
+One node hit its timeout again in isolation:
 
 | limit | case |
 |---:|---|
-| 60 s | UI `coroutine/issue-87142.rs` |
 | 10 min | RustSmith seed 7 |
 
 Classify each timeout by its last progressing compiler phase before attempting

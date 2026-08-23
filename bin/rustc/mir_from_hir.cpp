@@ -26,6 +26,7 @@ static const size_t PARTIAL_ARRAY_MIN = 32;
 #include <type_traits> // for TU_MATCHA
 
 #include <std/mem/obj_pool.h>
+#include <std/alg/defer.h>
 #include <std/sym/i_map.h>
 
 namespace {
@@ -4327,6 +4328,12 @@ struct PatternRulesetBuilder {
     const StaticTraitResolve& resolve;
     const HIRSimplePath* langBox = nullptr;
 
+    struct WildcardType {
+        const HIRTypeData* type;
+        WildcardType* parent;
+    };
+    WildcardType* wildcardTypes;
+
     // NOTE: Multiple rulesets to handle or-patterns (which multiply the pattern set)
     struct Ruleset {
         bool isImpossible;
@@ -4364,8 +4371,9 @@ struct PatternRulesetBuilder {
     unsigned nextRootStorage = 1;
     unsigned* nextRootIndex;
 
-    PatternRulesetBuilder(const StaticTraitResolve& resolve, unsigned* sharedNextRootIndex = nullptr)
+    PatternRulesetBuilder(const StaticTraitResolve& resolve, unsigned* sharedNextRootIndex = nullptr, WildcardType* parentWildcardTypes = nullptr)
         : resolve(resolve)
+        , wildcardTypes(parentWildcardTypes)
         , rulesets(1)
         , subsetStart(0)
         , subsetEnd(1)
@@ -5828,6 +5836,23 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
         return;
     }
 
+    const bool trackWildcard = pat.data.is_Any();
+    WildcardType wildcardType{topTy, wildcardTypes};
+    if (trackWildcard) {
+        for (auto* active = wildcardTypes; active; active = active->parent) {
+            if (active->type == topTy) {
+                this->pushRule(PatternRule::make_Any({}));
+                return;
+            }
+        }
+        wildcardTypes = &wildcardType;
+    }
+    STD_DEFER {
+        if (trackWildcard) {
+            wildcardTypes = wildcardType.parent;
+        }
+    };
+
     struct H {
         static U128 getPatternValueInt(const Span& sp, const StaticTraitResolve& resolve, const HIRPattern& pat, const HIRPattern::Value& val) {
             switch (val.tag()) {
@@ -6435,7 +6460,7 @@ default:
                             assert(pe.binding.is_Enum());
                             const auto& be = pe.binding.as_Enum();
 
-                            PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex};
+                            PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
                             subBuilder.fieldPath = fieldPath;
                             subBuilder.rootIndex = rootIndex;
                             ASSERT_BUG(sp, be.varIdx < FIELD_INDEX_MAX, "Too-large variant index in " << ty);
@@ -6460,7 +6485,7 @@ default:
                             assert(pe.binding.is_Enum());
                             const auto& be = pe.binding.as_Enum();
 
-                            PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex};
+                            PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
                             subBuilder.fieldPath = fieldPath;
                             subBuilder.rootIndex = rootIndex;
                             ASSERT_BUG(sp, be.varIdx < FIELD_INDEX_MAX, "Too-large variant index");
@@ -6651,7 +6676,7 @@ default:
                 case HIRPatternData::TAG_Slice: {
                     auto& pe = pat.data.as_Slice();
                     // Sub-patterns
-                    PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex};
+                    PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
                     subBuilder.fieldPath = fieldPath;
                     subBuilder.rootIndex = rootIndex;
                     subBuilder.fieldPath.push_back(0);
@@ -6675,7 +6700,7 @@ default:
                 }
                 case HIRPatternData::TAG_SplitSlice: {
                     auto& pe = pat.data.as_SplitSlice();
-                    PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex};
+                    PatternRulesetBuilder subBuilder{this->resolve, this->nextRootIndex, wildcardTypes};
                     subBuilder.fieldPath = fieldPath;
                     subBuilder.rootIndex = rootIndex;
                     ASSERT_BUG(sp, pe.leading.size() < FIELD_INDEX_MAX, "Too many leading slice rules to fit encodng");
