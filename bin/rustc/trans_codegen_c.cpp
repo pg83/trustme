@@ -529,7 +529,7 @@ namespace {
                             const HIRPath staticPath = HIRGenericPath(allocatorIt->second);
                             of << "\t";
                             if (method.ret != AllocatorDataTy::Unit) {
-                                of << "return reinterpret_cast<i8*>(";
+                                of << "return (i8*)";
                             }
                             of << TransMangleValue(methodPath) << "(&" << TransMangleValue(staticPath) << ".val";
                             flatArg = 0;
@@ -543,7 +543,7 @@ namespace {
                                         layoutArg += 1;
                                         break;
                                     case AllocatorDataTy::Ptr:
-                                        of << "reinterpret_cast<u8*>(a" << flatArg << ")";
+                                        of << "(u8*)a" << flatArg;
                                         flatArg += 1;
                                         break;
                                     case AllocatorDataTy::Usize:
@@ -556,9 +556,6 @@ namespace {
                                 }
                             }
                             of << ")";
-                            if (method.ret != AllocatorDataTy::Unit) {
-                                of << ")";
-                            }
                             of << ";\n";
                         }
                         of << "}\n";
@@ -574,8 +571,8 @@ namespace {
                         auto layoutPath = HIRSimplePath("core", {"alloc", "Layout"});
                         if (oomMethod != HIRSimplePath()) {
                             of << "struct s_" << TransMangle(layoutPath) << "_A { uintptr_t a, b; };\n";
-                            of << "void oom_impl(struct s_" << TransMangle(layoutPath) << "_A l) {"
-                               << " extern void " << TransMangleValue(oomMethod) << "(struct s_" << TransMangle(layoutPath) << "_A l);"
+                            of << "void oom_impl(s_" << TransMangle(layoutPath) << "_A l) {"
+                               << " extern void " << TransMangleValue(oomMethod) << "(s_" << TransMangle(layoutPath) << "_A l);"
                                << " " << TransMangleValue(oomMethod) << "(l);"
                                << " }\n";
                         }
@@ -587,7 +584,7 @@ namespace {
                             of << "\tvoid __rdl_oom(uintptr_t, uintptr_t);\n";
                             of << "\t__rdl_oom(s,a);\n";
                         } else {
-                            of << "\tstruct s_" << TransMangle(layoutPath) << "_A v = { s, a };\n";
+                            of << "\ts_" << TransMangle(layoutPath) << "_A v = { s, a };\n";
                             of << "\toom_impl(v);\n";
                         }
                         of << "}\n";
@@ -1161,9 +1158,7 @@ default:
                 case HIRTypeData::TAG_Tuple: {
                     auto& te = (*ty).as_Tuple();
                     if (te.size() > 0) {
-                        of << "typedef struct ";
-                        emitCtype(ty);
-                        of << " ";
+                        of << "struct ";
                         emitCtype(ty);
                         of << ";\n";
                     }
@@ -1175,17 +1170,13 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_NamedFunction: {
-                    of << "typedef struct ";
-                    emitCtype(ty);
-                    of << " ";
+                    of << "struct ";
                     emitCtype(ty);
                     of << ";\n";
                     break;
                 }
                 case HIRTypeData::TAG_Array: {
-                    of << "typedef struct ";
-                    emitCtype(ty);
-                    of << " ";
+                    of << "struct ";
                     emitCtype(ty);
                     of << ";\n";
                     break;
@@ -1320,10 +1311,7 @@ default:
             if (packingMaxAlign) {
                 of << "#pragma pack(push, " << packingMaxAlign << ")\n";
             }
-            if (ty->is_Tuple()) {
-                of << "typedef ";
-                of << "struct ";
-            }
+            of << "struct ";
             emitCtype(ty);
             of << " {\n";
 
@@ -1399,19 +1387,8 @@ default:
             of << "}";
             if (hasManualAlign) {
                 of << " __attribute__((__aligned__(" << repr->align << ")))";
-                of << " ";
-                if (ty->is_Tuple()) {
-                    emitCtype(ty);
-                }
-                of << ";\n";
-
-            } else {
-                of << " ";
-                if (ty->is_Tuple()) {
-                    emitCtype(ty);
-                }
-                of << ";\n";
             }
+            of << ";\n";
             if (packingMaxAlign != 0) {
                 of << "#pragma pack(pop)\n";
             }
@@ -1451,15 +1428,13 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_NamedFunction: {
-                    of << "typedef struct ";
+                    of << "struct ";
                     emitCtype(ty);
                     of << " {";
                     if (options.disallowEmptyStructs) {
                         of << " char _unused; ";
                     }
-                    of << "} ";
-                    emitCtype(ty);
-                    of << ";\n";
+                    of << "};\n";
                     break;
                 }
                 case HIRTypeData::TAG_Array: {
@@ -1468,7 +1443,6 @@ default:
                     ASSERT_BUG(sp, TargetGetSizeOf(sp, resolve_, ty, rustSize), "Unable to determine array size for " << ty);
                     const bool isZeroSized = rustSize == 0;
 
-                    of << "typedef ";
                     size_t align;
                     if (isZeroSized) {
                         TargetGetAlignOf(sp, resolve_, ty, align);
@@ -1487,13 +1461,12 @@ default:
                         emitCtype(te.inner);
                         of << " DATA[" << te.size.as_Known() << "];";
                     }
-                    of << " } ";
+                    of << " }";
                     if (isZeroSized) {
                         of << " __attribute__((";
                         of << "__aligned__(" << align << "),";
                         of << "))";
                     }
-                    emitCtype(ty);
                     of << ";\n";
                     break;
                 }
@@ -1789,7 +1762,7 @@ default:
             };
             mirRes = &topMirRes;
 
-            of << "static struct e_" << TransMangle(p) << " " << TransMangleValue(path) << "(";
+            of << "static e_" << TransMangle(p) << " " << TransMangleValue(path) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
                     of << ", ";
@@ -1799,7 +1772,7 @@ default:
             }
             of << ") {\n";
 
-            of << "\tstruct e_" << TransMangle(p) << " rv;\n";
+            of << "\te_" << TransMangle(p) << " rv;\n";
 
             std::vector<MIRParam> vals;
             for (unsigned int i = 0; i < e.size(); i++) {
@@ -1824,7 +1797,7 @@ default:
 
             // Crate constructor function
             const auto& e = item.data.as_Tuple();
-            of << "static struct s_" << TransMangle(p) << " " << TransMangleValue(p) << "(";
+            of << "static s_" << TransMangle(p) << " " << TransMangleValue(p) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
                     of << ", ";
@@ -1835,7 +1808,7 @@ default:
             of << ") {\n";
             // The emitted members are in layout order, which `repr(Rust)` may
             // have shuffled, so each one is named rather than positional.
-            of << "\tstruct s_" << TransMangle(p) << " rv = {};\n";
+            of << "\ts_" << TransMangle(p) << " rv = {};\n";
             for (unsigned int i = 0; i < e.size(); i++) {
                 const auto& ty = monomorph(e[i].ent);
                 if (this->typeIsBadZst(ty)) {
@@ -4040,11 +4013,10 @@ default:
                     case MIRRValue::TAG_Constant: {
                         auto& ve = e.src.as_Constant();
                         emitLvalue(e.dst);
-                        of << " = static_cast<";
+                        of << " = (";
                         emitCtype(ty);
-                        of << ">(";
-                        emitConstant(ve, &e.dst);
                         of << ")";
+                        emitConstant(ve, &e.dst);
                         break;
                     }
                     case MIRRValue::TAG_SizedArray: {
@@ -4086,24 +4058,15 @@ default:
                     case MIRRValue::TAG_Borrow: {
                         auto& ve = e.src.as_Borrow();
                         emitLvalue(e.dst);
-                        const HIRTypeData* pointeeTy;
-                        if (const auto* borrow = ty->opt_Borrow()) {
-                            pointeeTy = borrow->inner;
-                        } else if (const auto* pointer = ty->opt_Pointer()) {
-                            pointeeTy = pointer->inner;
-                        } else {
-                            MIR_BUG(localMirRes, "Borrow rvalue has non-pointer result type " << ty);
-                        }
-                        const auto pointerMetadata = metadataType(pointeeTy);
-                        of << (pointerMetadata == MetadataType::None || pointerMetadata == MetadataType::Zero ? " = reinterpret_cast<" : " = static_cast<");
+                        MIR_ASSERT(localMirRes, ty->is_Borrow() || ty->is_Pointer(), "Borrow rvalue has non-pointer result type " << ty);
+                        of << " = (";
                         emitCtype(ty);
-                        of << ">(";
+                        of << ")";
                         if (this->typeIsBadZst(mirRes->getLvalueType(tmp, ve.val, ve.val.wrappers.size()))) {
                             of << "(void*)&rv";
                         } else {
                             emitBorrow(localMirRes, ve.type, ve.val);
                         }
-                        of << ")";
                         break;
                     }
                     case MIRRValue::TAG_Cast: {
@@ -4186,12 +4149,9 @@ default:
                                 const bool ordering = ve.op == MIRBinOp::GT || ve.op == MIRBinOp::GE
                                     || ve.op == MIRBinOp::LT || ve.op == MIRBinOp::LE;
                                 if (ordering) {
-                                    of << "reinterpret_cast<uintptr_t>(";
+                                    of << "(uintptr_t)";
                                 }
                                 emitParam(ve.valL);
-                                if (ordering) {
-                                    of << ")";
-                                }
                                 switch (ve.op) {
                                     case MIRBinOp::EQ:
                                         of << " == ";
@@ -4215,12 +4175,9 @@ default:
                                         MIR_BUG(localMirRes, "Unknown comparison of a *-ptr - " << e.src << " with " << ty);
                                 }
                                 if (ordering) {
-                                    of << "reinterpret_cast<uintptr_t>(";
+                                    of << "(uintptr_t)";
                                 }
                                 emitParam(ve.valR);
-                                if (ordering) {
-                                    of << ")";
-                                }
                             }
                             break;
                         } else if (ve.op == MIRBinOp::MOD && (ty == HIRCoreType::F16 || ty == HIRCoreType::F32 || ty == HIRCoreType::F64)) {
@@ -4519,33 +4476,33 @@ default:
                         } else {
                             of << "._0._0";
                         }
-                        of << " = static_cast<decltype(";
+                        of << " = (decltype(";
                         emitLvalue(e.dst);
                         if (ty->is_Primitive() || ty->is_Pointer() || ty->is_Borrow()) {
                         } else {
                             of << "._0._0";
                         }
-                        of << ")>(";
+                        of << "))";
                         emitLvalue(ve.val);
-                        of << ".META)";
+                        of << ".META";
                         break;
                     }
                     case MIRRValue::TAG_DstPtr: {
                         auto& ve = e.src.as_DstPtr();
                         emitLvalue(e.dst);
-                        of << " = static_cast<";
+                        of << " = (";
                         emitCtype(ty);
-                        of << ">(";
+                        of << ")";
                         emitLvalue(ve.val);
-                        of << ".PTR)";
+                        of << ".PTR";
                         break;
                     }
                     case MIRRValue::TAG_MakeDst: {
                         auto& ve = e.src.as_MakeDst();
                         emitLvalue(e.dst);
-                        of << " = static_cast<";
+                        of << " = (";
                         emitCtype(ty);
-                        of << ">(";
+                        of << ")";
                         auto meta = metadataType(ty->is_Pointer() ? ty->as_Pointer().inner : ty->as_Borrow().inner);
                         switch (meta) {
                             case MetadataType::Slice:
@@ -4571,7 +4528,6 @@ default:
                                 emitParam(ve.ptrVal);
                                 break;
                         }
-                        of << ")";
                         break;
                     }
                     case MIRRValue::TAG_Tuple: {
@@ -4882,18 +4838,18 @@ default:
             }
             if (ve.type == HIRCoreType::F128) {
                 emitLvalue(dst);
-                of << " = f128_encode(static_cast<f128_native>(";
+                of << " = f128_encode((f128_native)";
                 emitLvalue(ve.val);
-                of << "))";
+                of << ")";
                 return;
             }
             if (ty == HIRCoreType::F128) {
                 emitLvalue(dst);
-                of << " = static_cast<";
+                of << " = (";
                 emitCtype(ve.type);
-                of << ">(f128_decode(";
+                of << ")f128_decode(";
                 emitLvalue(ve.val);
-                of << "))";
+                of << ")";
                 return;
             }
 
@@ -4903,15 +4859,14 @@ default:
             if (dstPrimitive && isInteger(*dstPrimitive)
                 && (ty->is_NamedFunction() || ty->is_Function() || ty->is_Pointer())) {
                 emitLvalue(dst);
-                of << " = static_cast<";
+                of << " = (";
                 emitCtype(dstTy);
-                of << ">(reinterpret_cast<uintptr_t>(";
+                of << ")(uintptr_t)";
                 if (ty->is_NamedFunction()) {
                     emitReifiedFunctionName(ty->as_NamedFunction().path);
                 } else {
                     emitLvalue(ve.val);
                 }
-                of << "))";
                 return;
             }
 
@@ -7180,11 +7135,11 @@ default:
                     of << "abort()";
                 } else if (srcTy == HIRCoreType::F128) {
                     emitLvalue(e.retVal);
-                    of << " = static_cast<";
+                    of << " = (";
                     emitCtype(dstTy);
-                    of << ">(f128_decode(";
+                    of << ")f128_decode(";
                     emitParam(e.args.at(0));
-                    of << "))";
+                    of << ")";
                 } else {
                     emitLvalue(e.retVal);
                     of << " = (";
@@ -10097,11 +10052,10 @@ default:
                     auto& e = p.as_Constant();
                     if (typeBytes && e.is_Bytes()) {
                         HIRTypeRef tmp;
-                        of << "static_cast<";
+                        of << "(";
                         emitCtype(mirRes->getParamType(tmp, p));
-                        of << ">(";
-                        emitConstant(e);
                         of << ")";
+                        emitConstant(e);
                     } else {
                         emitConstant(e);
                     }
@@ -10123,6 +10077,7 @@ default:
 
         struct CTypeCallback {
             virtual void write(::std::ostream& os) const = 0;
+            virtual bool empty() const = 0;
 
             friend ::std::ostream& operator<<(::std::ostream& os, const CTypeCallback& callback) {
                 callback.write(os);
@@ -10142,10 +10097,23 @@ default:
             void write(::std::ostream& os) const override {
                 f(os);
             }
+
+            bool empty() const override {
+                return false;
+            }
+        };
+
+        struct EmptyCTypeCb final: CTypeCallback {
+            void write(::std::ostream&) const override {
+            }
+
+            bool empty() const override {
+                return true;
+            }
         };
 
         void emitCtype(const HIRTypeData* ty) {
-            auto callback = makeCallable<CTypeCb>([](auto&) {});
+            EmptyCTypeCb callback;
             emitCtypeCb(ty, callback);
         }
 
@@ -10173,7 +10141,10 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_Diverge: {
-                    of << "tBANG " << inner;
+                    of << "tBANG";
+                    if (!inner.empty()) {
+                        of << " " << inner;
+                    }
                     break;
                 }
                 case HIRTypeData::TAG_Primitive: {
@@ -10238,7 +10209,9 @@ default:
                         case HIRCoreType::Str:
                             MIR_BUG(*mirRes, "Raw str");
                     }
-                    of << " " << inner;
+                    if (!inner.empty()) {
+                        of << " " << inner;
+                    }
                     break;
                 }
                 case HIRTypeData::TAG_Path: {
@@ -10246,19 +10219,19 @@ default:
                     //}
                     switch (te.binding.tag()) {
                         case HIRTypePathBinding::TAG_Struct: {
-                            of << "struct s_" << TransMangle(te.path);
+                            of << "s_" << TransMangle(te.path);
                             break;
                         }
                         case HIRTypePathBinding::TAG_Union: {
-                            of << "union u_" << TransMangle(te.path);
+                            of << "u_" << TransMangle(te.path);
                             break;
                         }
                         case HIRTypePathBinding::TAG_Enum: {
-                            of << "struct e_" << TransMangle(te.path);
+                            of << "e_" << TransMangle(te.path);
                             break;
                         }
                         case HIRTypePathBinding::TAG_ExternType: {
-                            of << "struct x_" << TransMangle(te.path);
+                            of << "x_" << TransMangle(te.path);
                             break;
                         }
                         case HIRTypePathBinding::TAG_Unbound: {
@@ -10270,7 +10243,9 @@ default:
                             break;
                         }
                     }
-                    of << " " << inner;
+                    if (!inner.empty()) {
+                        of << " " << inner;
+                    }
                     break;
                 }
                 case HIRTypeData::TAG_Generic: {
@@ -10286,7 +10261,10 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_Array: {
-                    of << "t_" << TransMangle(ty) << " " << inner;
+                    of << "t_" << TransMangle(ty);
+                    if (!inner.empty()) {
+                        of << " " << inner;
+                    }
                     break;
                 }
                 case HIRTypeData::TAG_Slice: {
@@ -10303,7 +10281,9 @@ default:
                             of << "_" << TransMangle(t);
                         }
                     }
-                    of << " " << inner;
+                    if (!inner.empty()) {
+                        of << " " << inner;
+                    }
                     break;
                 }
                 case HIRTypeData::TAG_Borrow: {
@@ -10317,11 +10297,17 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_NamedFunction: {
-                    of << "t_" << TransMangle(ty) << " " << inner;
+                    of << "t_" << TransMangle(ty);
+                    if (!inner.empty()) {
+                        of << " " << inner;
+                    }
                     break;
                 }
                 case HIRTypeData::TAG_Function: {
-                    of << "t_" << TransMangle(ty) << " " << inner;
+                    of << "t_" << TransMangle(ty);
+                    if (!inner.empty()) {
+                        of << " " << inner;
+                    }
                     break;
                 }
                 case HIRTypeData::TAG_Pattern: {
@@ -10639,10 +10625,16 @@ default:
                         break;
                     }
                     case MetadataType::Slice:
-                        of << "SLICE_PTR " << inner;
+                        of << "SLICE_PTR";
+                        if (!inner.empty()) {
+                            of << " " << inner;
+                        }
                         break;
                     case MetadataType::TraitObject:
-                        of << "TRAITOBJ_PTR " << inner;
+                        of << "TRAITOBJ_PTR";
+                        if (!inner.empty()) {
+                            of << " " << inner;
+                        }
                         break;
                 }
             }

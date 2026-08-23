@@ -22,6 +22,22 @@ enum Wide {
     V7,
 }
 
+struct TupleValue(u32);
+
+enum Payload {
+    Value(u32),
+}
+
+#[no_mangle]
+fn trustme_tuple_constructor() -> fn(u32) -> TupleValue {
+    TupleValue
+}
+
+#[no_mangle]
+fn trustme_enum_constructor() -> fn(u32) -> Payload {
+    Payload::Value
+}
+
 unsafe extern "C" {
     fn trustme_switch_common() -> i32;
     fn trustme_switch_odd() -> i32;
