@@ -288,6 +288,12 @@ def check_prototype_order(rustc: str, src: str, work: str) -> None:
     expect_ok(result, "function prototype ordering codegen")
     generated = Path(output + ".cpp").read_text()
 
+    mangled = re.findall(r"\bZR[A-Za-z0-9_$]*", generated)
+    if not mangled or any(re.fullmatch(r"ZR[0-9a-f]{16}", symbol) is None for symbol in mangled):
+        raise RuntimeError("generated identifiers do not use short stable hashes")
+    if "#define ZRe2bff76835446371 trustme_order_root\n" not in generated:
+        raise RuntimeError("stable mangling changed for trustme_order_root")
+
     prototypes = re.findall(r"^// PROTO[^\n]*::(trustme_[a-z_]+)$", generated, re.MULTILINE)
     if set(prototypes) != {"trustme_recursive_a", "trustme_recursive_b"}:
         raise RuntimeError(f"unexpected internal prototypes: {prototypes!r}")

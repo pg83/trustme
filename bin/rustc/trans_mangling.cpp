@@ -13,9 +13,11 @@
 #include <cmath> // ceil/log10
 #include <cctype>
 #include <cstring>
-#include <string_view> // hash of the reused buffer, keeps old symbol spelling
 #include <type_traits>
 #include <algorithm> // std::find
+
+#define XXH_INLINE_ALL
+#include <xxhash.h>
 
 namespace {
     // Every symbol is formatted into one process-wide reused buffer: mangling
@@ -532,8 +534,6 @@ case HIRTypeData::TAG_Infer:
 };
 
 namespace {
-    constexpr size_t MANGLE_MAX_LEN = 128;
-
     stl::StringBuilder& mangleBegin() {
         auto& sb = mangleBuffer();
         sb.reset();
@@ -543,20 +543,15 @@ namespace {
 
     RcString mangleFinish(stl::StringBuilder& sb) {
         const auto* data = static_cast<const char*>(sb.data());
-        size_t size = static_cast<const char*>(sb.current()) - data;
-        if (size > MANGLE_MAX_LEN) {
-            // Keep the head, replace the tail with a hash. std::hash over the
-            // same bytes reproduces the old stringstream-based spelling.
-            const size_t hash = std::hash<std::string_view>()(std::string_view(data, size));
-            sb.seekAbsolute(MANGLE_MAX_LEN - 9);
-            sb << '$';
-            char buf[20];
-            sb.append(buf, static_cast<char*>(stl::formatU64Base16(hash, buf)) - buf);
-            data = static_cast<const char*>(sb.data());
-            size = static_cast<const char*>(sb.current()) - data;
-            DEBUG("Over-long symbol -> '" << std::string_view(data, size) << "'");
+        const auto size = static_cast<const char*>(sb.current()) - data;
+        auto hash = XXH3_64bits(data, size);
+        char symbol[18] = {'Z', 'R'};
+        static constexpr char HEX[] = "0123456789abcdef";
+        for (size_t i = sizeof(symbol); i > 2; i--) {
+            symbol[i - 1] = HEX[hash & 0xf];
+            hash >>= 4;
         }
-        return RcString::newInterned(data, size);
+        return RcString::newInterned(symbol, sizeof(symbol));
     }
 }
 

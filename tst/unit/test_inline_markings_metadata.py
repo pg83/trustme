@@ -3,6 +3,7 @@
 
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -12,19 +13,32 @@ def run(command: list[str], env: dict[str, str]) -> None:
     subprocess.run(command, env=env, timeout=60, check=True)
 
 
+def mangled_symbol(generated: str, function: str) -> str:
+    match = re.search(
+        rf"^#define (ZR[0-9a-f]{{16}}) {re.escape(function)}$",
+        generated,
+        re.MULTILINE,
+    )
+    if match is None:
+        raise RuntimeError(f"generated C++ lost the exported function {function}")
+    return match.group(1)
+
+
 def require_always_inline(generated: str, function: str) -> None:
+    symbol = mangled_symbol(generated, function)
     declarations = [
         line for line in generated.splitlines()
-        if function in line and "(" in line
+        if symbol in line and "(" in line
     ]
     if not any("__attribute__((always_inline))" in line for line in declarations):
         raise RuntimeError(f"generated C++ lost the inline marking for {function}")
 
 
 def require_not_always_inline(generated: str, function: str) -> None:
+    symbol = mangled_symbol(generated, function)
     declarations = [
         line for line in generated.splitlines()
-        if function in line and "(" in line
+        if symbol in line and "(" in line
     ]
     if not declarations:
         raise RuntimeError(f"generated C++ lost the function {function}")
