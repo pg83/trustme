@@ -6,114 +6,121 @@ Source locations are routing signatures, not proof of a shared root cause.
 
 ## Current baseline
 
-The complete fast gate was run on 2026-08-22 at commit `1c8482622` in the
-clang Nix environment on all 78 available cores:
+The complete fast gate was run on 2026-08-23 at commit `12353394a` in the ix
+clang environment on all 24 available cores:
 
 ```text
-nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
-  ./build -B .build-clang -j 78 -k test
+env -u CC -u CXX ../ix/ix run set/pg/libs -- bash -c \
+  'export CC=cc CXX=c++ AR=llvm-ar SSL_CERT_FILE=/etc/ssl/cert.pem; \
+   ./build -B .build-clang -j 24 -k test'
 ```
 
 The `test` group is the complete fast semantic gate. `resvg` is not a
-dependency of that group: it lives in the separate `slow_tests` group and
-was not run or counted here. The gate log contains no `resvg` invocation.
+dependency of that group: it lives in the separate `slow_tests` group and was
+not run or counted here.
 
-Before the gate, and again before reclassification, the current CAS dependency
-roots were built:
+Before the gate, the current CAS dependency roots were published explicitly:
 
 ```text
-nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
-  ./build -B .build-clang -j 78 -k \
+./build -B .build-clang -j 24 -k \
   rustc cargo libstd rust_test_helpers rust_lib_dependencies
 ```
 
 Artifacts:
 
-- full log:
-  `.build-clang/full-gate-20260822-no-resvg.log`;
-- independent reruns:
-  `.build-clang/reclass-20260822-full-no-resvg/results.jsonl`;
+- full log: `.build-clang/full-gate-20260823.log`;
+- independent reruns: `.build-clang/reclass-20260823-full/results.jsonl`;
 - classified records:
-  `.build-clang/classification-20260822-full-no-resvg/records.jsonl`;
+  `.build-clang/classification-20260823-full/records.jsonl`;
 - signature clusters:
-  `.build-clang/classification-20260822-full-no-resvg/clusters.json`.
+  `.build-clang/classification-20260823-full/clusters.json`.
 
-The graph contained 15,139 nodes. The full run completed 15,090 and reported
-49 broken targets. All 49 target commands were rerun independently against
-the published roots. Forty-eight failures reproduced; RustSmith seed 36
-completed in isolation and is the only load-sensitive result. The subsequent
-ThinBox, async-drop, coroutine-storage, async-argument, trait-object,
-projection-bound, specialization, `IntoFuture`, and empty-array coercion point
-fixes, followed by the declarative-macro hygiene fix, closed twenty-eight
-independently rerun nodes; preserving the generic context while evaluating an
-associated const pattern closed one more; keeping simultaneously live locals
-in separate coroutine storage slots closed another; implementing captured
-generic assertions closed one more; tracking the initialized variant of data
-enums during drop elaboration closed another; preserving the source owner of
-block-local items in `type_name` closed two more; preserving higher-ranked
-lifetime identity in `TypeId` and enumerating the resulting generated drop
-glue dependencies closed three more; keeping wildcard array patterns sparse
-closed one more; emitting large non-relocated static contents as assembler
-binary blobs closed one more; preserving opaque identity while expanding a
-recursive type-alias bound closed one more; preventing recursive normalization
-of sibling associated-type bounds closed one more; preserving Rust inline
-markings through metadata and C++ code generation closed one more; emitting
-MIR locals in native stack order closed one more; the associated projection
-normalization fix also closed the next-solver stress case; bounding wildcard
-expansion through recursive types closed the coroutine case, leaving 3.
+The graph contained 15,333 nodes. The full run completed 15,219 and reported
+114 broken targets. All 114 target commands were rerun independently against
+the published roots. One hundred and thirteen failures reproduced. RustSmith
+seed 36 completed in isolation and remains the only load-sensitive result.
 
 | result | nodes |
 |---|---:|
-| complete fast-gate graph | 15,139 |
-| green in the full parallel run | 15,090 |
-| failed in the full parallel run | 49 |
-| reproduced immediately after the full gate | 48 |
+| complete fast-gate graph | 15,333 |
+| green in the full parallel run | 15,219 |
+| failed in the full parallel run | 114 |
+| reproduced immediately after the full gate | 113 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 45 |
-| still failing independently | 3 |
+| fixed by subsequent point reruns | 0 |
+| still failing independently | 113 |
 
-Manual inspection normalised one mechanical classifier label:
-
-- `async-drop/async-drop-initial.rs` compiles successfully, then its program
-  takes `SIGABRT` while polling generated async-drop glue, so it is a runtime
-  failure rather than a compiler abort.
+The mechanical `link-failure` classifier was normalised by the first undefined
+symbol: 95 nodes require `Debug for dyn Any + Send`, and one requires the
+adjacent `Debug for dyn Any` implementation. They are one dependency-enumeration
+family. Four stable timeouts are interactive programs blocked on inherited
+stdin, so they are harness failures rather than compiler-progress failures.
 
 The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| wrong runtime behaviour, panic, abort, or output | 2 |
-| stable timeout | 1 |
-| **total independently reproduced** | **3** |
+| missing trait-object `Debug` dependencies at link time | 96 |
+| wrong runtime behaviour, panic, abort, or output | 7 |
+| compiler abort or wrong compiler diagnostic | 5 |
+| stable timeout | 5 |
+| **total independently reproduced** | **113** |
 
-There are no carried failures from an older sweep. This full run supersedes
-the previous 631-node baseline and the later “12 current + 25 carried”
-accounting.
+This full run supersedes the 2026-08-22 15,139-node baseline and all subsequent
+point accounting.
 
-## P1: runtime semantics
+## P1: missing trait-object dependencies
 
-Two programs compile but execute incorrectly:
+Ninety-six programs compile to C++ but fail to link:
 
-| family | nodes | cases |
-|---|---:|---|
-| RustSmith stdout mismatch | 2 | seeds 19 and 102 |
+| nodes | missing implementation | representative cases |
+|---:|---|---|
+| 95 | `Debug for dyn Any + Send` | Miri concurrency, thread/sync doctests, Rust library sync/TLS tests |
+| 1 | `Debug for dyn Any` | `coercion/any-trait-object-debug-12744.rs` |
 
-## P2: stable timeouts
+Both implementations are concrete library items. Translation must enumerate
+them when their trait-object method paths are referenced; relying on a vtable
+instance is insufficient for these direct `Debug::fmt` calls.
 
-One node hit its timeout again in isolation:
+## P2: runtime semantics
 
-| limit | case |
-|---:|---|
-| 10 min | RustSmith seed 7 |
+Seven programs compile but execute incorrectly:
 
-Classify each timeout by its last progressing compiler phase before attempting
-a fix. Recursive alias resolution, solver explosion, large generated MIR, and
+| nodes | family | cases |
+|---:|---|---|
+| 2 | RustSmith stdout mismatch | seeds 19 and 102 |
+| 2 | missing enum/aggregate drops | `drop/issue-23611-enum-swap-in-drop.rs`, `drop/issue-90752.rs` |
+| 1 | discarded-expression drop | `issues/issue-6892.rs` |
+| 1 | linear inlined stack allocation | `codegen/StackColoring-not-blowup-stack-issue-40883.rs` |
+| 1 | stack overflow in threaded `OnceLock` list | `std/src/sync/once_lock.rs:53` |
+
+## P3: compiler aborts and diagnostics
+
+Five cases fail before producing a usable artifact:
+
+| nodes | signature | cases |
+|---:|---|---|
+| 2 | `mir_from_hir.cpp:2405`, region-only trait-object cast mismatch | Miri `dyn-upcast.rs`, `multiple-supertraits-modulo-binder.rs` |
+| 1 | const evaluator rejects a live `Vec` result | `consts/control-flow/drop-precise.rs` |
+| 1 | MIR treats a function item address as a static | UI `issues/issue-56870.rs` |
+| 1 | TAIT inherent lookup emits a type mismatch instead of the expected lookup failure | unit `tait_inherent_lookup_outside_defining_scope` |
+
+## P4: stable timeouts
+
+| nodes | limit | classification | cases |
+|---:|---:|---|---|
+| 3 | 60 s | harness leaves interactive stdin open | Rust Book guessing-game examples |
+| 1 | 60 s | harness leaves interactive stdin open | doctest `std/src/io/mod.rs:2379` |
+| 1 | 10 min | compiler progress requires phase classification | RustSmith seed 7 |
+
+Classify seed 7 by its last progressing compiler phase before attempting a
+fix. Recursive alias resolution, solver explosion, large generated MIR, and
 slow generated-program compilation are not interchangeable root causes.
 
 ## Load-sensitive result
 
-RustSmith seed 36 exceeded its 10-minute node limit during the 78-way full
-run, then compiled and passed in isolation in roughly eight minutes. It is not
+RustSmith seed 36 exceeded its 10-minute node limit during the 24-way full run,
+then compiled and passed in isolation in roughly eight minutes. It is not
 included in the current failure count. Keep it as a gate-capacity signal; do
 not turn it into a compiler-correctness issue unless it becomes a stable
 timeout.
@@ -132,9 +139,10 @@ For every compiler fix:
 6. Re-run every affected original node against freshly published CAS roots.
 
 A generic type that derives `Copy` and `Clone` still clones field by field:
-`*self` needs `Self: Copy`, which the bounds a derived `Clone` adds do not
-give, and emitting it breaks the standard library.
+`*self` needs `Self: Copy`, which the bounds a derived `Clone` adds do not give,
+and emitting it breaks the standard library.
 
 Refresh this baseline only with a complete `test` run followed by
-`dev/gate_reclassify.py` and `dev/gate_classify.py`. Keep `resvg` and the
-other `slow_tests` explicitly outside the fast-gate counts.
+`dev/gate_reclassify.py` and `dev/gate_classify.py`. Do not run another complete
+gate until every row above has been closed by point reruns and `unit`. Keep
+`resvg` and the other `slow_tests` explicitly outside the fast-gate counts.
