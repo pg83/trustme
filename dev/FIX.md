@@ -54,7 +54,8 @@ block-local items in `type_name` closed two more; preserving higher-ranked
 lifetime identity in `TypeId` and enumerating the resulting generated drop
 glue dependencies closed three more; keeping wildcard array patterns sparse
 closed one more; emitting large non-relocated static contents as assembler
-binary blobs closed one more, leaving 9.
+binary blobs closed one more; preserving opaque identity while expanding a
+recursive type-alias bound closed one more, leaving 8.
 
 | result | nodes |
 |---|---:|
@@ -63,8 +64,8 @@ binary blobs closed one more, leaving 9.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 39 |
-| still failing independently | 9 |
+| fixed by subsequent point reruns | 40 |
+| still failing independently | 8 |
 
 Manual inspection normalised one mechanical classifier label:
 
@@ -77,8 +78,8 @@ The resulting current population is:
 | current result | nodes |
 |---|---:|
 | wrong runtime behaviour, panic, abort, or output | 3 |
-| stable timeout | 6 |
-| **total independently reproduced** | **9** |
+| stable timeout | 5 |
+| **total independently reproduced** | **8** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -95,11 +96,10 @@ Three programs compile but execute incorrectly:
 
 ## P2: stable timeouts
 
-Six nodes hit their timeout again in isolation:
+Five nodes hit their timeout again in isolation:
 
 | limit | case |
 |---:|---|
-| 60 s | UI `impl-trait/recursive-type-alias-impl-trait-declaration-too-subtle-2.rs` |
 | 60 s | UI `associated-type-bounds/trait-params.rs` |
 | 60 s | Exercism `palindrome-products` |
 | 60 s | UI `next-solver/normalize/normalize-allow-too-many-vars.rs` |

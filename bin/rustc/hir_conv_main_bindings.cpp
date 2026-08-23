@@ -1693,6 +1693,31 @@ class Expander: public HIRVisitor {
     bool inExpr = false;
     const HIRTypeData* implType = nullptr;
 
+    struct ActiveTypeAlias {
+        const HIRTypeAlias* alias;
+        HIRTypeRef recursiveReference;
+        const ActiveTypeAlias* parent;
+    };
+
+    const ActiveTypeAlias* activeTypeAliases = nullptr;
+
+    const HIRTypeAlias* typeAlias(const Span& sp, const HIRTypeData* type) const {
+        const auto* path = type->opt_Path();
+        if (!path || !path->path.data.is_Generic()) {
+            return nullptr;
+        }
+        return crate.getTypeitemByPath(sp, path->path.data.as_Generic().path).opt_TypeAlias();
+    }
+
+    const ActiveTypeAlias* activeTypeAlias(const HIRTypeAlias* alias) const {
+        for (auto* active = activeTypeAliases; active; active = active->parent) {
+            if (active->alias == alias) {
+                return active;
+            }
+        }
+        return nullptr;
+    }
+
 public:
     Expander(const HIRCrate& crate)
         : HIRVisitor(nullptr, crate.types)
@@ -1777,6 +1802,13 @@ public:
     [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
         static Span sp;
 
+        const auto* alias = typeAlias(sp, ty);
+        if (alias) {
+            if (const auto* active = activeTypeAlias(alias)) {
+                return active->recursiveReference;
+            }
+        }
+
         if (ty->is_ErasedType() || ty->is_TraitObject()) {
             auto data = ty->cloneData();
             if (auto* e = data.opt_ErasedType()) {
@@ -1823,6 +1855,19 @@ public:
 
         if (const auto* e = ty->opt_Path()) {
             HIRTypeRef newType = ConvertHIRExpandAliasesGetExpansion(crate, e->path, inExpr);
+            HIRTypeRef recursiveReference = ty;
+            if (alias && newType->is_ErasedType()) {
+                // The Alias inner identifies an opaque type. Its own bound may
+                // name that identity recursively, but must not embed another
+                // complete copy of the same bounds.
+                auto referenceData = newType->cloneData();
+                referenceData.as_ErasedType().traits.clear();
+                recursiveReference = crate.types.intern(mv$(referenceData));
+            }
+            const ActiveTypeAlias activeAlias { alias, recursiveReference, activeTypeAliases };
+            if (alias) {
+                activeTypeAliases = &activeAlias;
+            }
             // Keep trying to expand down the chain
             unsigned int numExp = 1;
             const unsigned int MAX_RECURSIVE_TYPE_EXPANSIONS = 100;
@@ -1844,6 +1889,9 @@ public:
             if (!newType->is_Infer()) {
                 DEBUG("Replacing " << ty << " with " << newType << " (" << numExp << " expansions)");
                 ty = mv$(newType);
+            }
+            if (alias) {
+                activeTypeAliases = activeAlias.parent;
             }
         }
         return ty;
