@@ -264,6 +264,7 @@ private:
     mutable u64 freshImplPlaceholderCounter = 0;
     mutable ::std::map<std::string, HIRTypeRef> eatCache;
     mutable ::std::vector<HIRTypeRef> eatActiveStack;
+    mutable bool normalizingBoundType = false;
     // Owned by the crate ObjPool.  TraitResolution only keeps a stable
     // pointer into the compiler-lifetime arena.
     mutable NextTraitGoalEvaluator* nextSolver = nullptr;

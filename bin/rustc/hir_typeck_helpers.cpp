@@ -9,6 +9,7 @@
 
 #include <std/mem/obj_list.h>
 #include <std/mem/obj_pool.h>
+#include <std/alg/defer.h>
 #include <std/sym/i_map.h>
 #include <std/lib/vector.h>
 #include <std/rng/split_mix_64.h>
@@ -1635,7 +1636,11 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 const HIRTypeData* boundType = b.first.first;
                 auto cmp = boundType->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
                 HIRTypeRef normalizedBound;
-                if (cmp == HIRCompare::Unequal && this->hasAssociatedType(boundType)) {
+                if (cmp == HIRCompare::Unequal && this->hasAssociatedType(boundType) && !normalizingBoundType) {
+                    normalizingBoundType = true;
+                    STD_DEFER {
+                        normalizingBoundType = false;
+                    };
                     normalizedBound = this->expandAssociatedTypes(sp, boundType);
                     if (normalizedBound != boundType) {
                         boundType = normalizedBound;
