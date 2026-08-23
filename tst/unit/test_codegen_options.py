@@ -3,6 +3,7 @@
 
 import os
 from pathlib import Path
+import re
 import shlex
 import subprocess
 import sys
@@ -193,6 +194,14 @@ def check_unwind_cleanup(rustc: str, src: str, work: str) -> None:
     )
     if "trustme_run_cleanup" in monomorphized_no_op or "try {" in monomorphized_no_op:
         raise RuntimeError("monomorphized no-drop cleanup emitted EH scaffolding")
+
+    no_op_drop = generated_function(
+        generated, "codegen_unwind_cleanup", "generic_projected_noop_drop"
+    )
+    if re.search(r"try \{\s*\} catch", no_op_drop):
+        raise RuntimeError("monomorphized no-drop operation emitted an empty handler")
+    if re.search(r"if\( df\d+ \) \{\s*\}", no_op_drop):
+        raise RuntimeError("monomorphized no-drop operation emitted an empty drop flag test")
 
     real = generated_function(
         generated, "codegen_unwind_cleanup", "trustme_real_cleanup_probe"

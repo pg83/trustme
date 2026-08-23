@@ -3370,6 +3370,10 @@ default:
                 }
                 case MIRTerminator::TAG_Drop: {
                     auto& e = term.as_Drop();
+                    if (dropOperationIsNoOp(localMirRes, e)) {
+                        emitTarget(e.target);
+                        break;
+                    }
                     if (cleanup) {
                         emitDropOperation(localMirRes, e, indentLevel);
                     } else {
