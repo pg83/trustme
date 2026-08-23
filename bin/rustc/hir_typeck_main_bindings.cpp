@@ -156,6 +156,15 @@ namespace {
             });
         }
 
+        static bool traitParamsMayHaveAssociatedType(const HIRPathParams& params) {
+            for (const auto& type : params.types) {
+                if (type->mayHaveAssociatedType()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         void checkParameters(const Span& sp, const HIRSimplePath& usedPath, PathContext pc, const HIRGenericParams& paramDef, HIRPathParams& paramVals) {
             MonomorphStatePtr ms(crate.types, selfTypes.empty() ? nullptr : selfTypes.back(), &paramVals, nullptr);
 
@@ -206,7 +215,7 @@ namespace {
                         }
                         auto type = ms.monomorphType(sp, e.type);
                         auto trait = ms.monomorphTraitpath(sp, e.trait, false);
-                        if (type->mayHaveAssociatedType()) {
+                        if (type->mayHaveAssociatedType() || traitParamsMayHaveAssociatedType(trait.path.params)) {
                             break;
                         }
                         if (const auto* actualGeneric = type->opt_Generic()) {

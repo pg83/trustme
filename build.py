@@ -458,63 +458,125 @@ else:
         color="cyan",
     )
 
-# resvg_src: the project source at a pinned revision.
-resvg_src = command(
-    name="resvg_src",
-    inputs=["$(S)/tst/git_src.py"] + TESTS_LIB,
-    outputs=["$(B)/tst/resvg-src.tar"],
-    cmd=[
-        "python3", "$(S)/tst/git_src.py",
-        "https://github.com/linebender/resvg.git",
-        "08c79a3148df4ce8ab08fca72204b142b95423dd",
-        "$(B)/tst/resvg-src.tar",
-    ],
-    descr="RS",
-    color="magenta",
-)
-
-# resvg_vendor: vendor resvg's locked dependencies with the Go cargo.
-resvg_vendor = command(
-    name="resvg_vendor",
-    inputs=["$(S)/tst/vendor.py"] + TESTS_LIB,
-    outputs=["$(B)/tst/resvg-vendor.tar.zst"],
-    cmd=[
-        "python3", "$(S)/tst/vendor.py",
-        "$(B)/tst/resvg-src.tar", ".",
-        "$(B)/tst/resvg-vendor.tar.zst",
-    ],
-    deps=[resvg_src, cargo],
-    env={"CARGO": "$(B)/bin/cargo"},
-    descr="VN",
-    color="magenta",
-)
-
-# Real-project builds exercise our Cargo/toolchain integration, not the
-# semantic Rust corpus, so they do not exist in system-rustc mode.
 project_tests = []
-if not system_rustc_mode:
-    resvg = command(
-        name="resvg",
-        inputs=["$(S)/tst/build_project.py", "$(S)/tst/resvg/run.py"] + TESTS_LIB,
-        outputs=["$(B)/tst/resvg.stamp"],
+
+
+def add_project_test(
+    name,
+    url,
+    rev,
+    *,
+    manifest=".",
+    vendor_manifest=None,
+    adapter="$(S)/tst/test_project.py",
+    adapter_args=(),
+    adapter_inputs=(),
+    lockfile=None,
+    timeout=PROJECT_TIMEOUT,
+):
+    """Add the source, vendor and build+test nodes for one pinned project."""
+    if vendor_manifest is None:
+        vendor_manifest = manifest
+
+    source_archive = f"$(B)/tst/{name}-src.tar"
+    vendor_archive = f"$(B)/tst/{name}-vendor.tar.zst"
+    stamp = f"$(B)/tst/{name}.stamp"
+
+    source_inputs = ["$(S)/tst/git_src.py"] + TESTS_LIB
+    source_cmd = [
+        "python3", "$(S)/tst/git_src.py", url, rev, source_archive,
+    ]
+    if lockfile:
+        source_inputs.append(lockfile)
+        source_cmd.extend([lockfile, vendor_manifest])
+
+    source = command(
+        name=name + "_src",
+        inputs=source_inputs,
+        outputs=[source_archive],
+        cmd=source_cmd,
+        descr="RS",
+        color="magenta",
+    )
+
+    vendor = command(
+        name=name + "_vendor",
+        inputs=["$(S)/tst/vendor.py"] + TESTS_LIB,
+        outputs=[vendor_archive],
+        cmd=[
+            "python3", "$(S)/tst/vendor.py",
+            source_archive, vendor_manifest, vendor_archive,
+        ],
+        deps=[source, cargo],
+        env={"CARGO": "$(B)/bin/cargo"},
+        descr="VN",
+        color="magenta",
+    )
+
+    # Real-project builds exercise our Cargo/toolchain integration, not the
+    # semantic Rust corpus, so they do not exist in system-rustc mode.
+    if system_rustc_mode:
+        return None
+
+    target = command(
+        name=name,
+        inputs=[adapter, *adapter_inputs] + TESTS_LIB,
+        outputs=[stamp],
         cmd=[
             [
-                *PROJECT_TIMEOUT,
-                "python3", "$(S)/tst/build_project.py",
-                "$(B)/tst/resvg-src.tar",
-                "$(B)/tst/resvg-vendor.tar.zst",
-                "$(B)/tst/libstd.tar",
-                "crates/resvg",
-                "python3", "$(S)/tst/resvg/run.py", "@BIN@",
+                *timeout,
+                "python3", adapter,
+                source_archive, vendor_archive, "$(B)/tst/libstd.tar",
+                manifest, *adapter_args,
             ],
-            [*TEST_TIMEOUT, "sh", "-c", "> $(B)/tst/resvg.stamp"],
+            [*TEST_TIMEOUT, "sh", "-c", f"> {stamp}"],
         ],
-        deps=[resvg_src, resvg_vendor, libstd, rustc, cargo],
+        deps=[source, vendor, libstd, rustc, cargo],
         env=TOOLCHAIN_ENV,
         descr="TS",
         color="magenta",
     )
-    project_tests.append(resvg)
+    project_tests.append(target)
+    return target
+
+
+resvg = add_project_test(
+    name="resvg",
+    url="https://github.com/linebender/resvg.git",
+    rev="08c79a3148df4ce8ab08fca72204b142b95423dd",
+    manifest="crates/resvg",
+    vendor_manifest=".",
+    adapter="$(S)/tst/build_project.py",
+    adapter_args=["python3", "$(S)/tst/resvg/run.py", "@BIN@"],
+    adapter_inputs=["$(S)/tst/resvg/run.py"],
+)
+
+base64 = add_project_test(
+    name="base64",
+    url="https://github.com/marshallpierce/rust-base64.git",
+    rev="069bf7067b949f5c0a92b6ceb82492920502f2c2",
+)
+
+itertools = add_project_test(
+    name="itertools",
+    url="https://github.com/rust-itertools/itertools.git",
+    rev="d5084d15e959b85d89a49e5cd33ad6267bc541a3",
+    lockfile="$(S)/tst/projects/itertools/Cargo.lock",
+)
+
+zmij = add_project_test(
+    name="zmij",
+    url="https://github.com/dtolnay/zmij.git",
+    rev="7b7cc48b58028e8af7be87e94c0c1c8936f1a57c",
+    lockfile="$(S)/tst/projects/zmij/Cargo.lock",
+)
+
+num_bigint = add_project_test(
+    name="num_bigint",
+    url="https://github.com/rust-num/num-bigint.git",
+    rev="33c59ba44b7bdb09975b38a321b1b88c6a444005",
+    lockfile="$(S)/tst/projects/num-bigint/Cargo.lock",
+)
 
 # Unit regressions: one self-contained tst/unit/test_*.rs per compiler fix,
 # each its own node — compiled against the shared libstd and run (must exit 0).
@@ -1702,6 +1764,7 @@ def partition_lite_tests(targets):
 
 group("test", *lite_tests)
 group("lite_tests", *partition_lite_tests(lite_tests))
+group("projects", *project_tests)
 group("slow_tests", *project_tests, *slow_rust_lib_tests)
 group("unit", *(rust_unit_tests if system_rustc_mode else unit_tests))
 # `ut` builds+runs only the C++ *_ut.cpp runner (bin/rustc/*_ut.cpp), without the

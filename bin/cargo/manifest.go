@@ -514,6 +514,20 @@ func parseTargets(pkg *Package, doc, packageTable map[string]any) {
 			pkg.targets = append(pkg.targets, parseTarget(kind, table, pkg))
 		}
 	}
+
+	for _, automatic := range []struct {
+		kind    string
+		dir     string
+		enabled bool
+	}{
+		{"test", "tests", boolValue(packageTable["autotests"], true)},
+		{"bench", "benches", boolValue(packageTable["autobenches"], true)},
+		{"example", "examples", boolValue(packageTable["autoexamples"], true)},
+	} {
+		if automatic.enabled {
+			addAutomaticTargets(pkg, automatic.kind, automatic.dir)
+		}
+	}
 }
 
 func parseTarget(kind string, table map[string]any, pkg *Package) *Target {
@@ -590,6 +604,10 @@ func addAutomaticBins(pkg *Package) {
 	}
 
 	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) != ".rs" {
+			continue
+		}
+
 		name := strings.TrimSuffix(entry.Name(), ".rs")
 		path := filepath.Join("src", "bin", entry.Name())
 
@@ -602,6 +620,44 @@ func addAutomaticBins(pkg *Package) {
 		}
 
 		pkg.targets = append(pkg.targets, parseTarget("bin", map[string]any{"name": name, "path": path}, pkg))
+	}
+}
+
+func addAutomaticTargets(pkg *Package, kind, dir string) {
+	seen := map[string]bool{}
+
+	for _, target := range pkg.targets {
+		if target.kind == kind {
+			seen[target.name] = true
+		}
+	}
+
+	entries, err := os.ReadDir(filepath.Join(pkg.dir, dir))
+
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) != ".rs" {
+			continue
+		}
+
+		name := strings.TrimSuffix(entry.Name(), ".rs")
+		path := filepath.Join(dir, entry.Name())
+
+		if entry.IsDir() {
+			path = filepath.Join(dir, entry.Name(), "main.rs")
+		}
+
+		if seen[name] || !fileExists(filepath.Join(pkg.dir, path)) {
+			continue
+		}
+
+		pkg.targets = append(pkg.targets, parseTarget(kind, map[string]any{
+			"name": name,
+			"path": path,
+		}, pkg))
 	}
 }
 

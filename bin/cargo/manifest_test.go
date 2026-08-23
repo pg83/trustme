@@ -64,6 +64,57 @@ required-features = ["serde"]
 	}
 }
 
+func TestManifestDiscoversIntegrationTargets(t *testing.T) {
+	dir := t.TempDir()
+
+	writeTestFile(t, filepath.Join(dir, "src", "lib.rs"), "")
+	writeTestFile(t, filepath.Join(dir, "tests", "integration.rs"), "")
+	writeTestFile(t, filepath.Join(dir, "tests", "directory", "main.rs"), "")
+	writeTestFile(t, filepath.Join(dir, "benches", "speed.rs"), "")
+	writeTestFile(t, filepath.Join(dir, "examples", "demo.rs"), "")
+	writeTestFile(t, filepath.Join(dir, "examples", "ignored.txt"), "")
+
+	manifest := `[package]
+name = "demo"
+version = "1.0.0"
+
+[lib]
+test = false
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+`
+	path := filepath.Join(dir, "Cargo.toml")
+	writeTestFile(t, path, manifest)
+
+	workspace := &Workspace{dir: dir, dependencies: map[string]*Dependency{}, patches: map[string]string{}}
+	pkg := parsePackage(path, readToml(path), workspace)
+	want := map[string]bool{
+		"lib:demo":         true,
+		"test:integration": true,
+		"test:directory":   true,
+		"bench:speed":      true,
+		"example:demo":     true,
+	}
+
+	if len(pkg.targets) != len(want) {
+		t.Fatalf("got %d targets, want %d: %#v", len(pkg.targets), len(want), pkg.targets)
+	}
+
+	for _, target := range pkg.targets {
+		key := target.kind + ":" + target.name
+		if !want[key] {
+			t.Fatalf("unexpected target %s", key)
+		}
+		delete(want, key)
+	}
+
+	if len(want) != 0 {
+		t.Fatalf("missing targets: %#v", want)
+	}
+}
+
 func TestWorkspaceMembers(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "Cargo.toml"), `[workspace]

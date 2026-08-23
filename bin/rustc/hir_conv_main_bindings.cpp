@@ -730,6 +730,9 @@ default:
         }
 
         void visitTrait(HIRItemPath p, HIRTrait& item) override {
+            HIRGenericPath traitPath(p.getSimplePath());
+            traitPath.params = item.params.makeNopParams(crate.types, 0);
+            auto _trait = this->ms.setCurrentTrait(traitPath);
             auto _ = this->ms.setImplGenerics(item.params);
             const auto oldSelfType = selfType;
             selfType = crate.types.self();
@@ -3044,8 +3047,14 @@ public:
     {
     }
 
-    void restoreExprContext(const HIRExprState& state) {
+    void restoreExprContext(const HIRExprState& state, const HIRItemPath* traitPath) {
         traits = state.traits;
+        currentTraitPath_ = traitPath;
+        if (traitPath) {
+            currentTrait = &crate.getTraitByPath(Span(), state.currentTraitPath);
+            currentType_ = state.currentTraitImpl ? state.currentTraitImpl->type : nullptr;
+            inTraitDef_ = state.currentTraitImpl == nullptr;
+        }
         curModPath = state.modPath;
     }
 
@@ -3686,7 +3695,10 @@ public:
         const bool collapseToSubtrait = crate.featureEnabled("supertrait_item_shadowing");
         ::std::vector<::std::pair<HIRSimplePath, HIRPath::Data>> candidates;
         DEBUG("m_traits.size() = " << traits.size());
-        for (const auto& traitInfo : traits) {
+        for (const auto& traitInfo : ::reverse(traits)) {
+            if (traitInfo.first == nullptr) {
+                break;
+            }
             const auto& trait = *traitInfo.second;
 
             DEBUG(e.item << " in? " << *traitInfo.first);
@@ -3863,7 +3875,7 @@ public:
             // - NOTE: Could be in an inherent block, where there's no trait
             if (/*m_current_type &&*/ currentTrait && e.type == crate.types.self()) {
                 HIRGenericPath traitPath;
-                if (currentTraitPath_->traitPath()) {
+                if (currentTraitPath_->traitArgs()) {
                     traitPath = HIRGenericPath(*currentTraitPath_->traitPath());
                     traitPath.params = currentTraitPath_->traitArgs()->clone();
                 } else {
@@ -3932,7 +3944,7 @@ public:
             // TODO: Should this look up in-scope traits instead of hard-coding this hack?
             if (currentType_ && currentTrait && e.type == currentType_) {
                 HIRGenericPath traitPath;
-                if (currentTraitPath_->traitPath()) {
+                if (currentTraitPath_->traitArgs()) {
                     traitPath = HIRGenericPath(*currentTraitPath_->traitPath());
                     traitPath.params = currentTraitPath_->traitArgs()->clone();
                 } else {
@@ -4237,8 +4249,21 @@ void ConvertHIRResolveUFCSExpr(const WireBoard& wb, const HIRCrate& crate, const
     // Check innards but NOT the value
     UfcsVisitor exp{wb, true};
     ASSERT_BUG(Span(), exprPtr.state, "No ExprState for " << ip);
-    exp.restoreExprContext(*exprPtr.state);
-    exp.visitExpr(exprPtr);
+    if (exprPtr.state->currentTraitImpl) {
+        auto traitPath = HIRItemPath(
+            exprPtr.state->currentTraitImpl->type,
+            exprPtr.state->currentTraitPath,
+            exprPtr.state->currentTraitImpl->traitArgs);
+        exp.restoreExprContext(*exprPtr.state, &traitPath);
+        exp.visitExpr(exprPtr);
+    } else if (exprPtr.state->currentTraitPath != HIRSimplePath()) {
+        auto traitPath = HIRItemPath(exprPtr.state->currentTraitPath);
+        exp.restoreExprContext(*exprPtr.state, &traitPath);
+        exp.visitExpr(exprPtr);
+    } else {
+        exp.restoreExprContext(*exprPtr.state, nullptr);
+        exp.visitExpr(exprPtr);
+    }
 }
 
 void ConvertHIRResolveUFCSSortImpls(WireBoard& wb, HIRCrate& crate) {
