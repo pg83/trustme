@@ -277,13 +277,38 @@ def check_cfg_compaction(rustc: str, src: str, work: str) -> None:
         raise RuntimeError("conditional branch did not use one physical fallthrough")
 
 
+def check_prototype_order(rustc: str, src: str, work: str) -> None:
+    output = os.path.join(work, "prototype-order")
+    result = invoke(
+        rustc,
+        src,
+        output,
+        ["--crate-name", "codegen_prototype_order", "-Cemit-cpp-only"],
+    )
+    expect_ok(result, "function prototype ordering codegen")
+    generated = Path(output + ".cpp").read_text()
+
+    prototypes = re.findall(r"^// PROTO[^\n]*::(trustme_[a-z_]+)$", generated, re.MULTILINE)
+    if set(prototypes) != {"trustme_recursive_a", "trustme_recursive_b"}:
+        raise RuntimeError(f"unexpected internal prototypes: {prototypes!r}")
+
+    leaf = generated.find('// ::"codegen_prototype_order"::trustme_order_leaf\n')
+    middle = generated.find('// ::"codegen_prototype_order"::trustme_order_middle\n')
+    root = generated.find('// ::"codegen_prototype_order"::trustme_order_root\n')
+    if leaf < 0 or not leaf < middle < root:
+        raise RuntimeError("function definitions are not ordered callee before caller")
+    external = generated.find('// EXTERN extern "C" ::"codegen_prototype_order"::trustme_order_external\n')
+    if external < 0 or external > leaf:
+        raise RuntimeError("external function declaration was not emitted before definitions")
+
+
 def main() -> int:
-    if len(sys.argv) != 9:
+    if len(sys.argv) != 10:
         raise SystemExit(
             "usage: test_codegen_options.py "
-            "RUSTC MIR_RS CFG_RS LINK_RS UNWIND_RS SWITCH_RS CFG_COMPACT_RS STAMP"
+            "RUSTC MIR_RS CFG_RS LINK_RS UNWIND_RS SWITCH_RS CFG_COMPACT_RS PROTO_RS STAMP"
         )
-    rustc, mir_src, cfg_src, link_src, unwind_src, switch_src, cfg_compact_src, stamp = map(
+    rustc, mir_src, cfg_src, link_src, unwind_src, switch_src, cfg_compact_src, proto_src, stamp = map(
         os.path.abspath, sys.argv[1:]
     )
 
@@ -357,6 +382,7 @@ def main() -> int:
         check_unwind_cleanup(rustc, unwind_src, work)
         check_enum_switch_compaction(rustc, switch_src, work)
         check_cfg_compaction(rustc, cfg_compact_src, work)
+        check_prototype_order(rustc, proto_src, work)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)
     Path(stamp).touch()

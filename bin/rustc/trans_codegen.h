@@ -46,7 +46,7 @@ public:
 
     virtual void emitFunctionProto(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef);
 
-    virtual void emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code) = 0;
+    virtual void emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code, bool hasPrototype) = 0;
 
     virtual void emitGlobalAsm(const HIRGlobalAssembly&) = 0;
 };

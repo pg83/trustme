@@ -855,7 +855,7 @@ break;
             mirRes = nullptr;
         }
 
-        void emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code) override {
+        void emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code, bool hasPrototype) override {
             TRACE_FUNCTION_F(p);
 
             MIRTypeResolve::argsT argTypes;

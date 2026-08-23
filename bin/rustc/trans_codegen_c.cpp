@@ -2895,6 +2895,31 @@ default:
             mirRes = nullptr;
         }
 
+        void emitFunctionLinkageAlias(const HIRPath& p, const HIRFunction& item) {
+            // `main` is not renameable: C++ fixes its signature, and a Rust
+            // `extern "C" fn main(c_int, *const *const c_char)` does not match.
+            // It gets a shim after its body instead.
+            if (item.linkage.name != "" && item.linkage.name != "main") {
+                of << "#define " << TransMangleValue(p) << " " << item.linkage.name << "\n";
+            }
+        }
+
+        void emitFunctionDefinitionPrefix(const HIRFunction& item, bool isExternDef) {
+            if (isExternDef) {
+                of << "static ";
+            }
+            switch (item.linkage.type) {
+                case HIRLinkage::Type::External:
+                case HIRLinkage::Type::Auto:
+                    break;
+                case HIRLinkage::Type::Weak:
+                    of << "__attribute__((weak)) ";
+                    break;
+                case HIRLinkage::Type::ExternWeak:
+                    BUG(Span(), "unexpected ExternWeak on function");
+            }
+        }
+
         void emitFunctionProto(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef) override {
             MIRFunction emptyFcn;
             auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "/*proto*/ fn " << p; });
@@ -2905,28 +2930,8 @@ default:
 
             TRACE_FUNCTION_F(p);
             of << "// PROTO extern \"" << item.abi << "\" " << p << "\n";
-            // `main` is not renameable: C++ fixes its signature, and a Rust
-            // `extern "C" fn main(c_int, *const *const c_char)` does not match.
-            // It gets a shim after its body instead.
-            if (item.linkage.name != "" && item.linkage.name != "main") {
-                // If this function is implementing an external ABI, just rename it.
-                of << "#define " << TransMangleValue(p) << " " << item.linkage.name << "\n";
-            }
-            if (isExternDef) {
-                of << "static ";
-            }
-            switch (item.linkage.type) {
-                case HIRLinkage::Type::External:
-                    break;
-                case HIRLinkage::Type::Auto:
-                    break;
-                case HIRLinkage::Type::Weak:
-                    of << "__attribute__((weak)) ";
-
-                    break;
-                case HIRLinkage::Type::ExternWeak:
-                    BUG(Span(), "unexpected ExternWeak on function");
-            }
+            emitFunctionLinkageAlias(p, item);
+            emitFunctionDefinitionPrefix(item, isExternDef);
             emitFunctionHeader(p, item, params);
             of << ";\n";
 
@@ -2938,8 +2943,13 @@ default:
             mirRes = nullptr;
         }
 
-        void emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code) override {
+        void emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code, bool hasPrototype) override {
             TRACE_FUNCTION_F(p);
+
+            const bool tracksCaller = crate.functionTracksCaller(sp, p, item);
+            if (tracksCaller) {
+                trackedFunctions.insert(p.clone());
+            }
 
             MIRTypeResolve::argsT argTypes;
             for (const auto& ent : item.args) {
@@ -2954,12 +2964,13 @@ default:
                 sp, resolve_, pathCallback, retType, argTypes, *code
             };
             mirRes = &localMirRes;
-            currentFunctionTracksCaller = trackedFunctions.count(p) != 0;
+            currentFunctionTracksCaller = tracksCaller;
 
-            of << "// " << p << "\n";
-            if (isExternDef) {
-                of << "static ";
+            if (!hasPrototype) {
+                emitFunctionLinkageAlias(p, item);
             }
+            of << "// " << p << "\n";
+            emitFunctionDefinitionPrefix(item, isExternDef);
             emitFunctionHeader(p, item, params);
             of << "\n";
             of << "{\n";
@@ -3016,6 +3027,9 @@ default:
                 of << "}\n";
                 of.flush();
                 currentFunctionTracksCaller = false;
+                if (tracksCaller && !hasPrototype) {
+                    emitTrackCallerReifyWrapper(p, item, params);
+                }
                 mirRes = nullptr;
                 return;
             }
@@ -3129,6 +3143,9 @@ default:
             }
             of.flush();
             currentFunctionTracksCaller = false;
+            if (tracksCaller && !hasPrototype) {
+                emitTrackCallerReifyWrapper(p, item, params);
+            }
             mirRes = nullptr;
         }
 
