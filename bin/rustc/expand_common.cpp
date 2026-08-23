@@ -1173,6 +1173,7 @@ struct CExpandExpr: public ASTNodeVisitor {
     void visit(ASTExprNodeBlock& node) override {
         this->inAssignLhs = false;
         unsigned int modItemCount = 0;
+        bool hasLocalMod = node.localMod != nullptr;
 
         auto prevModstack = this->expandState.modstack;
         if (node.localMod) {
@@ -1210,6 +1211,14 @@ struct CExpandExpr: public ASTNodeVisitor {
 
                 ::std::vector<ASTExprNodeBlock::Line> newNodes;
                 this->visitMacro(*nodeMac, &newNodes);
+                if (!hasLocalMod && node.localMod) {
+                    this->expandState.modstack = LList<const ASTModule*>(&prevModstack, node.localMod.get());
+                    hasLocalMod = true;
+                }
+                if (node.localMod && modItemCount < node.localMod->items.size()) {
+                    ExpandMod(this->expandState, node.localMod->path(), *node.localMod, modItemCount);
+                    modItemCount = node.localMod->items.size();
+                }
                 if (definesMacro && !nodeMac->path.isValid()) {
                     for (auto& attr : nodeMac->attrs().items) {
                         if (!attr.isInert() && attr.name() == "macro_export") {

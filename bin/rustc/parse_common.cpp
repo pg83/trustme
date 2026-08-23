@@ -2989,6 +2989,14 @@ ASTAttribute ParseMetaItem(TokenStream& lex);
 void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs);
 bool ParseMacroInvocationOpt(TokenStream& lex, ASTMacroInvocation& outInv);
 
+static ASTAbsolutePath VisibilityModulePath(TokenStream& lex) {
+    auto path = lex.parseState().getCurrentMod().path();
+    while (!path.nodes.empty() && path.nodes.back().c_str()[0] == '#') {
+        path.nodes.pop_back();
+    }
+    return path;
+}
+
 ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
     Token tok;
     if (lex.getTokenIf(TOK_INTERPOLATED_VIS, tok)) {
@@ -3025,11 +3033,11 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                     return ASTVisibility::makeRestricted(ASTVisibility::Ty::PubCrate, std::move(path));
                 case TOK_RWORD_SELF:
                     // Private!
-                    path = lex.parseState().getCurrentMod().path();
+                    path = VisibilityModulePath(lex);
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return ASTVisibility::makeRestricted(ASTVisibility::Ty::PubSelf, std::move(path));
                 case TOK_RWORD_SUPER:
-                    path = lex.parseState().getCurrentMod().path();
+                    path = VisibilityModulePath(lex);
                     // At the crate root there is nothing above to be visible to.
                     // A `cfg` may still remove the item, so parsing it is not an
                     // error.
@@ -3056,11 +3064,11 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                             break;
                         case TOK_RWORD_SELF:
                             astPath = ASTPath::newSelf({});
-                            path = lex.parseState().getCurrentMod().path();
+                            path = VisibilityModulePath(lex);
                             break;
                         case TOK_RWORD_SUPER:
                             astPath = ASTPath::newSuper(1, {});
-                            path = lex.parseState().getCurrentMod().path();
+                            path = VisibilityModulePath(lex);
                             path.nodes.pop_back();
                             while (lex.lookahead(0) == TOK_DOUBLE_COLON && lex.lookahead(1) == TOK_RWORD_SUPER) {
                                 GET_TOK(tok, lex);

@@ -21,6 +21,17 @@ def require_always_inline(generated: str, function: str) -> None:
         raise RuntimeError(f"generated C++ lost the inline marking for {function}")
 
 
+def require_not_always_inline(generated: str, function: str) -> None:
+    declarations = [
+        line for line in generated.splitlines()
+        if function in line and "(" in line
+    ]
+    if not declarations:
+        raise RuntimeError(f"generated C++ lost the function {function}")
+    if any("__attribute__((always_inline))" in line for line in declarations):
+        raise RuntimeError(f"generated C++ forced ordinary #[inline] for {function}")
+
+
 def main() -> int:
     if len(sys.argv) != 6:
         raise SystemExit(
@@ -79,7 +90,7 @@ def main() -> int:
         )
 
         consumer_generated = Path(output + ".cpp").read_text()
-        require_always_inline(consumer_generated, "trustme_inline_normal_probe")
+        require_not_always_inline(consumer_generated, "trustme_inline_normal_probe")
         require_always_inline(consumer_generated, "trustme_inline_always_probe")
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)

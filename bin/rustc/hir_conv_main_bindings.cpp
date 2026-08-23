@@ -3077,16 +3077,19 @@ public:
     struct ModTraitsGuard {
         UfcsVisitor* v;
         tTraitImports oldImports;
+        HIRSimplePath oldModPath;
 
         ModTraitsGuard(UfcsVisitor& v, tTraitImports oldImports)
             : v(&v)
             , oldImports(mv$(oldImports))
+            , oldModPath(v.curModPath)
         {
         }
 
         ModTraitsGuard(ModTraitsGuard&& x)
             : v(x.v)
             , oldImports(mv$(x.oldImports))
+            , oldModPath(x.oldModPath)
         {
             x.v = nullptr;
         }
@@ -3097,6 +3100,7 @@ public:
             if (v) {
                 DEBUG("Stack pop: " << this->v->traits.size() << " -> " << this->oldImports.size());
                 this->v->traits = mv$(this->oldImports);
+                this->v->curModPath = this->oldModPath;
                 v = nullptr;
             }
         }
