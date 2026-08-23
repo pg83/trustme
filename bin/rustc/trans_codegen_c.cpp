@@ -300,6 +300,28 @@ namespace {
 
         stl::IntMap<PromotedNode*> promotedValues;
 
+        struct CallerLocationNode {
+            CallerLocationNode* hashNext;
+            CallerLocationNode* orderNext;
+            SourceLocation source;
+            u32 index;
+
+            CallerLocationNode(const SourceLocation& source, u32 index, CallerLocationNode* hashNext)
+                : hashNext(hashNext)
+                , orderNext(nullptr)
+                , source(source)
+                , index(index)
+            {
+            }
+        };
+
+        stl::ObjPool::Ref callerLocationPoolOwner = stl::ObjPool::fromMemory();
+        stl::ObjPool* callerLocationPool = callerLocationPoolOwner.mutPtr();
+        stl::IntMap<CallerLocationNode*> callerLocations{callerLocationPool};
+        CallerLocationNode* firstCallerLocation = nullptr;
+        CallerLocationNode* lastCallerLocation = nullptr;
+        u32 callerLocationCount = 0;
+
         bool usesIntelCompilerAsmDialect() const {
             const auto& arch = TargetGetCurSpec(wb_).arch.name;
             return arch == "x86" || arch == "x86_64";
@@ -357,6 +379,9 @@ namespace {
                << "#define TRUSTME_TARGET_U128_ALIGN " << static_cast<unsigned>(targetSpec.arch.alignments.u128) << "\n"
                << "#define TRUSTME_TARGET_HAS_NATIVE_F128 " << usesIntelCompilerAsmDialect() << "\n"
                << CODEGEN_C_PRELUDE;
+            of << "}\nnamespace {\n"
+               << "extern const trustme_caller_location trustme_caller_locations[];\n"
+               << "}\nextern \"C\" {\n";
         }
 
         ~CodeGeneratorC() {
@@ -586,6 +611,7 @@ namespace {
             }
 
             of << "}\n";
+            emitCallerLocationDefinitions();
             of.flush();
             of.close();
             ASSERT_BUG(Span(), !of.bad(), "Error set on output stream for: " << outfilePathC);
@@ -5357,11 +5383,6 @@ default:
             if (tailCall && e.fcn.is_Intrinsic()) {
                 MIR_BUG(localMirRes, "Intrinsic used as an explicit tail-call target");
             }
-            if (targetTracksCaller && !currentFunctionTracksCaller) {
-                of << indent << "static const trustme_caller_location trustme_callsite = ";
-                emitSourceLocationInitializer(e.source);
-                of << ";\n";
-            }
             of << indent;
 
             const auto calleeAbi = this->calleeAbi(localMirRes, e.fcn);
@@ -5532,7 +5553,12 @@ default:
                 if (!firstCallArgument) {
                     of << ",";
                 }
-                of << " " << (currentFunctionTracksCaller ? "trustme_caller" : "&trustme_callsite");
+                of << " ";
+                if (currentFunctionTracksCaller) {
+                    of << "trustme_caller";
+                } else {
+                    emitCallerLocationPointer(e.source);
+                }
             }
             of << " );\n";
 
@@ -6483,6 +6509,56 @@ default:
             of << "," << source.filename.size() << "}," << source.line << "," << source.column << "}";
         }
 
+        u64 callerLocationHash(const SourceLocation& source) const {
+            return source.filename.contentHash()
+                ^ stl::splitMix64(source.line + 0x9e3779b97f4a7c15ULL)
+                ^ stl::splitMix64(source.column + 0xd6e8feb86659fd93ULL);
+        }
+
+        CallerLocationNode* internCallerLocation(const SourceLocation& source) {
+            const auto hash = callerLocationHash(source);
+            auto* head = callerLocations.find(hash);
+            for (auto* node = head ? *head : nullptr; node; node = node->hashNext) {
+                if (node->source == source) {
+                    return node;
+                }
+            }
+
+            auto* node = callerLocationPool->make<CallerLocationNode>(source, callerLocationCount++, head ? *head : nullptr);
+            if (head) {
+                *head = node;
+            } else {
+                callerLocations.insert(hash, node);
+            }
+            if (lastCallerLocation) {
+                lastCallerLocation->orderNext = node;
+            } else {
+                firstCallerLocation = node;
+            }
+            lastCallerLocation = node;
+            return node;
+        }
+
+        void emitCallerLocationPointer(const SourceLocation& source) {
+            const auto* location = internCallerLocation(source);
+            of << "&trustme_caller_locations[" << location->index << "]";
+        }
+
+        void emitCallerLocationDefinitions() {
+            of << "namespace {\n"
+               << "const trustme_caller_location trustme_caller_locations[] = {\n";
+            if (!firstCallerLocation) {
+                of << "\t{},\n";
+            } else {
+                for (const auto* location = firstCallerLocation; location; location = location->orderNext) {
+                    of << "\t";
+                    emitSourceLocationInitializer(location->source);
+                    of << ",\n";
+                }
+            }
+            of << "};\n}\n";
+        }
+
         /// The name a promoted borrow's value is reached by: whichever static
         /// holds that value. A name that stands for the same value keeps its
         /// own definition -- another crate may have been given it -- but is
@@ -6620,9 +6696,7 @@ default:
             of << "static ";
             emitFunctionHeader(p, item, params, /*includeCallerLocation=*/false, "__trustme_reify");
             of << "{\n";
-            of << "\tstatic const trustme_caller_location trustme_definition = ";
-            emitSourceLocationInitializer(item.source);
-            of << ";\n\t";
+            of << "\t";
 
             HIRTypeRef returnTypeTmp;
             const auto& returnType = monomorphiseFcnReturn(returnTypeTmp, item, params);
@@ -6657,7 +6731,8 @@ default:
             if (!first) {
                 of << ", ";
             }
-            of << "&trustme_definition);\n";
+            emitCallerLocationPointer(item.source);
+            of << ");\n";
             if (returnType == crate.types.unit()) {
                 of << "\treturn;\n";
             }

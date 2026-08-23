@@ -36,3 +36,20 @@ fn trustme_instantiate_noop_drop(value: u32) -> u32 {
 fn trustme_branch_fallthrough(condition: bool) -> u32 {
     if condition { 11 } else { 22 }
 }
+
+#[track_caller]
+#[inline(never)]
+fn trustme_tracked_target(value: u32) -> u32 {
+    value
+}
+
+#[inline(never)]
+fn trustme_generic_tracked_call<T>(value: u32, _marker: T) -> u32 {
+    trustme_tracked_target(value)
+}
+
+#[no_mangle]
+fn trustme_caller_location_interning(value: u32) -> u32 {
+    trustme_generic_tracked_call(value, 0u8)
+        + trustme_generic_tracked_call(value, 0u16)
+}

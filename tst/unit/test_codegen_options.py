@@ -315,6 +315,19 @@ def check_cfg_compaction(rustc: str, src: str, work: str) -> None:
     if len(re.findall(r"\bgoto bb\d+;", branch)) != 1:
         raise RuntimeError("conditional branch did not use one physical fallthrough")
 
+    locations = re.search(
+        r"const trustme_caller_location trustme_caller_locations\[\] = \{\n(.*?)\n\};",
+        generated,
+        re.DOTALL,
+    )
+    references = re.findall(r"&trustme_caller_locations\[(\d+)\]", generated)
+    if locations is None or locations.group(1).count("{{(void*)") != len(set(references)):
+        raise RuntimeError("caller location table does not match its referenced entries")
+    if not any(references.count(index) == 2 for index in set(references)):
+        raise RuntimeError("duplicate monomorphized caller locations were not interned")
+    if "static const trustme_caller_location trustme_" in generated:
+        raise RuntimeError("caller location was still emitted as a function-local static")
+
 
 def check_prototype_order(rustc: str, src: str, work: str) -> None:
     output = os.path.join(work, "prototype-order")
