@@ -266,6 +266,13 @@ namespace {
         stl::Vector<u8> noOpCleanupBlocks;
         stl::Vector<u8> cleanupCandidateBlocks;
         stl::Vector<MIRBasicBlockId> cleanupReachabilityWorklist;
+        stl::Vector<MIRBasicBlockId> forwardedBlockTargets;
+        stl::Vector<u8> inlinedReturnBlocks;
+        stl::Vector<u8> forwardingState;
+        stl::Vector<MIRBasicBlockId> forwardingPath;
+        stl::Vector<u32> blockIncoming;
+        stl::Vector<u8> asmLabelBlocks;
+        MIRBasicBlockId fallthroughBlock = ~0u;
         bool currentFunctionTracksCaller = false;
 
         struct {
@@ -3087,14 +3094,24 @@ default:
                 } queueTargets{pendingCleanupBlocks, *this};
                 visitTerminatorTarget(code->blocks[blockIndex].terminator, queueTargets);
             }
+            findForwardedBlocks(localMirRes, *code);
             if (!cleanupBlocks.empty()) {
                 emitCleanupRunner(localMirRes, cleanupBlocks);
             }
 
             for (unsigned i = 0; i < code->blocks.size(); i++) {
                 const auto& block = code->blocks[i];
-                if (cleanupBlocks.count(i) != 0 || cleanupBlockIsNoOp(i)) {
+                if (cleanupBlocks.count(i) != 0 || cleanupBlockIsNoOp(i)
+                    || blockIsForwarded(i) || blockIsInlinedReturn(i)) {
                     continue;
+                }
+                fallthroughBlock = ~0u;
+                for (MIRBasicBlockId next = i + 1; next < code->blocks.size(); next++) {
+                    if (cleanupBlocks.count(next) == 0 && !cleanupBlockIsNoOp(next)
+                        && !blockIsForwarded(next) && !blockIsInlinedReturn(next)) {
+                        fallthroughBlock = next;
+                        break;
+                    }
                 }
                 of << "bb" << i << ": {\n";
                 for (const auto& stmt : block.statements) {
@@ -3105,6 +3122,7 @@ default:
                 emitBlockTerminator(localMirRes, block.terminator, i, false, 1);
                 of << "}\n";
             }
+            fallthroughBlock = ~0u;
             of << "}\n";
             if (item.linkage.name == "main") {
                 emitCMainShim(p, item, params, retType);
@@ -3125,6 +3143,123 @@ default:
             HIRTypeRef tmp;
             const auto& ty = localMirRes.getLvalueType(tmp, drop.slot);
             return !resolve_.typeNeedsDropGlue(localMirRes.sp, ty);
+        }
+
+        MIRBasicBlockId forwardedBlockTarget(MIRBasicBlockId block) const {
+            if (block < forwardedBlockTargets.length()) {
+                return forwardedBlockTargets[block];
+            }
+            return block;
+        }
+
+        bool blockIsForwarded(MIRBasicBlockId block) const {
+            return forwardedBlockTarget(block) != block;
+        }
+
+        bool blockIsInlinedReturn(MIRBasicBlockId block) const {
+            return block < inlinedReturnBlocks.length() && inlinedReturnBlocks[block] != 0;
+        }
+
+        void findForwardedBlocks(const MIRTypeResolve& localMirRes, const MIRFunction& code) {
+            forwardedBlockTargets.clear();
+            forwardedBlockTargets.zero(code.blocks.size());
+            for (MIRBasicBlockId i = 0; i < code.blocks.size(); i++) {
+                forwardedBlockTargets.mut(i) = i;
+            }
+
+            // BB0 is the implicit function entry and must remain physically
+            // first. Cleanup blocks have their own runner and labels, so leave
+            // that graph to findNoOpCleanupBlocks.
+            for (MIRBasicBlockId i = 1; i < code.blocks.size(); i++) {
+                const auto& block = code.blocks[i];
+                if (cleanupCandidateBlocks[i] || !block.statements.empty()) {
+                    continue;
+                }
+                MIRBasicBlockId target = i;
+                if (block.terminator.is_Goto()) {
+                    target = block.terminator.as_Goto();
+                } else if (const auto* drop = block.terminator.opt_Drop()) {
+                    if (dropOperationIsNoOp(localMirRes, *drop)) {
+                        target = drop->target;
+                    }
+                }
+                if (target < code.blocks.size() && !cleanupCandidateBlocks[target]) {
+                    forwardedBlockTargets.mut(i) = target;
+                }
+            }
+
+            // Resolve every chain once. A goto cycle keeps one representative
+            // block, preserving the infinite loop while removing the rest.
+            forwardingState.clear();
+            forwardingState.zero(code.blocks.size());
+            for (MIRBasicBlockId root = 0; root < code.blocks.size(); root++) {
+                if (forwardingState[root] != 0) {
+                    continue;
+                }
+                forwardingPath.clear();
+                auto block = root;
+                while (forwardingState[block] == 0) {
+                    forwardingState.mut(block) = 1;
+                    forwardingPath.pushBack(block);
+                    block = forwardedBlockTargets[block];
+                }
+                if (forwardingState[block] == 1) {
+                    forwardedBlockTargets.mut(block) = block;
+                }
+                while (!forwardingPath.empty()) {
+                    const auto item = forwardingPath.popBack();
+                    const auto target = forwardedBlockTargets[item];
+                    forwardedBlockTargets.mut(item) = forwardedBlockTargets[target];
+                    forwardingState.mut(item) = 2;
+                }
+            }
+
+            blockIncoming.clear();
+            blockIncoming.zero(code.blocks.size());
+            asmLabelBlocks.clear();
+            asmLabelBlocks.zero(code.blocks.size());
+            for (MIRBasicBlockId source = 0; source < code.blocks.size(); source++) {
+                if (cleanupCandidateBlocks[source] || cleanupBlockIsNoOp(source) || blockIsForwarded(source)) {
+                    continue;
+                }
+                struct CountIncoming final: public MIRTargetVisitor {
+                    const CodeGeneratorC& codegen;
+                    stl::Vector<u32>& incoming;
+
+                    CountIncoming(const CodeGeneratorC& codegen, stl::Vector<u32>& incoming)
+                        : codegen(codegen)
+                        , incoming(incoming)
+                    {
+                    }
+
+                    void visitTarget(const MIRBasicBlockId& target) override {
+                        const auto resolved = codegen.forwardedBlockTarget(target);
+                        if (resolved < incoming.length()) {
+                            incoming.mut(resolved)++;
+                        }
+                    }
+                } countIncoming{*this, blockIncoming};
+                const auto& terminator = code.blocks[source].terminator;
+                visitTerminatorTarget(terminator, countIncoming);
+                if (const auto* assembly = terminator.opt_Asm2()) {
+                    for (const auto& param : assembly->params) {
+                        if (const auto* label = param.opt_Label()) {
+                            asmLabelBlocks.mut(forwardedBlockTarget(*label)) = 1;
+                        }
+                    }
+                }
+            }
+
+            inlinedReturnBlocks.clear();
+            inlinedReturnBlocks.zero(code.blocks.size());
+            for (MIRBasicBlockId i = 1; i < code.blocks.size(); i++) {
+                const auto& block = code.blocks[i];
+                if (!cleanupCandidateBlocks[i] && !blockIsForwarded(i)
+                    && !asmLabelBlocks[i] && blockIncoming[i] == 1
+                    && block.statements.empty() && block.terminator.is_Return()) {
+                    inlinedReturnBlocks.mut(i) = 1;
+                }
+            }
         }
 
         void findNoOpCleanupBlocks(const MIRTypeResolve& localMirRes, const MIRFunction& code, const stl::Vector<MIRBasicBlockId>& cleanupEntries) {
@@ -3282,16 +3417,44 @@ default:
 
         void emitBlockTerminator(MIRTypeResolve& localMirRes, const MIRTerminator& term, unsigned blockIndex, bool cleanup, unsigned indentLevel) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
-            auto emitTargetBody = [&](unsigned target) {
+            auto emitReturnBody = [&]() {
+                if (localMirRes.retType == crate.types.unit()) {
+                    of << "return";
+                } else {
+                    of << "return rv";
+                }
+            };
+            auto targetFallsThrough = [&](unsigned target) {
+                return !cleanup
+                    && forwardedBlockTarget(target) == fallthroughBlock
+                    && !blockIsInlinedReturn(fallthroughBlock);
+            };
+            auto emitTargetBodyImpl = [&](unsigned target, bool allowFallthrough) {
                 if (cleanup && cleanupBlockIsNoOp(target)) {
                     of << "return";
                 } else {
+                    if (!cleanup) {
+                        target = forwardedBlockTarget(target);
+                        if (blockIsInlinedReturn(target)) {
+                            emitReturnBody();
+                            return;
+                        }
+                        if (allowFallthrough && target == fallthroughBlock) {
+                            return;
+                        }
+                    }
                     of << "goto " << (cleanup ? "cleanup_bb" : "bb") << target;
                 }
             };
+            auto emitTargetBody = [&](unsigned target) {
+                emitTargetBodyImpl(target, true);
+            };
             auto emitTarget = [&](unsigned target) {
+                if (targetFallsThrough(target)) {
+                    return;
+                }
                 of << indent;
-                emitTargetBody(target);
+                emitTargetBodyImpl(target, false);
                 of << ";\n";
             };
             switch (term.tag()) {
@@ -3304,10 +3467,10 @@ default:
                     auto& _ = term.as_Return();
                     if (cleanup) {
                         of << indent << "abort();\n";
-                    } else if (localMirRes.retType == crate.types.unit()) {
-                        of << indent << "return;\n";
                     } else {
-                        of << indent << "return rv;\n";
+                        of << indent;
+                        emitReturnBody();
+                        of << ";\n";
                     }
                     break;
                 }
@@ -3337,20 +3500,38 @@ default:
                 }
                 case MIRTerminator::TAG_If: {
                     auto& e = term.as_If();
-                    of << indent << "if(";
-                    emitLvalue(e.cond);
-                    of << ") ";
-                    emitTargetBody(e.bbTrue);
-                    of << "; else ";
-                    emitTargetBody(e.bbFalse);
-                    of << ";\n";
+                    const auto trueTarget = forwardedBlockTarget(e.bbTrue);
+                    const auto falseTarget = forwardedBlockTarget(e.bbFalse);
+                    if (!cleanup && trueTarget == falseTarget) {
+                        emitTarget(trueTarget);
+                    } else if (!cleanup && targetFallsThrough(e.bbTrue)) {
+                        of << indent << "if(!(";
+                        emitLvalue(e.cond);
+                        of << ")) ";
+                        emitTargetBodyImpl(e.bbFalse, false);
+                        of << ";\n";
+                    } else if (!cleanup && targetFallsThrough(e.bbFalse)) {
+                        of << indent << "if(";
+                        emitLvalue(e.cond);
+                        of << ") ";
+                        emitTargetBodyImpl(e.bbTrue, false);
+                        of << ";\n";
+                    } else {
+                        of << indent << "if(";
+                        emitLvalue(e.cond);
+                        of << ") ";
+                        emitTargetBody(e.bbTrue);
+                        of << "; else ";
+                        emitTargetBody(e.bbFalse);
+                        of << ";\n";
+                    }
                     break;
                 }
                 case MIRTerminator::TAG_Switch: {
                     auto& e = term.as_Switch();
                     if (e.validFlag != ~0u) {
                         of << indent << "if(!df" << e.validFlag << ") ";
-                        emitTargetBody(e.invalidTarget);
+                        emitTargetBodyImpl(e.invalidTarget, false);
                         of << ";\n";
                     }
 
@@ -6247,7 +6428,7 @@ default:
                                 of << ",";
                             }
                             firstLabel = false;
-                            of << " bb" << *label;
+                            of << " bb" << forwardedBlockTarget(*label);
                         }
                     }
                 }
@@ -6282,7 +6463,16 @@ default:
                     if (retBlock == ~0u) {
                         of << indent << "__builtin_unreachable();\n";
                     } else {
-                        of << indent << "goto bb" << retBlock << ";\n";
+                        const auto target = forwardedBlockTarget(retBlock);
+                        if (blockIsInlinedReturn(target)) {
+                            of << indent << "return";
+                            if (localMirRes.retType != crate.types.unit()) {
+                                of << " rv";
+                            }
+                            of << ";\n";
+                        } else if (target != fallthroughBlock) {
+                            of << indent << "goto bb" << target << ";\n";
+                        }
                     }
                 }
                 if (blockOpen) {
