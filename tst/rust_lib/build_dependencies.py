@@ -45,6 +45,7 @@ def main() -> int:
                 os.path.join(HERE, "dependencies", "Cargo.toml"),
                 "--target-dir",
                 output,
+                "-Zpublish-deps",
                 "-Zvendor-dir=" + os.path.join(rust_src, "vendor"),
                 "-Zlib-search=" + os.path.join(libstd, "release"),
             ],
