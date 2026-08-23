@@ -47,42 +47,30 @@ seed 36 completed in isolation and remains the only load-sensitive result.
 | failed in the full parallel run | 114 |
 | reproduced immediately after the full gate | 113 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 0 |
-| still failing independently | 113 |
+| fixed by subsequent point reruns | 96 |
+| still failing independently | 17 |
 
-The mechanical `link-failure` classifier was normalised by the first undefined
-symbol: 95 nodes require `Debug for dyn Any + Send`, and one requires the
-adjacent `Debug for dyn Any` implementation. They are one dependency-enumeration
-family. Four stable timeouts are interactive programs blocked on inherited
-stdin, so they are harness failures rather than compiler-progress failures.
+The 96 trait-object `Debug` link failures were closed by canonicalising concrete
+trait-impl value paths before translation enumeration and C symbol emission.
+All 96 original commands passed against freshly published roots; the rerun is
+recorded in
+`.build-clang/reclass-20260823-link-fixed-ix-env/results.jsonl`. Four stable
+timeouts are interactive programs blocked on inherited stdin, so they are
+harness failures rather than compiler-progress failures.
 
 The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| missing trait-object `Debug` dependencies at link time | 96 |
 | wrong runtime behaviour, panic, abort, or output | 7 |
 | compiler abort or wrong compiler diagnostic | 5 |
 | stable timeout | 5 |
-| **total independently reproduced** | **113** |
+| **total independently reproduced** | **17** |
 
 This full run supersedes the 2026-08-22 15,139-node baseline and all subsequent
 point accounting.
 
-## P1: missing trait-object dependencies
-
-Ninety-six programs compile to C++ but fail to link:
-
-| nodes | missing implementation | representative cases |
-|---:|---|---|
-| 95 | `Debug for dyn Any + Send` | Miri concurrency, thread/sync doctests, Rust library sync/TLS tests |
-| 1 | `Debug for dyn Any` | `coercion/any-trait-object-debug-12744.rs` |
-
-Both implementations are concrete library items. Translation must enumerate
-them when their trait-object method paths are referenced; relying on a vtable
-instance is insufficient for these direct `Debug::fmt` calls.
-
-## P2: runtime semantics
+## P1: runtime semantics
 
 Seven programs compile but execute incorrectly:
 
@@ -94,7 +82,7 @@ Seven programs compile but execute incorrectly:
 | 1 | linear inlined stack allocation | `codegen/StackColoring-not-blowup-stack-issue-40883.rs` |
 | 1 | stack overflow in threaded `OnceLock` list | `std/src/sync/once_lock.rs:53` |
 
-## P3: compiler aborts and diagnostics
+## P2: compiler aborts and diagnostics
 
 Five cases fail before producing a usable artifact:
 
@@ -105,7 +93,7 @@ Five cases fail before producing a usable artifact:
 | 1 | MIR treats a function item address as a static | UI `issues/issue-56870.rs` |
 | 1 | TAIT inherent lookup emits a type mismatch instead of the expected lookup failure | unit `tait_inherent_lookup_outside_defining_scope` |
 
-## P4: stable timeouts
+## P3: stable timeouts
 
 | nodes | limit | classification | cases |
 |---:|---:|---|---|

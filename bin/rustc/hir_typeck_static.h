@@ -302,6 +302,12 @@ public:
 
     using ValuePtr = TypeckValuePtr;
 
+    struct ResolvedTraitImplPath {
+        HIRTypeRef type;
+        HIRPathParams traitParams;
+    };
+
     /// `signature_only` - Returns a pointer to an item with the correct signature, not the actual implementation (faster)
-    ValuePtr getValue(const Span& sp, const HIRPath& p, MonomorphState& outParams, bool signatureOnly = false, const HIRGenericParams** outImplParamsDef = nullptr) const;
+    ValuePtr getValue(const Span& sp, const HIRPath& p, MonomorphState& outParams, bool signatureOnly = false,
+        const HIRGenericParams** outImplParamsDef = nullptr, ResolvedTraitImplPath* outTraitImplPath = nullptr) const;
 };

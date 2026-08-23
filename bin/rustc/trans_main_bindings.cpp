@@ -3425,7 +3425,7 @@ namespace {
         }
     }
 
-    EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRPath& path, TransParams& params) {
+    EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate& crate, HIRPath& path, TransParams& params) {
         TRACE_FUNCTION_F(path);
         StaticTraitResolve resolve{wb};
 
@@ -3435,7 +3435,14 @@ namespace {
 
         MonomorphState ms(crate.types);
         params.gdefImpl = nullptr;
-        auto ent = resolve.getValue(sp, path, ms, /*signature_only=*/false, &params.gdefImpl);
+        StaticTraitResolve::ResolvedTraitImplPath traitImplPath;
+        auto ent = resolve.getValue(sp, path, ms, /*signature_only=*/false, &params.gdefImpl, &traitImplPath);
+        if (traitImplPath.type) {
+            auto& pe = path.data.as_UfcsKnown();
+            pe.type = traitImplPath.type;
+            pe.trait.params = mv$(traitImplPath.traitParams);
+            params.selfType = pe.type;
+        }
         if (ms.getImplParams()) {
             params.ppImpl = ms.getImplParams()->clone();
             if (params.ppImpl.hasParams()) {

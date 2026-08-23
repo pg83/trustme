@@ -4001,9 +4001,15 @@ default:
     BUG(sp, "Reached end of `get_field_type` - " << ty);
 }
 
-StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const HIRPath& p, MonomorphState& outParams, bool signatureOnly /*=false*/, const HIRGenericParams** outImplParamsDef /*=nullptr*/) const {
+StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const HIRPath& p, MonomorphState& outParams,
+    bool signatureOnly /*=false*/, const HIRGenericParams** outImplParamsDef /*=nullptr*/,
+    ResolvedTraitImplPath* outTraitImplPath /*=nullptr*/) const {
     TRACE_FUNCTION_F(p << ", signature_only=" << signatureOnly);
     outParams = MonomorphState{crate.types};
+    if (outTraitImplPath) {
+        outTraitImplPath->type = nullptr;
+        outTraitImplPath->traitParams = HIRPathParams();
+    }
     switch (p.data.tag()) {
         case HIRPathData::TAG_Generic: {
             auto& pe = p.data.as_Generic();
@@ -4205,6 +4211,13 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 auto& ie = bestImpl.data.as_TraitImpl();
                 if (outImplParamsDef) {
                     *outImplParamsDef = &ie.impl->params;
+                }
+                // Only concrete impls have one published symbol independent
+                // of the caller's spelling. Generic impls must retain the
+                // path used to enumerate their particular instantiation.
+                if (outTraitImplPath && !ie.impl->params.isGeneric()) {
+                    outTraitImplPath->type = bestImpl.getImplType(crate.types);
+                    outTraitImplPath->traitParams = bestImpl.getTraitParams(crate.types);
                 }
                 outParams.ppImpl = &outParams.ppImplData;
                 outParams.ppImplData = ie.implParams.clone();

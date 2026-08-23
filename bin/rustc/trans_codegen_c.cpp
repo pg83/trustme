@@ -4985,6 +4985,28 @@ default:
             return RcString::newInterned(ABI_RUST);
         }
 
+        RcString mangleResolvedValuePath(const HIRPath& path) const {
+            if (!path.data.is_UfcsKnown()) {
+                return TransMangleValue(path);
+            }
+
+            // A concrete trait impl is emitted under its declaration's Self
+            // and trait parameters. An equivalent caller path can retain
+            // lifetime identity that is absent from that published symbol.
+            MonomorphState params(crate.types);
+            StaticTraitResolve::ResolvedTraitImplPath implPath;
+            resolve_.getValue(sp, path, params, /*signatureOnly=*/false, nullptr, &implPath);
+            if (!implPath.type) {
+                return TransMangleValue(path);
+            }
+
+            auto canonical = path.clone();
+            auto& pe = canonical.data.as_UfcsKnown();
+            pe.type = implPath.type;
+            pe.trait.params = mv$(implPath.traitParams);
+            return TransMangleValue(canonical);
+        }
+
         void emitTermCall(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_Call& e, unsigned indentLevel, bool tailCall = false) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
             const auto* targetPath = e.fcn.opt_Path();
@@ -5121,7 +5143,7 @@ default:
                             of << " = ";
                     }
                     }
-                    of << TransMangleValue(e2);
+                    of << mangleResolvedValuePath(e2);
                     break;
                 }
                 case MIRCallTarget::TAG_Intrinsic: {
@@ -6138,7 +6160,7 @@ default:
         }
 
         void emitReifiedFunctionName(const HIRPath& path, bool preserveTrackCaller = false) {
-            of << TransMangleValue(promotedName(path));
+            of << mangleResolvedValuePath(promotedName(path));
             if (!preserveTrackCaller && pathTracksCaller(path)) {
                 of << "__trustme_reify";
             }
