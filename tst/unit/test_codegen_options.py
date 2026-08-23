@@ -240,6 +240,10 @@ def require_cpp_layout_asserts(generated: str) -> None:
 
 
 def require_compact_cpp_syntax(generated: str) -> None:
+    block_scope = re.search(r"^[ \t]*(?:bb|cleanup_bb)\d+: \{$", generated, re.MULTILINE)
+    if block_scope:
+        raise RuntimeError(f"generated C++ contains blanket basic-block scope {block_scope.group()!r}")
+
     verbose_cast = re.search(r"\b(?:static|reinterpret|const|dynamic)_cast<", generated)
     if verbose_cast:
         raise RuntimeError(f"generated C++ contains verbose cast {verbose_cast.group()!r}")

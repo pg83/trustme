@@ -3098,14 +3098,13 @@ default:
                         break;
                     }
                 }
-                of << "bb" << i << ": {\n";
+                of << "bb" << i << ":\n";
                 for (const auto& stmt : block.statements) {
                     localMirRes.setCurStmt(i, &stmt - block.statements.data());
                     emitStatement(localMirRes, stmt, 1);
                 }
                 localMirRes.setCurStmtTerm(i);
                 emitBlockTerminator(localMirRes, block.terminator, i, false, 1);
-                of << "}\n";
             }
             fallthroughBlock = ~0u;
             of << "}\n";
@@ -3632,14 +3631,13 @@ default:
             of << "\t\t}\n";
             for (auto blockIndex : cleanupBlocks) {
                 const auto& block = localMirRes.fcn.blocks.at(blockIndex);
-                of << "\tcleanup_bb" << blockIndex << ": {\n";
+                of << "\tcleanup_bb" << blockIndex << ":\n";
                 for (const auto& stmt : block.statements) {
                     localMirRes.setCurStmt(blockIndex, &stmt - block.statements.data());
                     emitStatement(localMirRes, stmt, 2);
                 }
                 localMirRes.setCurStmtTerm(blockIndex);
                 emitBlockTerminator(localMirRes, block.terminator, blockIndex, true, 2);
-                of << "\t}\n";
             }
             of << "\t};\n";
         }
@@ -6839,6 +6837,7 @@ default:
                 emitParam(param);
             };
             auto emitAtomicCxchg = [&](const auto& e, Ordering oSucc, Ordering oFail, bool isWeak) {
+                const bool emulatedI128 = typeIsEmulatedI128(params.types.at(0));
                 switch (oFail) {
                     case Ordering::Release:
                         oFail = Ordering::Relaxed;
@@ -6849,31 +6848,35 @@ default:
                     default:
                         break;
                 }
-                if (typeIsEmulatedI128(params.types.at(0))) {
+                if (emulatedI128) {
+                    of << "{ ";
                     emitCtype(params.types.at(0), FMT_CB(ss, ss << " trustme_atomic_desired";));
                     of << " = ";
                     emitParam(e.args.at(2));
-                    of << ";\n\t";
+                    of << "; ";
                 }
                 emitLvalue(e.retVal);
                 of << "._0 = ";
                 emitParam(e.args.at(1));
                 of << ";\n\t";
                 emitLvalue(e.retVal);
-                of << "._1 = " << (typeIsEmulatedI128(params.types.at(0)) ? "__atomic_compare_exchange(" : "__atomic_compare_exchange_n(");
+                of << "._1 = " << (emulatedI128 ? "__atomic_compare_exchange(" : "__atomic_compare_exchange_n(");
                 emitAtomicCast();
                 emitParam(e.args.at(0));
                 of << ", &";
                 emitLvalue(e.retVal);
                 of << "._0"; // Expected (i.e. the check value)
                 of << ", ";
-                if (typeIsEmulatedI128(params.types.at(0))) {
+                if (emulatedI128) {
                     of << "&trustme_atomic_desired";
                 } else {
                     emitParam(e.args.at(2)); // `desired` (the new value for the slot if equal)
                 }
                 of << ", " << (isWeak ? "true" : "false");
                 of << ", " << getAtomicTyGcc(oSucc) << ", " << getAtomicTyGcc(oFail) << ")";
+                if (emulatedI128) {
+                    of << "; }";
+                }
             };
             auto emitAtomicArith = [&](AtomicOp op, Ordering ordering) {
                 emitLvalue(e.retVal);
