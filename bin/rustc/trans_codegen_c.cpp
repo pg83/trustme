@@ -6188,6 +6188,10 @@ default:
             if (item.markings.isNaked) {
                 of << "__attribute__((naked)) ";
             }
+            if (item.markings.inlineType == HIRFunction::Markings::Inline::Normal
+                || item.markings.inlineType == HIRFunction::Markings::Inline::Always) {
+                of << "__attribute__((always_inline)) ";
+            }
             if (item.markings.alignment != 0) {
                 of << "__attribute__((aligned(" << item.markings.alignment << "))) ";
             }

@@ -56,7 +56,8 @@ glue dependencies closed three more; keeping wildcard array patterns sparse
 closed one more; emitting large non-relocated static contents as assembler
 binary blobs closed one more; preserving opaque identity while expanding a
 recursive type-alias bound closed one more; preventing recursive normalization
-of sibling associated-type bounds closed one more, leaving 7.
+of sibling associated-type bounds closed one more; preserving Rust inline
+markings through metadata and C++ code generation closed one more, leaving 6.
 
 | result | nodes |
 |---|---:|
@@ -65,8 +66,8 @@ of sibling associated-type bounds closed one more, leaving 7.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 41 |
-| still failing independently | 7 |
+| fixed by subsequent point reruns | 42 |
+| still failing independently | 6 |
 
 Manual inspection normalised one mechanical classifier label:
 
@@ -79,8 +80,8 @@ The resulting current population is:
 | current result | nodes |
 |---|---:|
 | wrong runtime behaviour, panic, abort, or output | 3 |
-| stable timeout | 4 |
-| **total independently reproduced** | **7** |
+| stable timeout | 3 |
+| **total independently reproduced** | **6** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -97,11 +98,10 @@ Three programs compile but execute incorrectly:
 
 ## P2: stable timeouts
 
-Four nodes hit their timeout again in isolation:
+Three nodes hit their timeout again in isolation:
 
 | limit | case |
 |---:|---|
-| 60 s | Exercism `palindrome-products` |
 | 60 s | UI `next-solver/normalize/normalize-allow-too-many-vars.rs` |
 | 60 s | UI `coroutine/issue-87142.rs` |
 | 10 min | RustSmith seed 7 |

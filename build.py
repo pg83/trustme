@@ -821,6 +821,29 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_inline_markings_metadata_driver",
+    inputs=[
+        "$(S)/tst/unit/test_inline_markings_metadata.py",
+        "$(S)/tst/unit/inline_markings_producer.rs",
+        "$(S)/tst/unit/test_inline_markings_metadata.rs",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/inline_markings_metadata_driver.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_inline_markings_metadata.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/inline_markings_producer.rs",
+        "$(S)/tst/unit/test_inline_markings_metadata.rs",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/inline_markings_metadata_driver.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_driver_lint_cfg_options",
     inputs=[
         "$(S)/tst/unit/test_driver_lint_cfg_options.py",

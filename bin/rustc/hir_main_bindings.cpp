@@ -807,6 +807,7 @@ public:
         rv.isRustcPromotable = in.readBool();
         rv.mustUse = in.readBool();
         rv.alignment = in.readCount();
+        rv.inlineType = static_cast<HIRFunction::Markings::Inline>(in.readTag());
         return rv;
     }
 
@@ -4062,6 +4063,7 @@ break;
         // crate, so it has to travel with the function.
         out.writeBool(m.mustUse);
         out.writeCount(m.alignment);
+        out.writeTag(static_cast<unsigned int>(m.inlineType));
     }
 
     void serialise(const HIRConstant& item) {
