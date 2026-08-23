@@ -564,6 +564,13 @@ itertools = add_project_test(
     lockfile="$(S)/tst/projects/itertools/Cargo.lock",
 )
 
+alloca = add_project_test(
+    name="alloca",
+    url="https://github.com/playXE/alloca-rs.git",
+    rev="1a5ff4220155da43390f7f7ee940cb508d3db262",
+    lockfile="$(S)/tst/projects/alloca/Cargo.lock",
+)
+
 zmij = add_project_test(
     name="zmij",
     url="https://github.com/dtolnay/zmij.git",
