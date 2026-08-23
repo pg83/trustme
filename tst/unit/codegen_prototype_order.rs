@@ -28,6 +28,18 @@ fn trustme_order_middle(value: u32) -> u32 {
 
 #[inline(never)]
 #[no_mangle]
+fn trustme_five_arguments(a: u32, b: u32, c: u32, d: u32, e: u32) -> u32 {
+    a + b + c + d + e
+}
+
+#[inline(never)]
+#[no_mangle]
+fn trustme_six_arguments(a: u32, b: u32, c: u32, d: u32, e: u32, f: u32) -> u32 {
+    a + b + c + d + e + f
+}
+
+#[inline(never)]
+#[no_mangle]
 fn trustme_recursive_a(value: u32) -> u32 {
     if value == 0 {
         0

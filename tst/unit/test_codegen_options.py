@@ -244,6 +244,10 @@ def require_compact_cpp_syntax(generated: str) -> None:
     if block_scope:
         raise RuntimeError(f"generated C++ contains blanket basic-block scope {block_scope.group()!r}")
 
+    joined_functions = re.search(r"^}\n(?:static )?[^\n]*\bZR[0-9a-f]{16}\(", generated, re.MULTILINE)
+    if joined_functions:
+        raise RuntimeError("generated functions have no separating blank line")
+
     verbose_cast = re.search(r"\b(?:static|reinterpret|const|dynamic)_cast<", generated)
     if verbose_cast:
         raise RuntimeError(f"generated C++ contains verbose cast {verbose_cast.group()!r}")
@@ -421,6 +425,8 @@ def check_prototype_order(rustc: str, src: str, work: str) -> None:
     functions = (
         "trustme_order_leaf",
         "trustme_order_middle",
+        "trustme_five_arguments",
+        "trustme_six_arguments",
         "trustme_recursive_a",
         "trustme_recursive_b",
         "trustme_order_root",
@@ -433,6 +439,27 @@ def check_prototype_order(rustc: str, src: str, work: str) -> None:
     }
     if prototypes != {"trustme_recursive_a", "trustme_recursive_b"}:
         raise RuntimeError(f"unexpected internal prototypes: {sorted(prototypes)!r}")
+
+    for name in functions:
+        for position, terminator in headers[name]:
+            line_end = generated.find("\n", position)
+            if terminator not in generated[position:line_end]:
+                if name != "trustme_six_arguments":
+                    raise RuntimeError(f"{name} function header is split across lines")
+            elif name == "trustme_six_arguments":
+                raise RuntimeError("six-argument function header was not split across lines")
+
+    for name in functions:
+        body = generated_function(generated, name)
+        body_end = generated.find(body) + len(body)
+        if generated[body_end:body_end + 1] != "\n":
+            raise RuntimeError(f"{name} has no blank line after its definition")
+
+    padded_call = re.search(r"\bZR[0-9a-f]{16}\( |\b(?:memcpy|memmove|memset|memcmp)\( ", generated)
+    if padded_call:
+        raise RuntimeError(f"generated call contains space after opening parenthesis: {padded_call.group()!r}")
+    if re.search(r"^[ \t].*\bZR[0-9a-f]{16}\([^\n;]* \);", generated, re.MULTILINE):
+        raise RuntimeError("generated call contains space before closing parenthesis")
 
     definitions = {
         name: next(position for position, terminator in entries if terminator == "{")

@@ -395,7 +395,7 @@ namespace {
             // - Well... for cdylibs that's the case, for rdylibs it's not
             if (outTy == CodegenOutput::Executable && !crate.noMain) {
                 // TODO: Define this function in MIR?
-                of << "}\n";
+                of << "}\n\n";
                 of << "int main(int argc, const char* argv[]) {\n";
                 auto cStartPath = resolve_.hirCrate().getLangItemPathOpt("trustme-start");
                 if (cStartPath == HIRSimplePath()) {
@@ -420,7 +420,7 @@ namespace {
                 } else {
                     of << "\treturn " << TransMangleValue(HIRGenericPath(cStartPath)) << "(argc, (u8**)argv);\n";
                 }
-                of << "}\n";
+                of << "}\n\n";
                 of << "extern \"C\" {\n";
             }
 
@@ -1783,7 +1783,7 @@ default:
             // - Use `emit_statement` to avoid re-writing the enum tag handling
             emitStatement(*mirRes, MIRStatement::make_Assign({MIRLValue::newReturn(), MIRRValue::make_EnumVariant({p.clone(), static_cast<unsigned>(varIdx), mv$(vals)})}));
             of << "\treturn rv;\n";
-            of << "}\n";
+            of << "}\n\n";
             mirRes = nullptr;
         }
 
@@ -1817,7 +1817,7 @@ default:
                 of << "\trv._" << i << " = _" << i << ";\n";
             }
             of << "\treturn rv;\n";
-            of << "}\n";
+            of << "}\n\n";
         }
 
         // Returns `true` if the type is pointer-aligned (i.e. it could contain a pointer)
@@ -2251,7 +2251,7 @@ default:
             if (item.linkage.name.rfind("llvm.", 0) == 0) {
                 of << "static ";
                 emitFunctionHeader(p, item, params);
-                of << "{\n";
+                of << " {\n";
                 of << "\t";
                 emitCtype(item.returnType);
                 of << " rv;\n";
@@ -2840,7 +2840,7 @@ default:
                     //MIR_TODO(*m_mir_res, "LLVM extern linkage: " << item.m_linkage.name);
                     of << "\tassert(!\"Extern LLVM: " << item.linkage.name << "\"); abort();\n";
                 }
-                of << "}\n";
+                of << "}\n\n";
                 mirRes = nullptr;
                 return;
             } else if (item.linkage.name == "_Unwind_RaiseException") {
@@ -2848,7 +2848,7 @@ default:
                 emitFunctionHeader(p, item, params);
                 of << " {\n";
                 of << "\tthrow trustme_panic{arg0};\n";
-                of << "}\n";
+                of << "}\n\n";
                 return;
             } else {
                 of << "extern ";
@@ -2861,7 +2861,7 @@ default:
                     of << " asm(\"" << item.linkage.name << "\")";
                 }
             }
-            of << ";\n";
+            of << ";\n\n";
 
             if (tracksCaller) {
                 emitTrackCallerReifyWrapper(p, item, params);
@@ -2907,7 +2907,7 @@ default:
             emitFunctionLinkageAlias(p, item);
             emitFunctionDefinitionPrefix(item, isExternDef);
             emitFunctionHeader(p, item, params);
-            of << ";\n";
+            of << ";\n\n";
 
             if (crate.functionTracksCaller(sp, p, item)) {
                 trackedFunctions.insert(p.clone());
@@ -2945,8 +2945,7 @@ default:
             }
             emitFunctionDefinitionPrefix(item, isExternDef);
             emitFunctionHeader(p, item, params);
-            of << "\n";
-            of << "{\n";
+            of << " {\n";
             if (item.hasNamedVariadic) {
                 const auto index = item.fixedArgCount();
                 of << "\t";
@@ -2997,7 +2996,7 @@ default:
                 MIR_ASSERT(localMirRes, block.terminator.is_Return() || block.terminator.is_Unreachable(), "Naked function has a non-trivial MIR terminator");
                 localMirRes.setCurStmt(0, nakedAsmIndex);
                 emitStatement(localMirRes, *nakedAsm, 1);
-                of << "}\n";
+                of << "}\n\n";
                 of.flush();
                 currentFunctionTracksCaller = false;
                 if (tracksCaller && !hasPrototype) {
@@ -3107,7 +3106,7 @@ default:
                 emitBlockTerminator(localMirRes, block.terminator, i, false, 1);
             }
             fallthroughBlock = ~0u;
-            of << "}\n";
+            of << "}\n\n";
             if (item.linkage.name == "main") {
                 emitCMainShim(p, item, params, retType);
             }
@@ -3354,7 +3353,7 @@ default:
             if (!returnsValue) {
                 of << "\treturn 0;\n";
             }
-            of << "}\n";
+            of << "}\n\n";
         }
 
         void emitOperationWithUnwindCb(const MIRUnwindAction& action, unsigned indentLevel, CUnwindOperationCallback& emitOperation) {
@@ -5482,10 +5481,9 @@ default:
                     continue;
                 }
                 if (!firstCallArgument) {
-                    of << ",";
+                    of << ", ";
                 }
                 firstCallArgument = false;
-                of << " ";
 
                 if (this->typeIsBadZst(ty)) {
                     of << "zarg" << j;
@@ -5502,16 +5500,15 @@ default:
             }
             if (targetTracksCaller) {
                 if (!firstCallArgument) {
-                    of << ",";
+                    of << ", ";
                 }
-                of << " ";
                 if (currentFunctionTracksCaller) {
                     of << "trustme_caller";
                 } else {
                     emitCallerLocationPointer(e.source);
                 }
             }
-            of << " );\n";
+            of << ");\n";
 
             if( hasZst )
             {
@@ -6589,6 +6586,18 @@ default:
             HIRTypeRef tmp;
             const auto& retTy = monomorphiseFcnReturn(tmp, item, params);
             const bool hasCallerLocation = includeCallerLocation && crate.functionTracksCaller(sp, p, item);
+            unsigned int passedCount = 0;
+            unsigned int parameterCount = item.variadic + hasCallerLocation;
+            for (unsigned int i = 0; i < item.fixedArgCount(); i++) {
+                auto ty = params.monomorph(resolve_, item.args[i].second);
+                if (!argumentIsPassed(item.abi, ty)) {
+                    continue;
+                }
+                passedCount++;
+                const auto metadata = metadataType(ty);
+                parameterCount += (metadata == MetadataType::Slice || metadata == MetadataType::TraitObject) ? 2 : 1;
+            }
+            const bool compact = parameterCount <= 5;
             if (item.markings.isNaked) {
                 of << "__attribute__((naked)) ";
             }
@@ -6601,12 +6610,6 @@ default:
             auto cb = FMT_CB(
                 ss,
                 ss << " " << compilerAbiAttribute(item.abi) << TransMangleValue(p) << nameSuffix << "(";
-                unsigned int passedCount = 0;
-                for (unsigned int i = 0; i < item.fixedArgCount(); i++) {
-                    if (argumentIsPassed(item.abi, params.monomorph(resolve_, item.args[i].second))) {
-                        passedCount++;
-                    }
-                }
                 if (passedCount == 0 && !hasCallerLocation && !item.variadic) { ss << "void)"; } else {
                     unsigned int emitted = 0;
                     for (unsigned int i = 0; i < item.fixedArgCount(); i++) {
@@ -6614,24 +6617,42 @@ default:
                         if (!argumentIsPassed(item.abi, ty)) {
                             continue;
                         }
-                        ss << "\n\t\t";
+                        if (compact) {
+                            if (emitted != 0) {
+                                ss << ", ";
+                            }
+                        } else {
+                            ss << "\n\t\t";
+                        }
                         this->emitFunctionArgument(ty, FMT_CB(os, os << "arg" << i;));
                         emitted++;
-                        if (item.variadic || emitted < passedCount || hasCallerLocation) {
+                        if (!compact && (item.variadic || emitted < passedCount || hasCallerLocation)) {
                             of << ",";
                         }
                     }
 
                     if (item.variadic) {
-                        of << "\n\t\t...";
+                        if (compact) {
+                            of << (emitted != 0 ? ", ..." : "...");
+                        } else {
+                            of << "\n\t\t...";
+                        }
+                        emitted++;
                     }
 
                     if (hasCallerLocation) {
                         MIR_ASSERT(*mirRes, !item.variadic, "#[track_caller] on a variadic function");
-                        of << "\n\t\tconst trustme_caller_location* trustme_caller";
+                        if (compact) {
+                            if (emitted != 0) {
+                                of << ", ";
+                            }
+                        } else {
+                            of << "\n\t\t";
+                        }
+                        of << "const trustme_caller_location* trustme_caller";
                     }
 
-                    ss << "\n\t\t)";
+                    ss << (compact ? ")" : "\n\t\t)");
                 }
             );
             if (retTy != crate.types.unit()) {
@@ -6639,14 +6660,13 @@ default:
             } else {
                 of << "void " << cb;
             }
-            of << "\n";
         }
 
         void emitTrackCallerReifyWrapper(const HIRPath& p, const HIRFunction& item, const TransParams& params) {
             MIR_ASSERT(*mirRes, !item.variadic, "Cannot reify a variadic #[track_caller] function");
             of << "static ";
             emitFunctionHeader(p, item, params, /*includeCallerLocation=*/false, "__trustme_reify");
-            of << "{\n";
+            of << " {\n";
             of << "\t";
 
             HIRTypeRef returnTypeTmp;
@@ -6687,7 +6707,7 @@ default:
             if (returnType == crate.types.unit()) {
                 of << "\treturn;\n";
             }
-            of << "}\n";
+            of << "}\n\n";
         }
 
         /// A tag is matched on the bits it holds. Where a signed tag's niche
@@ -7064,7 +7084,7 @@ default:
                 // struct a byte, so clear the destination rather than leave it
                 // holding whatever was in that byte.
                 if (this->typeIsBadZst(tySrc)) {
-                    of << "memset( &";
+                    of << "memset(&";
                     emitLvalue(e.retVal);
                     of << ", 0, sizeof(";
                     emitCtype(tyDst);
@@ -7075,7 +7095,7 @@ default:
                     of << " = ";
                     emitParam(e.args.at(0));
                     of << "; ";
-                    of << "memcpy( &";
+                    of << "memcpy(&";
                     emitLvalue(e.retVal);
                     of << ", &v, sizeof(";
                     emitCtype(tyDst);
@@ -7122,7 +7142,7 @@ default:
                         emitParam(e.args.at(0));
                     }
                 } else {
-                    of << "memcpy( &";
+                    of << "memcpy(&";
                     emitLvalue(e.retVal);
                     of << ", &";
                     emitParam(e.args.at(0));
@@ -7160,7 +7180,7 @@ default:
                     of << "memcpy";
                 }
                 // 0: Source, 1: Destination, 2: Count
-                of << "( ";
+                of << "(";
                 emitParam(e.args.at(1));
                 of << ", ";
                 emitParam(e.args.at(0));
@@ -7179,7 +7199,7 @@ default:
                 // 0: Destination, 1: Value, 2: Count
                 of << "if( ";
                 emitParam(e.args.at(2));
-                of << " > 0) memset( ";
+                of << " > 0) memset(";
                 emitParam(e.args.at(0));
                 of << ", ";
                 emitParam(e.args.at(1));
@@ -7192,7 +7212,7 @@ default:
             } else if (name == "compare_bytes") {
                 // A raw memcmp
                 emitLvalue(e.retVal);
-                of << " = memcmp( ";
+                of << " = memcmp(";
                 emitParam(e.args.at(0));
                 of << ", ";
                 emitParam(e.args.at(1));
@@ -7278,7 +7298,7 @@ default:
                 // Do nothing, leaves the destination undefined
                 // TODO: This makes the C compiler warn
             } else if (name == "init") {
-                of << "memset( &";
+                of << "memset(&";
                 emitLvalue(e.retVal);
                 of << ", 0, sizeof(";
                 emitCtype(params.types.at(0));
@@ -9518,9 +9538,9 @@ default:
                             break;
                         case MetadataType::Slice:
                         case MetadataType::TraitObject:
-                            of << indent << TransMangleValue(p) << "( ";
+                            of << indent << TransMangleValue(p) << "(";
                             emitDstLvaluePointer(MIRLValue::CRef(slot));
-                            of << " );\n";
+                            of << ");\n";
                             break;
                     }
                     break;
