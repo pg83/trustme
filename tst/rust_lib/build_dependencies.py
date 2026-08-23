@@ -26,7 +26,6 @@ def main() -> int:
     with lib.workdir() as work:
         environment = dict(os.environ)
         environment["TRUSTME_PATH"] = lib.trustme_link(work)
-        environment["CARGO_TRUSTME_DEFER_CODEGEN"] = "1"
         environment.setdefault("CC", "cc")
 
         rust_src = lib.untar(rust_src_tar, os.path.join(work, "rust-src"))

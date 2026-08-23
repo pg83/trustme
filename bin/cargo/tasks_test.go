@@ -3,8 +3,41 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestCargoControlEnvironmentUsesTrustmePrefix(t *testing.T) {
+	for _, name := range []string{
+		trustmeCargoDumpCommand,
+		trustmeCargoDumpEnv,
+		trustmeCargoDylib,
+		trustmeCargoIgnoreToolTimestamps,
+		trustmeCargoNoDebugAssertions,
+	} {
+		if !strings.HasPrefix(name, "TRUSTME_CARGO_") {
+			t.Errorf("Cargo control environment variable %q has the wrong namespace", name)
+		}
+	}
+}
+
+func TestCargoControlEnvironmentIsConsumed(t *testing.T) {
+	t.Setenv(trustmeCargoDylib, "1")
+	t.Setenv(trustmeCargoIgnoreToolTimestamps, "1")
+	t.Setenv(trustmeCargoNoDebugAssertions, "1")
+
+	if !dylibEnabled() {
+		t.Error("TRUSTME_CARGO_DYLIB was ignored")
+	}
+
+	if !ignoreToolTimestamps() {
+		t.Error("TRUSTME_CARGO_IGNORE_TOOL_TIMESTAMPS was ignored")
+	}
+
+	if debugAssertions("debug") {
+		t.Error("TRUSTME_CARGO_NO_DEBUG_ASSERTIONS was ignored")
+	}
+}
 
 func TestTaskExecutorCachesOutputsInCas(t *testing.T) {
 	root := t.TempDir()

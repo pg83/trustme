@@ -36,6 +36,17 @@ standard Cargo flags:
 the metadata and object endpoints of dependency libraries after the graph has
 finished. It does not change how tools exchange artifacts inside the graph.
 
+Cargo-specific diagnostic and compatibility switches use the
+`TRUSTME_CARGO_` environment namespace:
+
+```text
+TRUSTME_CARGO_DUMP_COMMAND
+TRUSTME_CARGO_DUMP_ENV
+TRUSTME_CARGO_DYLIB
+TRUSTME_CARGO_IGNORE_TOOL_TIMESTAMPS
+TRUSTME_CARGO_NO_DEBUG_ASSERTIONS
+```
+
 `vendor` follows Cargo's destination and `--manifest-path` interface. The test
 graph additionally uses `-Zarchive=FILE.tar.zst` to create a reproducible,
 checksum-verified archive for transport between isolated build nodes.

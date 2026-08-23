@@ -11,6 +11,14 @@ import (
 	"strings"
 )
 
+const (
+	trustmeCargoDumpCommand          = "TRUSTME_CARGO_DUMP_COMMAND"
+	trustmeCargoDumpEnv              = "TRUSTME_CARGO_DUMP_ENV"
+	trustmeCargoDylib                = "TRUSTME_CARGO_DYLIB"
+	trustmeCargoIgnoreToolTimestamps = "TRUSTME_CARGO_IGNORE_TOOL_TIMESTAMPS"
+	trustmeCargoNoDebugAssertions    = "TRUSTME_CARGO_NO_DEBUG_ASSERTIONS"
+)
+
 type Builder struct {
 	context            *BuildContext
 	tasks              map[string]*Task
@@ -1572,11 +1580,11 @@ func crateType(target *Target) string {
 }
 
 func runCommand(dir string, extraEnv map[string]string, logPath string, dryRun bool, name string, args ...string) {
-	if _, dump := os.LookupEnv("CARGO_TRUSTME_DUMP_COMMAND"); dump {
+	if _, dump := os.LookupEnv(trustmeCargoDumpCommand); dump {
 		fmt.Fprintln(os.Stderr, ">", shellJoin(append([]string{name}, args...)))
 	}
 
-	if _, dump := os.LookupEnv("CARGO_TRUSTME_DUMP_ENV"); dump {
+	if _, dump := os.LookupEnv(trustmeCargoDumpEnv); dump {
 		keys := make([]string, 0, len(extraEnv))
 
 		for key := range extraEnv {
@@ -1714,19 +1722,19 @@ func rustName(name string) string {
 }
 
 func dylibEnabled() bool {
-	_, enabled := os.LookupEnv("CARGO_TRUSTME_DYLIB")
+	_, enabled := os.LookupEnv(trustmeCargoDylib)
 
 	return enabled
 }
 
 func ignoreToolTimestamps() bool {
-	_, enabled := os.LookupEnv("CARGO_TRUSTME_IGNORE_TOOL_TIMESTAMPS")
+	_, enabled := os.LookupEnv(trustmeCargoIgnoreToolTimestamps)
 
 	return enabled
 }
 
 func debugAssertions(profile string) bool {
-	if _, disabled := os.LookupEnv("CARGO_TRUSTME_NO_DEBUG_ASSERTIONS"); disabled {
+	if _, disabled := os.LookupEnv(trustmeCargoNoDebugAssertions); disabled {
 		return false
 	}
 
