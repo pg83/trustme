@@ -5,7 +5,7 @@
 //
 // Same shape as the upstream test mir/enum/negative_discr_ok.rs.
 #[repr(i64)]
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Wide {
     Min = i64::MIN,
     Zero = 0,
@@ -42,4 +42,6 @@ fn main() {
     // The same value round-trips through a comparison.
     assert!(Wide::Min == Wide::Min);
     assert!(Wide::Min != Wide::Max);
+    assert!(Wide::Min < Wide::Zero);
+    assert_eq!(Wide::Min.cmp(&Wide::Max), std::cmp::Ordering::Less);
 }

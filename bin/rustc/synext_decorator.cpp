@@ -1485,6 +1485,10 @@ protected:
     virtual ASTExprNodeP equalValue(Span sp, const RcString& coreName) const = 0;
     /// Get the return value for a mismatch in enum variants
     virtual ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const = 0;
+    /// Compare an enum whose variants carry no fields.
+    virtual ASTExprNodeP compareFieldlessEnum(Span sp, const RcString& coreName) const {
+        return this->enumMismatch(sp, coreName);
+    }
 
 public:
     // Struct
@@ -1518,6 +1522,18 @@ public:
 
     // Enum
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
+        bool fieldless = true;
+        for (const auto& variant : enm.variants()) {
+            if (variant.data.tag() != ASTEnumVariantData::TAG_Unit) {
+                fieldless = false;
+                break;
+            }
+        }
+        if (fieldless) {
+            return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm),
+                this->compareFieldlessEnum(sp, opts.coreName));
+        }
+
         ASTPath basePath = *type->data.as_Path();
         basePath.nodes().back().args() = ASTPathParams();
         ::std::vector<ASTExprNodeMatchArm> arms;
@@ -1622,6 +1638,15 @@ class DeriverPartialEq: public DeriverInnerCompare {
 
     ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override {
         return NEWNODE(Bool, false);
+    }
+
+    ASTExprNodeP compareFieldlessEnum(Span sp, const RcString& coreName) const override {
+        auto discriminant = [&](const RcString& value) {
+            return NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"),
+                makeVec1(NEWNODE(NamedValue, ASTPath(value))));
+        };
+        return NEWNODE(BinOp, ASTExprNodeBinOp::CMPEQU,
+            discriminant(rcstringSelfLower), discriminant(rcstringV));
     }
 
 public:

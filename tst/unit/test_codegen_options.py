@@ -171,8 +171,7 @@ def generated_symbol(generated: str, function: str) -> str:
     return match.group(1)
 
 
-def generated_function_headers(generated: str, function: str) -> list[tuple[int, str]]:
-    symbol = generated_symbol(generated, function)
+def generated_symbol_headers(generated: str, symbol: str) -> list[tuple[int, str]]:
     headers: list[tuple[int, str]] = []
     for match in re.finditer(
         rf"^(?!\s|#)[^\n;=]*\b{re.escape(symbol)}\(",
@@ -195,21 +194,27 @@ def generated_function_headers(generated: str, function: str) -> list[tuple[int,
     return headers
 
 
-def generated_function(generated: str, function: str) -> str:
+def generated_function_headers(generated: str, function: str) -> list[tuple[int, str]]:
+    return generated_symbol_headers(generated, generated_symbol(generated, function))
+
+
+def generated_function_by_symbol(generated: str, symbol: str) -> str:
     definitions = [
         position
-        for position, terminator in generated_function_headers(generated, function)
+        for position, terminator in generated_symbol_headers(generated, symbol)
         if terminator == "{"
     ]
     if len(definitions) != 1:
-        raise RuntimeError(
-            f"generated C++ has {len(definitions)} definitions of {function}"
-        )
+        raise RuntimeError(f"generated C++ has {len(definitions)} definitions of {symbol}")
     start = definitions[0]
     end = generated.find("\n}\n", start)
     if end < 0:
-        raise RuntimeError(f"generated C++ has no end of function {function}")
+        raise RuntimeError(f"generated C++ has no end of function {symbol}")
     return generated[start:end + 3]
+
+
+def generated_function(generated: str, function: str) -> str:
+    return generated_function_by_symbol(generated, generated_symbol(generated, function))
 
 
 def reject_detailed_codegen_comments(generated: str) -> None:
@@ -299,6 +304,40 @@ def check_enum_switch_compaction(rustc: str, src: str, work: str) -> None:
         raise RuntimeError("one-odd-target enum match was not compacted to a condition")
 
 
+def check_fieldless_enum_derive(
+    rustc: str, src: str, libstd_tar: str, work: str
+) -> None:
+    output = os.path.join(work, "fieldless-enum-derive")
+    libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
+    result = invoke(
+        rustc,
+        src,
+        output,
+        [
+            "--crate-name", "codegen_fieldless_enum_derive",
+            "-L", os.path.join(libstd, "release"),
+            "-O",
+            "-Cemit-cpp-only",
+        ],
+    )
+    expect_ok(result, "fieldless enum derive codegen")
+    generated = Path(output + ".cpp").read_text()
+    reject_detailed_codegen_comments(generated)
+
+    for function in (
+        "trustme_fieldless_eq",
+        "trustme_fieldless_cmp",
+        "trustme_fieldless_partial_cmp",
+    ):
+        wrapper = generated_function(generated, function)
+        callee = re.search(r"\brv = (ZR[0-9a-f]{16})\(", wrapper)
+        if callee is None:
+            raise RuntimeError(f"{function} did not call its derived implementation")
+        derived = generated_function_by_symbol(generated, callee.group(1))
+        if "switch(" in derived or "case " in derived:
+            raise RuntimeError(f"{function} derived a variant-by-variant comparison")
+
+
 def check_cfg_compaction(rustc: str, src: str, work: str) -> None:
     output = os.path.join(work, "cfg-compaction")
     result = invoke(
@@ -383,14 +422,25 @@ def check_prototype_order(rustc: str, src: str, work: str) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) != 10:
+    if len(sys.argv) != 12:
         raise SystemExit(
             "usage: test_codegen_options.py "
-            "RUSTC MIR_RS CFG_RS LINK_RS UNWIND_RS SWITCH_RS CFG_COMPACT_RS PROTO_RS STAMP"
+            "RUSTC MIR_RS CFG_RS LINK_RS UNWIND_RS SWITCH_RS FIELDLESS_RS "
+            "CFG_COMPACT_RS PROTO_RS LIBSTD_TAR STAMP"
         )
-    rustc, mir_src, cfg_src, link_src, unwind_src, switch_src, cfg_compact_src, proto_src, stamp = map(
-        os.path.abspath, sys.argv[1:]
-    )
+    (
+        rustc,
+        mir_src,
+        cfg_src,
+        link_src,
+        unwind_src,
+        switch_src,
+        fieldless_src,
+        cfg_compact_src,
+        proto_src,
+        libstd_tar,
+        stamp,
+    ) = map(os.path.abspath, sys.argv[1:])
 
     with tempfile.TemporaryDirectory(prefix="trustme-codegen-options-") as work:
         mir_cases = [
@@ -461,6 +511,7 @@ def main() -> int:
         check_link_args(rustc, link_src, work)
         check_unwind_cleanup(rustc, unwind_src, work)
         check_enum_switch_compaction(rustc, switch_src, work)
+        check_fieldless_enum_derive(rustc, fieldless_src, libstd_tar, work)
         check_cfg_compaction(rustc, cfg_compact_src, work)
         check_prototype_order(rustc, proto_src, work)
 
