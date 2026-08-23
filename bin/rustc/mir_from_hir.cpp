@@ -11538,6 +11538,13 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
                 }
 
                 const auto outerFlag = partial.outerFlag;
+                const auto* markings = lvTy->as_Path().binding.getTraitMarkings();
+                ASSERT_BUG(sp, markings, "Enum path binding has no trait markings - " << lvTy);
+                if (markings->hasDropImpl) {
+                    pushStmtDrop(sp, mv$(lv), outerFlag);
+                    break;
+                }
+
                 const auto nextBb = newBbUnlinked();
                 ::std::vector<MIRBasicBlockId> arms;
                 ::std::vector<MIRBasicBlockId> cleanupBlocks;

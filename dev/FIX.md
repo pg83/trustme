@@ -47,8 +47,8 @@ seed 36 completed in isolation and remains the only load-sensitive result.
 | failed in the full parallel run | 114 |
 | reproduced immediately after the full gate | 113 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 96 |
-| still failing independently | 17 |
+| fixed by subsequent point reruns | 98 |
+| still failing independently | 15 |
 
 The 96 trait-object `Debug` link failures were closed by canonicalising concrete
 trait-impl value paths before translation enumeration and C symbol emission.
@@ -58,27 +58,32 @@ recorded in
 timeouts are interactive programs blocked on inherited stdin, so they are
 harness failures rather than compiler-progress failures.
 
+Two enum destructor failures were closed by retaining the full enum drop when
+its known-variant state belongs to a type with a user `Drop` impl. Both original
+commands passed against the explicitly published compiler; the rerun is
+recorded in
+`.build-clang/reclass-20260823-enum-drop-fixed/results.jsonl`.
+
 The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| wrong runtime behaviour, panic, abort, or output | 7 |
+| wrong runtime behaviour, panic, abort, or output | 5 |
 | compiler abort or wrong compiler diagnostic | 5 |
 | stable timeout | 5 |
-| **total independently reproduced** | **17** |
+| **total independently reproduced** | **15** |
 
 This full run supersedes the 2026-08-22 15,139-node baseline and all subsequent
 point accounting.
 
 ## P1: runtime semantics
 
-Seven programs compile but execute incorrectly:
+Five programs compile but execute incorrectly:
 
 | nodes | family | cases |
 |---:|---|---|
 | 2 | RustSmith stdout mismatch | seeds 19 and 102 |
-| 2 | missing enum/aggregate drops | `drop/issue-23611-enum-swap-in-drop.rs`, `drop/issue-90752.rs` |
-| 1 | discarded-expression drop | `issues/issue-6892.rs` |
+| 1 | missing aggregate drops | `drop/issue-90752.rs` |
 | 1 | linear inlined stack allocation | `codegen/StackColoring-not-blowup-stack-issue-40883.rs` |
 | 1 | stack overflow in threaded `OnceLock` list | `std/src/sync/once_lock.rs:53` |
 
