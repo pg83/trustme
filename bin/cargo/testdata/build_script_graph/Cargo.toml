@@ -1,0 +1,11 @@
+[package]
+name = "build_script_graph"
+version = "0.0.0"
+build = "build.rs"
+
+[lib]
+path = "lib.rs"
+
+[[bin]]
+name = "build_script_graph"
+path = "main.rs"

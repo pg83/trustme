@@ -122,6 +122,7 @@ type BuildOptions struct {
 	libSearch       []string
 	emitMmir        bool
 	dryRun          bool
+	publishDeps     bool
 	verbose         int
 	command         string
 	noRun           bool
@@ -155,4 +156,14 @@ type BuildContext struct {
 	host       string
 	target     string
 	cross      bool
+	cxx        CxxSpec
+	hostCxx    CxxSpec
+}
+
+type CxxSpec struct {
+	compiler string
+	compile  []string
+	linkPre  []string
+	linkPost []string
+	intelAsm bool
 }

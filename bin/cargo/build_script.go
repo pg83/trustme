@@ -2,10 +2,31 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"io"
 	"os"
 	"strings"
 )
+
+const buildOutDirPlaceholder = "${TRUSTME_OUT_DIR}"
+
+func makeBuildOutputPortable(path, outDir string) {
+	if outDir == "" {
+		return
+	}
+
+	data := throw2(os.ReadFile(path))
+	data = bytes.ReplaceAll(data, []byte(outDir), []byte(buildOutDirPlaceholder))
+	throw(os.WriteFile(path, data, 0o644))
+}
+
+func resolveBuildOutputPath(value, outDir string) string {
+	if outDir == "" {
+		return value
+	}
+
+	return strings.ReplaceAll(value, buildOutDirPlaceholder, outDir)
+}
 
 func loadBuildScriptOutput(pkg *Package, path string) {
 	file := throw2(os.Open(path))

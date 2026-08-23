@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"unicode"
 )
@@ -10,6 +12,60 @@ import (
 type CfgSet struct {
 	flags  map[string]bool
 	values map[string]map[string]bool
+}
+
+func compilerCxxSpec(compiler, target string) CxxSpec {
+	file := throw2(os.CreateTemp("", "trustme-target-*.toml"))
+	path := file.Name()
+	throw(file.Close())
+
+	defer func() {
+		throw(os.Remove(path))
+	}()
+
+	args := []string{"--dump-target-spec", path}
+
+	if target != "" {
+		args = append([]string{"--target", target}, args...)
+	}
+
+	command := exec.Command(compiler, args...)
+	command.Stderr = os.Stderr
+	throw(command.Run())
+	doc := readToml(path)
+	backend := mapValue(mapValue(doc["backend"])["c"])
+	arch := mapValue(doc["arch"])
+	spec := CxxSpec{
+		compiler: stringValue(backend["target"]),
+		compile:  stringsValue(backend["compiler-opts"]),
+		linkPre:  stringsValue(backend["linker-opts-pre"]),
+		linkPost: stringsValue(backend["linker-opts-post"]),
+	}
+
+	switch stringValue(arch["name"]) {
+	case "x86", "x86_64":
+		spec.intelAsm = true
+	}
+
+	if value := os.Getenv("CXX_" + strings.NewReplacer("-", "_", ".", "_").Replace(spec.compiler)); value != "" {
+		spec.compiler = value
+	} else if value := os.Getenv("CXX"); value != "" {
+		spec.compiler = value
+	} else if candidate := spec.compiler + "-g++"; candidate != "-g++" {
+		if path, err := exec.LookPath(candidate); err == nil {
+			spec.compiler = path
+		}
+	}
+
+	if spec.compiler == "" || !filepath.IsAbs(spec.compiler) {
+		if path, err := exec.LookPath(spec.compiler); err == nil {
+			spec.compiler = path
+		} else if fallback, fallbackErr := exec.LookPath("g++"); fallbackErr == nil {
+			spec.compiler = fallback
+		}
+	}
+
+	return spec
 }
 
 type CfgParser struct {

@@ -467,10 +467,12 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCr
     }
 
     // 2. Get executable and macro name
-    ::std::string procMacroExeName = extCrate.filename;
+    const auto* procMacroExeName = extCrate.procMacroFilename != ""
+        ? extCrate.procMacroFilename.c_str()
+        : extCrate.filename.c_str();
 
     // 3. Create ProcMacroInv
-    auto rv = ProcMacroInv(sp, extCrate.hir->edition, procMacroExeName.c_str(), *pmp);
+    auto rv = ProcMacroInv(sp, extCrate.hir->edition, procMacroExeName, *pmp);
     rv.parseState().crate = &crate;
     rv.parseState().wb = &wb;
 

@@ -2,6 +2,8 @@
 
 #include "rc_string.h"
 
+#include <std/sym/i_map.h>
+
 #include <map>
 #include <optional>
 #include <string>
@@ -29,12 +31,47 @@ enum class CfgLintLevel {
 // Defined and created by expand_cfg.cpp.
 struct CfgState;
 
+// One command-line crate entry.  The same record serves both the exact
+// artifact table (`--crate`, `--crate-object`, `--proc-macro`) and the source
+// namespace aliases (`--extern`).  Keeping the two roles in one table makes an
+// alias cheap while still letting recursive HIR dependencies resolve by their
+// unique crate name, without directory scans.
+struct CrateOverride {
+    RcString name;
+    RcString metadataPath;
+    RcString objectPath;
+    RcString procMacroPath;
+    RcString target;
+    bool isExtern = false;
+
+    explicit CrateOverride(RcString name)
+        : name(name)
+    {
+    }
+};
+
 // The one authoritative compilation-settings component, wired on the
 // WireBoard as an opaque pointer: consumers that do not read settings see
 // only the forward declaration. main fills everything from the command line
 // before parsing; the HIR lowering phase fills coreCrate/crateName. Nothing
 // here changes after the phase that owns it has run.
 struct Settings {
+    explicit Settings(stl::ObjPool* pool)
+        : crateOverrides(pool)
+    {
+    }
+
+    CrateOverride& crateOverride(RcString name) {
+        if (auto* entry = crateOverrides.find(name.rawId())) {
+            return *entry;
+        }
+        return *crateOverrides.insert(name.rawId(), name);
+    }
+
+    CrateOverride* findCrateOverride(RcString name) const {
+        return crateOverrides.find(name.rawId());
+    }
+
     TraitSolverConfig solver;
     bool overflowChecks = false;
     /// Whether the library's UB checks are compiled in (`-Zub-checks`, which
@@ -58,11 +95,11 @@ struct Settings {
         None,
     } fmtDebug = FmtDebug::Full;
 
-    // Crate-loading configuration: `-L` search directories, `--extern
-    // name=path` overrides, and crates injected without an explicit `extern
+    // Crate-loading configuration: legacy `-L` search directories, the exact
+    // artifact/alias table, and crates injected without an explicit `extern
     // crate` item (loadExternCrate records those as it resolves them).
     ::std::vector<::std::string> crateLoadDirs;
-    ::std::map<::std::string, ::std::string> crateOverrides;
+    stl::IntMap<CrateOverride> crateOverrides;
     ::std::map<RcString, RcString> implicitCrates;
 
     // Name of the crate providing core intrinsics ("core" unless building

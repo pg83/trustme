@@ -247,6 +247,8 @@ func parseUnstable(opts *BuildOptions, option string) {
 		opts.emitMmir = true
 	case "dry-run":
 		opts.dryRun = true
+	case "publish-deps":
+		opts.publishDeps = true
 	case "pause":
 		opts.pause = true
 	default:
@@ -312,7 +314,7 @@ Options:
       --no-run                Build tests without running them
 
 trustme options are passed as -Zname=value: vendor-dir, lib-search;
-flags: emit-mmir, dry-run and pause.
+flags: emit-mmir, dry-run, publish-deps and pause.
 `, command)
 }
 

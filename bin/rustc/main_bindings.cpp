@@ -180,6 +180,9 @@ struct ProgramParams {
     ::std::string outfile;
     ::std::string outputDir = "";
     ::std::string target = DEFAULT_TARGET_NAME;
+    // Metadata inspection used by graph builders. No source compilation is
+    // performed when this is populated.
+    RcString crateNameQuery;
 
     ::std::string emitDepfile;
 
@@ -218,8 +221,6 @@ struct ProgramParams {
     ::std::vector<::std::string> nativeLibSearchDirs;
     ::std::vector<::std::string> frameworkSearchDirs;
     ::std::vector<const char*> libraries;
-    ::std::map<::std::string, ::std::string> crateOverrides; // --extern name=path
-
     ::std::set<::std::string> features;
 
     struct {
@@ -234,6 +235,7 @@ struct ProgramParams {
     struct {
         ::std::string codegenType;
         ::std::string emitBuildCommand;
+        RcString emitLinkManifest;
         // Emit the generated C++ source and stop, without invoking the C
         // compiler (for profiling the trustme front/middle-end in isolation).
         bool emitCppOnly = false;
@@ -375,7 +377,7 @@ static int compile(int argc, char* argv[]) {
 #endif
     WireBoard& wb = *pool->make<WireBoard>(pool);
     wb.types = pool->make<HIRTypeInterner>(*pool);
-    wb.settings = pool->make<Settings>();
+    wb.settings = pool->make<Settings>(pool);
     wb.settings->cfg = CfgCreateState(*pool);
     ProgramParams params(*wb.settings, argc, argv);
     wb.settings->solver = params.traitSolver;
@@ -425,6 +427,10 @@ static int compile(int argc, char* argv[]) {
         CfgDump(*wb.settings, std::cout);
         return 0;
     }
+    if (params.crateNameQuery != "") {
+        ::std::cout << HIRDeserialiseJustName(params.crateNameQuery.c_str()) << ::std::endl;
+        return 0;
+    }
     if (params.targetSaveback != "") {
         TargetExportCurSpec(wb, params.targetSaveback);
         return 0;
@@ -463,8 +469,6 @@ static int compile(int argc, char* argv[]) {
 
         // Load external crates.
         CompilePhaseV("LoadCrates", [&]() {
-            // Hacky!
-            wb.settings->crateOverrides = params.crateOverrides;
             for (const auto& ld : params.crateSearchDirs) {
                 wb.settings->crateLoadDirs.push_back(ld);
             }
@@ -889,6 +893,39 @@ static int compile(int argc, char* argv[]) {
         }
         transOpt.debugInfo = params.debugInfo;
 
+        // Cargo owns C++ compilation and linking. Give it this crate's native
+        // link contribution as data instead of hiding it in an emitted shell
+        // command.
+        if (params.codegen.emitLinkManifest != "") {
+            ::std::ofstream manifest(params.codegen.emitLinkManifest.c_str());
+            ASSERT_BUG(Span(), manifest.is_open(), "Failed to open link manifest `" << params.codegen.emitLinkManifest << "`");
+            for (const auto& path : params.nativeLibSearchDirs) {
+                manifest << "search\t" << path << "\n";
+            }
+            for (const auto& path : hirCrate->linkPaths) {
+                manifest << "search\t" << path << "\n";
+            }
+            for (const auto& lib : hirCrate->extLibs) {
+                manifest << "lib\t" << lib.name << "\n";
+            }
+            for (const auto& arg : params.codegen.linkerArgs) {
+                manifest << "arg\t" << arg << "\n";
+            }
+            for (const auto& crateName : hirCrate->extCratesOrdered) {
+                const auto& ext = hirCrate->extCrates.at(crateName);
+                if (ext.objectPath == "" || ext.isProcMacro) {
+                    continue;
+                }
+                if (ext.data->langItems.count("trustme-panic_runtime")
+                    && strncmp(crateName.c_str(), transOpt.panicCrate.c_str(), transOpt.panicCrate.size()) != 0) {
+                    continue;
+                }
+                manifest << "object\t" << ext.objectPath << "\n";
+            }
+            manifest.close();
+            ASSERT_BUG(Span(), !manifest.bad(), "Failed to write link manifest `" << params.codegen.emitLinkManifest << "`");
+        }
+
         // Generate code for non-generic public items (if requested)
         if (params.testHarness) {
             // If the test harness is enabled, override crate type to "Executable"
@@ -909,17 +946,19 @@ static int compile(int argc, char* argv[]) {
                     }
                 }
                 crateForSer.exportedMacroNames = hirCrate->exportedMacroNames;
-                HIRSerialise(params.outfile + ".hir", crateForSer);
+                HIRSerialise(params.outfile + ".rlib", crateForSer);
             });
         }
 
         // `--emit=metadata` stops here: the crate has been analysed, and what
         // is left only builds it.
         if (params.emitMetadataOnly) {
-            // Nothing reads what this writes: a crate that depends on this one
-            // is given the rlib the ordinary build produces. Only the file has
-            // to exist.
-            { ::std::ofstream marker(params.outfile); }
+            if (crateType == ASTCrate::Type::RustLib) {
+                HIRSerialise(params.outfile, *hirCrate);
+            } else {
+                // Non-library metadata-only invocations have no loadable rlib.
+                { ::std::ofstream marker(params.outfile); }
+            }
             return 0;
         }
 
@@ -966,13 +1005,14 @@ static int compile(int argc, char* argv[]) {
         switch (crateType) {
             case ASTCrate::Type::RustLib:
                 // Save a loadable HIR dump
-                hirFile = params.outfile + ".hir";
+                hirFile = params.outfile;
                 CompilePhaseV("HIR Serialise", [&]() {
                     HIRSerialise(hirFile, *hirCrate);
                 });
                 break;
             case ASTCrate::Type::RustDylib:
                 // Save a loadable HIR dump
+                hirFile = params.outfile + ".rlib";
                 CompilePhaseV("HIR Serialise", [&]() {
                     HIRSerialise(hirFile, *hirCrate);
                 });
@@ -1224,6 +1264,9 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     } else if (optname == "emit-build-command") {
                         getOptval();
                         this->codegen.emitBuildCommand = optval;
+                    } else if (optname == "emit-link-manifest") {
+                        getOptval();
+                        this->codegen.emitLinkManifest = RcString::newInterned(optval);
                     } else if (optname == "codegen-type") {
                         getOptval();
                         this->codegen.codegenType = optval;
@@ -1561,7 +1604,76 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     this->outputDir += '/';
                 }
             }
-            // --extern <name>=<path>   >> Override the file to load for `extern crate <name>;`
+            // --crate-name-of <metadata> >> Print the exact name stored in a
+            // metadata artifact. Cargo uses this when importing a prebuilt
+            // sysroot whose filenames need not contain the crate tag.
+            else if (const char* metadata = checkWithArg("crate-name-of")) {
+                this->crateNameQuery = metadata;
+            }
+            // --crate <unique-name>=<metadata-path> >> Make one exact crate artifact available.
+            else if (strcmp(arg, "--crate") == 0) {
+                if (i == argc - 1) {
+                    ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                    exit(1);
+                }
+                const char* desc = argv[++i];
+                const char* pos = ::std::strchr(desc, '=');
+                if (!pos || pos == desc || !pos[1]) {
+                    ::std::cerr << "Option --crate requires <unique-name>=<metadata-path>" << ::std::endl;
+                    exit(1);
+                }
+                auto name = RcString::newInterned(desc, pos - desc);
+                settings.crateOverride(name).metadataPath = pos + 1;
+            }
+            // --crate-object <unique-name>=<object-path> >> Exact link object for standalone linking.
+            else if (strcmp(arg, "--crate-object") == 0) {
+                if (i == argc - 1) {
+                    ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                    exit(1);
+                }
+                const char* desc = argv[++i];
+                const char* pos = ::std::strchr(desc, '=');
+                if (!pos || pos == desc || !pos[1]) {
+                    ::std::cerr << "Option --crate-object requires <unique-name>=<object-path>" << ::std::endl;
+                    exit(1);
+                }
+                auto name = RcString::newInterned(desc, pos - desc);
+                settings.crateOverride(name).objectPath = pos + 1;
+            }
+            // --proc-macro <unique-name>=<executable-path> >> Exact host executable for a proc macro crate.
+            else if (strcmp(arg, "--proc-macro") == 0) {
+                if (i == argc - 1) {
+                    ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                    exit(1);
+                }
+                const char* desc = argv[++i];
+                const char* pos = ::std::strchr(desc, '=');
+                if (!pos || pos == desc || !pos[1]) {
+                    ::std::cerr << "Option --proc-macro requires <unique-name>=<executable-path>" << ::std::endl;
+                    exit(1);
+                }
+                auto name = RcString::newInterned(desc, pos - desc);
+                settings.crateOverride(name).procMacroPath = pos + 1;
+            }
+            // --crate-alias <source-name>=<unique-name> >> Resolve a source
+            // name through the availability table without eagerly importing
+            // it into the extern prelude.
+            else if (strcmp(arg, "--crate-alias") == 0) {
+                if (i == argc - 1) {
+                    ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                    exit(1);
+                }
+                const char* desc = argv[++i];
+                const char* pos = ::std::strchr(desc, '=');
+                if (!pos || pos == desc || !pos[1]) {
+                    ::std::cerr << "Option --crate-alias requires <source-name>=<unique-name>" << ::std::endl;
+                    exit(1);
+                }
+                auto name = RcString::newInterned(desc, pos - desc);
+                settings.crateOverride(name).target = pos + 1;
+            }
+            // --extern <alias>=<unique-name> >> Bind a source name to an exact crate entry.
+            // A path on the right remains accepted for compatibility with old callers.
             else if (strcmp(arg, "--extern") == 0) {
                 if (i == argc - 1) {
                     ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
@@ -1569,12 +1681,10 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 }
                 const char* desc = argv[++i];
                 const char* pos = ::std::strchr(desc, '=');
-                // `--extern name` with no path names a crate to load from the
-                // search directories, the sysroot included; only `name=path`
-                // says where it is.
-                auto name = pos ? ::std::string(desc, pos) : ::std::string(desc);
-                auto path = pos ? ::std::string(pos + 1) : ::std::string();
-                this->crateOverrides.insert(::std::make_pair(mv$(name), mv$(path)));
+                auto name = RcString::newInterned(desc, pos ? pos - desc : strlen(desc));
+                auto& spec = settings.crateOverride(name);
+                spec.isExtern = true;
+                spec.target = pos ? RcString::newInterned(pos + 1) : RcString{};
             }
             // --crate-tag <name>  >> Specify a version/identifier suffix for the crate
             else if (const auto* nameStr = checkWithArg("crate-tag")) {
@@ -1737,8 +1847,18 @@ void ProgramParams::showHelp() const {
                    "-O                 : Enable optimisation\n"
                    "-g                 : Emit debugging information\n"
                    "--out-dir <dir>    : Specify the output directory (alternative to `-o`)\n"
-                   "--extern <crate>=<path>\n"
-                   "                   : Specify the path for a given crate (instead of searching for it)\n"
+                   "--crate <unique>=<rlib>\n"
+                   "                   : Make an exact crate metadata artifact available\n"
+                   "--crate-name-of <rlib>\n"
+                   "                   : Print the exact crate name stored in metadata\n"
+                   "--crate-alias <source>=<unique>\n"
+                   "                   : Resolve a source name through the crate table\n"
+                   "--crate-object <unique>=<object>\n"
+                   "                   : Supply the exact object used by standalone linking\n"
+                   "--proc-macro <unique>=<executable>\n"
+                   "                   : Supply the exact proc-macro host executable\n"
+                   "--extern <alias>=<unique>\n"
+                   "                   : Bind a source crate name to an available unique crate\n"
                    "--crate-tag <str>  : Specify a suffix for symbols and output files\n"
                    "--crate-name <str> : Override/set the crate name\n"
                    "--crate-type <ty>  : Override/set the crate type (rlib, bin, proc-macro)\n"

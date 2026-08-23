@@ -19,7 +19,6 @@ def main() -> int:
         env = dict(os.environ)
         env["TRUSTME_PATH"] = lib.trustme_link(work)
         env["RUSTC_VERSION"] = "1.90.0"
-        env["CARGO_TRUSTME_DEFER_CODEGEN"] = "1"
         env.setdefault("CC", "cc")
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
         out = os.path.join(work, "out")

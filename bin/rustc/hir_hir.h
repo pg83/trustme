@@ -693,7 +693,9 @@ class HIRExternCrate {
 public:
     HIRCrate* data = nullptr;
     ::std::string basename; // Just the filename (serialised)
-    ::std::string path;    // The path used to load this crate
+    ::std::string path;     // The metadata artifact used to load this crate
+    RcString objectPath; // Exact object for this invocation; never serialised
+    bool isProcMacro = false; // Invocation-local artifact role; never serialised
 };
 
 class HIRExternLibrary {

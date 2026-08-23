@@ -29,7 +29,6 @@ def main() -> int:
         env["TRUSTME_PATH"] = lib.trustme_link(work)
         env["RUSTC_VERSION"] = "1.90.0"
         env["STD_ENV_ARCH"] = env.get("STD_ENV_ARCH", "x86_64")
-        env["CARGO_TRUSTME_DEFER_CODEGEN"] = "1"
         env.setdefault("CC", "cc")
 
         src = lib.untar(src_tar, os.path.join(work, "rust-src"))
@@ -40,13 +39,16 @@ def main() -> int:
         lib.run([cargo, "build", "--release", "-j", jobs,
                  "--manifest-path", os.path.join(src, "trustme-stdlib", "Cargo.toml"),
                  "--target-dir", outdir,
+                 "-Zpublish-deps",
                  "-Zvendor-dir=" + os.path.join(src, "vendor")],
                 env=env)
 
         lib.log("[libstd] libproc_macro")
         lib.run([cargo, "build", "--release", "--lib", "-j", jobs,
                  "--manifest-path", proc_macro_manifest,
-                 "--target-dir", outdir],
+                 "--target-dir", outdir,
+                 "-Zpublish-deps",
+                 "-Zlib-search=" + os.path.join(outdir, "release")],
                 env=env)
 
         lib.log(f"[libstd] packing {out}")

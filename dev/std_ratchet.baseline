@@ -87,7 +87,7 @@
 11	unique_ptr	bin/rustc/expand_common.cpp
 3	new	bin/rustc/expand_proc_macro.cpp
 1	shared_ptr	bin/rustc/expand_proc_macro.cpp
-10	std::string	bin/rustc/expand_proc_macro.cpp
+9	std::string	bin/rustc/expand_proc_macro.cpp
 2	std::unordered	bin/rustc/expand_proc_macro.cpp
 10	std::vector	bin/rustc/expand_proc_macro.cpp
 7	unique_ptr	bin/rustc/expand_proc_macro.cpp
@@ -129,7 +129,7 @@
 2	shared_ptr	bin/rustc/hir_from_ast.cpp
 8	std::map	bin/rustc/hir_from_ast.cpp
 4	std::set	bin/rustc/hir_from_ast.cpp
-7	std::string	bin/rustc/hir_from_ast.cpp
+4	std::string	bin/rustc/hir_from_ast.cpp
 2	std::unordered	bin/rustc/hir_from_ast.cpp
 62	std::vector	bin/rustc/hir_from_ast.cpp
 1	unique_ptr	bin/rustc/hir_from_ast.cpp
@@ -219,9 +219,8 @@
 1	unique_ptr	bin/rustc/macro_rules_macro_rules.h
 3	new	bin/rustc/main_bindings.cpp
 1	shared_ptr	bin/rustc/main_bindings.cpp
-1	std::map	bin/rustc/main_bindings.cpp
 1	std::set	bin/rustc/main_bindings.cpp
-57	std::string	bin/rustc/main_bindings.cpp
+51	std::string	bin/rustc/main_bindings.cpp
 7	std::vector	bin/rustc/main_bindings.cpp
 1	std::string	bin/rustc/main_bindings.h
 1	std::string	bin/rustc/memory_dump.cpp
@@ -296,8 +295,8 @@
 4	std::set	bin/rustc/resolve_main_bindings.cpp
 1	std::unordered	bin/rustc/resolve_main_bindings.cpp
 19	std::vector	bin/rustc/resolve_main_bindings.cpp
-3	std::map	bin/rustc/settings.h
-7	std::string	bin/rustc/settings.h
+2	std::map	bin/rustc/settings.h
+5	std::string	bin/rustc/settings.h
 1	std::vector	bin/rustc/settings.h
 2	new	bin/rustc/span.cpp
 1	new	bin/rustc/synext.cpp
@@ -336,7 +335,7 @@
 1	std::string	bin/rustc/trans_codegen.h
 1	new	bin/rustc/trans_codegen_c.cpp
 4	std::set	bin/rustc/trans_codegen_c.cpp
-53	std::string	bin/rustc/trans_codegen_c.cpp
+52	std::string	bin/rustc/trans_codegen_c.cpp
 41	std::vector	bin/rustc/trans_codegen_c.cpp
 2	unique_ptr	bin/rustc/trans_codegen_c.cpp
 1	std::string	bin/rustc/trans_codegen_c.h

@@ -1,17 +1,20 @@
 #include "lint_must_use.h"
 
+#include <std/mem/obj_pool.h>
 #include <std/tst/ut.h>
 
 using namespace stl;
 
 STD_TEST_SUITE(LintMustUseLevel) {
     STD_TEST(testDefaultIsWarn) {
-        Settings settings;
+        auto pool = ObjPool::fromMemory();
+        Settings settings{pool.mutPtr()};
         STD_INSIST(LintUnusedMustUseLevel(settings) == CfgLintLevel::Warn);
     }
 
     STD_TEST(testExplicitLevelWins) {
-        Settings settings;
+        auto pool = ObjPool::fromMemory();
+        Settings settings{pool.mutPtr()};
         settings.lintLevels["unused_must_use"] = CfgLintLevel::Deny;
         STD_INSIST(LintUnusedMustUseLevel(settings) == CfgLintLevel::Deny);
 
@@ -20,7 +23,8 @@ STD_TEST_SUITE(LintMustUseLevel) {
     }
 
     STD_TEST(testCapLowersButNeverRaises) {
-        Settings settings;
+        auto pool = ObjPool::fromMemory();
+        Settings settings{pool.mutPtr()};
         settings.lintLevels["unused_must_use"] = CfgLintLevel::Deny;
         settings.lintCap = CfgLintLevel::Allow;
         STD_INSIST(LintUnusedMustUseLevel(settings) == CfgLintLevel::Allow);
@@ -31,7 +35,8 @@ STD_TEST_SUITE(LintMustUseLevel) {
     }
 
     STD_TEST(testUnrelatedLintDoesNotMoveIt) {
-        Settings settings;
+        auto pool = ObjPool::fromMemory();
+        Settings settings{pool.mutPtr()};
         settings.lintLevels["unused_variables"] = CfgLintLevel::Deny;
         STD_INSIST(LintUnusedMustUseLevel(settings) == CfgLintLevel::Warn);
     }

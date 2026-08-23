@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,8 +12,40 @@ import (
 )
 
 type Builder struct {
-	context *BuildContext
-	tasks   map[string]*Task
+	context            *BuildContext
+	tasks              map[string]*Task
+	units              map[*Task]*CompileUnit
+	systemHostLoaded   bool
+	systemTargetLoaded bool
+	systemHost         []ExternalCrateArtifact
+	systemTarget       []ExternalCrateArtifact
+}
+
+type ExternalCrateArtifact struct {
+	alias    string
+	name     string
+	metadata string
+	object   string
+}
+
+type CompileUnit struct {
+	pkg          *Package
+	target       *Target
+	isHost       bool
+	baseName     string
+	rs           *Task
+	metadata     int
+	cpp          int
+	linkManifest int
+	cc           *Task
+	final        *Task
+}
+
+type InstallArtifact struct {
+	task   *Task
+	index  int
+	path   string
+	binary bool
 }
 
 func buildProject(opts BuildOptions) []string {
@@ -93,12 +124,36 @@ func buildPackage(opts BuildOptions, manifestPath string) []string {
 	}
 
 	context.cfg = compilerCfg(compiler, opts.target)
+	context.cxx = compilerCxxSpec(compiler, opts.target)
+	context.hostCxx = context.cxx
+
+	if context.cross {
+		context.hostCxx = compilerCxxSpec(compiler, "")
+	}
+
 	resolveGraph(context)
 
-	builder := &Builder{context: context, tasks: map[string]*Task{}}
-	roots, binaries := builder.rootTasks()
+	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
+	roots, artifacts := builder.rootTasks()
 
-	runTasks(roots, opts.jobs)
+	if opts.publishDeps {
+		publishedRoots, publishedArtifacts := builder.publishedDependencies()
+		roots = append(roots, publishedRoots...)
+		artifacts = append(artifacts, publishedArtifacts...)
+	}
+
+	executor := runTasks(roots, opts.jobs, builder.cacheRoot(), opts.dryRun)
+	var binaries []string
+
+	if !opts.dryRun {
+		for _, artifact := range artifacts {
+			executor.install(artifact.task, artifact.index, artifact.path)
+
+			if artifact.binary {
+				binaries = append(binaries, artifact.path)
+			}
+		}
+	}
 
 	if opts.command == "test" && !opts.noRun {
 		for _, binary := range binaries {
@@ -107,6 +162,75 @@ func buildPackage(opts BuildOptions, manifestPath string) []string {
 	}
 
 	return binaries
+}
+
+func (b *Builder) publishedDependencies() ([]*Task, []InstallArtifact) {
+	units := make([]*CompileUnit, 0, len(b.units))
+
+	for _, unit := range b.units {
+		if unit.target.kind == "lib" {
+			units = append(units, unit)
+		}
+	}
+
+	sort.Slice(units, func(i, j int) bool {
+		return b.artifact(units[i].pkg, units[i].target, units[i].isHost) <
+			b.artifact(units[j].pkg, units[j].target, units[j].isHost)
+	})
+
+	var roots []*Task
+	var artifacts []InstallArtifact
+
+	for _, unit := range units {
+		metadataPath := b.artifact(unit.pkg, unit.target, unit.isHost)
+
+		if unit.target.procMacro || crateType(unit.target) == "dylib" {
+			metadataPath += ".rlib"
+		}
+
+		if unit.metadata >= 0 {
+			artifacts = append(artifacts, InstallArtifact{
+				task: unit.rs, index: unit.metadata, path: metadataPath,
+			})
+
+			// HIR keeps this conventional unique filename as the fallback for
+			// standalone -L loading.  Some published artifacts (notably core,
+			// alloc, and proc macros) have a deliberately shorter public name,
+			// so publish a second hardlink without duplicating CAS contents.
+			compatibilityPath := filepath.Join(
+				filepath.Dir(metadataPath), "lib"+b.crateName(unit)+".rlib")
+			if compatibilityPath != metadataPath {
+				artifacts = append(artifacts, InstallArtifact{
+					task: unit.rs, index: unit.metadata, path: compatibilityPath,
+				})
+			}
+		}
+
+		if unit.target.procMacro || crateType(unit.target) == "dylib" {
+			final := b.finalTask(unit.rs)
+			roots = append(roots, final)
+			artifacts = append(artifacts, InstallArtifact{
+				task: final, index: 0,
+				path: b.artifact(unit.pkg, unit.target, true),
+			})
+		} else {
+			object := b.codegenTask(unit.rs)
+			roots = append(roots, object)
+			artifacts = append(artifacts, InstallArtifact{
+				task: object, index: 0, path: metadataPath + ".o",
+			})
+
+			compatibilityPath := filepath.Join(
+				filepath.Dir(metadataPath), "lib"+b.crateName(unit)+".rlib.o")
+			if compatibilityPath != metadataPath+".o" {
+				artifacts = append(artifacts, InstallArtifact{
+					task: object, index: 0, path: compatibilityPath,
+				})
+			}
+		}
+	}
+
+	return roots, artifacts
 }
 
 func workspaceMemberManifests(workspace *Workspace) []string {
@@ -178,12 +302,12 @@ func selectWorkspacePackage(workspace *Workspace, members []string, want string)
 	return ""
 }
 
-func (b *Builder) rootTasks() ([]*Task, []string) {
+func (b *Builder) rootTasks() ([]*Task, []InstallArtifact) {
 	root := b.context.root
 	isHost := !b.context.cross
 
 	var tasks []*Task
-	var binaries []string
+	var artifacts []InstallArtifact
 
 	selectors := b.context.opts.selectors
 
@@ -195,6 +319,32 @@ func (b *Builder) rootTasks() ([]*Task, []string) {
 		if !explicit || selectors.lib {
 			if task := b.libraryTask(root, isHost); task != nil {
 				tasks = append(tasks, b.finalTask(task))
+				unit := b.units[task]
+
+				if unit.metadata >= 0 {
+					path := b.artifact(root, unit.target, isHost)
+
+					if unit.target.procMacro || crateType(unit.target) == "dylib" {
+						path += ".rlib"
+					}
+
+					artifacts = append(artifacts, InstallArtifact{
+						task: task, index: unit.metadata,
+						path: path,
+					})
+				}
+
+				if unit.target.procMacro || crateType(unit.target) == "dylib" {
+					artifacts = append(artifacts, InstallArtifact{
+						task: b.finalTask(task), index: 0,
+						path: b.artifact(root, unit.target, true),
+					})
+				} else if crateType(unit.target) == "rlib" {
+					artifacts = append(artifacts, InstallArtifact{
+						task: b.codegenTask(task), index: 0,
+						path: b.artifact(root, unit.target, isHost) + ".o",
+					})
+				}
 			}
 		}
 
@@ -207,11 +357,13 @@ func (b *Builder) rootTasks() ([]*Task, []string) {
 
 			if selected && targetFeaturesEnabled(root, target) {
 				task := b.targetTask(root, target, isHost)
-
-				tasks = append(tasks, b.finalTask(task))
+				final := b.finalTask(task)
+				tasks = append(tasks, final)
 
 				if target.kind != "lib" {
-					binaries = append(binaries, b.artifact(root, target, isHost))
+					artifacts = append(artifacts, InstallArtifact{
+						task: final, index: 0, path: b.artifact(root, target, isHost), binary: true,
+					})
 				}
 			}
 		}
@@ -226,8 +378,11 @@ func (b *Builder) rootTasks() ([]*Task, []string) {
 
 			task := b.targetTask(root, &target, isHost)
 
-			tasks = append(tasks, b.finalTask(task))
-			binaries = append(binaries, b.artifact(root, &target, isHost))
+			final := b.finalTask(task)
+			tasks = append(tasks, final)
+			artifacts = append(artifacts, InstallArtifact{
+				task: final, index: 0, path: b.artifact(root, &target, isHost), binary: true,
+			})
 		}
 
 		for _, target := range root.targets {
@@ -245,8 +400,11 @@ func (b *Builder) rootTasks() ([]*Task, []string) {
 
 				task := b.targetTask(root, &copy, isHost)
 
-				tasks = append(tasks, b.finalTask(task))
-				binaries = append(binaries, b.artifact(root, &copy, isHost))
+				final := b.finalTask(task)
+				tasks = append(tasks, final)
+				artifacts = append(artifacts, InstallArtifact{
+					task: final, index: 0, path: b.artifact(root, &copy, isHost), binary: true,
+				})
 			}
 		}
 	}
@@ -255,7 +413,7 @@ func (b *Builder) rootTasks() ([]*Task, []string) {
 		throwFmt("package %s has no selected targets", root.name)
 	}
 
-	return tasks, binaries
+	return tasks, artifacts
 }
 
 func (b *Builder) libraryTask(pkg *Package, isHost bool) *Task {
@@ -273,30 +431,55 @@ func (b *Builder) libraryTask(pkg *Package, isHost bool) *Task {
 }
 
 func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
-	key := fmt.Sprintf("compile|%p|%s|%t", pkg, targetKey(target), isHost)
+	key := b.unitKey("rs", pkg, target, isHost)
 
 	if task := b.tasks[key]; task != nil {
 		return task
 	}
 
-	output := b.artifact(pkg, target, isHost)
+	baseName := b.artifactName(pkg, target)
+	outputs := []TaskOutput{}
+	metadata := -1
 
+	if target.kind == "lib" {
+		metadata = len(outputs)
+		name := baseName
+
+		if target.procMacro || crateType(target) == "dylib" {
+			name += ".rlib"
+		}
+
+		outputs = append(outputs, TaskOutput{name: name})
+	}
+
+	cpp := len(outputs)
+	outputs = append(outputs, TaskOutput{name: baseName + ".cpp"})
+	linkManifest := len(outputs)
+	outputs = append(outputs, TaskOutput{name: baseName + ".link"})
 	task := &Task{
-		name:    b.taskName(pkg, target, isHost),
-		verb:    "Compiling",
-		inputs:  []string{pkg.manifestPath, filepath.Join(pkg.dir, target.path), b.context.compiler},
-		outputs: []string{output},
+		key:       key,
+		name:      b.taskName(pkg, target, isHost),
+		kind:      "RS",
+		inputs:    b.packageInputs(pkg),
+		outputs:   outputs,
+		signature: b.rustSignature(pkg, target, isHost),
 	}
 
-	if ignoreToolTimestamps() {
-		task.inputs = task.inputs[:len(task.inputs)-1]
+	if !ignoreToolTimestamps() {
+		task.inputs = append(task.inputs, b.context.compiler)
 	}
+	b.addSystemInputs(task, isHost, false)
 
 	b.tasks[key] = task
+	unit := &CompileUnit{
+		pkg: pkg, target: target, isHost: isHost, baseName: baseName, rs: task,
+		metadata: metadata, cpp: cpp, linkManifest: linkManifest,
+	}
+	b.units[task] = unit
 
 	if target.kind != "lib" {
 		if libTask := b.libraryTask(pkg, isHost); libTask != nil {
-			task.deps = append(task.deps, b.finalTask(libTask))
+			task.deps = append(task.deps, libTask)
 		}
 	}
 
@@ -312,18 +495,26 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 		}
 
 		if depTask := b.libraryTask(dep.packageRef, depHost); depTask != nil {
-			task.deps = append(task.deps, b.finalTask(depTask))
+			if lib := packageLibrary(dep.packageRef); lib != nil && lib.procMacro {
+				task.deps = append(task.deps, b.finalTask(depTask))
+			} else {
+				task.deps = append(task.deps, depTask)
+			}
 		}
 	}
 
 	if script := b.buildScriptRunTask(pkg); script != nil {
 		task.deps = append(task.deps, script)
-		task.inputs = append(task.inputs, script.outputs...)
 	}
 
-	task.action = func() {
-		b.ensureBuildOutput(pkg)
-		b.compileTarget(pkg, target, isHost, output)
+	task.action = func(ctx *TaskContext) {
+		outDir := ""
+
+		if script := b.buildScriptRunTask(pkg); script != nil {
+			outDir = ctx.tree(script, 1)
+		}
+
+		b.compileTarget(ctx, unit, outDir)
 	}
 
 	return task
@@ -334,35 +525,49 @@ func (b *Builder) buildScriptCompileTask(pkg *Package) *Task {
 		return nil
 	}
 
-	key := fmt.Sprintf("script-compile|%p", pkg)
+	key := "rs|build-script|" + pkg.manifestPath + "|" + b.context.opts.profile
 
 	if task := b.tasks[key]; task != nil {
 		return task
 	}
 
-	output := b.buildScriptExe(pkg)
-
+	target := &Target{
+		kind: "build-script", name: "build", path: pkg.buildScript, edition: pkg.edition,
+	}
+	baseName := b.buildScriptBase(pkg) + "_run"
 	task := &Task{
-		name:    pkg.name + " v" + pkg.version.string() + " (build script)",
-		verb:    "Compiling",
-		inputs:  []string{pkg.manifestPath, filepath.Join(pkg.dir, pkg.buildScript), b.context.compiler},
-		outputs: []string{output},
+		key:       key,
+		name:      pkg.name + " v" + pkg.version.string() + " (build script)",
+		kind:      "RS",
+		inputs:    b.packageInputs(pkg),
+		outputs:   []TaskOutput{{name: baseName + ".cpp"}, {name: baseName + ".link"}},
+		signature: b.rustSignature(pkg, target, true),
 	}
 
-	if ignoreToolTimestamps() {
-		task.inputs = task.inputs[:len(task.inputs)-1]
+	if !ignoreToolTimestamps() {
+		task.inputs = append(task.inputs, b.context.compiler)
 	}
+	b.addSystemInputs(task, true, false)
 
 	b.tasks[key] = task
+	unit := &CompileUnit{
+		pkg: pkg, target: target, isHost: true, baseName: baseName, rs: task,
+		metadata: -1, cpp: 0, linkManifest: 1,
+	}
+	b.units[task] = unit
 
 	for _, dep := range b.buildDependencies(pkg) {
 		if depTask := b.libraryTask(dep.packageRef, true); depTask != nil {
-			task.deps = append(task.deps, b.finalTask(depTask))
+			if lib := packageLibrary(dep.packageRef); lib != nil && lib.procMacro {
+				task.deps = append(task.deps, b.finalTask(depTask))
+			} else {
+				task.deps = append(task.deps, depTask)
+			}
 		}
 	}
 
-	task.action = func() {
-		b.compileBuildScript(pkg, output)
+	task.action = func(ctx *TaskContext) {
+		b.compileBuildScript(ctx, unit)
 	}
 
 	return task
@@ -373,94 +578,134 @@ func (b *Builder) buildScriptRunTask(pkg *Package) *Task {
 		return nil
 	}
 
-	key := fmt.Sprintf("script-run|%p", pkg)
+	key := "build-script-run|" + pkg.manifestPath + "|" + b.context.opts.profile
 
 	if task := b.tasks[key]; task != nil {
 		return task
 	}
 
-	output := b.buildScriptLog(pkg)
-
 	task := &Task{
-		name:    pkg.name + " v" + pkg.version.string() + " (build script run)",
-		verb:    "Running",
-		inputs:  []string{pkg.manifestPath, filepath.Join(pkg.dir, pkg.buildScript)},
-		outputs: []string{output},
+		key:       key,
+		name:      pkg.name + " v" + pkg.version.string() + " (build script run)",
+		kind:      "RUN",
+		inputs:    b.packageInputs(pkg),
+		outputs:   []TaskOutput{{name: b.buildScriptBase(pkg) + ".txt"}, {name: b.buildScriptBase(pkg) + ".out", tree: true}},
+		signature: b.buildScriptRunSignature(pkg),
 	}
 
 	b.tasks[key] = task
-	task.deps = append(task.deps, b.buildScriptCompileTask(pkg))
+	compile := b.buildScriptCompileTask(pkg)
+	task.deps = append(task.deps, b.finalTask(compile))
 
 	for _, dep := range b.mainDependencies(pkg, false) {
 		if depTask := b.libraryTask(dep.packageRef, !b.context.cross); depTask != nil {
-			task.deps = append(task.deps, b.finalTask(depTask))
+			task.deps = append(task.deps, depTask)
 		}
 	}
 
-	task.action = func() {
-		b.runBuildScript(pkg, output)
+	task.action = func(ctx *TaskContext) {
+		b.runBuildScript(ctx, pkg, b.finalTask(compile))
+	}
+	task.after = func(ctx *TaskContext) {
+		if !b.context.opts.dryRun {
+			loadBuildScriptOutput(pkg, ctx.file(task, 0))
+		}
 	}
 
 	return task
 }
 
 func (b *Builder) finalTask(compile *Task) *Task {
-	if compile == nil || !deferredCodegen() {
+	if compile == nil {
 		return compile
 	}
 
-	key := "codegen|" + compile.name
+	unit := b.units[compile]
 
-	if task := b.tasks[key]; task != nil {
-		return task
+	if unit == nil {
+		throwFmt("internal: no compile unit for %s", compile.name)
 	}
 
-	commandFile := compile.outputs[0] + "-codegen.sh"
-	output := compile.outputs[0]
-
-	if strings.HasSuffix(output, ".rlib") {
-		output += ".o"
+	if unit.final != nil {
+		return unit.final
 	}
 
+	cc := b.codegenTask(compile)
+	needsLink := unit.target.kind != "lib" || unit.target.procMacro || crateType(unit.target) != "rlib"
+
+	if !needsLink {
+		unit.final = cc
+
+		return cc
+	}
+
+	key := strings.Replace(unit.rs.key, "rs|", "ld|", 1)
+	output := unit.baseName
+	cxx := b.cxxSpec(unit.isHost)
 	task := &Task{
-		name:    compile.name + " (codegen)",
-		verb:    "Codegen",
-		deps:    []*Task{compile},
-		inputs:  []string{commandFile},
-		outputs: []string{output},
-		action: func() {
-			if b.context.opts.dryRun {
-				fmt.Fprintln(os.Stderr, "> codegen", commandFile)
+		key:       key,
+		name:      compile.name + " (link)",
+		kind:      "LD",
+		deps:      []*Task{cc},
+		inputs:    []string{cxx.compiler},
+		outputs:   []TaskOutput{{name: output, executable: unit.target.kind != "lib" || unit.target.procMacro}},
+		signature: append([]string{"link"}, b.cxxSignature(unit.isHost)...),
+	}
+	b.addSystemInputs(task, unit.isHost, true)
+	b.tasks[key] = task
+	unit.final = task
+	linkedUnits := b.linkedUnits(unit)
 
-				return
-			}
-
-			file := throw2(os.Open(commandFile))
-			scanner := bufio.NewScanner(file)
-
-			if !scanner.Scan() {
-				throwFmt("%s: empty codegen command", commandFile)
-			}
-
-			line := strings.TrimSpace(scanner.Text())
-
-			throw(file.Close())
-
-			command := shellCommand(line)
-
-			runCommand("", nil, "", b.context.opts.dryRun, command[0], command[1:]...)
-		},
+	for _, linked := range linkedUnits {
+		task.deps = append(task.deps, b.codegenTask(linked.rs))
 	}
 
-	b.tasks[key] = task
+	task.action = func(ctx *TaskContext) {
+		b.linkUnit(ctx, unit, linkedUnits)
+	}
 
 	return task
 }
 
-func (b *Builder) compileTarget(pkg *Package, target *Target, isHost bool, output string) {
+func (b *Builder) codegenTask(compile *Task) *Task {
+	unit := b.units[compile]
+
+	if unit.cc != nil {
+		return unit.cc
+	}
+
+	key := strings.Replace(unit.rs.key, "rs|", "cc|", 1)
+	object := unit.baseName + ".o"
+	cxx := b.cxxSpec(unit.isHost)
+	task := &Task{
+		key:       key,
+		name:      compile.name + " (C++)",
+		kind:      "CC",
+		deps:      []*Task{compile},
+		inputs:    []string{cxx.compiler},
+		outputs:   []TaskOutput{{name: object}},
+		signature: append([]string{"compile"}, b.cxxSignature(unit.isHost)...),
+	}
+	b.tasks[key] = task
+	unit.cc = task
+	task.action = func(ctx *TaskContext) {
+		args := b.cxxCompileArgs(unit.isHost)
+		// CAS paths intentionally have no semantic filename. Tell the compiler
+		// the language instead of making it guess from a .cpp suffix.
+		args = append(args, "-o", ctx.output(0), "-x", "c++", ctx.file(compile, unit.cpp), "-c")
+		runCommand("", nil, "", b.context.opts.dryRun, cxx.compiler, args...)
+	}
+
+	return task
+}
+
+func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir string) {
+	pkg := unit.pkg
+	target := unit.target
+	output := ctx.outputBase(unit.baseName)
 	args := []string{filepath.Join(pkg.dir, target.path)}
 
-	args = append(args, b.commonCompilerArgs(pkg, output, isHost)...)
+	args = append(args, b.commonCompilerArgs(pkg, output, unit.isHost)...)
 	args = append(args, "--crate-name", target.name, "--crate-type", crateType(target))
 
 	suffix := b.crateSuffix(pkg)
@@ -469,16 +714,14 @@ func (b *Builder) compileTarget(pkg *Package, target *Target, isHost bool, outpu
 		args = append(args, "--crate-tag", strings.TrimPrefix(suffix, "-"))
 	}
 
-	if b.context.cross && !isHost {
+	if b.context.cross && !unit.isHost {
 		args = append(args, "--target", b.context.target)
 	}
 
-	if deferredCodegen() {
-		args = append(args, "-C", "emit-build-command="+output+"-codegen.sh")
-	}
+	args = append(args, "-C", "emit-cpp-only", "-C", "emit-link-manifest="+ctx.output(unit.linkManifest))
 
 	for _, path := range pkg.buildOutput.linkSearch {
-		args = append(args, "-L", path)
+		args = append(args, "-Lnative="+resolveBuildOutputPath(path, outDir))
 	}
 
 	for _, lib := range pkg.buildOutput.linkLib {
@@ -489,11 +732,14 @@ func (b *Builder) compileTarget(pkg *Package, target *Target, isHost bool, outpu
 		args = append(args, "--cfg", cfg)
 	}
 
-	args = append(args, pkg.buildOutput.flags...)
+	for _, flag := range pkg.buildOutput.flags {
+		args = append(args, resolveBuildOutputPath(flag, outDir))
+	}
 
 	if target.kind != "lib" {
 		if lib := packageLibrary(pkg); lib != nil {
-			args = append(args, "--extern", lib.name+"="+b.artifact(pkg, lib, isHost))
+			dep := b.units[b.libraryTask(pkg, unit.isHost)]
+			args = append(args, "--extern", lib.name+"="+b.crateName(dep))
 		}
 	}
 
@@ -505,59 +751,46 @@ func (b *Builder) compileTarget(pkg *Package, target *Target, isHost bool, outpu
 		args = append(args, "--test")
 	}
 
-	for _, dep := range b.compileDependencies(pkg, target.kind == "test") {
-		lib := packageLibrary(dep.packageRef)
+	args = append(args, b.crateArgs(ctx, unit, b.compileDependencies(pkg, target.kind == "test"))...)
 
-		if lib == nil {
-			continue
-		}
-
-		depHost := isHost || lib.procMacro
-
-		args = append(args, "--extern", rustName(dep.key)+"="+b.artifact(dep.packageRef, lib, depHost))
-	}
-
-	env := b.commonEnv(pkg)
-
-	env["OUT_DIR"] = absolutePath(b.buildScriptOutDir(pkg))
+	env := b.taskEnv(ctx, pkg)
+	env["OUT_DIR"] = outDir
 	env["CARGO_CRATE_NAME"] = target.name
 
 	for key, value := range pkg.buildOutput.env {
-		env[key] = value
+		env[key] = resolveBuildOutputPath(value, outDir)
 	}
 
 	for _, command := range pkg.buildOutput.preBuild {
-		args := shellCommand(command)
+		args := shellCommand(resolveBuildOutputPath(command, outDir))
 
 		runCommand(pkg.dir, env, "", b.context.opts.dryRun, args[0], args[1:]...)
 	}
 
-	runCommand("", env, output+"_dbg.txt", b.context.opts.dryRun, b.context.compiler, args...)
+	runCommand("", env, "", b.context.opts.dryRun, b.context.compiler, args...)
+
+	if !b.context.opts.dryRun {
+		makeBuildOutputPortable(ctx.output(unit.linkManifest), outDir)
+	}
 }
 
-func (b *Builder) compileBuildScript(pkg *Package, output string) {
+func (b *Builder) compileBuildScript(ctx *TaskContext, unit *CompileUnit) {
+	pkg := unit.pkg
+	output := ctx.outputBase(unit.baseName)
 	args := []string{filepath.Join(pkg.dir, pkg.buildScript)}
 
 	args = append(args, b.commonCompilerArgs(pkg, output, true)...)
 	args = append(args, "--crate-name", "build", "--crate-type", "bin", "--edition", pkg.edition)
-
-	for _, dep := range b.buildDependencies(pkg) {
-		lib := packageLibrary(dep.packageRef)
-
-		if lib != nil {
-			args = append(args, "--extern", rustName(dep.key)+"="+b.artifact(dep.packageRef, lib, true))
-		}
-	}
-
-	runCommand("", b.commonEnv(pkg), output+"_dbg.txt", b.context.opts.dryRun, b.context.compiler, args...)
+	args = append(args, "-C", "emit-cpp-only", "-C", "emit-link-manifest="+ctx.output(unit.linkManifest))
+	args = append(args, b.crateArgs(ctx, unit, b.buildDependencies(pkg))...)
+	runCommand("", b.commonEnv(pkg), "", b.context.opts.dryRun, b.context.compiler, args...)
 }
 
-func (b *Builder) runBuildScript(pkg *Package, output string) {
-	throw(os.MkdirAll(b.buildScriptOutDir(pkg), 0o755))
+func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Task) {
+	output := ctx.output(0)
+	env := b.taskEnv(ctx, pkg)
 
-	env := b.commonEnv(pkg)
-
-	env["OUT_DIR"] = absolutePath(b.buildScriptOutDir(pkg))
+	env["OUT_DIR"] = ctx.output(1)
 	env["TARGET"] = b.context.target
 	env["HOST"] = b.context.host
 	env["NUM_JOBS"] = strconv.Itoa(b.context.opts.jobs)
@@ -597,20 +830,18 @@ func (b *Builder) runBuildScript(pkg *Package, output string) {
 		}
 
 		runCommand(pkg.dir, env, output, b.context.opts.dryRun, miri,
-			absolutePath(b.buildScriptExe(pkg))+".mir", "--logfile", absolutePath(output)+"-miri.log")
+			ctx.file(executable, 0)+".mir", "--logfile", output+"-miri.log")
 	} else {
-		runCommand(pkg.dir, env, output, b.context.opts.dryRun, absolutePath(b.buildScriptExe(pkg)))
+		runCommand(pkg.dir, env, output, b.context.opts.dryRun, ctx.file(executable, 0))
 	}
 
 	if !b.context.opts.dryRun {
-		loadBuildScriptOutput(pkg, output)
+		makeBuildOutputPortable(output, ctx.output(1))
 	}
 }
 
 func (b *Builder) commonCompilerArgs(pkg *Package, output string, isHost bool) []string {
-	throw(os.MkdirAll(filepath.Dir(output), 0o755))
-
-	args := []string{"-o", output, "-C", "emit-depfile=" + output + ".d"}
+	args := []string{"-o", output}
 
 	if b.context.opts.profile == "release" {
 		args = append(args, "-O")
@@ -635,14 +866,9 @@ func (b *Builder) commonCompilerArgs(pkg *Package, output string, isHost bool) [
 			}
 		}
 
-		args = append(args, "-L", dir)
+		args = append(args, "-Lnative="+dir)
 	}
-
-	args = append(args, "-L", b.outputDir(isHost))
-
-	if b.context.cross && !isHost {
-		args = append(args, "-L", b.outputDir(true))
-	}
+	args = append(args, b.systemCrateArgs(isHost)...)
 
 	for _, feature := range sortedFeatureKeys(pkg.activeFeatures) {
 		args = append(args, "--cfg", "feature=\""+feature+"\"")
@@ -672,14 +898,451 @@ func (b *Builder) commonEnv(pkg *Package) map[string]string {
 	return env
 }
 
-func (b *Builder) ensureBuildOutput(pkg *Package) {
-	if pkg.buildScript == "" || b.context.opts.dryRun {
-		return
+func (b *Builder) taskEnv(ctx *TaskContext, pkg *Package) map[string]string {
+	env := b.commonEnv(pkg)
+
+	for _, dep := range b.mainDependencies(pkg, false) {
+		script := b.buildScriptRunTask(dep.packageRef)
+
+		if script == nil {
+			continue
+		}
+
+		outDir := ctx.tree(script, 1)
+
+		for key, value := range dep.packageRef.buildOutput.downstream {
+			env[key] = resolveBuildOutputPath(value, outDir)
+		}
 	}
 
-	if len(pkg.buildOutput.linkSearch) == 0 && len(pkg.buildOutput.cfg) == 0 && len(pkg.buildOutput.env) == 0 {
-		loadBuildScriptOutput(pkg, b.buildScriptLog(pkg))
+	return env
+}
+
+func (b *Builder) cacheRoot() string {
+	dir := b.context.opts.targetDir
+
+	if dir == "" {
+		dir = filepath.Join(b.context.workspace.dir, "target")
 	}
+
+	return absolutePath(dir)
+}
+
+func (b *Builder) unitKey(stage string, pkg *Package, target *Target, isHost bool) string {
+	platform := b.context.target
+
+	if isHost {
+		platform = b.context.host
+	}
+
+	return strings.Join([]string{
+		stage, pkg.manifestPath, targetKey(target), platform,
+		b.context.opts.profile, b.crateSuffix(pkg),
+	}, "|")
+}
+
+func (b *Builder) packageInputs(pkg *Package) []string {
+	cacheRoot := b.cacheRoot()
+	var inputs []string
+	throw(filepath.WalkDir(pkg.dir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if entry.IsDir() {
+			if path == cacheRoot || entry.Name() == ".git" {
+				return filepath.SkipDir
+			}
+
+			return nil
+		}
+
+		if entry.Type().IsRegular() {
+			inputs = append(inputs, path)
+		}
+
+		return nil
+	}))
+	sort.Strings(inputs)
+
+	return inputs
+}
+
+func (b *Builder) rustSignature(pkg *Package, target *Target, isHost bool) []string {
+	signature := []string{
+		b.context.compiler,
+		b.context.opts.profile,
+		b.context.target,
+		fmt.Sprintf("host=%t", isHost),
+		fmt.Sprintf("emit-mmir=%t", b.context.opts.emitMmir),
+		targetKey(target),
+		crateType(target),
+		b.crateSuffix(pkg),
+	}
+	for _, dir := range b.context.opts.libSearch {
+		signature = append(signature, "lib-search="+absolutePath(dir))
+	}
+
+	for _, feature := range sortedFeatureKeys(pkg.activeFeatures) {
+		signature = append(signature, "feature="+feature)
+	}
+
+	return append(signature, b.envSignature(b.commonEnv(pkg))...)
+}
+
+func (b *Builder) buildScriptRunSignature(pkg *Package) []string {
+	signature := []string{
+		"target=" + b.context.target,
+		"host=" + b.context.host,
+		"jobs=" + strconv.Itoa(b.context.opts.jobs),
+		"opt-level=" + profileOptLevel(b.context.opts.profile),
+		"debug=" + profileDebug(b.context.opts.profile),
+		"profile=" + b.context.opts.profile,
+		"rustc=" + b.context.compiler,
+	}
+	if len(b.context.opts.libSearch) > 0 {
+		signature = append(signature, "trustme-libdir="+absolutePath(b.context.opts.libSearch[0]))
+	}
+	for _, feature := range sortedFeatureKeys(pkg.activeFeatures) {
+		signature = append(signature, "feature="+feature)
+	}
+	var flags []string
+	for flag := range b.context.cfg.flags {
+		flags = append(flags, flag)
+	}
+	sort.Strings(flags)
+	for _, flag := range flags {
+		signature = append(signature, "cfg="+flag)
+	}
+	var keys []string
+	for key := range b.context.cfg.values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		var values []string
+		for value := range b.context.cfg.values[key] {
+			values = append(values, value)
+		}
+		sort.Strings(values)
+		for _, value := range values {
+			signature = append(signature, "cfg="+key+"="+value)
+		}
+	}
+	for _, name := range []string{"AR", "CC", "CXX", "PATH", "RUSTC_VERSION", "STD_ENV_ARCH"} {
+		signature = append(signature, "env="+name+"="+os.Getenv(name))
+	}
+
+	return append(signature, b.envSignature(b.commonEnv(pkg))...)
+}
+
+func (b *Builder) envSignature(env map[string]string) []string {
+	keys := make([]string, 0, len(env))
+
+	for key := range env {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+	result := make([]string, 0, len(keys))
+
+	for _, key := range keys {
+		result = append(result, key+"="+env[key])
+	}
+
+	return result
+}
+
+func (b *Builder) cxxSpec(isHost bool) CxxSpec {
+	if isHost {
+		return b.context.hostCxx
+	}
+
+	return b.context.cxx
+}
+
+func (b *Builder) cxxSignature(isHost bool) []string {
+	cxx := b.cxxSpec(isHost)
+	signature := []string{cxx.compiler, b.context.opts.profile, fmt.Sprintf("intel-asm=%t", cxx.intelAsm)}
+	signature = append(signature, cxx.compile...)
+	signature = append(signature, cxx.linkPre...)
+	signature = append(signature, cxx.linkPost...)
+
+	return signature
+}
+
+func (b *Builder) cxxCompileArgs(isHost bool) []string {
+	cxx := b.cxxSpec(isHost)
+	args := []string{"-std=gnu++20", "-fexceptions", "-fwrapv"}
+
+	if cxx.intelAsm {
+		args = append(args, "-masm=intel")
+	}
+
+	args = append(args, cxx.compile...)
+
+	if b.context.opts.profile == "release" {
+		args = append(args, "-O1")
+	} else {
+		args = append(args, "-O0", "-g")
+	}
+
+	args = append(args, "-fPIC")
+
+	return args
+}
+
+func (b *Builder) linkedUnits(root *CompileUnit) []*CompileUnit {
+	seen := map[*CompileUnit]bool{root: true}
+	var result []*CompileUnit
+	var visit func(*Task)
+	visit = func(task *Task) {
+		for _, dep := range task.deps {
+			unit := b.units[dep]
+
+			if unit == nil || seen[unit] || unit.target.procMacro {
+				continue
+			}
+
+			seen[unit] = true
+			result = append(result, unit)
+			visit(unit.rs)
+		}
+	}
+	visit(root.rs)
+
+	return result
+}
+
+func (b *Builder) linkUnit(ctx *TaskContext, root *CompileUnit, linked []*CompileUnit) {
+	cxx := b.cxxSpec(root.isHost)
+	args := append([]string(nil), cxx.compile...)
+	args = append(args, "-o", ctx.output(0))
+	args = append(args, cxx.linkPre...)
+	args = append(args, ctx.file(b.codegenTask(root.rs), 0))
+
+	for _, unit := range linked {
+		args = append(args, ctx.file(b.codegenTask(unit.rs), 0))
+	}
+
+	if root.target.kind == "lib" && !root.target.procMacro {
+		args = append(args, "-shared")
+	}
+
+	manifests := []*CompileUnit{root}
+	manifests = append(manifests, linked...)
+	seenObjects := map[string]bool{}
+
+	for _, unit := range manifests {
+		outDir := ""
+
+		if unit.target.kind != "build-script" {
+			if script := b.buildScriptRunTask(unit.pkg); script != nil {
+				outDir = ctx.tree(script, 1)
+			}
+		}
+
+		data := throw2(os.ReadFile(ctx.file(unit.rs, unit.linkManifest)))
+
+		for _, line := range strings.Split(string(data), "\n") {
+			kind, value, ok := strings.Cut(line, "\t")
+
+			if !ok || value == "" {
+				continue
+			}
+
+			value = resolveBuildOutputPath(value, outDir)
+
+			switch kind {
+			case "search":
+				args = append(args, "-L", value)
+			case "lib":
+				if strings.HasPrefix(value, "framework=") {
+					args = append(args, "-framework", strings.TrimPrefix(value, "framework="))
+				} else {
+					args = append(args, "-l", value)
+				}
+			case "arg":
+				args = append(args, value)
+			case "object":
+				if !seenObjects[value] {
+					seenObjects[value] = true
+					args = append(args, value)
+				}
+			}
+		}
+	}
+
+	args = append(args, cxx.linkPost...)
+	runCommand("", nil, "", b.context.opts.dryRun, cxx.compiler, args...)
+}
+
+func (b *Builder) crateName(unit *CompileUnit) string {
+	return unit.target.name + b.crateSuffix(unit.pkg)
+}
+
+func (b *Builder) crateArgs(ctx *TaskContext, root *CompileUnit, direct []*Dependency) []string {
+	seen := map[*CompileUnit]bool{}
+	var args []string
+	var add func(*CompileUnit)
+	add = func(unit *CompileUnit) {
+		if unit == nil || unit.metadata < 0 || seen[unit] {
+			return
+		}
+
+		seen[unit] = true
+		name := b.crateName(unit)
+		args = append(args, "--crate", name+"="+ctx.file(unit.rs, unit.metadata))
+
+		if unit.target.procMacro {
+			args = append(args, "--proc-macro", name+"="+ctx.file(b.finalTask(unit.rs), 0))
+
+			return
+		}
+
+		for _, dep := range unit.rs.deps {
+			add(b.units[dep])
+		}
+	}
+
+	if root.target.kind != "lib" && root.target.kind != "build-script" {
+		add(b.units[b.libraryTask(root.pkg, root.isHost)])
+	}
+
+	for _, dep := range direct {
+		lib := packageLibrary(dep.packageRef)
+
+		if lib == nil {
+			continue
+		}
+
+		unit := b.units[b.libraryTask(dep.packageRef, root.isHost || lib.procMacro)]
+		add(unit)
+		args = append(args, "--extern", rustName(dep.key)+"="+b.crateName(unit))
+	}
+
+	return args
+}
+
+func (b *Builder) systemCrateArgs(isHost bool) []string {
+	var args []string
+
+	for _, artifact := range b.systemCrates(isHost) {
+		args = append(args, "--crate", artifact.name+"="+artifact.metadata)
+		args = append(args, "--crate-alias", artifact.alias+"="+artifact.name)
+
+		if artifact.object != "" {
+			args = append(args, "--crate-object", artifact.name+"="+artifact.object)
+		}
+	}
+
+	return args
+}
+
+func (b *Builder) addSystemInputs(task *Task, isHost bool, objectsOnly bool) {
+	for _, artifact := range b.systemCrates(isHost) {
+		if objectsOnly && artifact.object != "" {
+			task.inputs = append(task.inputs, artifact.object)
+		} else if !objectsOnly {
+			task.inputs = append(task.inputs, artifact.metadata)
+		}
+	}
+}
+
+func (b *Builder) systemCrates(isHost bool) []ExternalCrateArtifact {
+	if isHost && b.systemHostLoaded {
+		return b.systemHost
+	}
+
+	if !isHost && b.systemTargetLoaded {
+		return b.systemTarget
+	}
+
+	var result []ExternalCrateArtifact
+	byName := map[string]int{}
+
+	for _, dir := range b.systemLibraryDirs(isHost) {
+		entries, err := os.ReadDir(dir)
+
+		if err != nil {
+			continue
+		}
+
+		for _, entry := range entries {
+			name := entry.Name()
+
+			if entry.IsDir() || !strings.HasPrefix(name, "lib") || !strings.HasSuffix(name, ".rlib") {
+				continue
+			}
+
+			metadata := filepath.Join(dir, name)
+			command := exec.Command(b.context.compiler, "--crate-name-of", metadata)
+			command.Stderr = os.Stderr
+			lines := strings.Fields(string(throw2(command.Output())))
+			unique := ""
+
+			if len(lines) > 0 {
+				// Older/debug compiler builds print phase diagnostics before the
+				// requested value. The query contract puts the crate name last.
+				unique = lines[len(lines)-1]
+			}
+
+			if unique == "" {
+				throwFmt("compiler returned an empty crate name for %s", metadata)
+			}
+
+			object := metadata + ".o"
+
+			if !fileExists(object) {
+				object = ""
+			}
+
+			alias, _, _ := strings.Cut(unique, "-")
+			artifact := ExternalCrateArtifact{
+				alias: alias, name: unique, metadata: metadata, object: object,
+			}
+			if index, ok := byName[unique]; ok {
+				// -Zpublish-deps exposes both a short public filename and the
+				// conventional unique fallback as hardlinks to one artifact.
+				// Keep one exact table entry and prefer the shorter public path.
+				if len(metadata) < len(result[index].metadata) {
+					result[index] = artifact
+				}
+			} else {
+				byName[unique] = len(result)
+				result = append(result, artifact)
+			}
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].name < result[j].name
+	})
+
+	if isHost {
+		b.systemHostLoaded = true
+		b.systemHost = result
+	} else {
+		b.systemTargetLoaded = true
+		b.systemTarget = result
+	}
+
+	return result
+}
+
+func (b *Builder) systemLibraryDirs(isHost bool) []string {
+	dirs := append([]string(nil), b.context.opts.libSearch...)
+
+	if isHost && b.context.cross {
+		marker := "-" + b.context.target
+
+		for index, dir := range dirs {
+			if position := strings.LastIndex(dir, marker); position >= 0 {
+				dirs[index] = dir[:position] + dir[position+len(marker):]
+			}
+		}
+	}
+
+	return dirs
 }
 
 func (b *Builder) mainDependencies(pkg *Package, includeDev bool) []*Dependency {
@@ -756,7 +1419,10 @@ func (b *Builder) conditionMatches(pkg *Package, condition string) bool {
 }
 
 func (b *Builder) artifact(pkg *Package, target *Target, isHost bool) string {
-	dir := b.outputDir(isHost)
+	return filepath.Join(b.outputDir(isHost), b.artifactName(pkg, target))
+}
+
+func (b *Builder) artifactName(pkg *Package, target *Target) string {
 	suffix := b.crateSuffix(pkg)
 
 	if pkg.version == (Version{}) || target.kind != "lib" {
@@ -766,19 +1432,19 @@ func (b *Builder) artifact(pkg *Package, target *Target, isHost bool) string {
 	switch target.kind {
 	case "lib":
 		if target.procMacro {
-			return filepath.Join(dir, "lib"+target.name+suffix+"-plugin")
+			return "lib" + target.name + suffix + "-plugin"
 		}
 
 		switch crateType(target) {
 		case "dylib", "cdylib":
-			return filepath.Join(dir, "lib"+target.name+suffix+sharedLibrarySuffix())
+			return "lib" + target.name + suffix + sharedLibrarySuffix()
 		case "staticlib":
-			return filepath.Join(dir, "lib"+target.name+suffix+staticLibrarySuffix())
+			return "lib" + target.name + suffix + staticLibrarySuffix()
 		}
 
-		return filepath.Join(dir, "lib"+target.name+suffix+".rlib")
+		return "lib" + target.name + suffix + ".rlib"
 	default:
-		return filepath.Join(dir, target.name+executableSuffix())
+		return target.name + executableSuffix()
 	}
 }
 
@@ -839,18 +1505,6 @@ func (b *Builder) crateSuffix(pkg *Package) string {
 
 func (b *Builder) buildScriptBase(pkg *Package) string {
 	return "build_" + pkg.name + b.crateSuffix(pkg)
-}
-
-func (b *Builder) buildScriptExe(pkg *Package) string {
-	return filepath.Join(b.outputDir(true), b.buildScriptBase(pkg)+"_run"+executableSuffix())
-}
-
-func (b *Builder) buildScriptOutDir(pkg *Package) string {
-	return filepath.Join(b.outputDir(true), b.buildScriptBase(pkg))
-}
-
-func (b *Builder) buildScriptLog(pkg *Package) string {
-	return filepath.Join(b.outputDir(true), b.buildScriptBase(pkg)+".txt")
 }
 
 func (b *Builder) taskName(pkg *Package, target *Target, isHost bool) string {
@@ -918,6 +1572,10 @@ func crateType(target *Target) string {
 }
 
 func runCommand(dir string, extraEnv map[string]string, logPath string, dryRun bool, name string, args ...string) {
+	if _, dump := os.LookupEnv("CARGO_TRUSTME_DUMP_COMMAND"); dump {
+		fmt.Fprintln(os.Stderr, ">", shellJoin(append([]string{name}, args...)))
+	}
+
 	if _, dump := os.LookupEnv("CARGO_TRUSTME_DUMP_ENV"); dump {
 		keys := make([]string, 0, len(extraEnv))
 
@@ -1003,8 +1661,33 @@ func shellJoin(args []string) string {
 
 func siblingCompiler() string {
 	executable := throw2(os.Executable())
+	invoked := os.Args[0]
 
-	return filepath.Clean(filepath.Join(filepath.Dir(executable), "..", "rustc", "rustc"))
+	if resolved, err := exec.LookPath(invoked); err == nil {
+		invoked = resolved
+	}
+	if absolute, err := filepath.Abs(invoked); err == nil {
+		invoked = absolute
+	}
+
+	return siblingCompilerAt(invoked, executable)
+}
+
+func siblingCompilerAt(invoked string, executable string) string {
+	candidates := []string{
+		filepath.Join(filepath.Dir(invoked), "rustc"),
+		filepath.Join(filepath.Dir(invoked), "..", "rustc", "rustc"),
+		filepath.Join(filepath.Dir(executable), "..", "rustc", "rustc"),
+	}
+
+	for _, candidate := range candidates {
+		candidate = filepath.Clean(candidate)
+		if fileExists(candidate) {
+			return candidate
+		}
+	}
+
+	return filepath.Clean(candidates[len(candidates)-1])
 }
 
 func hostTriple() string {
@@ -1028,12 +1711,6 @@ func hostTriple() string {
 
 func rustName(name string) string {
 	return strings.ReplaceAll(name, "-", "_")
-}
-
-func deferredCodegen() bool {
-	_, enabled := os.LookupEnv("CARGO_TRUSTME_DEFER_CODEGEN")
-
-	return enabled
 }
 
 func dylibEnabled() bool {

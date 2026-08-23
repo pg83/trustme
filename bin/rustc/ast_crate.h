@@ -129,7 +129,13 @@ class ASTExternCrate {
 public:
     RcString name;
     RcString shortName;
+    // The metadata artifact is stable and target-independent.  Link objects
+    // and proc-macro executables are separate graph artifacts supplied by the
+    // driver that needs them.
     ::std::string filename;
+    RcString objectFilename;
+    RcString procMacroFilename;
+    bool isProcMacro = false;
     HIRCrate* hir = nullptr;
 
     ASTExternCrate(stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name, const ::std::string& path);

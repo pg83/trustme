@@ -3831,11 +3831,26 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
                 ERROR(sp, E0000, "Conflicting definitions of lang item '" << name << "'. " << path << " and " << irv.first->second);
             }
         }
-        auto p1 = extCrate.second.filename.rfind('/');
-        auto p2 = extCrate.second.filename.rfind('\\');
-        auto p = (p1 == ::std::string::npos ? p2 : (p2 == ::std::string::npos ? p1 : ::std::max(p1, p2)));
-        auto crateFile = (p == ::std::string::npos ? extCrate.second.filename : extCrate.second.filename.substr(p + 1));
-        rv.extCrates.insert(::std::make_pair(extCrate.first, HIRExternCrate{extCrate.second.hir, crateFile, extCrate.second.filename}));
+        // The path used by a graph driver is normally a content hash.  Keep a
+        // stable fallback for that case, while retaining a real legacy rlib,
+        // dylib, or plugin basename when the standalone driver loaded one.
+        const auto* filename = extCrate.second.filename.c_str();
+        const auto* crateFileStart = filename;
+        if (const auto* slash = strrchr(filename, '/')) {
+            crateFileStart = slash + 1;
+        }
+        if (const auto* slash = strrchr(crateFileStart, '\\')) {
+            crateFileStart = slash + 1;
+        }
+        auto crateFile = FMT(crateFileStart);
+        if (!crateFile.ends_with(".rlib")
+            && !crateFile.ends_with(".so")
+            && !crateFile.ends_with("-plugin")) {
+            crateFile = FMT("lib" << extCrate.first << ".rlib");
+        }
+        rv.extCrates.insert(::std::make_pair(extCrate.first, HIRExternCrate{
+            extCrate.second.hir, crateFile, extCrate.second.filename,
+            extCrate.second.objectFilename, extCrate.second.isProcMacro}));
     }
     pathSized = rv.getLangItemPathOpt("sized");
     pathPointeeSized = rv.getLangItemPathOpt("pointee_sized");

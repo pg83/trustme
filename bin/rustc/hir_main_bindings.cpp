@@ -18,6 +18,32 @@
 
 namespace {
     bool desDebugEnabled();
+
+    bool isMetadataFile(const auto& filename) {
+        ::std::ifstream direct(filename, ::std::ios_base::in | ::std::ios_base::binary);
+        unsigned char header[2] = {};
+        if (direct.read(reinterpret_cast<char*>(header), sizeof(header))) {
+            const unsigned word = static_cast<unsigned>(header[0]) * 256 + header[1];
+            if ((header[0] & 0x0f) == 8 && word % 31 == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    auto metadataFilename(const auto& filename) {
+        // New rlibs are the compressed HIR stream itself. Dylibs and proc
+        // macros keep that stream in a `.rlib` companion. Old artifacts used
+        // a sibling `.hir`; recognise all three layouts during the transition.
+        if (isMetadataFile(filename)) {
+            return filename;
+        }
+        auto rlib = filename + ".rlib";
+        if (isMetadataFile(rlib)) {
+            return rlib;
+        }
+        return filename + ".hir";
+    }
 }
 
 //#define DISABLE_DEBUG   //  Disable debug for this function - too hot
@@ -1652,7 +1678,7 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
 
 HIRCrate* HIRDeserialise(stl::ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename) {
     try {
-        HIRSerialiseReader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
+        HIRSerialiseReader in{metadataFilename(filename)};
         HirDeserialiser s{*pool, in, types};
 
         auto* rv = pool->make<HIRCrate>(pool, types);
@@ -1668,7 +1694,7 @@ HIRCrate* HIRDeserialise(stl::ObjPool* pool, HIRTypeInterner& types, const ::std
 
 RcString HIRDeserialiseJustName(const ::std::string& filename) {
     try {
-        HIRSerialiseReader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
+        HIRSerialiseReader in{metadataFilename(filename)};
 
         // NOTE: This is the first item loaded by deserialise_crate
         auto crateName = in.readIstring();

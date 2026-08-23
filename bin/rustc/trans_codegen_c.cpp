@@ -685,8 +685,12 @@ namespace {
                             }
                         }
 
-                        if (extCrate.path.compare(extCrate.path.size() - 5, 5, ".rlib") == 0) {
-                            extCrates.push_back(extCrate.path.c_str());
+                        if (extCrate.isProcMacro) {
+                            // Host executables participate in expansion, not target linking.
+                        } else if (extCrate.objectPath != "") {
+                            extCrates.push_back(extCrate.objectPath.c_str());
+                        } else if (extCrate.path.size() >= 5 && extCrate.path.compare(extCrate.path.size() - 5, 5, ".rlib") == 0) {
+                            extCrates.push_back(extCrate.path + ".o");
                         } else if (isDylib(extCrate)) {
                             extCratesDylib.push_back(extCrate.path.c_str());
                         } else {
@@ -870,7 +874,7 @@ namespace {
                         args.push_back(a.c_str());
                     }
                     for (const auto& c : extCrates) {
-                        args.push_back(std::string(c) + ".o");
+                        args.push_back(c);
                     }
                     for (const auto& c : extCratesDylib) {
                         args.push_back(c);
@@ -951,13 +955,6 @@ namespace {
                 }
             }
 
-            // Custom Cargo treats `.rlib` as the metadata/completion marker and links the sibling object file.
-            if (outTy == CodegenOutput::StaticLibrary) {
-                ::std::ofstream of(outfilePath);
-                if (!of.good()) {
-                    // TODO: Error?
-                }
-            }
         }
 
         void emitBoxDrop(unsigned indentLevel, const HIRTypeData* innerType, const HIRTypeData* boxType, const MIRLValue& slot, bool runDestructor) {

@@ -92,6 +92,21 @@ def check_codegen_prelude(rustc: str, src: str, work: str) -> None:
     output = os.path.join(work, "prelude")
     result = invoke(rustc, src, output, ["-Cemit-cpp-only"])
     expect_ok(result, "embedded C++ prelude")
+    metadata = Path(output)
+    if not metadata.is_file() or metadata.stat().st_size == 0:
+        raise RuntimeError("emit-cpp-only did not produce loadable rlib metadata")
+    query = subprocess.run(
+        lib.wrap_gdb([rustc, "--crate-name-of", output]),
+        env=dict(os.environ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    expect_ok(query, "crate metadata name query")
+    words = query.stdout.split()
+    if not words or words[-1] != Path(src).stem:
+        raise RuntimeError(f"metadata crate name is {query.stdout!r}, expected {Path(src).stem!r}")
     generated = Path(output + ".cpp").read_text()
     markers = (
         "#define TRUSTME_CODEGEN_DISALLOW_EMPTY_STRUCTS ",

@@ -1,0 +1,6 @@
+[package]
+name = "system_consumer"
+version = "0.0.0"
+
+[lib]
+path = "lib.rs"
