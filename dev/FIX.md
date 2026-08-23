@@ -53,7 +53,8 @@ enums during drop elaboration closed another; preserving the source owner of
 block-local items in `type_name` closed two more; preserving higher-ranked
 lifetime identity in `TypeId` and enumerating the resulting generated drop
 glue dependencies closed three more; keeping wildcard array patterns sparse
-closed one more, leaving 10.
+closed one more; emitting large non-relocated static contents as assembler
+binary blobs closed one more, leaving 9.
 
 | result | nodes |
 |---|---:|
@@ -62,8 +63,8 @@ closed one more, leaving 10.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 38 |
-| still failing independently | 10 |
+| fixed by subsequent point reruns | 39 |
+| still failing independently | 9 |
 
 Manual inspection normalised one mechanical classifier label:
 
@@ -76,8 +77,8 @@ The resulting current population is:
 | current result | nodes |
 |---|---:|
 | wrong runtime behaviour, panic, abort, or output | 3 |
-| stable timeout | 7 |
-| **total independently reproduced** | **10** |
+| stable timeout | 6 |
+| **total independently reproduced** | **9** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -94,7 +95,7 @@ Three programs compile but execute incorrectly:
 
 ## P2: stable timeouts
 
-Seven nodes hit their timeout again in isolation:
+Six nodes hit their timeout again in isolation:
 
 | limit | case |
 |---:|---|
@@ -104,7 +105,6 @@ Seven nodes hit their timeout again in isolation:
 | 60 s | UI `next-solver/normalize/normalize-allow-too-many-vars.rs` |
 | 60 s | UI `coroutine/issue-87142.rs` |
 | 10 min | RustSmith seed 7 |
-| 60 s | `mir/mir_heavy_promoted.rs` |
 
 Classify each timeout by its last progressing compiler phase before attempting
 a fix. Recursive alias resolution, solver explosion, large generated MIR, and

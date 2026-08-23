@@ -260,6 +260,8 @@ namespace {
         ::std::string outfilePathC;
 
         ::std::ofstream of;
+        FILE* literalBlob = nullptr;
+        size_t literalBlobSize = 0;
         const MIRTypeResolve* mirRes = nullptr;
         bool currentFunctionTracksCaller = false;
 
@@ -291,6 +293,35 @@ namespace {
         bool usesIntelCompilerAsmDialect() const {
             const auto& arch = TargetGetCurSpec(wb_).arch.name;
             return arch == "x86" || arch == "x86_64";
+        }
+
+        bool literalBlobPathIsSafe() const {
+            for (char c : outfilePath) {
+                if (c == '"' || c == '\\' || c == '\n' || c == '\r') {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        size_t appendLiteralBlob(const EncodedLiteral& encoded) {
+            if (!literalBlob) {
+                const auto path = outfilePath + ".blob";
+                literalBlob = fopen(path.c_str(), "wb");
+                ASSERT_BUG(Span(), literalBlob, "Failed to open `" << path << "` for writing");
+            }
+            const size_t offset = literalBlobSize;
+            const size_t written = fwrite(encoded.bytes.data(), 1, encoded.bytes.size(), literalBlob);
+            ASSERT_BUG(Span(), written == encoded.bytes.size(), "Failed to write literal blob for `" << outfilePath << "`");
+            literalBlobSize += written;
+            return offset;
+        }
+
+        void closeLiteralBlob() {
+            if (literalBlob) {
+                ASSERT_BUG(Span(), fclose(literalBlob) == 0, "Failed to close literal blob for `" << outfilePath << "`");
+                literalBlob = nullptr;
+            }
         }
 
     public:
@@ -548,6 +579,7 @@ namespace {
             of.flush();
             of.close();
             ASSERT_BUG(Span(), !of.bad(), "Error set on output stream for: " << outfilePathC);
+            closeLiteralBlob();
 
             // Stop after emitting the C++ source, without invoking the C
             // compiler (used to profile the trustme front/middle-end alone).
@@ -2021,6 +2053,42 @@ default:
 
             auto type = params.monomorph(resolve_, item.type);
             const bool isZero = isZeroLiteral(type, encoded, params);
+
+            const bool blobLinkage = item.linkage.type == HIRLinkage::Type::Auto
+                || item.linkage.type == HIRLinkage::Type::Weak;
+            // Feeding one C++ initializer per byte to the host compiler turns
+            // large Rust constants into enormous source files. GNU assembly
+            // can include the evaluated bytes directly and preserve the same
+            // link-time value without asking the C++ parser to see them.
+            if (!isZero && encoded.bytes.size() >= 64 * 1024 && encoded.relocations.empty()
+                && TargetGetCurSpec(wb_).osName == "linux" && blobLinkage
+                && item.linkage.name.empty() && item.linkage.section.empty()
+                && literalBlobPathIsSafe()) {
+                size_t size = 0;
+                size_t align = 0;
+                MIR_ASSERT(topMirRes, TargetGetSizeAndAlignOf(sp, resolve_, type, size, align), "Unsized static " << p);
+                MIR_ASSERT(topMirRes, size == encoded.bytes.size(),
+                    "Static size differs from its encoded value: " << size << " != " << encoded.bytes.size());
+                if (align < item.explicitAlignment) {
+                    align = item.explicitAlignment;
+                }
+
+                const size_t blobOffset = appendLiteralBlob(encoded);
+                const bool weak = item.params.isGeneric() || item.linkage.type == HIRLinkage::Type::Weak;
+                of << "__asm__(\n";
+                of << "\".pushsection .data\\n\"\n";
+                of << "\".balign " << align << "\\n\"\n";
+                of << "\"." << (weak ? "weak " : "globl ") << TransMangleValue(p) << "\\n\"\n";
+                of << "\".type " << TransMangleValue(p) << ",@object\\n\"\n";
+                of << "\"" << TransMangleValue(p) << ":\\n\"\n";
+                of << "\".incbin \\\"" << outfilePath << ".blob\\\", " << blobOffset << ", " << encoded.bytes.size() << "\\n\"\n";
+                of << "\".size " << TransMangleValue(p) << "," << size << "\\n\"\n";
+                of << "\".popsection\\n\");\n";
+                of << "\t// static " << p << " : " << type << " (literal blob, " << size << " bytes)\n";
+                mirRes = nullptr;
+                return;
+            }
+
             if (item.params.isGeneric()) {
                 of << "__attribute__((weak)) ";
             }
