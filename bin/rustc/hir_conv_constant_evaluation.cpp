@@ -3244,7 +3244,7 @@ default:
                                 switch (srcTi.ty) {
                                     // NOTE: Subtle rounding differences between f32 and f64
                                     case TypeInfo::Signed: {
-                                        auto v = S128(inval.readUint(state, srcTi.bits));
+                                        auto v = inval.readSint(state, srcTi.bits);
                                         dst.writeFloat(state, ti.bits, ti.bits == 32 ? v.toFloat() : v.toDouble());
                                         break;
                                     }

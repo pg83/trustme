@@ -1746,22 +1746,23 @@ namespace {
                                         auto candidateSubFields = candidate.subFields;
                                         ::std::reverse(candidateSubFields.begin(), candidateSubFields.end());
                                         const bool sameScalar = candidate.size == ve.field.size && candidateSubFields == ve.field.subFields;
-                                        if (sameScalar) {
-                                            const size_t candidateEnd = candidateStart + requiredCount + occupiedCount - 1;
-                                            const size_t occupiedStart = ve.offset;
-                                            const size_t occupiedEnd = occupiedStart + occupiedCount - 1;
-                                            if (!(candidateEnd < occupiedStart || occupiedEnd < candidateStart)) {
-                                                const size_t beforeCount = occupiedStart > candidateStart ? occupiedStart - candidateStart : 0;
-                                                const size_t afterStart = occupiedEnd == SIZE_MAX ? SIZE_MAX : ::std::max(candidateStart, occupiedEnd + 1);
-                                                const size_t afterCount = occupiedEnd == SIZE_MAX || candidateEnd < afterStart ? 0 : candidateEnd - afterStart + 1;
-                                                if (requiredCount <= beforeCount) {
-                                                    // The requested values fit before the
-                                                    // range used by the inner enum.
-                                                } else if (requiredCount <= afterCount) {
-                                                    candidateStart = afterStart;
-                                                } else {
-                                                    return false;
-                                                }
+                                        if (!sameScalar) {
+                                            return false;
+                                        }
+                                        const size_t candidateEnd = candidateStart + requiredCount + occupiedCount - 1;
+                                        const size_t occupiedStart = ve.offset;
+                                        const size_t occupiedEnd = occupiedStart + occupiedCount - 1;
+                                        if (!(candidateEnd < occupiedStart || occupiedEnd < candidateStart)) {
+                                            const size_t beforeCount = occupiedStart > candidateStart ? occupiedStart - candidateStart : 0;
+                                            const size_t afterStart = occupiedEnd == SIZE_MAX ? SIZE_MAX : ::std::max(candidateStart, occupiedEnd + 1);
+                                            const size_t afterCount = occupiedEnd == SIZE_MAX || candidateEnd < afterStart ? 0 : candidateEnd - afterStart + 1;
+                                            if (requiredCount <= beforeCount) {
+                                                // The requested values fit before the
+                                                // range used by the inner enum.
+                                            } else if (requiredCount <= afterCount) {
+                                                candidateStart = afterStart;
+                                            } else {
+                                                return false;
                                             }
                                         }
                                         candidate.subFields.push_back(ve.field.index);
