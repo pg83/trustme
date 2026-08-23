@@ -1,5 +1,5 @@
 //@ crate-type: lib
-//@ compile-fail: Type mismatch
+//@ compile-fail: Failed to locate function
 
 #![feature(type_alias_impl_trait)]
 

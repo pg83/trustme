@@ -214,8 +214,7 @@ public:
         /// Lint levels set on this function by `#[allow]` and friends, by exact
         /// name and by group. NOTE: not serialised, so only meaningful for a
         /// function defined in the crate being compiled.
-        ::std::map<RcString, CfgLintLevel> lintLevels;
-        ::std::map<RcString, CfgLintLevel> lintGroupLevels;
+        LintLevelOverrides lintLevels;
     } markings;
 
     HIRFunction();
@@ -585,6 +584,10 @@ public:
 
 class HIRModule {
 public:
+    /// Lexical lint levels for this module in the current crate. Like function
+    /// lint levels, these do not need to cross crate metadata boundaries.
+    LintLevelOverrides lintLevels;
+
     // List of in-scope traits in this module
     ::std::vector<HIRSimplePath> traits;
 

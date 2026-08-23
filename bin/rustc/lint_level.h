@@ -7,19 +7,23 @@
 #include "rc_string.h"
 #include "settings.h"
 
-#include <map>
+class HIRCrate;
+class HIRSimplePath;
 
-/// The level `name` reports at inside an item carrying these attributes.
-///
-/// The crate's own setting and `--cap-lints` come first, then the item's:
-/// a group it belongs to, then its exact name, which beats the group whichever
-/// order the two were written in. `warnings` applies last and only to a lint
-/// that is at warn by then, which is what makes `#[deny(warnings)]` next to
-/// `#[warn(unsafe_code)]` a denial.
-extern CfgLintLevel LintLevelForItem(
+/// Apply the levels written on one lexical scope to an inherited level.
+extern CfgLintLevel ApplyLintLevelOverrides(
     const Settings& settings,
-    const ::std::map<RcString, CfgLintLevel>& byName,
-    const ::std::map<RcString, CfgLintLevel>& byGroup,
+    const LintLevelOverrides& overrides,
+    const char* name,
+    CfgLintLevel inherited
+);
+
+/// Resolve a lint at a module path, applying every enclosing module in lexical
+/// order. Impl blocks use this because HIR stores them outside the module tree.
+extern CfgLintLevel LintLevelForModulePath(
+    const Settings& settings,
+    const HIRCrate& crate,
+    const HIRSimplePath& path,
     const char* name,
     CfgLintLevel builtin
 );

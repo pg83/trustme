@@ -3336,7 +3336,7 @@ default:
                 }
                 case HIRExprLiteral::TAG_ByteString: {
                     auto& e = node.data.as_ByteString();
-                    auto v = mv$(*reinterpret_cast<::std::vector<u8>*>(&e));
+                    ::std::vector<u8> v(e.begin(), e.end());
                     builder.setResult(node.span(), MIRRValue::make_Constant(MIRConstant(mv$(v))));
                     break;
                 }
@@ -3635,30 +3635,40 @@ default:
                             return;
                         }
                         if (e->data.is_Tuple()) {
-                            ASSERT_BUG(node.span(), node.baseValue, "Tuple struct literal has no values or base");
-                            // `S { 0: a, ..base }` names the tuple fields by index:
-                            // those come from the expression, the rest from the base.
-                            ::std::map<unsigned, MIRParam> provided;
+                            // `S { 0: a, ..base }` names tuple fields by index.
+                            // The no-base form can survive AST lowering when
+                            // the path is `Self`; in that case every field must
+                            // be supplied by the expression.
+                            const auto& fields = e->data.as_Tuple();
+                            stl::Vector<u8> valuesSet;
+                            valuesSet.zero(fields.size());
+                            std::vector<MIRParam> values;
+                            values.resize(fields.size());
                             for (auto& val : node.values) {
+                                const auto idx = static_cast<unsigned>(::std::atoi(val.first.c_str()));
+                                ASSERT_BUG(node.span(), idx < fields.size(), "Tuple field index " << idx << " out of range");
+                                ASSERT_BUG(node.span(), !valuesSet[idx], "Tuple field " << idx << " specified twice");
                                 this->visitNodePtr(val.second);
                                 if (!builder.blockActive()) {
                                     return;
                                 }
-                                provided.insert(::std::make_pair(static_cast<unsigned>(::std::atoi(val.first.c_str())), builder.getResultInParam(val.second->span(), val.second->resType)));
+                                valuesSet.mut(idx) = true;
+                                values.at(idx) = builder.getResultInParam(val.second->span(), val.second->resType);
                             }
-                            this->visitNodePtr(node.baseValue);
-                            if (!builder.blockActive()) {
-                                return;
+                            auto baseValue = MIRLValue::newReturn();
+                            if (node.baseValue) {
+                                this->visitNodePtr(node.baseValue);
+                                if (!builder.blockActive()) {
+                                    return;
+                                }
+                                baseValue = builder.getResultInLvalue(node.baseValue->span(), node.baseValue->resType);
                             }
-                            auto baseValue = builder.getResultInLvalue(node.baseValue->span(), node.baseValue->resType);
-                            std::vector<MIRParam> values;
-                            values.reserve(e->data.as_Tuple().size());
-                            for (size_t i = 0; i < e->data.as_Tuple().size(); i++) {
-                                auto it = provided.find(static_cast<unsigned>(i));
-                                if (it != provided.end()) {
-                                    values.push_back(mv$(it->second));
-                                } else {
-                                    values.push_back(MIRLValue::newField(baseValue.clone(), static_cast<unsigned>(i)));
+                            for (size_t i = 0; i < fields.size(); i++) {
+                                if (!valuesSet[i]) {
+                                    if (!node.baseValue) {
+                                        ERROR(node.span(), E0000, "Field '" << i << "' not specified");
+                                    }
+                                    values.at(i) = MIRLValue::newField(baseValue.clone(), static_cast<unsigned>(i));
                                 }
                             }
                             builder.setResult(node.span(), MIRRValue::make_Struct({tyPath.clone(), std::move(values)}));

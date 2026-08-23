@@ -250,8 +250,7 @@ public:
         /// Lint levels set on this function by `#[allow]` and friends, by exact
         /// name and by group. Only the crate being compiled is linted, so these
         /// never leave it.
-        ::std::map<RcString, CfgLintLevel> lintLevels;
-        ::std::map<RcString, CfgLintLevel> lintGroupLevels;
+        LintLevelOverrides lintLevels;
     } markings;
 
     ASTFunction(const ASTFunction&) = delete;
@@ -788,6 +787,10 @@ public:
 
     bool insertPrelude = true; // Set to false by `#[no_prelude]` handler
     char indexPopulated = 0;   // 0 = no, 1 = partial, 2 = complete
+
+    /// Lint levels written on the module item. They are lexical state for the
+    /// current crate and are copied to HIR, but never exported as metadata.
+    LintLevelOverrides lintLevels;
 
     struct IndexEnt {
         bool isImport; // Set if this item has a path that isn't `mod->path() + name`

@@ -60,6 +60,7 @@ namespace {
     };
 
     class UnsafeCodeVisitor: public HIRVisitor {
+        const HIRCrate& crate_;
         const Settings& settings_;
         CfgLintLevel level_;
         RcString crateName_;
@@ -67,17 +68,39 @@ namespace {
     public:
         UnsafeCodeVisitor(const WireBoard& wb)
             : HIRVisitor(nullptr, wb.crate->types)
+            , crate_(*wb.crate)
             , settings_(*wb.settings)
             , level_(wb.settings->lintLevel(LINT_NAME, CfgLintLevel::Allow))
             , crateName_(wb.crate->crateName)
         {
         }
 
+        void visitModule(HIRItemPath p, HIRModule& module) override {
+            const auto saved = level_;
+            level_ = ApplyLintLevelOverrides(settings_, module.lintLevels, LINT_NAME, level_);
+            HIRVisitor::visitModule(p, module);
+            level_ = saved;
+        }
+
+        void visitTypeImpl(HIRTypeImpl& impl) override {
+            const auto saved = level_;
+            level_ = LintLevelForModulePath(settings_, crate_, impl.srcModule, LINT_NAME, CfgLintLevel::Allow);
+            HIRVisitor::visitTypeImpl(impl);
+            level_ = saved;
+        }
+
+        void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
+            const auto saved = level_;
+            level_ = LintLevelForModulePath(settings_, crate_, impl.srcModule, LINT_NAME, CfgLintLevel::Allow);
+            HIRVisitor::visitTraitImpl(traitPath, impl);
+            level_ = saved;
+        }
+
         /// A lint attribute on the function sets the level for its declaration
         /// and its body.
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
             const auto saved = level_;
-            level_ = LintLevelForItem(settings_, item.markings.lintLevels, item.markings.lintGroupLevels, LINT_NAME, CfgLintLevel::Allow);
+            level_ = ApplyLintLevelOverrides(settings_, item.markings.lintLevels, LINT_NAME, level_);
             if (item.unsafe && item.code && !spanIsNotUserCode(item.code->span(), crateName_)) {
                 report(level_, item.code->span(), "an `unsafe` function");
             }

@@ -3027,10 +3027,9 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     markings.mustUse = attrs.has("must_use");
     markings.isNaked = f.markings.isNaked;
     markings.alignment = f.markings.alignment;
-    // Lint levels set on this function, which the lints consult before the
-    // crate's own settings.
+    // Lint levels set on this function, which the lints apply after the
+    // containing module's level.
     markings.lintLevels = f.markings.lintLevels;
-    markings.lintGroupLevels = f.markings.lintGroupLevels;
     markings.isRustcIntrinsic = attrs.has("rustc_intrinsic");
     markings.isRustcPromotable = attrs.has("rustc_promotable");
 
@@ -3283,6 +3282,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
     TRACE_FUNCTION_F("path = " << path);
     HIRModule mod{};
 
+    mod.lintLevels = astMod.lintLevels;
     mod.traits = mv$(traits);
 
     auto modPath = path.getSimplePath();

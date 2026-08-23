@@ -4093,33 +4093,40 @@ class CMultiHandlerLint: public ExpandDecorator {
         }
     }
 
+    void recordItemLevel(const ASTAttribute& mi, ASTItem& item) const {
+        LintLevelOverrides* overrides = nullptr;
+        if (auto* function = item.opt_Function()) {
+            overrides = &function->markings.lintLevels;
+        } else if (auto* module = item.opt_Module()) {
+            overrides = &module->lintLevels;
+        }
+        if (!overrides) {
+            return;
+        }
+        collectLintNames(mi, [&](const RcString& name) {
+            const bool isGroup = name == "warnings" || name == "unused";
+            overrides->set(name, isGroup, this->level());
+        });
+    }
+
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
         collectLintNames(mi, [&](const RcString& name) {
             CfgSetLintLevel(*wb.settings, name.c_str(), this->level());
         });
     }
 
-    /// A lint attribute on an item applies to that item only. A group and an
-    /// exact name are recorded apart, because the exact name wins whichever
-    /// order they were written in.
+    /// A lint attribute on a module is inherited by its contents; one on a
+    /// function applies to that function and its body.
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        auto* fcn = i.opt_Function();
-        if (!fcn) {
-            return;
-        }
-        collectLintNames(mi, [&](const RcString& name) {
-            if (name == "warnings" || name == "unused") {
-                fcn->markings.lintGroupLevels[name] = this->level();
-            } else {
-                fcn->markings.lintLevels[name] = this->level();
-            }
-        });
+        recordItemLevel(mi, i);
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+        recordItemLevel(mi, i);
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
+        recordItemLevel(mi, i);
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override {

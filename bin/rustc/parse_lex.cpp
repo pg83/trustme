@@ -916,13 +916,28 @@ Token Lexer::getTokenInt() {
                     ch = this->getc();
                     if (ch == '.') {
                         ch = this->getc();
-                        this->ungetc();
-                        if (ch.isdigit()) {
+                        if (ch == '.') {
+                            // `.0..`, `.0..=`, and `.0...`: the first dot
+                            // belongs to the tuple index and the remaining
+                            // run is a range operator.
+                            ch = this->getc();
+                            if (ch == '.') {
+                                nextTokens.push_back(TOK_TRIPLE_DOT);
+                            } else if (ch == '=') {
+                                nextTokens.push_back(TOK_DOUBLE_DOT_EQUAL);
+                            } else {
+                                this->ungetc();
+                                nextTokens.push_back(TOK_DOUBLE_DOT);
+                            }
+                            nextTokens.push_back(Token(val, CORETYPE_ANY));
+                        } else if (ch.isdigit()) {
+                            this->ungetc();
                             auto fval = this->parseFloat(val);
                             if (fval == fval) {
                                 nextTokens.push_back(Token::makeFloat(fval, CORETYPE_ANY));
                             }
                         } else {
+                            this->ungetc();
                             nextTokens.push_back(TOK_DOT);
                             nextTokens.push_back(Token(val, CORETYPE_ANY));
                         }

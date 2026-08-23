@@ -175,8 +175,8 @@ func buildPackage(opts BuildOptions, manifestPath string) []string {
 func (b *Builder) publishedDependencies() ([]*Task, []InstallArtifact) {
 	units := make([]*CompileUnit, 0, len(b.units))
 
-	for _, unit := range b.units {
-		if unit.target.kind == "lib" {
+	for task, unit := range b.units {
+		if task == unit.rs && unit.target.kind == "lib" {
 			units = append(units, unit)
 		}
 	}
@@ -662,6 +662,7 @@ func (b *Builder) finalTask(compile *Task) *Task {
 	b.addSystemInputs(task, unit.isHost, true)
 	b.tasks[key] = task
 	unit.final = task
+	b.units[task] = unit
 	linkedUnits := b.linkedUnits(unit)
 
 	for _, linked := range linkedUnits {
@@ -696,6 +697,7 @@ func (b *Builder) codegenTask(compile *Task) *Task {
 	}
 	b.tasks[key] = task
 	unit.cc = task
+	b.units[task] = unit
 	task.action = func(ctx *TaskContext) {
 		args := b.cxxCompileArgs(unit.isHost)
 		// CAS paths intentionally have no semantic filename. Tell the compiler

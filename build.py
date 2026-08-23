@@ -331,6 +331,9 @@ TESTS_LIB = ["$(S)/tst/lib.py", "$(S)/tst/wrap_gdb.py"]
 # The build engine resolves Nix's `timeout` symlink to the multicall binary,
 # so select its applet explicitly instead of relying on argv[0].
 TEST_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "60s"]
+# A real project contains a full Cargo graph and starts from archive inputs in a
+# fresh directory, so unlike a unit node it cannot reuse a materialised CAS.
+PROJECT_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "5m"]
 # A from-scratch standard-library build is intentionally much heavier than a
 # single test, but it must not leave the graph occupied indefinitely.
 LIBSTD_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "10m"]
@@ -496,7 +499,7 @@ if not system_rustc_mode:
         outputs=["$(B)/tst/resvg.stamp"],
         cmd=[
             [
-                *TEST_TIMEOUT,
+                *PROJECT_TIMEOUT,
                 "python3", "$(S)/tst/build_project.py",
                 "$(B)/tst/resvg-src.tar",
                 "$(B)/tst/resvg-vendor.tar.zst",
@@ -924,6 +927,27 @@ unit_tests.append(command(
         "$(S)/tst/unit/proc_macro_attribute/Cargo.toml",
         "$(B)/tst/libstd.tar",
         "$(B)/tst/unit/proc_macro_attribute.stamp",
+    ],
+    deps=[libstd, rustc, cargo],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
+    name="unit_transitive_proc_macro_artifact",
+    inputs=[
+        "$(S)/tst/unit/test_transitive_proc_macro_artifact.py",
+        *build.glob("$(S)/tst/unit/transitive_proc_macro_artifact/**/*.toml"),
+        *build.glob("$(S)/tst/unit/transitive_proc_macro_artifact/**/*.rs"),
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/transitive_proc_macro_artifact.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_transitive_proc_macro_artifact.py",
+        "$(S)/tst/unit/transitive_proc_macro_artifact/Cargo.toml",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/transitive_proc_macro_artifact.stamp",
     ],
     deps=[libstd, rustc, cargo],
     env=TOOLCHAIN_ENV,

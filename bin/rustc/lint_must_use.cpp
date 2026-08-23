@@ -138,12 +138,32 @@ default:
         {
         }
 
-        /// A lint attribute on the function overrides the crate's level for its
-        /// body. An exact name beats a group whichever order they were written
-        /// in, which is why the two are recorded apart.
+        void visitModule(HIRItemPath p, HIRModule& module) override {
+            const auto saved = level_;
+            level_ = ApplyLintLevelOverrides(settings_, module.lintLevels, LINT_NAME, level_);
+            HIRVisitor::visitModule(p, module);
+            level_ = saved;
+        }
+
+        void visitTypeImpl(HIRTypeImpl& impl) override {
+            const auto saved = level_;
+            level_ = LintLevelForModulePath(settings_, crate_, impl.srcModule, LINT_NAME, CfgLintLevel::Warn);
+            HIRVisitor::visitTypeImpl(impl);
+            level_ = saved;
+        }
+
+        void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
+            const auto saved = level_;
+            level_ = LintLevelForModulePath(settings_, crate_, impl.srcModule, LINT_NAME, CfgLintLevel::Warn);
+            HIRVisitor::visitTraitImpl(traitPath, impl);
+            level_ = saved;
+        }
+
+        /// A lint attribute on the function overrides the containing module's
+        /// level for its body.
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
             const auto saved = level_;
-            level_ = LintLevelForItem(settings_, item.markings.lintLevels, item.markings.lintGroupLevels, LINT_NAME, CfgLintLevel::Warn);
+            level_ = ApplyLintLevelOverrides(settings_, item.markings.lintLevels, LINT_NAME, level_);
             HIRVisitor::visitFunction(p, item);
             level_ = saved;
         }

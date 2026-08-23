@@ -2,6 +2,7 @@
 
 #include "rc_string.h"
 
+#include <std/lib/vector.h>
 #include <std/sym/i_map.h>
 
 #include <map>
@@ -25,6 +26,39 @@ enum class CfgLintLevel {
     ForceWarn,
     Deny,
     Forbid,
+};
+
+/// Lint levels written on one lexical scope. Lint attribute lists are tiny,
+/// and names are interned, so a flat vector is cheaper than a separately
+/// allocated tree for every function and module.
+struct LintLevelOverrides {
+    struct Entry {
+        RcString name;
+        CfgLintLevel level;
+        bool isGroup;
+    };
+
+    stl::Vector<Entry> entries;
+
+    void set(RcString name, bool isGroup, CfgLintLevel level) {
+        for (size_t i = 0; i < entries.length(); ++i) {
+            auto& entry = entries.mut(i);
+            if (entry.name == name && entry.isGroup == isGroup) {
+                entry.level = level;
+                return;
+            }
+        }
+        entries.pushBack(Entry{name, level, isGroup});
+    }
+
+    const Entry* find(RcString name, bool isGroup) const {
+        for (const auto& entry : entries) {
+            if (entry.name == name && entry.isGroup == isGroup) {
+                return &entry;
+            }
+        }
+        return nullptr;
+    }
 };
 
 // Opaque cfg!() evaluation state (values, flags, --check-cfg expectations).

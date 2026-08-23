@@ -1857,8 +1857,10 @@ default:
                             return;
                         }
                         if (e->data.is_Tuple()) {
-                            // `S { 0: a, ..base }` names the tuple fields by index.
-                            ASSERT_BUG(node.span(), node.baseValue, "Tuple struct literal has no values or base");
+                            // Tuple fields can be named by index. The no-base
+                            // form can reach here when the AST path was `Self`,
+                            // so lowering could not recognise the tuple struct.
+                            ASSERT_BUG(node.span(), node.baseValue || !node.values.empty(), "Tuple struct literal has no values or base");
                             HIRExprVisitorDef::visit(node);
                             return;
                         }
@@ -9667,15 +9669,25 @@ default:
             DEBUG(nIvars << " ivars (" << nSrcIvars << " src, " << nDstIvars << " dst)");
 
             // Distinct function items and closures have distinct source types,
-            // but can share a function-pointer coercion target. Select that
-            // target before the generic fallback can choose one source item.
-            if (possibleTys.size() >= 2
+            // but can share a function-pointer coercion target. A surrounding
+            // unsizing coercion can also contribute a trait-object destination;
+            // it constrains the pointer target but must not hide the source LUB.
+            const auto isFunctionSource = [](const PossibleType& possible) {
+                return possible.isSource()
+                    && (((*possible.ty).is_NodeType() && ((*possible.ty).as_NodeType().is_Closure()))
+                        || possible.ty->is_NamedFunction());
+            };
+            const auto functionSourceCount = std::count_if(possibleTys.begin(), possibleTys.end(), isFunctionSource);
+            if (functionSourceCount >= 2
                 && (fallbackTy == IvarPossFallbackType::FinalOption || nSrcIvars == 0)
-                && std::all_of(possibleTys.begin(), possibleTys.end(), [](const auto& e) {
-                return e.hasType() && (((*e.ty).is_NodeType() && ((*e.ty).as_NodeType().is_Closure())) || (e.ty)->is_NamedFunction());
-            })) {
+                && std::all_of(possibleTys.begin(), possibleTys.end(), [&](const auto& possible) {
+                    return !possible.isSource() || isFunctionSource(possible);
+                })) {
                 ::std::optional<HIRTypeDataFunctionPointer> target;
                 for (const auto& possible : possibleTys) {
+                    if (!possible.isSource()) {
+                        continue;
+                    }
                     HIRTypeDataFunctionPointer candidate;
                     if (const auto* function = possible.ty->opt_NamedFunction()) {
                         candidate = function->decay(context.crate.types, sp);
@@ -9695,9 +9707,11 @@ default:
                     }
                 }
                 auto newTy = context.crate.types.function(std::move(*target));
-                DEBUG("All options are closures/functions, adding a function pointer - " << newTy);
-                context.equateTypes(sp, tyL, newTy);
-                return true;
+                if (!checkIvarPossFailsBounds(sp, context, boundRefs, tyL, newTy)) {
+                    DEBUG("Function sources share a valid pointer target - " << newTy);
+                    context.equateTypes(sp, tyL, newTy);
+                    return true;
+                }
             }
 
             if (ivarEnt.hasBounded && ivarEnt.boundsIncludeSelf) {

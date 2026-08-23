@@ -178,9 +178,10 @@ namespace {
 const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const HIRPath& path, HIRTypeRef& outTy, MonomorphState& params) {
     TRACE_FUNCTION_F(path);
 
-    auto v = state.resolve.getValue(state.sp, path, params);
+    const HIRGenericParams* implParams = nullptr;
+    auto v = state.resolve.getValue(state.sp, path, params, false, &implParams);
     if (const auto* e = v.opt_Constant()) {
-        const auto& hirConst = **e;
+        auto& hirConst = const_cast<HIRConstant&>(**e);
         outTy = params.monomorphType(state.sp, hirConst.type);
         state.resolve.expandAssociatedTypes(state.sp, outTy);
         switch (hirConst.valueState) {
@@ -190,6 +191,10 @@ const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const H
                 // Do some form of lookup of a pre-cached evaluated monomorphised constant
                 // - Maybe on the `Constant` entry there can be a list of pre-monomorphised values
                 auto it = hirConst.monomorphCache.find(path);
+                if (it == hirConst.monomorphCache.end() && !monomorphisePathNeeded(path)) {
+                    ConvertHIRConstantEvaluateConstant(state.resolve, implParams, HIRItemPath(path), hirConst);
+                    it = hirConst.monomorphCache.find(path);
+                }
                 if (it == hirConst.monomorphCache.end()) {
                     // Emit a bug if the cache is empty? (or if this is in the post-monomorph pass)
                     if (gIsPostMonomorph && !monomorphisePathNeeded(path)) {

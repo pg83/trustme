@@ -2317,6 +2317,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, c
                 auto lc = lex.clone();
                 bool rv = true;
                 for (const auto& check : e->ents) {
+                    const bool atConditionStart = lc.position() == lex.position();
                     if (check.ty != MacroPatEnt::PAT_TOKEN) {
                         if (!consumeFromFrag(lc, check.ty)) {
                             rv = false;
@@ -2331,7 +2332,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, c
                             lc.consume();
                         }
                     }
-                    if (check.isLocalAmbiguity()) {
+                    if (atConditionStart && check.isLocalAmbiguity()) {
                         ERROR(sp, E0000, "local ambiguity when calling macro: multiple parsing options");
                     }
                 }
