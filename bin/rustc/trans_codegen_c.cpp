@@ -263,6 +263,7 @@ namespace {
         FILE* literalBlob = nullptr;
         size_t literalBlobSize = 0;
         const MIRTypeResolve* mirRes = nullptr;
+        stl::Vector<u8> noOpCleanupBlocks;
         bool currentFunctionTracksCaller = false;
 
         struct {
@@ -3037,20 +3038,21 @@ default:
                 of << "\tbool df" << i << " = " << code->dropFlags[i] << ";\n";
             }
 
+            findNoOpCleanupBlocks(*code);
             ::std::set<unsigned> cleanupBlocks;
             ::std::vector<unsigned> pendingCleanupBlocks;
             for (const auto& block : code->blocks) {
                 switch (block.terminator.tag()) {
                     case MIRTerminator::TAG_Drop: {
                         auto& e = block.terminator.as_Drop();
-                        if (const auto* target = e.unwind.opt_Cleanup()) {
+                        if (const auto* target = e.unwind.opt_Cleanup(); target && !cleanupBlockIsNoOp(*target)) {
                             pendingCleanupBlocks.push_back(*target);
                         }
                         break;
                     }
                     case MIRTerminator::TAG_Call: {
                         auto& e = block.terminator.as_Call();
-                        if (const auto* target = e.unwind.opt_Cleanup()) {
+                        if (const auto* target = e.unwind.opt_Cleanup(); target && !cleanupBlockIsNoOp(*target)) {
                             pendingCleanupBlocks.push_back(*target);
                         }
                         break;
@@ -3068,16 +3070,20 @@ default:
                 }
                 struct QueueTargets final: public MIRTargetVisitor {
                     ::std::vector<MIRBasicBlockId>& pending;
+                    const CodeGeneratorC& codegen;
 
-                    explicit QueueTargets(::std::vector<MIRBasicBlockId>& pending)
+                    QueueTargets(::std::vector<MIRBasicBlockId>& pending, const CodeGeneratorC& codegen)
                         : pending(pending)
+                        , codegen(codegen)
                     {
                     }
 
                     void visitTarget(const MIRBasicBlockId& target) override {
-                        pending.push_back(target);
+                        if (!codegen.cleanupBlockIsNoOp(target)) {
+                            pending.push_back(target);
+                        }
                     }
-                } queueTargets{pendingCleanupBlocks};
+                } queueTargets{pendingCleanupBlocks, *this};
                 visitTerminatorTarget(code->blocks[blockIndex].terminator, queueTargets);
             }
             if (!cleanupBlocks.empty()) {
@@ -3086,7 +3092,7 @@ default:
 
             for (unsigned i = 0; i < code->blocks.size(); i++) {
                 const auto& block = code->blocks[i];
-                if (cleanupBlocks.count(i) != 0) {
+                if (cleanupBlocks.count(i) != 0 || cleanupBlockIsNoOp(i)) {
                     continue;
                 }
                 of << "bb" << i << ": {\n";
@@ -3105,6 +3111,63 @@ default:
             of.flush();
             currentFunctionTracksCaller = false;
             mirRes = nullptr;
+        }
+
+        bool cleanupBlockIsNoOp(MIRBasicBlockId block) const {
+            return block < noOpCleanupBlocks.length() && noOpCleanupBlocks[block] != 0;
+        }
+
+        void findNoOpCleanupBlocks(const MIRFunction& code) {
+            noOpCleanupBlocks.clear();
+            noOpCleanupBlocks.zero(code.blocks.size());
+
+            bool changed;
+            do {
+                changed = false;
+                for (MIRBasicBlockId blockIndex = 0; blockIndex < code.blocks.size(); blockIndex++) {
+                    const auto& block = code.blocks[blockIndex];
+                    if (cleanupBlockIsNoOp(blockIndex) || !block.isCleanup || !block.statements.empty()) {
+                        continue;
+                    }
+
+                    bool noOp = false;
+                    switch (block.terminator.tag()) {
+                        case MIRTerminator::TAG_UnwindResume:
+                            noOp = true;
+                            break;
+                        case MIRTerminator::TAG_Goto:
+                            noOp = cleanupBlockIsNoOp(block.terminator.as_Goto());
+                            break;
+                        case MIRTerminator::TAG_If: {
+                            const auto& e = block.terminator.as_If();
+                            noOp = cleanupBlockIsNoOp(e.bbTrue) && cleanupBlockIsNoOp(e.bbFalse);
+                            break;
+                        }
+                        case MIRTerminator::TAG_Switch: {
+                            const auto& e = block.terminator.as_Switch();
+                            noOp = e.validFlag == ~0u || cleanupBlockIsNoOp(e.invalidTarget);
+                            for (const auto target : e.targets) {
+                                noOp = noOp && cleanupBlockIsNoOp(target);
+                            }
+                            break;
+                        }
+                        case MIRTerminator::TAG_SwitchValue: {
+                            const auto& e = block.terminator.as_SwitchValue();
+                            noOp = cleanupBlockIsNoOp(e.defTarget);
+                            for (const auto target : e.targets) {
+                                noOp = noOp && cleanupBlockIsNoOp(target);
+                            }
+                            break;
+                        }
+default:
+                            break;
+                    }
+                    if (noOp) {
+                        noOpCleanupBlocks.mut(blockIndex) = 1;
+                        changed = true;
+                    }
+                }
+            } while (changed);
         }
 
         /// A `#[no_mangle] extern "C" fn main` in a `#![no_main]` crate is the
@@ -3142,10 +3205,14 @@ default:
                 }
                 case MIRUnwindAction::TAG_Cleanup: {
                     auto& target = action.as_Cleanup();
+                    if (cleanupBlockIsNoOp(target)) {
+                        emitOperation.emit(indentLevel);
+                        break;
+                    }
                     of << indent << "try {\n";
                     emitOperation.emit(indentLevel + 1);
                     of << indent << "} catch (...) {\n";
-                    of << indent << "\ttry { trustme_run_cleanup(" << target << "); } catch (...) { abort(); }\n";
+                    of << indent << "\ttrustme_run_cleanup(" << target << ");\n";
                     of << indent << "\tthrow;\n";
                     of << indent << "}\n";
                     break;
@@ -3175,8 +3242,17 @@ default:
 
         void emitBlockTerminator(MIRTypeResolve& localMirRes, const MIRTerminator& term, unsigned blockIndex, bool cleanup, unsigned indentLevel) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
+            auto emitTargetBody = [&](unsigned target) {
+                if (cleanup && cleanupBlockIsNoOp(target)) {
+                    of << "return";
+                } else {
+                    of << "goto " << (cleanup ? "cleanup_bb" : "bb") << target;
+                }
+            };
             auto emitTarget = [&](unsigned target) {
-                of << indent << "goto " << (cleanup ? "cleanup_bb" : "bb") << target << ";\n";
+                of << indent;
+                emitTargetBody(target);
+                of << ";\n";
             };
             switch (term.tag()) {
                 case MIRTerminator::TAG_Incomplete: {
@@ -3223,17 +3299,23 @@ default:
                     auto& e = term.as_If();
                     of << indent << "if(";
                     emitLvalue(e.cond);
-                    of << ") goto " << (cleanup ? "cleanup_bb" : "bb") << e.bbTrue;
-                    of << "; else goto " << (cleanup ? "cleanup_bb" : "bb") << e.bbFalse << ";\n";
+                    of << ") ";
+                    emitTargetBody(e.bbTrue);
+                    of << "; else ";
+                    emitTargetBody(e.bbFalse);
+                    of << ";\n";
                     break;
                 }
                 case MIRTerminator::TAG_Switch: {
                     auto& e = term.as_Switch();
                     if (e.validFlag != ~0u) {
-                        of << indent << "if(!df" << e.validFlag << ") goto " << (cleanup ? "cleanup_bb" : "bb") << e.invalidTarget << ";\n";
+                        of << indent << "if(!df" << e.validFlag << ") ";
+                        emitTargetBody(e.invalidTarget);
+                        of << ";\n";
                     }
                     emitTermSwitch(localMirRes, e.val, e.targets.size(), indentLevel, [&](size_t idx) {
-                        of << "goto " << (cleanup ? "cleanup_bb" : "bb") << e.targets[idx] << ";";
+                        emitTargetBody(e.targets[idx]);
+                        of << ";";
                     });
                     break;
                 }
@@ -3241,7 +3323,8 @@ default:
                     auto& e = term.as_SwitchValue();
                     emitTermSwitchvalue(localMirRes, e.val, e.values, indentLevel, [&](size_t idx) {
                         const auto target = idx == SIZE_MAX ? e.defTarget : e.targets[idx];
-                        of << "goto " << (cleanup ? "cleanup_bb" : "bb") << target << ";";
+                        emitTargetBody(target);
+                        of << ";";
                     });
                     break;
                 }

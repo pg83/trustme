@@ -159,12 +159,52 @@ def check_link_args(rustc: str, src: str, work: str) -> None:
         raise RuntimeError(f"link args changed order: {actual!r} != {expected!r}")
 
 
+def generated_function(generated: str, crate: str, function: str) -> str:
+    marker = f'// ::"{crate}"::{function}\n'
+    start = generated.find(marker)
+    if start < 0:
+        raise RuntimeError(f"generated C++ has no function {function}")
+    end = generated.find('\n// ::', start + len(marker))
+    return generated[start:] if end < 0 else generated[start:end]
+
+
+def check_unwind_cleanup(rustc: str, src: str, work: str) -> None:
+    output = os.path.join(work, "unwind-cleanup")
+    result = invoke(
+        rustc,
+        src,
+        output,
+        ["--crate-name", "codegen_unwind_cleanup", "-Cemit-cpp-only"],
+    )
+    expect_ok(result, "unwind cleanup codegen")
+    generated = Path(output + ".cpp").read_text()
+
+    no_op = generated_function(
+        generated, "codegen_unwind_cleanup", "trustme_noop_cleanup_probe"
+    )
+    if "trustme_run_cleanup" in no_op or "try {" in no_op:
+        raise RuntimeError("no-op unwind cleanup emitted EH scaffolding")
+
+    real = generated_function(
+        generated, "codegen_unwind_cleanup", "trustme_real_cleanup_probe"
+    )
+    if "auto trustme_run_cleanup" not in real or "try {" not in real:
+        raise RuntimeError("real unwind cleanup lost its EH scaffolding")
+    if "\n\t\ttrustme_run_cleanup(" not in real:
+        raise RuntimeError("real unwind cleanup is not called from the handler")
+    if "try { trustme_run_cleanup" in real:
+        raise RuntimeError("cleanup runner is redundantly wrapped in try/catch")
+
+
 def main() -> int:
-    if len(sys.argv) != 6:
+    if len(sys.argv) != 7:
         raise SystemExit(
-            "usage: test_codegen_options.py RUSTC MIR_RS CFG_RS LINK_RS STAMP"
+            "usage: test_codegen_options.py "
+            "RUSTC MIR_RS CFG_RS LINK_RS UNWIND_RS STAMP"
         )
-    rustc, mir_src, cfg_src, link_src, stamp = map(os.path.abspath, sys.argv[1:])
+    rustc, mir_src, cfg_src, link_src, unwind_src, stamp = map(
+        os.path.abspath, sys.argv[1:]
+    )
 
     with tempfile.TemporaryDirectory(prefix="trustme-codegen-options-") as work:
         mir_cases = [
@@ -233,6 +273,7 @@ def main() -> int:
         )
         check_codegen_prelude(rustc, mir_src, work)
         check_link_args(rustc, link_src, work)
+        check_unwind_cleanup(rustc, unwind_src, work)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)
     Path(stamp).touch()
