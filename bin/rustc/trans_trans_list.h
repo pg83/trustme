@@ -87,8 +87,9 @@ struct TransListConst {
 };
 
 class TransList {
-    // Translation erases regions, so an exact HIR path is not the identity of
-    // an emitted symbol. Keep the ABI identity alongside the exact-path maps.
+    // Keep the emitted value identity alongside the exact-path maps. C layout
+    // names erase regions, but addressable functions and statics do not: their
+    // bodies can observe a type through TypeId.
     ::std::unordered_map<::std::string, HIRPath> functionSymbols;
     ::std::unordered_map<::std::string, HIRPath> staticSymbols;
 

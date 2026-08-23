@@ -420,6 +420,9 @@ void HIRTypeData::fmt(::std::ostream& os) const {
                 os << "+" << tr;
             }
             os << ")";
+            if (e.lifetimeIdentity != "") {
+                os << "/*regions:" << e.lifetimeIdentity << "*/";
+            }
             break;
         }
         case HIRTypeData::TAG_ErasedType: {
@@ -535,6 +538,9 @@ void HIRTypeData::fmt(::std::ostream& os) const {
                 os << "...";
             }
             os << ") -> " << e.rettype;
+            if (e.lifetimeIdentity != "") {
+                os << "/*regions:" << e.lifetimeIdentity << "*/";
+            }
             break;
         }
         case HIRTypeData::TAG_NodeType: {
@@ -890,7 +896,7 @@ namespace {
                         return false;
                     }
                 }
-                return true;
+                return ae.lifetimeIdentity == be.lifetimeIdentity && ae.lifetimeIdentityHasFree == be.lifetimeIdentityHasFree;
             }
             case HIRTypeData::TAG_ErasedType: {
                 auto& ae = a.as_ErasedType();
@@ -963,7 +969,7 @@ namespace {
             case HIRTypeData::TAG_Function: {
                 auto& ae = a.as_Function();
                 auto& be = b.as_Function();
-                return ae.isUnsafe == be.isUnsafe && ae.isVariadic == be.isVariadic && ae.abi == be.abi && ae.rettype == be.rettype && ae.argTypes == be.argTypes && ae.trackCaller == be.trackCaller;
+                return ae.isUnsafe == be.isUnsafe && ae.isVariadic == be.isVariadic && ae.abi == be.abi && ae.rettype == be.rettype && ae.argTypes == be.argTypes && ae.trackCaller == be.trackCaller && ae.lifetimeIdentity == be.lifetimeIdentity && ae.lifetimeIdentityHasFree == be.lifetimeIdentityHasFree;
             }
             case HIRTypeData::TAG_NodeType: {
                 auto& ae = a.as_NodeType();
@@ -1346,6 +1352,8 @@ namespace {
                 auto& e = type.as_TraitObject();
                 h = hashMix(h, hashGenericPath(e.trait.path));
                 h = hashMix(h, reinterpret_cast<uintptr_t>(e.trait.traitPtr));
+                h = hashMix(h, e.lifetimeIdentity.rawId());
+                h = hashMix(h, e.lifetimeIdentityHasFree);
                 for (const auto& marker : e.markers) {
                     h = hashMix(h, hashGenericPath(marker));
                 }
@@ -1452,6 +1460,8 @@ namespace {
             case HIRTypeData::TAG_Function: {
                 auto& e = type.as_Function();
                 h = hashMix(h, ::std::hash<RcString>()(e.abi));
+                h = hashMix(h, e.lifetimeIdentity.rawId());
+                h = hashMix(h, e.lifetimeIdentityHasFree);
                 h = hashMix(h, e.isUnsafe);
                 h = hashMix(h, e.isVariadic);
                 h = hashMix(h, e.trackCaller);
@@ -2089,8 +2099,8 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         }
         return vAlias->params.matchTestGenericsFuzz(sp, xAlias->params, resolvePlaceholder, *this);
     }
-    if ((vAlias && !vAlias->inner->type) || (xAlias && !xAlias->inner->type)) {
-        DEBUG("- Fuzzy match due to unresolved opaque alias - " << v << " = " << x);
+    if (vAlias || xAlias) {
+        DEBUG("- Fuzzy match due to opaque alias - " << v << " = " << x);
         return HIRCompare::Fuzzy;
     }
 
@@ -2505,6 +2515,8 @@ HIRTypeData HIRTypeData::cloneData() const {
             auto& e = (*this).as_TraitObject();
             HIRTypeData::Data_TraitObject rv;
             rv.trait = e.trait.clone();
+            rv.lifetimeIdentity = e.lifetimeIdentity;
+            rv.lifetimeIdentityHasFree = e.lifetimeIdentityHasFree;
             for (const auto& trait : e.markers) {
                 rv.markers.push_back(trait.clone());
             }
@@ -2579,6 +2591,8 @@ HIRTypeData HIRTypeData::cloneData() const {
         case HIRTypeData::TAG_Function: {
             auto& e = (*this).as_Function();
             HIRTypeDataFunctionPointer ft{e.isUnsafe, e.isVariadic, e.abi, e.rettype, {}, e.trackCaller};
+            ft.lifetimeIdentity = e.lifetimeIdentity;
+            ft.lifetimeIdentityHasFree = e.lifetimeIdentityHasFree;
             for (const auto& a : e.argTypes) {
                 ft.argTypes.push_back(a);
             }

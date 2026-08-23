@@ -50,7 +50,9 @@ associated const pattern closed one more; keeping simultaneously live locals
 in separate coroutine storage slots closed another; implementing captured
 generic assertions closed one more; tracking the initialized variant of data
 enums during drop elaboration closed another; preserving the source owner of
-block-local items in `type_name` closed two more, leaving 14.
+block-local items in `type_name` closed two more; preserving higher-ranked
+lifetime identity in `TypeId` and enumerating the resulting generated drop
+glue dependencies closed three more, leaving 11.
 
 | result | nodes |
 |---|---:|
@@ -59,8 +61,8 @@ block-local items in `type_name` closed two more, leaving 14.
 | failed in the full parallel run | 49 |
 | reproduced immediately after the full gate | 48 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 34 |
-| still failing independently | 14 |
+| fixed by subsequent point reruns | 37 |
+| still failing independently | 11 |
 
 Manual inspection normalised one mechanical classifier label:
 
@@ -72,9 +74,9 @@ The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| wrong runtime behaviour, panic, abort, or output | 6 |
+| wrong runtime behaviour, panic, abort, or output | 3 |
 | stable timeout | 8 |
-| **total independently reproduced** | **14** |
+| **total independently reproduced** | **11** |
 
 There are no carried failures from an older sweep. This full run supersedes
 the previous 631-node baseline and the later “12 current + 25 carried”
@@ -82,18 +84,12 @@ accounting.
 
 ## P1: runtime semantics
 
-Six programs compile but execute incorrectly:
+Three programs compile but execute incorrectly:
 
 | family | nodes | cases |
 |---|---:|---|
-| lifetime-erased `TypeId` / `Any` distinctions | 3 | `type-id-higher-rank`, `any-lifetime-escape-higher-rank`, doctest `core/src/any.rs:660` |
 | RustSmith stdout mismatch | 2 | seeds 19 and 102 |
 | adjacent stack allocation layout | 1 | Miri `adjacent-allocs.rs` |
-
-The three `TypeId`/`Any` cases depend on distinguishing higher-ranked and
-`'static` function/trait-object types. trustme currently erases lifetimes
-from HIR path parameters, so this family needs a representation change rather
-than three point fixes.
 
 ## P2: stable timeouts
 

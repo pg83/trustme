@@ -22,6 +22,7 @@
 #include "parse_ttstream.h"
 
 #include <std/mem/obj_pool.h>
+#include <std/str/builder.h>
 
 #include <algorithm>
 #include <limits.h>
@@ -1143,6 +1144,327 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
 }
 
 namespace {
+    class LifetimeIdentity {
+        enum class Phase : u8 {
+            Other,
+            Input,
+            Output,
+        };
+
+        struct SeenLifetime {
+            RcString name;
+            size_t canonical;
+        };
+
+        struct Binder {
+            Binder* parent;
+            const ASTHigherRankedBounds& bounds;
+            stl::Vector<SeenLifetime> seen;
+            stl::Vector<size_t> inputLifetimes;
+            size_t nextCanonical = 0;
+            Phase phase = Phase::Other;
+        };
+
+        stl::StringBuilder text;
+        Binder* binder = nullptr;
+        bool hasLifetime = false;
+        bool hasFreeLifetime = false;
+
+        void append(char value) {
+            text.append(&value, 1);
+        }
+
+        void appendNumber(size_t value) {
+            char buffer[24];
+            auto* begin = buffer + sizeof(buffer);
+            do {
+                *--begin = '0' + value % 10;
+                value /= 10;
+            } while (value);
+            text.append(begin, buffer + sizeof(buffer) - begin);
+            append('_');
+        }
+
+        void rememberInput(Binder& owner, size_t canonical) {
+            if (owner.phase != Phase::Input) {
+                return;
+            }
+            for (const auto known : owner.inputLifetimes) {
+                if (known == canonical) {
+                    return;
+                }
+            }
+            owner.inputLifetimes.pushBack(canonical);
+        }
+
+        size_t canonical(Binder& owner, const RcString& name) {
+            for (const auto& seen : owner.seen) {
+                if (seen.name == name) {
+                    return seen.canonical;
+                }
+            }
+            const auto result = owner.nextCanonical++;
+            owner.seen.pushBack({name, result});
+            return result;
+        }
+
+        void appendBound(Binder& owner, size_t canonical) {
+            size_t depth = 0;
+            for (auto* current = binder; current != &owner; current = current->parent) {
+                ASSERT_BUG(Span(), current, "Lifetime binder is not active");
+                depth++;
+            }
+            rememberInput(owner, canonical);
+            append('b');
+            appendNumber(depth);
+            appendNumber(canonical);
+        }
+
+        void appendImplicitLifetime() {
+            if (!binder) {
+                append('u');
+                return;
+            }
+            if (binder->phase == Phase::Output && binder->inputLifetimes.length() == 1) {
+                appendBound(*binder, binder->inputLifetimes[0]);
+                return;
+            }
+            appendBound(*binder, binder->nextCanonical++);
+        }
+
+        void lifetime(const ASTLifetimeRef& value) {
+            hasLifetime = true;
+            append('l');
+            switch (value.binding()) {
+                case ASTLifetimeRef::BINDING_STATIC:
+                    append('s');
+                    return;
+                case ASTLifetimeRef::BINDING_UNSPECIFIED:
+                case ASTLifetimeRef::BINDING_INFER:
+                    appendImplicitLifetime();
+                    return;
+                case ASTLifetimeRef::BINDING_UNBOUND:
+                    append('x');
+                    return;
+            }
+
+            if ((value.binding() >> 8) == 3) {
+                for (auto* owner = binder; owner; owner = owner->parent) {
+                    for (const auto& parameter : owner->bounds.lifetimes) {
+                        if (parameter.name().name == value.name().name) {
+                            appendBound(*owner, canonical(*owner, parameter.name().name));
+                            return;
+                        }
+                    }
+                }
+            }
+
+            hasFreeLifetime = true;
+            append('g');
+            appendNumber(value.binding());
+        }
+
+        void pathParams(const ASTPathParams& params) {
+            append('q');
+            appendNumber(params.entries.size());
+            for (const auto& entry : params.entries) {
+                switch (entry.tag()) {
+                    case ASTPathParamEnt::TAG_Null:
+                        append('n');
+                        break;
+                    case ASTPathParamEnt::TAG_Value:
+                        append('v');
+                        break;
+                    case ASTPathParamEnt::TAG_AssociatedValueEqual:
+                        append('w');
+                        break;
+                    case ASTPathParamEnt::TAG_Lifetime:
+                        append('l');
+                        lifetime(entry.as_Lifetime());
+                        break;
+                    case ASTPathParamEnt::TAG_Type:
+                        append('t');
+                        type(*entry.as_Type());
+                        break;
+                    case ASTPathParamEnt::TAG_AssociatedTyEqual:
+                        append('e');
+                        type(*entry.as_AssociatedTyEqual().second);
+                        break;
+                    case ASTPathParamEnt::TAG_AssociatedTyBound:
+                        append('b');
+                        for (const auto& trait : entry.as_AssociatedTyBound().second) {
+                            traitPath(trait);
+                        }
+                        break;
+                }
+            }
+        }
+
+        template <typename Nodes>
+        void pathNodes(const Nodes& nodes) {
+            appendNumber(nodes.size());
+            for (const auto& node : nodes) {
+                pathParams(node.args());
+            }
+        }
+
+        void path(const ASTPath& value) {
+            append('p');
+            switch (value.cls.tag()) {
+                case ASTPathClass::TAG_Invalid:
+                case ASTPathClass::TAG_Local:
+                    break;
+                case ASTPathClass::TAG_Relative:
+                    pathNodes(value.cls.as_Relative().nodes);
+                    break;
+                case ASTPathClass::TAG_Self:
+                    pathNodes(value.cls.as_Self().nodes);
+                    break;
+                case ASTPathClass::TAG_Super:
+                    pathNodes(value.cls.as_Super().nodes);
+                    break;
+                case ASTPathClass::TAG_Absolute:
+                    pathNodes(value.cls.as_Absolute().nodes);
+                    break;
+                case ASTPathClass::TAG_UFCS: {
+                    const auto& data = value.cls.as_UFCS();
+                    type(*data.type);
+                    if (data.trait) {
+                        path(*data.trait);
+                    }
+                    pathNodes(data.nodes);
+                    break;
+                }
+            }
+        }
+
+        void traitPath(const TypeTraitPath& value) {
+            Binder local{binder, value.hrbs};
+            binder = &local;
+            append('h');
+            path(*value.path);
+            binder = local.parent;
+        }
+
+        void type(const ASTType& value) {
+            switch (value.data.tag()) {
+                case TypeData::TAG_None:
+                    append('n');
+                    break;
+                case TypeData::TAG_Any:
+                    append('y');
+                    break;
+                case TypeData::TAG_Bang:
+                    append('z');
+                    break;
+                case TypeData::TAG_Unit:
+                    append('u');
+                    break;
+                case TypeData::TAG_Macro:
+                    append('m');
+                    break;
+                case TypeData::TAG_Primitive:
+                    append('c');
+                    break;
+                case TypeData::TAG_Generic:
+                    append('g');
+                    break;
+                case TypeData::TAG_Function: {
+                    append('f');
+                    const auto& function = value.data.as_Function().info;
+                    Binder local{binder, function.hrbs};
+                    binder = &local;
+                    appendNumber(function.argTypes.size());
+                    local.phase = Phase::Input;
+                    for (const auto* argument : function.argTypes) {
+                        type(*argument);
+                    }
+                    local.phase = Phase::Output;
+                    type(*function.rettype);
+                    binder = local.parent;
+                    break;
+                }
+                case TypeData::TAG_Tuple:
+                    append('t');
+                    for (const auto* element : value.data.as_Tuple().innerTypes) {
+                        type(*element);
+                    }
+                    break;
+                case TypeData::TAG_Borrow: {
+                    append('b');
+                    const auto& borrow = value.data.as_Borrow();
+                    lifetime(borrow.lifetime);
+                    type(*borrow.inner);
+                    break;
+                }
+                case TypeData::TAG_Pointer:
+                    append('p');
+                    type(*value.data.as_Pointer().inner);
+                    break;
+                case TypeData::TAG_Array:
+                    append('a');
+                    type(*value.data.as_Array().inner);
+                    break;
+                case TypeData::TAG_Slice:
+                    append('s');
+                    type(*value.data.as_Slice().inner);
+                    break;
+                case TypeData::TAG_Pattern:
+                    append('r');
+                    type(*value.data.as_Pattern().inner);
+                    break;
+                case TypeData::TAG_Path:
+                    append('q');
+                    path(*value.data.as_Path());
+                    break;
+                case TypeData::TAG_TraitObject: {
+                    append('d');
+                    const auto& object = value.data.as_TraitObject();
+                    for (const auto& trait : object.traits) {
+                        traitPath(trait);
+                    }
+                    for (const auto& bound : object.lifetimes) {
+                        if (bound.binding() != ASTLifetimeRef::BINDING_UNSPECIFIED) {
+                            lifetime(bound);
+                        }
+                    }
+                    break;
+                }
+                case TypeData::TAG_ErasedType: {
+                    append('i');
+                    const auto& erased = *value.data.as_ErasedType();
+                    for (const auto& trait : erased.traits) {
+                        traitPath(trait);
+                    }
+                    for (const auto& trait : erased.maybeTraits) {
+                        traitPath(trait);
+                    }
+                    for (const auto& bound : erased.lifetimes) {
+                        lifetime(bound);
+                    }
+                    if (erased.use) {
+                        pathParams(*erased.use);
+                    }
+                    break;
+                }
+            }
+        }
+
+    public:
+        RcString make(const ASTType& value) {
+            type(value);
+            if (!hasLifetime) {
+                return {};
+            }
+            const auto size = text.used();
+            return RcString::newInterned(text.cStr(), size);
+        }
+
+        bool hasFree() const {
+            return hasFreeLifetime;
+        }
+    };
+
     class TraitObjectLowering {
         AST2HIR& ctx_;
         const Span& span_;
@@ -1514,6 +1836,9 @@ default:
         case TypeData::TAG_TraitObject: {
             auto& e = ty->data.as_TraitObject();
             HIRTypeData::Data_TraitObject v;
+            LifetimeIdentity identity;
+            v.lifetimeIdentity = identity.make(*ty);
+            v.lifetimeIdentityHasFree = identity.hasFree();
             TraitObjectLowering lowering(*this, ty->span(), v);
             for (const auto& t : e.traits) {
                 DEBUG("t = " << *t.path);
@@ -1574,6 +1899,9 @@ default:
                 args.push_back(LowerHIRType(arg));
             }
             HIRTypeDataFunctionPointer f{e.info.isUnsafe, e.info.isVariadic, RcString::newInterned(e.info.abi), LowerHIRType(e.info.rettype), mv$(args)};
+            LifetimeIdentity identity;
+            f.lifetimeIdentity = identity.make(*ty);
+            f.lifetimeIdentityHasFree = identity.hasFree();
             if (f.abi == "") {
                 f.abi = RcString::newInterned(ABI_RUST);
             }

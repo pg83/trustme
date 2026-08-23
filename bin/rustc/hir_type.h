@@ -90,6 +90,11 @@ struct HIRTypeDataPath {
 struct HIRTypeDataTraitObject {
     HIRTraitPath trait;
     ::std::vector<HIRGenericPath> markers;
+    // Canonical shape of regions erased from the ordinary HIR paths.  Empty
+    // when the source type contains no region that can affect type identity.
+    RcString lifetimeIdentity;
+    // Free lifetime parameters do not select separate machine-code instances.
+    bool lifetimeIdentityHasFree = false;
 };
 
 struct HIRTypeDataErasedTypeAliasInner {
@@ -141,6 +146,11 @@ struct HIRTypeDataFunctionPointer {
     // pointers erase #[track_caller], but a tracked trait method keeps the
     // implicit caller-location argument across dynamic dispatch.
     bool trackCaller = false;
+    // Region identity is deliberately separate from the lowered signature:
+    // type checking compares signatures with regions erased, while TypeId
+    // and metadata must distinguish e.g. fn(&'static T) from for<'a> fn(&'a T).
+    RcString lifetimeIdentity;
+    bool lifetimeIdentityHasFree = false;
 };
 
 struct HIRTypePatternRange {

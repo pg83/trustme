@@ -14,3 +14,7 @@ extern RcString TransMangle(const HIRSimplePath& path);
 extern RcString TransMangle(const HIRGenericPath& path);
 extern RcString TransMangle(const HIRPath& path);
 extern RcString TransMangle(const HIRTypeData* ty);
+extern RcString TransMangleValue(const HIRSimplePath& path);
+extern RcString TransMangleValue(const HIRGenericPath& path);
+extern RcString TransMangleValue(const HIRPath& path);
+extern RcString TransMangleTypeId(const HIRTypeData* ty);

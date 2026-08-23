@@ -54,14 +54,26 @@ namespace {
     }
 }
 
+enum class LifetimeIdentityMode {
+    Erased,
+    Closed,
+    All,
+};
+
 class Mangler {
     stl::StringBuilder& os;
     stl::Vector<RcString>& names = mangleNames();
     const size_t nameWindowStart = names.length();
+    const LifetimeIdentityMode lifetimeIdentityMode;
+
+    bool includeLifetimeIdentity(bool hasFree) const {
+        return lifetimeIdentityMode == LifetimeIdentityMode::All || (lifetimeIdentityMode == LifetimeIdentityMode::Closed && !hasFree);
+    }
 
 public:
-    Mangler(stl::StringBuilder& os)
+    Mangler(stl::StringBuilder& os, LifetimeIdentityMode lifetimeIdentityMode = LifetimeIdentityMode::Erased)
         : os(os)
+        , lifetimeIdentityMode(lifetimeIdentityMode)
     {
     }
 
@@ -367,6 +379,10 @@ case HIRTypeData::TAG_Infer:
                 for (const auto& p : e.markers) {
                     this->fmtGenericPath(p);
                 }
+                if (includeLifetimeIdentity(e.lifetimeIdentityHasFree) && e.lifetimeIdentity != "") {
+                    os << "l";
+                    this->fmtName(e.lifetimeIdentity);
+                }
                 break;
             }
             case HIRTypeData::TAG_NamedFunction: {
@@ -391,6 +407,10 @@ case HIRTypeData::TAG_Infer:
                     this->fmtType(t);
                 }
                 this->fmtType(e.rettype);
+                if (includeLifetimeIdentity(e.lifetimeIdentityHasFree) && e.lifetimeIdentity != "") {
+                    os << "l";
+                    this->fmtName(e.lifetimeIdentity);
+                }
                 break;
             }
             case HIRTypeData::TAG_Borrow: {
@@ -562,16 +582,46 @@ RcString TransMangle(const HIRPath& p) {
     return mangleFinish(sb);
 }
 
-RcString TransMangle(const HIRTypeData* v) {
-    // Types are interned: one spelling per node, cached for the process
-    // lifetime (symbols for the same type are requested many times).
-    static stl::ObjPool::Ref cachePool = stl::ObjPool::fromMemory();
-    static stl::IntMap<RcString> cache{cachePool.mutPtr()};
-    if (const auto* hit = cache.find(reinterpret_cast<uintptr_t>(v))) {
-        return *hit;
-    }
+RcString TransMangleValue(const HIRGenericPath& p) {
     auto& sb = mangleBegin();
-    sb << "ZRT";
-    Mangler(sb).fmtType(v);
-    return *cache.insert(reinterpret_cast<uintptr_t>(v), mangleFinish(sb));
+    sb << "ZRG";
+    Mangler(sb, LifetimeIdentityMode::Closed).fmtGenericPath(p);
+    return mangleFinish(sb);
+}
+
+RcString TransMangleValue(const HIRSimplePath& p) {
+    return TransMangleValue(HIRGenericPath(p));
+}
+
+RcString TransMangleValue(const HIRPath& p) {
+    auto& sb = mangleBegin();
+    sb << "ZR";
+    Mangler(sb, LifetimeIdentityMode::Closed).fmtPath(p);
+    return mangleFinish(sb);
+}
+
+namespace {
+    RcString transMangleType(const HIRTypeData* v, bool includeLifetimeIdentity) {
+        // Types are interned: one spelling per node, cached for the process
+        // lifetime (symbols for the same type are requested many times).
+        static stl::ObjPool::Ref cachePool = stl::ObjPool::fromMemory();
+        static stl::IntMap<RcString> ordinaryCache{cachePool.mutPtr()};
+        static stl::IntMap<RcString> typeIdCache{cachePool.mutPtr()};
+        auto& cache = includeLifetimeIdentity ? typeIdCache : ordinaryCache;
+        if (const auto* hit = cache.find(reinterpret_cast<uintptr_t>(v))) {
+            return *hit;
+        }
+        auto& sb = mangleBegin();
+        sb << "ZRT";
+        Mangler(sb, includeLifetimeIdentity ? LifetimeIdentityMode::All : LifetimeIdentityMode::Erased).fmtType(v);
+        return *cache.insert(reinterpret_cast<uintptr_t>(v), mangleFinish(sb));
+    }
+}
+
+RcString TransMangle(const HIRTypeData* v) {
+    return transMangleType(v, false);
+}
+
+RcString TransMangleTypeId(const HIRTypeData* v) {
+    return transMangleType(v, true);
 }

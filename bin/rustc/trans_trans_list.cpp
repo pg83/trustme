@@ -4,7 +4,7 @@
 #include "hir_typeck_static.h" // StaticTraitResolve
 
 TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
-    auto symbol = FMT(TransMangle(p));
+    auto symbol = FMT(TransMangleValue(p));
     auto existing = functionSymbols.find(symbol);
     if (existing != functionSymbols.end()) {
         ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p), "Distinct function paths have the same mangled name: " << existing->second << " and " << p);
@@ -29,7 +29,7 @@ const TransListFunction* TransList::findFunction(const HIRPath& p) const {
         return exact->second.get();
     }
 
-    const auto symbol = FMT(TransMangle(p));
+    const auto symbol = FMT(TransMangleValue(p));
     auto canonical = functionSymbols.find(symbol);
     if (canonical == functionSymbols.end()) {
         return nullptr;
@@ -78,7 +78,7 @@ void TransList::clearTypes() {
 }
 
 TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
-    auto symbol = FMT(TransMangle(p));
+    auto symbol = FMT(TransMangleValue(p));
     auto existing = staticSymbols.find(symbol);
     if (existing != staticSymbols.end()) {
         ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p), "Distinct static paths have the same mangled name: " << existing->second << " and " << p);

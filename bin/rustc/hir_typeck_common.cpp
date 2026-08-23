@@ -526,6 +526,8 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         case HIRTypeData::TAG_TraitObject: {
             auto& e = (*tpl).as_TraitObject();
             HIRTypeData::Data_TraitObject to;
+            to.lifetimeIdentity = e.lifetimeIdentity;
+            to.lifetimeIdentityHasFree = e.lifetimeIdentityHasFree;
             {
                 to.trait = this->monomorphTraitpath(sp, e.trait, allowInfer);
                 for (const auto& trait : e.markers) {
@@ -627,6 +629,8 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
             ft.isVariadic = e.isVariadic;
             ft.trackCaller = e.trackCaller;
             ft.abi = e.abi;
+            ft.lifetimeIdentity = e.lifetimeIdentity;
+            ft.lifetimeIdentityHasFree = e.lifetimeIdentityHasFree;
             ft.rettype = this->monomorphType(sp, e.rettype, allowInfer);
             for (const auto& arg : e.argTypes) {
                 ft.argTypes.push_back(this->monomorphType(sp, arg, allowInfer));

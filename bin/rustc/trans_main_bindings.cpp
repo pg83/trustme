@@ -1322,11 +1322,18 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 if (auto* e = transList.addFunction(crate.types, HIRPath(ty, state.resolve.langDrop(), rcstringDrop))) {
                                     MonomorphState params(crate.types);
                                     auto p = HIRPath(ty, state.resolve.langDrop(), rcstringDrop);
-                                    auto fcnE = state.resolve.getValue(sp, p, /*out*/ params, /*signature_only=*/false);
+                                    const HIRGenericParams* implParamsDef = nullptr;
+                                    auto fcnE = state.resolve.getValue(sp, p, /*out*/ params, /*signature_only=*/false, &implParamsDef);
                                     ASSERT_BUG(sp, fcnE.is_Function(), "Drop didn't point to a function! " << fcnE.tagStr() << " " << p);
-                                    ASSERT_BUG(sp, !params.hasTypes(), "Generic drop impl encountered during auto_impls (should have been populated during enum)");
-                                    e->forcePrototype = true;
                                     e->ptr = fcnE.as_Function();
+                                    e->pp.selfType = params.getSelfType();
+                                    e->pp.gdefImpl = implParamsDef;
+                                    if (const auto* implParams = params.getImplParams()) {
+                                        e->pp.ppImpl = implParams->clone();
+                                    }
+                                    if (const auto* methodParams = params.getMethodParams()) {
+                                        e->pp.ppMethod = methodParams->clone();
+                                    }
                                 }
                         }
                         break;
@@ -1483,7 +1490,7 @@ default:
 
         void enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp) {
             if (auto* e = rv.addFunction(crate.types, mv$(p))) {
-                auto name = FMT(TransMangle(*e->path));
+                auto name = FMT(TransMangleValue(*e->path));
                 auto inserted = emittedFunctions.insert(name).second;
                 ASSERT_BUG(Span(), inserted, "Duplicated mangled name - " << *e->path);
                 fcnsToTypeVisit.push_back(e);
@@ -1607,9 +1614,46 @@ void TransEnumerateGlobalAllocator(EnumState& state) {
     }
 }
 
+namespace {
+    void enumerateDestructorType(EnumState& state, HIRTypeRef type) {
+        if (!state.resolve.typeNeedsDropGlue(Span(), type)) {
+            return;
+        }
+        switch (type->tag()) {
+            case HIRTypeData::TAG_Path:
+                state.rv.dropGlue.insert(type);
+                break;
+            case HIRTypeData::TAG_Borrow: {
+                const auto& borrow = type->as_Borrow();
+                if (borrow.type == HIRBorrowType::Owned) {
+                    enumerateDestructorType(state, borrow.inner);
+                }
+                break;
+            }
+            case HIRTypeData::TAG_Array:
+                enumerateDestructorType(state, type->as_Array().inner);
+                break;
+            case HIRTypeData::TAG_Slice:
+                enumerateDestructorType(state, type->as_Slice().inner);
+                break;
+            case HIRTypeData::TAG_Tuple:
+                for (const auto* field : type->as_Tuple()) {
+                    enumerateDestructorType(state, field);
+                }
+                break;
+            case HIRTypeData::TAG_Pattern:
+                enumerateDestructorType(state, type->as_Pattern().inner);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
 struct MIREnumCache {
-    ::std::vector<const HIRPath*> paths;
-    ::std::vector<const HIRTypeData*> typeids;
+    stl::Vector<const HIRPath*> paths;
+    stl::Vector<const HIRTypeData*> typeids;
+    stl::Vector<const HIRTypeData*> destructorTypes;
 
     MIREnumCache() {
     }
@@ -1620,7 +1664,7 @@ struct MIREnumCache {
                 return;
             }
         }
-        this->paths.push_back(&newPath);
+        this->paths.pushBack(&newPath);
     }
 
     void insertTypeid(const HIRTypeData* newTy) {
@@ -1629,7 +1673,16 @@ struct MIREnumCache {
                 return;
             }
         }
-        this->typeids.push_back(newTy);
+        this->typeids.pushBack(newTy);
+    }
+
+    void insertDestructorType(const HIRTypeData* newTy) {
+        for (const auto* p : this->destructorTypes) {
+            if (p == newTy) {
+                return;
+            }
+        }
+        this->destructorTypes.pushBack(newTy);
     }
 
     void apply(EnumState& state, const TransParams& pp) const {
@@ -1637,6 +1690,9 @@ struct MIREnumCache {
         for (const auto* tyP : this->typeids) {
             DEBUG("TypeID " << tyP);
             state.rv.typeids.insert(pp.monomorph(state.resolve, tyP));
+        }
+        for (const auto* tyP : this->destructorTypes) {
+            enumerateDestructorType(state, pp.monomorph(state.resolve, tyP));
         }
         for (const auto& path : this->paths) {
             DEBUG("Path " << *path);
@@ -2169,13 +2225,13 @@ namespace {
     void removeMissing(std::map<HIRPath, T>& target, const std::map<HIRPath, T>& tpl) {
         ::std::unordered_map<::std::string, const HIRPath*> requiredSymbols;
         for (const auto& entry : tpl) {
-            auto symbol = FMT(TransMangle(entry.first));
+            auto symbol = FMT(TransMangleValue(entry.first));
             auto inserted = requiredSymbols.emplace(mv$(symbol), &entry.first);
             ASSERT_BUG(Span(), inserted.second || inserted.first->second->equalsIgnoringRegions(entry.first), "Distinct paths have the same mangled name: " << *inserted.first->second << " and " << entry.first);
         }
 
         for (auto itIn = target.begin(); itIn != target.end();) {
-            const auto symbol = FMT(TransMangle(itIn->first));
+            const auto symbol = FMT(TransMangleValue(itIn->first));
             const auto required = requiredSymbols.find(symbol);
             if (required == requiredSymbols.end()) {
                 DEBUG("Remove " << itIn->first);
@@ -2186,6 +2242,16 @@ namespace {
                 ++itIn;
             }
         }
+    }
+
+    HIRTypeRef implicitDropType(const HIRPath& path, const HIRSimplePath& dropTrait) {
+        if (const auto* inherent = path.data.opt_UfcsInherent()) {
+            return inherent->item == "#drop_glue" ? inherent->type : nullptr;
+        }
+        if (const auto* known = path.data.opt_UfcsKnown()) {
+            return known->item == "drop" && known->trait.path == dropTrait ? known->type : nullptr;
+        }
+        return nullptr;
     }
 }
 
@@ -2230,9 +2296,44 @@ default:
     }
     auto newList = TransEnumerateCommonPost(state);
 
+    // Region-bearing drop variants are retained below when their ABI type is
+    // reachable.  Their optimised bodies can name region-bearing value paths
+    // which the canonical ABI variant does not, so enumerate those bodies too.
+    stl::Vector<const TransListFunction*> enumeratedImplicitDrops;
+    for (;;) {
+        stl::Vector<const TransListFunction*> generatedFunctions;
+        for (const auto& entry : list.functions) {
+            const auto* type = implicitDropType(entry.first, state.resolve.langDrop());
+            if (!type || !newList.hasType(type, true) || newList.findFunction(entry.first)
+                || entry.second->forcePrototype) {
+                continue;
+            }
+            if (!entry.second->monomorphised.code && !entry.second->ptr->code.mir) {
+                continue;
+            }
+
+            bool alreadyEnumerated = false;
+            for (const auto* function : enumeratedImplicitDrops) {
+                alreadyEnumerated |= function == entry.second.get();
+            }
+            if (alreadyEnumerated) {
+                continue;
+            }
+            enumeratedImplicitDrops.pushBack(entry.second.get());
+            generatedFunctions.pushBack(entry.second.get());
+        }
+        if (generatedFunctions.empty()) {
+            break;
+        }
+        TransEnumerateGeneratedMIR(wb, newList, generatedFunctions);
+    }
+
     // Add stub entries to `new_list` for vtables and destructors, items that would be created by stages after enumerate
     // - VTables
     static RcString rcstringDropGlue = RcString::newInterned("#drop_glue");
+    for (const auto* type : newList.dropGlue) {
+        newList.functions.insert(std::make_pair(HIRPath(type, rcstringDropGlue), nullptr));
+    }
     for (const auto& vtp : newList.vtables) {
         static Span sp;
         const auto& traitPath = vtp.first.data.as_UfcsKnown().trait;
@@ -2326,6 +2427,16 @@ default:
         HIRPath fnPath(ty, crate.getLangItemPath(Span(), "fn_ptr_trait"), rcstringItem);
         DEBUG("++ " << fnPath);
         newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
+    }
+
+    // Drop terminators enumerate their ABI type, not a function path. Keep
+    // every exact region-bearing glue/method variant already generated for a
+    // reachable ABI type; its body may observe that exact type through TypeId.
+    for (const auto& entry : list.functions) {
+        const auto* type = implicitDropType(entry.first, state.resolve.langDrop());
+        if (type && newList.hasType(type, true)) {
+            newList.functions.insert(std::make_pair(entry.first.clone(), nullptr));
+        }
     }
 
     list.clearTypes();
@@ -2454,20 +2565,47 @@ bool TransEnumerateGeneratedLiteral(const WireBoard& wb, TransList& list, const 
     return mergeEnumeratedItems(state.crate.types, list, TransEnumerateCommonPost(state));
 }
 
-bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const ::std::vector<const MIRFunction*>& functions) {
+bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const stl::Vector<const TransListFunction*>& functions) {
     EnumState state{wb};
     for (const auto* function : functions) {
+        const MIRFunction* mir;
+        HIRTypeRef returnType;
+        const HIRFunction::argsT* args;
+        if (function->monomorphised.code) {
+            mir = &*function->monomorphised.code;
+            returnType = function->monomorphised.retTy;
+            args = &function->monomorphised.argTys;
+        } else {
+            ASSERT_BUG(Span(), function->ptr->code.mir, "Generated function has no MIR: " << *function->path);
+            mir = &*function->ptr->code.mir;
+            returnType = function->ptr->returnType;
+            args = &function->ptr->args;
+        }
+
         MIREnumCache cache;
-        TransEnumerateFillFromMIR(cache, *function);
+        TransEnumerateFillFromMIR(cache, *mir);
         for (const auto* ty : cache.typeids) {
             if (list.typeids.count(ty) == 0) {
                 state.rv.typeids.insert(ty);
             }
         }
+        for (const auto* type : cache.destructorTypes) {
+            enumerateDestructorType(state, type);
+        }
         for (const auto* path : cache.paths) {
             ASSERT_BUG(Span(), !monomorphisePathNeeded(*path), "Generated MIR contains a generic translation path: " << *path);
             if (!transListContainsPath(list, *path)) {
                 TransEnumerateFillFromPathMono(state, path->clone());
+            }
+        }
+
+        Span sp;
+        auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << *function->path; });
+        MIRTypeResolve mirResolve{sp, state.resolve, pathCallback, returnType, *args, *mir};
+        for (const auto& block : mir->blocks) {
+            if (const auto* drop = block.terminator.opt_Drop()) {
+                HIRTypeRef tmp;
+                enumerateDestructorType(state, mirResolve.getLvalueType(tmp, drop->slot));
             }
         }
     }
@@ -3878,6 +4016,11 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
                         if (e2.name == "type_id") {
                             // Add <T>::#type_id to the enumerate list
                             state.insertTypeid(e2.params.types.at(0));
+                        } else if (e2.name == "drop_in_place") {
+                            // C lowering turns this intrinsic into static
+                            // #drop_glue calls, so expose those dependencies
+                            // to translation enumeration before codegen.
+                            state.insertDestructorType(e2.params.types.at(0));
                         }
                         break;
                     }
@@ -3900,6 +4043,7 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
                     case MIRCallTarget::TAG_Intrinsic: {
                         auto& e2 = e.fcn.as_Intrinsic();
                         if (e2.name == "type_id") state.insertTypeid(e2.params.types.at(0));
+                        else if (e2.name == "drop_in_place") state.insertDestructorType(e2.params.types.at(0));
                         break;
                     }
                 } for (const auto& arg : e.args) TransEnumerateFillFromMIRParam(state, arg);

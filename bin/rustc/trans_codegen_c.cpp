@@ -341,18 +341,18 @@ namespace {
                         // A no_core binary has no standard entrypoint protocol.
                         // Call its ordinary main directly instead of inventing a
                         // `start` language item.
-                        of << "\t" << TransMangle(HIRGenericPath(mainPath)) << "();\n";
+                        of << "\t" << TransMangleValue(HIRGenericPath(mainPath)) << "();\n";
                         of << "\treturn 0;\n";
                     } else {
                         auto startGpath = HIRGenericPath(resolve_.hirCrate().getLangItemPath(Span(), "start"));
                         startGpath.params.types.push_back(mainFcn.returnType);
-                        of << "\treturn " << TransMangle(startGpath) << "(" << TransMangle(HIRGenericPath(mainPath)) << ", argc, (u8**)argv";
+                        of << "\treturn " << TransMangleValue(startGpath) << "(" << TransMangleValue(HIRGenericPath(mainPath)) << ", argc, (u8**)argv";
                         of << ", 0"; // `sigpipe` setting
                         // 0: Default, 1: Inherit, 2: SIG_IGN, 3: SIG_DFL
                         of << ");\n";
                     }
                 } else {
-                    of << "\treturn " << TransMangle(HIRGenericPath(cStartPath)) << "(argc, (u8**)argv);\n";
+                    of << "\treturn " << TransMangleValue(HIRGenericPath(cStartPath)) << "(argc, (u8**)argv);\n";
                 }
                 of << "}\n";
                 of << "extern \"C\" {\n";
@@ -465,7 +465,7 @@ namespace {
                             if (method.ret != AllocatorDataTy::Unit) {
                                 of << "return reinterpret_cast<i8*>(";
                             }
-                            of << TransMangle(methodPath) << "(&" << TransMangle(staticPath) << ".val";
+                            of << TransMangleValue(methodPath) << "(&" << TransMangleValue(staticPath) << ".val";
                             flatArg = 0;
                             layoutArg = 0;
                             for (size_t j = 0; j < method.nArgs; j++) {
@@ -509,8 +509,8 @@ namespace {
                         if (oomMethod != HIRSimplePath()) {
                             of << "struct s_" << TransMangle(layoutPath) << "_A { uintptr_t a, b; };\n";
                             of << "void oom_impl(struct s_" << TransMangle(layoutPath) << "_A l) {"
-                               << " extern void " << TransMangle(oomMethod) << "(struct s_" << TransMangle(layoutPath) << "_A l);"
-                               << " " << TransMangle(oomMethod) << "(l);"
+                               << " extern void " << TransMangleValue(oomMethod) << "(struct s_" << TransMangle(layoutPath) << "_A l);"
+                               << " " << TransMangleValue(oomMethod) << "(l);"
                                << " }\n";
                         }
 
@@ -535,8 +535,8 @@ namespace {
                     const auto& panicImplPath = crate.getLangItemPathOpt("trustme-panic_implementation");
                     if (panicImplPath != HIRSimplePath()) {
                         of << "u32 panic_impl(uintptr_t payload) {";
-                        of << "extern u32 " << TransMangle(panicImplPath) << "(uintptr_t payload);";
-                        of << "return " << TransMangle(panicImplPath) << "(payload);";
+                        of << "extern u32 " << TransMangleValue(panicImplPath) << "(uintptr_t payload);";
+                        of << "return " << TransMangleValue(panicImplPath) << "(payload);";
                         of << "}\n";
                     } else if (!crate.isNoCore) {
                         crate.getLangItemPath(Span(), "trustme-panic_implementation");
@@ -965,7 +965,7 @@ namespace {
             }
 
             auto p = HIRPath(boxType, crate.getLangItemPath(Span(), "drop"), "drop");
-            of << indent << TransMangle(p) << "(&";
+            of << indent << TransMangleValue(p) << "(&";
             emitLvalue(slot);
             of << ");\n";
 
@@ -994,7 +994,10 @@ namespace {
                 BUG(span, "asm sym operand does not name a function or static: " << path);
             }
 
-            std::string symbol = linkage->name.empty() ? FMT(TransMangle(path)) : linkage->name;
+            std::string symbol = linkage->name;
+            if (symbol.empty()) {
+                symbol = FMT(TransMangleValue(path));
+            }
             if (!symbol.empty() && symbol[0] == '\1') {
                 symbol.erase(symbol.begin());
             }
@@ -1068,7 +1071,7 @@ namespace {
         }
 
         void emitTypeId(const HIRTypeData* ty) override {
-            of << "tTYPEID __typeid_" << TransMangle(ty) << " __attribute__((weak));\n";
+            of << "tTYPEID __typeid_" << TransMangleTypeId(ty) << " __attribute__((weak));\n";
         }
 
         static const char* compilerAbiAttribute(const RcString& abi) {
@@ -1732,7 +1735,7 @@ default:
             };
             mirRes = &topMirRes;
 
-            of << "static struct e_" << TransMangle(p) << " " << TransMangle(path) << "(";
+            of << "static struct e_" << TransMangle(p) << " " << TransMangleValue(path) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
                     of << ", ";
@@ -1767,7 +1770,7 @@ default:
 
             // Crate constructor function
             const auto& e = item.data.as_Tuple();
-            of << "static struct s_" << TransMangle(p) << " " << TransMangle(p) << "(";
+            of << "static struct s_" << TransMangle(p) << " " << TransMangleValue(p) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
                     of << ", ";
@@ -1805,7 +1808,7 @@ default:
             const bool sized = TargetGetSizeAndAlignOf(sp, resolve_, type, size, align);
             align = std::max(align, explicitAlignment);
             bool rv = (align * 8 >= TargetGetPointerBits());
-            of << "union u_static_" << TransMangle(p);
+            of << "union u_static_" << TransMangleValue(p);
             // An `extern type` has no size here, and a value of one cannot be
             // read: only its address is ever taken. The symbol still needs a
             // declaration that stands on its own, so give it one byte.
@@ -1815,7 +1818,7 @@ default:
                     emitCtype(type, FMT_CB(ss, ss << "val";));
                     of << "; u8 raw[1]; }";
                 }
-                of << " " << TransMangle(p);
+                of << " " << TransMangleValue(p);
                 return false;
             }
             if (isProto) {
@@ -1831,7 +1834,7 @@ default:
                 }
                 of << " }";
             }
-            of << " " << TransMangle(p);
+            of << " " << TransMangleValue(p);
             return rv;
         }
 
@@ -2057,7 +2060,7 @@ default:
                             if (relocIt->p) {
                                 if (relocIt->p->data.is_UfcsInherent() && relocIt->p->data.as_UfcsInherent().item == "#type_id") {
                                     const auto& ty = relocIt->p->data.as_UfcsInherent().type;
-                                    of << "&__typeid_" << TransMangle(ty);
+                                    of << "&__typeid_" << TransMangleTypeId(ty);
                                 } else {
                                     of << "&";
                                     emitReifiedFunctionName(*relocIt->p, relocIt->preserveTrackCaller);
@@ -2829,7 +2832,7 @@ default:
             // It gets a shim after its body instead.
             if (item.linkage.name != "" && item.linkage.name != "main") {
                 // If this function is implementing an external ABI, just rename it.
-                of << "#define " << TransMangle(p) << " " << item.linkage.name << "\n";
+                of << "#define " << TransMangleValue(p) << " " << item.linkage.name << "\n";
             }
             if (isExternDef) {
                 of << "static ";
@@ -3043,7 +3046,7 @@ default:
             if (returnsValue) {
                 of << "return (int)";
             }
-            of << TransMangle(p) << "(";
+            of << TransMangleValue(p) << "(";
             if (item.args.size() == 2) {
                 of << "(";
                 emitCtype(params.monomorph(resolve_, item.args[0].second));
@@ -5047,7 +5050,7 @@ default:
                             of << " = ";
                     }
                     }
-                    of << TransMangle(e2);
+                    of << TransMangleValue(e2);
                     break;
                 }
                 case MIRCallTarget::TAG_Intrinsic: {
@@ -6064,7 +6067,7 @@ default:
         }
 
         void emitReifiedFunctionName(const HIRPath& path, bool preserveTrackCaller = false) {
-            of << TransMangle(promotedName(path));
+            of << TransMangleValue(promotedName(path));
             if (!preserveTrackCaller && pathTracksCaller(path)) {
                 of << "__trustme_reify";
             }
@@ -6122,7 +6125,7 @@ default:
             }
             auto cb = FMT_CB(
                 ss,
-                ss << " " << compilerAbiAttribute(item.abi) << TransMangle(p) << nameSuffix << "(";
+                ss << " " << compilerAbiAttribute(item.abi) << TransMangleValue(p) << nameSuffix << "(";
                 unsigned int passedCount = 0;
                 for (unsigned int i = 0; i < item.fixedArgCount(); i++) {
                     if (argumentIsPassed(item.abi, params.monomorph(resolve_, item.args[i].second))) {
@@ -6179,7 +6182,7 @@ default:
             if (returnType != crate.types.unit()) {
                 of << "return ";
             }
-            of << TransMangle(p) << "(";
+            of << TransMangleValue(p) << "(";
             bool first = true;
             auto emitArgument = [&](const char* prefix, unsigned index, const char* suffix) {
                 if (!first) {
@@ -6558,7 +6561,7 @@ default:
                 if (options.emulatedI128) {
                     of << "make128(";
                 }
-                of << "(uintptr_t)&__typeid_" << TransMangle(ty);
+                of << "(uintptr_t)&__typeid_" << TransMangleTypeId(ty);
                 if (options.emulatedI128) {
                     of << ")";
                 }
@@ -8997,9 +9000,9 @@ default:
                                 // an elided local (which can be behind Field/Index/etc.).
                                 of << indent << "{ ";
                                 emitCtype(ty);
-                                of << " trustme_zst{}; " << TransMangle(p) << "(&trustme_zst); }\n";
+                                of << " trustme_zst{}; " << TransMangleValue(p) << "(&trustme_zst); }\n";
                             } else if (this->typeIsBadZst(ty) && MIRLValue::CRef(slot).is_Index()) {
-                                of << indent << TransMangle(p) << "((";
+                                of << indent << TransMangleValue(p) << "((";
                                 emitCtype(ty);
                                 of << "*)";
                                 emitBorrow(*mirRes, HIRBorrowType::Unique, slot);
@@ -9015,13 +9018,13 @@ default:
                                 while (this->typeIsBadZst(mirRes->getLvalueType(tmp, v)) && (v.is_Field() || v.is_Downcast())) {
                                     v = v.innerRef();
                                 }
-                                of << indent << TransMangle(p) << "((";
+                                of << indent << TransMangleValue(p) << "((";
                                 emitCtype(ty);
                                 of << "*)&";
                                 emitLvalue(v);
                                 of << ");\n";
                             } else if (this->typeIsBadZst(ty) && slot.wrappers.empty()) {
-                                of << indent << TransMangle(p) << "((";
+                                of << indent << TransMangleValue(p) << "((";
                                 emitCtype(ty);
                                 of << "*)&rv);\n";
                             } else if (this->fieldIsUnderaligned(slot, ty)) {
@@ -9034,16 +9037,16 @@ default:
                                 emitCtype(ty, FMT_CB(ss, ss << "trustme_unaligned"));
                                 of << "; memcpy(&trustme_unaligned, &";
                                 emitLvalue(slot);
-                                of << ", sizeof(trustme_unaligned)); " << TransMangle(p) << "(&trustme_unaligned); }\n";
+                                of << ", sizeof(trustme_unaligned)); " << TransMangleValue(p) << "(&trustme_unaligned); }\n";
                             } else {
-                                of << indent << TransMangle(p) << "(&";
+                                of << indent << TransMangleValue(p) << "(&";
                                 emitLvalue(slot);
                                 of << ");\n";
                             }
                             break;
                         case MetadataType::Slice:
                         case MetadataType::TraitObject:
-                            of << indent << TransMangle(p) << "( ";
+                            of << indent << TransMangleValue(p) << "( ";
                             emitDstLvaluePointer(MIRLValue::CRef(slot));
                             of << " );\n";
                             break;
@@ -9188,7 +9191,7 @@ default:
                 }
                 case MIRLValue::RefCommon::TAG_Static: {
                     decltype(val.as_Static()) e = val.as_Static();
-                    of << TransMangle(e);
+                    of << TransMangleValue(e);
                     of << ".val";
                     break;
                 }
@@ -9343,7 +9346,7 @@ default:
                         of << "(uintptr_t)";
                         if (relocation->p) {
                             if (relocation->p->data.is_UfcsInherent() && relocation->p->data.as_UfcsInherent().item == "#type_id") {
-                                of << "&__typeid_" << TransMangle(relocation->p->data.as_UfcsInherent().type);
+                                of << "&__typeid_" << TransMangleTypeId(relocation->p->data.as_UfcsInherent().type);
                             } else {
                                 of << "&";
                                 emitReifiedFunctionName(*relocation->p, relocation->preserveTrackCaller);
@@ -9504,7 +9507,7 @@ default:
                         of << "((void*)((u8*)";
                     }
                     if (c->data.is_UfcsInherent() && c->data.as_UfcsInherent().item == "#type_id") {
-                        of << "(void*)&__typeid_" << TransMangle(c->data.as_UfcsInherent().type);
+                        of << "(void*)&__typeid_" << TransMangleTypeId(c->data.as_UfcsInherent().type);
                     } else {
                         MonomorphState msTmp(crate.types);
                         auto v = resolve_.getValue(sp, *c, msTmp, /*signature_only=*/true);
@@ -9889,7 +9892,7 @@ default:
         void emitExternTypeLayoutPanic(const HIRTypeData* ty) {
             const auto message = FMT("attempted to compute the size or alignment of extern type `" << ty << "`");
             const auto& panicPath = crate.getLangItemPath(sp, "panic_nounwind");
-            const auto panicName = TransMangle(panicPath);
+            const auto panicName = TransMangleValue(panicPath);
             of << "{ extern tBANG " << panicName << "(SLICE_PTR); ";
             of << panicName << "(SLICE_PTR{(void*)\"" << FmtEscaped(message) << "\", " << message.size() << "}); abort(); }";
         }

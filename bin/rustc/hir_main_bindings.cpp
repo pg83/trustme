@@ -1095,7 +1095,7 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
         _(Primitive, static_cast<HIRCoreType>(in.readTag()))
         _(Path, {deserialisePath(), {}})
         _(Generic, deserialiseGenericref())
-        _(TraitObject, {deserialiseTraitpath(), deserialiseVec<HIRGenericPath>()})
+        _(TraitObject, {deserialiseTraitpath(), deserialiseVec<HIRGenericPath>(), in.readIstring(), in.readBool()})
         case HIRTypeData::TAG_ErasedType:
             TODO(Span(), "ErasedType");
             _(Array, {deserialiseType(), deserialiseArraysize()})
@@ -1104,7 +1104,7 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
             _(Borrow, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(Pointer, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(NamedFunction, {deserialisePath()})
-            _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVec<HIRTypeRef>(), in.readBool()})
+            _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVec<HIRTypeRef>(), in.readBool(), in.readIstring(), in.readBool()})
             case HIRTypeData::TAG_Pattern: {
                 auto inner = deserialiseType();
                 HIRTypePattern pattern;
@@ -2819,6 +2819,8 @@ public:
                     auto& e = (*ty).as_TraitObject();
                     serialiseTraitpath(e.trait);
                     serialiseVec(e.markers);
+                    out.writeString(e.lifetimeIdentity);
+                    out.writeBool(e.lifetimeIdentityHasFree);
                     break;
                 }
                 case HIRTypeData::TAG_ErasedType: {
@@ -2871,6 +2873,8 @@ public:
                     serialiseType(e.rettype);
                     serialiseVec(e.argTypes);
                     out.writeBool(e.trackCaller);
+                    out.writeString(e.lifetimeIdentity);
+                    out.writeBool(e.lifetimeIdentityHasFree);
                     break;
                 }
                 case HIRTypeData::TAG_Pattern: {

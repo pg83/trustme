@@ -745,13 +745,9 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
     // translation paths such as `<T as Trait>::vtable#`.  Those paths do not
     // exist in the pre-monomorphisation MIR, so collect and prepare them until
     // the translation graph reaches a fixed point.
-    ::std::set<const TransListFunction*> initialFunctions;
-    for (const auto& ent : list.functions) {
-        initialFunctions.insert(ent.second.get());
-    }
     ::std::set<const TransListFunction*> processedFunctions;
     while (processedFunctions.size() < list.functions.size()) {
-        ::std::vector<const MIRFunction*> generatedMir;
+        stl::Vector<const TransListFunction*> generatedFunctions;
         for (auto& fcnEnt : list.functions) {
             auto* transFcn = fcnEnt.second.get();
             if (!processedFunctions.insert(transFcn).second) {
@@ -797,20 +793,20 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
                 transFcn->monomorphised.retTy = ::std::move(retType);
                 transFcn->monomorphised.argTys = ::std::move(args);
                 transFcn->monomorphised.code = ::std::move(mir);
-                generatedMir.push_back(&*transFcn->monomorphised.code);
+                generatedFunctions.pushBack(transFcn);
                 resolve.clearBothGenerics();
             } else {
                 DEBUG("Non-generic: FUNCTION " << fcnEnt.first);
-                // Concrete MIR was already collected by the initial
-                // enumeration.  Only automatic functions created by a late
-                // TransAutoImpls pass need their raw MIR collected here.
-                if (initialFunctions.count(transFcn) == 0 && fcn.code.mir) {
-                    generatedMir.push_back(&*fcn.code.mir);
+                // TransAutoImpls may have generated concrete MIR before this
+                // fixed point started.  Enumerate it again: the initial walk
+                // only saw the function path, not the generated body.
+                if (fcn.code.mir) {
+                    generatedFunctions.pushBack(transFcn);
                 }
             }
         }
 
-        if (TransEnumerateGeneratedMIR(wb, list, generatedMir)) {
+        if (TransEnumerateGeneratedMIR(wb, list, generatedFunctions)) {
             TransAutoImpls(wb, crate, list);
         }
     }

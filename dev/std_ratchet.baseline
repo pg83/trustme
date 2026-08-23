@@ -351,12 +351,12 @@
 4	std::set	bin/rustc/trans_main_bindings.cpp
 3	std::string	bin/rustc/trans_main_bindings.cpp
 2	std::unordered	bin/rustc/trans_main_bindings.cpp
-25	std::vector	bin/rustc/trans_main_bindings.cpp
+22	std::vector	bin/rustc/trans_main_bindings.cpp
 9	std::string	bin/rustc/trans_main_bindings.h
-6	std::vector	bin/rustc/trans_main_bindings.h
+5	std::vector	bin/rustc/trans_main_bindings.h
 1	std::string	bin/rustc/trans_mangling.cpp
-4	std::set	bin/rustc/trans_monomorphise.cpp
-4	std::vector	bin/rustc/trans_monomorphise.cpp
+3	std::set	bin/rustc/trans_monomorphise.cpp
+3	std::vector	bin/rustc/trans_monomorphise.cpp
 3	std::map	bin/rustc/trans_target.cpp
 8	std::string	bin/rustc/trans_target.cpp
 3	std::unordered	bin/rustc/trans_target.cpp
