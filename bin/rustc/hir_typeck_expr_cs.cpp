@@ -3094,6 +3094,28 @@ namespace {
             return false;
         }
 
+        bool equateEvaluated(const HIRConstGenericUnevaluated& value, const EncodedLiteral& evaluated) const {
+            const HIRExprNode* node = &**value.expr;
+            for (;;) {
+                if (const auto* block = cast<const HIRExprNodeBlock>(node)) {
+                    if (!block->nodes.empty() || !block->valueNode) {
+                        return false;
+                    }
+                    node = &*block->valueNode;
+                    continue;
+                }
+                if (const auto* block = cast<const HIRExprNodeConstBlock>(node)) {
+                    node = &*block->inner;
+                    continue;
+                }
+                break;
+            }
+
+            const auto* path = cast<const HIRExprNodePathValue>(node);
+            const auto* pathValue = path ? evaluatedPath(value, *path) : nullptr;
+            return pathValue && EncodedLiteralSlice(*pathValue) == EncodedLiteralSlice(evaluated);
+        }
+
         bool equatePath(const HIRConstGenericUnevaluated& leftValue, const HIRPath& left, const HIRConstGenericUnevaluated& rightValue, const HIRPath& right) const {
             MonomorphStatePtr leftMonomorph(context.crate.types, leftValue.selfType, &leftValue.paramsImpl, &leftValue.paramsItem);
             MonomorphStatePtr rightMonomorph(context.crate.types, rightValue.selfType, &rightValue.paramsImpl, &rightValue.paramsItem);
@@ -3330,6 +3352,8 @@ void Context::equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRC
                 } else if (exprEquate.equateIdentity(normalizedL, normalizedR)) {
                 } else if (exprEquate.equateIdentity(normalizedR, normalizedL)) {
                 } else if (normalizedL.is_Unevaluated() && normalizedR.is_Unevaluated() && exprEquate.equate(*normalizedL.as_Unevaluated(), *normalizedR.as_Unevaluated())) {
+                } else if (normalizedL.is_Unevaluated() && normalizedR.is_Evaluated() && exprEquate.equateEvaluated(*normalizedL.as_Unevaluated(), *normalizedR.as_Evaluated())) {
+                } else if (normalizedR.is_Unevaluated() && normalizedL.is_Evaluated() && exprEquate.equateEvaluated(*normalizedR.as_Unevaluated(), *normalizedL.as_Evaluated())) {
                 } else {
                     // TODO: What about unevaluated values due to type inference?
                     ERROR(sp, E0000, "Value mismatch between " << normalizedL << " and " << normalizedR);
