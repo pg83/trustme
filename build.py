@@ -920,6 +920,29 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_local_inner_macros_metadata",
+    inputs=[
+        "$(S)/tst/unit/test_local_inner_macros_metadata.py",
+        "$(S)/tst/unit/local_inner_macros_producer.rs",
+        "$(S)/tst/unit/local_inner_macros_consumer.rs",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/local_inner_macros_metadata.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_local_inner_macros_metadata.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/local_inner_macros_producer.rs",
+        "$(S)/tst/unit/local_inner_macros_consumer.rs",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/local_inner_macros_metadata.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_const_borrow_offset_metadata",
     inputs=[
         "$(S)/tst/unit/test_const_borrow_offset_metadata.py",

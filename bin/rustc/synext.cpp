@@ -206,6 +206,33 @@ class CMacroUseHandler: public ExpandDecorator {
 };
 
 namespace {
+    template<typename Contents>
+    void localiseInnerMacroPaths(const WireBoard& wb, Contents& contents) {
+        for (size_t i = 0; i < contents.size(); i++) {
+            if (auto* loop = contents[i].opt_Loop()) {
+                localiseInnerMacroPaths(wb, loop->entries);
+                continue;
+            }
+            auto* token = contents[i].opt_Token();
+            if (!token || token->type() != TOK_IDENT || i + 1 == contents.size()) {
+                continue;
+            }
+            const auto* next = contents[i + 1].opt_Token();
+            const auto* previous = i == 0 ? nullptr : contents[i - 1].opt_Token();
+            if (!next || next->type() != TOK_EXCLAM || (previous && previous->type() == TOK_DOUBLE_COLON)) {
+                continue;
+            }
+
+            auto position = token->getPos();
+            auto ident = token->ident();
+            Ident::ModPath mp;
+            mp.crate = "";
+            ident.hygiene.setModPath(*wb.pool, mp);
+            *token = Token(TOK_IDENT, ident);
+            token->setPos(position);
+        }
+    }
+
     bool macroExportUsesLocalInnerMacros(const ASTAttribute& attr) {
         bool localInnerMacros = false;
         if (attr.data().size() > 0) {
@@ -233,10 +260,9 @@ namespace {
         DEBUG(mod.path() << ": macro_use Import " << mod.macroImports.back().name << " = " << mod.macroImports.back().path);
 
         if (localInnerMacros) {
-            Ident::ModPath mp;
-            mp.crate = "";
-            // Empty node list, so macro lookups start at the crate root.
-            e.data->hygiene.setModPath(*wb.pool, mv$(mp));
+            for (auto& rule : e.data->rules) {
+                localiseInnerMacroPaths(wb, rule.contents);
+            }
         }
 
         e.data->exported = true;

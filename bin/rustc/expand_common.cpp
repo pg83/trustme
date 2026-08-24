@@ -434,7 +434,8 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
 MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTPath& path) {
     ASSERT_BUG(miSpan, path.size() > 0, "Path should have nodes: " << path);
 
-    if (path.isTrivial()) {
+    const bool hasDefinitionModule = path.cls.is_Relative() && path.cls.as_Relative().hygiene.hasModPath();
+    if (path.isTrivial() && !hasDefinitionModule) {
         const auto& name = path.asTrivial();
 
         // Iterate up the module tree, using the first located macro
