@@ -1,4 +1,6 @@
 #include "parse_lex.h"
+
+#include <std/str/view.h>
 #include "wire_board.h"
 
 #include "common.h"
@@ -1725,16 +1727,18 @@ bool Codepoint::isxdigit() const {
     return os;
 }
 
-Token LexFindOperator(const ::std::string& s) {
-    if (s == "_") {
+Token LexFindOperator(stl::StringView s) {
+    const stl::StringView underscore(reinterpret_cast<const u8*>("_"), 1);
+    if (s == underscore) {
         return TOK_UNDERSCORE;
     }
     for (size_t i = 0; i < LEN(TOKENMAP); i++) {
         const auto& e = TOKENMAP[i];
-        if (s < e.chars) {
+        const stl::StringView chars(reinterpret_cast<const u8*>(e.chars), e.len);
+        if (s < chars) {
             break;
         }
-        if (s == e.chars) {
+        if (s == chars) {
             if (e.type < 0) {
                 break;
             }
@@ -1742,6 +1746,10 @@ Token LexFindOperator(const ::std::string& s) {
         }
     }
     return TOK_NULL;
+}
+
+Token LexFindOperator(const ::std::string& s) {
+    return LexFindOperator(stl::StringView(reinterpret_cast<const u8*>(s.data()), s.size()));
 }
 
 Token LexFindReservedWord(const ::std::string& s, ASTEdition edition) {

@@ -22,6 +22,7 @@ fn main() {
     assert_eq!(instrument_was_invoked(), 42);
     assert_eq!(unicode_char_from_token_stream(), '\u{2764}');
     assert_eq!(raw_integer_from_token_stream(), 4);
+    assert_eq!(joint_punctuation_from_token_stream(), 4);
     assert_eq!(ATTRIBUTE_CONST + ATTRIBUTE_STATIC, 42);
     suffixed_literal_roundtrip();
 }

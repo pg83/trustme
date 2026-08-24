@@ -39,6 +39,10 @@ fn main() {
         assert_eq!(TokenStream::from_str(integer).unwrap().to_string(), *integer);
     }
     assert_eq!(TokenStream::from_str("1..2").unwrap().to_string(), "1 .. 2");
+    assert_eq!(TokenStream::from_str("Vec<Attribute>,").unwrap().to_string(), "Vec < Attribute >,");
+    assert_eq!(TokenStream::from_str("Vec<Attribute> ,").unwrap().to_string(), "Vec < Attribute > ,");
+    assert_eq!(TokenStream::from_str(">=,").unwrap().to_string(), ">=,");
+    assert_eq!(TokenStream::from_str(">/* comment */,").unwrap().to_string(), "> ,");
 
     let function = TokenStream::from_str("async fn process() {}").unwrap();
     assert_eq!(function.to_string(), "async fn process ( ) { }");

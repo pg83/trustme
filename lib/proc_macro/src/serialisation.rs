@@ -130,7 +130,7 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                     let v = match it.next()
                         {
                         Some(TokenTree::Ident(Ident { val: v, .. })) => v,
-                        _ => panic!("Punct('\\'') not floowed by an ident"),
+                        _ => panic!("Punct('\\'') not followed by an ident"),
                         };
                     s.write_ent(Token::Lifetime(v));
                 }
@@ -138,22 +138,20 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                     s.write_sym_1(p.ch);
                 }
                 else {
-                    use std::io::Write;
                     // Consume punct until Spacing::Alone (error for any other)
-                    let mut buf = [0u8; 4];
-                    let mut c = ::std::io::Cursor::new(&mut buf[..]);
-                    write!(&mut c, "{}", p.ch).expect("Overly-long punctuation sequence");
+                    let mut chars = String::new();
+                    chars.push(p.ch);
                     while match it.next()
                         {
                         Some(TokenTree::Punct(p)) => {
-                            write!(&mut c, "{}", p.ch).expect("Overly-long punctuation sequence");
+                            chars.push(p.ch);
                             p.spacing == Spacing::Joint
                             },
-                        _ => panic!("Punct(Joint) not floowed by another Punct"),
+                        _ => panic!("Punct(Joint) not followed by another Punct"),
                         }
                     {
                     }
-                    s.write_sym(&c.get_ref()[..c.position() as usize]);
+                    s.write_sym(chars.as_bytes());
                 }
                 },
             TokenTree::Literal(Literal { val: v, .. }) => s.write_ent(match v

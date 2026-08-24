@@ -2,6 +2,7 @@
 
 namespace stl {
     class ObjPool;
+    class StringView;
 }
 
 #include "parse_tokenstream.h"
@@ -40,6 +41,7 @@ struct Codepoint {
 extern ::std::string& operator+=(::std::string& s, const Codepoint& cp);
 extern ::std::ostream& operator<<(::std::ostream& s, const Codepoint& cp);
 
+extern Token LexFindOperator(stl::StringView s);
 extern Token LexFindOperator(const ::std::string& s);
 extern Token LexFindReservedWord(const ::std::string& s, ASTEdition edition);
 

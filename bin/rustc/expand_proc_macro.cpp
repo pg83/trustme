@@ -14,6 +14,9 @@
 #include "main_bindings.h"
 #include "parse_ttstream.h"
 
+#include <std/lib/vector.h>
+#include <std/str/view.h>
+
 #include <spawn.h>
 #include <unistd.h> // read/write/pipe
 #include <sys/wait.h>
@@ -228,6 +231,8 @@ struct ProcMacroInv: public TokenStream {
     } handles;
 
     bool eofHit = false;
+    stl::Vector<u8> pendingSymbols;
+    size_t pendingSymbolOffset = 0;
 
 public:
     ProcMacroInv(const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
@@ -424,6 +429,7 @@ public:
 
 private:
     Token realGetToken_();
+    Token takePendingSymbol();
     void sendU8(u8 v);
     void sendBytes(const void* val, size_t size);
     void sendBytesRaw(const void* val, size_t size);
@@ -2293,6 +2299,9 @@ Token ProcMacroInv::realGetToken() {
 }
 
 Token ProcMacroInv::realGetToken_() {
+    if (pendingSymbolOffset != pendingSymbols.length()) {
+        return this->takePendingSymbol();
+    }
     if (eofHit) {
         return Token(TOK_EOF);
     }
@@ -2312,9 +2321,10 @@ Token ProcMacroInv::realGetToken_() {
                 eofHit = true;
                 return Token(TOK_EOF);
             }
-            auto t = LexFindOperator(val);
-            ASSERT_BUG(this->parentSpan, t != TOK_NULL, "Unknown symbol from child process - '" << val << "'");
-            return t;
+            pendingSymbols.clear();
+            pendingSymbols.append(reinterpret_cast<const u8*>(val.data()), val.size());
+            pendingSymbolOffset = 0;
+            return this->takePendingSymbol();
         }
         case TokenClass::Ident: {
             auto val = this->recvBytes();
@@ -2448,6 +2458,20 @@ Token ProcMacroInv::realGetToken_() {
     BUG(this->parentSpan, "Invalid token class from child process - " << int(v));
 
     throw "";
+}
+
+Token ProcMacroInv::takePendingSymbol() {
+    const stl::StringView remaining(
+        pendingSymbols.begin() + pendingSymbolOffset,
+        pendingSymbols.length() - pendingSymbolOffset);
+    for (size_t len = remaining.length(); len != 0; --len) {
+        auto token = LexFindOperator(remaining.prefix(len));
+        if (token != TOK_NULL) {
+            pendingSymbolOffset += len;
+            return token;
+        }
+    }
+    BUG(this->parentSpan, "Unknown symbol byte from child process - " << remaining[0]);
 }
 
 Ident::Hygiene ProcMacroInv::realGetHygiene() const {

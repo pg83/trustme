@@ -134,6 +134,18 @@ impl ::std::str::FromStr for TokenStream {
             s
         }
 
+        fn starts_punctuation<T: Iterator<Item=char>>(it: &CharStream<T>, c: char) -> bool
+        {
+            if c == '/' && (it.next() == Some('/') || it.next() == Some('*')) {
+                return false;
+            }
+            match c {
+            '~' | '!' | '@' | '#' | '$' | '%' | '^' | '&' | '*' | '-' | '=' | '+' |
+            '|' | ';' | ':' | ',' | '<' | '.' | '>' | '/' | '?' | '\'' => true,
+            _ => false,
+            }
+        }
+
         fn get_unicode_escape<T: Iterator<Item=char>>(it: &mut CharStream<T>) -> Result<char, &'static str>
         {
             if it.consume() != Some('{') {
@@ -636,10 +648,17 @@ impl ::std::str::FromStr for TokenStream {
                         ofs += 1;
                     }
                     assert_eq!(SYMS[start].len(), ofs);
-                    for (i,&c) in Iterator::enumerate(SYMS[start].iter())
+                    for (i,&punct) in Iterator::enumerate(SYMS[start].iter())
                     {
-                        let sep = if i == SYMS[start].len() - 1 { Spacing::Alone } else { Spacing::Joint };
-                        rv.push(Punct::new(c as char, sep).into());
+                        let sep = if i != SYMS[start].len() - 1 ||
+                            (!it.is_complete() && starts_punctuation(&it, c))
+                        {
+                            Spacing::Joint
+                        }
+                        else {
+                            Spacing::Alone
+                        };
+                        rv.push(Punct::new(punct as char, sep).into());
                     }
                 }
                 else
