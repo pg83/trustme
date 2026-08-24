@@ -561,6 +561,14 @@ base64 = add_project_test(
     rev="069bf7067b949f5c0a92b6ceb82492920502f2c2",
 )
 
+bitflags = add_project_test(
+    name="bitflags",
+    url="https://github.com/bitflags/bitflags.git",
+    rev="f92a2921b41644b02ca5d50a6ace542e309e6a6f",
+    lockfile="$(S)/tst/projects/bitflags/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
+)
+
 itertools = add_project_test(
     name="itertools",
     url="https://github.com/rust-itertools/itertools.git",
