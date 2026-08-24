@@ -5514,16 +5514,20 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
             DEBUG("Super " << path);
             assert(e.count >= 1);
             ASTPath np("", {});
-            if (e.count > basePath.nodes().size()) {
-                ERROR(span, E0000, "Too many `super` components");
+            size_t startLen = basePath.nodes().size();
+            while (startLen > 0 && basePath.nodes()[startLen - 1].name().c_str()[0] == '#') {
+                startLen--;
             }
-            // TODO: Do this in a cleaner manner.
-            unsigned int nAnon = 0;
-            // Skip any anon modules in the way (i.e. if the current module is an anon, go to the parent)
-            while (basePath.nodes().size() > nAnon && basePath.nodes()[basePath.nodes().size() - 1 - nAnon].name().c_str()[0] == '#') {
-                nAnon++;
+            for (unsigned int count = 0; count < e.count; count++) {
+                if (startLen == 0) {
+                    ERROR(span, E0000, "Too many `super` components");
+                }
+                startLen--;
+                while (startLen > 0 && basePath.nodes()[startLen - 1].name().c_str()[0] == '#') {
+                    startLen--;
+                }
             }
-            for (unsigned int i = 0; i < basePath.nodes().size() - e.count - nAnon; i++) {
+            for (size_t i = 0; i < startLen; i++) {
                 np.nodes().push_back(basePath.nodes()[i]);
             }
             np += path;
