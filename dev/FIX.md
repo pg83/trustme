@@ -158,6 +158,26 @@ minimal unit and the original Rust 1.90 `issues/issue-49955.rs` case both pass;
 generated MIR retains the runtime index and takes its reference from the
 promoted static.
 
+## 2026-08-24 final verification gate
+
+The complete fast gate was rerun at commit `cc219d0ed` with 20 parallel jobs
+against freshly rebuilt matching `rustc` and `libstd` roots. All 15,083 graph
+nodes completed and no target was broken.
+
+| result | nodes |
+|---|---:|
+| complete fast-gate graph | 15,083 |
+| green in the full parallel run | 15,083 |
+| failed in the full parallel run | 0 |
+| still failing independently | 0 |
+
+The full log is `.build-clang/full-gate-20260824-final.log`.
+`dev/gate_reclassify.py` found no failed command to rerun; classification of
+the empty population produced zero records in
+`.build-clang/classification-20260824-final/records.jsonl` and an empty
+`.build-clang/classification-20260824-final/clusters.json`. This clean gate
+supersedes both earlier baselines.
+
 ## P1: independently reproduced failures
 
 None.
