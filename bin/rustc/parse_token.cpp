@@ -490,6 +490,23 @@ struct EscapedByteString {
     }
 };
 
+void printEscapedLiteral(::std::ostream& os, eTokenType type, const u8* value, size_t size) {
+    const auto bytes = stl::StringView(value, size);
+    switch (type) {
+        case TOK_STRING:
+            os << "\"" << EscapedString(bytes) << "\"";
+            return;
+        case TOK_BYTESTRING:
+            os << "b\"" << EscapedByteString(bytes) << "\"";
+            return;
+        case TOK_CSTRING:
+            os << "c\"" << EscapedString(bytes) << "\"";
+            return;
+        default:
+            throw CompileErrorBugCheck("printEscapedLiteral called for a non-string token");
+    }
+}
+
 namespace {
     /// The fewest hashes that let a raw literal hold `text`: one more than the
     /// longest run of `#` that follows a quote in it, and none without a quote.

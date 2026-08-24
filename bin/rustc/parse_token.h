@@ -197,6 +197,9 @@ public:
 
 extern ::std::ostream& operator<<(::std::ostream& os, const Token& tok);
 
+/// Print the decoded payload of a string-like token as a re-parseable literal.
+extern void printEscapedLiteral(::std::ostream& os, eTokenType type, const u8* value, size_t size);
+
 /// Whether re-printing `prev` then `cur` as source needs a space to keep the
 /// two tokens apart.  `stringify!` and the meta-fragment printer share the
 /// rule so a fragment prints the way the tokens around it do.

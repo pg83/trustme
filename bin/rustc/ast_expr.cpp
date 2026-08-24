@@ -756,9 +756,9 @@ NODE(
     { return NEWNODE(ASTExprNodeFloat, value, datatype); }
 )
 NODE(ASTExprNodeBool, { os << value; }, { return NEWNODE(ASTExprNodeBool, value); })
-NODE(ASTExprNodeString, { os << "\"" << value << "\""; }, { return NEWNODE(ASTExprNodeString, value, hygiene); })
-NODE(ASTExprNodeByteString, { os << "b\"" << value << "\""; }, { return NEWNODE(ASTExprNodeByteString, value); })
-NODE(ASTExprNodeCString, { os << "c\"" << value << "\""; }, { return NEWNODE(ASTExprNodeCString, value); })
+NODE(ASTExprNodeString, { printEscapedLiteral(os, TOK_STRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, { return NEWNODE(ASTExprNodeString, value, hygiene); })
+NODE(ASTExprNodeByteString, { printEscapedLiteral(os, TOK_BYTESTRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, { return NEWNODE(ASTExprNodeByteString, value); })
+NODE(ASTExprNodeCString, { printEscapedLiteral(os, TOK_CSTRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, { return NEWNODE(ASTExprNodeCString, value); })
 NODE(ASTExprNodeSuffixedLiteral, { os << text; }, { return NEWNODE(ASTExprNodeSuffixedLiteral, text); })
 
 NODE(

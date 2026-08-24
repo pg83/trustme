@@ -32,6 +32,7 @@ fn main() {
         "{ foo += 1; eprintln!(\"before\"); 7331 }",
     );
     assert_eq!(stringify_expr!(("Yeah",)), "(\"Yeah\",)");
+    assert_eq!(stringify_expr!("\r"), "\"\\r\"");
     assert_eq!(stringify_expr!(1u8), "1u8");
 
     let _ = (Point { x: value, y: value }, f(&value), foo);
