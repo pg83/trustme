@@ -577,6 +577,12 @@ itertools = add_project_test(
     lockfile="$(S)/tst/projects/itertools/Cargo.lock",
 )
 
+clap = add_project_test(
+    name="clap",
+    url="https://github.com/clap-rs/clap.git",
+    rev="3bd502024e45cc9abef690f28783d76a9ce33500",
+)
+
 alloca = add_project_test(
     name="alloca",
     url="https://github.com/playXE/alloca-rs.git",
