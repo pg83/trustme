@@ -47,8 +47,8 @@ seed 36 completed in isolation and remains the only load-sensitive result.
 | failed in the full parallel run | 114 |
 | reproduced immediately after the full gate | 113 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 102 |
-| still failing independently | 11 |
+| fixed by subsequent point reruns | 104 |
+| still failing independently | 9 |
 
 The 96 trait-object `Debug` link failures were closed by canonicalising concrete
 trait-impl value paths before translation enumeration and C symbol emission.
@@ -87,14 +87,18 @@ flag. The original Rust 1.90 run-pass case now succeeds while the existing live
 drop rejection tests remain negative; the rerun is recorded in
 `.build-clang/reclass-20260824-const-precise-live-drop-fixed/results.jsonl`.
 
+The two region-only trait-object cast failures were closed by lowering types
+that differ only in erased regions as the same-value copy already used for
+identical cast types. Both the Rust 1.90 and Miri originals pass; the reruns are
+recorded in `.build-clang/reclass-20260824-region-cast-fixed/results.jsonl`.
+
 The resulting current population is:
 
 | current result | nodes |
 |---|---:|
 | wrong runtime behaviour, panic, abort, or output | 4 |
-| compiler abort or wrong compiler diagnostic | 2 |
 | stable timeout | 5 |
-| **total independently reproduced** | **11** |
+| **total independently reproduced** | **9** |
 
 This full run supersedes the 2026-08-22 15,139-node baseline and all subsequent
 point accounting.
@@ -109,15 +113,7 @@ Four programs compile but execute incorrectly:
 | 1 | linear inlined stack allocation | `codegen/StackColoring-not-blowup-stack-issue-40883.rs` |
 | 1 | stack overflow in threaded `OnceLock` list | `std/src/sync/once_lock.rs:53` |
 
-## P2: compiler aborts and diagnostics
-
-Two cases fail before producing a usable artifact:
-
-| nodes | signature | cases |
-|---:|---|---|
-| 2 | `mir_from_hir.cpp:2405`, region-only trait-object cast mismatch | Miri `dyn-upcast.rs`, `multiple-supertraits-modulo-binder.rs` |
-
-## P3: stable timeouts
+## P2: stable timeouts
 
 | nodes | limit | classification | cases |
 |---:|---:|---|---|

@@ -2385,9 +2385,9 @@ default:
             const auto& tyOut = node.resType;
             const auto& tyIn = node.value->resType;
 
-            // A cast produces a new value even when the type does not change:
-            // `&(a as i32)` borrows a copy, not `a` itself.
-            if (tyOut == tyIn) {
+            // A cast produces a new value even when the runtime type does not
+            // change: `&(a as i32)` borrows a copy, not `a` itself.
+            if (tyOut == tyIn || tyOut->equalsIgnoringRegions(tyIn)) {
                 auto sameVal = builder.getResultInLvalue(node.value->span(), node.value->resType);
                 auto sameRes = builder.newTemporary(node.resType);
                 builder.pushStmtAssign(node.span(), sameRes.clone(), MIRRValue::make_Use(mv$(sameVal)));
