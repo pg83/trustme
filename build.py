@@ -1061,6 +1061,29 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_forward_closure_rpit_metadata",
+    inputs=[
+        "$(S)/tst/unit/test_forward_closure_rpit_metadata.py",
+        "$(S)/tst/unit/forward_closure_rpit_metadata_producer.rs",
+        "$(S)/tst/unit/forward_closure_rpit_metadata_consumer.rs",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/forward_closure_rpit_metadata.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_forward_closure_rpit_metadata.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/forward_closure_rpit_metadata_producer.rs",
+        "$(S)/tst/unit/forward_closure_rpit_metadata_consumer.rs",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/forward_closure_rpit_metadata.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_const_borrow_offset_metadata",
     inputs=[
         "$(S)/tst/unit/test_const_borrow_offset_metadata.py",

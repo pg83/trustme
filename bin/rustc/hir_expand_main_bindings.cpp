@@ -2068,6 +2068,7 @@ namespace {
                         switch ((*e).tag()) {
                             case HIRTypeDataNodeType::TAG_Closure: {
                                 auto& nodeP = (*e).as_Closure();
+                                ASSERT_BUG(sp, nodeP->objPtr && nodeP->objPathBase != HIRGenericPath(), "Closure type was used before extraction");
                                 DEBUG("Closure: " << nodeP->objPathBase); // TODO: Why does this use the `_base`
                                 auto path = monomorphiser.monomorphGenericpath(sp, nodeP->objPathBase, false);
                                 const auto& str = *nodeP->objPtr;
@@ -2076,6 +2077,7 @@ namespace {
                             }
                             case HIRTypeDataNodeType::TAG_Generator: {
                                 auto& nodeP = (*e).as_Generator();
+                                ASSERT_BUG(sp, nodeP->objPtr && nodeP->objPathBase != HIRGenericPath(), "Generator type was used before extraction");
                                 DEBUG("Generator: " << nodeP->objPathBase);
                                 auto path = monomorphiser.monomorphGenericpath(sp, nodeP->objPathBase, false);
                                 const auto& str = *nodeP->objPtr;
@@ -2084,6 +2086,7 @@ namespace {
                             }
                             case HIRTypeDataNodeType::TAG_Async: {
                                 auto& nodeP = (*e).as_Async();
+                                ASSERT_BUG(sp, nodeP->objPtr && nodeP->objPathBase != HIRGenericPath(), "Async block type was used before extraction");
                                 DEBUG("Async: " << nodeP->objPathBase);
                                 auto path = monomorphiser.monomorphGenericpath(sp, nodeP->objPathBase, false);
                                 const auto& str = *nodeP->objPtr;
@@ -2181,6 +2184,28 @@ namespace {
         const char* newTypeSuffix;
         bool isAsyncDropIntrinsic;
 
+        struct ActiveNode {
+            const void* node;
+            const ActiveNode* parent;
+        };
+        const ActiveNode* activeNode = nullptr;
+
+        struct ActiveNodeGuard {
+            const ActiveNode*& head;
+            ActiveNode entry;
+
+            ActiveNodeGuard(const ActiveNode*& head, const void* node)
+                : head(head)
+                , entry{node, head}
+            {
+                head = &entry;
+            }
+
+            ~ActiveNodeGuard() {
+                head = entry.parent;
+            }
+        };
+
     public:
         ClosureExprVisitorExtract(const StaticTraitResolve& resolve, const HIRTypeData* selfType, const ::std::vector<HIRTypeRef>& varTypes, const HIRExprPtr& exprPtr, OutState& out, const char* newTypeSuffix, bool isAsyncDropIntrinsic = false)
             : HIRExprVisitorDef(resolve.hirCrate().types)
@@ -2197,6 +2222,51 @@ namespace {
 
         void visitRoot(HIRExprNode& root) {
             root.visit(*this);
+        }
+
+        bool isActive(const void* node) const {
+            for (auto* entry = activeNode; entry; entry = entry->parent) {
+                if (entry->node == node) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        template <typename Node>
+        void extractReferencedNode(const Span& sp, const Node* constNode) {
+            if (constNode->objPathBase != HIRGenericPath()) {
+                ASSERT_BUG(sp, constNode->objPtr, "Extracted anonymous type has no type item");
+                return;
+            }
+
+            ASSERT_BUG(sp, !isActive(constNode), "Cyclic anonymous type dependency");
+            auto& node = *const_cast<Node*>(constNode);
+            ASSERT_BUG(sp, node.code, "Anonymous type lost its body before extraction");
+            visit(node);
+            ASSERT_BUG(sp, node.objPtr && node.objPathBase != HIRGenericPath(), "Anonymous type extraction did not assign a path");
+        }
+
+        void extractReferencedNodeTypes(const Span& sp, HIRTypeRef type) {
+            visitTyWith(type, [this, &sp](const HIRTypeData* candidate) {
+                const auto* nodeType = candidate->opt_NodeType();
+                if (!nodeType) {
+                    return false;
+                }
+
+                switch (nodeType->tag()) {
+                    case HIRTypeDataNodeType::TAG_Closure:
+                        extractReferencedNode(sp, nodeType->as_Closure());
+                        break;
+                    case HIRTypeDataNodeType::TAG_Generator:
+                        extractReferencedNode(sp, nodeType->as_Generator());
+                        break;
+                    case HIRTypeDataNodeType::TAG_Async:
+                        extractReferencedNode(sp, nodeType->as_Async());
+                        break;
+                }
+                return false;
+            });
         }
 
         struct Monomorph: public Monomorphiser {
@@ -2436,7 +2506,20 @@ namespace {
 
             ASSERT_BUG(sp, node.objPath == HIRGenericPath(), "Closure path already set? " << node.objPath);
 
+            ASSERT_BUG(sp, !isActive(&node), "Cyclic closure type dependency");
+            ActiveNodeGuard activeGuard{activeNode, &node};
+
             HIRExprVisitorDef::visit(node);
+            for (const auto& arg : node.args) {
+                extractReferencedNodeTypes(sp, arg.second);
+            }
+            extractReferencedNodeTypes(sp, node.returnType);
+            for (const auto bindingIdx : node.avuCache.localVars) {
+                extractReferencedNodeTypes(sp, variableTypes.at(bindingIdx));
+            }
+            for (const auto& binding : node.avuCache.capturedVars) {
+                extractReferencedNodeTypes(sp, variableTypes.at(binding.rootSlot));
+            }
             const auto implCounts = out.saveCounts();
 
             // A closure can only expose call traits that exist in a no_core
@@ -3036,8 +3119,20 @@ namespace {
 
             TRACE_FUNCTION_F("Extract generator - " << node.resType);
 
+            ASSERT_BUG(sp, !isActive(&node), "Cyclic generator type dependency");
+            ActiveNodeGuard activeGuard{activeNode, &node};
+
             // 1. Recurse to obtain useful metadata
             HIRExprVisitorDef::visit(node);
+            extractReferencedNodeTypes(sp, node.resumeTy);
+            extractReferencedNodeTypes(sp, node.yieldTy);
+            extractReferencedNodeTypes(sp, node.returnType);
+            for (const auto slot : node.avuCache.localVars) {
+                extractReferencedNodeTypes(sp, variableTypes.at(slot));
+            }
+            for (const auto& capture : node.avuCache.capturedVars) {
+                extractReferencedNodeTypes(sp, variableTypes.at(capture.first));
+            }
 
             // -- Prepare type params for rewriting the expression tree
             HIRGenericParams params;
@@ -3217,8 +3312,21 @@ namespace {
 
             TRACE_FUNCTION_F("Extract async - " << node.resType);
 
+            ASSERT_BUG(sp, !isActive(&node), "Cyclic async block type dependency");
+            ActiveNodeGuard activeGuard{activeNode, &node};
+
             // 1. Recurse to obtain useful metadata
             HIRExprVisitorDef::visit(node);
+            extractReferencedNodeTypes(sp, node.returnType);
+            if (node.isAsyncGen) {
+                extractReferencedNodeTypes(sp, node.yieldTy);
+            }
+            for (const auto slot : node.avuCache.localVars) {
+                extractReferencedNodeTypes(sp, variableTypes.at(slot));
+            }
+            for (const auto& capture : node.avuCache.capturedVars) {
+                extractReferencedNodeTypes(sp, variableTypes.at(capture.first));
+            }
 
             // -- Prepare type params for rewriting the expression tree
             HIRGenericParams params;
