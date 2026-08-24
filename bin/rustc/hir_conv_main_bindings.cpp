@@ -1966,10 +1966,11 @@ public:
                 if (!implType) {
                     ERROR(sp, E0000, "Use of `Self` pattern outside of an impl block");
                 }
-                if (!((*implType).is_Path() && ((*implType).as_Path().path.data.is_Generic()))) {
-                    ERROR(sp, E0000, "Use of `Self` pattern in non-struct impl block - " << implType);
+                const auto resolvedImplType = visitType(implType);
+                if (!(resolvedImplType->is_Path() && resolvedImplType->as_Path().path.data.is_Generic())) {
+                    ERROR(sp, E0000, "Use of `Self` pattern in non-struct impl block - " << resolvedImplType);
                 }
-                gpP = &implType->as_Path().path.data.as_Generic();
+                gpP = &resolvedImplType->as_Path().path.data.as_Generic();
             } else {
                 if (ty->is_Generic()) {
                     return HIRPattern::PathBinding();
