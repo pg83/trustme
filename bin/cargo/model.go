@@ -44,6 +44,7 @@ type Dependencies struct {
 type Target struct {
 	kind             string
 	name             string
+	compileName      string
 	path             string
 	edition          string
 	crateTypes       []string
@@ -55,6 +56,7 @@ type Target struct {
 	plugin           bool
 	harness          bool
 	requiredFeatures []string
+	libraryTest      bool
 }
 
 type BuildScriptOutput struct {

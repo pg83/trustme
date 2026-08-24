@@ -43,11 +43,58 @@ func TestProcMacroTestDependsOnLinkedLibrary(t *testing.T) {
 	if testUnit == nil || testUnit.rs == nil {
 		t.Fatal("test compile unit is missing")
 	}
+	if got := targetCompileName(testUnit.target); got != library.name {
+		t.Fatalf("test crate name = %q, want %q", got, library.name)
+	}
 	if !containsTask(testUnit.rs.deps, linkedLibrary) {
 		t.Fatal("proc-macro test does not depend on the linked library")
 	}
 	if containsTask(testUnit.rs.deps, libraryTask) {
 		t.Fatal("proc-macro test depends on metadata without the linked library")
+	}
+}
+
+func TestLibraryTestCompilesSourceWithoutExternalSelf(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "src", "lib.rs")
+
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	library := &Target{
+		kind: "lib", name: "library", path: "src/lib.rs", test: true,
+	}
+	pkg := &Package{
+		dir: root, manifestPath: filepath.Join(root, "Cargo.toml"), name: "library",
+		version: Version{major: 1}, targets: []*Target{library},
+		activeFeatures: map[string]bool{},
+	}
+	context := &BuildContext{
+		opts: BuildOptions{command: "test", profile: "debug", targetDir: filepath.Join(root, "target")},
+		root: pkg, workspace: &Workspace{dir: root}, host: "host", target: "host",
+	}
+	builder := &Builder{context: context, tasks: map[string]*Task{}, units: map[*Task]*CompileUnit{}}
+	roots, _ := builder.rootTasks()
+
+	if len(roots) != 1 {
+		t.Fatalf("root task count = %d, want one", len(roots))
+	}
+
+	testUnit := builder.units[roots[0]]
+	libraryTask := builder.libraryTask(pkg, true)
+
+	if testUnit == nil || testUnit.rs == nil {
+		t.Fatal("test compile unit is missing")
+	}
+	if got := targetCompileName(testUnit.target); got != library.name {
+		t.Fatalf("test crate name = %q, want %q", got, library.name)
+	}
+	if containsTask(testUnit.rs.deps, libraryTask) {
+		t.Fatal("library test depends on a second compiled copy of itself")
 	}
 }
 

@@ -392,7 +392,9 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact) {
 			target := *lib
 
 			target.kind = "test"
+			target.compileName = lib.name
 			target.name += "-test"
+			target.libraryTest = true
 
 			task := b.targetTask(root, &target, isHost)
 
@@ -495,7 +497,7 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 	}
 	b.units[task] = unit
 
-	if target.kind != "lib" {
+	if target.kind != "lib" && (!target.libraryTest || target.procMacro) {
 		if libTask := b.libraryTask(pkg, isHost); libTask != nil {
 			if lib := packageLibrary(pkg); lib != nil && lib.procMacro {
 				task.deps = append(task.deps, b.finalTask(libTask))
@@ -731,7 +733,7 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 	args := []string{source}
 
 	args = append(args, b.commonCompilerArgs(pkg, output, unit.isHost)...)
-	args = append(args, "--crate-name", target.name, "--crate-type", crateType(target))
+	args = append(args, "--crate-name", targetCompileName(target), "--crate-type", crateType(target))
 
 	suffix := b.crateSuffix(pkg)
 
@@ -761,7 +763,7 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 		args = append(args, resolveBuildOutputPath(flag, outDir))
 	}
 
-	if target.kind != "lib" {
+	if target.kind != "lib" && (!target.libraryTest || target.procMacro) {
 		if lib := packageLibrary(pkg); lib != nil {
 			dep := b.units[b.libraryTask(pkg, unit.isHost)]
 			args = append(args, "--extern", lib.name+"="+b.crateName(dep))
@@ -780,7 +782,7 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 
 	env := b.taskEnv(ctx, pkg)
 	env["OUT_DIR"] = outDir
-	env["CARGO_CRATE_NAME"] = target.name
+	env["CARGO_CRATE_NAME"] = targetCompileName(target)
 
 	for key, value := range pkg.buildOutput.env {
 		env[key] = resolveBuildOutputPath(value, outDir)
@@ -1247,7 +1249,8 @@ func (b *Builder) crateArgs(ctx *TaskContext, root *CompileUnit, direct []*Depen
 		}
 	}
 
-	if root.target.kind != "lib" && root.target.kind != "build-script" {
+	if root.target.kind != "lib" && root.target.kind != "build-script" &&
+		(!root.target.libraryTest || root.target.procMacro) {
 		add(b.units[b.libraryTask(root.pkg, root.isHost)])
 	}
 
@@ -1584,7 +1587,15 @@ func targetFeaturesEnabled(pkg *Package, target *Target) bool {
 }
 
 func targetKey(target *Target) string {
-	return target.kind + "|" + target.name + "|" + target.path
+	return target.kind + "|" + target.name + "|" + targetCompileName(target) + "|" + target.path
+}
+
+func targetCompileName(target *Target) string {
+	if target.compileName != "" {
+		return target.compileName
+	}
+
+	return target.name
 }
 
 func crateType(target *Target) string {
