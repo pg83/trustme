@@ -2789,14 +2789,10 @@ default:
                     if (es.crate.externCrates.count(e.name) == 0) {
                         e.name = es.crate.loadExternCrate(*es.wb.settings, i.span, e.name);
                     }
-                    // Crates imported in root are added to the implicit list
-                    if (modpath.nodes.empty()) {
-                        es.wb.settings->implicitCrates.insert(std::make_pair(i.name, e.name));
-                    }
-                } else {
-                    if (modpath.nodes.empty()) {
-                        es.wb.settings->implicitCrates.insert(std::make_pair(i.name, ""));
-                    }
+                }
+                // An explicit root alias shadows the same name in the extern prelude.
+                if (modpath.nodes.empty()) {
+                    es.wb.settings->implicitCrates.insert_or_assign(i.name, e.name);
                 }
                 break;
             }
