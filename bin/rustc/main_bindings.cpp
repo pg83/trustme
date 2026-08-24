@@ -449,7 +449,15 @@ static int compile(int argc, char* argv[]) {
 
     // The AST gets its own pool so parse/expand-lifetime data can be dropped
     // wholesale right after HIR lowering (the one place a pool dies early).
+#if TRUSTME_SANITIZER_BUILD
+    // Error-path tests can leave before AST Drop. Keep an owner in sanitizer
+    // builds so those paths are leak-checkable; successful production builds
+    // still release this pool at the early drop point below.
+    auto astPoolOwner = stl::ObjPool::fromMemory();
+    auto* astPool = astPoolOwner.mutPtr();
+#else
     auto* astPool = stl::ObjPool::fromMemoryRaw();
+#endif
     wb.astPool = astPool;
 
     try {
@@ -698,7 +706,9 @@ static int compile(int argc, char* argv[]) {
         CompilePhaseV("AST Drop", [&]() {
             wb.astCrate = nullptr;
             wb.astPool = nullptr;
+#if !TRUSTME_SANITIZER_BUILD
             delete astPool;
+#endif
             astPool = nullptr;
         });
         memoryDump("AST Dropped");
