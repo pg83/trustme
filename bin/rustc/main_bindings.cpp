@@ -155,7 +155,7 @@ void ExpandTestHarness(ASTCrate& crate) {
     #define __has_feature(x) 0
 #endif
 
-#if __has_feature(addressSanitizer) || __has_feature(undefinedBehaviorSanitizer)
+#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)
     #define TRUSTME_SANITIZER_BUILD 1
 #else
     #define TRUSTME_SANITIZER_BUILD 0
