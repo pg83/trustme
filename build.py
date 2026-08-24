@@ -612,6 +612,14 @@ gimli_0_32_3 = add_project_test(
     lockfile="$(S)/tst/projects/gimli_0_32_3/Cargo.lock",
 )
 
+pest_2_9_0 = add_project_test(
+    name="pest_2_9_0",
+    url="https://github.com/pest-parser/pest.git",
+    rev="d9b29b61da505daafd028c19547366ace1ade7df",
+    manifest="pest",
+    vendor_manifest=".",
+)
+
 combine = add_project_test(
     name="combine",
     url="https://github.com/Marwes/combine.git",
