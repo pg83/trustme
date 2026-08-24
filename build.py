@@ -617,6 +617,13 @@ rayon_1_12_0 = add_project_test(
     rev="c9ced185ae3508246a9eb70c8407a1199bb1b77f",
 )
 
+crossbeam_utils_0_8_22 = add_project_test(
+    name="crossbeam_utils_0_8_22",
+    url="https://github.com/crossbeam-rs/crossbeam.git",
+    rev="9b56303b8aa9ff8ec5bbebb9d2da05e034977889",
+    manifest="crossbeam-utils",
+)
+
 gimli_0_32_3 = add_project_test(
     name="gimli_0_32_3",
     url="https://github.com/gimli-rs/gimli.git",
