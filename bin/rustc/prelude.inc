@@ -46,6 +46,7 @@ typedef struct { } tTYPEID;
 #endif
 
 static inline size_t ALIGN_TO(size_t s, size_t a) { return (s + a - 1) / a * a; }
+static inline void* trustme_align_storage(void* ptr, size_t align) { return (void*)(((uintptr_t)ptr + align - 1) & ~(uintptr_t)(align - 1)); }
 
 #define ALIGNOF(t) __alignof__(t)
 

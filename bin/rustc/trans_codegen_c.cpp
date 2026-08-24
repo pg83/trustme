@@ -275,6 +275,16 @@ namespace {
         stl::Vector<u8> blockLabels;
         MIRBasicBlockId fallthroughBlock = ~0u;
         bool currentFunctionTracksCaller = false;
+        bool currentFunctionRealignsArguments = false;
+
+        static constexpr size_t maxCTypeAlignment = 1u << 28;
+
+        static size_t cTypeAlignment(size_t rustSize, size_t rustAlignment) {
+            if (rustSize == 0) {
+                return 1;
+            }
+            return rustAlignment > maxCTypeAlignment ? maxCTypeAlignment : rustAlignment;
+        }
 
         struct {
             bool emulatedI128 = false;
@@ -1293,7 +1303,8 @@ default:
                 fields.push_back(fields.size());
                 zsts.push_back(sz == 0);
             }
-            if (packingMaxAlign == 0 && cMaxAlign != repr->align /*&& repr->size > 0*/) {
+            const auto emittedAlignment = cTypeAlignment(repr->size, repr->align);
+            if (packingMaxAlign == 0 && cMaxAlign != emittedAlignment /*&& repr->size > 0*/) {
                 hasManualAlign = true;
             }
             // An align-1 type must be emitted packed - gcc takes a container's alignment from the member's natural alignment
@@ -1382,12 +1393,17 @@ default:
 
                 curOfs += s;
             }
+            if (repr->align > maxCTypeAlignment && repr->size != SIZE_MAX && curOfs < repr->size) {
+                of << "\tu8 _trustme_tail[" << repr->size - curOfs << "];\n";
+                curOfs = repr->size;
+                sizedFields++;
+            }
             if (sizedFields == 0 && !hasUnsized && options.disallowEmptyStructs) {
                 of << "\tchar _d;\n";
             }
             of << "}";
             if (hasManualAlign) {
-                of << " __attribute__((__aligned__(" << repr->align << ")))";
+                of << " __attribute__((__aligned__(" << emittedAlignment << ")))";
             }
             of << ";\n";
             if (packingMaxAlign != 0) {
@@ -1465,7 +1481,7 @@ default:
                     of << " }";
                     if (isZeroSized) {
                         of << " __attribute__((";
-                        of << "__aligned__(" << align << "),";
+                        of << "__aligned__(" << cTypeAlignment(0, align) << "),";
                         of << "))";
                     }
                     of << ";\n";
@@ -1500,7 +1516,7 @@ default:
                 // TODO: Handle unsized (should check the size of the fixed-size region)
                 of << "static_assert(sizeof(s_" << TransMangle(p) << ")==" << repr->size << ");\n";
             }
-            of << "static_assert(ALIGNOF(s_" << TransMangle(p) << ")==" << repr->align << ");\n";
+            of << "static_assert(ALIGNOF(s_" << TransMangle(p) << ")==" << cTypeAlignment(repr->size, repr->align) << ");\n";
 
             mirRes = nullptr;
         }
@@ -1525,6 +1541,9 @@ default:
                 emitCtype(repr->fields[i].ty, FMT_CB(ss, ss << "var_" << i;));
                 of << ";\n";
             }
+            if (repr->align > maxCTypeAlignment && repr->size > 0) {
+                of << "\tu8 _trustme_size[" << repr->size << "];\n";
+            }
             of << "}";
             // `#[repr(packed)]` on a union caps every member's alignment, so
             // the whole thing is as small and as loosely aligned as its bytes.
@@ -1533,7 +1552,7 @@ default:
             }
             // Pin union alignment - under the power ABI gcc takes a union's alignment from its *first* member
             if (repr->align > 0) {
-                of << " __attribute__((__aligned__(" << repr->align << ")))";
+                of << " __attribute__((__aligned__(" << cTypeAlignment(repr->size, repr->align) << ")))";
             }
             of << ";\n";
             if (true && repr->size > 0) {
@@ -1717,11 +1736,25 @@ default:
                 TODO(sp, "No common offsets and more than one field, is this possible? - " << itemTy);
             }
 
+            if (repr->align > maxCTypeAlignment && repr->size > 0) {
+                size_t contentEnd = 0;
+                for (const auto& field : repr->fields) {
+                    size_t fieldSize = 0;
+                    MIR_ASSERT(*mirRes, TargetGetSizeOf(sp, resolve_, field.ty, fieldSize), "Unknown enum field size");
+                    if (fieldSize != SIZE_MAX && contentEnd < field.offset + fieldSize) {
+                        contentEnd = field.offset + fieldSize;
+                    }
+                }
+                if (contentEnd < repr->size) {
+                    of << "\tu8 _trustme_tail[" << repr->size - contentEnd << "];\n";
+                }
+            }
+
             of << "}";
             // `#[repr(align(N))]` on the enum itself; C would otherwise derive the
             // alignment from the tag alone and make the type too small.
             if (item.forcedAlignment > 0) {
-                of << " __attribute__((__aligned__(" << repr->align << ")))";
+                of << " __attribute__((__aligned__(" << cTypeAlignment(repr->size, repr->align) << ")))";
             }
             of << ";\n";
 
@@ -3011,10 +3044,39 @@ default:
                 emitUnsizedArgumentLocal(argTypes[i].second, i);
             }
 
+            for (unsigned int i = 0; i < item.fixedArgCount(); i++) {
+                const auto& argTy = argTypes[i].second;
+                size_t argSize = 0;
+                size_t argAlignment = 0;
+                if (!argumentIsPassed(item.abi, argTy)
+                    || !TargetGetSizeAndAlignOf(sp, resolve_, argTy, argSize, argAlignment)
+                    || argSize == 0 || argAlignment <= maxCTypeAlignment) {
+                    continue;
+                }
+                of << "\tu8 arg" << i << "_storage[" << argSize + argAlignment - 1 << "];\n\t";
+                emitCtype(argTy, FMT_CB(ss, ss << "&arg" << i << "_aligned";));
+                of << " = *(";
+                emitCtype(argTy);
+                of << "*)trustme_align_storage(arg" << i << "_storage, " << argAlignment << ");\n";
+                of << "\targ" << i << "_aligned = arg" << i << ";\n";
+            }
+            currentFunctionRealignsArguments = true;
+
             // Variables
-            of << "\t";
-            emitCtype(retType, FMT_CB(ss, ss << "rv";));
-            of << ";\n";
+            size_t returnSize = 0;
+            size_t returnAlignment = 0;
+            if (TargetGetSizeAndAlignOf(sp, resolve_, retType, returnSize, returnAlignment)
+                && returnSize > 0 && returnAlignment > maxCTypeAlignment) {
+                of << "\tu8 rv_storage[" << returnSize + returnAlignment - 1 << "];\n\t";
+                emitCtype(retType, FMT_CB(ss, ss << "&rv";));
+                of << " = *(";
+                emitCtype(retType);
+                of << "*)trustme_align_storage(rv_storage, " << returnAlignment << ");\n";
+            } else {
+                of << "\t";
+                emitCtype(retType, FMT_CB(ss, ss << "rv";));
+                of << ";\n";
+            }
             // Native C/C++ compilers place separate stack locals opposite to
             // declaration order.  Reverse the declarations so consecutive
             // MIR locals keep their order in memory.
@@ -3024,9 +3086,20 @@ default:
                     continue;
                 }
                 DEBUG("var" << i << " : " << code->locals[i]);
-                of << "\t";
-                emitCtype(code->locals[i], FMT_CB(ss, ss << "var" << i;));
-                of << ";\n";
+                size_t localSize = 0;
+                size_t localAlignment = 0;
+                if (TargetGetSizeAndAlignOf(sp, resolve_, code->locals[i], localSize, localAlignment)
+                    && localSize > 0 && localAlignment > maxCTypeAlignment) {
+                    of << "\tu8 var" << i << "_storage[" << localSize + localAlignment - 1 << "];\n\t";
+                    emitCtype(code->locals[i], FMT_CB(ss, ss << "&var" << i;));
+                    of << " = *(";
+                    emitCtype(code->locals[i]);
+                    of << "*)trustme_align_storage(var" << i << "_storage, " << localAlignment << ");\n";
+                } else {
+                    of << "\t";
+                    emitCtype(code->locals[i], FMT_CB(ss, ss << "var" << i;));
+                    of << ";\n";
+                }
             }
             for (unsigned int i = 0; i < code->dropFlags.size(); i++) {
                 of << "\tbool df" << i << " = " << code->dropFlags[i] << ";\n";
@@ -3116,6 +3189,7 @@ default:
             }
             of.flush();
             currentFunctionTracksCaller = false;
+            currentFunctionRealignsArguments = false;
             if (tracksCaller && !hasPrototype) {
                 emitTrackCallerReifyWrapper(p, item, params);
             }
@@ -3780,6 +3854,13 @@ default:
             HIRTypeRef tmp;
             const auto& ty = localMirRes.getLvalueType(tmp, val);
 
+            if (this->typeIsBadZst(ty) && this->lvalueRootIsBadZst(val)) {
+                size_t alignment = 0;
+                MIR_ASSERT(localMirRes, TargetGetAlignOf(sp, resolve_, ty, alignment), "Unknown ZST alignment");
+                of << "(void*)" << alignment;
+                return;
+            }
+
             if (this->typeIsBadZst(ty) && !this->lvalueRootIsBadZst(val)) {
                 auto backing = this->lvalueZstIndexBacking(val);
                 if (backing.wrappers.size() != val.wrappers.size()) {
@@ -4121,11 +4202,7 @@ default:
                         of << " = (";
                         emitCtype(ty);
                         of << ")";
-                        if (this->typeIsBadZst(mirRes->getLvalueType(tmp, ve.val, ve.val.wrappers.size()))) {
-                            of << "(void*)&rv";
-                        } else {
-                            emitBorrow(localMirRes, ve.type, ve.val);
-                        }
+                        emitBorrow(localMirRes, ve.type, ve.val);
                         break;
                     }
                     case MIRRValue::TAG_Cast: {
@@ -7064,9 +7141,9 @@ default:
                     emitLvalue(e.retVal);
                     of << " = ";
                     if (innerTy == HIRTypeRef()) {
-                        of << "ALIGNOF(";
-                        emitCtype(ty);
-                        of << ")";
+                        size_t alignment = 0;
+                        MIR_ASSERT(localMirRes, TargetGetAlignOf(sp, resolve_, ty, alignment), "Can't get alignment of " << ty);
+                        of << alignment;
                     } else if (const auto* te = innerTy->opt_Slice()) {
                         of << "ALIGNOF(";
                         if (ty->is_Slice()) {
@@ -9548,13 +9625,11 @@ default:
                         case MetadataType::None:
                         case MetadataType::Zero:
                             if (this->typeIsBadZst(ty) && this->lvalueRootIsBadZst(slot)) {
-                                // The C backend omits zero-sized locals, but Rust still
-                                // runs Drop for every logical ZST value.  Give Drop an
-                                // address with the ZST's own alignment instead of naming
-                                // an elided local (which can be behind Field/Index/etc.).
-                                of << indent << "{ ";
+                                size_t alignment = 0;
+                                MIR_ASSERT(*mirRes, TargetGetAlignOf(sp, resolve_, ty, alignment), "Unknown ZST alignment");
+                                of << indent << TransMangleValue(p) << "((";
                                 emitCtype(ty);
-                                of << " trustme_zst{}; " << TransMangleValue(p) << "(&trustme_zst); }\n";
+                                of << "*)" << alignment << ");\n";
                             } else if (this->typeIsBadZst(ty) && MIRLValue::CRef(slot).is_Index()) {
                                 of << indent << TransMangleValue(p) << "((";
                                 emitCtype(ty);
@@ -9731,6 +9806,17 @@ default:
                 }
                 case MIRLValue::RefCommon::TAG_Argument: {
                     decltype(val.as_Argument()) e = val.as_Argument();
+                    if (currentFunctionRealignsArguments) {
+                        HIRTypeRef tmp;
+                        size_t size = 0;
+                        size_t alignment = 0;
+                        const auto& ty = mirRes->getLvalueType(tmp, val);
+                        if (TargetGetSizeAndAlignOf(sp, resolve_, ty, size, alignment)
+                            && size > 0 && alignment > maxCTypeAlignment) {
+                            of << "arg" << e << "_aligned";
+                            break;
+                        }
+                    }
                     of << "arg" << e;
                     break;
                 }
