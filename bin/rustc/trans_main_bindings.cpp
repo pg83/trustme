@@ -2296,15 +2296,18 @@ default:
     }
     auto newList = TransEnumerateCommonPost(state);
 
-    // Region-bearing drop variants are retained below when their ABI type is
-    // reachable.  Their optimised bodies can name region-bearing value paths
-    // which the canonical ABI variant does not, so enumerate those bodies too.
+    // Region-bearing drop variants are retained below when their value type or
+    // an explicit MIR drop is reachable. Their optimised bodies can name
+    // region-bearing value paths which the canonical ABI variant does not, so
+    // enumerate those bodies too. A borrowed ABI type alone needs only a C
+    // forward declaration and must not retain a body which accesses its fields.
     stl::Vector<const TransListFunction*> enumeratedImplicitDrops;
     for (;;) {
         stl::Vector<const TransListFunction*> generatedFunctions;
         for (const auto& entry : list.functions) {
             const auto* type = implicitDropType(entry.first, state.resolve.langDrop());
-            if (!type || !newList.hasType(type, true) || newList.findFunction(entry.first)
+            if (!type || (!newList.hasType(type, false) && newList.dropGlue.count(type) == 0)
+                || newList.findFunction(entry.first)
                 || entry.second->forcePrototype) {
                 continue;
             }
@@ -2429,12 +2432,13 @@ default:
         newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
     }
 
-    // Drop terminators enumerate their ABI type, not a function path. Keep
-    // every exact region-bearing glue/method variant already generated for a
-    // reachable ABI type; its body may observe that exact type through TypeId.
+    // Drop terminators enumerate their type, not a function path. Keep every
+    // exact region-bearing glue/method variant already generated for a value
+    // type or explicit MIR drop; its body may observe that exact type through
+    // TypeId. A type seen only behind a borrow does not need a drop body.
     for (const auto& entry : list.functions) {
         const auto* type = implicitDropType(entry.first, state.resolve.langDrop());
-        if (type && newList.hasType(type, true)) {
+        if (type && (newList.hasType(type, false) || newList.dropGlue.count(type) != 0)) {
             newList.functions.insert(std::make_pair(entry.first.clone(), nullptr));
         }
     }
