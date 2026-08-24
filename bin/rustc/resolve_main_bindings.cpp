@@ -1036,6 +1036,7 @@ void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPa
                         if (newPath != ASTPath()) {
                             // If that lookup succeeds, then create a value (and visit it - just in case)
                             ent = ASTPathParamEnt::make_Value(new ASTExprNodeNamedValue(std::move(newPath)));
+                            auto _h = context.enterRootblock();
                             ResolveAbsoluteExprNode(context, *ent.as_Value());
                         } else {
                             // Otherwise, visit (which will most likely fail)
@@ -1053,6 +1054,7 @@ void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPa
             }
             case ASTPathParamEnt::TAG_Value: {
                 auto& n = ent.as_Value();
+                auto _h = context.enterRootblock();
                 ResolveAbsoluteExprNode(context, *n);
                 break;
             }
