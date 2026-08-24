@@ -14,6 +14,7 @@
 #include <typeinfo>
 
 // TODO: Have an environment variable that controls if debug is enabled here.
+#undef DEBUG_EXTRA_ENABLE
 #define DEBUG_EXTRA_ENABLE &&desDebugEnabled()
 
 namespace {

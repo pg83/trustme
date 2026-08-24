@@ -1018,11 +1018,20 @@ NODE(
             case RawBorrowMut:
                 os << "&raw mut ";
                 break;
+            case PinBorrow:
+                os << "&pin const ";
+                break;
+            case PinBorrowMut:
+                os << "&pin mut ";
+                break;
             case QMARK:
                 os << *value << "?";
                 return;
             case AWait:
                 os << *value << ".await";
+                return;
+            case AWaitNext:
+                os << *value << ".await/*next*/";
                 return;
             case USE:
                 os << *value << ".use";

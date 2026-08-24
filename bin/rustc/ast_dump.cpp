@@ -1300,6 +1300,10 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
             os << "_";
             break;
         }
+        case ASTPattern::Data::TAG_Never: {
+            os << "!";
+            break;
+        }
         case ASTPattern::Data::TAG_MaybeBind: {
             auto& v = p.data().as_MaybeBind();
             os << v.name << " /*?*/";
@@ -1340,6 +1344,15 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                 printPattern(*v.sub, isRefutable);
                 os << ")";
             }
+            break;
+        }
+        case ASTPattern::Data::TAG_Guard: {
+            const auto& v = p.data().as_Guard();
+            os << "(";
+            printPattern(*v.sub, isRefutable);
+            os << " if ";
+            os << *v.cond;
+            os << ")";
             break;
         }
         case ASTPattern::Data::TAG_Value: {

@@ -3155,11 +3155,11 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
             return this->bbBase + idx;
         }
 
-        virtual unsigned mapLocal(unsigned f) const {
+        unsigned mapLocal(unsigned f) const override {
             return this->varBase + f;
         }
 
-        virtual unsigned mapDropFlag(unsigned f) const {
+        unsigned mapDropFlag(unsigned f) const override {
             return this->dfBase + f;
         }
 
@@ -4391,7 +4391,7 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
         const OptimiseStmtRef* pos = nullptr;
         const MIRTerminator::Data_Drop* dropped = nullptr;
 
-        MarkUsed(MIRTypeResolve& state, decltype(possible)& possible, const decltype(possibleBySource)& possibleBySource)
+        MarkUsed(MIRTypeResolve& state, decltype(possible)& possible, decltype(possibleBySource) possibleBySource)
             : state(state)
             , possible(possible)
             , possibleBySource(possibleBySource)
@@ -4457,7 +4457,7 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
         MIRTypeResolve& state;
         const decltype(replacements)& replacements;
 
-        ReplaceRoots(MIRTypeResolve& state, const decltype(replacements)& replacements)
+        ReplaceRoots(MIRTypeResolve& state, decltype(replacements) replacements)
             : state(state)
             , replacements(replacements)
         {
@@ -4876,7 +4876,7 @@ bool MIROptimiseUnifyTemporaries(MIRTypeResolve& state, MIRFunction& fcn) {
             MIRTypeResolve& state;
             const decltype(replacements)& replacements;
 
-            ReplaceLocals(MIRTypeResolve& state, const decltype(replacements)& replacements)
+            ReplaceLocals(MIRTypeResolve& state, decltype(replacements) replacements)
                 : state(state)
                 , replacements(replacements)
             {
@@ -5638,7 +5638,7 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                     }
 
                     static S128 sext(U128 v, unsigned bits) {
-                        if (v >> (bits - 1) != 0) {
+                        if ((v >> (bits - 1)) != 0) {
                             return S128(v | (U128::max() << bits));
                         } else {
                             return S128(v);
@@ -8231,7 +8231,7 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
                 MIRTypeResolve& state;
                 const decltype(localRewriteTable)& localRewriteTable;
 
-                RewriteLocals(MIRTypeResolve& state, const decltype(localRewriteTable)& localRewriteTable)
+                RewriteLocals(MIRTypeResolve& state, decltype(localRewriteTable) localRewriteTable)
                     : state(state)
                     , localRewriteTable(localRewriteTable)
                 {

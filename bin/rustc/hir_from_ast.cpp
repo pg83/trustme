@@ -442,6 +442,10 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
         case ASTPatternData::TAG_Never: {
             return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
         }
+        case ASTPatternData::TAG_Guard: {
+            BUG(pat.span(), "Guard pattern was not lifted before HIR lowering");
+            break;
+        }
         case ASTPatternData::TAG_Box: {
             auto& e = pat.data().as_Box();
             return HIRPattern{mv$(bindings), HIRPattern::Data::make_Box({box$(LowerHIRPattern(*e.sub))})};
@@ -1058,6 +1062,10 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                 auto srcTrait = H(*this).findSourceTrait(sp, rv.path, path.bindings.type.binding, nameArgs.first, H::Namespace::Type, MonomorphiserNop(crate->types));
                 DEBUG("src_trait = " << srcTrait << " for " << assoc.first);
                 rv.typeBounds.insert(::std::make_pair(nameArgs.first, HIRTraitPath::AtyEqual{std::move(srcTrait), std::move(nameArgs.second), LowerHIRType(assoc.second)}));
+                break;
+            }
+            case ASTPathParamEnt::TAG_AssociatedValueEqual: {
+                // HIR does not represent associated-const equality bounds yet.
                 break;
             }
             case ASTPathParamEnt::TAG_AssociatedTyBound: {
@@ -4784,6 +4792,10 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 break;
             case ASTExprNodeUniOp::RawBorrowMut:
                 rv.reset(ctx.crate->pool->make<HIRExprNodeRawBorrow>(v.span(), HIRBorrowType::Unique, lower(v.value)));
+                break;
+            case ASTExprNodeUniOp::PinBorrow:
+            case ASTExprNodeUniOp::PinBorrowMut:
+                BUG(v.span(), "Pin borrow was not expanded before HIR lowering");
                 break;
 
             case ASTExprNodeUniOp::AWait: {

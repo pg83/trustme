@@ -791,7 +791,7 @@ namespace {
             }
         }
 
-        MIRLValue getValueForBindingPath(const Span& sp, const HIRTypeData* outerTy, const MIRLValue& outerLval, const PatternBinding& b) {
+        MIRLValue getValueForBindingPath(const Span& sp, const HIRTypeData* outerTy, const MIRLValue& outerLval, const PatternBinding& b) override {
             HIRTypeRef ty;
             MIRLValue lval;
             MIRLowerHIRGetTypeValueForPath(sp, builder, outerTy, outerLval, b.field, ty, lval);
@@ -896,7 +896,7 @@ namespace {
             }
         }
 
-        const HIRTypeData* getBindingType(const Span& sp, unsigned index) const {
+        const HIRTypeData* getBindingType(const Span& sp, unsigned index) const override {
             return variableTypes.at(index);
         }
 

@@ -4824,7 +4824,7 @@ public:
             return types.generic(params.types[i].name, 256 + i);
         }
 
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& ge) const {
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& ge) const override {
             unsigned i;
             if (ge.binding == 0xFFFF) {
                 BUG(sp, "Binding 0xFFFF isn't valid for values");
@@ -5085,7 +5085,7 @@ public:
         }
     }
 
-    void visit(HIRExprNodeConstBlock& node) {
+    void visit(HIRExprNodeConstBlock& node) override {
         HIRExprVisitorDef::visit(node);
 
         if (cast<HIRExprNodePathValue>(node.inner.get())) {

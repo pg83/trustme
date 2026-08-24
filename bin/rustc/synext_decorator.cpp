@@ -1229,6 +1229,11 @@ default:
                 addFieldBoundFromTy(params, outList, e.inner);
                 break;
             }
+            case TypeData::TAG_Pattern: {
+                auto& e = ty->data.as_Pattern();
+                addFieldBoundFromTy(params, outList, e.inner);
+                break;
+            }
             case TypeData::TAG_Generic: {
                 // Although this is what we're looking for, it's already handled.
                 break;
@@ -2906,6 +2911,11 @@ namespace {
                     auto& e = param.as_AssociatedTyEqual();
                     changed |= substitutePathParams(e.first.args(), from, to);
                     changed |= substituteType(e.second, from, to);
+                    break;
+                }
+                case ASTPathParamEnt::TAG_AssociatedValueEqual: {
+                    auto& e = param.as_AssociatedValueEqual();
+                    changed |= substitutePathParams(e.first.args(), from, to);
                     break;
                 }
                 case ASTPathParamEnt::TAG_AssociatedTyBound: {

@@ -1079,6 +1079,15 @@ namespace {
                 }
                 break;
             }
+            case HIRTypeData::TAG_Pattern: {
+                auto& le = (*left).as_Pattern();
+                if (const auto* re = right->opt_Pattern()) {
+                    return typeOrdSpecific(sp, le.inner, re->inner);
+                } else {
+                    BUG(sp, "Mismatched types - " << left << " and " << right);
+                }
+                break;
+            }
             case HIRTypeData::TAG_Array: {
                 auto& le = (*left).as_Array();
                 if (const auto* re = right->opt_Array()) {
@@ -1591,6 +1600,11 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                 case HIRTypeData::TAG_Slice: {
                     auto& ae = (*a).as_Slice();
                     auto& be = (*b).as_Slice();
+                    return H::typesOverlap(ae.inner, be.inner);
+                }
+                case HIRTypeData::TAG_Pattern: {
+                    auto& ae = (*a).as_Pattern();
+                    auto& be = (*b).as_Pattern();
                     return H::typesOverlap(ae.inner, be.inner);
                 }
                 case HIRTypeData::TAG_Array: {

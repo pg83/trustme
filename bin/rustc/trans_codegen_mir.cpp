@@ -91,6 +91,11 @@ namespace {
                     os << "[" << fmt(te.inner) << "]";
                     break;
                 }
+                case HIRTypeData::TAG_Pattern: {
+                    auto& te = tuMatch.as_Pattern();
+                    os << fmt(te.inner);
+                    break;
+                }
                 case HIRTypeData::TAG_Tuple: {
                     auto& te = tuMatch.as_Tuple();
                     if (te.empty()) {

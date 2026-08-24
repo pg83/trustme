@@ -898,6 +898,12 @@ void ExpandPathParams(const ExpandState& es, ASTModule& mod, ASTPathParams& para
                 ExpandType(es, mod, aty.second);
                 break;
             }
+            case ASTPathParamEnt::TAG_AssociatedValueEqual: {
+                auto& value = e.as_AssociatedValueEqual();
+                ExpandPathParams(es, mod, value.first.args());
+                ExpandExpr(es, value.second);
+                break;
+            }
             case ASTPathParamEnt::TAG_AssociatedTyBound: {
                 auto& aty = e.as_AssociatedTyBound();
                 ExpandPathParams(es, mod, aty.first.args());

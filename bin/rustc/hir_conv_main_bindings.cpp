@@ -3125,7 +3125,7 @@ public:
         HIRVisitor::visitModule(p, mod);
     }
 
-    void visitParams(HIRGenericParams& params) {
+    void visitParams(HIRGenericParams& params) override {
         TRACE_FUNCTION_F(params.fmtArgs() << params.fmtBounds());
 
         DeclaredTypeGuard declaredTypes(*this);
@@ -3320,7 +3320,7 @@ public:
                 upperVisitor.visitPattern(pat);
             }
 
-            void visitNodePtr(HIRExprNodeP& nodePtr) {
+            void visitNodePtr(HIRExprNodeP& nodePtr) override {
                 HIRExprVisitorDef::visitNodePtr(nodePtr);
                 if (replacement) {
                     replacement->resType = nodePtr->resType;

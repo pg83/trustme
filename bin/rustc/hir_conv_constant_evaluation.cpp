@@ -479,7 +479,7 @@ public:
         }
     }
 
-    size_t size() const {
+    size_t size() const override {
         return length;
     }
 
@@ -490,7 +490,7 @@ public:
         return data + ofs;
     }
 
-    void readMask(u8* dst, size_t dstOfs, size_t /*ofs*/, size_t len) const {
+    void readMask(u8* dst, size_t dstOfs, size_t /*ofs*/, size_t len) const override {
         dst += dstOfs / 8;
         dstOfs %= 8;
         if (dstOfs != 0) {
@@ -620,7 +620,7 @@ public:
         return this->data + ofs;
     }
 
-    void readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const {
+    void readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const override {
         assert(ofs <= length);
         assert(len <= length);
         assert(ofs + len <= length);
@@ -794,7 +794,7 @@ public:
         }
     }
 
-    size_t size() const {
+    size_t size() const override {
         return length;
     }
 

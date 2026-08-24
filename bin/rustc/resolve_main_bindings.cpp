@@ -1064,6 +1064,13 @@ void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPa
                 ResolveAbsoluteType(context, a.second);
                 break;
             }
+            case ASTPathParamEnt::TAG_AssociatedValueEqual: {
+                auto& a = ent.as_AssociatedValueEqual();
+                ResolveAbsolutePathParams(context, sp, a.first.args());
+                auto _h = context.enterRootblock();
+                ResolveAbsoluteExprNode(context, *a.second);
+                break;
+            }
             case ASTPathParamEnt::TAG_AssociatedTyBound: {
                 auto& a = ent.as_AssociatedTyBound();
                 ResolveAbsolutePathParams(context, sp, a.first.args());
@@ -2856,6 +2863,10 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
             ResolveAbsolutePattern(context, allowRefutable, *e.sub);
             break;
         }
+        case ASTPatternData::TAG_Guard: {
+            BUG(pat.span(), "Guard pattern was not lifted before name resolution");
+            break;
+        }
         case ASTPatternData::TAG_Value: {
             auto& e = pat.data().as_Value();
             // Disabled check : Some code does `let (Foo | Bar);` where those are the only options
@@ -3312,6 +3323,11 @@ void ReplaceDelegatedSelf(ASTPathParams& params, const RcString& replacementName
                 auto& e = param.as_AssociatedTyEqual();
                 ReplaceDelegatedSelf(e.first.args(), replacementName);
                 ReplaceDelegatedSelf(e.second, replacementName);
+                break;
+            }
+            case ASTPathParamEnt::TAG_AssociatedValueEqual: {
+                auto& e = param.as_AssociatedValueEqual();
+                ReplaceDelegatedSelf(e.first.args(), replacementName);
                 break;
             }
             case ASTPathParamEnt::TAG_AssociatedTyBound: {

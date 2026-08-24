@@ -336,6 +336,15 @@ namespace {
                     e.inner = this->visitType(e.inner);
                     break;
                 }
+                case HIRTypeData::TAG_Pattern: {
+                    auto& e = data.as_Pattern();
+                    e.inner = this->visitType(e.inner);
+                    for (auto& range : e.pattern.alternatives) {
+                        if (range.hasStart) this->visitConstgeneric(range.start);
+                        if (range.hasEnd) this->visitConstgeneric(range.end);
+                    }
+                    break;
+                }
                 case HIRTypeData::TAG_Tuple: {
                     auto& e = data.as_Tuple();
                     for (auto& inner : e) inner = this->visitType(inner);

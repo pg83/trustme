@@ -1018,6 +1018,11 @@ default:
             }
         }
 
+        void visitTypeAsText(const ASTType* ty) {
+            ::std::stringstream ss; ss << ty << " "; DEBUG("STRING: " << ss.str());
+            parseString(ss.str());
+        }
+
         void visitType(::ASTType* ty) {
             // TODO: Correct handling of visit_type
             switch (ty->data.tag()) {
@@ -1047,9 +1052,7 @@ default:
                     break;
                 }
                 case TypeData::TAG_Function: {
-                    ::std::stringstream ss; ss << ty << " "; DEBUG("STRING: " << ss.str());
-
-                    parseString(ss.str());
+                    visitTypeAsText(ty);
                     break;
                 }
                 case TypeData::TAG_Tuple: {
@@ -1078,6 +1081,10 @@ default:
                 case TypeData::TAG_Slice: {
                     auto& te = ty->data.as_Slice();
                     pmi.sendSymbol("["); this->visitType(te.inner); pmi.sendSymbol("]");
+                    break;
+                }
+                case TypeData::TAG_Pattern: {
+                    visitTypeAsText(ty);
                     break;
                 }
                 case TypeData::TAG_Generic: {
@@ -1212,6 +1219,14 @@ default:
                             visitPathNode(a.first, false);
                             pmi.sendSymbol("=");
                             this->visitType(a.second);
+                            pmi.sendSymbol(",");
+                            break;
+                        }
+                        case ASTPathParamEnt::TAG_AssociatedValueEqual: {
+                            auto& a = ent.as_AssociatedValueEqual();
+                            visitPathNode(a.first, false);
+                            pmi.sendSymbol("=");
+                            this->visitNode(*a.second);
                             pmi.sendSymbol(",");
                             break;
                         }

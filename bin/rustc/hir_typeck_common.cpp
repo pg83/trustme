@@ -775,7 +775,7 @@ struct CloneTyWithMonomorph: Monomorphiser {
         return g;
     }
 
-    HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const {
+    HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override {
         HIRTypeRef rv;
 
         if (callback.clone(ty, rv)) {
