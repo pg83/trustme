@@ -28,7 +28,7 @@ namespace stl {
             static_assert(sizeof(T) <= smallObjMaxSize);
             static_assert(alignof(T) <= alignof(max_align_t));
 
-            return &(new (allocate(sizeof(T))) Storage(forward<Args>(args)...))->t;
+            return &(new (allocate(sizeof(T))) Storage(stl::forward<Args>(args)...))->t;
         }
 
         template <typename T>

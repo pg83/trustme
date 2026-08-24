@@ -59,14 +59,14 @@ namespace stl {
 
         template <typename... A>
         T* insert(K key, A&&... a) {
-            auto value = ol.make(forward<A>(a)...);
+            auto value = ol.make(stl::forward<A>(a)...);
 
             return (value->key = H::hash(key), insertNode(value));
         }
 
         template <typename... A>
         T* insertKeyed(A&&... a) {
-            auto value = ol.make(forward<A>(a)...);
+            auto value = ol.make(stl::forward<A>(a)...);
 
             return (value->key = H::hash(value->t.key()), insertNode(value));
         }

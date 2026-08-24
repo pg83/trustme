@@ -326,21 +326,22 @@ SYSTEM_TEST_ENV = {"TRUSTME_SYSTEM_RUSTC": "1"} if system_rustc_mode else {}
 # All node scripts are Python and share tst/lib.py. Compiler invocations are
 # prefixed with tst/wrap_gdb.py: a signal death is rerun under gdb (assumed
 # available) so the node's log ends with symbolised backtraces.
-TESTS_LIB = ["$(S)/tst/lib.py", "$(S)/tst/wrap_gdb.py"]
-# Bound the whole test node, including compilation performed by adapters.
-# The build engine resolves Nix's `timeout` symlink to the multicall binary,
-# so select its applet explicitly instead of relying on argv[0].
-TEST_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "60s"]
+TIMEOUT_SCRIPT = "$(S)/dev/timeout.py"
+TIMEOUT_INPUT = [TIMEOUT_SCRIPT]
+TESTS_LIB = [*TIMEOUT_INPUT, "$(S)/tst/lib.py", "$(S)/tst/wrap_gdb.py"]
+# Bound the whole test node, including compilation performed by adapters. The
+# in-tree wrapper gives ix and Ubuntu identical process-group semantics.
+TEST_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "60s"]
 # A real project contains a full Cargo graph and starts from archive inputs in a
 # fresh directory, so unlike a unit node it cannot reuse a materialised CAS.
-PROJECT_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "5m"]
+PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "5m"]
 # trybuild compiles its own dependency graph and then a second generated Cargo
 # workspace containing the UI cases. Keep the ordinary project budget tight,
 # but allow this deliberately nested corpus node to finish from cold archives.
-NESTED_PROJECT_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "15m"]
+NESTED_PROJECT_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "15m"]
 # A from-scratch standard-library build is intentionally much heavier than a
 # single test, but it must not leave the graph occupied indefinitely.
-LIBSTD_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "10m"]
+LIBSTD_TIMEOUT = ["python3", TIMEOUT_SCRIPT, "10m"]
 
 # std_src: fetch + adjust the rust-1.90 source, add the shim, pack it.
 std_src = command(
@@ -654,6 +655,7 @@ unit_tests = [
         inputs=[
             "$(S)/tst/rust_doctest/import.py",
             "$(S)/tst/rust_doctest/test_import.py",
+            *TIMEOUT_INPUT,
         ],
         outputs=["$(B)/tst/unit/doctest_import.stamp"],
         cmd=[
@@ -676,7 +678,7 @@ unit_tests = [
 ]
 rustc_ut_run = command(
     name="unit_rustc_ut",
-    inputs=UT_SRC,
+    inputs=[*UT_SRC, *TIMEOUT_INPUT],
     outputs=["$(B)/tst/unit/rustc_ut.stamp"],
     cmd=[
         [*TEST_TIMEOUT, "$(B)/tst/unit/rustc_ut"],
@@ -695,6 +697,7 @@ unit_tests.append(command(
         *build.glob("$(S)/bin/rustc/**/*.h"),
         *build.glob("$(S)/bin/rustc/**/*.cpp"),
         *build.glob("$(S)/bin/rustc/**/*.inc"),
+        *TIMEOUT_INPUT,
     ],
     outputs=["$(B)/tst/unit/node_cast.stamp"],
     cmd=[
@@ -714,6 +717,7 @@ unit_tests.append(command(
         "$(S)/dev/std_ratchet.baseline",
         *build.glob("$(S)/bin/rustc/**/*.h"),
         *build.glob("$(S)/bin/rustc/**/*.cpp"),
+        *TIMEOUT_INPUT,
     ],
     outputs=["$(B)/tst/unit/std_ratchet.stamp"],
     cmd=[
@@ -730,7 +734,7 @@ unit_tests.append(command(
 
 unit_tests.append(command(
     name="unit_ident_ordering",
-    inputs=["$(S)/tst/unit/test_ident_ordering.cpp"],
+    inputs=["$(S)/tst/unit/test_ident_ordering.cpp", *TIMEOUT_INPUT],
     outputs=["$(B)/tst/unit/ident_ordering.stamp"],
     cmd=[
         [*TEST_TIMEOUT, "$(B)/tst/unit/ident_ordering_test"],
@@ -772,6 +776,7 @@ unit_tests.append(command(
         *build.glob("$(S)/bin/rustc/*.h"),
         *build.glob("$(S)/bin/rustc/*.cpp"),
         *build.glob("$(S)/bin/rustc/*.inc"),
+        *TIMEOUT_INPUT,
     ],
     outputs=["$(B)/tst/unit/rustc_header_pairs.stamp"],
     cmd=[
@@ -798,6 +803,7 @@ unit_tests.append(command(
         *build.glob("$(S)/bin/rustc/**/*.h"),
         *build.glob("$(S)/bin/rustc/**/*.cpp"),
         *build.glob("$(S)/bin/rustc/**/*.inc"),
+        *TIMEOUT_INPUT,
     ],
     outputs=["$(B)/tst/unit/compiler_no_dead_branches.stamp"],
     cmd=[
@@ -829,6 +835,7 @@ unit_tests.append(command(
         "$(S)/tst/rust_lib/upstream/coretests/preamble.rs",
         "$(S)/tst/rust_lib/upstream/coretests/tests/ops.rs",
         "$(S)/tst/rust_lib/upstream/coretests/tests/ops/control_flow.rs",
+        *TIMEOUT_INPUT,
     ],
     outputs=["$(B)/tst/unit/rust_lib_import.stamp"],
     cmd=[
@@ -855,6 +862,7 @@ unit_tests.append(command(
         *build.glob("$(S)/bin/rustc/*.h"),
         *build.glob("$(S)/bin/rustc/*.cpp"),
         *build.glob("$(S)/bin/rustc/*.inc"),
+        *TIMEOUT_INPUT,
     ],
     outputs=["$(B)/tst/unit/target_version_default.stamp"],
     cmd=[
@@ -875,6 +883,7 @@ unit_tests.append(command(
         *build.glob("$(S)/bin/rustc/*.h"),
         *build.glob("$(S)/bin/rustc/*.cpp"),
         *build.glob("$(S)/bin/rustc/*.inc"),
+        *TIMEOUT_INPUT,
     ],
     outputs=["$(B)/tst/unit/no_windows_support.stamp"],
     cmd=[
@@ -1036,6 +1045,7 @@ unit_tests.append(command(
     inputs=[
         "$(S)/tst/unit/test_libstd_timeout.py",
         "$(S)/build.py",
+        *TIMEOUT_INPUT,
     ],
     outputs=["$(B)/tst/unit/libstd_timeout.stamp"],
     cmd=[
@@ -1051,6 +1061,7 @@ unit_tests.append(command(
     inputs=[
         "$(S)/build",
         "$(S)/tst/unit/test_build_output_bytes.py",
+        *TIMEOUT_INPUT,
     ],
     outputs=["$(B)/tst/unit/build_output_bytes.stamp"],
     cmd=[
@@ -1066,6 +1077,7 @@ unit_tests.append(command(
     inputs=[
         "$(S)/tst/program.py",
         "$(S)/tst/unit/test_noninteractive_program_runner.py",
+        *TIMEOUT_INPUT,
     ],
     outputs=["$(B)/tst/unit/noninteractive_program_runner.stamp"],
     cmd=[
@@ -1083,6 +1095,7 @@ unit_tests.append(command(
         "$(S)/tst/lib.py",
         "$(S)/tst/rust_1_90/adapter.py",
         "$(S)/tst/rust_ui_compile/import.py",
+        *TIMEOUT_INPUT,
     ],
     outputs=["$(B)/tst/unit/compiletest_flags.stamp"],
     cmd=[
@@ -1141,6 +1154,7 @@ unit_tests.append(command(
         "$(S)/build.py",
         "$(S)/tst/system_rustc.py",
         "$(S)/tst/unit/test_system_rustc_mode.py",
+        *TIMEOUT_INPUT,
     ],
     outputs=["$(B)/tst/unit/system_rustc_mode.stamp"],
     cmd=[

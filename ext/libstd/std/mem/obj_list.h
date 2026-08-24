@@ -29,7 +29,7 @@ namespace stl {
 
         template <typename... A>
         T* make(A&&... a) {
-            return &(new (fl->allocate()) TT(forward<A>(a)...))->t;
+            return &(new (fl->allocate()) TT(stl::forward<A>(a)...))->t;
         }
 
         void release(T* t) {

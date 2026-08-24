@@ -127,7 +127,7 @@ namespace stl {
 
     template <typename R, typename C>
     void quickSort(R&& r, C&& f) {
-        return quickSort(r.begin(), r.end(), forward<C>(f));
+        return quickSort(r.begin(), r.end(), stl::forward<C>(f));
     }
 
     template <typename R>

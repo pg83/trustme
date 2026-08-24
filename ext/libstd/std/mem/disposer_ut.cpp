@@ -18,7 +18,7 @@ namespace {
             STD_INSIST(offset + sizeof(T) <= sizeof(storage));
             used = offset + sizeof(T);
 
-            return new (storage + offset) T(forward<A>(a)...);
+            return new (storage + offset) T(stl::forward<A>(a)...);
         }
     };
 

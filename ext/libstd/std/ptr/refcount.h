@@ -33,7 +33,7 @@ namespace stl {
 
         template <typename... A>
         static auto make(A&&... a) {
-            return RefCountPtr(new T(forward<A>(a)...));
+            return RefCountPtr(new T(stl::forward<A>(a)...));
         }
 
         auto ptr() const noexcept {

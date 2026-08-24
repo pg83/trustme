@@ -30,7 +30,7 @@ namespace stl {
             template <typename... A>
             Node(K key, A&&... a)
                 : k(key)
-                , v(forward<A>(a)...)
+                , v(stl::forward<A>(a)...)
             {
             }
 
@@ -44,7 +44,7 @@ namespace stl {
 
         template <typename... A>
         V* insertNew(K key, A&&... a) {
-            auto node = ol.make(key, forward<A>(a)...);
+            auto node = ol.make(key, stl::forward<A>(a)...);
             map.insert(node);
             return &node->v;
         }
@@ -73,7 +73,7 @@ namespace stl {
 
         template <typename... A>
         V* insert(K key, A&&... a) {
-            return (erase(key), insertNew(key, forward<A>(a)...));
+            return (erase(key), insertNew(key, stl::forward<A>(a)...));
         }
 
         V& operator[](K key) {

@@ -9,7 +9,7 @@ namespace stl {
 
         template <typename... A>
         Embed(A&&... a)
-            : t(forward<A>(a)...)
+            : t(stl::forward<A>(a)...)
         {
         }
     };
