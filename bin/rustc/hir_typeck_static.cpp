@@ -8,6 +8,7 @@
 #include "hir_item_path.h"
 #include "hir_visitor.h"
 
+#include <std/alg/defer.h>
 #include <std/mem/obj_pool.h>
 
 #include <algorithm>
@@ -942,7 +943,11 @@ bool StaticTraitResolve::findImplBoundsCb(const Span& sp, const HIRSimplePath& t
 
         HIRTypeRef normalizedBound;
         const HIRTypeData* comparableBound = bType;
-        if (bType->mayHaveAssociatedType()) {
+        if (bType->mayHaveAssociatedType() && !normalizingBoundType) {
+            normalizingBoundType = true;
+            STD_DEFER {
+                normalizingBoundType = false;
+            };
             normalizedBound = bType;
             this->expandAssociatedTypes(sp, normalizedBound);
             comparableBound = normalizedBound;

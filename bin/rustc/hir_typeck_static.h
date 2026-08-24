@@ -139,6 +139,7 @@ class StaticTraitResolve: public TraitResolveCommon {
     /// Cache of the result of find_impl__check_crate_raw
     mutable ::std::map<ImplCheckKey, ThinVector<ImplCheckEntry>> cachedImplChecks;
     mutable ::std::vector<::std::tuple<const HIRSimplePath*, const HIRPathParams*, const HIRTypeData*>> findImplStack;
+    mutable bool normalizingBoundType = false;
     // Owned by the crate ObjPool and reused across all fully-static goals.
     mutable NextSolverBridge* nextSolver = nullptr;
 

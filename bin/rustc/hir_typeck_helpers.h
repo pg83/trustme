@@ -4,6 +4,7 @@
 #include "hir_expr.h" // t_trait_list
 #include "hir_typeck_common.h"
 #include "hir_typeck_resolve_common.h"
+#include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 #include <std/sym/i_map.h>
 
@@ -260,10 +261,16 @@ private:
         bool matches(const HIRSimplePath& otherTrait, const HIRPathParams& otherParams, bool otherHasParams, const HIRTypeData* otherType) const;
     };
 
+    struct EatCacheEntry {
+        u64 generation;
+        HIRTypeRef type;
+    };
+
     mutable ::std::vector<LegacyTraitGoal> legacyTraitGoalStack;
-    mutable u64 freshImplPlaceholderCounter = 0;
-    mutable ::std::map<std::string, HIRTypeRef> eatCache;
-    mutable ::std::vector<HIRTypeRef> eatActiveStack;
+    mutable stl::ObjPool::Ref eatCachePool;
+    mutable stl::IntMap<EatCacheEntry> eatCache;
+    mutable u64 eatCacheGeneration = 0;
+    mutable stl::Vector<HIRTypeRef> eatActiveStack;
     mutable bool normalizingBoundType = false;
     // Owned by the crate ObjPool.  TraitResolution only keeps a stable
     // pointer into the compiler-lifetime arena.

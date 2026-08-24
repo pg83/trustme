@@ -1623,12 +1623,29 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
         // -------------------------------------------------------------------------------------------------------------------
         // -------------------------------------------------------------------------------------------------------------------
         bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRTypeData* type, const HIRSimplePath& trait, TraitBoundCallback& cb) const {
-            return iterateBoundsTraits(sp, type, [&](HIRCompare cmp, const HIRTypeData* t, const HIRGenericPath& tr, const CachedBound& b) {
-                if (tr.path != trait) {
-                    return false;
+            for (const auto& b : traitBounds) {
+                if (b.first.second.path != trait) {
+                    continue;
                 }
-                return cb.visit(cmp, t, tr, b);
-            });
+                const HIRTypeData* boundType = b.first.first;
+                auto cmp = boundType->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
+                HIRTypeRef normalizedBound;
+                if (cmp == HIRCompare::Unequal && this->hasAssociatedType(boundType) && !normalizingBoundType) {
+                    normalizingBoundType = true;
+                    STD_DEFER {
+                        normalizingBoundType = false;
+                    };
+                    normalizedBound = this->expandAssociatedTypes(sp, boundType);
+                    if (normalizedBound != boundType) {
+                        boundType = normalizedBound;
+                        cmp = boundType->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
+                    }
+                }
+                if (cmp != HIRCompare::Unequal && cb.visit(cmp, boundType, b.first.second, b.second)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRTypeData* type, TraitBoundCallback& cb) const {
@@ -4876,10 +4893,12 @@ default:
             : TraitResolveCommon(wb)
             , langDeref_(crate.getLangItemPathOpt("deref"))
             , ivars(ivars)
-            , coherenceIvars(crate.types)
             , visPath(visPath)
             , currentTraitPath_(currentTrait)
             , currentTraitPtr(currentTrait ? &crate.getTraitByPath(Span(), currentTrait->path) : nullptr)
+            , eatCachePool(stl::ObjPool::fromMemory())
+            , eatCache(eatCachePool.mutPtr())
+            , coherenceIvars(crate.types)
         {
             implGenerics_ = implParams;
             itemGenerics_ = itemParams;
@@ -4895,7 +4914,7 @@ default:
             ASSERT_BUG(Span(), eatActiveStack.empty(), "changing trait environment during associated-type expansion");
             implGenerics_ = implParams;
             itemGenerics_ = itemParams;
-            eatCache.clear();
+            eatCacheGeneration++;
             prepIndexes(Span());
         }
 
@@ -5254,22 +5273,12 @@ default:
                 }
                 case HIRPathData::TAG_UfcsKnown: {
                     auto& pe = e.path.data.as_UfcsKnown();
-                    struct D {
-                        const TraitResolution& tr;
-                        D(const TraitResolution& tr, HIRTypeRef v)
-                            : tr(tr)
-                        {
-                            tr.eatActiveStack.push_back(v);
-                        }
-                        ~D() {
-                            tr.eatActiveStack.pop_back();
-                        }
-                        D(D&&) = delete;
-                        D(const D&) = delete;
+                    eatActiveStack.pushBack(input);
+                    STD_DEFER {
+                        eatActiveStack.popBack();
                     };
-                    D _(*this, input);
                     // State stack to avoid infinite recursion
-                    assert(eatActiveStack.size() > 0);
+                    assert(!eatActiveStack.empty());
                     auto& prevStack = stack;
                     LList<const HIRTypeData*> stack(&prevStack, eatActiveStack.back());
 
@@ -5291,20 +5300,20 @@ default:
 
                         // Cache the result of this to avoid needing to do the full resolution too often.
                         // - This avoids VERY slow typechecking in 1.90's librustc_target
-                        auto k = FMT(input);
-                        auto it = eatCache.find(k);
-                        if (it != eatCache.end()) {
-                            if (input != it->second) {
-                                this->expandAssociatedTypesInplace(sp, it->second, stack);
+                        const auto cacheKey = input->uid;
+                        auto* cached = eatCache.find(cacheKey);
+                        if (cached && cached->generation == eatCacheGeneration) {
+                            if (input != cached->type) {
+                                this->expandAssociatedTypesInplace(sp, cached->type, stack);
                             }
-                            DEBUG("CACHED: " << input << " -> " << it->second);
-                            input = it->second;
+                            DEBUG("CACHED: " << input << " -> " << cached->type);
+                            input = cached->type;
                         } else {
                             this->expandAssociatedTypesInplaceUfcsKnown(sp, input, stack);
                             if (input->is_Path() && (input->as_Path().binding.is_Unbound() || input->as_Path().binding.is_Opaque())) {
                             } else {
-                                DEBUG("CACHE+: " << k << " = " << input);
-                                eatCache.insert(::std::make_pair(k, input));
+                                DEBUG("CACHE+: " << cacheKey << " = " << input);
+                                eatCache.insert(cacheKey, EatCacheEntry{eatCacheGeneration, input});
                             }
                         }
                     }
@@ -6323,6 +6332,19 @@ default:
                 }
                 return false;
             };
+            auto declaredTraitMayMatch = [&](auto&& visit, const HIRTraitPath& declaredTrait, bool matchCurrent) -> bool {
+                if (matchCurrent && declaredTrait.path.path == trait) {
+                    return true;
+                }
+                for (const auto& associated : declaredTrait.traitBounds) {
+                    for (const auto& nestedTrait : associated.second.traits) {
+                        if (visit(visit, nestedTrait, true)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            };
 
             for (const auto& environment : traitBounds) {
                 const auto& environmentType = environment.first.first;
@@ -6334,6 +6356,9 @@ default:
                 for (const auto& declaredBound : environmentInfo.traitPtr->params.bounds) {
                     const auto* declaredTrait = declaredBound.opt_TraitBound();
                     if (!declaredTrait) {
+                        continue;
+                    }
+                    if (!declaredTraitMayMatch(declaredTraitMayMatch, declaredTrait->trait, true)) {
                         continue;
                     }
 
@@ -6357,10 +6382,18 @@ default:
                     if (definition.generics.isGeneric() || !definition.generics.isEmpty()) {
                         continue;
                     }
+                    if (::std::none_of(definition.traitBounds.begin(), definition.traitBounds.end(), [&](const auto& declaredTrait) {
+                        return declaredTraitMayMatch(declaredTraitMayMatch, declaredTrait, false);
+                    })) {
+                        continue;
+                    }
                     auto associatedType = crate.types.path(HIRPath(environmentType, environmentTrait.clone(), associated.first, {}), HIRTypePathBinding::make_Opaque({}));
                     monomorph.ppMethod = &associatedType->as_Path().path.data.as_UfcsKnown().params;
                     bool found = false;
                     for (const auto& declaredTrait : definition.traitBounds) {
+                        if (!declaredTraitMayMatch(declaredTraitMayMatch, declaredTrait, false)) {
+                            continue;
+                        }
                         auto impliedTrait = monomorph.monomorphTraitpath(sp, declaredTrait, false);
                         if (visitDeclaredTrait(visitDeclaredTrait, associatedType, impliedTrait, false)) {
                             found = true;
@@ -6500,14 +6533,9 @@ default:
             }
 
             legacyTraitGoalStack.emplace_back(trait, canonicalParams, hasParams, canonicalType);
-
-            struct StackGuard {
-                ::std::vector<LegacyTraitGoal>& stack;
-
-                ~StackGuard() {
-                    stack.pop_back();
-                }
-            } guard{legacyTraitGoalStack};
+            STD_DEFER {
+                legacyTraitGoalStack.pop_back();
+            };
 
             // Handle auto traits (aka OIBITs)
             if (crate.getTraitByPath(sp, trait).isMarker) {
@@ -6982,9 +7010,11 @@ default:
                 }
             }
             if (placeholdersNeeded) {
-                // NOTE: Not using interning, because these are short-lived
-                // - Also, adding an interned string is quite expensive
-                placeholderName = RcString(FMT("ph_" << &implParamsDef << "_" << freshImplPlaceholderCounter++));
+                // Candidate substitutions for the same immutable impl header
+                // are alpha-equivalent.  A stable identity lets repeated
+                // constraint passes converge instead of manufacturing a new
+                // type and associated rule on every lookup.
+                placeholderName = RcString::newInterned(FMT("impl_?_" << &implParamsDef));
                 for (unsigned int i = 0; i < outImplParams.types.size(); i++) {
                     if (outImplParams.types[i] == HIRTypeRef()) {
                         if (placeholders.types.size() == 0) {
@@ -8622,7 +8652,7 @@ default: {
                             HIRPathParams methodParams;
                             RcString placeholderName;
                             if (method.data.params.isGeneric()) {
-                                placeholderName = RcString(FMT("method_wf_" << &method.data << "_" << freshImplPlaceholderCounter++));
+                                placeholderName = RcString::newInterned(FMT("method_wf_" << &method.data));
                             }
                             methodParams.types.reserve(method.data.params.types.size());
                             for (size_t i = 0; i < method.data.params.types.size(); i++) {

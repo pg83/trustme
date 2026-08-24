@@ -13,6 +13,8 @@
 #include "hir_typeck_main_bindings.h"
 
 #include <std/mem/obj_pool.h>
+#include <std/alg/defer.h>
+#include <std/rng/mix.h>
 
 #include <optional>
 #include <algorithm> // std::find_if
@@ -5371,34 +5373,44 @@ void Context::equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSi
         pp.types.push_back(monomorph.monomorphType(sp, defaultType));
     }
 
-    for (const auto& a : this->linkAssoc) {
-        if (a.leftTy != l) {
-            continue;
-        }
-        if (a.trait != trait) {
-            continue;
-        }
-        if (a.params != pp) {
-            continue;
-        }
-        if (a.implTy != implTy) {
-            continue;
-        }
-        if (a.atyPp != atyPp) {
-            continue;
-        }
-        if (a.name != name) {
-            continue;
-        }
-        if (a.isOperator != isOp) {
-            continue;
-        }
-        if (a.operatorKind != operatorKind) {
-            continue;
-        }
+    const RcString ruleName(name);
+    MonomorphEraseHrls eraseHrls(crate.types);
+    const auto ruleLeftTy = eraseHrls.monomorphType(sp, l, true);
+    auto ruleParams = eraseHrls.monomorphPathParams(sp, pp, true);
+    const auto ruleImplTy = eraseHrls.monomorphType(sp, implTy, true);
+    auto ruleAtyPp = eraseHrls.monomorphPathParams(sp, atyPp, true);
+    const auto key = associatedIndexKey(ruleLeftTy, trait, ruleImplTy, ruleName, isOp, operatorKind);
+    if (const auto* candidates = this->linkAssocIndex.find(key)) {
+        for (const auto index : *candidates) {
+            const auto& a = this->linkAssoc[index];
+            if (a.leftTy != ruleLeftTy) {
+                continue;
+            }
+            if (a.trait != trait) {
+                continue;
+            }
+            if (a.params != ruleParams) {
+                continue;
+            }
+            if (a.implTy != ruleImplTy) {
+                continue;
+            }
+            if (a.atyPp != ruleAtyPp) {
+                continue;
+            }
+            if (a.name != ruleName) {
+                continue;
+            }
+            if (a.isOperator != isOp) {
+                continue;
+            }
+            if (a.operatorKind != operatorKind) {
+                continue;
+            }
 
-        DEBUG("(DUPLICATE " << a << ")");
-        return;
+            DEBUG("(DUPLICATE " << a << ")");
+            return;
+        }
     }
     visitTyWith(implTy, [&](const HIRTypeData* ty) {
         if (const auto* path = ty->opt_Path()) {
@@ -5412,19 +5424,75 @@ void Context::equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSi
         Associated{
             this->nextRuleIdx++,
             sp,
-            MonomorphEraseHrls(crate.types).monomorphType(sp, l, true),
+            ruleLeftTy,
 
             trait.clone(),
-            MonomorphEraseHrls(crate.types).monomorphPathParams(sp, pp, true),
-            MonomorphEraseHrls(crate.types).monomorphType(sp, implTy, true),
-            name,
-            MonomorphEraseHrls(crate.types).monomorphPathParams(sp, atyPp, true),
+            mv$(ruleParams),
+            ruleImplTy,
+            ruleName,
+            mv$(ruleAtyPp),
             isOp,
             operatorKind
         }
     );
+    this->indexAssociated(this->linkAssoc.size() - 1);
     DEBUG("++ " << this->linkAssoc.back());
     this->ivars.markChange();
+}
+
+u64 Context::associatedIndexKey(HIRTypeRef leftTy, const HIRSimplePath& trait, HIRTypeRef implTy, RcString name, bool isOperator, TypeckPrimitiveOperator operatorKind) {
+    return stl::mix(leftTy, implTy, trait.rawData()) ^ (static_cast<u64>(name.rawId()) << 8) ^ (static_cast<u64>(operatorKind) << 1) ^ isOperator;
+}
+
+u64 Context::associatedIndexKey(const Associated& rule) {
+    return associatedIndexKey(rule.leftTy, rule.trait, rule.implTy, rule.name, rule.isOperator, rule.operatorKind);
+}
+
+void Context::indexAssociated(unsigned index) {
+    const auto key = associatedIndexKey(linkAssoc[index]);
+    auto* bucket = linkAssocIndex.find(key);
+    if (!bucket) {
+        bucket = linkAssocIndex.insert(key);
+    }
+    bucket->pushBack(index);
+}
+
+void Context::unindexAssociated(unsigned index, u64 key) {
+    auto* bucket = linkAssocIndex.find(key);
+    assert(bucket);
+    for (size_t i = 0; i < bucket->length(); i++) {
+        if ((*bucket)[i] == index) {
+            const auto replacement = bucket->popBack();
+            if (i < bucket->length()) {
+                bucket->mut(i) = replacement;
+            }
+            return;
+        }
+    }
+    assert(!"associated type rule is absent from its index");
+}
+
+void Context::storeAssociated(unsigned index, Associated rule, u64 oldKey) {
+    const auto newKey = associatedIndexKey(rule);
+    if (newKey != oldKey) {
+        unindexAssociated(index, oldKey);
+    }
+    linkAssoc[index] = mv$(rule);
+    if (newKey != oldKey) {
+        indexAssociated(index);
+    }
+}
+
+void Context::removeAssociated(unsigned index, u64 oldKey) {
+    unindexAssociated(index, oldKey);
+    const auto last = static_cast<unsigned>(linkAssoc.size() - 1);
+    if (index != last) {
+        const auto movedKey = associatedIndexKey(linkAssoc[last]);
+        unindexAssociated(last, movedKey);
+        linkAssoc[index] = mv$(linkAssoc.back());
+        indexAssociated(index);
+    }
+    linkAssoc.pop_back();
 }
 
 void Context::selectWellFormed(const Span& sp, const HIRTypeData* type) {
@@ -8316,22 +8384,6 @@ namespace {
         }
     }
 
-    struct AssociatedPossibilityCapture {
-        Context& context;
-        ::std::vector<Context::Associated::CapturedIvarPossible>* previous;
-
-        AssociatedPossibilityCapture(Context& context, ::std::vector<Context::Associated::CapturedIvarPossible>& destination)
-            : context(context)
-            , previous(context.possibleIvarSink)
-        {
-            context.possibleIvarSink = &destination;
-        }
-
-        ~AssociatedPossibilityCapture() {
-            context.possibleIvarSink = previous;
-        }
-    };
-
     struct IvarDependencyIndex {
         Context& context;
         ::std::vector<::std::vector<unsigned int>> associatedTargets;
@@ -10431,13 +10483,32 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
             DEBUG("--- Associated types");
             unsigned int linkAssocIterLimit = context.linkAssoc.size() * 4;
             for (unsigned int i = 0; i < context.linkAssoc.size();) {
-                // - Move out (and back in later) to avoid holding a bad pointer if the list is updated
-                auto rule = mv$(context.linkAssoc[i]);
+                // Keep the indexed snapshot intact while checking the rule.
+                // Candidate bounds can append to this vector, and must still
+                // be able to recognise the currently-checked rule as a
+                // duplicate after that append reallocates the vector.
+                const auto& indexedRule = context.linkAssoc[i];
+                const auto indexedKey = context.associatedIndexKey(indexedRule);
+                Context::Associated rule{
+                    indexedRule.ruleIdx,
+                    indexedRule.span,
+                    indexedRule.leftTy,
+                    indexedRule.trait.clone(),
+                    indexedRule.params.clone(),
+                    indexedRule.implTy,
+                    indexedRule.name,
+                    indexedRule.atyPp.clone(),
+                    indexedRule.isOperator,
+                    indexedRule.operatorKind,
+                };
+                rule.isAmbiguous = indexedRule.isAmbiguous;
+                rule.stalledOn = indexedRule.stalledOn;
+                rule.stalledPossibilities = indexedRule.stalledPossibilities;
 
                 DEBUG("- " << rule);
                 if (associatedStillStalled(context, rule)) {
                     mergeAssociatedPossibilities(context, rule.stalledPossibilities);
-                    context.linkAssoc[i] = mv$(rule);
+                    context.storeAssociated(i, mv$(rule), indexedKey);
                     i++;
                     if (linkAssocIterLimit-- == 0) {
                         DEBUG("link_assoc iteration limit exceeded");
@@ -10459,7 +10530,11 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                 ::std::vector<Context::Associated::CapturedIvarPossible> capturedPossibilities;
                 AssociatedCheckResult result;
                 {
-                    AssociatedPossibilityCapture capture(context, capturedPossibilities);
+                    auto* previousSink = context.possibleIvarSink;
+                    context.possibleIvarSink = &capturedPossibilities;
+                    STD_DEFER {
+                        context.possibleIvarSink = previousSink;
+                    };
                     result = checkAssociated(context, rule);
                 }
                 mergeAssociatedPossibilities(context, capturedPossibilities);
@@ -10467,10 +10542,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
 
                 if (result == AssociatedCheckResult::Complete) {
                     DEBUG("- Consumed associated type rule " << i << "/" << context.linkAssoc.size() << " - " << rule);
-                    if (i != context.linkAssoc.size() - 1) {
-                        context.linkAssoc[i] = mv$(context.linkAssoc.back());
-                    }
-                    context.linkAssoc.pop_back();
+                    context.removeAssociated(i, indexedKey);
                 } else {
                     if ((result == AssociatedCheckResult::Stalled || result == AssociatedCheckResult::Ambiguous) && setAssociatedStall(context, rule)) {
                         rule.stalledPossibilities = mv$(capturedPossibilities);
@@ -10478,7 +10550,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                         rule.stalledOn.clear();
                         rule.stalledPossibilities.clear();
                     }
-                    context.linkAssoc[i] = mv$(rule);
+                    context.storeAssociated(i, mv$(rule), indexedKey);
                     i++;
                 }
 
@@ -13799,6 +13871,8 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
     , ivars(wb.crate->types)
     , resolve(ivars, wb, implParams, itemParams, modPath, currentTrait)
     , nextRuleIdx(0)
+    , linkAssocIndexPool(stl::ObjPool::fromMemory())
+    , linkAssocIndex(linkAssocIndexPool.mutPtr())
     , langBox(crate.getLangItemPathOpt("owned_box"))
 {
     if (currentTraitImpl) {

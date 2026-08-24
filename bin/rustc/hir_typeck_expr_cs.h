@@ -7,6 +7,8 @@
 #include "hir_typeck_helpers.h"
 #include "hir_typeck_expr_visit.h"
 
+#include <std/lib/vector.h>
+
 #include <algorithm>
 #include <unordered_map>
 
@@ -121,6 +123,8 @@ struct Context: TraitTypeConstraintCallback {
     // before the corresponding coercion rules are solved.
     ::std::unordered_map<const HIRExprNode*, HIRTypeRef> coercionHints;
     ::std::vector<Associated> linkAssoc;
+    stl::ObjPool::Ref linkAssocIndexPool;
+    stl::IntMap<stl::Vector<unsigned>> linkAssocIndex;
     /// Nodes that need revisiting (e.g. method calls when the receiver isn't known)
     ::std::vector<HIRExprNode*> toVisit;
     /// Callback-based revisits (e.g. for slice patterns handling slices/arrays)
@@ -191,6 +195,13 @@ struct Context: TraitTypeConstraintCallback {
 
     // Equate const generics (values)
     void equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRConstGeneric& rr);
+
+    static u64 associatedIndexKey(HIRTypeRef leftTy, const HIRSimplePath& trait, HIRTypeRef implTy, RcString name, bool isOperator, TypeckPrimitiveOperator operatorKind);
+    static u64 associatedIndexKey(const Associated& rule);
+    void indexAssociated(unsigned index);
+    void unindexAssociated(unsigned index, u64 key);
+    void storeAssociated(unsigned index, Associated rule, u64 oldKey);
+    void removeAssociated(unsigned index, u64 oldKey);
 
     /// Adds a `ty: Sized` bound to the contained ivars.
     void requireSized(const Span& sp, const HIRTypeData* ty);

@@ -1986,6 +1986,13 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
     const auto& v = (tyL->is_Infer() ? resolvePlaceholder.getType(sp, tyL) : tyL);
     const auto& x = (tyR->is_Infer() || tyR->is_Generic() ? resolvePlaceholder.getType(sp, tyR) : tyR);
     TRACE_FUNCTION_F(tyL << ", " << tyR << " -- " << v << ", " << x);
+    // Resolving an inference variable can expose the generic that the caller
+    // must match.  Treat it exactly like a generic supplied directly as the
+    // left operand instead of falling through to the unreachable structural
+    // Generic/Generic case below.
+    if (const auto* e = v->opt_Generic()) {
+        return this->matchTy(*e, x, resolvePlaceholder);
+    }
     // If `x` is an ivar - This can be a fuzzy match.
     if (const auto* xep = x->opt_Infer()) {
         const auto& xe = *xep;

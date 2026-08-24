@@ -696,9 +696,10 @@ HIRCompare HIRPath::compareWithPlaceholders(const Span& sp, const HIRPath& x, tC
             if (ple.item != pre.item) {
                 return HIRCompare::Unequal;
             }
-
-            TODO(sp, "Path::compare_with_placeholders - UfcsUnknown");
-            break;
+            HIRCompare rv = HIRCompare::Equal;
+            CMP(rv, ple.type->compareWithPlaceholders(sp, pre.type, resolvePlaceholder));
+            CMP(rv, ::compareWithPlaceholders(sp, ple.params, pre.params, resolvePlaceholder));
+            return rv;
         }
         case HIRPathData::TAG_UfcsInherent: {
             auto& ple = this->data.as_UfcsInherent();
