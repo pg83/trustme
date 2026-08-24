@@ -609,6 +609,7 @@ gimli_0_32_3 = add_project_test(
     url="https://github.com/gimli-rs/gimli.git",
     rev="8bc8e622fcb9be20fc9f03c96bc6335d936b869d",
     adapter_args=["--no-default-features", "--features", "read"],
+    lockfile="$(S)/tst/projects/gimli_0_32_3/Cargo.lock",
 )
 
 combine = add_project_test(
