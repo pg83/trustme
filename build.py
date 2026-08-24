@@ -587,6 +587,13 @@ rustversion = add_project_test(
     lockfile="$(S)/tst/projects/rustversion/Cargo.lock",
 )
 
+trybuild = add_project_test(
+    name="trybuild",
+    url="https://github.com/dtolnay/trybuild.git",
+    rev="2adc26560dba1d8eaeb596c5625f854e5d6c68b2",
+    lockfile="$(S)/tst/projects/trybuild/Cargo.lock",
+)
+
 serde = add_project_test(
     name="serde",
     url="https://github.com/serde-rs/serde.git",
