@@ -76,6 +76,42 @@ impl ::std::fmt::Debug for LexError {
     }
 }
 
+fn group_delimiters(tokens: Vec<crate::TokenTree>) -> Result<Vec<crate::TokenTree>, LexError> {
+    let mut groups: Vec<(char, Vec<crate::TokenTree>)> = Vec::new();
+    let mut current = Vec::new();
+
+    for token in tokens {
+        match token {
+        crate::TokenTree::Punct(ref punct) if punct.ch == '(' || punct.ch == '[' || punct.ch == '{' => {
+            groups.push((punct.ch, current));
+            current = Vec::new();
+            },
+        crate::TokenTree::Punct(ref punct) if punct.ch == ')' || punct.ch == ']' || punct.ch == '}' => {
+            let (open, mut parent) = match groups.pop() {
+                Some(group) => group,
+                None => return Err(LexError { inner: "Unexpected closing delimiter" }),
+                };
+            let delimiter = match (open, punct.ch) {
+                ('(', ')') => crate::Delimiter::Parenthesis,
+                ('[', ']') => crate::Delimiter::Bracket,
+                ('{', '}') => crate::Delimiter::Brace,
+                _ => return Err(LexError { inner: "Mismatched closing delimiter" }),
+                };
+            parent.push(crate::Group::new(delimiter, TokenStream { inner: current }).into());
+            current = parent;
+            },
+        token => current.push(token),
+        }
+    }
+
+    if groups.is_empty() {
+        Ok(current)
+    }
+    else {
+        Err(LexError { inner: "Unclosed delimiter" })
+    }
+}
+
 impl ::std::str::FromStr for TokenStream {
     type Err = LexError;
     fn from_str(src: &str) -> Result<TokenStream, LexError> {
@@ -498,7 +534,7 @@ impl ::std::str::FromStr for TokenStream {
         }
 
         Ok(TokenStream {
-            inner: rv,
+            inner: group_delimiters(rv)?,
             })
     }
 }
