@@ -85,14 +85,34 @@ pub mod token_stream {
     impl ::std::fmt::Display for TokenStream
     {
         fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-            for v in &self.inner
-            {
-                write!(f, "{}", v)?;
-                // Put a space after every token that isn't punctuation
-                if let &crate::TokenTree::Punct(_) = v {
+            let mut joint = false;
+            for (i, token) in self.inner.iter().enumerate() {
+                if i != 0 && !joint {
+                    f.write_str(" ")?;
                 }
-                else {
-                    write!(f, " ")?;
+                joint = false;
+                match token {
+                &crate::TokenTree::Group(ref group) => {
+                    let (open, close) = match group.delimiter() {
+                        crate::Delimiter::Parenthesis => ("(", ")"),
+                        crate::Delimiter::Brace => ("{", "}"),
+                        crate::Delimiter::Bracket => ("[", "]"),
+                        crate::Delimiter::None => ("", ""),
+                        };
+                    let stream = group.stream();
+                    if stream.is_empty() {
+                        write!(f, "{} {}", open, close)?;
+                    }
+                    else {
+                        write!(f, "{} {} {}", open, stream, close)?;
+                    }
+                    },
+                &crate::TokenTree::Ident(ref ident) => write!(f, "{}", ident)?,
+                &crate::TokenTree::Punct(ref punct) => {
+                    write!(f, "{}", punct.as_char())?;
+                    joint = punct.spacing() == crate::Spacing::Joint;
+                    },
+                &crate::TokenTree::Literal(ref literal) => write!(f, "{}", literal)?,
                 }
             }
             Ok(())

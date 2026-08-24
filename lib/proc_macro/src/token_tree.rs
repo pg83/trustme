@@ -168,13 +168,7 @@ impl ::std::fmt::Display for Punct
 {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result
     {
-        self.ch.fmt(f)?;
-        match self.spacing
-        {
-        Spacing::Alone => f.write_str(" ")?,
-        Spacing::Joint => {},
-        }
-        Ok(())
+        self.ch.fmt(f)
     }
 }
 impl Punct {

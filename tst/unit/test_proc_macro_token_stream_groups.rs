@@ -21,7 +21,9 @@ fn expect_empty_group(token: Option<TokenTree>, expected: Delimiter) {
 }
 
 fn main() {
-    let mut function = TokenStream::from_str("async fn process() {}").unwrap().into_iter();
+    let function = TokenStream::from_str("async fn process() {}").unwrap();
+    assert_eq!(function.to_string(), "async fn process ( ) { }");
+    let mut function = function.into_iter();
     expect_ident(function.next(), "async");
     expect_ident(function.next(), "fn");
     expect_ident(function.next(), "process");
@@ -29,7 +31,9 @@ fn main() {
     expect_empty_group(function.next(), Delimiter::Brace);
     assert!(function.next().is_none());
 
-    let mut closure = TokenStream::from_str("async || { [] }").unwrap().into_iter();
+    let closure = TokenStream::from_str("async || { [] }").unwrap();
+    assert_eq!(closure.to_string(), "async || { [ ] }");
+    let mut closure = closure.into_iter();
     expect_ident(closure.next(), "async");
     assert!(matches!(closure.next(), Some(TokenTree::Punct(_))));
     assert!(matches!(closure.next(), Some(TokenTree::Punct(_))));
@@ -43,6 +47,14 @@ fn main() {
         other => panic!("expected closure body group, got {:?}", other),
     }
     assert!(closure.next().is_none());
+
+    assert_eq!(
+        TokenStream::from_str("fn main() { assert_eq!(foo(), \"Hello, world!\"); }")
+            .unwrap()
+            .to_string(),
+        "fn main ( ) { assert_eq ! ( foo ( ) , \"Hello, world!\" ) ; }",
+    );
+    assert_eq!(TokenStream::from_str("<T>").unwrap().to_string(), "< T >");
 
     assert!(TokenStream::from_str("(]").is_err());
     assert!(TokenStream::from_str("{").is_err());
