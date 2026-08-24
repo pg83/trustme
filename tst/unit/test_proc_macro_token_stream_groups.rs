@@ -1,6 +1,6 @@
 extern crate proc_macro;
 
-use proc_macro::{Delimiter, Ident, Span, TokenStream, TokenTree};
+use proc_macro::{Delimiter, Ident, Literal, Span, TokenStream, TokenTree};
 use std::panic;
 use std::str::FromStr;
 
@@ -27,6 +27,11 @@ fn main() {
     }
     assert_eq!(Ident::new("_", Span::call_site()).to_string(), "_");
     assert_eq!(Ident::new("String", Span::call_site()).to_string(), "String");
+    for byte in &["b'a'", "b'\\n'", "b'\\r'", "b'\\t'", "b'\\''", "b'\"'", "b'\\x7f'"] {
+        assert_eq!(TokenStream::from_str(byte).unwrap().to_string(), *byte);
+    }
+    assert_eq!(Literal::byte_character(b'a').to_string(), "b'a'");
+    assert_eq!(Literal::byte_character(b'\n').to_string(), "b'\\n'");
 
     let function = TokenStream::from_str("async fn process() {}").unwrap();
     assert_eq!(function.to_string(), "async fn process ( ) { }");

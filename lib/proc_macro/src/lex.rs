@@ -356,7 +356,44 @@ impl ::std::str::FromStr for TokenStream {
                         // Byte character literal?
                         // NOTE: That b'foo is not `b` followed by `'foo`
                         assert!(is_byte);
-                        panic!("TODO: Byte character literal");
+                        let mut spelling = String::from("b'");
+                        c = some_else!(it.consume() => return err("Unterminated byte character literal"));
+                        if c == '\\' {
+                            spelling.push(c);
+                            c = some_else!(it.consume() => return err("Unterminated byte character literal"));
+                            spelling.push(c);
+                            match c {
+                            '0' | 'n' | 'r' | 't' | '\\' | '\'' | '"' => {},
+                            'x' => {
+                                for _ in 0 .. 2 {
+                                    c = some_else!(it.consume() => return err("Unterminated byte character literal"));
+                                    if c.to_digit(16).is_none() {
+                                        return err("Invalid hex digit in byte character literal");
+                                    }
+                                    spelling.push(c);
+                                }
+                                },
+                            _ => return err("Invalid escape in byte character literal"),
+                            }
+                        }
+                        else if c as u32 <= 0x7f && c != '\n' && c != '\r' {
+                            spelling.push(c);
+                        }
+                        else {
+                            return err("Invalid byte character literal");
+                        }
+
+                        match it.consume() {
+                        Some('\'') => spelling.push('\''),
+                        Some(_) => return err("Multiple characters in byte character literal"),
+                        None => return err("Unterminated byte character literal"),
+                        }
+                        it.consume();
+                        rv.push(Literal {
+                            span: crate::Span::call_site(),
+                            val: crate::token_tree::LiteralValue::Raw(spelling),
+                        }.into());
+                        continue 'outer;
                     }
                     else if c == '\"'
                     {

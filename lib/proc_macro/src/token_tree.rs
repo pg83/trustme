@@ -466,9 +466,19 @@ impl Literal {
         }
     }
     pub fn byte_character(ch: u8) -> Literal {
+        let escaped = match ch {
+            b'\0' => "\\0".to_owned(),
+            b'\t' => "\\t".to_owned(),
+            b'\n' => "\\n".to_owned(),
+            b'\r' => "\\r".to_owned(),
+            b'\'' => "\\'".to_owned(),
+            b'\\' => "\\\\".to_owned(),
+            b' '..=b'~' => (ch as char).to_string(),
+            _ => format!("\\x{:02x}", ch),
+        };
         Literal {
             span: Span::call_site(),
-            val: LiteralValue::UnsignedInt(ch as _, 8),
+            val: LiteralValue::Raw(format!("b'{}'", escaped)),
         }
     }
     pub fn c_string(bytes: &::std::ffi::CStr) -> Literal {
