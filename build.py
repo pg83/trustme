@@ -592,6 +592,15 @@ zerocopy = add_project_test(
     lockfile="$(S)/tst/projects/zerocopy/Cargo.lock",
 )
 
+zerocopy_0_8_56 = add_project_test(
+    name="zerocopy_0_8_56",
+    url="https://github.com/google/zerocopy.git",
+    rev="6dc429c451bdf1d7202ec1ec2cf426514e00d8eb",
+    manifest="zerocopy",
+    adapter_args=["--features", "derive,simd"],
+    lockfile="$(S)/tst/projects/zerocopy_0_8_56/Cargo.lock",
+)
+
 rustversion = add_project_test(
     name="rustversion",
     url="https://github.com/dtolnay/rustversion.git",
