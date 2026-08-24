@@ -587,6 +587,15 @@ rustversion = add_project_test(
     lockfile="$(S)/tst/projects/rustversion/Cargo.lock",
 )
 
+serde = add_project_test(
+    name="serde",
+    url="https://github.com/serde-rs/serde.git",
+    rev="7fc3b4c30c94f73a96ebd1553f2b090d928fc3a8",
+    manifest="serde",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/serde/Cargo.lock",
+)
+
 elain = add_project_test(
     name="elain",
     url="https://github.com/jswrenn/elain.git",
