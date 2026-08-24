@@ -583,6 +583,12 @@ clap = add_project_test(
     rev="3bd502024e45cc9abef690f28783d76a9ce33500",
 )
 
+combine = add_project_test(
+    name="combine",
+    url="https://github.com/Marwes/combine.git",
+    rev="50a71afa1c88e8564e0220a6e0625dd16a2302a2",
+)
+
 alloca = add_project_test(
     name="alloca",
     url="https://github.com/playXE/alloca-rs.git",
