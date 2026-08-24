@@ -81,7 +81,7 @@ parseGlobals:
 	commandArgs := args[commandIndex+1:]
 
 	switch command {
-	case "build", "test":
+	case "build", "check", "test":
 		commandArgs = append(global, commandArgs...)
 
 		opts := parseBuildOptions(command, commandArgs)
@@ -92,8 +92,18 @@ parseGlobals:
 			fmt.Fprintln(os.Stderr, "Press enter to exit...")
 			_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
 		}
+	case "run":
+		commandArgs = append(global, commandArgs...)
+		opts := parseBuildOptions("build", commandArgs)
+		binaries := buildProject(opts)
+		if len(binaries) != 1 {
+			throwFmt("cargo run requires exactly one binary target, found %d", len(binaries))
+		}
+		runCommand("", nil, "", opts.dryRun, binaries[0], opts.testArgs...)
 	case "vendor":
 		cmdVendor(commandArgs)
+	case "metadata":
+		cmdMetadata(append(global, commandArgs...))
 	case "help", "-h", "--help":
 		usage(os.Stdout)
 	default:
@@ -108,7 +118,10 @@ Usage: cargo [OPTIONS] <COMMAND>
 
 Commands:
   build    Compile the current package
+  check    Typecheck the current package
   test     Build and execute tests
+  run      Build and execute a binary target
+  metadata Output package and workspace metadata
   vendor   Vendor all dependencies locally
   help     Print this message
 
@@ -133,6 +146,8 @@ func parseBuildOptions(command string, args []string) BuildOptions {
 		profile:      "debug",
 		jobs:         runtime.NumCPU(),
 		targetDir:    os.Getenv("CARGO_TARGET_DIR"),
+		vendorDir:    os.Getenv(trustmeCargoVendorDir),
+		libSearch:    filepath.SplitList(os.Getenv(trustmeCargoLibSearch)),
 	}
 
 	for i := 0; i < len(args); i++ {
@@ -201,9 +216,11 @@ func parseBuildOptions(command string, args []string) BuildOptions {
 			opts.noRun = true
 		case "-v", "--verbose":
 			opts.verbose++
-		case "--color", "--message-format", "--config":
+		case "--message-format":
+			opts.messageFormat = value()
+		case "--color", "--config":
 			_ = value()
-		case "-q", "--quiet", "--locked", "--offline", "--frozen":
+		case "-q", "--quiet", "--locked", "--offline", "--frozen", "--keep-going":
 		case "-h", "--help":
 			buildUsage(command)
 			os.Exit(0)

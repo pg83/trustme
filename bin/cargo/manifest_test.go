@@ -115,6 +115,41 @@ path = "tests/integration.rs"
 	}
 }
 
+func TestAbsoluteTargetPathIsCompilerAndCacheInput(t *testing.T) {
+	dir := t.TempDir()
+	packageDir := filepath.Join(dir, "generated")
+	source := filepath.Join(dir, "ui", "case.rs")
+	manifestPath := filepath.Join(packageDir, "Cargo.toml")
+
+	writeTestFile(t, source, "fn main() {}\n")
+	writeTestFile(t, manifestPath, `[package]
+name = "generated"
+version = "1.0.0"
+
+[[bin]]
+name = "case"
+path = "`+source+`"
+`)
+
+	workspace := &Workspace{
+		dir: dir, manifestPath: manifestPath,
+		dependencies: map[string]*Dependency{}, patches: map[string]string{},
+	}
+	pkg := parsePackage(manifestPath, readToml(manifestPath), workspace)
+	target := pkg.targets[0]
+	builder := &Builder{context: &BuildContext{
+		workspace: workspace,
+		opts:      BuildOptions{targetDir: filepath.Join(dir, "target")},
+	}}
+
+	if got := targetSourcePath(pkg, target); got != source {
+		t.Fatalf("compiler source is %q, want %q", got, source)
+	}
+	if inputs := builder.targetInputs(pkg, target); !contains(inputs, source) {
+		t.Fatalf("absolute target source is missing from cache inputs: %#v", inputs)
+	}
+}
+
 func TestWorkspaceMembers(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "Cargo.toml"), `[workspace]

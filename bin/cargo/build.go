@@ -17,6 +17,8 @@ const (
 	trustmeCargoDylib                = "TRUSTME_CARGO_DYLIB"
 	trustmeCargoIgnoreToolTimestamps = "TRUSTME_CARGO_IGNORE_TOOL_TIMESTAMPS"
 	trustmeCargoNoDebugAssertions    = "TRUSTME_CARGO_NO_DEBUG_ASSERTIONS"
+	trustmeCargoVendorDir            = "TRUSTME_CARGO_VENDOR_DIR"
+	trustmeCargoLibSearch            = "TRUSTME_CARGO_LIB_SEARCH"
 )
 
 type Builder struct {
@@ -165,7 +167,7 @@ func buildPackage(opts BuildOptions, manifestPath string) []string {
 
 	if opts.command == "test" && !opts.noRun {
 		for _, binary := range binaries {
-			runTest(binary, opts.testArgs, opts.dryRun)
+			builder.runTest(binary, opts.testArgs)
 		}
 	}
 
@@ -323,13 +325,18 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact) {
 		len(selectors.test) > 0 || selectors.examples || len(selectors.example) > 0 ||
 		selectors.benches || len(selectors.bench) > 0
 
-	if b.context.opts.command == "build" {
+	if b.context.opts.command == "build" || b.context.opts.command == "check" {
+		checkOnly := b.context.opts.command == "check"
 		if !explicit || selectors.lib {
 			if task := b.libraryTask(root, isHost); task != nil {
-				tasks = append(tasks, b.finalTask(task))
+				rootTask := task
+				if !checkOnly {
+					rootTask = b.finalTask(task)
+				}
+				tasks = append(tasks, rootTask)
 				unit := b.units[task]
 
-				if unit.metadata >= 0 {
+				if !checkOnly && unit.metadata >= 0 {
 					path := b.artifact(root, unit.target, isHost)
 
 					if unit.target.procMacro || crateType(unit.target) == "dylib" {
@@ -342,12 +349,12 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact) {
 					})
 				}
 
-				if unit.target.procMacro || crateType(unit.target) == "dylib" {
+				if !checkOnly && (unit.target.procMacro || crateType(unit.target) == "dylib") {
 					artifacts = append(artifacts, InstallArtifact{
 						task: b.finalTask(task), index: 0,
 						path: b.artifact(root, unit.target, true),
 					})
-				} else if crateType(unit.target) == "rlib" {
+				} else if !checkOnly && crateType(unit.target) == "rlib" {
 					artifacts = append(artifacts, InstallArtifact{
 						task: b.codegenTask(task), index: 0,
 						path: b.artifact(root, unit.target, isHost) + ".o",
@@ -365,12 +372,15 @@ func (b *Builder) rootTasks() ([]*Task, []InstallArtifact) {
 
 			if selected && targetFeaturesEnabled(root, target) {
 				task := b.targetTask(root, target, isHost)
-				final := b.finalTask(task)
-				tasks = append(tasks, final)
+				rootTask := task
+				if !checkOnly {
+					rootTask = b.finalTask(task)
+				}
+				tasks = append(tasks, rootTask)
 
-				if target.kind != "lib" {
+				if !checkOnly && target.kind != "lib" {
 					artifacts = append(artifacts, InstallArtifact{
-						task: final, index: 0, path: b.artifact(root, target, isHost), binary: true,
+						task: rootTask, index: 0, path: b.artifact(root, target, isHost), binary: true,
 					})
 				}
 			}
@@ -468,7 +478,7 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 		key:       key,
 		name:      b.taskName(pkg, target, isHost),
 		kind:      "RS",
-		inputs:    b.packageInputs(pkg),
+		inputs:    b.targetInputs(pkg, target),
 		outputs:   outputs,
 		signature: b.rustSignature(pkg, target, isHost),
 	}
@@ -713,7 +723,8 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 	pkg := unit.pkg
 	target := unit.target
 	output := ctx.outputBase(unit.baseName)
-	args := []string{filepath.Join(pkg.dir, target.path)}
+	source := targetSourcePath(pkg, target)
+	args := []string{source}
 
 	args = append(args, b.commonCompilerArgs(pkg, output, unit.isHost)...)
 	args = append(args, "--crate-name", target.name, "--crate-type", crateType(target))
@@ -777,7 +788,7 @@ func (b *Builder) compileTarget(ctx *TaskContext, unit *CompileUnit, outDir stri
 		runCommand(pkg.dir, env, "", b.context.opts.dryRun, args[0], args[1:]...)
 	}
 
-	runCommand("", env, "", b.context.opts.dryRun, b.context.compiler, args...)
+	b.runCompiler("", env, source, args...)
 
 	if !b.context.opts.dryRun {
 		makeBuildOutputPortable(ctx.output(unit.linkManifest), outDir)
@@ -793,7 +804,7 @@ func (b *Builder) compileBuildScript(ctx *TaskContext, unit *CompileUnit) {
 	args = append(args, "--crate-name", "build", "--crate-type", "bin", "--edition", pkg.edition)
 	args = append(args, "-C", "emit-cpp-only", "-C", "emit-link-manifest="+ctx.output(unit.linkManifest))
 	args = append(args, b.crateArgs(ctx, unit, b.buildDependencies(pkg))...)
-	runCommand("", b.commonEnv(pkg), "", b.context.opts.dryRun, b.context.compiler, args...)
+	b.runCompiler("", b.commonEnv(pkg), absoluteFrom(pkg.dir, pkg.buildScript), args...)
 }
 
 func (b *Builder) runBuildScript(ctx *TaskContext, pkg *Package, executable *Task) {
@@ -978,6 +989,22 @@ func (b *Builder) packageInputs(pkg *Package) []string {
 	return inputs
 }
 
+func targetSourcePath(pkg *Package, target *Target) string {
+	return absoluteFrom(pkg.dir, target.path)
+}
+
+func (b *Builder) targetInputs(pkg *Package, target *Target) []string {
+	inputs := b.packageInputs(pkg)
+	source := targetSourcePath(pkg, target)
+
+	if !contains(inputs, source) {
+		inputs = append(inputs, source)
+		sort.Strings(inputs)
+	}
+
+	return inputs
+}
+
 func (b *Builder) rustSignature(pkg *Package, target *Target, isHost bool) []string {
 	signature := []string{
 		b.context.compiler,
@@ -988,6 +1015,7 @@ func (b *Builder) rustSignature(pkg *Package, target *Target, isHost bool) []str
 		targetKey(target),
 		crateType(target),
 		b.crateSuffix(pkg),
+		"message-format=" + b.context.opts.messageFormat,
 	}
 	for _, dir := range b.context.opts.libSearch {
 		signature = append(signature, "lib-search="+absolutePath(dir))
@@ -1641,8 +1669,21 @@ func runCommand(dir string, extraEnv map[string]string, logPath string, dryRun b
 	}
 }
 
-func runTest(binary string, args []string, dryRun bool) {
-	runCommand("", nil, "", dryRun, binary, args...)
+func (b *Builder) runTest(binary string, args []string) {
+	env := b.commonEnv(b.context.root)
+	if cargo, err := os.Executable(); err == nil {
+		env["CARGO"] = cargo
+	}
+	if b.context.opts.targetDir != "" {
+		env["CARGO_TARGET_DIR"] = absolutePath(b.context.opts.targetDir)
+	}
+	if b.context.opts.vendorDir != "" {
+		env[trustmeCargoVendorDir] = absolutePath(b.context.opts.vendorDir)
+	}
+	if len(b.context.opts.libSearch) > 0 {
+		env[trustmeCargoLibSearch] = strings.Join(b.context.opts.libSearch, string(os.PathListSeparator))
+	}
+	runCommand(b.context.root.dir, env, "", b.context.opts.dryRun, binary, args...)
 }
 
 func shellCommand(command string) []string {
