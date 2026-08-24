@@ -497,7 +497,11 @@ func (b *Builder) targetTask(pkg *Package, target *Target, isHost bool) *Task {
 
 	if target.kind != "lib" {
 		if libTask := b.libraryTask(pkg, isHost); libTask != nil {
-			task.deps = append(task.deps, libTask)
+			if lib := packageLibrary(pkg); lib != nil && lib.procMacro {
+				task.deps = append(task.deps, b.finalTask(libTask))
+			} else {
+				task.deps = append(task.deps, libTask)
+			}
 		}
 	}
 
