@@ -4130,7 +4130,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
             rv.exportedMacroNames.push_back(ent.name);
             DEBUG("Export proc_macro " << ent.name);
         }
-    } else {
+    } else if (!crate.testHarness) {
         ASSERT_BUG(Span(), crate.procMacros.size() == 0, "Procedural macros defined in non proc-macro crate");
     }
 
