@@ -594,6 +594,7 @@ syn_0_15_44 = add_project_test(
     name="syn_0_15_44",
     url="https://github.com/dtolnay/syn.git",
     rev="6d798b63c255e90b7b1dbbfb3707fdce1704a18d",
+    lockfile="$(S)/tst/projects/syn_0_15_44/Cargo.lock",
 )
 
 combine = add_project_test(
