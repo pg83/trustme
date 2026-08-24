@@ -598,6 +598,12 @@ syn_0_15_44 = add_project_test(
     adapter_args=["--release", "--all-features"],
 )
 
+ron_0_4_2 = add_project_test(
+    name="ron_0_4_2",
+    url="https://github.com/ron-rs/ron.git",
+    rev="be6bebab49d29bf3cf0fcf1c96fb870597e2c7b9",
+)
+
 console_0_7_7 = add_project_test(
     name="console_0_7_7",
     url="https://github.com/mitsuhiko/console.git",
