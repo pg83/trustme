@@ -601,6 +601,7 @@ console_0_7_7 = add_project_test(
     name="console_0_7_7",
     url="https://github.com/mitsuhiko/console.git",
     rev="9f62b487585476f7a5ba85cd6a2b109d6d15a92f",
+    lockfile="$(S)/tst/projects/console_0_7_7/Cargo.lock",
 )
 
 combine = add_project_test(
