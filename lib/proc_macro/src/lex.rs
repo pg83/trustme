@@ -334,13 +334,20 @@ impl ::std::str::FromStr for TokenStream {
                             }
                         }
 
+                        it.consume();
+                        let mut spelling = ident_str.to_string();
+                        for _ in 0 .. req_hashes {
+                            spelling.push('#');
+                        }
+                        spelling.push('"');
+                        spelling.push_str(&rawstr);
+                        spelling.push('"');
+                        for _ in 0 .. req_hashes {
+                            spelling.push('#');
+                        }
                         rv.push(Literal {
                             span: crate::Span::call_site(),
-                            val: if is_byte {
-                                crate::token_tree::LiteralValue::ByteString(rawstr.into_bytes())
-                            } else {
-                                crate::token_tree::LiteralValue::String(rawstr)
-                            }
+                            val: crate::token_tree::LiteralValue::Raw(spelling)
                         }.into());
                         continue 'outer;
                     }

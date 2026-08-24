@@ -55,6 +55,16 @@ fn main() {
         "fn main ( ) { assert_eq ! ( foo ( ) , \"Hello, world!\" ) ; }",
     );
     assert_eq!(TokenStream::from_str("<T>").unwrap().to_string(), "< T >");
+    assert_eq!(
+        TokenStream::from_str(r#"= r" See the std::result module documentation for details.""#)
+            .unwrap()
+            .to_string(),
+        r#"= r" See the std::result module documentation for details.""#,
+    );
+    assert_eq!(
+        TokenStream::from_str(r###"br##"a"#b"## tail"###).unwrap().to_string(),
+        r###"br##"a"#b"## tail"###,
+    );
 
     assert!(TokenStream::from_str("(]").is_err());
     assert!(TokenStream::from_str("{").is_err());
