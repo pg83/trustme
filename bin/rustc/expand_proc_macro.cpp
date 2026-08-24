@@ -1988,6 +1988,11 @@ default:
                     visitFunction(name, vis, e);
                     break;
                 }
+                case ASTItem::TAG_Static: {
+                    auto& e = item.as_Static();
+                    visitStatic(name, vis, e);
+                    break;
+                }
             }
         }
     };
