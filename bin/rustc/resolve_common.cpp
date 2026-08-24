@@ -295,6 +295,33 @@ default: {
             throw "";
         }
 
+        ResolveModuleRef getModuleForMacro(const ASTPath& basePath, const ASTPath& path, ASTAbsolutePath* outPath) {
+            auto mod = getModule(basePath, path, /*ignore_last=*/true, outPath);
+            if (!mod.is_None() || !path.cls.is_Relative() || path.nodes().size() < 2) {
+                return mod;
+            }
+
+            // Qualified macro paths have used the extern prelude since their
+            // introduction, including in the 2015 edition. Other path kinds
+            // retain the edition-dependent lookup performed by getModule.
+            const auto& crateAlias = path.nodes().front().name();
+            auto implicitIt = settings.implicitCrates.find(crateAlias);
+            if (implicitIt == settings.implicitCrates.end()) {
+                return mod;
+            }
+            if (implicitIt->second == "") {
+                return getModuleAst(crate.rootModule_, path, 1, /*ignore_last=*/true, outPath);
+            }
+
+            ASSERT_BUG(sp, crate.externCrates.count(implicitIt->second),
+                "Crate \"" << implicitIt->second << "\" not loaded (for \"" << crateAlias << "\")");
+            const auto& externalCrate = crate.externCrates.at(implicitIt->second);
+            if (outPath) {
+                *outPath = ASTAbsolutePath(implicitIt->second, {});
+            }
+            return getModuleHir(externalCrate.hir->rootModule, path, 1, /*ignore_last=*/true, outPath);
+        }
+
         ResolveModuleRef getModuleAst(const ASTModule& startMod, const ASTPath& path, size_t startOffset, bool ignoreLast, ASTAbsolutePath* outPath) {
             TRACE_FUNCTION_F("start_offset=" << startOffset << ", ignore_last=" << ignoreLast);
             const ASTModule* mod = &startMod;
@@ -902,7 +929,7 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
     ResolveState rs(span, settings, crate);
 
     const auto& itemName = path.nodes().back().name();
-    auto mod = rs.getModule(basePath, path, true, outPath);
+    auto mod = rs.getModuleForMacro(basePath, path, outPath);
     if (mod.is_ImplicitPrelude()) {
         const auto& baseNodes = basePath.nodes();
         mod = ResolveModuleRef(&rs.getModByTruePath(baseNodes, baseNodes.size()));

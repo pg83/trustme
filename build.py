@@ -1067,6 +1067,29 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_qualified_extern_macro_2015",
+    inputs=[
+        "$(S)/tst/unit/test_qualified_extern_macro_2015.py",
+        "$(S)/tst/unit/qualified_extern_macro_2015_producer.rs",
+        "$(S)/tst/unit/qualified_extern_macro_2015_consumer.rs",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/qualified_extern_macro_2015.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_qualified_extern_macro_2015.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/qualified_extern_macro_2015_producer.rs",
+        "$(S)/tst/unit/qualified_extern_macro_2015_consumer.rs",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/qualified_extern_macro_2015.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_generic_default_projection_metadata",
     inputs=[
         "$(S)/tst/unit/test_generic_default_projection_metadata.py",
