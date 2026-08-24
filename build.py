@@ -583,6 +583,12 @@ clap = add_project_test(
     rev="3bd502024e45cc9abef690f28783d76a9ce33500",
 )
 
+clap_2_33_3 = add_project_test(
+    name="clap_2_33_3",
+    url="https://github.com/clap-rs/clap.git",
+    rev="33bebeda52b52c6f643b4ed6fa880671ba0ab80a",
+)
+
 combine = add_project_test(
     name="combine",
     url="https://github.com/Marwes/combine.git",
