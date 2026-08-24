@@ -3080,18 +3080,22 @@ namespace {
             return nullptr;
         }
 
-        bool equateLiteralPath(const HIRExprNodeLiteral& literal, const HIRConstGenericUnevaluated& pathValue, const HIRExprNodePathValue& path) const {
-            const auto* evaluated = evaluatedPath(pathValue, path);
-            if (!evaluated || !evaluated->relocations.empty() || evaluated->bytes.empty()) {
+        bool equateLiteralEvaluated(const HIRExprNodeLiteral& literal, const EncodedLiteral& evaluated) const {
+            if (!evaluated.relocations.empty() || evaluated.bytes.empty()) {
                 return false;
             }
             if (const auto* integer = literal.data.opt_Integer()) {
-                return EncodedLiteralSlice(*evaluated).readUint() == integer->value;
+                return EncodedLiteralSlice(evaluated).readUint() == integer->value;
             }
             if (const auto* boolean = literal.data.opt_Boolean()) {
-                return (EncodedLiteralSlice(*evaluated).readUint() != 0) == *boolean;
+                return (EncodedLiteralSlice(evaluated).readUint() != 0) == *boolean;
             }
             return false;
+        }
+
+        bool equateLiteralPath(const HIRExprNodeLiteral& literal, const HIRConstGenericUnevaluated& pathValue, const HIRExprNodePathValue& path) const {
+            const auto* evaluated = evaluatedPath(pathValue, path);
+            return evaluated && equateLiteralEvaluated(literal, *evaluated);
         }
 
         bool equateEvaluated(const HIRConstGenericUnevaluated& value, const EncodedLiteral& evaluated) const {
@@ -3112,8 +3116,13 @@ namespace {
             }
 
             const auto* path = cast<const HIRExprNodePathValue>(node);
-            const auto* pathValue = path ? evaluatedPath(value, *path) : nullptr;
-            return pathValue && EncodedLiteralSlice(*pathValue) == EncodedLiteralSlice(evaluated);
+            if (const auto* pathValue = path ? evaluatedPath(value, *path) : nullptr) {
+                return EncodedLiteralSlice(*pathValue) == EncodedLiteralSlice(evaluated);
+            }
+            if (const auto* literal = cast<const HIRExprNodeLiteral>(node)) {
+                return equateLiteralEvaluated(*literal, evaluated);
+            }
+            return false;
         }
 
         bool equatePath(const HIRConstGenericUnevaluated& leftValue, const HIRPath& left, const HIRConstGenericUnevaluated& rightValue, const HIRPath& right) const {
