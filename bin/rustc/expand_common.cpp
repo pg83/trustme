@@ -76,6 +76,7 @@ struct ExpandAttrCb final: ExpandAttrCallback {
 };
 
 void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f);
+void ExpandModExternCrates(const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& modpath, ASTModule& mod, unsigned int firstItem);
 void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, unsigned int firstItem = 0);
 void ExpandExpr(const ExpandState& es, ASTExprNodeP& node);
 void ExpandExpr(const ExpandState& es, ASTExpr& node);
@@ -293,6 +294,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
                             i = ASTItem::make_None({});
                             lex->parseState().module = &mod;
                             ParseModRootItemsInto(mod, modIdx, *lex);
+                            ExpandModExternCrates(wb, crate, mod.path(), mod, modIdx + 1);
                         } else {
                             ERROR(sp, E0000, "proc_macro expansion failed");
                         }
@@ -361,6 +363,32 @@ void ExpandAttrsCfgAttr(const Settings& settings, ASTAttributeList& attrs) {
             it = attrs.items.insert(it, std::make_move_iterator(newAttrs.begin()), std::make_move_iterator(newAttrs.end()));
         } else {
             ++it;
+        }
+    }
+}
+
+void ExpandModExternCrates(const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& modpath, ASTModule& mod, unsigned int firstItem) {
+    for (unsigned int idx = firstItem; idx < mod.items.size(); idx++) {
+        auto& item = *mod.items[idx];
+        auto* crateItem = item.data.opt_Crate();
+        if (!crateItem) {
+            continue;
+        }
+
+        ExpandAttrsCfgAttr(*wb.settings, item.attrs);
+        if (!checkCfgAttrs(*wb.settings, item.attrs)) {
+            continue;
+        }
+
+        if (crateItem->name != "") {
+            if (crate.externCrates.count(crateItem->name) == 0) {
+                crateItem->name = crate.loadExternCrate(*wb.settings, item.span, crateItem->name);
+            }
+            if (modpath.nodes.empty()) {
+                wb.settings->implicitCrates.insert({item.name, crateItem->name});
+            }
+        } else if (modpath.nodes.empty()) {
+            wb.settings->implicitCrates.insert({item.name, ""});
         }
     }
 }
@@ -2468,6 +2496,12 @@ default:
 void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, unsigned int firstItem) {
     TRACE_FUNCTION_F("modpath = " << modpath << ", first_item=" << firstItem);
 
+    // Item order cannot affect name resolution.  In particular, a `use`
+    // preceding an `extern crate` can be inspected while looking up a macro.
+    // Crates from the initial AST were normalised by ASTCrate::loadExterns;
+    // do the same up front for modules and items created by macro expansion.
+    ExpandModExternCrates(es.wb, es.crate, modpath, mod, firstItem);
+
     // TODO: Pre-parse all macro_rules invocations into items?
 
     if (es.mode == ExpandMode::FirstPass) {
@@ -2666,6 +2700,7 @@ default:
                         DEBUG("-- Parsing as mod items");
                         size_t oldLen = mod.items.size();
                         ParseModRootItemsInto(mod, idx, *ttl);
+                        ExpandModExternCrates(es.wb, es.crate, modpath, mod, idx + 1);
 
                         auto nextNonMacroItem = idx + 1 + (mod.items.size() - oldLen);
                         macroRecursionStack.push_back(nextNonMacroItem == mod.items.size() ? nullptr : &*mod.items[nextNonMacroItem]);
