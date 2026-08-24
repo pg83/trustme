@@ -173,7 +173,7 @@ func (s VersionSpec) accepts(version Version) bool {
 				return false
 			}
 		case "^":
-			if cmp < 0 || !compatible(bound.version, version) {
+			if cmp < 0 || !compatible(bound.version, version, bound.parts) {
 				return false
 			}
 		}
@@ -182,12 +182,16 @@ func (s VersionSpec) accepts(version Version) bool {
 	return true
 }
 
-func compatible(base, version Version) bool {
+func compatible(base, version Version, parts int) bool {
+	if parts == 1 {
+		return base.major == version.major
+	}
+
 	if base.major != 0 {
 		return base.major == version.major
 	}
 
-	if base.minor != 0 {
+	if parts == 2 || base.minor != 0 {
 		return version.major == 0 && base.minor == version.minor
 	}
 
