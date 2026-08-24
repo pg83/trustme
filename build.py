@@ -612,6 +612,13 @@ gimli_0_32_3 = add_project_test(
     lockfile="$(S)/tst/projects/gimli_0_32_3/Cargo.lock",
 )
 
+addr2line_0_25_1 = add_project_test(
+    name="addr2line_0_25_1",
+    url="https://github.com/gimli-rs/addr2line.git",
+    rev="f02db009deb9b441818afa49cb1b17453c1e4243",
+    adapter_args=["--no-default-features"],
+)
+
 pest_2_9_0 = add_project_test(
     name="pest_2_9_0",
     url="https://github.com/pest-parser/pest.git",
