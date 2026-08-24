@@ -32,6 +32,10 @@ fn main() {
     }
     assert_eq!(Literal::byte_character(b'a').to_string(), "b'a'");
     assert_eq!(Literal::byte_character(b'\n').to_string(), "b'\\n'");
+    for float in &["5.5", "5.5E12", "5.5e12", "1.0__3e-12", "1.03e+12", "1f32"] {
+        assert_eq!(TokenStream::from_str(float).unwrap().to_string(), *float);
+    }
+    assert_eq!(TokenStream::from_str("1..2").unwrap().to_string(), "1 .. 2");
 
     let function = TokenStream::from_str("async fn process() {}").unwrap();
     assert_eq!(function.to_string(), "async fn process ( ) { }");

@@ -476,8 +476,9 @@ impl ::std::str::FromStr for TokenStream {
                 }
                 else if c.is_digit(10)
                 {
+                    let leading_zero = c == '0';
                     let base =
-                        if c == '0' {
+                        if leading_zero {
                             match it.consume()
                             {
                             Some('x') => { it.consume(); 16 },
@@ -495,9 +496,16 @@ impl ::std::str::FromStr for TokenStream {
                         };
                     let mut v = 0;
                     let mut c = it.cur();
+                    let mut decimal_spelling = String::new();
+                    if leading_zero && base == 10 {
+                        decimal_spelling.push('0');
+                    }
                     'int: loop
                     {
                         while c == '_' {
+                            if base == 10 {
+                                decimal_spelling.push(c);
+                            }
                             c = some_else!( it.consume() => { break 'int; } );
                         }
                         if c == 'u' || c == 'i' {
@@ -517,10 +525,77 @@ impl ::std::str::FromStr for TokenStream {
                         else if let Some(d) = c.to_digit(base) {
                             v *= base as u128;
                             v += d as u128;
+                            if base == 10 {
+                                decimal_spelling.push(c);
+                            }
                             c = some_else!( it.consume() => { break 'int; } );
                         }
-                        else if c == '.' {
-                            panic!("TODO: Floating point");
+                        else if base == 10 && (c == '.' || c == 'e' || c == 'E' || c == 'f') {
+                            if c == '.' && it.next().map(|next| {
+                                next == '.' || next == '_' || next.is_alphabetic()
+                            }).unwrap_or(false) {
+                                break;
+                            }
+
+                            let mut current = Some(c);
+                            if current == Some('.') {
+                                decimal_spelling.push('.');
+                                current = it.consume();
+                                loop {
+                                    match current {
+                                    Some(ch) if ch == '_' || ch.is_digit(10) => {
+                                        decimal_spelling.push(ch);
+                                        current = it.consume();
+                                        },
+                                    _ => break,
+                                    }
+                                }
+                            }
+
+                            if current == Some('e') || current == Some('E') {
+                                decimal_spelling.push(current.unwrap());
+                                current = it.consume();
+                                if current == Some('+') || current == Some('-') {
+                                    decimal_spelling.push(current.unwrap());
+                                    current = it.consume();
+                                }
+
+                                let mut has_exponent_digit = false;
+                                loop {
+                                    match current {
+                                    Some('_') => {
+                                        decimal_spelling.push('_');
+                                        current = it.consume();
+                                        },
+                                    Some(ch) if ch.is_digit(10) => {
+                                        has_exponent_digit = true;
+                                        decimal_spelling.push(ch);
+                                        current = it.consume();
+                                        },
+                                    _ => break,
+                                    }
+                                }
+                                if !has_exponent_digit {
+                                    return err("Missing digits in float exponent");
+                                }
+                            }
+
+                            if current == Some('f') {
+                                let suffix = get_ident(&mut it, String::new());
+                                match &*suffix {
+                                "f32" | "f64" => decimal_spelling.push_str(&suffix),
+                                _ => return err("Unexpected float suffix"),
+                                }
+                            }
+                            else if current.map(|ch| ch == '_' || ch.is_alphabetic()).unwrap_or(false) {
+                                return err("Unexpected float suffix");
+                            }
+
+                            rv.push(Literal {
+                                span: crate::Span::call_site(),
+                                val: crate::token_tree::LiteralValue::Raw(decimal_spelling),
+                            }.into());
+                            continue 'outer;
                         }
                         else {
                             break;
