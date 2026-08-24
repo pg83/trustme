@@ -604,6 +604,13 @@ console_0_7_7 = add_project_test(
     lockfile="$(S)/tst/projects/console_0_7_7/Cargo.lock",
 )
 
+gimli_0_32_3 = add_project_test(
+    name="gimli_0_32_3",
+    url="https://github.com/gimli-rs/gimli.git",
+    rev="8bc8e622fcb9be20fc9f03c96bc6335d936b869d",
+    adapter_args=["--no-default-features", "--features", "read"],
+)
+
 combine = add_project_test(
     name="combine",
     url="https://github.com/Marwes/combine.git",
