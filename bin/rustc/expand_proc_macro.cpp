@@ -2431,8 +2431,17 @@ Token ProcMacroInv::realGetToken_() {
             this->recvBytesRaw(&val, sizeof(val));
             return Token::makeFloat(val, ty);
         }
-        case TokenClass::RawLiteral:
-            return Token(TOK_LITERAL_SUFFIXED, this->recvBytes(), this->getHygiene());
+        case TokenClass::RawLiteral: {
+            auto text = this->recvBytes();
+            ::std::istringstream input(text + " ");
+            Lexer lexer(this->typePool(), input, edition, this->parseState());
+            auto token = lexer.getToken();
+            ASSERT_BUG(this->parentSpan, token != TOK_EOF, "Empty raw literal from child process");
+            ASSERT_BUG(this->parentSpan, lexer.getToken() == TOK_EOF,
+                "Raw literal contains multiple tokens: `" << text << "`");
+            token.setPos(this->getPosition());
+            return token;
+        }
             //case TokenClass::Fragment:
             //    TODO(this->m_parent_span, "Handle ints/floats/fragments from child process");
     }

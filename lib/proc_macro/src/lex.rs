@@ -477,15 +477,20 @@ impl ::std::str::FromStr for TokenStream {
                 else if c.is_digit(10)
                 {
                     let leading_zero = c == '0';
+                    let mut number_spelling = String::new();
                     let base =
                         if leading_zero {
+                            number_spelling.push('0');
                             match it.consume()
                             {
-                            Some('x') => { it.consume(); 16 },
-                            Some('o') => { it.consume(); 8 },
-                            Some('b') => { it.consume(); 2 },
+                            Some('x') => { number_spelling.push('x'); it.consume(); 16 },
+                            Some('o') => { number_spelling.push('o'); it.consume(); 8 },
+                            Some('b') => { number_spelling.push('b'); it.consume(); 2 },
                             None => {
-                                rv.push(Literal::new_u(0, 0).into());
+                                rv.push(Literal {
+                                    span: crate::Span::call_site(),
+                                    val: crate::token_tree::LiteralValue::Raw(number_spelling),
+                                }.into());
                                 continue 'outer;
                                 },
                             _ => 10,
@@ -494,40 +499,29 @@ impl ::std::str::FromStr for TokenStream {
                         else {
                             10
                         };
-                    let mut v = 0;
                     let mut c = it.cur();
-                    let mut decimal_spelling = String::new();
-                    if leading_zero && base == 10 {
-                        decimal_spelling.push('0');
-                    }
                     'int: loop
                     {
                         while c == '_' {
-                            if base == 10 {
-                                decimal_spelling.push(c);
-                            }
+                            number_spelling.push(c);
                             c = some_else!( it.consume() => { break 'int; } );
                         }
                         if c == 'u' || c == 'i' {
                             let s = get_ident(&mut it, String::new());
-                            rv.push(match &*s
-                                {
-                                "u8"    => Literal::new_u(v,   8), "i8"    => Literal::new_s(v as i128,   8),
-                                "u16"   => Literal::new_u(v,  16), "i16"   => Literal::new_s(v as i128,  16),
-                                "u32"   => Literal::new_u(v,  32), "i32"   => Literal::new_s(v as i128,  32),
-                                "u64"   => Literal::new_u(v,  64), "i64"   => Literal::new_s(v as i128,  64),
-                                "u128"  => Literal::new_u(v, 128), "i128"  => Literal::new_s(v as i128, 128),
-                                "usize" => Literal::new_u(v,   1), "isize" => Literal::new_s(v as i128,   1),
+                            match &*s {
+                                "u8" | "i8" | "u16" | "i16" | "u32" | "i32" |
+                                "u64" | "i64" | "u128" | "i128" | "usize" | "isize" => {},
                                 _ => return err("Unexpected integer suffix"),
-                                }.into());
+                            }
+                            number_spelling.push_str(&s);
+                            rv.push(Literal {
+                                span: crate::Span::call_site(),
+                                val: crate::token_tree::LiteralValue::Raw(number_spelling),
+                            }.into());
                             continue 'outer;
                         }
-                        else if let Some(d) = c.to_digit(base) {
-                            v *= base as u128;
-                            v += d as u128;
-                            if base == 10 {
-                                decimal_spelling.push(c);
-                            }
+                        else if c.to_digit(base).is_some() {
+                            number_spelling.push(c);
                             c = some_else!( it.consume() => { break 'int; } );
                         }
                         else if base == 10 && (c == '.' || c == 'e' || c == 'E' || c == 'f') {
@@ -539,12 +533,12 @@ impl ::std::str::FromStr for TokenStream {
 
                             let mut current = Some(c);
                             if current == Some('.') {
-                                decimal_spelling.push('.');
+                                number_spelling.push('.');
                                 current = it.consume();
                                 loop {
                                     match current {
                                     Some(ch) if ch == '_' || ch.is_digit(10) => {
-                                        decimal_spelling.push(ch);
+                                        number_spelling.push(ch);
                                         current = it.consume();
                                         },
                                     _ => break,
@@ -553,10 +547,10 @@ impl ::std::str::FromStr for TokenStream {
                             }
 
                             if current == Some('e') || current == Some('E') {
-                                decimal_spelling.push(current.unwrap());
+                                number_spelling.push(current.unwrap());
                                 current = it.consume();
                                 if current == Some('+') || current == Some('-') {
-                                    decimal_spelling.push(current.unwrap());
+                                    number_spelling.push(current.unwrap());
                                     current = it.consume();
                                 }
 
@@ -564,12 +558,12 @@ impl ::std::str::FromStr for TokenStream {
                                 loop {
                                     match current {
                                     Some('_') => {
-                                        decimal_spelling.push('_');
+                                        number_spelling.push('_');
                                         current = it.consume();
                                         },
                                     Some(ch) if ch.is_digit(10) => {
                                         has_exponent_digit = true;
-                                        decimal_spelling.push(ch);
+                                        number_spelling.push(ch);
                                         current = it.consume();
                                         },
                                     _ => break,
@@ -583,7 +577,7 @@ impl ::std::str::FromStr for TokenStream {
                             if current == Some('f') {
                                 let suffix = get_ident(&mut it, String::new());
                                 match &*suffix {
-                                "f32" | "f64" => decimal_spelling.push_str(&suffix),
+                                "f32" | "f64" => number_spelling.push_str(&suffix),
                                 _ => return err("Unexpected float suffix"),
                                 }
                             }
@@ -593,7 +587,7 @@ impl ::std::str::FromStr for TokenStream {
 
                             rv.push(Literal {
                                 span: crate::Span::call_site(),
-                                val: crate::token_tree::LiteralValue::Raw(decimal_spelling),
+                                val: crate::token_tree::LiteralValue::Raw(number_spelling),
                             }.into());
                             continue 'outer;
                         }
@@ -601,7 +595,10 @@ impl ::std::str::FromStr for TokenStream {
                             break;
                         }
                     }
-                    rv.push(Literal::new_u(v, 0).into());
+                    rv.push(Literal {
+                        span: crate::Span::call_site(),
+                        val: crate::token_tree::LiteralValue::Raw(number_spelling),
+                    }.into());
                     continue 'outer;
                 }
                 // Punctuation?
@@ -712,7 +709,10 @@ mod tests {
         let rv = TokenStream::from_str("0").expect("Failed to parse");
 
         let mut it = rv.inner.into_iter();
-        assert_tt_matches!(it.next(), Literal::new_u(0,0).into());
+        assert_tt_matches!(it.next(), Literal {
+            span: Span::call_site(),
+            val: crate::token_tree::LiteralValue::Raw("0".into()),
+        }.into());
         assert_tt_matches!(it.next());
     }
     #[test]
@@ -722,7 +722,10 @@ mod tests {
         let mut it = rv.inner.into_iter();
         assert_tt_matches!(it.next(), Ident::new("key", Span::call_site()).into());
         assert_tt_matches!(it.next(), Punct::new('.', Spacing::Alone).into());
-        assert_tt_matches!(it.next(), Literal::new_u(1,0).into());
+        assert_tt_matches!(it.next(), Literal {
+            span: Span::call_site(),
+            val: crate::token_tree::LiteralValue::Raw("1".into()),
+        }.into());
         assert_tt_matches!(it.next(), Punct::new('.', Spacing::Alone).into());
         assert_tt_matches!(it.next(), Ident::new("def_id", Span::call_site()).into());
         assert_tt_matches!(it.next());

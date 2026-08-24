@@ -35,6 +35,9 @@ fn main() {
     for float in &["5.5", "5.5E12", "5.5e12", "1.0__3e-12", "1.03e+12", "1f32"] {
         assert_eq!(TokenStream::from_str(float).unwrap().to_string(), *float);
     }
+    for integer in &["0_4", "0x__7___F_", "5u32"] {
+        assert_eq!(TokenStream::from_str(integer).unwrap().to_string(), *integer);
+    }
     assert_eq!(TokenStream::from_str("1..2").unwrap().to_string(), "1 .. 2");
 
     let function = TokenStream::from_str("async fn process() {}").unwrap();
