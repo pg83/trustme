@@ -604,6 +604,12 @@ console_0_7_7 = add_project_test(
     lockfile="$(S)/tst/projects/console_0_7_7/Cargo.lock",
 )
 
+insta_0_8_2 = add_project_test(
+    name="insta_0_8_2",
+    url="https://github.com/mitsuhiko/insta.git",
+    rev="9373b2669c6c2ae44ab85afe24acb5369f839100",
+)
+
 gimli_0_32_3 = add_project_test(
     name="gimli_0_32_3",
     url="https://github.com/gimli-rs/gimli.git",
