@@ -590,6 +590,12 @@ clap_2_33_3 = add_project_test(
     lockfile="$(S)/tst/projects/clap_2_33_3/Cargo.lock",
 )
 
+syn_0_15_44 = add_project_test(
+    name="syn_0_15_44",
+    url="https://github.com/dtolnay/syn.git",
+    rev="6d798b63c255e90b7b1dbbfb3707fdce1704a18d",
+)
+
 combine = add_project_test(
     name="combine",
     url="https://github.com/Marwes/combine.git",
