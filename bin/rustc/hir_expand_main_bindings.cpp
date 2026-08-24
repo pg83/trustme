@@ -4079,6 +4079,24 @@ static void checkConstFinalBorrow(const StaticTraitResolve& resolve, HIRExprNode
     }
 }
 
+// Indexing stays in the caller when a borrow is promoted. Only the value being
+// indexed is moved into static storage, so a runtime index must not disqualify
+// an otherwise constant storage value.
+static HIRExprNodeP* staticBorrowPromotionRoot(HIRExprNodeP& value) {
+    auto* root = &value;
+    for (;;) {
+        if (auto* index = cast<HIRExprNodeIndex>(root->get())) {
+            root = &index->value;
+            continue;
+        }
+        if (auto* unsize = cast<HIRExprNodeUnsize>(root->get())) {
+            root = &unsize->value;
+            continue;
+        }
+        return root;
+    }
+}
+
 class StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
     const StaticTraitResolve& resolve_;
     const HIRTypeData* selfType;
@@ -4148,6 +4166,7 @@ public:
         auto savedAllConstant = allConstant_;
         allConstant_ = true;
         HIRExprVisitorDef::visit(node);
+        const bool wholeValueIsConstant = allConstant_;
 
         if (
             const auto* inode = cast<HIRExprNodePathValue>(node.value.get())
@@ -4162,21 +4181,27 @@ public:
             }
         }
 
-        // If the inner is constant (Array, Struct, Literal, const)
-        if (allConstant_) {
-            // Handle a `_Unsize` inner
-            auto* valuePtrPtr = &node.value;
-            for (;;) {
-                if (auto* innerNode = cast<HIRExprNodeIndex>(valuePtrPtr->get())) {
-                    valuePtrPtr = &innerNode->value;
-                    continue;
-                }
-                if (auto* innerNode = cast<HIRExprNodeUnsize>(valuePtrPtr->get())) {
-                    valuePtrPtr = &innerNode->value;
-                    continue;
-                }
-                break;
+        auto* valuePtrPtr = staticBorrowPromotionRoot(node.value);
+        bool promotionRootIsConstant = wholeValueIsConstant;
+        if (!promotionRootIsConstant && valuePtrPtr != &node.value) {
+            promotionRootIsConstant = nodeIsConstant(*valuePtrPtr);
+        }
+
+        // A static already supplies permanent storage. In particular, don't
+        // copy it merely because its index is dynamic.
+        if (const auto* path = cast<HIRExprNodePathValue>(valuePtrPtr->get())) {
+            MonomorphState ms(resolve_.hirCrate().types);
+            if (resolve_.getValue(node.span(), path->path, ms, /*signature_only*/ true).is_Static()) {
+                allConstant_ = savedAllConstant;
+                isConstant = wholeValueIsConstant;
+                return;
             }
+        }
+
+        // If the inner, or just the storage value below an index, is constant
+        // (Array, Struct, Literal, const), it can have static storage. Runtime
+        // projections remain around the replacement path in the caller.
+        if (promotionRootIsConstant) {
             // If the inner value is already a static or it's a constant, then treat as a valid static
             // - Seek through field accesses
             {
@@ -4229,10 +4254,13 @@ public:
                 DEBUG("-- Marking static");
                 node.isValidStaticBorrowConstant = true;
 
-                isConstant = true;
+                // A runtime index still makes the resulting pointer a runtime
+                // value. The marker is enough for the mutation pass; claiming
+                // the complete borrow is constant could promote an outer
+                // expression that captures the index local.
+                isConstant = wholeValueIsConstant;
             }
         } else {
-            // TODO: It would be nice if this could see through indexing/fields, but indexing needs a constant index
             if (cast<HIRExprNodePathValue>(node.value.get()) && node.value->usage == HIRValueUsage::Borrow) {
                 isConstant = true;
             }
@@ -4515,6 +4543,18 @@ public:
     }
 
 private:
+    bool nodeIsConstant(HIRExprNodeP& node) {
+        const auto savedAllConstant = allConstant_;
+        const auto savedIsConstant = isConstant;
+        allConstant_ = true;
+        isConstant = false;
+        node->visit(*this);
+        const bool rv = isConstant;
+        allConstant_ = savedAllConstant;
+        isConstant = savedIsConstant;
+        return rv;
+    }
+
     bool candidateNeedsDrop(HIRExprNodeP& root) const {
         struct Visitor: public HIRExprVisitorDef {
             const StaticTraitResolve& resolve;
@@ -5010,19 +5050,7 @@ public:
             // Clear the flag, so subsequent visits don't repeat
             node.isValidStaticBorrowConstant = false;
 
-            // Handle a `_Unsize` inner
-            auto* valuePtrPtr = &node.value;
-            for (;;) {
-                if (auto* innerNode = cast<HIRExprNodeIndex>(valuePtrPtr->get())) {
-                    valuePtrPtr = &innerNode->value;
-                    continue;
-                }
-                if (auto* innerNode = cast<HIRExprNodeUnsize>(valuePtrPtr->get())) {
-                    valuePtrPtr = &innerNode->value;
-                    continue;
-                }
-                break;
-            }
+            auto* valuePtrPtr = staticBorrowPromotionRoot(node.value);
             // If the inner value is already a static or it's a constant, then treat as a valid static
             auto& valuePtr = *valuePtrPtr;
             if (auto* innerNode = cast<HIRExprNodeDeref>(valuePtrPtr->get())) {

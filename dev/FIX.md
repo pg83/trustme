@@ -140,8 +140,7 @@ The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| runtime value mismatch | 1 |
-| **total independently reproduced** | **1** |
+| **total independently reproduced** | **0** |
 
 This verification gate supersedes the 2026-08-23 baseline and all subsequent
 point accounting.
@@ -153,11 +152,15 @@ The minimal unit and the original Rust 1.90
 codegen check confirms that acyclic functions still do not receive unnecessary
 forward declarations.
 
+The static-array reference failure was closed by promoting the constant storage
+below a runtime index while leaving the index operation in the caller. The
+minimal unit and the original Rust 1.90 `issues/issue-49955.rs` case both pass;
+generated MIR retains the runtime index and takes its reference from the
+promoted static.
+
 ## P1: independently reproduced failures
 
-| nodes | classification | cases |
-|---:|---|---|
-| 1 | runtime returns `32766` instead of the static array element `1` | Rust 1.90 `issues/issue-49955.rs` |
+None.
 
 ## Load-sensitive result
 
