@@ -334,6 +334,10 @@ TEST_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "60s"]
 # A real project contains a full Cargo graph and starts from archive inputs in a
 # fresh directory, so unlike a unit node it cannot reuse a materialised CAS.
 PROJECT_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "5m"]
+# trybuild compiles its own dependency graph and then a second generated Cargo
+# workspace containing the UI cases. Keep the ordinary project budget tight,
+# but allow this deliberately nested corpus node to finish from cold archives.
+NESTED_PROJECT_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "15m"]
 # A from-scratch standard-library build is intentionally much heavier than a
 # single test, but it must not leave the graph occupied indefinitely.
 LIBSTD_TIMEOUT = ["coreutils", "--coreutils-prog=timeout", "10m"]
@@ -592,6 +596,7 @@ trybuild = add_project_test(
     url="https://github.com/dtolnay/trybuild.git",
     rev="2adc26560dba1d8eaeb596c5625f854e5d6c68b2",
     lockfile="$(S)/tst/projects/trybuild/Cargo.lock",
+    timeout=NESTED_PROJECT_TIMEOUT,
 )
 
 serde = add_project_test(
