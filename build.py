@@ -1032,6 +1032,29 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_generic_default_projection_metadata",
+    inputs=[
+        "$(S)/tst/unit/test_generic_default_projection_metadata.py",
+        "$(S)/tst/unit/generic_default_projection_metadata_producer.rs",
+        "$(S)/tst/unit/generic_default_projection_metadata_consumer.rs",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/generic_default_projection_metadata.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_generic_default_projection_metadata.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/generic_default_projection_metadata_producer.rs",
+        "$(S)/tst/unit/generic_default_projection_metadata_consumer.rs",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/generic_default_projection_metadata.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_const_borrow_offset_metadata",
     inputs=[
         "$(S)/tst/unit/test_const_borrow_offset_metadata.py",

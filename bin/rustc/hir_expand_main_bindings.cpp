@@ -3780,6 +3780,20 @@ namespace {
         {
         }
 
+        void visitParams(HIRGenericParams& params) override {
+            // A type parameter default is instantiated in the caller's
+            // param-env. Resolving its projections against the declaration's
+            // own bounds can turn a default that names an earlier parameter
+            // into a reference to a later, still-omitted parameter.
+            for (auto& value : params.values) {
+                updateType(value.type);
+                visitConstgeneric(value.defaultValue);
+            }
+            for (auto& bound : params.bounds) {
+                visitGenericBound(bound);
+            }
+        }
+
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
             static Span sp;
             ::visitType(sp, resolve_, ty);
