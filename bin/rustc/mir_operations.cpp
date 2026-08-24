@@ -5358,7 +5358,8 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                 MIR_BUG(state, "Rounding non-float constant " << type);
         }
     };
-    auto makeFloatArithmeticResult = [](FloatValue value, HIRCoreType type) {
+    auto makeFloatArithmeticResult = [&](FloatValue value, HIRCoreType type) {
+        value = roundFloatValue(value, type);
         if (floatValueIsNan(value)) {
             value = positiveNanFloatValue();
         }
@@ -5911,7 +5912,8 @@ default:
                                         auto& le = valL.as_Float();
                                         auto& re = valR.as_Float();
                                         MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " / " << valR);
-                                        newValue = makeFloatArithmeticResult(le.v + re.v, le.t);
+                                        newValue = makeFloatArithmeticResult(
+                                            roundFloatValue(le.v, le.t) + roundFloatValue(re.v, re.t), le.t);
                                         break;
                                     }
                                     case MIRConstant::TAG_Int: {
@@ -5939,7 +5941,8 @@ default:
                                         auto& le = valL.as_Float();
                                         auto& re = valR.as_Float();
                                         MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " / " << valR);
-                                        newValue = makeFloatArithmeticResult(le.v - re.v, le.t);
+                                        newValue = makeFloatArithmeticResult(
+                                            roundFloatValue(le.v, le.t) - roundFloatValue(re.v, re.t), le.t);
                                         break;
                                     }
                                     case MIRConstant::TAG_Int: {
@@ -5967,7 +5970,8 @@ default:
                                         auto& le = valL.as_Float();
                                         auto& re = valR.as_Float();
                                         MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " / " << valR);
-                                        newValue = makeFloatArithmeticResult(le.v * re.v, le.t);
+                                        newValue = makeFloatArithmeticResult(
+                                            roundFloatValue(le.v, le.t) * roundFloatValue(re.v, re.t), le.t);
                                         break;
                                     }
                                     case MIRConstant::TAG_Int: {
@@ -5995,7 +5999,8 @@ default:
                                         auto& le = valL.as_Float();
                                         auto& re = valR.as_Float();
                                         MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
-                                        newValue = makeFloatArithmeticResult(le.v / re.v, le.t);
+                                        newValue = makeFloatArithmeticResult(
+                                            roundFloatValue(le.v, le.t) / roundFloatValue(re.v, re.t), le.t);
                                         break;
                                     }
                                     case MIRConstant::TAG_Int: {

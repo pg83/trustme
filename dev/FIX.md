@@ -47,8 +47,8 @@ seed 36 completed in isolation and remains the only load-sensitive result.
 | failed in the full parallel run | 114 |
 | reproduced immediately after the full gate | 113 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 110 |
-| still failing independently | 3 |
+| fixed by subsequent point reruns | 112 |
+| still failing independently | 1 |
 
 The 96 trait-object `Debug` link failures were closed by canonicalising concrete
 trait-impl value paths before translation enumeration and C symbol emission.
@@ -103,26 +103,23 @@ threaded `OnceLock` doctest both pass against an explicitly published matching
 `rustc`/`libstd` pair; the reruns are recorded in
 `.build-clang/reclass-20260824-inline-stack-fixed/results.jsonl`.
 
+The two RustSmith output mismatches were closed by rounding typed floating-point
+operands before MIR constant-folded arithmetic and rounding the result back to
+the same type. Seeds 19 and 102 both pass against the freshly published
+compiler; the reruns are recorded in
+`.build-clang/reclass-20260824-float-fold-fixed/results.jsonl`.
+
 The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| wrong runtime behaviour, panic, abort, or output | 2 |
 | stable timeout | 1 |
-| **total independently reproduced** | **3** |
+| **total independently reproduced** | **1** |
 
 This full run supersedes the 2026-08-22 15,139-node baseline and all subsequent
 point accounting.
 
-## P1: runtime semantics
-
-Two programs compile but execute incorrectly:
-
-| nodes | family | cases |
-|---:|---|---|
-| 2 | RustSmith stdout mismatch | seeds 19 and 102 |
-
-## P2: stable timeouts
+## P1: stable timeouts
 
 | nodes | limit | classification | cases |
 |---:|---:|---|---|
