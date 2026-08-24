@@ -597,6 +597,12 @@ syn_0_15_44 = add_project_test(
     lockfile="$(S)/tst/projects/syn_0_15_44/Cargo.lock",
 )
 
+console_0_7_7 = add_project_test(
+    name="console_0_7_7",
+    url="https://github.com/mitsuhiko/console.git",
+    rev="9f62b487585476f7a5ba85cd6a2b109d6d15a92f",
+)
+
 combine = add_project_test(
     name="combine",
     url="https://github.com/Marwes/combine.git",
