@@ -587,6 +587,7 @@ clap_2_33_3 = add_project_test(
     name="clap_2_33_3",
     url="https://github.com/clap-rs/clap.git",
     rev="33bebeda52b52c6f643b4ed6fa880671ba0ab80a",
+    lockfile="$(S)/tst/projects/clap_2_33_3/Cargo.lock",
 )
 
 combine = add_project_test(
