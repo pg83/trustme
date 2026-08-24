@@ -2595,7 +2595,7 @@ Token MacroExpander::realGetToken() {
                             case NAMEDVALUE_MAGIC_CRATE:
                                 DEBUG("[" << logIndex << "] Crate name hack");
                                 if (crateName == "") {
-                                    if (this->editionAfter(ASTEdition::Rust2018)) {
+                                    if (sourceEdition >= ASTEdition::Rust2018) {
                                         return Token(TOK_RWORD_CRATE);
                                     }
                                 } else {
