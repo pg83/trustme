@@ -1590,11 +1590,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 exit(0);
             } else if (strcmp(arg, "--version") == 0) {
                 const char* rustcTarget = RUSTC_TARGET_VERSION;
-                // NOTE: Starts the version with "rustc 1.29.100" so build scripts don't get confused
                 ::std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << ::std::endl;
-                ::std::cout << "release: " << rustcTarget << ".100" << ::std::endl; // `autoconfig` looks for this line
-                ::std::cout << "- Build time: " << gsVersionBuildTime << ::std::endl;
-                ::std::cout << "- Commit: " << gsVersionGitHash << (gbVersionGitDirty ? " (dirty tree)" : "") << ::std::endl;
                 exit(0);
             }
             // --out-dir <dir>  >> Set the output directory for automatically-named files

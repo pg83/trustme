@@ -33,6 +33,20 @@ def main() -> int:
             + result.stdout.splitlines()[0]
         )
 
+    result = subprocess.run(
+        [rustc, "--version"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        sys.stderr.write(result.stderr)
+        raise RuntimeError("rustc --version failed")
+    lines = result.stdout.splitlines()
+    if len(lines) != 1 or not lines[0].startswith("rustc 1.90.100 "):
+        raise RuntimeError(f"rustc --version must be one rustc-compatible line; got {lines!r}")
+
     rustc_sources = Path(__file__).parents[2] / "bin" / "rustc"
     compatibility_branches = []
     for source in sorted(rustc_sources.iterdir()):
