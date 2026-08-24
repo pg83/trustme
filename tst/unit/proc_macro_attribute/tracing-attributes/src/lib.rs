@@ -4,7 +4,10 @@ use proc_macro::TokenStream;
 
 #[proc_macro_attribute]
 pub fn instrument(_attribute: TokenStream, _item: TokenStream) -> TokenStream {
-    "fn instrument_was_invoked() -> u32 { 42 }".parse().unwrap()
+    "fn instrument_was_invoked() -> u32 { 42 }\n\
+     fn unicode_char_from_token_stream() -> char { '\\u{2764}' }"
+        .parse()
+        .unwrap()
 }
 
 #[proc_macro_attribute]

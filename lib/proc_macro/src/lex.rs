@@ -98,6 +98,41 @@ impl ::std::str::FromStr for TokenStream {
             s
         }
 
+        fn get_unicode_escape<T: Iterator<Item=char>>(it: &mut CharStream<T>) -> Result<char, &'static str>
+        {
+            if it.consume() != Some('{') {
+                return Err("Expected `{` after `\\u` in literal");
+            }
+
+            let mut value = 0u32;
+            let mut digits = 0;
+            loop {
+                let c = match it.consume() {
+                    Some(c) => c,
+                    None => return Err("Unterminated `\\u` escape"),
+                };
+                if c == '}' {
+                    break;
+                }
+                if c == '_' {
+                    continue;
+                }
+                let digit = match c.to_digit(16) {
+                    Some(digit) => digit,
+                    None => return Err("Invalid hex digit in `\\u` escape"),
+                };
+                digits += 1;
+                if digits > 6 {
+                    return Err("Overlong `\\u` escape");
+                }
+                value = value * 16 + digit;
+            }
+            if digits == 0 {
+                return Err("Empty `\\u` escape");
+            }
+            ::std::char::from_u32(value).ok_or("Invalid Unicode scalar in `\\u` escape")
+        }
+
         'outer: while ! it.is_complete()
         {
             let mut c = it.cur();
@@ -135,11 +170,9 @@ impl ::std::str::FromStr for TokenStream {
                             '\\' => '\\',
                             '\'' => '\'',
                             '"' => '"',
-                            'u' => {
-                                if it.consume() != Some('{') {
-                                    return err("Expected `{` after `\\u` in char literal");
-                                }
-                                panic!("TODO: char literal - unicode literal");
+                            'u' => match get_unicode_escape(&mut it) {
+                                Ok(c) => c,
+                                Err(e) => return err(e),
                                 },
                             c @ _ => panic!("TODO: char literal with escape - '\\{}'", c),
                             }
@@ -312,18 +345,10 @@ impl ::std::str::FromStr for TokenStream {
                                     s.push(some_else!(::std::char::from_u32(v) => return err("Invalid `\\x` escape")));
                                     },
                                 'u' => {
-                                    if it.consume() != Some('{') {
-                                        return err("Expected `{` after `\\u` in string literal");
-                                    }
-                                    let mut v = 0u32;
-                                    loop {
-                                        let d = some_else!(it.consume() => return err("str eof"));
-                                        if d == '}' {
-                                            break ;
-                                        }
-                                        v = v * 16 + some_else!(d.to_digit(16) => return err("Invalid hex digit in `\\u` escape"));
-                                    }
-                                    s.push(some_else!(::std::char::from_u32(v) => return err("Invalid `\\u` escape")));
+                                    s.push(match get_unicode_escape(&mut it) {
+                                        Ok(c) => c,
+                                        Err(e) => return err(e),
+                                        });
                                     },
                                 // A backslash at end-of-line eats the newline and the next line's leading whitespace
                                 '\n' | '\r' => {
@@ -506,6 +531,7 @@ mod tests {
     fn char_literals()
     {
         TokenStream::from_str("'!'").expect("failed to parse");
+        TokenStream::from_str("'\\u{2764}'").expect("failed to parse Unicode escape");
     }
 
     #[test]
