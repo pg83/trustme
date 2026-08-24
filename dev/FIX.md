@@ -47,8 +47,8 @@ seed 36 completed in isolation and remains the only load-sensitive result.
 | failed in the full parallel run | 114 |
 | reproduced immediately after the full gate | 113 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 100 |
-| still failing independently | 13 |
+| fixed by subsequent point reruns | 101 |
+| still failing independently | 12 |
 
 The 96 trait-object `Debug` link failures were closed by canonicalising concrete
 trait-impl value paths before translation enumeration and C symbol emission.
@@ -75,14 +75,20 @@ MIR item addresses when an evaluated raw pointer is reconstructed. The original
 UI case passed against the explicitly published compiler; the rerun is recorded
 in `.build-clang/reclass-20260823-function-address-fixed/results.jsonl`.
 
+The TAIT diagnostic failure was closed by rejecting inherent-impl candidates
+whose fuzzy match depends on equating a rigid opaque alias with a concrete type
+outside its defining scope. The original unit now emits its expected lookup
+failure; the rerun is recorded in
+`.build-clang/reclass-20260824-tait-lookup-fixed/results.jsonl`.
+
 The resulting current population is:
 
 | current result | nodes |
 |---|---:|
 | wrong runtime behaviour, panic, abort, or output | 4 |
-| compiler abort or wrong compiler diagnostic | 4 |
+| compiler abort or wrong compiler diagnostic | 3 |
 | stable timeout | 5 |
-| **total independently reproduced** | **13** |
+| **total independently reproduced** | **12** |
 
 This full run supersedes the 2026-08-22 15,139-node baseline and all subsequent
 point accounting.
@@ -99,13 +105,12 @@ Four programs compile but execute incorrectly:
 
 ## P2: compiler aborts and diagnostics
 
-Four cases fail before producing a usable artifact:
+Three cases fail before producing a usable artifact:
 
 | nodes | signature | cases |
 |---:|---|---|
 | 2 | `mir_from_hir.cpp:2405`, region-only trait-object cast mismatch | Miri `dyn-upcast.rs`, `multiple-supertraits-modulo-binder.rs` |
 | 1 | const evaluator rejects a live `Vec` result | `consts/control-flow/drop-precise.rs` |
-| 1 | TAIT inherent lookup emits a type mismatch instead of the expected lookup failure | unit `tait_inherent_lookup_outside_defining_scope` |
 
 ## P3: stable timeouts
 

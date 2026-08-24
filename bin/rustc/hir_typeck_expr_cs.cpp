@@ -10956,6 +10956,41 @@ public:
     }
 };
 
+bool inherentImplMatchesReceiver(
+    Context& context,
+    const Span& sp,
+    const HIRTypeImpl& impl,
+    const HIRTypeData* receiver
+) {
+    HIRPathParams implParams;
+    while (implParams.types.size() < impl.params.types.size()) {
+        implParams.types.push_back(context.crate.types.infer());
+    }
+    implParams.values.resize(impl.params.values.size());
+
+    OwnedImplMatcher matcher(implParams);
+    const auto match = impl.type->matchTestGenericsFuzz(
+        sp, receiver, context.ivars.callbackResolveInfer(), matcher);
+    if (match != HIRCompare::Fuzzy) {
+        return match == HIRCompare::Equal;
+    }
+
+    const bool hasRigidOpaque = visitTyWith(receiver, [&](const HIRTypeData* type) {
+        const auto* erased = type->opt_ErasedType();
+        const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+        return alias && !context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
+    });
+    if (!hasRigidOpaque) {
+        return true;
+    }
+
+    const auto candidate = MonomorphStatePtr(
+        context.crate.types, receiver, &implParams, nullptr
+    ).monomorphType(sp, impl.type, false);
+    return candidate->compareWithPlaceholders(
+        sp, receiver, context.ivars.callbackResolveInfer()) != HIRCompare::Unequal;
+}
+
 void populateDefaults(const Span& sp, Context& context, const MonomorphStatePtr& ms, const HIRGenericParams& paramDefs, HIRPathParams& params) {
     for (size_t i = 0; i < paramDefs.types.size(); i++) {
         const auto& ty = params.types[i];
@@ -11300,6 +11335,9 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
     unsigned int count = 0;
     context.crate.findTypeImpls(lookupType, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
         DEBUG("- impl" << impl.params.fmtArgs() << " " << impl.type);
+        if (!inherentImplMatchesReceiver(context, sp, impl, lookupType)) {
+            return false;
+        }
         auto it = impl.methods.find(e.item);
         if (it == impl.methods.end()) {
             return false;
@@ -13235,6 +13273,9 @@ public:
                     unsigned int count = 0;
                     this->context.crate.findTypeImpls(lookupType, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
                         DEBUG("- impl" << impl.params.fmtArgs() << " " << impl.type);
+                        if (!inherentImplMatchesReceiver(this->context, sp, impl, lookupType)) {
+                            return false;
+                        }
                         {
                             auto it = impl.methods.find(e.item);
                             if (it != impl.methods.end()) {
