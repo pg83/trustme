@@ -2500,7 +2500,8 @@ namespace {
 
     const MIRFunction* getCalledMir(const MIRTypeResolve& state, const TransList* list, const HIRPath& path, ParamsSet& params) {
         MonomorphState outParams(state.resolve.hirCrate().types);
-        auto e = state.resolve.getValue(state.sp, path, outParams, /*sig_only*/ false, &params.implParamsDef);
+        StaticTraitResolve::ResolvedTraitImplPath traitImplPath;
+        auto e = state.resolve.getValue(state.sp, path, outParams, /*sig_only*/ false, &params.implParamsDef, &traitImplPath);
         DEBUG(e.tagStr() << " " << outParams);
         params.fcnParams = outParams.getMethodParams();
         params.implParams = outParams.ppImpl == nullptr ? HIRPathParams() : outParams.ppImpl == &outParams.ppImplData ? std::move(outParams.ppImplData) : outParams.ppImpl->clone();
@@ -2515,9 +2516,15 @@ namespace {
 
         // If a TransList is avaliable, then all referenced functions must be in it.
         if (list) {
-            const auto* transFcn = list->findFunction(path);
+            auto canonicalPath = path.clone();
+            if (traitImplPath.type) {
+                auto& pe = canonicalPath.data.as_UfcsKnown();
+                pe.type = traitImplPath.type;
+                pe.trait.params = mv$(traitImplPath.traitParams);
+            }
+            const auto* transFcn = list->findFunction(canonicalPath);
             if (!transFcn) {
-                MIR_BUG(state, "Enumeration failure - Function " << path << " not in TransList");
+                MIR_BUG(state, "Enumeration failure - Function " << canonicalPath << " not in TransList");
             }
             // TODO: Need identity params for most, but lifetime params need to be from the input.
             // Except, everything should already be monomorphised, so no identity required!
