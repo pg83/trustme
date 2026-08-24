@@ -1821,6 +1821,11 @@ namespace {
 
         const char* s = formatString.c_str();
         const char* const sEnd = s + formatString.length();
+        auto skipWhitespace = [&]() {
+            while (s < sEnd && (*s == ' ' || *s == '\t' || *s == '\n' || *s == '\r')) {
+                s++;
+            }
+        };
         for (; s < sEnd; s++) {
             if (*s != '{') {
                 if (*s == '}') {
@@ -1843,9 +1848,7 @@ namespace {
                 }
                 // `{ }` names the next argument just like `{}` does: the space is
                 // padding in the format string, not part of the argument name.
-                while (*s == ' ') {
-                    s++;
-                }
+                skipWhitespace();
 
                 // Debugging: A view of the formatting fragment
                 const char* s2 = s;
@@ -1884,6 +1887,8 @@ namespace {
                     // - If index is ~0u at the end of this block, it's set to the next arg
                     // - This allows {:.*} to format correctly (taking <prec> then <arg>)
                 }
+
+                skipWhitespace();
 
                 // If next character is ':', parse extra information
                 if (*s == ':') {
@@ -2016,6 +2021,8 @@ namespace {
                             ERROR(sp, E0000, "Unexpected character in precision");
                         }
                     }
+
+                    skipWhitespace();
 
                     if (s == sEnd) {
                         ERROR(sp, E0000, "Unexpected end of formatting string");
