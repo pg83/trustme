@@ -47,8 +47,8 @@ seed 36 completed in isolation and remains the only load-sensitive result.
 | failed in the full parallel run | 114 |
 | reproduced immediately after the full gate | 113 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 99 |
-| still failing independently | 14 |
+| fixed by subsequent point reruns | 100 |
+| still failing independently | 13 |
 
 The 96 trait-object `Debug` link failures were closed by canonicalising concrete
 trait-impl value paths before translation enumeration and C symbol emission.
@@ -70,14 +70,19 @@ place)` update the same drop state later used by partial moves. The original
 command passed against the explicitly published compiler; the rerun is recorded
 in `.build-clang/reclass-20260823-partial-drop-fixed/results.jsonl`.
 
+The function-address failure was closed by preserving function relocations as
+MIR item addresses when an evaluated raw pointer is reconstructed. The original
+UI case passed against the explicitly published compiler; the rerun is recorded
+in `.build-clang/reclass-20260823-function-address-fixed/results.jsonl`.
+
 The resulting current population is:
 
 | current result | nodes |
 |---|---:|
 | wrong runtime behaviour, panic, abort, or output | 4 |
-| compiler abort or wrong compiler diagnostic | 5 |
+| compiler abort or wrong compiler diagnostic | 4 |
 | stable timeout | 5 |
-| **total independently reproduced** | **14** |
+| **total independently reproduced** | **13** |
 
 This full run supersedes the 2026-08-22 15,139-node baseline and all subsequent
 point accounting.
@@ -94,13 +99,12 @@ Four programs compile but execute incorrectly:
 
 ## P2: compiler aborts and diagnostics
 
-Five cases fail before producing a usable artifact:
+Four cases fail before producing a usable artifact:
 
 | nodes | signature | cases |
 |---:|---|---|
 | 2 | `mir_from_hir.cpp:2405`, region-only trait-object cast mismatch | Miri `dyn-upcast.rs`, `multiple-supertraits-modulo-binder.rs` |
 | 1 | const evaluator rejects a live `Vec` result | `consts/control-flow/drop-precise.rs` |
-| 1 | MIR treats a function item address as a static | UI `issues/issue-56870.rs` |
 | 1 | TAIT inherent lookup emits a type mismatch instead of the expected lookup failure | unit `tait_inherent_lookup_outside_defining_scope` |
 
 ## P3: stable timeouts

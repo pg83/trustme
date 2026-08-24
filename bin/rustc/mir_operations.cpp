@@ -524,6 +524,23 @@ default:
         case HIRTypeData::TAG_Pointer: {
             auto& te = (*ty).as_Pointer();
             if (lit.getReloc()) {
+                const auto* reloc = lit.getReloc();
+                if (reloc->p) {
+                    auto itemPath = params.monomorphPath(state.sp, *reloc->p);
+                    MonomorphState itemParams(state.crate.types);
+                    const auto item = state.resolve.getValue(
+                        state.sp, itemPath, itemParams, /*signature_only=*/true);
+                    if (item.is_Function()) {
+                        const auto encodedAddress = lit.readUint(TargetGetPointerBits() / 8);
+                        MIR_ASSERT(state, encodedAddress >= EncodedLiteral::PTR_BASE, "Invalid function address");
+                        const auto offset = encodedAddress - EncodedLiteral::PTR_BASE;
+                        MIR_ASSERT(state, offset == U128(0), "Function address has a non-zero offset: " << offset);
+                        auto address = MIRConstant::make_ItemAddr({box$(mv$(itemPath)), offset});
+                        auto addressType = state.getConstType(address);
+                        auto value = mutator.inTemporary(mv$(addressType), mv$(address));
+                        return MIRRValue::make_Cast({mv$(value), mv$(ty)});
+                    }
+                }
                 // Share logic with `Borrow` below, but wrap returned value in a cast op
                 auto tyBorrow = state.crate.types.borrow(te.type, te.inner);
                 auto rval = MIRCleanupLiteralToRValue(state, mutator, lit, tyBorrow, params, mv$(path));
