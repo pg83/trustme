@@ -610,6 +610,12 @@ insta_0_8_2 = add_project_test(
     rev="9373b2669c6c2ae44ab85afe24acb5369f839100",
 )
 
+rayon_1_12_0 = add_project_test(
+    name="rayon_1_12_0",
+    url="https://github.com/rayon-rs/rayon.git",
+    rev="c9ced185ae3508246a9eb70c8407a1199bb1b77f",
+)
+
 gimli_0_32_3 = add_project_test(
     name="gimli_0_32_3",
     url="https://github.com/gimli-rs/gimli.git",
