@@ -1060,6 +1060,21 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_noninteractive_program_runner",
+    inputs=[
+        "$(S)/tst/program.py",
+        "$(S)/tst/unit/test_noninteractive_program_runner.py",
+    ],
+    outputs=["$(B)/tst/unit/noninteractive_program_runner.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_noninteractive_program_runner.py",
+        "$(S)/tst/program.py", "$(B)/tst/unit/noninteractive_program_runner.stamp",
+    ],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_compiletest_flags",
     inputs=[
         "$(S)/tst/unit/test_compiletest_flags.py",
@@ -1499,6 +1514,7 @@ for _index, (_case, _root, _mode, _edition) in enumerate(rust_book_cases):
         inputs=[
             "$(S)/tst/rust_book/adapter.py",
             "$(S)/tst/rust_book/cases.tsv",
+            "$(S)/tst/program.py",
             *_sources,
             *TESTS_LIB,
         ],
@@ -1746,6 +1762,7 @@ for _case, _origin, _edition, _mode in rust_doctest_cases:
             _src,
             "$(S)/tst/rust_doctest/adapter.py",
             "$(S)/tst/rust_doctest/cases.tsv",
+            "$(S)/tst/program.py",
             *TESTS_LIB,
         ],
         outputs=[_stamp],

@@ -55,6 +55,7 @@ def check_case(
             run_result = subprocess.run(
                 [str(binary)],
                 cwd=work,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 timeout=2,

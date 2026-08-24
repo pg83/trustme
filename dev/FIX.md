@@ -47,16 +47,14 @@ seed 36 completed in isolation and remains the only load-sensitive result.
 | failed in the full parallel run | 114 |
 | reproduced immediately after the full gate | 113 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 104 |
-| still failing independently | 9 |
+| fixed by subsequent point reruns | 108 |
+| still failing independently | 5 |
 
 The 96 trait-object `Debug` link failures were closed by canonicalising concrete
 trait-impl value paths before translation enumeration and C symbol emission.
 All 96 original commands passed against freshly published roots; the rerun is
 recorded in
-`.build-clang/reclass-20260823-link-fixed-ix-env/results.jsonl`. Four stable
-timeouts are interactive programs blocked on inherited stdin, so they are
-harness failures rather than compiler-progress failures.
+`.build-clang/reclass-20260823-link-fixed-ix-env/results.jsonl`.
 
 Two enum destructor failures were closed by retaining the full enum drop when
 its known-variant state belongs to a type with a user `Drop` impl. Both original
@@ -92,13 +90,19 @@ that differ only in erased regions as the same-value copy already used for
 identical cast types. Both the Rust 1.90 and Miri originals pass; the reruns are
 recorded in `.build-clang/reclass-20260824-region-cast-fixed/results.jsonl`.
 
+The four interactive-program timeouts were closed by running corpus binaries
+with a deterministic EOF on stdin instead of inheriting the gate process's live
+PTY. The three Rust Book examples and the library doctest now pass; the reruns
+are recorded in
+`.build-clang/reclass-20260824-closed-stdin-fixed/results.jsonl`.
+
 The resulting current population is:
 
 | current result | nodes |
 |---|---:|
 | wrong runtime behaviour, panic, abort, or output | 4 |
-| stable timeout | 5 |
-| **total independently reproduced** | **9** |
+| stable timeout | 1 |
+| **total independently reproduced** | **5** |
 
 This full run supersedes the 2026-08-22 15,139-node baseline and all subsequent
 point accounting.
@@ -117,8 +121,6 @@ Four programs compile but execute incorrectly:
 
 | nodes | limit | classification | cases |
 |---:|---:|---|---|
-| 3 | 60 s | harness leaves interactive stdin open | Rust Book guessing-game examples |
-| 1 | 60 s | harness leaves interactive stdin open | doctest `std/src/io/mod.rs:2379` |
 | 1 | 10 min | compiler progress requires phase classification | RustSmith seed 7 |
 
 Classify seed 7 by its last progressing compiler phase before attempting a

@@ -169,6 +169,7 @@ def reference_accepts(rustc: Path, program: str, edition: str, mode: str) -> boo
             run_result = subprocess.run(
                 [str(output)],
                 cwd=directory,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 timeout=2,

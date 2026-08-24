@@ -7,6 +7,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import lib  # noqa: E402
+import program  # noqa: E402
 
 
 def main() -> int:
@@ -44,13 +45,12 @@ def main() -> int:
             return compile_result.returncode
 
         try:
-            run_result = subprocess.run(
+            run_result = program.run(
                 [binary],
                 env=environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 timeout=60,
-                check=False,
             )
         except subprocess.TimeoutExpired:
             print(f"FAIL {case}: timed out after 60 seconds", file=sys.stderr)
