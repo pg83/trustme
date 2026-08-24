@@ -476,12 +476,36 @@ def check_prototype_order(rustc: str, src: str, work: str) -> None:
         raise RuntimeError("external function declaration was not emitted before definitions")
 
 
+def check_large_function_backend_budget(
+    rustc: str, src: str, libstd_tar: str, work: str
+) -> None:
+    output = os.path.join(work, "large-function-budget")
+    libstd = lib.untar(libstd_tar, os.path.join(work, "large-function-libstd"))
+    result = invoke(
+        rustc,
+        src,
+        output,
+        [
+            "--crate-name", "large_function_backend_budget",
+            "-L", os.path.join(libstd, "release"),
+            "-O",
+            "-Cemit-cpp-only",
+        ],
+    )
+    expect_ok(result, "large function backend budget codegen")
+    generated = Path(output + ".cpp").read_text()
+    function = generated_function(generated, "trustme_large_backend_budget")
+    header = function.splitlines()[0]
+    if not header.startswith("TRUSTME_BACKEND_OPTNONE "):
+        raise RuntimeError(f"large function retained backend optimizations: {header!r}")
+
+
 def main() -> int:
-    if len(sys.argv) != 12:
+    if len(sys.argv) != 13:
         raise SystemExit(
             "usage: test_codegen_options.py "
             "RUSTC MIR_RS CFG_RS LINK_RS UNWIND_RS SWITCH_RS FIELDLESS_RS "
-            "CFG_COMPACT_RS PROTO_RS LIBSTD_TAR STAMP"
+            "CFG_COMPACT_RS PROTO_RS LARGE_RS LIBSTD_TAR STAMP"
         )
     (
         rustc,
@@ -493,6 +517,7 @@ def main() -> int:
         fieldless_src,
         cfg_compact_src,
         proto_src,
+        large_src,
         libstd_tar,
         stamp,
     ) = map(os.path.abspath, sys.argv[1:])
@@ -569,6 +594,7 @@ def main() -> int:
         check_fieldless_enum_derive(rustc, fieldless_src, libstd_tar, work)
         check_cfg_compaction(rustc, cfg_compact_src, work)
         check_prototype_order(rustc, proto_src, work)
+        check_large_function_backend_budget(rustc, large_src, libstd_tar, work)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)
     Path(stamp).touch()

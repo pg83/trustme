@@ -35,6 +35,14 @@ struct trustme_caller_location final { SLICE_PTR filename; u32 line; u32 column;
 #define TRUSTME_MUSTTAIL
 #endif
 
+#if defined(__clang__)
+#define TRUSTME_BACKEND_OPTNONE __attribute__((optnone, noinline))
+#elif defined(__GNUC__)
+#define TRUSTME_BACKEND_OPTNONE __attribute__((optimize("O0"), noinline))
+#else
+#define TRUSTME_BACKEND_OPTNONE
+#endif
+
 #if TRUSTME_CODEGEN_DISALLOW_EMPTY_STRUCTS
 typedef struct { char _d; } tUNIT;
 typedef char tBANG;

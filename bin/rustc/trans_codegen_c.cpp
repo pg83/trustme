@@ -278,6 +278,28 @@ namespace {
         bool currentFunctionRealignsArguments = false;
 
         static constexpr size_t maxCTypeAlignment = 1u << 28;
+        static constexpr size_t backendOptimizationBudget = 10'000;
+
+        static bool exceedsBackendOptimizationBudget(const HIRFunction& item, const MIRFunction& code) {
+            if (item.markings.inlineType == HIRFunction::Markings::Inline::Always) {
+                return false;
+            }
+
+            size_t remaining = backendOptimizationBudget;
+            auto charge = [&](size_t amount) {
+                remaining = amount >= remaining ? 0 : remaining - amount;
+            };
+            charge(code.locals.size());
+            charge(code.dropFlags.size());
+            charge(code.blocks.size());
+            for (const auto& block : code.blocks) {
+                charge(block.statements.size());
+                if (remaining == 0) {
+                    return true;
+                }
+            }
+            return remaining == 0;
+        }
 
         static size_t cTypeAlignment(size_t rustSize, size_t rustAlignment) {
             if (rustSize == 0) {
@@ -2978,6 +3000,9 @@ default:
                 emitFunctionLinkageAlias(p, item);
             }
             emitFunctionDefinitionPrefix(item, isExternDef);
+            if (exceedsBackendOptimizationBudget(item, *code)) {
+                of << "TRUSTME_BACKEND_OPTNONE ";
+            }
             emitFunctionHeader(p, item, params);
             of << " {\n";
             if (item.hasNamedVariadic) {

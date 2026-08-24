@@ -331,7 +331,7 @@
 1	unique_ptr	bin/rustc/trans_codegen.cpp
 1	std::string	bin/rustc/trans_codegen.h
 1	new	bin/rustc/trans_codegen_c.cpp
-4	std::set	bin/rustc/trans_codegen_c.cpp
+2	std::set	bin/rustc/trans_codegen_c.cpp
 52	std::string	bin/rustc/trans_codegen_c.cpp
 38	std::vector	bin/rustc/trans_codegen_c.cpp
 2	unique_ptr	bin/rustc/trans_codegen_c.cpp

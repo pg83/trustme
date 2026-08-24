@@ -47,8 +47,8 @@ seed 36 completed in isolation and remains the only load-sensitive result.
 | failed in the full parallel run | 114 |
 | reproduced immediately after the full gate | 113 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 112 |
-| still failing independently | 1 |
+| fixed by subsequent point reruns | 113 |
+| still failing independently | 0 |
 
 The 96 trait-object `Debug` link failures were closed by canonicalising concrete
 trait-impl value paths before translation enumeration and C symbol emission.
@@ -109,25 +109,23 @@ the same type. Seeds 19 and 102 both pass against the freshly published
 compiler; the reruns are recorded in
 `.build-clang/reclass-20260824-float-fold-fixed/results.jsonl`.
 
+The final RustSmith timeout was in the C++ backend, not a recursive compiler
+phase: trustme completed MIR and C++ emission in roughly ten seconds, then
+Clang spent the remainder of the ten-minute node budget optimising one function
+with about thirty thousand locals and twenty-one thousand basic blocks. C++
+codegen now disables backend optimisation only for functions that exceed its
+MIR complexity budget. Seed 7 passes in roughly thirty seconds; the rerun is
+recorded in
+`.build-clang/reclass-20260824-backend-budget-fixed/results.jsonl`.
+
 The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| stable timeout | 1 |
-| **total independently reproduced** | **1** |
+| **total independently reproduced** | **0** |
 
 This full run supersedes the 2026-08-22 15,139-node baseline and all subsequent
 point accounting.
-
-## P1: stable timeouts
-
-| nodes | limit | classification | cases |
-|---:|---:|---|---|
-| 1 | 10 min | compiler progress requires phase classification | RustSmith seed 7 |
-
-Classify seed 7 by its last progressing compiler phase before attempting a
-fix. Recursive alias resolution, solver explosion, large generated MIR, and
-slow generated-program compilation are not interchangeable root causes.
 
 ## Load-sensitive result
 
