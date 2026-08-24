@@ -5435,7 +5435,8 @@ void Context::addRevisitAdv(::std::unique_ptr<Revisitor> entPtr) {
 void Context::requireSized(const Span& sp, const HIRTypeData* ty_) {
     const auto& ty = ivars.getType(ty_);
     TRACE_FUNCTION_F(ty_ << " -> " << ty);
-    if (resolve.typeIsSized(sp, ty) == HIRCompare::Unequal) {
+    const auto sized = resolve.typeIsSized(sp, ty);
+    if (sized == HIRCompare::Unequal) {
         ERROR(sp, E0000, "Unsized type not valid here - " << ty);
     }
     if (const auto* e = ty->opt_Infer()) {
@@ -5486,7 +5487,9 @@ void Context::requireSized(const Span& sp, const HIRTypeData* ty_) {
 
                 switch (pb->structMarkings.dstType) {
                     case HIRStructMarkings::DstType::Possible:
-                        this->requireSized(sp, e->path.data.as_Generic().params.types.at(pb->structMarkings.unsizedParam));
+                        if (sized != HIRCompare::Equal) {
+                            this->requireSized(sp, e->path.data.as_Generic().params.types.at(pb->structMarkings.unsizedParam));
+                        }
                         break;
                     case HIRStructMarkings::DstType::Projection: {
                         const HIRTypeData* tailTpl = nullptr;
@@ -5503,7 +5506,9 @@ void Context::requireSized(const Span& sp, const HIRTypeData* ty_) {
                         const auto& params = e->path.data.as_Generic().params;
                         auto tailTy = MonomorphStatePtr(crate.types, ty, &params, nullptr).monomorphType(sp, tailTpl);
                         tailTy = resolve.expandAssociatedTypes(sp, mv$(tailTy));
-                        this->requireSized(sp, tailTy);
+                        if (sized != HIRCompare::Equal) {
+                            this->requireSized(sp, tailTy);
+                        }
                         break;
                     }
                     case HIRStructMarkings::DstType::None:
