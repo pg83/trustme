@@ -11,10 +11,11 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 func crateURL(p Pkg) string {
@@ -171,16 +172,61 @@ directory = "vendor"
 }
 
 func tarZstd(root, out string) {
-	cmd := exec.Command("tar",
-		"--zstd",
-		"--sort=name",
-		"--mtime=@0",
-		"--owner=0", "--group=0", "--numeric-owner",
-		"-cf", out,
-		"-C", root,
-		".",
-	)
+	dest := throw2(os.Create(out))
 
-	cmd.Stderr = os.Stderr
-	throw(cmd.Run())
+	defer func() {
+		throw(dest.Close())
+	}()
+
+	encoder := throw2(zstd.NewWriter(dest, zstd.WithEncoderConcurrency(1)))
+
+	defer func() {
+		throw(encoder.Close())
+	}()
+
+	archive := tar.NewWriter(encoder)
+
+	defer func() {
+		throw(archive.Close())
+	}()
+
+	throw(filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+		return try(func() {
+			throw(walkErr)
+
+			rel := throw2(filepath.Rel(root, path))
+
+			if rel == "." {
+				return
+			}
+
+			link := ""
+
+			if info.Mode()&os.ModeSymlink != 0 {
+				link = throw2(os.Readlink(path))
+			}
+
+			header := throw2(tar.FileInfoHeader(info, link))
+			header.Name = filepath.ToSlash(rel)
+			header.Uid = 0
+			header.Gid = 0
+			header.Uname = ""
+			header.Gname = ""
+			header.ModTime = time.Unix(0, 0).UTC()
+			header.AccessTime = time.Time{}
+			header.ChangeTime = time.Time{}
+
+			throw(archive.WriteHeader(header))
+
+			if info.Mode().IsRegular() {
+				src := throw2(os.Open(path))
+
+				defer func() {
+					throw(src.Close())
+				}()
+
+				throw2(io.Copy(archive, src))
+			}
+		}).asError()
+	}))
 }
