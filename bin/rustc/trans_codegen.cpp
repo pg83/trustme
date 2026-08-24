@@ -77,8 +77,8 @@ namespace {
         }
 
         void addDependency(FunctionOrderNode& source, const HIRPath& path) {
-            auto it = list.functions.find(path);
-            if (it == list.functions.end() && path.data.is_UfcsKnown()) {
+            const auto* function = list.findFunction(path);
+            if (!function && path.data.is_UfcsKnown()) {
                 MonomorphState params(resolve.hirCrate().types);
                 StaticTraitResolve::ResolvedTraitImplPath implPath;
                 resolve.getValue(sp, path, params, false, nullptr, &implPath);
@@ -87,13 +87,13 @@ namespace {
                     auto& data = canonical.data.as_UfcsKnown();
                     data.type = implPath.type;
                     data.trait.params = implPath.traitParams.clone();
-                    it = list.functions.find(canonical);
+                    function = list.findFunction(canonical);
                 }
             }
-            if (it == list.functions.end()) {
+            if (!function) {
                 return;
             }
-            auto* target = findNode(it->first);
+            auto* target = findNode(*function->path);
             if (!target) {
                 return;
             }

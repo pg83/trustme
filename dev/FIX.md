@@ -118,14 +118,46 @@ MIR complexity budget. Seed 7 passes in roughly thirty seconds; the rerun is
 recorded in
 `.build-clang/reclass-20260824-backend-budget-fixed/results.jsonl`.
 
+## 2026-08-24 verification gate
+
+After the population above reached zero, the complete fast gate was rerun at
+commit `436289aaf` with 20 parallel jobs against the freshly rebuilt matching
+`rustc` and `libstd` roots. The graph contained 15,082 nodes. It completed
+15,079 and reported three broken targets. An incremental three-job replay ran
+only the missing-UID commands: two failures reproduced and one library test
+passed immediately.
+
+| result | nodes |
+|---|---:|
+| complete fast-gate graph | 15,082 |
+| green in the full parallel run | 15,079 |
+| failed in the full parallel run | 3 |
+| reproduced immediately after the full gate | 2 |
+| passed in isolation | 1 |
+| still failing independently | 2 |
+
 The resulting current population is:
 
 | current result | nodes |
 |---|---:|
-| **total independently reproduced** | **0** |
+| runtime value mismatch | 1 |
+| **total independently reproduced** | **1** |
 
-This full run supersedes the 2026-08-22 15,139-node baseline and all subsequent
+This verification gate supersedes the 2026-08-23 baseline and all subsequent
 point accounting.
+
+The generated-C++ ordering failure was closed by resolving function-order
+dependencies through the translation list's region-insensitive symbol index.
+The minimal unit and the original Rust 1.90
+`regions/regions-static-closure.rs` case both pass, while the prototype-order
+codegen check confirms that acyclic functions still do not receive unnecessary
+forward declarations.
+
+## P1: independently reproduced failures
+
+| nodes | classification | cases |
+|---:|---|---|
+| 1 | runtime returns `32766` instead of the static array element `1` | Rust 1.90 `issues/issue-49955.rs` |
 
 ## Load-sensitive result
 
@@ -134,6 +166,12 @@ then compiled and passed in isolation in roughly eight minutes. It is not
 included in the current failure count. Keep it as a gate-capacity signal; do
 not turn it into a compiler-correctness issue unless it becomes a stable
 timeout.
+
+The library test
+`coretests/num/ieee754.rs::num::ieee754::preserve_signed_infinity` failed in
+the 20-way verification gate and passed on the immediate three-job replay. It
+is likewise excluded from the current failure count unless it reproduces
+independently.
 
 ## Fix discipline
 
