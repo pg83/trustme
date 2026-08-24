@@ -131,12 +131,32 @@ pub struct Ident {
     pub(crate) is_raw: bool,
     pub(crate) val: String,
 }
+
+fn validate_ident(string: &str) {
+    if string.is_empty() {
+        panic!("Ident is not allowed to be empty; use Option<Ident>");
+    }
+    if string.bytes().all(|digit| digit >= b'0' && digit <= b'9') {
+        panic!("Ident cannot be a number; use Literal instead");
+    }
+
+    let mut chars = string.chars();
+    let first = chars.next().unwrap();
+    if first != '_' && !first.is_alphabetic()
+        || !chars.all(|ch| ch == '_' || ch.is_alphanumeric())
+    {
+        panic!("{:?} is not a valid Ident", string);
+    }
+}
+
 impl Ident {
     pub fn new(string: &str, span: Span) -> Ident {
+        validate_ident(string);
         Ident { span, is_raw: false, val: string.to_owned() }
     }
     // 1.47
     pub fn new_raw(string: &str, span: Span) -> Ident {
+        validate_ident(string);
         Ident { span, is_raw: true, val: string.to_owned() }
     }
     pub fn span(&self) -> Span {

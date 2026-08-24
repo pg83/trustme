@@ -1,6 +1,7 @@
 extern crate proc_macro;
 
-use proc_macro::{Delimiter, TokenStream, TokenTree};
+use proc_macro::{Delimiter, Ident, Span, TokenStream, TokenTree};
+use std::panic;
 use std::str::FromStr;
 
 fn expect_ident(token: Option<TokenTree>, expected: &str) {
@@ -21,6 +22,12 @@ fn expect_empty_group(token: Option<TokenTree>, expected: Delimiter) {
 }
 
 fn main() {
+    for invalid in &["", "'static", "255", "a#"] {
+        assert!(panic::catch_unwind(|| Ident::new(invalid, Span::call_site())).is_err());
+    }
+    assert_eq!(Ident::new("_", Span::call_site()).to_string(), "_");
+    assert_eq!(Ident::new("String", Span::call_site()).to_string(), "String");
+
     let function = TokenStream::from_str("async fn process() {}").unwrap();
     assert_eq!(function.to_string(), "async fn process ( ) { }");
     let mut function = function.into_iter();
