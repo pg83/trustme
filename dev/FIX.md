@@ -47,8 +47,8 @@ seed 36 completed in isolation and remains the only load-sensitive result.
 | failed in the full parallel run | 114 |
 | reproduced immediately after the full gate | 113 |
 | passed in isolation | 1 |
-| fixed by subsequent point reruns | 101 |
-| still failing independently | 12 |
+| fixed by subsequent point reruns | 102 |
+| still failing independently | 11 |
 
 The 96 trait-object `Debug` link failures were closed by canonicalising concrete
 trait-impl value paths before translation enumeration and C symbol emission.
@@ -81,14 +81,20 @@ outside its defining scope. The original unit now emits its expected lookup
 failure; the rerun is recorded in
 `.build-clang/reclass-20260824-tait-lookup-fixed/results.jsonl`.
 
+The precise-live-drop failure was closed by invalidating stale local MIR
+constant-propagation knowledge when a drop flag is assigned from an unknown
+flag. The original Rust 1.90 run-pass case now succeeds while the existing live
+drop rejection tests remain negative; the rerun is recorded in
+`.build-clang/reclass-20260824-const-precise-live-drop-fixed/results.jsonl`.
+
 The resulting current population is:
 
 | current result | nodes |
 |---|---:|
 | wrong runtime behaviour, panic, abort, or output | 4 |
-| compiler abort or wrong compiler diagnostic | 3 |
+| compiler abort or wrong compiler diagnostic | 2 |
 | stable timeout | 5 |
-| **total independently reproduced** | **12** |
+| **total independently reproduced** | **11** |
 
 This full run supersedes the 2026-08-22 15,139-node baseline and all subsequent
 point accounting.
@@ -105,12 +111,11 @@ Four programs compile but execute incorrectly:
 
 ## P2: compiler aborts and diagnostics
 
-Three cases fail before producing a usable artifact:
+Two cases fail before producing a usable artifact:
 
 | nodes | signature | cases |
 |---:|---|---|
 | 2 | `mir_from_hir.cpp:2405`, region-only trait-object cast mismatch | Miri `dyn-upcast.rs`, `multiple-supertraits-modulo-binder.rs` |
-| 1 | const evaluator rejects a live `Vec` result | `consts/control-flow/drop-precise.rs` |
 
 ## P3: stable timeouts
 

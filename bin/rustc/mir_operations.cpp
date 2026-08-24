@@ -6497,6 +6497,8 @@ default:
                     auto it = knownDropFlags.find(se->other);
                     if (it != knownDropFlags.end()) {
                         knownDropFlags[se->idx] = se->newVal != it->second;
+                    } else {
+                        knownDropFlags.erase(se->idx);
                     }
                 }
             }
