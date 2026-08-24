@@ -2612,7 +2612,7 @@ class CIncludeBytesExpander: public ExpandProcMacro {
         auto path = includeGetString(sp, lex, crate, mod);
         GET_CHECK_TOK(tok, lex, TOK_EOF);
 
-        ::std::string filePath = getPathRelativeTo(mod.fileInfo.path, mv$(path));
+        ::std::string filePath = getPathRelativeTo(sp.getTopFileSpan().filename.c_str(), mv$(path));
         crate.extraFiles.push_back(filePath);
 
         ::std::ifstream is(filePath);
@@ -2637,7 +2637,7 @@ class CIncludeStrExpander: public ExpandProcMacro {
         auto path = includeGetString(sp, lex, crate, mod);
         GET_CHECK_TOK(tok, lex, TOK_EOF);
 
-        ::std::string filePath = getPathRelativeTo(mod.fileInfo.path, mv$(path));
+        ::std::string filePath = getPathRelativeTo(sp.getTopFileSpan().filename.c_str(), mv$(path));
         crate.extraFiles.push_back(filePath);
 
         ::std::ifstream is(filePath);
