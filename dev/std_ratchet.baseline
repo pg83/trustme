@@ -262,7 +262,7 @@
 8	new	bin/rustc/parse_interpolated_fragment.cpp
 1	new	bin/rustc/parse_lex.cpp
 17	std::string	bin/rustc/parse_lex.cpp
-3	std::vector	bin/rustc/parse_lex.cpp
+2	std::vector	bin/rustc/parse_lex.cpp
 5	std::string	bin/rustc/parse_lex.h
 2	std::vector	bin/rustc/parse_lex.h
 1	unique_ptr	bin/rustc/parse_lex.h

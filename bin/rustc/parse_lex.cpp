@@ -1353,50 +1353,6 @@ FloatValue Lexer::parseFloat(U128 whole) {
         PUTC(ch);
         ch = this->getcNum();
     }
-    auto queueTupleIndices = [&](Codepoint first) {
-        DEBUG("Detected tuple index chain after float-shaped token - " << sbuf);
-        const char* buf = sbuf.data();
-        auto cit = std::find(buf, buf + sbuf.size(), '.');
-        std::vector<U128> indices;
-        indices.push_back(U128(std::strtoull(buf, nullptr, 10)));
-        indices.push_back(U128(std::strtoull(cit + 1, nullptr, 10)));
-
-        ch = first;
-        while (ch.isspace()) {
-            ch = this->getc();
-        }
-        bool hasTrailingDot = true;
-        while (ch.isdigit()) {
-            this->ungetc();
-            indices.push_back(this->parseInt(nullptr));
-            ch = this->getc();
-            while (ch.isspace()) {
-                ch = this->getc();
-            }
-            if (ch != '.') {
-                hasTrailingDot = false;
-                this->ungetc();
-                break;
-            }
-            ch = this->getc();
-            while (ch.isspace()) {
-                ch = this->getc();
-            }
-        }
-        if (!ch.isdigit() && hasTrailingDot) {
-            this->ungetc();
-        }
-
-        if (hasTrailingDot) {
-            nextTokens.push_back(TOK_DOT);
-        }
-        for (size_t i = indices.size(); i-- > 0;) {
-            nextTokens.push_back(Token(indices[i], CORETYPE_ANY));
-            if (i > 0) {
-                nextTokens.push_back(TOK_DOT);
-            }
-        }
-    };
     auto queueFloat = [&]() {
         nextTokens.push_back(Token::makeFloat(parseFloatValue(sbuf.c_str()), CORETYPE_ANY));
         return std::numeric_limits<double>::quiet_NaN();
@@ -1427,13 +1383,9 @@ FloatValue Lexer::parseFloat(U128 whole) {
             while (ch.isspace()) {
                 ch = this->getc();
             }
-            if (ch.isdigit()) {
-                queueTupleIndices(ch);
-            } else {
-                this->ungetc();
-                nextTokens.push_back(TOK_DOT);
-                queueFloat();
-            }
+            this->ungetc();
+            nextTokens.push_back(TOK_DOT);
+            queueFloat();
             return std::numeric_limits<double>::quiet_NaN();
         }
     } else if (ch.isspace()) {
@@ -1467,13 +1419,9 @@ FloatValue Lexer::parseFloat(U128 whole) {
         while (ch.isspace()) {
             ch = this->getc();
         }
-        if (ch.isdigit()) {
-            queueTupleIndices(ch);
-        } else {
-            this->ungetc();
-            nextTokens.push_back(TOK_DOT);
-            queueFloat();
-        }
+        this->ungetc();
+        nextTokens.push_back(TOK_DOT);
+        queueFloat();
         return std::numeric_limits<double>::quiet_NaN();
     } else {
         if (ch == 'e' || ch == 'E') {

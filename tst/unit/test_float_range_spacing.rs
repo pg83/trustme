@@ -17,6 +17,10 @@ fn classify(v: f64) -> &'static str {
 
 struct Nested((u32, u32));
 
+macro_rules! float_then_tuple_index {
+    ($float:literal . $index:literal) => {};
+}
+
 fn main() {
     assert_eq!(classify(0.0), "in");
     assert_eq!(classify(10.0), "in");
@@ -44,4 +48,6 @@ fn main() {
     assert_eq!(n.0 .0, 7);
     assert_eq!(n.0 .1, 8);
     assert_eq!(n.0.0, 7);
+
+    float_then_tuple_index!(1.34.0);
 }
