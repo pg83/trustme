@@ -47,6 +47,21 @@ def main() -> int:
     if len(lines) != 1 or not lines[0].startswith("rustc 1.90.100 "):
         raise RuntimeError(f"rustc --version must be one rustc-compatible line; got {lines!r}")
 
+    for args in (["--version", "--verbose"], ["--verbose", "--version"]):
+        result = subprocess.run(
+            [rustc, *args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            sys.stderr.write(result.stderr)
+            raise RuntimeError(f"rustc {' '.join(args)} failed")
+        lines = result.stdout.splitlines()
+        if not lines[0].startswith("rustc 1.90.100 ") or "release: 1.90.100" not in lines:
+            raise RuntimeError(f"rustc {' '.join(args)} must report the verbose release; got {lines!r}")
+
     rustc_sources = Path(__file__).parents[2] / "bin" / "rustc"
     compatibility_branches = []
     for source in sorted(rustc_sources.iterdir()):

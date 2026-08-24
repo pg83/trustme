@@ -1121,6 +1121,21 @@ int main(int argc, char* argv[]) {
     return args.result;
 }
 
+static void printRustcVersion(bool verbose) {
+    const char* rustcTarget = RUSTC_TARGET_VERSION;
+
+    ::std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << ::std::endl;
+    if (!verbose) {
+        return;
+    }
+    ::std::cout << "binary: rustc" << ::std::endl;
+    ::std::cout << "commit-hash: " << gsVersionGitHash << ::std::endl;
+    ::std::cout << "commit-date: UNKNOWN" << ::std::endl;
+    ::std::cout << "build-date: " << gsVersionBuildTime << ::std::endl;
+    ::std::cout << "host: UNKNOWN" << ::std::endl;
+    ::std::cout << "release: " << rustcTarget << ".100" << ::std::endl;
+}
+
 ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
     auto addLibrarySearchDir = [this](const char* value) {
         ::std::string spec(value);
@@ -1157,25 +1172,24 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
         addLibrarySearchDir(a);
     }
 
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-vV") == 0 || strcmp(argv[i], "-Vv") == 0) {
+            printRustcVersion(true);
+            exit(0);
+        }
+        if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
+            bool verbose = false;
+            for (int j = 1; j < argc; j++) {
+                verbose |= strcmp(argv[j], "--verbose") == 0 || strcmp(argv[j], "-v") == 0;
+            }
+            printRustcVersion(verbose);
+            exit(0);
+        }
+    }
+
     // Parse the rustc-compatible command-line subset supported by this driver.
     for (int i = 1; i < argc; i++) {
         const char* arg = argv[i];
-
-        // The following imitates rustc's version output (which the crate `rustc_version` tries to parse)
-        // Report the emulated rustc release together with the native compiler version.
-        if (strcmp(arg, "-vV") == 0) {
-            const char* rustcTarget = RUSTC_TARGET_VERSION;
-
-            ::std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << ::std::endl;
-            ::std::cout << "binary: rustc" << ::std::endl;
-            ::std::cout << "commit-hash: " << gsVersionGitHash << ::std::endl;
-            ::std::cout << "commit-date: UNKNOWN" << ::std::endl;
-            ::std::cout << "build-date: " << gsVersionBuildTime << ::std::endl;
-            ::std::cout << "host: UNKNOWN" << ::std::endl;
-            ::std::cout << "release: " << rustcTarget << ".100" << ::std::endl;
-
-            exit(0);
-        }
 
         if (arg[0] != '-' || arg[1] == '\0') {
             if (this->infile == "") {
@@ -1588,13 +1602,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             if (strcmp(arg, "--help") == 0) {
                 this->showHelp();
                 exit(0);
-            } else if (strcmp(arg, "--version") == 0) {
-                const char* rustcTarget = RUSTC_TARGET_VERSION;
-                ::std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << ::std::endl;
-                exit(0);
-            }
-            // --out-dir <dir>  >> Set the output directory for automatically-named files
-            else if (const char* outDir = checkWithArg("out-dir")) {
+            } else if (const char* outDir = checkWithArg("out-dir")) {
                 this->outputDir = outDir;
                 if (this->outputDir != "" && this->outputDir.back() != '/') {
                     this->outputDir += '/';
