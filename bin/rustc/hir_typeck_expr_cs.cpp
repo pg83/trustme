@@ -7427,14 +7427,18 @@ default:
         // monomorphised generic expression still carries its original HIR
         // together with the now-concrete substitutions, so evaluate it before
         // probing candidates instead of treating every concrete impl as fuzzy.
-        auto normalizeConstParams = [&](HIRPathParams& params) {
+        auto normalizeConstParams = [&](HIRPathParams& params, const HIRGenericParams* paramsDef) {
             context.ivars.expandIvarsParams(params);
+            if (paramsDef && params.values.size() == paramsDef->values.size()) {
+                ConvertHIRConstantEvaluateMethodParams(sp, context.resolve.board(), context.crate, paramsDef, params);
+            }
             for (auto& value : params.values) {
                 ConvertHIRConstantEvaluateConstGeneric(sp, context.resolve.board(), context.crate, value);
             }
         };
-        normalizeConstParams(v.params);
-        normalizeConstParams(v.atyPp);
+        const auto& traitDef = context.crate.getTraitByPath(sp, v.trait);
+        normalizeConstParams(v.params, &traitDef.params);
+        normalizeConstParams(v.atyPp, nullptr);
 
         ::std::optional<HIRTypeRef> outputType;
 

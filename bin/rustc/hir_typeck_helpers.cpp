@@ -5275,6 +5275,8 @@ default:
 
                     expandAssociatedTypesInplace(sp, pe.type, stack);
                     H::expandAssociatedTypesParams(sp, *this, pe.params, stack);
+                    const auto& traitDef = crate.getTraitByPath(sp, pe.trait.path);
+                    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &traitDef.params, pe.trait.params);
                     H::expandAssociatedTypesParams(sp, *this, pe.trait.params, stack);
                     input = crate.types.intern(mv$(data));
                     // Retry opaque projections too: equality bounds can be
