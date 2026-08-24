@@ -761,9 +761,22 @@ NODE(ASTExprNodeByteString, { printEscapedLiteral(os, TOK_BYTESTRING, reinterpre
 NODE(ASTExprNodeCString, { printEscapedLiteral(os, TOK_CSTRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, { return NEWNODE(ASTExprNodeCString, value); })
 NODE(ASTExprNodeSuffixedLiteral, { os << text; }, { return NEWNODE(ASTExprNodeSuffixedLiteral, text); })
 
+static void printClosureParameterPattern(::std::ostream& os, const ASTPattern& pattern) {
+    if (pattern.bindings().empty() && pattern.data().is_MaybeBind()) {
+        const auto& ident = pattern.data().as_MaybeBind().name;
+        if (ident.isRaw) {
+            os << "r#";
+        }
+        os << ident.name;
+        return;
+    }
+    os << pattern;
+}
+
 NODE(
     ASTExprNodeClosure,
     {
+        os << hrbs;
         if (isPinned) {
             os << "static ";
         }
@@ -774,11 +787,23 @@ NODE(
             os << "use ";
         }
         os << "|";
+        bool needsComma = false;
         for (const auto& a : args) {
-            os << a.first << ": " << a.second << ",";
+            if (needsComma) {
+                os << ", ";
+            }
+            needsComma = true;
+            printClosureParameterPattern(os, a.first);
+            if (!a.second->isWildcard()) {
+                os << ": ";
+                a.second->print(os, false);
+            }
         }
         os << "|";
-        os << "->" << returnType;
+        if (!returnType->isWildcard()) {
+            os << " -> ";
+            returnType->print(os, false);
+        }
         os << " " << *code;
     },
     {

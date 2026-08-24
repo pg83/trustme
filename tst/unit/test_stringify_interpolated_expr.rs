@@ -34,6 +34,11 @@ fn main() {
     assert_eq!(stringify_expr!(("Yeah",)), "(\"Yeah\",)");
     assert_eq!(stringify_expr!("\r"), "\"\\r\"");
     assert_eq!(stringify_expr!(1u8), "1u8");
+    assert_eq!(stringify_expr!(|state| state), "|state| state");
+    assert_eq!(
+        stringify_expr!(|state: u8| -> u8 { state }),
+        "|state: u8| -> u8 { state }",
+    );
 
     let _ = (Point { x: value, y: value }, f(&value), foo);
 }
