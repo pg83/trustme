@@ -2669,11 +2669,12 @@ class CExpanderPanic: public ExpandProcMacro {
         }
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_DOUBLE_COLON));
-        toks.push_back(Token(TOK_STRING, std::string(crate.extCratenameCore.c_str()), {}));
+        const auto& panicCrate = crate.extCratenameStd != "" ? crate.extCratenameStd : crate.extCratenameCore;
+        toks.push_back(Token(TOK_STRING, std::string(panicCrate.c_str()), {}));
         toks.push_back(Token(TOK_DOUBLE_COLON));
         toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
         toks.push_back(Token(TOK_DOUBLE_COLON));
-        switch (crate.edition) {
+        switch (edition) {
             case ASTEdition::Rust2015:
             case ASTEdition::Rust2018:
                 toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic_2015")));
