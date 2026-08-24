@@ -29,7 +29,7 @@ runs:
             export DEBIAN_FRONTEND=noninteractive
             apt-get update
             apt-get install --yes --no-install-recommends \
-              clang curl golang-go libclang-rt-dev lld llvm patch python3 zlib1g-dev
+              clang curl golang-go libclang-rt-dev libxxhash-dev lld llvm patch python3 zlib1g-dev
             clang++ --version
             ld.lld --version
             export CC="$(command -v clang)"

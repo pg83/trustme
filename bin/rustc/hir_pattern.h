@@ -66,9 +66,7 @@ struct HIRPatternPathNamedData {
     ::std::vector<::std::pair<RcString, HIRPattern>> subPatterns;
     bool isExhaustive;
 
-    bool isWildcard() const {
-        return subPatterns.empty() && !isExhaustive;
-    }
+    bool isWildcard() const;
 };
 
 // Definitions generated from hir_pattern.tu.
@@ -105,5 +103,9 @@ struct HIRPattern {
 
     friend ::std::ostream& operator<<(::std::ostream& os, const HIRPattern& x);
 };
+
+inline bool HIRPatternPathNamedData::isWildcard() const {
+    return subPatterns.empty() && !isExhaustive;
+}
 
 std::vector<unsigned> patternBindingSlots(const HIRPattern& pattern, HIRPatternBindingOrder order);

@@ -24,7 +24,7 @@ namespace stl {
 
         template <typename T, typename... A>
         T* makeImpl(A&&... a) {
-            return new (allocFor<sizeof(T), alignof(T)>()) T(forward<A>(a)...);
+            return new (allocFor<sizeof(T), alignof(T)>()) T(stl::forward<A>(a)...);
         }
 
     public:
@@ -48,13 +48,13 @@ namespace stl {
             if constexpr (stdHasTrivialDestructor(T)) {
                 static_assert(sizeof(Wrapper1) == sizeof(T));
 
-                return &makeImpl<Wrapper1>(forward<A>(a)...)->t;
+                return &makeImpl<Wrapper1>(stl::forward<A>(a)...)->t;
             } else {
                 struct Wrapper2: public Disposable, public Wrapper1 {
                     using Wrapper1::Wrapper1;
                 };
 
-                auto res = makeImpl<Wrapper2>(forward<A>(a)...);
+                auto res = makeImpl<Wrapper2>(stl::forward<A>(a)...);
 
                 submit(res);
 
