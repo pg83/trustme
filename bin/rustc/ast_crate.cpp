@@ -11,9 +11,23 @@
 #include <dirent.h>
 
 namespace {
+    bool checkAttributeCfg(const Settings& settings, const ASTAttribute& attr) {
+        if (attr.name() == "cfg") {
+            return checkCfg(settings, attr.span(), attr);
+        }
+        if (attr.name() == "cfg_attr") {
+            for (const auto& expanded : checkCfgAttr(settings, attr)) {
+                if (!checkAttributeCfg(settings, expanded)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     bool checkItemCfg(const Settings& settings, const ASTAttributeList& attrs) {
         for (const auto& at : attrs.items) {
-            if (at.name() == "cfg" && !checkCfg(settings, at.span(), at)) {
+            if (!checkAttributeCfg(settings, at)) {
                 return false;
             }
         }
@@ -59,7 +73,12 @@ void ASTCrate::loadExterns(Settings& settings) {
             }
         }
     };
-    iterateModule(settings, rootModule_, cb);
+    // Crate-level cfg is applied during expansion, but explicit extern crates
+    // are loaded before expansion. Do not require externs from a crate whose
+    // entire contents will be removed.
+    if (checkItemCfg(settings, attrs)) {
+        iterateModule(settings, rootModule_, cb);
+    }
 
     // Check for no_std or no_core, and load libstd/libcore
     // - Duplicates some of the logic in "Expand", but also helps keep crate loading separate to most of expand
