@@ -17,6 +17,7 @@ public:
     // traversal stack, but that stack is absent for lazy processing.
     HIRSimplePath currentTraitPath;
     const HIRTraitImpl* currentTraitImpl;
+    const HIRTypeData* currentSelfType;
 
     ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> traits;
     ::std::vector<HIRSimplePath> defineOpaque;

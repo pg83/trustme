@@ -7,6 +7,7 @@ HIRExprState::HIRExprState(HIRTypeInterner& types, const HIRModule& modPtr, HIRS
     , implGenerics(nullptr)
     , itemGenerics(nullptr)
     , currentTraitImpl(nullptr)
+    , currentSelfType(nullptr)
     , stage(Stage::Created)
 {
 }

@@ -34,6 +34,7 @@ HIRExprStatePtr HIRExprStatePtr::clone(stl::ObjPool* pool) const {
     rv->itemGenerics = (*this)->itemGenerics;
     rv->currentTraitPath = (*this)->currentTraitPath;
     rv->currentTraitImpl = (*this)->currentTraitImpl;
+    rv->currentSelfType = (*this)->currentSelfType;
     rv->defineOpaque = (*this)->defineOpaque;
     rv->stage = (*this)->stage;
     return rv;

@@ -2001,10 +2001,12 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
             if (ep.state->currentTraitImpl) {
                 currentTrait.path = ep.state->currentTraitPath;
                 currentTrait.params = ep.state->currentTraitImpl->traitArgs.clone();
-                // Lazy processing can be requested from Resolve UFCS Outer,
-                // before the whole-crate Self-expansion pass has run.  Give
-                // this body and its signature the same owner substitution.
-                ConvertHIRExpandAliasesSelfExpr(*this, ep.state->currentTraitImpl->type, const_cast<HIRFunction::argsT&>(args), retTy, epMut);
+            }
+            // Lazy processing can be requested from Resolve UFCS Outer,
+            // before the whole-crate Self-expansion pass has run.  Give
+            // this body and its signature the same owner substitution.
+            if (ep.state->currentSelfType) {
+                ConvertHIRExpandAliasesSelfExpr(*this, ep.state->currentSelfType, const_cast<HIRFunction::argsT&>(args), retTy, epMut);
             }
 
             // TODO: Ensure that all referenced items have constants evaluated

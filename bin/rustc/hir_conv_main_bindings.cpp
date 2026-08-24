@@ -941,6 +941,7 @@ default:
                 expr.state->implGenerics = ms.implGenerics;
                 expr.state->itemGenerics = ms.itemGenerics;
                 expr.state->currentTraitImpl = ms.currentTraitImpl;
+                expr.state->currentSelfType = selfType;
                 if (ms.currentTrait) {
                     expr.state->currentTraitPath = ms.currentTrait->path;
                 }
@@ -3052,7 +3053,7 @@ public:
         currentTraitPath_ = traitPath;
         if (traitPath) {
             currentTrait = &crate.getTraitByPath(Span(), state.currentTraitPath);
-            currentType_ = state.currentTraitImpl ? state.currentTraitImpl->type : nullptr;
+            currentType_ = state.currentSelfType;
             inTraitDef_ = state.currentTraitImpl == nullptr;
         }
         curModPath = state.modPath;
