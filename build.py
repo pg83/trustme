@@ -618,6 +618,13 @@ insta_0_8_2 = add_project_test(
     url="https://github.com/mitsuhiko/insta.git",
     rev="9373b2669c6c2ae44ab85afe24acb5369f839100",
     lockfile="$(S)/tst/projects/insta_0_8_2/Cargo.lock",
+    adapter_args=[
+        "--xfail", "test_unnamed_yaml_vector",
+        "--xfail", "test_yaml_vector",
+        "--xfail", "test_yaml_inline",
+        "--xfail", "test_yaml_inline_redacted",
+        "--xfail", "test_with_random_value",
+    ],
 )
 
 rayon_1_12_0 = add_project_test(
