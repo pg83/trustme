@@ -36,3 +36,17 @@ pub fn go(i: usize) -> impl Future<Output = ()> + Send + 'static {
         }
     }
 }
+
+// The deferred path also has to be rebased from the item's generic space into
+// the nested future's own parameters, not merely filled in after the fact.
+pub fn generic<T: Send + 'static>(value: T, recurse: bool) -> impl Future<Output = ()> + Send + 'static {
+    async move {
+        if recurse {
+            spawn(async move {
+                let fut = generic(value, false).boxed();
+                fut.await;
+            })
+            .await;
+        }
+    }
+}
