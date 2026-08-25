@@ -1267,90 +1267,102 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
 
     Matcher matcher{crate.types, sp, implParams, paramsSet, placeholderName, baseImplPlaceholderIdx, placeholders, placeholdersSet};
 
-    // Bounds
-    for (const auto& bound : implParamsDef.bounds) {
-        if (const auto* ep = bound.opt_TraitBound()) {
-            const auto& e = *ep;
+    // Bounds can infer impl parameters through associated type equalities. Keep
+    // checking until those inferences stop changing the placeholder set, so the
+    // result does not depend on the declaration order of the bounds.
+    HIRPathParams previousPlaceholders;
+    do {
+        previousPlaceholders = placeholders.clone();
+        for (const auto& bound : implParamsDef.bounds) {
+            if (const auto* ep = bound.opt_TraitBound()) {
+                const auto& e = *ep;
 
-            DEBUG("Trait bound " << e.type << " : " << e.trait);
-            auto bTyMono = matcher.monomorphType(sp, e.type);
-            this->expandAssociatedTypes(sp, bTyMono);
-            auto bTpMono = matcher.monomorphTraitpath(sp, e.trait, false);
-            expandAssociatedTypesTp(sp, bTpMono);
-            DEBUG("- b_ty_mono = " << bTyMono << ", b_tp_mono = " << bTpMono);
-            // HACK: If the type is '_', assume the bound passes
-            if (bTyMono->is_Infer()) {
-                continue;
-            }
+                DEBUG("Trait bound " << e.type << " : " << e.trait);
+                auto bTyMono = matcher.monomorphType(sp, e.type);
+                this->expandAssociatedTypes(sp, bTyMono);
+                auto bTpMono = matcher.monomorphTraitpath(sp, e.trait, false);
+                expandAssociatedTypesTp(sp, bTpMono);
+                DEBUG("- b_ty_mono = " << bTyMono << ", b_tp_mono = " << bTpMono);
+                // HACK: If the type is '_', assume the bound passes
+                if (bTyMono->is_Infer()) {
+                    continue;
+                }
 
-            // TODO: This is extrememly inefficient (looks up the trait impl 1+N times)
-            if (bTpMono.typeBounds.size() > 0) {
-                for (const auto& assocBound : bTpMono.typeBounds) {
-                    // TODO: Can bounds have generic params (GATs)
-                    const auto& atyName = assocBound.first;
-                    const HIRTypeData* exp = assocBound.second.type;
+                // TODO: This is extrememly inefficient (looks up the trait impl 1+N times)
+                if (bTpMono.typeBounds.size() > 0) {
+                    for (const auto& assocBound : bTpMono.typeBounds) {
+                        // TODO: Can bounds have generic params (GATs)
+                        const auto& atyName = assocBound.first;
+                        const HIRTypeData* exp = assocBound.second.type;
 
-                    // TODO: use `assoc_bound.second.source_trait`
-                    HIRGenericPath atySrcTrait;
-                    traitContainsType(sp, bTpMono.path, *e.trait.traitPtr, atyName.c_str(), atySrcTrait);
+                        // TODO: use `assoc_bound.second.source_trait`
+                        HIRGenericPath atySrcTrait;
+                        traitContainsType(sp, bTpMono.path, *e.trait.traitPtr, atyName.c_str(), atySrcTrait);
 
+                        bool rv = false;
+                        if (bTyMono->is_Generic() && bTyMono->as_Generic().isPlaceholder()) {
+                            DEBUG("- Placeholder param " << bTyMono << ", magic success");
+                            rv = true;
+                        } else {
+                            rv = this->findImpl(sp, atySrcTrait.path, atySrcTrait.params, bTyMono, [&](const ImplRef& impl, bool) -> bool {
+                                HIRTypeRef have = impl.getType(crate.types, atyName.c_str(), assocBound.second.atyParams);
+                                if (have == HIRTypeRef()) {
+                                    have = crate.types.path(HIRPath(impl.getImplType(crate.types), HIRGenericPath(atySrcTrait.path, impl.getTraitParams(crate.types)), atyName), HIRTypePathBinding::make_Unbound({}));
+                                }
+                                this->expandAssociatedTypes(sp, have);
+
+                                DEBUG("[find_impl__check_crate_raw] ATY ::" << atyName << " - " << have << " ?= " << exp);
+                                auto cmp = exp->matchTestGenericsFuzz(sp, have, cbIdent, matcher);
+                                if (cmp == HIRCompare::Unequal) {
+                                    DEBUG("Assoc ty " << atyName << " mismatch, " << have << " != des " << exp);
+                                }
+                                return cmp != HIRCompare::Unequal;
+                            });
+                        }
+                        if (!rv) {
+                            DEBUG("> Fail (assoc " << atyName << ") - " << bTyMono << " : " << atySrcTrait);
+                            return false;
+                        }
+                    }
+                }
+
+                // TODO: Detect if the associated type bound above is from directly the bounded trait, and skip this if it's the case
+                //else
+                {
                     bool rv = false;
                     if (bTyMono->is_Generic() && bTyMono->as_Generic().isPlaceholder()) {
                         DEBUG("- Placeholder param " << bTyMono << ", magic success");
                         rv = true;
                     } else {
-                        rv = this->findImpl(sp, atySrcTrait.path, atySrcTrait.params, bTyMono, [&](const ImplRef& impl, bool) -> bool {
-                            HIRTypeRef have = impl.getType(crate.types, atyName.c_str(), assocBound.second.atyParams);
-                            if (have == HIRTypeRef()) {
-                                have = crate.types.path(HIRPath(impl.getImplType(crate.types), HIRGenericPath(atySrcTrait.path, impl.getTraitParams(crate.types)), atyName), HIRTypePathBinding::make_Unbound({}));
-                            }
-                            this->expandAssociatedTypes(sp, have);
-
-                            DEBUG("[find_impl__check_crate_raw] ATY ::" << atyName << " - " << have << " ?= " << exp);
-                            auto cmp = exp->matchTestGenericsFuzz(sp, have, cbIdent, matcher);
-                            if (cmp == HIRCompare::Unequal) {
-                                DEBUG("Assoc ty " << atyName << " mismatch, " << have << " != des " << exp);
-                            }
-                            return cmp != HIRCompare::Unequal;
+                        rv = this->findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](const auto& impl, bool) {
+                            return true;
                         });
                     }
+                    if (!rv && visitTyWith(bTyMono, [](const HIRTypeData* ty) {
+                        return ty->is_Generic() && ty->as_Generic().isPlaceholder();
+                    })) {
+                        DEBUG("- Placeholder param within " << bTyMono << ", magic success");
+                        rv = true;
+                    }
+                    if (!rv && visitTraitPathTysWith(bTpMono, [](const HIRTypeData* ty) {
+                        return ty->is_Generic() && ty->as_Generic().isPlaceholder();
+                    })) {
+                        DEBUG("- Placeholder param within " << bTpMono << ", defer until the next bounds pass");
+                        rv = true;
+                    }
                     if (!rv) {
-                        DEBUG("> Fail (assoc " << atyName << ") - " << bTyMono << " : " << atySrcTrait);
+                        DEBUG("> Fail - " << bTyMono << ": " << bTpMono);
                         return false;
                     }
                 }
             }
-
-            // TODO: Detect if the associated type bound above is from directly the bounded trait, and skip this if it's the case
-            //else
+            //else if( const auto* be
+            else // bound.opt_TraitBound()
             {
-                bool rv = false;
-                if (bTyMono->is_Generic() && bTyMono->as_Generic().isPlaceholder()) {
-                    DEBUG("- Placeholder param " << bTyMono << ", magic success");
-                    rv = true;
-                } else {
-                    rv = this->findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](const auto& impl, bool) {
-                        return true;
-                    });
-                }
-                if (!rv && visitTyWith(bTyMono, [](const HIRTypeData* ty) {
-                    return ty->is_Generic() && ty->as_Generic().isPlaceholder();
-                })) {
-                    DEBUG("- Placeholder param within " << bTyMono << ", magic success");
-                    rv = true;
-                }
-                if (!rv) {
-                    DEBUG("> Fail - " << bTyMono << ": " << bTpMono);
-                    return false;
-                }
+                // Ignore
             }
         }
-        //else if( const auto* be
-        else // bound.opt_TraitBound()
-        {
-            // Ignore
-        }
-    }
+    } while (placeholders != previousPlaceholders);
 
     for (size_t i = 0; i < implParams.types.size(); i++) {
         if (!paramsSet.types[i]) {
