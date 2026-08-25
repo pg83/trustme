@@ -1270,10 +1270,13 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     // 1. If this->m_type is less specific than other.m_type: return false
     {
         // If any in te.impl->m_params is less specific than oe.impl->m_params: return false
+        // Mixed ordering (more specific in one position, less in another)
+        // means the impls are incomparable: neither is a specialisation of
+        // the other, so this one is not "more specific".
         sTypeOrdMixed = false;
         auto ord = typelistOrdSpecific(sp, this->traitArgs.types, other.traitArgs.types);
         if (sTypeOrdMixed) {
-            BUG(sp, "Mixed ordering in more_specific_than");
+            return false;
         }
         if (ord != ::OrdEqual) {
             DEBUG("- Trait arguments " << (ord == ::OrdLess ? "less" : "more") << " specific");
@@ -1282,7 +1285,7 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
 
         ord = typeOrdSpecific(sp, this->type, other.type);
         if (sTypeOrdMixed) {
-            BUG(sp, "Mixed ordering in more_specific_than");
+            return false;
         }
         if (ord != ::OrdEqual) {
             DEBUG("- Type " << this->type << " " << (ord == ::OrdLess ? "less" : "more") << " specific than " << other.type);
@@ -1458,7 +1461,7 @@ namespace {
 }
 
 // Returns `true` if the two impls overlap in the types they will accept
-bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other) const {
+bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other, bool headOnly) const {
     // TODO: Pre-calculate impl trees (with pointers to parent impls)
     struct H {
         static bool typesOverlap(const HIRPathParams& a, const HIRPathParams& b) {
@@ -1806,6 +1809,10 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
             return true;
         }
     };
+
+    if (headOnly) {
+        return true;
+    }
 
     // The two impls could overlap, pending on trait bounds
     if (isReversed) {

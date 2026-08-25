@@ -2671,6 +2671,10 @@ default:
             size_t frameDepth = 0;
             stl::ObjList<GoalKey> activeGoalNodes;
             stl::ObjList<CachedGoal> cachedGoalNodes;
+            // Guards the AliasRelate normalisation retry: EAT re-enters
+            // candidate evaluation, so an unguarded retry recurses without
+            // bound on coinductive cycles.
+            mutable bool aliasRelateActive_ = false;
             ::std::vector<GoalKey*> goalStack;
             ::std::vector<CachedGoal*> goalCache;
             ::std::unordered_multimap<size_t, GoalKey*> activeGoalIndex;
@@ -3807,6 +3811,7 @@ default:
                             HIRTraitPath::assocListT sourceAssociated;
                             sourceAssociated.insert({requirement.first, requirement.second.clone()});
                             const auto sourceResult = solveGoal(aty.sourceTrait.path, aty.sourceTrait.params, impl.getImplType(crate.types), &sourceAssociated);
+                            DEBUG("declaring-trait redirect " << aty.sourceTrait << " => " << static_cast<unsigned>(sourceResult));
                             if (sourceResult == Certainty::NoSolution) {
                                 return Certainty::NoSolution;
                             }
@@ -3828,7 +3833,26 @@ default:
                     // The projection response may contain the very caller-owned
                     // inference variable from the requested equality. That is an
                     // exact response, not an ambiguous comparison of two ivars.
-                    const auto cmp = output == aty.type ? HIRCompare::Equal : resolve_.compareTy(span(), output, aty.type);
+                    auto cmp = output == aty.type ? HIRCompare::Equal : resolve_.compareTy(span(), output, aty.type);
+                    if (cmp != HIRCompare::Equal && !aliasRelateActive_ && (resolve_.hasAssociatedType(output) || resolve_.hasAssociatedType(aty.type))) {
+                        aliasRelateActive_ = true;
+                        STD_DEFER {
+                            aliasRelateActive_ = false;
+                        };
+                        // AliasRelate: an unnormalised projection on either side
+                        // is neither an inference wildcard nor a structural
+                        // mismatch.  Normalise both sides in the current env and
+                        // re-relate: a ParamEnv value of `<Ret as II>::Item`
+                        // against a required `&T` becomes definitive, and a
+                        // synthesised `<C as FnMut<()>>::Output` folds through
+                        // the elaborated FnOnce equality instead of failing
+                        // structurally against a rigid parameter.
+                        const auto normalizedOutput = resolve_.expandAssociatedTypes(span(), output);
+                        const auto normalizedRequired = resolve_.expandAssociatedTypes(span(), aty.type);
+                        if (normalizedOutput != output || normalizedRequired != aty.type) {
+                            cmp = normalizedOutput == normalizedRequired ? HIRCompare::Equal : resolve_.compareTy(span(), normalizedOutput, normalizedRequired);
+                        }
+                    }
                     if (cmp == HIRCompare::Unequal) {
                         return Certainty::NoSolution;
                     }
@@ -3981,6 +4005,32 @@ default:
                 const HIRGenericParams* implParamsDef = markerImpl ? &markerImpl->params : (traitImpl && traitImpl->impl ? &traitImpl->impl->params : nullptr);
                 if (!implParamsDef) {
                     return result;
+                }
+
+                // An impl parameter without a `?Sized` relaxation carries an
+                // implicit `Sized` requirement.  For a specialising impl this
+                // is often the only distinguishing predicate (`Box<I>` vs
+                // `Box<I: ?Sized>`), so skipping it keeps a dead candidate
+                // alive and blocks the unique general impl.
+                {
+                    const HIRPathParams* boundParams = markerImpl ? &candidate->markerImplParams : &traitImpl->implParams;
+                    for (size_t i = 0; i < implParamsDef->types.size() && i < boundParams->types.size(); i++) {
+                        if (!implParamsDef->types[i].isSized) {
+                            continue;
+                        }
+                        const auto& bound = boundParams->types[i];
+                        if (bound == HIRTypeRef()) {
+                            continue;
+                        }
+                        const auto sized = resolve_.typeIsSized(span(), bound);
+                        if (sized == HIRCompare::Unequal) {
+                            return Certainty::NoSolution;
+                        }
+                        if (sized == HIRCompare::Fuzzy) {
+                            candidate->ambiguityBeyondHead = true;
+                            result = Certainty::Ambiguous;
+                        }
+                    }
                 }
 
                 for (const auto& bound : implParamsDef->bounds) {
@@ -4143,6 +4193,7 @@ default:
                 };
 
                 auto cacheResult = [&](Certainty certainty) {
+                    DEBUG("solveGoal " << trait << " for " << type << " => " << static_cast<unsigned>(certainty));
                     return cacheGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated, certainty);
                 };
 
@@ -4225,12 +4276,34 @@ default:
                         // well-formed, so the normalizes-to response is ambiguous.
                         return Certainty::Ambiguous;
                     }
-                    output = makeAssociatedProjection(impl, HIRGenericPath(trait, impl.getTraitParams(crate.types)), RcString::newInterned(assocName), params);
+                    // Synthesise the projection through the trait that DECLARES
+                    // the item (`Output` on an `FnMut` goal lives on `FnOnce`),
+                    // so normalisation can fold it through the elaborated
+                    // ParamEnv equality.
+                    auto sourceTrait = HIRGenericPath(trait, impl.getTraitParams(crate.types));
+                    HIRGenericPath declaringTrait;
+                    if (resolve_.traitContainsType(span(), sourceTrait, crate.getTraitByPath(span(), trait), assocName, declaringTrait)) {
+                        sourceTrait = ::std::move(declaringTrait);
+                    }
+                    output = makeAssociatedProjection(impl, ::std::move(sourceTrait), RcString::newInterned(assocName), params);
                 }
                 if (!assocType) {
                     return Certainty::Proven;
                 }
-                const auto cmp = resolve_.compareTy(span(), assocType, output);
+                auto cmp = resolve_.compareTy(span(), assocType, output);
+                if (cmp != HIRCompare::Equal && !aliasRelateActive_ && (resolve_.hasAssociatedType(output) || resolve_.hasAssociatedType(assocType))) {
+                    aliasRelateActive_ = true;
+                    STD_DEFER {
+                        aliasRelateActive_ = false;
+                    };
+                    // AliasRelate: normalise both sides before treating an
+                    // unnormalised projection as a mismatch or a wildcard.
+                    const auto normalizedOutput = resolve_.expandAssociatedTypes(span(), output);
+                    const auto normalizedRequired = resolve_.expandAssociatedTypes(span(), assocType);
+                    if (normalizedOutput != output || normalizedRequired != assocType) {
+                        cmp = normalizedRequired == normalizedOutput ? HIRCompare::Equal : resolve_.compareTy(span(), normalizedRequired, normalizedOutput);
+                    }
+                }
                 if (cmp == HIRCompare::Unequal) {
                     return Certainty::NoSolution;
                 }
@@ -4623,7 +4696,16 @@ default:
                 HIRTraitPath::assocListT rootAssociated;
                 if (assocName && assocName[0] && candidateAssocType) {
                     const static HIRPathParams noAssocParams;
-                    rootAssociated.insert({RcString::newInterned(assocName), HIRTraitPath::AtyEqual{HIRGenericPath(trait, goalParams.clone()), assocParams ? assocParams->clone() : noAssocParams.clone(), candidateAssocType}});
+                    // The requirement projects through the trait that DECLARES
+                    // the item: `Output` on an `FnMut` goal is declared on
+                    // `FnOnce`, and only the declaring trait's projection folds
+                    // through the elaborated ParamEnv equality.
+                    auto sourceTrait = HIRGenericPath(trait, goalParams.clone());
+                    HIRGenericPath declaringTrait;
+                    if (resolve_.traitContainsType(span(), sourceTrait, crate.getTraitByPath(span(), trait), assocName, declaringTrait)) {
+                        sourceTrait = ::std::move(declaringTrait);
+                    }
+                    rootAssociated.insert({RcString::newInterned(assocName), HIRTraitPath::AtyEqual{::std::move(sourceTrait), assocParams ? assocParams->clone() : noAssocParams.clone(), candidateAssocType}});
                 }
                 for (size_t i = 0; i < candidateCount; i++) {
                     auto certainty = evaluateCandidate(frameIndex, i, trait, rootAssociated.empty() ? nullptr : &rootAssociated);
@@ -4974,6 +5056,18 @@ default:
             }
             if (leftImpl->impl == rightImpl->impl) {
                 return true;
+            }
+
+            // Structural head unification with binding consistency is a
+            // necessary condition: `Extend<T>` and `Extend<&T>` for the same
+            // self can never overlap (`T = &T` is an infinite type).  The
+            // goal probe below over-approximates here because its one-way
+            // matcher drops goal-side inference constraints (no occurs
+            // check), which would let specialization discard a live impl.
+            // Heads only: the legacy bound walk recurses without a cycle
+            // guard on coinductive marker traits; bounds are the probe's job.
+            if (!leftImpl->impl->overlapsWith(crate, *rightImpl->impl, /*headOnly=*/true)) {
+                return false;
             }
 
             // The probe resolver is pool-owned and reused, while its inference table
