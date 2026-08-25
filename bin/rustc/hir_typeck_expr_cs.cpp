@@ -11734,6 +11734,10 @@ class ExprVisitorEnum: public HIRExprVisitor {
                     return true;
                 }
                 if (isFallback) {
+                    if (i->index < context.possibleIvarVals.size()
+                        && context.possibleIvarVals[i->index].hasRules()) {
+                        return false;
+                    }
                     context.equateTypes(node->span(), ty, context.crate.types.unit());
                     return true;
                 }
