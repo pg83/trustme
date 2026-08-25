@@ -354,3 +354,53 @@
 - Циклы констант/статиков/дискриминантов — ошибки «cycle detected» (E0391-паритет), регрессии в `tst/unit`.
 - Enum-дискриминанты — per-variant demand, 16-проходный фикспойнт и `discardDiscriminantMir` удалены.
 - Диагностический инструментарий: `TRUSTME_DEFER_STATS=1` (счётчик хвоста), `TRUSTME_CAPS_ORACLE=1` (попытка вопреки предикату; успех печатает `PREDICATE MISS`).
+
+---
+
+# П1: цикл libcore под `-Znext-solver=globally` (2026-08-26)
+
+Метод: гонять libcore под globally, каждый блокер — минимизация → сверка с настоящим rustc (nix, 1.97 + RUSTC_BOOTSTRAP, `-Znext-solver`) → фикс шва → гейт.
+
+## Закрыто и запушено
+
+1. **`869263e05`** — goal-сборка не видит нерезолвленных bounds: definitional-шорткаты lang-трейтов и placeholder-кейс раньше моста; handoff гейтится `genericBoundsUnresolved` (UfcsUnknown в where-клаузах ранних фаз).
+2. **`22d65a700`** — ноль head-совпадений при конкретном self = NoSolution, не Ambiguous (ивар в trait-параметре не оживляет кандидатов); чинит затенение inherent-метода blanket'ом `AsRef` (Peekable::peek; регрессия в корпусе).
+
+## Проверенные правила (dev-guide + эксперименты на rustc)
+
+- ParamEnv-кандидаты затеняют impl'ы при не-глобальном баунде — **и для нормализации**: «Normalization does not consider impls if the trait goal has been proven via a ParamEnv candidate». Голый баунд ⇒ проекция ригидна. Проверено: `let _: <U as Tr<T>>::A = ();` и конкретно-self вариант — **оба** E0308 под `-Znext-solver`.
+- При этом `<Foo<T, <()as C<T>>::Assoc>>::select()` (явный ригидный алиас в receiver!) — **резолвится**: rustc не нормализует заголовки вообще, обе стороны символьны, унификация структурная (alias-vs-alias).
+
+## Открытый блокер №4-и-далее (не закрыт, откачен до зелёного)
+
+Внедрение правила «ParamEnv затеняет нормализацию» ломает `test_next_solver_inherent_path_wf_constraints`: у нас impl-заголовки **эагерно нормализованы** при Resolve-UFCS в env определения (`hir_conv_main_bindings.cpp:3228`, spew: `impl ... Foo<Args,(),>`), а receiver с тем же дефолтом остаётся ригидным в caller-env → асимметрия → «Failed to locate function». Тупики, проверенные и откаченные:
+
+- нормализация дефолта в env определения при заполнении (populateDefaults / checkParameters) — receiver рождается третьим путём (символьное заполнение на выражении + поздняя подстановка);
+- retry в `inherentImplMatchesReceiver` с нормализацией receiver'а в env impl'а (в т.ч. с принудительным legacy) — не фолдит: цель `(): C<Ret>` с generic-параметром фолдится только fuzzy-commit'ом helpers-Inplace EAT, а не static-EAT.
+
+Настоящий шов — **симметрия заголовков**, два пути:
+(а) rustc-way: перестать эагерно нормализовать impl-заголовки, унифицировать алиасы структурно (большой радиус: всё ниже по пайплайну привыкло к нормализованным self);
+(б) научить goal-машину «param = rigid тип»: `impl C<T2> for ()` против `(): C<Ret>` — Proven с подстановкой T2:=Ret (сейчас generic-vs-generic = Fuzzy) — тогда нормализация в env, где баунда нет, честно фолдит, и ретраи не нужны.
+Вариант (б) согласован с давней болью «fuzzy» (HACKS §2) и выглядит корневым.
+
+Репро блокера №3 (без ядра, 25 строк) — для будущего красного теста после (б):
+
+```rust
+enum Never {}
+trait Into2<T> { fn into2(self) -> T; }
+trait TryFrom2<T>: Sized { type Error; fn try_from2(v: T) -> Result<Self, Self::Error>; }
+trait TryInto2<T> { type Error; fn try_into2(self) -> Result<T, Self::Error>; }
+impl<T, U> TryInto2<U> for T where U: TryFrom2<T> {
+    type Error = U::Error;
+    fn try_into2(self) -> Result<U, U::Error> { U::try_from2(self) }
+}
+impl<T, U> TryFrom2<U> for T where U: Into2<T> {
+    type Error = Never;
+    fn try_from2(v: U) -> Result<Self, Never> { Ok(v.into2()) }
+}
+```
+(легитимный итог: `U::Error` в сигнатуре TryInto2-blanket'а ригиден; сейчас под globally фолдится в `Never` через reverse-blanket → Type mismatch.)
+
+## Перф-заметка
+
+Кэш целей NextTraitGoalEvaluator живёт на `TraitResolution` (per-function) и чистится SessionGuard'ами — при выходе в дефолт нужен кэш времени жизни крейта (канонизация уже есть). «Normalization timeout» (закрыт `1854a44cf`) — симптом этой же короткой жизни кэша.
