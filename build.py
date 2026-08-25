@@ -639,6 +639,7 @@ crossbeam_utils_0_8_22 = add_project_test(
     url="https://github.com/crossbeam-rs/crossbeam.git",
     rev="9b56303b8aa9ff8ec5bbebb9d2da05e034977889",
     manifest="crossbeam-utils",
+    lockfile="$(S)/tst/projects/crossbeam_utils_0_8_22/Cargo.lock",
 )
 
 gimli_0_32_3 = add_project_test(
@@ -667,7 +668,8 @@ pest_2_9_0 = add_project_test(
     url="https://github.com/pest-parser/pest.git",
     rev="d9b29b61da505daafd028c19547366ace1ade7df",
     manifest="pest",
-    vendor_manifest=".",
+    vendor_manifest="pest",
+    lockfile="$(S)/tst/projects/pest_2_9_0/Cargo.lock",
 )
 
 combine = add_project_test(
