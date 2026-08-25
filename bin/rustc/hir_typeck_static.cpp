@@ -74,6 +74,38 @@ public:
     }
 };
 
+namespace {
+    bool typeHasUnresolvedPath(const HIRTypeData* ty) {
+        return ty && visitTyWith(ty, [](const HIRTypeData* inner) {
+            const auto* path = inner->opt_Path();
+            return path && path->path.data.is_UfcsUnknown();
+        });
+    }
+}
+
+bool StaticTraitResolve::genericBoundsUnresolved(const HIRGenericParams* params) {
+    if (!params) {
+        return false;
+    }
+    for (const auto& bound : params->bounds) {
+        if (const auto* tb = bound.opt_TraitBound()) {
+            if (typeHasUnresolvedPath(tb->type)) {
+                return true;
+            }
+            for (const auto& ty : tb->trait.path.params.types) {
+                if (typeHasUnresolvedPath(ty)) {
+                    return true;
+                }
+            }
+        } else if (const auto* eq = bound.opt_TypeEquality()) {
+            if (typeHasUnresolvedPath(eq->type) || typeHasUnresolvedPath(eq->otherType)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, bool dontHandoffToSpecialised) const {
     TRACE_FUNCTION_F(traitPath << FMT_CB(os, if (traitParams) { os << *traitParams; } else { os << "<?>"; }) << " for " << type);
     auto cbIdent = HIRResolvePlaceholdersNop();
@@ -84,14 +116,6 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
         if (normalizedType != type) {
             return this->findImplCb(sp, traitPath, traitParams, normalizedType, foundCb, dontHandoffToSpecialised);
         }
-    }
-
-    if (this->wb.settings->solver.globally && !dontHandoffToSpecialised) {
-        if (!nextSolver) {
-            ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
-            nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
-        }
-        return nextSolver->findImpl(sp, implGenerics_, itemGenerics_, traitPath, traitParams, type, foundCb);
     }
 
     static HIRPathParams nullParams;
@@ -274,6 +298,21 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
             // TODO: Restructure so this knows that the placehlder impls the impl-provided bounds.
             return foundCb.visit(ImplRef(type, traitParams, &nullAssoc), false);
         }
+    }
+
+    // The definitional shortcuts above answer from type structure alone and
+    // must stay authoritative: general candidate assembly walks in-scope
+    // bounds, and early pipeline phases (metadata for ResolveUFCSOuter)
+    // still hold those in unresolved UfcsUnknown form -- data the goal
+    // machinery must not see. Once the bounds are resolved the bridge takes
+    // every query.
+    if (this->wb.settings->solver.globally && !dontHandoffToSpecialised
+        && !genericBoundsUnresolved(implGenerics_) && !genericBoundsUnresolved(itemGenerics_)) {
+        if (!nextSolver) {
+            ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
+            nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
+        }
+        return nextSolver->findImpl(sp, implGenerics_, itemGenerics_, traitPath, traitParams, type, foundCb);
     }
 
     struct H {

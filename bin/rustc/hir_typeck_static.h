@@ -152,6 +152,11 @@ private:
 public:
     /// \brief State manipulation
     /// \{
+    /// Whether a where-clause in this parameter set still names an
+    /// unresolved (UfcsUnknown) path: early phases query impls before the
+    /// UFCS resolution pass has run.
+    static bool genericBoundsUnresolved(const HIRGenericParams* params);
+
     NullOnDrop<const HIRGenericParams> setImplGenerics(HIRStructMarkings::DstType structDstType, const HIRGenericParams& gps);
 
     NullOnDrop<const HIRGenericParams> setImplGenerics(MetadataType selfMetaType, const HIRGenericParams& gps);
