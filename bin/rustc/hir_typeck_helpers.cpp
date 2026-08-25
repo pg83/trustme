@@ -2511,7 +2511,15 @@ default:
                     this->findNamedTraitInTrait(sp, trait, params, *bound.traitPtr, bound.path.path, *bParamsMono, type, [&](const HIRTraitPath& iTp) {
                         auto cmp = this->comparePp(sp, iTp.path.params, params);
                         DEBUG("Opaque Path: cmp=" << cmp << ", impl " << iTp.path << " for " << type << " -- desired " << trait << params);
-                        auto ir = ImplRef(type, iTp.path.params.clone(), {}, iTp.constness);
+                        // The supertrait's associated equalities travel with
+                        // the candidate (`Int: BitXor<Output = Self>` must
+                        // answer `Output`), exactly as the TraitObject and
+                        // ErasedType supertrait paths do.
+                        HIRTraitPath::assocListT assocClone;
+                        for (const auto& aty : iTp.typeBounds) {
+                            assocClone.insert(::std::make_pair(aty.first, aty.second.clone()));
+                        }
+                        auto ir = ImplRef(type, iTp.path.params.clone(), mv$(assocClone), iTp.constness);
                         rv |= (cmp != HIRCompare::Unequal && callback.visit(std::move(ir), cmp));
                         ret = true;
                         return false; // Continue
@@ -3453,9 +3461,22 @@ default:
             }
 
             void assembleCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) {
+                // A rigid projection self only matches environment-class
+                // candidates: bounds on the associated type's declaration
+                // (alias bounds) surface through the legacy collector, but
+                // they are the same preference class as ParamEnv predicates.
+                // Mislabelling them lets the non-global-ParamEnv shadow drop
+                // `CastFrom<u16>`-style alias bounds and commit the one
+                // declared directly, guiding inference to the wrong type.
+                const auto* selfPath = resolve_.resolveType(type)->opt_Path();
+                const bool selfIsRigidProjection = selfPath && selfPath->binding.is_Opaque();
                 auto collect = [&](CandidateSource source) {
-                    return [&, source](ImplRef impl, HIRCompare match) {
-                        pushCandidate(frameIndex, ::std::move(impl), match, nullptr, {}, false, source);
+                    return [&, source, selfIsRigidProjection](ImplRef impl, HIRCompare match) {
+                        auto effectiveSource = source;
+                        if (source == CandidateSource::Other && selfIsRigidProjection && !impl.data.is_TraitImpl()) {
+                            effectiveSource = CandidateSource::ParamEnv;
+                        }
+                        pushCandidate(frameIndex, ::std::move(impl), match, nullptr, {}, false, effectiveSource);
                         return false;
                     };
                 };
@@ -4409,7 +4430,16 @@ default:
                 if ((!left.data.is_TraitImpl() || !right.data.is_TraitImpl()) && params.hasParams()) {
                     return false;
                 }
-                return typesEqualAfterNormalization(left.getType(crate.types, assocName, params), right.getType(crate.types, assocName, params));
+                const auto leftValue = left.getType(crate.types, assocName, params);
+                const auto rightValue = right.getType(crate.types, assocName, params);
+                // A bare environment predicate has no opinion on the value: the
+                // same where-clause reaches assembly twice (cached ParamEnv and
+                // the implied-declaration walk), once with its equality and once
+                // without.  That is a refinement, not a conflicting response.
+                if (!left.data.is_TraitImpl() && !right.data.is_TraitImpl() && (leftValue == HIRTypeRef()) != (rightValue == HIRTypeRef())) {
+                    return true;
+                }
+                return typesEqualAfterNormalization(leftValue, rightValue);
             }
 
         public:
@@ -4920,6 +4950,20 @@ default:
                         if (candidate->certainty == Certainty::Proven) {
                             selected = candidate;
                             break;
+                        }
+                    }
+                    // Among equal responses, prefer the one that actually
+                    // carries the requested associated value: the bare
+                    // predicate variant of the same where-clause cannot
+                    // answer the normalizes-to part.
+                    if (assocName && assocName[0]) {
+                        const static HIRPathParams noItemParams;
+                        const auto& itemParams = assocParams ? *assocParams : noItemParams;
+                        for (auto* candidate : frame.viable) {
+                            if (candidate->certainty == selected->certainty && candidate->impl.getType(crate.types, assocName, itemParams) != HIRTypeRef()) {
+                                selected = candidate;
+                                break;
+                            }
                         }
                     }
                     const auto certainty = selected->certainty;

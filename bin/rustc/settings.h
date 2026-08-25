@@ -5,6 +5,9 @@
 #include <std/lib/vector.h>
 #include <std/sym/i_map.h>
 
+#include <cstdlib>
+#include <cstring>
+
 #include <map>
 #include <optional>
 #include <string>
@@ -12,10 +15,20 @@
 
 // Trait solver selection. rustc 1.90 uses the new solver for coherence by
 // default, while ordinary type checking keeps the legacy solver unless
-// explicitly requested.
+// explicitly requested.  TRUSTME_NEXT_SOLVER=globally overrides the default
+// (not an explicit -Z next-solver) -- the survey tool for flipping the
+// default: run any corpus under the goal solver without editing call sites.
 struct TraitSolverConfig {
     bool coherence = true;
     bool globally = false;
+
+    TraitSolverConfig() {
+        if (const char* env = getenv("TRUSTME_NEXT_SOLVER")) {
+            if (strcmp(env, "globally") == 0) {
+                globally = true;
+            }
+        }
+    }
 };
 
 // Lint reporting level, as set by `-A/-W/-D/-F` and by `#![allow(...)]` and

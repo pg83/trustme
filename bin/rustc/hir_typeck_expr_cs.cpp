@@ -2350,7 +2350,9 @@ default:
         }
 
         void noRevisit(HIRExprNode& n) {
-            UNREACHABLE();
+            // A diagnostic printer must never abort: nodes without a
+            // specialised format still appear in leftover-rule dumps.
+            os << "_" << typeid(n).name() << " {" << context.ivars.fmtType(n.resType) << "}";
         }
     }; // class ExprVisitor_Print
 }
