@@ -603,7 +603,7 @@ ron_0_4_2 = add_project_test(
     url="https://github.com/ron-rs/ron.git",
     rev="be6bebab49d29bf3cf0fcf1c96fb870597e2c7b9",
     lockfile="$(S)/tst/projects/ron_0_4_2/Cargo.lock",
-    adapter_args=["--xfail", "::test_nul_in_string"],
+    adapter_args=["--xfail", "test_nul_in_string"],
 )
 
 console_0_7_7 = add_project_test(
