@@ -268,6 +268,9 @@ default: {
                         if (ecIt == settings.implicitCrates.end()) {
                             return ResolveModuleRef();
                         }
+                        if (ecIt->second == "") {
+                            return getModuleAst(crate.rootModule_, path, 0, ignoreLast, outPath);
+                        }
                         auto ecIt2 = crate.externCrates.find(ecIt->second);
                         if (ecIt2 == crate.externCrates.end()) {
                             DEBUG("Crate " << ecIt->second << " not found");

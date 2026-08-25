@@ -3,6 +3,17 @@
 
 extern crate self as alloc;
 
+pub mod macro_util {
+    #[macro_export]
+    macro_rules! local_macro {
+        () => {
+            7usize
+        };
+    }
+}
+
+pub const MACRO_VALUE: usize = ::alloc::local_macro!();
+
 pub trait LocalTrait {
     fn value() -> usize;
 }
