@@ -78,6 +78,10 @@ namespace {
     void ConvertHIRConstantEvaluateStatic(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRStatic& e);
     void ConvertHIRConstantEvaluateFcnSig(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRFunction& fcn);
 
+    // Diagnostic: attempt evaluation even when the captures predicate says
+    // no, and report a loud PREDICATE MISS when the attempt succeeds.
+    const bool sCapsOracle = getenv("TRUSTME_CAPS_ORACLE") != nullptr;
+
     // Dumped at exit when TRUSTME_DEFER_STATS is set: how often speculative
     // evaluation bailed, by reason -- the map of what still runs too early.
     struct DeferStats {
@@ -248,6 +252,118 @@ namespace {
         return false;
     }
 
+    /// One syntactic scan filling HIRExprState::Captures: the generic slots
+    /// the expression names. Cost model matches rustc's TypeFlags: computed
+    /// once per expression (per stage), read as bits afterwards.
+    struct ExprCaptureScan final: HIRExprVisitorDef {
+        HIRExprState::Captures out;
+
+        explicit ExprCaptureScan(HIRTypeInterner& types)
+            : HIRExprVisitorDef(types)
+        {
+        }
+
+        void addSlot(u64 (&masks)[2], u32 binding) {
+            const auto group = binding >> 8;
+            const auto idx = binding & 0xFF;
+            if (group > GENERICItem || idx >= 64) {
+                out.unknown = true;
+                return;
+            }
+            masks[group] |= u64(1) << idx;
+        }
+
+        void addType(const HIRGenericRef& g) {
+            if (g.isSelf()) {
+                out.usesSelf = true;
+            } else {
+                addSlot(out.typeMask, g.binding);
+            }
+        }
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+            if (ty) {
+                if (ty->flags & (HIRTypeData::HAS_UNEVALUATED_CONST | HIRTypeData::HAS_DEFERRED_CONST)) {
+                    out.unknown = true;
+                }
+                if (ty->flags & HIRTypeData::HAS_TYPE_PARAM) {
+                    visitTyWith(ty, [&](const HIRTypeData* inner) {
+                        if (const auto* g = inner->opt_Generic()) {
+                            addType(*g);
+                        }
+                        return false;
+                    });
+                }
+            }
+            return HIRExprVisitorDef::visitType(ty);
+        }
+
+        void visitPathParams(HIRPathParams& pp) override {
+            for (const auto& v : pp.values) {
+                if (const auto* g = v.opt_Generic()) {
+                    addSlot(out.valueMask, g->binding);
+                } else if (v.is_Unevaluated()) {
+                    out.unknown = true;
+                }
+            }
+            HIRExprVisitorDef::visitPathParams(pp);
+        }
+
+        void visit(HIRExprNodeConstParam& node) override {
+            addSlot(out.valueMask, node.binding);
+            HIRExprVisitorDef::visit(node);
+        }
+
+        void visit(HIRExprNodeCallMethod& node) override {
+            out.unknown = true;
+            HIRExprVisitorDef::visit(node);
+        }
+    };
+
+    const HIRExprState::Captures& exprCaptures(HIRTypeInterner& types, const HIRExprPtr& expr) {
+        auto& state = *expr.state;
+        if (!state.captures.computed || state.captures.stage != state.stage) {
+            ExprCaptureScan scan(types);
+            const_cast<HIRExprPtr&>(expr)->visit(scan);
+            state.captures = scan.out;
+            state.captures.computed = true;
+            state.captures.stage = state.stage;
+        }
+        return state.captures;
+    }
+
+    /// Whether every generic slot the expression names is concrete in its
+    /// captured environment: the rustc `const_eval_resolve` precondition,
+    /// decided without running the interpreter. Reads the cached captures.
+    bool unevaluatedUsedSlotsAreConcrete(HIRTypeInterner& types, const HIRConstGenericUnevaluated& ue) {
+        if (!ue.expr || !*ue.expr || !(*ue.expr).state) {
+            return false;
+        }
+        const auto& caps = exprCaptures(types, *ue.expr);
+        if (caps.unknown) {
+            return unevaluatedEnvIsConcrete(ue);
+        }
+        if (caps.usesSelf && !typeIsConcrete(ue.selfType)) {
+            return false;
+        }
+        const HIRPathParams* groups[2] = {&ue.paramsImpl, &ue.paramsItem};
+        for (unsigned g = 0; g < 2; g++) {
+            for (auto mask = caps.typeMask[g]; mask; mask &= mask - 1) {
+                const auto idx = static_cast<size_t>(__builtin_ctzll(mask));
+                if (idx >= groups[g]->types.size() || !typeIsConcrete(groups[g]->types[idx])) {
+                    return false;
+                }
+            }
+            for (auto mask = caps.valueMask[g]; mask; mask &= mask - 1) {
+                const auto idx = static_cast<size_t>(__builtin_ctzll(mask));
+                if (idx >= groups[g]->values.size() || !constGenericIsConcrete(groups[g]->values[idx])) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     struct NewvalStateNop: public HIREvaluator::Newval {
         const Span& sp;
 
@@ -260,6 +376,19 @@ namespace {
             TODO(this->sp, "new_static while evaluating a const generic");
         }
     };
+
+    /// Typecheck a symbolic const's body and build its MIR without
+    /// interpreting it: bodies are checked unconditionally (rustc checks
+    /// anon-const bodies like any body); only the value waits for a
+    /// concrete environment.
+    void translateConstExprBody(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRTypeData* type, const HIRConstGenericUnevaluated& value) {
+        const auto& expr = *value.expr;
+        ASSERT_BUG(sp, expr.state, "Const-generic expression has no state");
+        const auto& state = *expr.state;
+        auto name = FMT("const_" << &expr << "#");
+        HIRTypeRef exp = type;
+        crate.getOrGenMir(wb, HIRItemPath(state.modPath, name.c_str()), expr, exp);
+    }
 
     EncodedLiteral evaluateConstgeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRTypeData* type, const HIRConstGenericUnevaluated& value) {
         const auto& expr = *value.expr;
@@ -5162,8 +5291,16 @@ namespace {
 
         void evalulateConstGeneric(const Span& sp, const HIRTypeData* ty, HIRConstGeneric& v) {
             if (v.is_Unevaluated()) {
+                const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, *v.as_Unevaluated());
+                if (!predicted && !sCapsOracle) {
+                    translateConstExprBody(sp, wb, crate, ty, *v.as_Unevaluated());
+                    return;
+                }
                 try {
                     v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *v.as_Unevaluated())));
+                    if (!predicted) {
+                        fprintf(stderr, "PREDICATE MISS [evalulateConstGeneric]\n");
+                    }
                 } catch (const Defer&) {
                     // Deferred - no update
                 }
@@ -5415,9 +5552,24 @@ namespace {
                 const auto& unevaluated = *as.as_Unevaluated().as_Unevaluated();
                 const auto& exprPtr = *unevaluated.expr;
 
+                const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, unevaluated);
+                if (!predicted && !sCapsOracle) {
+                    // A bare const parameter gets its symbolic form; anything
+                    // else stays Unevaluated for monomorphisation-time demand.
+                    const auto* tn = cast<const HIRExprNodeConstParam>(&*exprPtr);
+                    if (tn) {
+                        as = HIRConstGeneric(HIRGenericRef(tn->name, tn->binding));
+                    } else {
+                        translateConstExprBody(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
+                    }
+                    return;
+                }
                 try {
                     auto val = evaluateConstgeneric(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
                     as = val.readUsize(0);
+                    if (!predicted) {
+                        fprintf(stderr, "PREDICATE MISS [visitArraysize]\n");
+                    }
                 } catch (const Defer&) {
                     const auto* tn = cast<const HIRExprNodeConstParam>(&*exprPtr);
                     if (tn) {
@@ -5447,6 +5599,11 @@ namespace {
                 auto& e = data.as_Pattern();
                 auto evaluateEndpoint = [&](HIRConstGeneric& value) {
                     if (const auto* unevaluated = value.opt_Unevaluated()) {
+                        const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, **unevaluated);
+                        if (!predicted && !sCapsOracle) {
+                            translateConstExprBody(Span(), wb, crate, e.inner, **unevaluated);
+                            return;
+                        }
                         try {
                             value = freezeEncodedLiteral(evaluateConstgeneric(Span(), wb, crate, e.inner, **unevaluated));
                         } catch (const Defer&) {
@@ -5959,8 +6116,19 @@ void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve,
 void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRTypeData* ty, HIRConstGeneric& cg) {
     if (auto* cgeP = cg.opt_Unevaluated()) {
         const auto& cge = *cgeP;
+        const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, *cge);
+        if (!predicted && !sCapsOracle) {
+            translateConstExprBody(sp, wb, crate, ty, *cge);
+            return;
+        }
+        if (!predicted) {
+            fprintf(stderr, "PREDICATE ATTEMPT [ConvertConstGeneric4]\n");
+        }
         try {
             cg = freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *cge));
+            if (!predicted) {
+                fprintf(stderr, "PREDICATE MISS [ConvertConstGeneric4]\n");
+            }
         } catch (const Defer&) {
             // Deferred - no update
         }
@@ -6002,6 +6170,11 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
 
             // Need to look up the required type - to do that requires knowing the item it's for
             // - Which, might not be known at this point - might be a UfcsInherent
+            const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, ue);
+            if (!predicted && !sCapsOracle) {
+                translateConstExprBody(sp, wb, crate, nullptr, ue);
+                continue;
+            }
             try {
 
                 ASSERT_BUG(sp, paramsDef, "Missing generic parameter definitions for " << params);
@@ -6019,6 +6192,9 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
                     ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
                 }
                 v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, ue)));
+                if (!predicted) {
+                    fprintf(stderr, "PREDICATE MISS [MethodParams]\n");
+                }
             } catch (const Defer&) {
                 // Deferred - no update
             }

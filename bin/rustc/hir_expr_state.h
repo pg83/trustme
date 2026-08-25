@@ -38,5 +38,23 @@ public:
     };
     mutable Stage stage;
 
+    /// Which generic slots the expression names (rustc-style captures),
+    /// computed by one syntactic scan and cached here; the environment of an
+    /// unevaluated const may carry unused slots, so evaluability is decided
+    /// per used slot. Recomputed when the stage advances past `stage`:
+    /// typecheck resolves method calls, refining `unknown`.
+    struct Captures {
+        bool computed = false;
+        Stage stage = Stage::Created;
+        // Unresolved method call, nested unevaluated const, out-of-range or
+        // non-Impl/Item slot: fall back to whole-environment concreteness.
+        bool unknown = false;
+        bool usesSelf = false;
+        // Bit `idx` set = slot `idx` of that group is named; [0]=Impl, [1]=Item.
+        u64 typeMask[2] = {0, 0};
+        u64 valueMask[2] = {0, 0};
+    };
+    mutable Captures captures;
+
     HIRExprState(HIRTypeInterner& types, const HIRModule& modPtr, HIRSimplePath modPath);
 };
