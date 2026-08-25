@@ -5644,98 +5644,7 @@ namespace {
             }
         }
 
-        /// Does this expression read a variant of an enum? Only such an
-        /// expression can have been folded against a value that later moved.
-        static bool namesAVariant(const HIRCrate& crate, const HIRExprPtr& expr) {
-            if (!expr) {
-                return false;
-            }
-            struct Finder: public HIRExprVisitorDef {
-                bool found = false;
-                Finder(HIRTypeInterner& types)
-                    : HIRExprVisitorDef(types)
-                {
-                }
-                void visit(HIRExprNodeUnitVariant& node) override {
-                    found = true;
-                    HIRExprVisitorDef::visit(node);
-                }
-            };
-            Finder f{crate.types};
-            const_cast<HIRExprPtr&>(expr)->visit(f);
-            return f.found;
-        }
-
-        /// Drop the MIR of every variant before `lastChanged`: it was built while
-        /// that variant still read zero, and a cast of it was folded to what it
-        /// was then. A variant that names no variant cannot have been folded
-        /// that way, and regenerating its MIR would redo the statics it
-        /// promotes.
-        static void discardDiscriminantMir(const HIRCrate& crate, HIREnum& item, size_t lastChanged) {
-            auto drop = [&](HIRExprPtr& expr) {
-                expr.mir.reset();
-                if (expr.state && expr.state->stage > HIRExprState::Stage::Expand) {
-                    expr.state->stage = HIRExprState::Stage::Expand;
-                }
-            };
-            switch (item.data.tag()) {
-                case HIREnumClass::TAG_Value: {
-                    auto& e = item.data.as_Value();
-                    for (size_t i = 0; i < e.variants.size() && i < lastChanged; i++) {
-                        if (namesAVariant(crate, e.variants[i].expr)) {
-                            drop(e.variants[i].expr);
-                        }
-                    }
-                    break;
-                }
-                case HIREnumClass::TAG_Data: {
-                    auto& e = item.data.as_Data();
-                    for (size_t i = 0; i < e.size() && i < lastChanged; i++) {
-                        if (namesAVariant(crate, e[i].discriminantExpr)) {
-                            drop(e[i].discriminantExpr);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-
-        static void visitEnumInner(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& p, const HIRModule& mod, const HIRItemPath& modPath, const char* name, HIREnum& item) {
-            if (item.discriminantsEvaluated || item.discriminantsEvaluating) {
-                return;
-            }
-            // A variant's expression may name another variant of the same enum,
-            // including one declared later. Evaluate the list repeatedly until
-            // the values stop moving: each pass resolves the references whose
-            // targets the previous pass settled. A cycle never settles, and the
-            // last pass's values are then reported as they stand.
-            item.discriminantsEvaluating = true;
-            STD_DEFER {
-                item.discriminantsEvaluating = false;
-            };
-            for (unsigned pass = 0; pass < 16; pass++) {
-                bool changed = false;
-                size_t lastChanged = 0;
-                // Only the pass that settles the values may judge them: a
-                // half-resolved list has variants still reading zero, which
-                // would look like a duplicate.
-                visitEnumPass(wb, crate, p, mod, modPath, name, item, changed, /*doCheck=*/false, lastChanged);
-                if (!changed) {
-                    visitEnumPass(wb, crate, p, mod, modPath, name, item, changed, /*doCheck=*/true, lastChanged);
-                    break;
-                }
-                // A variant's MIR is cached, and it was generated while another
-                // variant's value was still zero -- a cast of that variant was
-                // folded to the value it had then. Drop it so the next pass
-                // builds it again from the values this one settled.
-                discardDiscriminantMir(crate, item, lastChanged);
-            }
-            item.discriminantsEvaluated = true;
-        }
-
-        static void visitEnumPass(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& p, const HIRModule& mod, const HIRItemPath& modPath, const char* name, HIREnum& item, bool& changed, bool doCheck, size_t& lastChanged) {
-            auto ty = HIREnum::getReprType(item.tagRepr);
-            bool is_signed = false;
+        static bool enumTagIsSigned(HIRCoreType ty) {
             switch (ty) {
                 case HIRCoreType::I8:
                 case HIRCoreType::I16:
@@ -5743,8 +5652,7 @@ namespace {
                 case HIRCoreType::I64:
                 case HIRCoreType::Isize:
                 case HIRCoreType::I128: // TODO: Emulation
-                    is_signed = true;
-                    break;
+                    return true;
                 case HIRCoreType::Bool:
                 case HIRCoreType::U8:
                 case HIRCoreType::U16:
@@ -5753,8 +5661,7 @@ namespace {
                 case HIRCoreType::Usize:
                 case HIRCoreType::Char:
                 case HIRCoreType::U128: // TODO: Emulation
-                    is_signed = false;
-                    break;
+                    return false;
                 case HIRCoreType::F16:
                 case HIRCoreType::F32:
                 case HIRCoreType::F64:
@@ -5764,75 +5671,113 @@ namespace {
                 case HIRCoreType::Str:
                     BUG(Span(), "Unsized tag?!");
             }
+            return false;
+        }
+
+        /// The chain of variant evaluations currently on the stack. A variant
+        /// expression that casts another variant of the same enum re-enters
+        /// evaluation through the MIR constant fold; finding the target
+        /// already in this chain is a cycle.
+        struct ActiveDiscriminant {
+            const HIREnum* enm;
+            size_t idx;
+            const ActiveDiscriminant* prev;
+        };
+        static inline const ActiveDiscriminant* sActiveDiscriminants = nullptr;
+
+        /// Compute one variant's discriminant, following its dependencies:
+        /// the previous variant for an auto value, any variant its expression
+        /// casts through the constant fold.
+        static void visitEnumVariant(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& p, const HIRModule& mod, const HIRItemPath& modPath, const char* name, HIREnum& item, size_t idx) {
+            if (item.discriminantsEvaluated) {
+                return;
+            }
+            RcString varName;
+            const HIRExprPtr* expr = nullptr;
+            U128* slot = nullptr;
+            bool* known = nullptr;
+            switch (item.data.tag()) {
+                case HIREnumClass::TAG_Value: {
+                    auto& var = item.data.as_Value().variants.at(idx);
+                    varName = var.name;
+                    expr = &var.expr;
+                    slot = &var.val;
+                    known = &var.valueKnown;
+                    break;
+                }
+                case HIREnumClass::TAG_Data: {
+                    auto& var = item.data.as_Data().at(idx);
+                    varName = var.name;
+                    expr = &var.discriminantExpr;
+                    slot = &var.discriminantValue;
+                    known = &var.valueKnown;
+                    break;
+                }
+            }
+            if (*known) {
+                return;
+            }
+            for (const auto* active = sActiveDiscriminants; active; active = active->prev) {
+                if (active->enm == &item && active->idx == idx) {
+                    ERROR(*expr ? (*expr)->span() : Span(), E0000, "cycle detected when evaluating discriminant of `" << p << "::" << varName << "`");
+                }
+            }
+            ActiveDiscriminant node{&item, idx, sActiveDiscriminants};
+            sActiveDiscriminants = &node;
+            STD_DEFER {
+                sActiveDiscriminants = node.prev;
+            };
+
+            const auto ty = HIREnum::getReprType(item.tagRepr);
+            U128 value(0);
+            if (*expr) {
+                auto nvs = NewvalState{mod, modPath, FMT(name << "#" << varName << "_")};
+                auto eval = HIREvaluator{(*expr)->span(), wb, nvs};
+                eval.resolve.setImplGenericsRaw(MetadataType::None, item.params);
+                try {
+                    auto val = eval.evaluateConstant(p, *expr, crate.types.primitive(ty));
+                    DEBUG("enum variant: " << p << "::" << varName << " = " << val);
+                    if (enumTagIsSigned(ty)) {
+                        value = EncodedLiteralSlice(val).readSint().getInner();
+                    } else {
+                        value = EncodedLiteralSlice(val).readUint();
+                    }
+                } catch (const Defer& e) {
+                    BUG((*expr)->span(), "Defer(" << e.reason << ") during evaluation of enum discriminant");
+                }
+            } else if (idx > 0) {
+                visitEnumVariant(wb, crate, p, mod, modPath, name, item, idx - 1);
+                value = (item.data.is_Value() ? item.data.as_Value().variants.at(idx - 1).val : item.data.as_Data().at(idx - 1).discriminantValue) + 1;
+                DEBUG("enum variant: " << p << "::" << varName << " = " << value << " (auto)");
+            }
+            *slot = value;
+            *known = true;
+        }
+
+        static void visitEnumInner(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& p, const HIRModule& mod, const HIRItemPath& modPath, const char* name, HIREnum& item) {
+            if (item.discriminantsEvaluated) {
+                return;
+            }
+            const auto ty = HIREnum::getReprType(item.tagRepr);
             switch (item.data.tag()) {
                 case HIREnumClass::TAG_Value: {
                     auto& e = item.data.as_Value();
-                    U128 i(0);
-                    for (auto& var : e.variants) {
-                        if (var.expr) {
-                            auto nvs = NewvalState{mod, modPath, FMT(name << "#" << var.name << "_")};
-                            auto eval = HIREvaluator{var.expr->span(), wb, nvs};
-                            eval.resolve.setImplGenericsRaw(MetadataType::None, item.params);
-                            try {
-                                auto val = eval.evaluateConstant(p, var.expr, crate.types.primitive(ty));
-                                DEBUG("enum variant: " << p << "::" << var.name << " = " << val);
-                                if (is_signed) {
-                                    i = EncodedLiteralSlice(val).readSint().getInner();
-                                } else {
-                                    i = EncodedLiteralSlice(val).readUint();
-                                }
-                            } catch (const Defer&) {
-                                BUG(var.expr->span(), "`Defer` thrown during evaluation of enum discriminant");
-                            }
-                        }
-                        if (var.val != i) {
-                            changed = true;
-                            lastChanged = static_cast<size_t>(&var - &e.variants.front());
-                        }
-                        var.val = i;
-                        if (!var.expr) {
-                            DEBUG("enum variant: " << p << "::" << var.name << " = " << var.val << " (auto)");
-                        }
-                        i += 1;
+                    for (size_t idx = 0; idx < e.variants.size(); idx++) {
+                        visitEnumVariant(wb, crate, p, mod, modPath, name, item, idx);
                     }
-                    if (doCheck) {
-                        checkEnumDiscriminants(Span(), ty, e.variants, [](const auto& var) { return var.val; });
-                    }
+                    checkEnumDiscriminants(Span(), ty, e.variants, [](const auto& var) { return var.val; });
                     break;
                 }
                 case HIREnumClass::TAG_Data: {
                     auto& e = item.data.as_Data();
-                    U128 i(0);
-                    for (auto& var : e) {
-                        if (var.discriminantExpr) {
-                            auto nvs = NewvalState{mod, modPath, FMT(name << "#" << var.name << "_")};
-                            auto eval = HIREvaluator{var.discriminantExpr->span(), wb, nvs};
-                            eval.resolve.setImplGenericsRaw(MetadataType::None, item.params);
-                            try {
-                                auto val = eval.evaluateConstant(p, var.discriminantExpr, crate.types.primitive(ty));
-                                DEBUG("enum variant: " << p << "::" << var.name << " = " << val);
-                                if (is_signed) {
-                                    i = EncodedLiteralSlice(val).readSint().getInner();
-                                } else {
-                                    i = EncodedLiteralSlice(val).readUint();
-                                }
-                            } catch (const Defer&) {
-                                BUG(var.discriminantExpr->span(), "`Defer` thrown during evaluation of enum discriminant");
-                            }
-                        }
-                        if (var.discriminantValue != i) {
-                            changed = true;
-                            lastChanged = static_cast<size_t>(&var - &e.front());
-                        }
-                        var.discriminantValue = i;
-                        i += 1;
+                    for (size_t idx = 0; idx < e.size(); idx++) {
+                        visitEnumVariant(wb, crate, p, mod, modPath, name, item, idx);
                     }
-                    if (doCheck) {
-                        checkEnumDiscriminants(Span(), ty, e, [](const auto& var) { return var.discriminantValue; });
-                    }
+                    checkEnumDiscriminants(Span(), ty, e, [](const auto& var) { return var.discriminantValue; });
                     break;
                 }
             }
+            item.discriminantsEvaluated = true;
         }
     };
 
@@ -5961,6 +5906,16 @@ void ConvertHIRConstantEvaluateEnum(const WireBoard& wb, const HIRCrate& crate, 
     auto& item = const_cast<HIREnum&>(enm);
 
     Expander::visitEnumInner(wb, crate, ip, mod, modPath, itemName.c_str(), item);
+}
+
+void ConvertHIRConstantEvaluateEnumVariant(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, const HIREnum& enm, size_t idx) {
+    auto modPath = ip.getSimplePath();
+    auto itemName = modPath.popComponent();
+    const auto& mod = crate.getModByPath(Span(), modPath);
+
+    auto& item = const_cast<HIREnum&>(enm);
+
+    Expander::visitEnumVariant(wb, crate, ip, mod, modPath, itemName.c_str(), item, idx);
 }
 
 void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRConstant& e) {

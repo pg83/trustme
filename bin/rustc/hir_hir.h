@@ -352,6 +352,9 @@ struct HIREnumDataVariant {
     HIRExprPtr discriminantExpr;
     // Constant-evaluated descriminant value
     U128 discriminantValue = U128(0);
+    // The value above has been computed (demand-driven; irrelevant once the
+    // whole enum's discriminantsEvaluated is set).
+    bool valueKnown = false;
 };
 
 struct HIREnumValueVariant {
@@ -359,6 +362,9 @@ struct HIREnumValueVariant {
     HIRExprPtr expr;
     // TODO: Signed.
     U128 val = U128(0);
+    // The value above has been computed (demand-driven; irrelevant once the
+    // whole enum's discriminantsEvaluated is set).
+    bool valueKnown = false;
 };
 
 // Definitions generated from hir_hir_enum.tu.
@@ -395,10 +401,6 @@ public:
 
     // Flag indicating that constant evaluation has completed
     bool discriminantsEvaluated;
-    /// Set while the discriminants are being evaluated. A variant's expression
-    /// may name another variant of the same enum, and asking for the values then
-    /// must read what is known rather than start again.
-    mutable bool discriminantsEvaluating = false;
 
     HIRTraitMarkings markings;
 

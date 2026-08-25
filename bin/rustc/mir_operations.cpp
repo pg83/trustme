@@ -5796,14 +5796,11 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             const auto& srcTy = state.getLvalueType(tmp, se.val);
                             const HIREnum& enm = *srcTy->as_Path().binding.as_Enum();
 
-                            // The value has to be evaluated first: reading a
-                            // variant before then gives zero. Ask for that
-                            // directly rather than for the layout, which a
-                            // variant naming another variant of the same enum
-                            // would ask for again.
-                            if (!enm.discriminantsEvaluated) {
-                                ConvertHIRConstantEvaluateEnum(state.resolve.board(), state.resolve.hirCrate(), srcTy->as_Path().path.data.as_Generic().path, enm);
-                            }
+                            // Demand exactly the variant being cast: its
+                            // value is computed now if it is not yet known,
+                            // and a variant reading itself through this fold
+                            // is reported as a cycle.
+                            ConvertHIRConstantEvaluateEnumVariant(state.resolve.board(), state.resolve.hirCrate(), srcTy->as_Path().path.data.as_Generic().path, enm, variantIdx);
                             auto v = enm.getDiscriminant(variantIdx);
                             // A cast reads the discriminant at the enum's declared
                             // representation, which is `isize` unless one is
