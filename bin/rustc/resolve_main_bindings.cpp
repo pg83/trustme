@@ -2093,6 +2093,12 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
             } else {
                 // Look up value
                 auto p = context.lookup(sp, e.nodes[0].name(), e.hygiene, mode);
+                const auto coreType = coretypeFromstring(e.nodes[0].name().c_str());
+                if (mode == Context::LookupMode::Type
+                    && coreType != CORETYPE_INVAL
+                    && p.bindings.type.binding.is_Module()) {
+                    p = ASTPath::newUfcsTy(mkType(context.typePool(), sp, coreType));
+                }
                 if (p.isAbsolute()) {
                     assert(!p.nodes().empty());
                     // A value-level `Self` lookup returns the concrete impl type,
