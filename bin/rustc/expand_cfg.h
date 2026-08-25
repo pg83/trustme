@@ -54,7 +54,7 @@ void CfgSetValueCb(Settings& settings, CfgString name, F f) {
 extern void CfgDump(const Settings& settings, ::std::ostream& os);
 extern void CfgSetFlag(Settings& settings, ::std::string name);
 extern void CfgSetValue(Settings& settings, ::std::string name, ::std::string val);
-extern bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& hasValue, ::std::string& value, ::std::string& error);
+extern void CfgParseOption(const ::std::string& spec, ::std::string& name, bool& hasValue, ::std::string& value);
 extern bool CfgSetCheckSpec(Settings& settings, const ::std::string& spec, ::std::string& error);
 extern void CfgSetLintLevel(Settings& settings, ::std::string name, CfgLintLevel level);
 extern void CfgSetLintCap(Settings& settings, CfgLintLevel level);

@@ -57,7 +57,7 @@ namespace {
         }
 
         [[noreturn]] void fail(const ::std::string& message) const {
-            throw ::std::runtime_error(message);
+            throw ::std::runtime_error("invalid `--cfg` argument `" + input + "`: " + message);
         }
 
         void skipWs() {
@@ -226,17 +226,11 @@ void CfgSetValueCallback(Settings& settings, CfgString name, const CfgValueCallb
     cfg.valueFcns.insert(::std::make_pair(mv$(name), cb.cloneIn(*cfg.pool)));
 }
 
-bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& hasValue, ::std::string& value, ::std::string& error) {
-    try {
-        auto parsed = CfgSpecParser(spec).parseCfgOption();
-        name = ::std::move(parsed.first);
-        hasValue = parsed.second.has_value();
-        value = parsed.second ? ::std::move(*parsed.second) : ::std::string();
-        return true;
-    } catch (const ::std::exception& e) {
-        error = e.what();
-        return false;
-    }
+void CfgParseOption(const ::std::string& spec, ::std::string& name, bool& hasValue, ::std::string& value) {
+    auto parsed = CfgSpecParser(spec).parseCfgOption();
+    name = ::std::move(parsed.first);
+    hasValue = parsed.second.has_value();
+    value = parsed.second ? ::std::move(*parsed.second) : ::std::string();
 }
 
 bool CfgSetCheckSpec(Settings& settings, const ::std::string& spec, ::std::string& error) {

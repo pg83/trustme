@@ -2,6 +2,9 @@
  * A very basic (and probably incomplete) streaming TOML parser
  */
 #include "toml.h"
+
+#include <sstream>
+#include <cstdio>
 #include "common_debug.h"
 #include <cassert>
 #include <string>
@@ -788,6 +791,10 @@ TomlValue::TypeError::TypeError(TomlValue::Type h, TomlValue::Type e)
     : have(h)
     , exp(e)
 {
+    ::std::ostringstream ss;
+    ss << "TOML type error: " << *this;
+    const auto rendered = ss.str();
+    snprintf(message, sizeof(message), "%s", rendered.c_str());
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const TomlValue::TypeError& e) {
@@ -796,5 +803,5 @@ TomlValue::TypeError::TypeError(TomlValue::Type h, TomlValue::Type e)
 }
 
 const char* TomlValue::TypeError::what() const noexcept {
-    return "toml type error";
+    return message;
 }

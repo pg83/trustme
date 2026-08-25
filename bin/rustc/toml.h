@@ -88,6 +88,9 @@ struct TomlValue {
     struct TypeError: public ::std::exception {
         Type have;
         Type exp;
+        // Formatted in the constructor; what() needs stable storage and the
+        // two type names are short.
+        char message[64];
 
         TypeError(Type h, Type e);
 

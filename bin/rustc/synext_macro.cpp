@@ -2605,14 +2605,10 @@ class CIncludeExpander: public ExpandProcMacro {
         ::std::string filePath = getPathRelativeTo(sp.getTopFileSpan().filename.c_str(), mv$(path));
         crate.extraFiles.push_back(filePath);
 
-        try {
-            ParseState ps;
-            ps.module = &mod;
-            DEBUG("Edition = " << crate.edition);
-            return box$(Lexer(*crate.hirPool, filePath, crate.edition, ps));
-        } catch (::std::runtime_error& e) {
-            ERROR(sp, E0000, e.what());
-        }
+        ParseState ps;
+        ps.module = &mod;
+        DEBUG("Edition = " << crate.edition);
+        return box$(Lexer(*crate.hirPool, filePath, crate.edition, ps));
     }
 };
 

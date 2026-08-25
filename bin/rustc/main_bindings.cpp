@@ -460,7 +460,7 @@ static int compile(int argc, char* argv[]) {
 #endif
     wb.astPool = astPool;
 
-    try {
+    {
         // Parse the crate into AST
         ASTCrate* cratePtr = CompilePhase<ASTCrate*>("Parse", [&]() {
             return ParseCrate(wb, wb.astPool, params.infile, params.edition);
@@ -1070,20 +1070,7 @@ static int compile(int argc, char* argv[]) {
                 });
                 break;
         }
-    } catch (const ::std::exception& e) {
-        // The one place a real runtime error (I/O, corrupt metadata, bad
-        // TOML) is allowed to land; everything else aborts at its site.
-        ::std::cerr << "error: " << e.what() << ::std::endl;
-        ::exit(1);
     }
-    //catch(const ::std::exception& e)
-    //{
-    //    ::std::cerr << "Misc Error: " << e.what() << ::std::endl;
-    //}
-    //catch(const char* e)
-    //{
-    //    ::std::cerr << "Internal Compiler Error: " << e << ::std::endl;
-    //}
 
     return 0;
 }
@@ -1097,7 +1084,15 @@ namespace {
 
     void* compileOnThread(void* raw) {
         auto& args = *static_cast<CompileArgs*>(raw);
-        args.result = compile(args.argc, args.argv);
+        try {
+            args.result = compile(args.argc, args.argv);
+        } catch (const ::std::exception& e) {
+            // The one place a real runtime error (I/O, corrupt metadata, bad
+            // TOML, bad CLI) is allowed to land; everything else aborts at
+            // its site.
+            ::std::cerr << "error: " << e.what() << ::std::endl;
+            ::exit(1);
+        }
         return nullptr;
     }
 }
@@ -1730,12 +1725,8 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             else if (const char* cfgSpec = checkWithArg("cfg")) {
                 ::std::string name;
                 ::std::string value;
-                ::std::string error;
                 bool has_value = false;
-                if (!CfgParseOption(cfgSpec, name, has_value, value, error)) {
-                    ::std::cerr << "invalid `--cfg` argument: `" << cfgSpec << "`: " << error << ::std::endl;
-                    exit(1);
-                }
+                CfgParseOption(cfgSpec, name, has_value, value);
                 if (has_value) {
                     if (name == "feature") {
                         this->features.insert(value);

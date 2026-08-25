@@ -3582,11 +3582,7 @@ default:
                     break;
                 }
                 case TOK_INTERPOLATED_EXPR:
-                    try {
-                        emitAst(tok.fragNode());
-                    } catch (const ::std::exception& e) {
-                        TODO(Span(), "Convert interpolated macro fragment: " << tok << " - " << e.what());
-                    }
+                    emitAst(tok.fragNode());
                     break;
                 default:
                     out.push_back(::std::move(tok));

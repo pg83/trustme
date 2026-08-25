@@ -92,7 +92,7 @@ namespace {
                 }
             };
 
-            try {
+            {
                 if (keyVal.path[0] == "target") {
                     checkPathLengthMin(keyVal, 2);
                     if (keyVal.path[1] == "family") {
@@ -228,9 +228,6 @@ namespace {
                 } else {
                     ::std::cerr << "WARNING: Unknown configuration item " << keyVal.path[0] << " in " << filename << ::std::endl;
                 }
-            } catch (const TomlValue::TypeError& e) {
-                ::std::cerr << "ERROR: Invalid type for " << keyVal.path << " - " << e << ::std::endl;
-                exit(1);
             }
         }
 
