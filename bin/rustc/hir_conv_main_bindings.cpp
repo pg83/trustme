@@ -3223,6 +3223,10 @@ public:
         TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " " << impl.type << " (mod=" << impl.srcModule << ")");
         auto _t = this->pushModTraits(impl.srcModule, this->crate.getModByPath(Span(), impl.srcModule));
         auto _g = resolve_.setImplGenerics(MetadataType::Unknown, impl.params);
+        // An impl header is a declaration: its projections stay rigid, the
+        // same as struct fields and signatures, so a receiver built from a
+        // declared (unnormalised) form unifies with it structurally.
+        DeclaredTypeGuard declaredTypes(*this);
         currentType_ = impl.type;
 
         impl.type = this->visitType(impl.type);
