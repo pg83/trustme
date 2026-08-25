@@ -7487,6 +7487,36 @@ default:
         Ambiguous,
     };
 
+    bool typeNeedsFurtherInference(const Context& context, const HIRTypeData* type) {
+        bool pending = false;
+        visitTyWith(type, [&](const HIRTypeData* inner) {
+            const auto* resolved = context.getType(inner);
+            if (resolved != inner) {
+                pending = typeNeedsFurtherInference(context, resolved);
+                return pending;
+            }
+            if (resolved->is_Infer()) {
+                pending = true;
+                return true;
+            }
+            if (const auto* path = resolved->opt_Path(); path && path->binding.is_Unbound()) {
+                pending = true;
+                return true;
+            }
+            return false;
+        });
+        return pending;
+    }
+
+    bool pathParamsNeedFurtherInference(const Context& context, const HIRPathParams& params) {
+        for (const auto& type : params.types) {
+            if (typeNeedsFurtherInference(context, type)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     AssociatedCheckResult checkAssociated(Context& context, Context::Associated& v) {
         const auto& sp = v.span;
         TRACE_FUNCTION_F(v);
@@ -8070,10 +8100,14 @@ default:
                     DEBUG("No impl of " << v.trait << context.ivars.fmt(v.params) << " for " << context.ivars.fmtType(v.implTy) << " with " << v.name << " = " << context.ivars.fmtType(v.leftTy));
                 }
 
-                const auto& ty = context.getType(v.implTy);
-                bool isKnown = !ty->is_Infer() && !(ty->is_Path() && ty->as_Path().binding.is_Unbound());
-                if (!isKnown) {
-                    // There's still an ivar (or an unbound UFCS), keep trying
+                const bool needsInference = typeNeedsFurtherInference(context, v.implTy)
+                    || pathParamsNeedFurtherInference(context, v.params)
+                    || (v.name != "" && (typeNeedsFurtherInference(context, v.leftTy)
+                        || pathParamsNeedFurtherInference(context, v.atyPp)));
+                if (needsInference) {
+                    // A nested ivar can still change both impl applicability
+                    // and an associated output match. Keep the obligation
+                    // until its concrete inputs are available.
                     return AssociatedCheckResult::Stalled;
                 } else if (v.trait == context.resolve.langUnsize()) {
                     // TODO: Detect if this was a compiler-generated bound, or was actually in the code.
@@ -8576,7 +8610,58 @@ namespace {
         }
     };
 
-    bool typeHasUnresolvedNonLiteralIvar(const Context& context, const HIRTypeData* type, unsigned int exceptIndex) {
+    struct ActiveOperatorOutput {
+        unsigned int index;
+        const ActiveOperatorOutput* parent;
+    };
+
+    bool typeHasIndependentUnresolvedIvar(
+        const Context& context,
+        const HIRTypeData* type,
+        unsigned int exceptIndex,
+        const ActiveOperatorOutput* active = nullptr
+    );
+
+    bool operatorOutputHasIndependentInput(
+        const Context& context,
+        unsigned int index,
+        unsigned int exceptIndex,
+        const ActiveOperatorOutput* active
+    ) {
+        for (auto* entry = active; entry; entry = entry->parent) {
+            if (entry->index == index) {
+                return false;
+            }
+        }
+        const ActiveOperatorOutput activeEntry{index, active};
+
+        for (const auto& associated : context.linkAssoc) {
+            if (!associated.isOperator || associated.name == "") {
+                continue;
+            }
+            const auto* output = context.getType(associated.leftTy)->opt_Infer();
+            if (!output || output->index != index) {
+                continue;
+            }
+            bool hasIndependentInput = typeHasIndependentUnresolvedIvar(
+                context, associated.implTy, exceptIndex, &activeEntry);
+            for (const auto& type : associated.params.types) {
+                hasIndependentInput |= typeHasIndependentUnresolvedIvar(
+                    context, type, exceptIndex, &activeEntry);
+            }
+            if (!hasIndependentInput) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool typeHasIndependentUnresolvedIvar(
+        const Context& context,
+        const HIRTypeData* type,
+        unsigned int exceptIndex,
+        const ActiveOperatorOutput* active
+    ) {
         bool found = false;
         visitTyWith(type, [&](const HIRTypeData* inner) {
             if (found) {
@@ -8584,11 +8669,12 @@ namespace {
             }
             const auto* resolved = context.getType(inner);
             if (resolved != inner) {
-                found = typeHasUnresolvedNonLiteralIvar(context, resolved, exceptIndex);
+                found = typeHasIndependentUnresolvedIvar(context, resolved, exceptIndex, active);
                 return true;
             }
             if (const auto* infer = resolved->opt_Infer()) {
-                found = infer->index != exceptIndex && !infer->isLit();
+                found = infer->index != exceptIndex && !infer->isLit()
+                    && operatorOutputHasIndependentInput(context, infer->index, exceptIndex, active);
             }
             return found;
         });
@@ -8608,11 +8694,11 @@ namespace {
             if (!associated->isOperator) {
                 continue;
             }
-            if (typeHasUnresolvedNonLiteralIvar(context, associated->implTy, index)) {
+            if (typeHasIndependentUnresolvedIvar(context, associated->implTy, index)) {
                 return true;
             }
             for (const auto& type : associated->params.types) {
-                if (typeHasUnresolvedNonLiteralIvar(context, type, index)) {
+                if (typeHasIndependentUnresolvedIvar(context, type, index)) {
                     return true;
                 }
             }
