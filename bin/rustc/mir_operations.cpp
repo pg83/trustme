@@ -195,8 +195,8 @@ const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const H
                 if (it == hirConst.monomorphCache.end() && !monomorphisePathNeeded(path)) {
                     try {
                         ConvertHIRConstantEvaluateConstant(state.resolve, implParams, HIRItemPath(path), hirConst);
-                    } catch (const Defer& e) {
-                        MIR_BUG(state, "Defer(" << e.reason << ") evaluating concrete constant " << path);
+                    } catch (const Defer&) {
+                        MIR_BUG(state, "Solver could not commit while evaluating concrete constant " << path);
                     }
                     it = hirConst.monomorphCache.find(path);
                 }

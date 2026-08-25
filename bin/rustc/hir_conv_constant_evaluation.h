@@ -16,23 +16,15 @@ class MIRStatement;
 class MIRTerminator;
 class MIRTypeResolve;
 
-// Thrown by constant evaluation when the requested value cannot be computed
-// in the current environment. Reaching a catch of this with a fully concrete
-// environment is a compiler bug, never a retry-later. See dev/DEFER.md.
+// Thrown by constant evaluation for exactly one reason: the legacy trait
+// solver could not commit to an impl for a concrete path (NotYetKnown).
+// This is solver debt, not architecture -- it disappears with the
+// next-solver work (HACKS.md, dev/DEFER.md stage 5); with concrete
+// substitutions resolution must answer yes/no/error. Everything else that
+// used to defer is a precondition of the caller or a BUG.
 struct Defer {
-    enum class Reason {
-        Layout,         // size/align/repr of a type is not computable yet
-        GenericValue,   // the value or its path still names a generic parameter
-        Infer,          // inference variables in the value or environment
-        NotYetKnown,    // value resolution could not commit to an impl
-        UnresolvedCall, // method call unresolved before main typecheck
-    };
-    static constexpr unsigned NUM_REASONS = 5;
-
-    Reason reason;
     Span span;
 };
-extern ::std::ostream& operator<<(::std::ostream& os, Defer::Reason r);
 
 struct HIREvaluator {
     class Newval {

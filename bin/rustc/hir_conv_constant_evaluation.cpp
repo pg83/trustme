@@ -58,22 +58,6 @@ namespace {
 #include <std/alg/defer.h>
 #include <algorithm>
 
-::std::ostream& operator<<(::std::ostream& os, Defer::Reason r) {
-    switch (r) {
-        case Defer::Reason::Layout:
-            return os << "Layout";
-        case Defer::Reason::GenericValue:
-            return os << "GenericValue";
-        case Defer::Reason::Infer:
-            return os << "Infer";
-        case Defer::Reason::NotYetKnown:
-            return os << "NotYetKnown";
-        case Defer::Reason::UnresolvedCall:
-            return os << "UnresolvedCall";
-    }
-    return os << "?";
-}
-
 namespace {
     void ConvertHIRConstantEvaluateStatic(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRStatic& e);
     void ConvertHIRConstantEvaluateFcnSig(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRFunction& fcn);
@@ -82,29 +66,19 @@ namespace {
     // no, and report a loud PREDICATE MISS when the attempt succeeds.
     const bool sCapsOracle = getenv("TRUSTME_CAPS_ORACLE") != nullptr;
 
-    // Dumped at exit when TRUSTME_DEFER_STATS is set: how often speculative
-    // evaluation bailed, by reason -- the map of what still runs too early.
+    // Dumped at exit when TRUSTME_DEFER_STATS is set: how often the solver
+    // tail fired (the only deferral left).
     struct DeferStats {
-        unsigned counts[Defer::NUM_REASONS] = {};
+        unsigned notYetKnown = 0;
 
         ~DeferStats() {
             if (!getenv("TRUSTME_DEFER_STATS")) {
                 return;
             }
-            fprintf(stderr, "defer-stats: layout=%u generic-value=%u infer=%u not-yet-known=%u unresolved-call=%u\n",
-                counts[0], counts[1], counts[2], counts[3], counts[4]);
+            fprintf(stderr, "defer-stats: not-yet-known=%u\n", notYetKnown);
         }
     } gDeferStats;
 }
-
-// Every Defer is thrown through here: the throw point is the only place that
-// knows the reason, so it is printed and counted before the unwind.
-#define THROW_DEFER(sp, reasonName, msg)                                        \
-    do {                                                                        \
-        gDeferStats.counts[static_cast<unsigned>(Defer::Reason::reasonName)]++; \
-        DEBUG("Defer(" << Defer::Reason::reasonName << ") " << msg);            \
-        throw Defer{Defer::Reason::reasonName, Span(sp)};                       \
-    } while (0)
 
 namespace {
 
@@ -382,6 +356,7 @@ namespace {
     /// anon-const bodies like any body); only the value waits for a
     /// concrete environment.
     void translateConstExprBody(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRTypeData* type, const HIRConstGenericUnevaluated& value) {
+        ASSERT_BUG(sp, type, "translateConstExprBody without an expected type");
         const auto& expr = *value.expr;
         ASSERT_BUG(sp, expr.state, "Const-generic expression has no state");
         const auto& state = *expr.state;
@@ -1480,7 +1455,12 @@ namespace {
                 return EntPtr();
             }
             case TypeckValuePtr::TAG_NotYetKnown: {
-                THROW_DEFER(sp, NotYetKnown, "value of " << path);
+                // The legacy solver could not commit to an impl for a
+                // concrete path: the one deferral left, dying with the
+                // next-solver work.
+                gDeferStats.notYetKnown++;
+                DEBUG("Defer(NotYetKnown) value of " << path);
+                throw Defer{Span(sp)};
             }
             case TypeckValuePtr::TAG_Constant: {
                 auto& e = v.as_Constant();
@@ -1955,7 +1935,7 @@ public:
         if (visitPathTysWith(p, [&](const auto& ty) -> bool {
             return ty->is_Generic();
         })) {
-            THROW_DEFER(state.sp, GenericValue, "static " << p << " references a generic parameter");
+            BUG(state.sp, "Static " << p << " references a generic parameter after substitution");
         }
 
         // A trait-object method function pointer names the generated vtable
@@ -2040,8 +2020,8 @@ public:
                     item.valueGenerated = true;
                     item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, staticTy, std::move(constMs));
                     item.valueGenerated = true;
-                } catch (const Defer& e) {
-                    MIR_BUG(state, p << " Defer(" << e.reason << ") during value generation");
+                } catch (const Defer&) {
+                    MIR_BUG(state, p << ": solver could not commit during value generation");
                 }
                 DEBUG(p << " = " << item.valueRes);
             }
@@ -2252,7 +2232,7 @@ public:
         if (visitPathTysWith(p, [&](const auto& ty) -> bool {
             return ty->is_Generic();
         })) {
-            THROW_DEFER(state.sp, GenericValue, "constant " << p << " references a generic parameter");
+            BUG(state.sp, "Constant " << p << " references a generic parameter after substitution");
         }
         MonomorphState constMs(rootResolve.crate.types);
         const HIRGenericParams* implParamsDef = nullptr;
@@ -2267,10 +2247,15 @@ public:
             // This evaluates the *definition* under an identity substitution:
             // a body that names its generic environment (impl params, Self)
             // is per-instantiation and goes through the monomorph cache
-            // below instead of being attempted here.
+            // below instead of being attempted here. The body is translated
+            // first so the captures are post-typecheck and precise.
+            {
+                HIRTypeRef bodyTy = item.type;
+                rootResolve.hirCrate().getOrGenMir(rootResolve.board(), HIRItemPath(p), item.value, bodyTy);
+            }
             const auto& caps = exprCaptures(rootResolve.crate.types, item.value);
             const bool bodyNamesEnv = caps.usesSelf || caps.typeMask[0] || caps.typeMask[1] || caps.valueMask[0] || caps.valueMask[1];
-            if (!caps.unknown && bodyNamesEnv) {
+            if (bodyNamesEnv) {
                 item.valueState = HIRConstant::ValueState::Generic;
             } else {
                 // Challenge: Adding items to the module might invalidate an iterator.
@@ -2291,13 +2276,8 @@ public:
                 try {
                     item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, item.type, std::move(tempMs));
                     item.valueState = HIRConstant::ValueState::Known;
-                } catch (const Defer& e) {
-                    // NotYetKnown: the legacy solver could not commit (DEFER.md
-                    // stage 4). GenericValue with unknown captures: the scan
-                    // could not rule out the environment, the interpreter did.
-                    if (e.reason != Defer::Reason::NotYetKnown && !(caps.unknown && e.reason == Defer::Reason::GenericValue)) {
-                        MIR_BUG(state, "Defer(" << e.reason << ") evaluating concrete constant " << p);
-                    }
+                } catch (const Defer&) {
+                    // The solver could not commit: symbolic until it can.
                     item.valueState = HIRConstant::ValueState::Generic;
                 }
             }
@@ -2455,23 +2435,23 @@ public:
     const EncodedLiteral& getConst(const HIRConstGeneric& v, EncodedLiteral& tmp) const {
             switch (v.tag()) {
                 case HIRConstGeneric::TAG_Infer: {
-                    THROW_DEFER(state.sp, Infer, "const generic is Infer");
+                    BUG(state.sp, "Infer const generic during concrete evaluation");
                 }
                 case HIRConstGeneric::TAG_Generic: {
-                    THROW_DEFER(state.sp, GenericValue, "const generic " << v);
+                    BUG(state.sp, "Generic const " << v << " during concrete evaluation");
                 }
                 case HIRConstGeneric::TAG_Unevaluated: {
                     auto& ve = v.as_Unevaluated();
                     if (!typeCanMonomorph(ve->selfType, ms)
                         || !pathParamsCanMonomorph(ve->paramsImpl, ms)
                         || !pathParamsCanMonomorph(ve->paramsItem, ms)) {
-                        THROW_DEFER(state.sp, GenericValue, "unevaluated const cannot monomorph");
+                        BUG(state.sp, "Unevaluated const cannot monomorph during concrete evaluation");
                     }
                     auto value = ve->monomorph(state.sp, ms, false);
                     if (!typeIsConcrete(value.selfType)
                         || !pathParamsAreConcrete(value.paramsImpl)
                         || !pathParamsAreConcrete(value.paramsItem)) {
-                        THROW_DEFER(state.sp, GenericValue, "unevaluated const not concrete after monomorph");
+                        BUG(state.sp, "Unevaluated const not concrete after monomorph during concrete evaluation");
                     }
                     const auto& expr = *value.expr;
                     MonomorphState valueMs(rootResolve.crate.types);
@@ -4814,7 +4794,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
     // executing its MIR here would incorrectly validate (or reject) just one
     // generic definition rather than each concrete instance.
     if (monomorphisePathNeeded(path)) {
-        THROW_DEFER(state.sp, GenericValue, "const call to generic " << path);
+        BUG(state.sp, "Const call to generic " << path << " during concrete evaluation");
     }
 
     if (requireConstCalls) {
@@ -4906,7 +4886,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         );
         return true;
     } else if (rv.is_NotFound() && monomorphisePathNeeded(path)) {
-        THROW_DEFER(state.sp, GenericValue, "unresolved generic path " << path);
+        BUG(state.sp, "Unresolved generic path " << path << " during concrete evaluation");
     } else if (rv.is_Struct()) {
         // Set destination, same way as `RValue::Struct` does
         auto dst = localState.getLval(rvSlot);
@@ -5307,9 +5287,9 @@ namespace {
 
         void evalulateConstGeneric(const Span& sp, const HIRTypeData* ty, HIRConstGeneric& v) {
             if (v.is_Unevaluated()) {
+                translateConstExprBody(sp, wb, crate, ty, *v.as_Unevaluated());
                 const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, *v.as_Unevaluated());
                 if (!predicted && !sCapsOracle) {
-                    translateConstExprBody(sp, wb, crate, ty, *v.as_Unevaluated());
                     return;
                 }
                 try {
@@ -5568,15 +5548,16 @@ namespace {
                 const auto& unevaluated = *as.as_Unevaluated().as_Unevaluated();
                 const auto& exprPtr = *unevaluated.expr;
 
+                const auto* tn = cast<const HIRExprNodeConstParam>(&*exprPtr);
+                if (!tn) {
+                    translateConstExprBody(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
+                }
                 const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, unevaluated);
                 if (!predicted && !sCapsOracle) {
                     // A bare const parameter gets its symbolic form; anything
                     // else stays Unevaluated for monomorphisation-time demand.
-                    const auto* tn = cast<const HIRExprNodeConstParam>(&*exprPtr);
                     if (tn) {
                         as = HIRConstGeneric(HIRGenericRef(tn->name, tn->binding));
-                    } else {
-                        translateConstExprBody(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
                     }
                     return;
                 }
@@ -5615,9 +5596,9 @@ namespace {
                 auto& e = data.as_Pattern();
                 auto evaluateEndpoint = [&](HIRConstGeneric& value) {
                     if (const auto* unevaluated = value.opt_Unevaluated()) {
+                        translateConstExprBody(Span(), wb, crate, e.inner, **unevaluated);
                         const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, **unevaluated);
                         if (!predicted && !sCapsOracle) {
-                            translateConstExprBody(Span(), wb, crate, e.inner, **unevaluated);
                             return;
                         }
                         try {
@@ -5697,10 +5678,8 @@ namespace {
                 try {
                     item.valueRes = eval.evaluateConstant(p, item.value, item.type, monomorphState.clone());
                     item.valueState = HIRConstant::ValueState::Known;
-                } catch (const Defer& e) {
-                    if (e.reason != Defer::Reason::NotYetKnown) {
-                        BUG(item.value.span(), "Defer(" << e.reason << ") evaluating constant " << p);
-                    }
+                } catch (const Defer&) {
+                    // The solver could not commit: symbolic until it can.
                     item.valueState = HIRConstant::ValueState::Generic;
                 }
 
@@ -5731,8 +5710,8 @@ namespace {
                 try {
                     item.valueRes = eval.evaluateConstant(p, item.value, item.type);
                     item.valueGenerated = true;
-                } catch (const Defer& e) {
-                    ERROR(item.value->span(), E0000, "Defer(" << e.reason << ") evaluating top-level static");
+                } catch (const Defer&) {
+                    ERROR(item.value->span(), E0000, "solver could not commit while evaluating top-level static");
                 }
 
                 DEBUG("static: " << item.type << " = " << item.valueRes);
@@ -5927,8 +5906,8 @@ namespace {
                     } else {
                         value = EncodedLiteralSlice(val).readUint();
                     }
-                } catch (const Defer& e) {
-                    BUG((*expr)->span(), "Defer(" << e.reason << ") during evaluation of enum discriminant");
+                } catch (const Defer&) {
+                    BUG((*expr)->span(), "solver could not commit during evaluation of enum discriminant");
                 }
             } else if (idx > 0) {
                 visitEnumVariant(wb, crate, p, mod, modPath, name, item, idx - 1);
@@ -6135,9 +6114,9 @@ void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve,
 void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRTypeData* ty, HIRConstGeneric& cg) {
     if (auto* cgeP = cg.opt_Unevaluated()) {
         const auto& cge = *cgeP;
+        translateConstExprBody(sp, wb, crate, ty, *cge);
         const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, *cge);
         if (!predicted && !sCapsOracle) {
-            translateConstExprBody(sp, wb, crate, ty, *cge);
             return;
         }
         if (!predicted) {
@@ -6189,13 +6168,7 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
 
             // Need to look up the required type - to do that requires knowing the item it's for
             // - Which, might not be known at this point - might be a UfcsInherent
-            const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, ue);
-            if (!predicted && !sCapsOracle) {
-                translateConstExprBody(sp, wb, crate, nullptr, ue);
-                continue;
-            }
             try {
-
                 ASSERT_BUG(sp, paramsDef, "Missing generic parameter definitions for " << params);
                 auto idx = static_cast<size_t>(&v - &params.values.front());
                 ASSERT_BUG(sp, idx < paramsDef->values.size(), "");
@@ -6209,6 +6182,11 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
                     MonomorphStatePtr ms(crate.types, nullptr, &params, &params);
                     ty = tmp = ms.monomorphType(sp, ty);
                     ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
+                }
+                translateConstExprBody(sp, wb, crate, ty, ue);
+                const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, ue);
+                if (!predicted && !sCapsOracle) {
+                    continue;
                 }
                 v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, ue)));
                 if (!predicted) {
