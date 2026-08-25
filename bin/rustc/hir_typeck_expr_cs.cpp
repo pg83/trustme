@@ -1070,6 +1070,29 @@ default: {
                 this->context.possibleEquateTypeUnknown(node.span(), argNode->resType, Context::IvarUnknownType::To);
             }
 
+            // A preceding expression can expose an expected type for an
+            // inference variable nested in this receiver. Give ivar
+            // possibilities a chance to apply it before inherent-method
+            // priority commits to an impl whose implicit `Sized` bound would
+            // make that expected type impossible.
+            if (!this->isFallback) {
+                bool hasPendingReceiverCoercion = false;
+                visitTyWith(ty, [&](const HIRTypeData* inner) {
+                    const auto* resolved = this->context.getType(inner);
+                    const auto* infer = resolved->opt_Infer();
+                    if (!infer || infer->index >= this->context.possibleIvarVals.size()) {
+                        return false;
+                    }
+                    const auto& possible = this->context.possibleIvarVals[infer->index];
+                    hasPendingReceiverCoercion = !possible.typesCoerceTo.empty() || !possible.typesCoerceFrom.empty();
+                    return hasPendingReceiverCoercion;
+                });
+                if (hasPendingReceiverCoercion) {
+                    DEBUG("Receiver inference has a pending coercion, pausing method lookup");
+                    return;
+                }
+            }
+
             // Using autoderef, locate this method on the type
             // TODO: Obtain a list of avaliable methods at that level?
             // - If running in a mode after stablise (before defaults), fall
@@ -10726,6 +10749,12 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                 } else {
                     ++it;
                 }
+                // Let coercions observe every newly resolved node before a
+                // later method probe can commit to a candidate using stale
+                // expected-type information.
+                if (context.ivars.peekChanged()) {
+                    break;
+                }
             }
             {
                 ::std::vector<bool> advRevisitRemoveList;
@@ -10828,6 +10857,9 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                     it = context.toVisit.erase(it);
                 } else {
                     ++it;
+                }
+                if (context.ivars.peekChanged()) {
+                    break;
                 }
             }
             {
