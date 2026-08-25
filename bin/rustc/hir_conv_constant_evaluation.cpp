@@ -1373,7 +1373,7 @@ MIREvalConstantPtr MIREvalConstantPtr::allocate(stl::ObjPool* pool, const void* 
 MIREvalAllocationPtr MIREvalAllocationPtr::allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty) {
     size_t len;
     if (!TargetGetSizeOf(Span(), resolve, ty, len)) {
-        THROW_DEFER(Span(), Layout, "sizeof " << ty);
+        BUG(Span(), "Layout not computable during const evaluation - " << "sizeof " << ty);
     }
     auto* data = static_cast<u8*>(pool->allocate(len + ((len + 7) / 8)));
     MIREvalAllocationPtr rv;
@@ -1444,14 +1444,14 @@ namespace {
             if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
                 const auto* array = (*ty)->opt_Array();
                 if (!array || !array->size.is_Known() || array->size.as_Known() == 0) {
-                    THROW_DEFER(sp, Layout, "array element in " << *ty);
+                    BUG(sp, "Layout not computable during const evaluation - " << "array element in " << *ty);
                 }
                 ty = &array->inner;
                 continue;
             }
             r = TargetGetTypeRepr(sp, resolve, *ty);
             if (!r) {
-                THROW_DEFER(sp, Layout, "repr of " << *ty);
+                BUG(sp, "Layout not computable during const evaluation - " << "repr of " << *ty);
             }
             assert(f < r->fields.size());
             ofs += r->fields[f].offset;
@@ -1980,7 +1980,7 @@ public:
             auto staticTy = constMs.monomorphType(state.sp, s.type);
             size_t staticSize;
             if (!TargetGetSizeOf(state.sp, rootResolve, staticTy, staticSize)) {
-                THROW_DEFER(state.sp, Layout, "sizeof " << staticTy);
+                BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << staticTy);
             }
             if (outTy) {
                 *outTy = staticTy;
@@ -2115,7 +2115,7 @@ public:
                             metadata = MIREvalValueRef();
                             size_t sz, al;
                             if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                                THROW_DEFER(state.sp, Layout, "size/align of " << typ);
+                                BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << typ);
                             }
                             MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
                             size_t index = e;
@@ -2139,7 +2139,7 @@ public:
 
                         size_t sz, al;
                         if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                            THROW_DEFER(state.sp, Layout, "size/align of " << typ);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << typ);
                         }
                         if (sz == SIZE_MAX) {
                             val = val.slice(ofs);
@@ -2159,7 +2159,7 @@ public:
                         // If the inner type is unsized
                         size_t sz, al;
                         if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                            THROW_DEFER(state.sp, Layout, "size/align of " << typ);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << typ);
                         }
                         if (sz == SIZE_MAX) {
                             // Read metadata
@@ -2176,7 +2176,7 @@ public:
                             size_t itemSize = 1;
                             if (const auto* slice = typ->opt_Slice()) {
                                 if (!TargetGetSizeOf(state.sp, rootResolve, slice->inner, itemSize)) {
-                                    THROW_DEFER(state.sp, Layout, "sizeof " << slice->inner);
+                                    BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << slice->inner);
                                 }
                             } else if (typ != HIRCoreType::Str) {
                                 itemSize = 1;
@@ -2217,7 +2217,7 @@ public:
                         metadata = MIREvalValueRef();
                         size_t sz, al;
                         if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                            THROW_DEFER(state.sp, Layout, "size/align of " << typ);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << typ);
                         }
                         MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
                         MIR_ASSERT(state, e < locals.size(), "LValue::Index index local out of range");
@@ -3247,7 +3247,7 @@ static void writeCtfeEnumVariant(
     const auto& state = localState.state;
     auto* enmRepr = TargetGetTypeRepr(state.sp, resolve, ty);
     if (!enmRepr) {
-        THROW_DEFER(state.sp, Layout, "repr of " << ty);
+        BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
     }
     if (valueCount > 0) {
         MIR_ASSERT(state, index < enmRepr->fields.size(), "Enum representation has no variant " << index << " for " << ty);
@@ -3255,7 +3255,7 @@ static void writeCtfeEnumVariant(
         const auto& innerType = enmRepr->fields[index].ty;
         auto* innerRepr = TargetGetTypeRepr(state.sp, resolve, innerType);
         if (!innerRepr) {
-            THROW_DEFER(state.sp, Layout, "repr of " << innerType);
+            BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << innerType);
         }
         MIR_ASSERT(state, valueCount <= innerRepr->fields.size(),
             "Enum variant " << index << " has " << innerRepr->fields.size() << " fields, got " << valueCount);
@@ -3424,7 +3424,7 @@ default:
                                         MIR_ASSERT(state, enm.isValue(), "Constant cast Variant to integer with non-value enum - " << srcTy);
                                         const auto* repr = TargetGetTypeRepr(state.sp, resolve, srcTy);
                                         if (!repr) {
-                                            THROW_DEFER(state.sp, Layout, "repr of " << srcTy);
+                                            BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << srcTy);
                                         }
                                         if (repr->variants.is_None()) {
                                             // One variant, so nothing is stored
@@ -3673,7 +3673,7 @@ default:
                 const auto& ty = state.getLvalueType(tmp, sa.dst);
                 auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
                 if (!repr) {
-                    THROW_DEFER(state.sp, Layout, "repr of " << ty);
+                    BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
                 }
                 MIR_ASSERT(state, repr->fields.size() == e.vals.size(), "");
                 for (size_t i = 0; i < e.vals.size(); i++) {
@@ -3688,7 +3688,7 @@ default:
                 const auto& ty = state.getLvalueType(tmp, sa.dst);
                 auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
                 if (!repr) {
-                    THROW_DEFER(state.sp, Layout, "repr of " << ty);
+                    BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
                 }
                 MIR_ASSERT(state, repr->fields.size() == e.vals.size(), "");
                 for (size_t i = 0; i < e.vals.size(); i++) {
@@ -3925,7 +3925,7 @@ default:
                         if (TargetGetSizeOf(state.sp, this->resolve, ty, sizeVal)) {
                             dst.writeUint(state, TargetGetPointerBits(), U128(sizeVal));
                         } else {
-                            THROW_DEFER(state.sp, Layout, "sizeof " << ty);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << ty);
                         }
                     } else if (te->name == "size_of_val") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -3934,18 +3934,18 @@ default:
                         if (ty->is_TraitObject()) {
                             sizeVal = readTraitObjectVtableUsize(1);
                         } else if (!TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal)) {
-                            THROW_DEFER(state.sp, Layout, "size/align of " << ty);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << ty);
                         }
                         if (sizeVal == SIZE_MAX) {
                             size_t itemSize;
                             if (const auto* slice = ty->opt_Slice()) {
                                 if (!TargetGetSizeOf(state.sp, this->resolve, slice->inner, itemSize)) {
-                                    THROW_DEFER(state.sp, Layout, "sizeof " << slice->inner);
+                                    BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << slice->inner);
                                 }
                             } else if (ty == HIRCoreType::Str) {
                                 itemSize = 1;
                             } else {
-                                THROW_DEFER(state.sp, Layout, "unsized tail of " << ty);
+                                BUG(state.sp, "Layout not computable during const evaluation - " << "unsized tail of " << ty);
                             }
                             auto arg = localState.getLval(e.args.at(0).as_LValue());
                             const auto len = arg.slice(TargetGetPointerBits() / 8).readUsize(state);
@@ -3959,7 +3959,7 @@ default:
                         if (TargetGetAlignOf(state.sp, this->resolve, ty, alignVal)) {
                             dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                         } else {
-                            THROW_DEFER(state.sp, Layout, "alignof " << ty);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "alignof " << ty);
                         }
                     } else if (te->name == "align_of_val" || te->name == "min_align_of_val") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -3971,7 +3971,7 @@ default:
                         } else if (TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal) && alignVal > 0) {
                             dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                         } else {
-                            THROW_DEFER(state.sp, Layout, "alignof " << ty);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "alignof " << ty);
                         }
                     } else if (te->name == "offset_of") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -4298,7 +4298,7 @@ default:
                         MIR_ASSERT(state, argTy->is_Tuple(), "`" << te->name << "` requires a tuple for ARG, got " << argTy);
                         auto* repr = TargetGetTypeRepr(state.sp, resolve, argTy);
                         if (!repr) {
-                            THROW_DEFER(state.sp, Layout, "repr of " << argTy);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << argTy);
                         }
                         auto argVal = localState.getLval(e.args.at(0).as_LValue());
                         const auto& fcnArg = e.args.at(1);
@@ -4352,7 +4352,7 @@ default:
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                            THROW_DEFER(state.sp, Layout, "sizeof " << ty);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << ty);
                         }
                         auto ptrSrc = localState.readParamPtr(e.args.at(0));
                         auto ptrDst = localState.readParamPtr(e.args.at(1));
@@ -4388,7 +4388,7 @@ default:
                         size_t size;
                         size_t alignment;
                         if (!TargetGetSizeAndAlignOf(state.sp, resolve, ty, size, alignment)) {
-                            THROW_DEFER(state.sp, Layout, "size/align of " << ty);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << ty);
                         }
                         auto leftPtr = localState.readParamPtr(e.args.at(0));
                         auto rightPtr = localState.readParamPtr(e.args.at(1));
@@ -4421,7 +4421,7 @@ default:
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, vectorTy, vectorSize)
                             || !TargetGetSizeOf(state.sp, resolve, elementTy, elementSize)) {
-                            THROW_DEFER(state.sp, Layout, "sizeof " << vectorTy << " / " << elementTy);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << vectorTy << " / " << elementTy);
                         }
                         MIR_ASSERT(state, elementSize != 0 && vectorSize % elementSize == 0, "Invalid SIMD layout for `" << te->name << "`");
                         auto index = localState.readParamUint(32, e.args.at(1));
@@ -4437,7 +4437,7 @@ default:
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, vectorTy, vectorSize)
                             || !TargetGetSizeOf(state.sp, resolve, elementTy, elementSize)) {
-                            THROW_DEFER(state.sp, Layout, "sizeof " << vectorTy << " / " << elementTy);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << vectorTy << " / " << elementTy);
                         }
                         MIR_ASSERT(state, elementSize != 0 && vectorSize % elementSize == 0, "Invalid SIMD layout for `" << te->name << "`");
                         auto index = localState.readParamUint(32, e.args.at(1));
@@ -4448,7 +4448,7 @@ default:
                         auto ty = localState.monomorphExpand(te->params.types.at(0)->as_Pointer().inner);
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                            THROW_DEFER(state.sp, Layout, "sizeof " << ty);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << ty);
                         }
                         auto ptrPair = localState.readParamPtr(e.args.at(0));
                         auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
@@ -4459,7 +4459,7 @@ default:
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                            THROW_DEFER(state.sp, Layout, "sizeof " << ty);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << ty);
                         }
                         auto ptrPair = localState.readParamPtr(e.args.at(0));
                         auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
@@ -4469,7 +4469,7 @@ default:
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                            THROW_DEFER(state.sp, Layout, "sizeof " << ty);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << ty);
                         }
                         MIR_ASSERT(state, elementSize != 0, "`" << te->name << "` called for a zero-sized type");
                         MIR_ASSERT(state, elementSize <= static_cast<size_t>(INT64_MAX), "Element size overflows isize in `" << te->name << "`");
@@ -4519,7 +4519,7 @@ default:
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                            THROW_DEFER(state.sp, Layout, "sizeof " << ty);
+                            BUG(state.sp, "Layout not computable during const evaluation - " << "sizeof " << ty);
                         }
                         auto ptrDst = localState.getLval(e.args.at(0).as_LValue()).readPtr(state);
                         auto val = localState.readParamUint(8, e.args.at(1));
@@ -4543,7 +4543,7 @@ default:
                         } else {
                             const auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
                             if (!repr) {
-                                THROW_DEFER(state.sp, Layout, "repr of " << ty);
+                                BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
                             }
 
                             MIREvalValueRef value;
@@ -4915,7 +4915,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         const auto& ty = state.getLvalueType(tmp, rvSlot);
         auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
         if (!repr) {
-            THROW_DEFER(state.sp, Layout, "repr of " << ty);
+            BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << ty);
         }
         MIR_ASSERT(state, repr->fields.size() == callArgs.size(), "");
         for (size_t i = 0; i < callArgs.size(); i++) {
