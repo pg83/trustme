@@ -1598,6 +1598,12 @@ class CExpanderModulePath: public ExpandProcMacro {
         }
         pathStr += crate.crateNameSet;
         for (const auto& comp : mod.path().nodes) {
+            // Items declared in a block are kept in anonymous AST modules.
+            // Those are an implementation detail, not part of the lexical
+            // module path exposed by Rust.
+            if (comp.c_str()[0] == '#') {
+                continue;
+            }
             pathStr += "::";
             pathStr += comp.c_str();
         }

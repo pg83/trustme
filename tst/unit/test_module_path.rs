@@ -18,7 +18,22 @@ mod foo {
     }
 }
 
+macro_rules! nested_module_path {
+    () => {
+        module_path!()
+    };
+}
+
 fn main() {
     assert_eq!(module_path!(), "test_module_path");
     assert_eq!(foo::bar::baz::name(), "test_module_path::foo::bar::baz");
+
+    // Function bodies use anonymous AST modules internally. A builtin macro
+    // reached through a local macro expansion must not expose that module.
+    macro_rules! local_wrapper {
+        () => {
+            nested_module_path!()
+        };
+    }
+    assert_eq!(local_wrapper!(), "test_module_path");
 }
