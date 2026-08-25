@@ -4671,7 +4671,15 @@ default:
                     // ambiguous goal.  Returning false here would turn e.g.
                     // `<_ as IntoIterator>::IntoIter: Iterator` into NoSolution
                     // and incorrectly discard an enclosing `Zip` candidate.
-                    if (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)) {
+                    //
+                    // Only inference in the *self type* warrants that: heads
+                    // are selected by self, so with a concrete self and zero
+                    // head matches no instantiation of a trait parameter can
+                    // produce a candidate. An inference variable there (e.g.
+                    // `Option<T>: AsRef<_>`) must stay NoSolution, or a
+                    // blanket impl's unprovable where-clause keeps a method
+                    // candidate alive and shadows the inherent method.
+                    if (resolve_.typeContainsIvars(resolvedType)) {
                         return emitForcedAmbiguity();
                     }
                     return false;
