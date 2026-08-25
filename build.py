@@ -676,6 +676,14 @@ combine = add_project_test(
     rev="50a71afa1c88e8564e0220a6e0625dd16a2302a2",
 )
 
+camino_1_1_12 = add_project_test(
+    name="camino_1_1_12",
+    url="https://github.com/camino-rs/camino.git",
+    rev="e5edcb948d31dc66000a560725ed9f22c98672f3",
+    adapter_args=["--all-features"],
+    lockfile="$(S)/tst/projects/zerocopy/Cargo.lock",
+)
+
 alloca = add_project_test(
     name="alloca",
     url="https://github.com/playXE/alloca-rs.git",
