@@ -916,7 +916,9 @@ bool HIRMarkerImpl::matchesType(const HIRTypeData* type, tCbResolveType tyRes) c
 
 namespace {
 
-    struct TypeOrdSpecificMixedOrdering {};
+    // Sticky flag raised when the specificity walk sees orderings that
+    // point in both directions; entry points reset it and decide.
+    bool sTypeOrdMixed = false;
 
     ::Ordering typelistOrdSpecific(const Span& sp, const ThinVector<HIRTypeRef>& left, const ThinVector<HIRTypeRef>& right);
     ::Ordering typelistOrdSpecific(const Span& sp, const ::std::vector<HIRTypeRef>& left, const ::std::vector<HIRTypeRef>& right);
@@ -946,7 +948,8 @@ namespace {
         if (right == ::OrdEqual || left == right) {
             return left;
         }
-        throw TypeOrdSpecificMixedOrdering{};
+        sTypeOrdMixed = true;
+        return ::OrdEqual;
     }
 
     ::Ordering typeOrdSpecific(const Span& sp, const HIRTypeData* left, const HIRTypeData* right) {
@@ -1130,7 +1133,8 @@ namespace {
             if (a != ::OrdEqual) {
                 if (rv != ::OrdEqual && a != rv) {
                     DEBUG("Inconsistent ordering between type lists - i=" << i << " [" << le << "] vs [" << re << "]");
-                    throw TypeOrdSpecificMixedOrdering{};
+                    sTypeOrdMixed = true;
+                    return ::OrdEqual;
                 }
                 rv = a;
             }
@@ -1146,7 +1150,8 @@ namespace {
             if (a != ::OrdEqual) {
                 if (rv != ::OrdEqual && a != rv) {
                     DEBUG("Inconsistent ordering between type lists - i=" << i << " [" << le << "] vs [" << re << "]");
-                    throw TypeOrdSpecificMixedOrdering{};
+                    sTypeOrdMixed = true;
+                    return ::OrdEqual;
                 }
                 rv = a;
             }
@@ -1263,22 +1268,26 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
 
     // >> https://github.com/rust-lang/rfcs/blob/master/text/1210-impl-specialization.md#defining-the-precedence-rules
     // 1. If this->m_type is less specific than other.m_type: return false
-    try {
+    {
         // If any in te.impl->m_params is less specific than oe.impl->m_params: return false
+        sTypeOrdMixed = false;
         auto ord = typelistOrdSpecific(sp, this->traitArgs.types, other.traitArgs.types);
+        if (sTypeOrdMixed) {
+            BUG(sp, "Mixed ordering in more_specific_than");
+        }
         if (ord != ::OrdEqual) {
             DEBUG("- Trait arguments " << (ord == ::OrdLess ? "less" : "more") << " specific");
             return ord == ::OrdGreater;
         }
 
         ord = typeOrdSpecific(sp, this->type, other.type);
-        // If `*this` < `other` : false
+        if (sTypeOrdMixed) {
+            BUG(sp, "Mixed ordering in more_specific_than");
+        }
         if (ord != ::OrdEqual) {
             DEBUG("- Type " << this->type << " " << (ord == ::OrdLess ? "less" : "more") << " specific than " << other.type);
             return ord == ::OrdGreater;
         }
-    } catch (const TypeOrdSpecificMixedOrdering& e) {
-        BUG(sp, "Mixed ordering in more_specific_than");
     }
 
     // The syntax-only ordering above treats every generic as equally open.
@@ -1649,11 +1658,12 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
     DEBUG("TODO: Handle potential overlap (when not exactly equal)");
     Span sp;
 
-    // TODO: Use `type_ord_specific` but treat any case of mixed ordering as this returning `false`
-    try {
-        typeOrdSpecific(sp, this->type, other.type);
-        typelistOrdSpecific(sp, this->traitArgs.types, other.traitArgs.types);
-    } catch (const TypeOrdSpecificMixedOrdering& /*e*/) {
+    // Mixed ordering between the heads means neither is a specialisation
+    // of the other.
+    sTypeOrdMixed = false;
+    typeOrdSpecific(sp, this->type, other.type);
+    typelistOrdSpecific(sp, this->traitArgs.types, other.traitArgs.types);
+    if (sTypeOrdMixed) {
         return false;
     }
 

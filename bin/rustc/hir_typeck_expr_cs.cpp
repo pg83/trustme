@@ -34,9 +34,9 @@ namespace {
     }
 
     bool typeContainsImplPlaceholder(HIRTypeInterner& types, const HIRTypeData* t) {
-        struct HasPlaceholder {};
-
         struct V: public HIRVisitor {
+            bool found = false;
+
             explicit V(HIRTypeInterner& types)
                 : HIRVisitor(nullptr, types)
             {
@@ -44,7 +44,7 @@ namespace {
 
             void visitConstgeneric(const HIRConstGeneric& v) {
                 if (v.is_Generic() && v.as_Generic().isPlaceholder()) {
-                    throw HasPlaceholder{};
+                    found = true;
                 }
             }
 
@@ -57,7 +57,7 @@ namespace {
 
             [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
                 if (ty->is_Generic() && ty->as_Generic().isPlaceholder()) {
-                    throw HasPlaceholder{};
+                    found = true;
                 }
                 if (const auto* e = ty->opt_Array()) {
                     if (const auto* ase = e->size.opt_Unevaluated()) {
@@ -68,13 +68,9 @@ namespace {
             }
         } v(types);
 
-        try {
-            auto _discard = v.visitType(t);
-            (void)_discard;
-            return false;
-        } catch (const HasPlaceholder&) {
-            return true;
-        }
+        auto _discard = v.visitType(t);
+        (void)_discard;
+        return v.found;
     }
 
     struct MonomorphEraseHrls: public Monomorphiser {
