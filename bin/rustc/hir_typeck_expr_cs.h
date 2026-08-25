@@ -276,7 +276,7 @@ struct Context: TraitTypeConstraintCallback {
     HIRTypeRef revealOpaqueTypes(const HIRTypeData* type) const;
 
     void addRpitType(const HIRPath& origin, unsigned int index, HIRTypeRef type);
-    void noteRpitSelfReference(const HIRPath& origin, unsigned int index);
+    void noteRpitSelfReferences(const HIRTypeData* type);
     bool fallbackUnresolvedRpitType(const Span& sp);
 
     /// Create an autoderef operation from val_node->m_res_type to ty_dst (handling implicit unsizing)
