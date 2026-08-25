@@ -1100,6 +1100,18 @@ default: {
                         const auto& possible = this->context.possibleIvarVals[infer->index];
                         hasPendingReceiverCoercion = !possible.typesCoerceTo.empty() || !possible.typesCoerceFrom.empty();
                     }
+                    for (const auto& coercion : this->context.linkCoerce) {
+                        auto containsReceiverIvar = [&](const HIRTypeData* type) {
+                            return visitTyWith(this->context.getType(type), [&](const HIRTypeData* candidate) {
+                                const auto* candidateInfer = this->context.getType(candidate)->opt_Infer();
+                                return candidateInfer && candidateInfer->index == infer->index;
+                            });
+                        };
+                        if (containsReceiverIvar(coercion->leftTy) || containsReceiverIvar((*coercion->rightNodePtr)->resType)) {
+                            hasPendingReceiverCoercion = true;
+                            break;
+                        }
+                    }
                     return hasPendingReceiverCoercion;
                 });
                 if (hasPendingReceiverCoercion) {
