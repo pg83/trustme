@@ -735,6 +735,15 @@ serde = add_project_test(
     lockfile="$(S)/tst/projects/serde/Cargo.lock",
 )
 
+serde_derive_1_0_229 = add_project_test(
+    name="serde_derive_1_0_229",
+    url="https://github.com/serde-rs/serde.git",
+    rev="7fc3b4c30c94f73a96ebd1553f2b090d928fc3a8",
+    manifest="serde_derive",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/serde/Cargo.lock",
+)
+
 serde_core_1_0_229 = add_project_test(
     name="serde_core_1_0_229",
     url="https://github.com/serde-rs/serde.git",
