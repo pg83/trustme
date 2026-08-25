@@ -52,13 +52,55 @@ namespace {
 #include "hir_conv_main_bindings.h"
 
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <algorithm>
+
+::std::ostream& operator<<(::std::ostream& os, Defer::Reason r) {
+    switch (r) {
+        case Defer::Reason::Layout:
+            return os << "Layout";
+        case Defer::Reason::GenericValue:
+            return os << "GenericValue";
+        case Defer::Reason::Infer:
+            return os << "Infer";
+        case Defer::Reason::NotYetKnown:
+            return os << "NotYetKnown";
+        case Defer::Reason::UnresolvedCall:
+            return os << "UnresolvedCall";
+    }
+    return os << "?";
+}
 
 namespace {
     void ConvertHIRConstantEvaluateStatic(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRStatic& e);
     void ConvertHIRConstantEvaluateFcnSig(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRFunction& fcn);
 
-    struct Defer {};
+    // Dumped at exit when TRUSTME_DEFER_STATS is set: how often speculative
+    // evaluation bailed, by reason -- the map of what still runs too early.
+    struct DeferStats {
+        unsigned counts[Defer::NUM_REASONS] = {};
+
+        ~DeferStats() {
+            if (!getenv("TRUSTME_DEFER_STATS")) {
+                return;
+            }
+            fprintf(stderr, "defer-stats: layout=%u generic-value=%u infer=%u not-yet-known=%u unresolved-call=%u\n",
+                counts[0], counts[1], counts[2], counts[3], counts[4]);
+        }
+    } gDeferStats;
+}
+
+// Every Defer is thrown through here: the throw point is the only place that
+// knows the reason, so it is printed and counted before the unwind.
+#define THROW_DEFER(sp, reasonName, msg)                                        \
+    do {                                                                        \
+        gDeferStats.counts[static_cast<unsigned>(Defer::Reason::reasonName)]++; \
+        DEBUG("Defer(" << Defer::Reason::reasonName << ") " << msg);            \
+        throw Defer{Defer::Reason::reasonName, Span(sp)};                       \
+    } while (0)
+
+namespace {
 
     bool constGenericIsConcrete(const HIRConstGeneric& value);
 
@@ -1189,7 +1231,7 @@ MIREvalConstantPtr MIREvalConstantPtr::allocate(stl::ObjPool* pool, const void* 
 MIREvalAllocationPtr MIREvalAllocationPtr::allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty) {
     size_t len;
     if (!TargetGetSizeOf(Span(), resolve, ty, len)) {
-        throw Defer();
+        THROW_DEFER(Span(), Layout, "sizeof " << ty);
     }
     auto* data = static_cast<u8*>(pool->allocate(len + ((len + 7) / 8)));
     MIREvalAllocationPtr rv;
@@ -1260,14 +1302,14 @@ namespace {
             if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
                 const auto* array = (*ty)->opt_Array();
                 if (!array || !array->size.is_Known() || array->size.as_Known() == 0) {
-                    throw Defer();
+                    THROW_DEFER(sp, Layout, "array element in " << *ty);
                 }
                 ty = &array->inner;
                 continue;
             }
             r = TargetGetTypeRepr(sp, resolve, *ty);
             if (!r) {
-                throw Defer();
+                THROW_DEFER(sp, Layout, "repr of " << *ty);
             }
             assert(f < r->fields.size());
             ofs += r->fields[f].offset;
@@ -1296,7 +1338,7 @@ namespace {
                 return EntPtr();
             }
             case TypeckValuePtr::TAG_NotYetKnown: {
-                throw Defer();
+                THROW_DEFER(sp, NotYetKnown, "value of " << path);
             }
             case TypeckValuePtr::TAG_Constant: {
                 auto& e = v.as_Constant();
@@ -1771,8 +1813,7 @@ public:
         if (visitPathTysWith(p, [&](const auto& ty) -> bool {
             return ty->is_Generic();
         })) {
-            DEBUG("Return Literal::Defer for constastatic " << p << " which references a generic parameter");
-            throw Defer();
+            THROW_DEFER(state.sp, GenericValue, "static " << p << " references a generic parameter");
         }
 
         // A trait-object method function pointer names the generated vtable
@@ -1797,7 +1838,7 @@ public:
             auto staticTy = constMs.monomorphType(state.sp, s.type);
             size_t staticSize;
             if (!TargetGetSizeOf(state.sp, rootResolve, staticTy, staticSize)) {
-                throw Defer();
+                THROW_DEFER(state.sp, Layout, "sizeof " << staticTy);
             }
             if (outTy) {
                 *outTy = staticTy;
@@ -1851,8 +1892,8 @@ public:
                     item.valueGenerated = true;
                     item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, staticTy, std::move(constMs));
                     item.valueGenerated = true;
-                } catch (const Defer&) {
-                    MIR_BUG(state, p << " Defer during value generation");
+                } catch (const Defer& e) {
+                    MIR_BUG(state, p << " Defer(" << e.reason << ") during value generation");
                 }
                 DEBUG(p << " = " << item.valueRes);
             }
@@ -1926,7 +1967,7 @@ public:
                             metadata = MIREvalValueRef();
                             size_t sz, al;
                             if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                                throw Defer();
+                                THROW_DEFER(state.sp, Layout, "size/align of " << typ);
                             }
                             MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
                             size_t index = e;
@@ -1950,7 +1991,7 @@ public:
 
                         size_t sz, al;
                         if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "size/align of " << typ);
                         }
                         if (sz == SIZE_MAX) {
                             val = val.slice(ofs);
@@ -1970,7 +2011,7 @@ public:
                         // If the inner type is unsized
                         size_t sz, al;
                         if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "size/align of " << typ);
                         }
                         if (sz == SIZE_MAX) {
                             // Read metadata
@@ -1987,7 +2028,7 @@ public:
                             size_t itemSize = 1;
                             if (const auto* slice = typ->opt_Slice()) {
                                 if (!TargetGetSizeOf(state.sp, rootResolve, slice->inner, itemSize)) {
-                                    throw Defer();
+                                    THROW_DEFER(state.sp, Layout, "sizeof " << slice->inner);
                                 }
                             } else if (typ != HIRCoreType::Str) {
                                 itemSize = 1;
@@ -2028,7 +2069,7 @@ public:
                         metadata = MIREvalValueRef();
                         size_t sz, al;
                         if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "size/align of " << typ);
                         }
                         MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
                         MIR_ASSERT(state, e < locals.size(), "LValue::Index index local out of range");
@@ -2063,8 +2104,7 @@ public:
         if (visitPathTysWith(p, [&](const auto& ty) -> bool {
             return ty->is_Generic();
         })) {
-            DEBUG("Return Literal::Defer for constant " << p << " which references a generic parameter");
-            throw Defer();
+            THROW_DEFER(state.sp, GenericValue, "constant " << p << " references a generic parameter");
         }
         MonomorphState constMs(rootResolve.crate.types);
         const HIRGenericParams* implParamsDef = nullptr;
@@ -2247,23 +2287,23 @@ public:
     const EncodedLiteral& getConst(const HIRConstGeneric& v, EncodedLiteral& tmp) const {
             switch (v.tag()) {
                 case HIRConstGeneric::TAG_Infer: {
-                    throw Defer{};
+                    THROW_DEFER(state.sp, Infer, "const generic is Infer");
                 }
                 case HIRConstGeneric::TAG_Generic: {
-                    throw Defer{};
+                    THROW_DEFER(state.sp, GenericValue, "const generic " << v);
                 }
                 case HIRConstGeneric::TAG_Unevaluated: {
                     auto& ve = v.as_Unevaluated();
                     if (!typeCanMonomorph(ve->selfType, ms)
                         || !pathParamsCanMonomorph(ve->paramsImpl, ms)
                         || !pathParamsCanMonomorph(ve->paramsItem, ms)) {
-                        throw Defer{};
+                        THROW_DEFER(state.sp, GenericValue, "unevaluated const cannot monomorph");
                     }
                     auto value = ve->monomorph(state.sp, ms, false);
                     if (!typeIsConcrete(value.selfType)
                         || !pathParamsAreConcrete(value.paramsImpl)
                         || !pathParamsAreConcrete(value.paramsItem)) {
-                        throw Defer{};
+                        THROW_DEFER(state.sp, GenericValue, "unevaluated const not concrete after monomorph");
                     }
                     const auto& expr = *value.expr;
                     MonomorphState valueMs(rootResolve.crate.types);
@@ -3039,7 +3079,7 @@ static void writeCtfeEnumVariant(
     const auto& state = localState.state;
     auto* enmRepr = TargetGetTypeRepr(state.sp, resolve, ty);
     if (!enmRepr) {
-        throw Defer();
+        THROW_DEFER(state.sp, Layout, "repr of " << ty);
     }
     if (valueCount > 0) {
         MIR_ASSERT(state, index < enmRepr->fields.size(), "Enum representation has no variant " << index << " for " << ty);
@@ -3047,7 +3087,7 @@ static void writeCtfeEnumVariant(
         const auto& innerType = enmRepr->fields[index].ty;
         auto* innerRepr = TargetGetTypeRepr(state.sp, resolve, innerType);
         if (!innerRepr) {
-            throw Defer();
+            THROW_DEFER(state.sp, Layout, "repr of " << innerType);
         }
         MIR_ASSERT(state, valueCount <= innerRepr->fields.size(),
             "Enum variant " << index << " has " << innerRepr->fields.size() << " fields, got " << valueCount);
@@ -3216,7 +3256,7 @@ default:
                                         MIR_ASSERT(state, enm.isValue(), "Constant cast Variant to integer with non-value enum - " << srcTy);
                                         const auto* repr = TargetGetTypeRepr(state.sp, resolve, srcTy);
                                         if (!repr) {
-                                            throw Defer();
+                                            THROW_DEFER(state.sp, Layout, "repr of " << srcTy);
                                         }
                                         if (repr->variants.is_None()) {
                                             // One variant, so nothing is stored
@@ -3465,7 +3505,7 @@ default:
                 const auto& ty = state.getLvalueType(tmp, sa.dst);
                 auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
                 if (!repr) {
-                    throw Defer();
+                    THROW_DEFER(state.sp, Layout, "repr of " << ty);
                 }
                 MIR_ASSERT(state, repr->fields.size() == e.vals.size(), "");
                 for (size_t i = 0; i < e.vals.size(); i++) {
@@ -3480,7 +3520,7 @@ default:
                 const auto& ty = state.getLvalueType(tmp, sa.dst);
                 auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
                 if (!repr) {
-                    throw Defer();
+                    THROW_DEFER(state.sp, Layout, "repr of " << ty);
                 }
                 MIR_ASSERT(state, repr->fields.size() == e.vals.size(), "");
                 for (size_t i = 0; i < e.vals.size(); i++) {
@@ -3717,7 +3757,7 @@ default:
                         if (TargetGetSizeOf(state.sp, this->resolve, ty, sizeVal)) {
                             dst.writeUint(state, TargetGetPointerBits(), U128(sizeVal));
                         } else {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "sizeof " << ty);
                         }
                     } else if (te->name == "size_of_val") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -3726,18 +3766,18 @@ default:
                         if (ty->is_TraitObject()) {
                             sizeVal = readTraitObjectVtableUsize(1);
                         } else if (!TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal)) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "size/align of " << ty);
                         }
                         if (sizeVal == SIZE_MAX) {
                             size_t itemSize;
                             if (const auto* slice = ty->opt_Slice()) {
                                 if (!TargetGetSizeOf(state.sp, this->resolve, slice->inner, itemSize)) {
-                                    throw Defer();
+                                    THROW_DEFER(state.sp, Layout, "sizeof " << slice->inner);
                                 }
                             } else if (ty == HIRCoreType::Str) {
                                 itemSize = 1;
                             } else {
-                                throw Defer();
+                                THROW_DEFER(state.sp, Layout, "unsized tail of " << ty);
                             }
                             auto arg = localState.getLval(e.args.at(0).as_LValue());
                             const auto len = arg.slice(TargetGetPointerBits() / 8).readUsize(state);
@@ -3751,7 +3791,7 @@ default:
                         if (TargetGetAlignOf(state.sp, this->resolve, ty, alignVal)) {
                             dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                         } else {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "alignof " << ty);
                         }
                     } else if (te->name == "align_of_val" || te->name == "min_align_of_val") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -3763,7 +3803,7 @@ default:
                         } else if (TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal) && alignVal > 0) {
                             dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                         } else {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "alignof " << ty);
                         }
                     } else if (te->name == "offset_of") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -4090,7 +4130,7 @@ default:
                         MIR_ASSERT(state, argTy->is_Tuple(), "`" << te->name << "` requires a tuple for ARG, got " << argTy);
                         auto* repr = TargetGetTypeRepr(state.sp, resolve, argTy);
                         if (!repr) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "repr of " << argTy);
                         }
                         auto argVal = localState.getLval(e.args.at(0).as_LValue());
                         const auto& fcnArg = e.args.at(1);
@@ -4144,7 +4184,7 @@ default:
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "sizeof " << ty);
                         }
                         auto ptrSrc = localState.readParamPtr(e.args.at(0));
                         auto ptrDst = localState.readParamPtr(e.args.at(1));
@@ -4180,7 +4220,7 @@ default:
                         size_t size;
                         size_t alignment;
                         if (!TargetGetSizeAndAlignOf(state.sp, resolve, ty, size, alignment)) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "size/align of " << ty);
                         }
                         auto leftPtr = localState.readParamPtr(e.args.at(0));
                         auto rightPtr = localState.readParamPtr(e.args.at(1));
@@ -4213,7 +4253,7 @@ default:
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, vectorTy, vectorSize)
                             || !TargetGetSizeOf(state.sp, resolve, elementTy, elementSize)) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "sizeof " << vectorTy << " / " << elementTy);
                         }
                         MIR_ASSERT(state, elementSize != 0 && vectorSize % elementSize == 0, "Invalid SIMD layout for `" << te->name << "`");
                         auto index = localState.readParamUint(32, e.args.at(1));
@@ -4229,7 +4269,7 @@ default:
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, vectorTy, vectorSize)
                             || !TargetGetSizeOf(state.sp, resolve, elementTy, elementSize)) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "sizeof " << vectorTy << " / " << elementTy);
                         }
                         MIR_ASSERT(state, elementSize != 0 && vectorSize % elementSize == 0, "Invalid SIMD layout for `" << te->name << "`");
                         auto index = localState.readParamUint(32, e.args.at(1));
@@ -4240,7 +4280,7 @@ default:
                         auto ty = localState.monomorphExpand(te->params.types.at(0)->as_Pointer().inner);
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "sizeof " << ty);
                         }
                         auto ptrPair = localState.readParamPtr(e.args.at(0));
                         auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
@@ -4251,7 +4291,7 @@ default:
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "sizeof " << ty);
                         }
                         auto ptrPair = localState.readParamPtr(e.args.at(0));
                         auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
@@ -4261,7 +4301,7 @@ default:
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "sizeof " << ty);
                         }
                         MIR_ASSERT(state, elementSize != 0, "`" << te->name << "` called for a zero-sized type");
                         MIR_ASSERT(state, elementSize <= static_cast<size_t>(INT64_MAX), "Element size overflows isize in `" << te->name << "`");
@@ -4311,7 +4351,7 @@ default:
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
-                            throw Defer();
+                            THROW_DEFER(state.sp, Layout, "sizeof " << ty);
                         }
                         auto ptrDst = localState.getLval(e.args.at(0).as_LValue()).readPtr(state);
                         auto val = localState.readParamUint(8, e.args.at(1));
@@ -4335,7 +4375,7 @@ default:
                         } else {
                             const auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
                             if (!repr) {
-                                throw Defer();
+                                THROW_DEFER(state.sp, Layout, "repr of " << ty);
                             }
 
                             MIREvalValueRef value;
@@ -4606,7 +4646,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
     // executing its MIR here would incorrectly validate (or reject) just one
     // generic definition rather than each concrete instance.
     if (monomorphisePathNeeded(path)) {
-        throw Defer();
+        THROW_DEFER(state.sp, GenericValue, "const call to generic " << path);
     }
 
     if (requireConstCalls) {
@@ -4698,7 +4738,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         );
         return true;
     } else if (rv.is_NotFound() && monomorphisePathNeeded(path)) {
-        throw Defer();
+        THROW_DEFER(state.sp, GenericValue, "unresolved generic path " << path);
     } else if (rv.is_Struct()) {
         // Set destination, same way as `RValue::Struct` does
         auto dst = localState.getLval(rvSlot);
@@ -4707,7 +4747,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         const auto& ty = state.getLvalueType(tmp, rvSlot);
         auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
         if (!repr) {
-            throw Defer();
+            THROW_DEFER(state.sp, Layout, "repr of " << ty);
         }
         MIR_ASSERT(state, repr->fields.size() == callArgs.size(), "");
         for (size_t i = 0; i < callArgs.size(); i++) {
@@ -5483,8 +5523,8 @@ namespace {
                 try {
                     item.valueRes = eval.evaluateConstant(p, item.value, item.type);
                     item.valueGenerated = true;
-                } catch (const Defer&) {
-                    ERROR(item.value->span(), E0000, "Defer top-level static?");
+                } catch (const Defer& e) {
+                    ERROR(item.value->span(), E0000, "Defer(" << e.reason << ") evaluating top-level static");
                 }
 
                 DEBUG("static: " << item.type << " = " << item.valueRes);
@@ -5562,8 +5602,7 @@ namespace {
                 void visit(HIRExprNodeCallMethod& node) override {
                     auto saved = exp.getParams;
                     auto callback = makeCallable<GenericParamsCb>([&](const Span& sp) -> const HIRGenericParams& {
-                        DEBUG("visit(ExprNodeCallMethod)[m_get_params] Defer until after main typecheck");
-                        throw Defer();
+                        THROW_DEFER(sp, UnresolvedCall, "method-call params before main typecheck");
                     });
                     exp.getParams = &callback;
                     HIRExprVisitorDef::visit(node);
@@ -6009,7 +6048,7 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
                 if (typeContainsIvars(ue.selfType)
                     || paramsContainIvars(ue.paramsImpl)
                     || paramsContainIvars(ue.paramsItem)) {
-                    throw Defer();
+                    THROW_DEFER(sp, Infer, "ivars in environment of unevaluated const");
                 }
 
                 ASSERT_BUG(sp, paramsDef, "Missing generic parameter definitions for " << params);

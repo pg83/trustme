@@ -8,6 +8,7 @@
 #include "mir_helpers.h"
 #include "trans_target.h"
 #include "hir_conv_main_bindings.h"
+#include "hir_conv_constant_evaluation.h" // Defer
 #include "trans_trans_list.h" // Note: This is included for inlining after enumeration and monomorph
 #include "hir_typeck_static.h"
 #include "mir_main_bindings.h"
@@ -192,7 +193,11 @@ const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const H
                 // - Maybe on the `Constant` entry there can be a list of pre-monomorphised values
                 auto it = hirConst.monomorphCache.find(path);
                 if (it == hirConst.monomorphCache.end() && !monomorphisePathNeeded(path)) {
-                    ConvertHIRConstantEvaluateConstant(state.resolve, implParams, HIRItemPath(path), hirConst);
+                    try {
+                        ConvertHIRConstantEvaluateConstant(state.resolve, implParams, HIRItemPath(path), hirConst);
+                    } catch (const Defer& e) {
+                        MIR_BUG(state, "Defer(" << e.reason << ") evaluating concrete constant " << path);
+                    }
                     it = hirConst.monomorphCache.find(path);
                 }
                 if (it == hirConst.monomorphCache.end()) {
@@ -210,7 +215,7 @@ const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const H
                 MIR_ASSERT(state, monomorphisePathNeeded(path), "Unevaluated constant - " << path);
                 return nullptr;
         }
-        throw "";
+        MIR_BUG(state, "Unreachable ValueState for " << path);
     } else if (v.is_NotYetKnown()) {
         auto v = state.resolve.getValue(state.sp, path, params, /*signature_only=*/true);
         if (const auto* e = v.opt_Constant()) {

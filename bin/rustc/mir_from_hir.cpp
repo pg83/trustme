@@ -17,6 +17,7 @@ static const size_t PARTIAL_ARRAY_MIN = 32;
 #include "mir_main_bindings.h"
 #include "mir_visit_crate_mir.h"
 #include "hir_conv_main_bindings.h" // For consteval
+#include "hir_conv_constant_evaluation.h" // Defer
 #include "settings.h"
 
 #include <cctype> // isdigit
@@ -5820,7 +5821,11 @@ namespace {
         }
         if (binding->valueState == HIRConstant::ValueState::Unknown
             || (binding->valueState == HIRConstant::ValueState::Generic && !binding->monomorphCache.count(pve->path))) {
-            ConvertHIRConstantEvaluateConstant(resolve, implDef, pve->path, const_cast<HIRConstant&>(*binding));
+            try {
+                ConvertHIRConstantEvaluateConstant(resolve, implDef, pve->path, const_cast<HIRConstant&>(*binding));
+            } catch (const Defer& e) {
+                BUG(sp, "Defer(" << e.reason << ") evaluating pattern constant " << pve->path);
+            }
         }
         if (binding->valueState == HIRConstant::ValueState::Known) {
             return &binding->valueRes;

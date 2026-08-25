@@ -16,6 +16,24 @@ class MIRStatement;
 class MIRTerminator;
 class MIRTypeResolve;
 
+// Thrown by constant evaluation when the requested value cannot be computed
+// in the current environment. Reaching a catch of this with a fully concrete
+// environment is a compiler bug, never a retry-later. See dev/DEFER.md.
+struct Defer {
+    enum class Reason {
+        Layout,         // size/align/repr of a type is not computable yet
+        GenericValue,   // the value or its path still names a generic parameter
+        Infer,          // inference variables in the value or environment
+        NotYetKnown,    // value resolution could not commit to an impl
+        UnresolvedCall, // method call unresolved before main typecheck
+    };
+    static constexpr unsigned NUM_REASONS = 5;
+
+    Reason reason;
+    Span span;
+};
+extern ::std::ostream& operator<<(::std::ostream& os, Defer::Reason r);
+
 struct HIREvaluator {
     class Newval {
     public:
