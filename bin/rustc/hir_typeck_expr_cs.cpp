@@ -1429,7 +1429,7 @@ default: {
                         case TraitResolution::AutoderefBorrow::None:
                         case TraitResolution::AutoderefBorrow::RawShared:
                         case TraitResolution::AutoderefBorrow::PinShared:
-                            throw "";
+                            UNREACHABLE();
                         case TraitResolution::AutoderefBorrow::Shared:
                             bt = HIRBorrowType::Shared;
                             break;
@@ -2028,7 +2028,7 @@ default:
                     break;
                 }
                 case HIRPath::Data::TAG_UfcsUnknown: {
-                    throw "";
+                    UNREACHABLE();
                 }
             }
         }
@@ -2354,7 +2354,7 @@ default:
         }
 
         void noRevisit(HIRExprNode& n) {
-            throw "";
+            UNREACHABLE();
         }
     }; // class ExprVisitor_Print
 }
@@ -2811,7 +2811,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
             }
             switch ((*lT).tag()) {
                 case HIRTypeData::TAG_Infer: {
-                    throw "";
+                    UNREACHABLE();
                 }
                 case HIRTypeData::TAG_Diverge: {
                     // ignore?
@@ -3107,7 +3107,7 @@ namespace {
                     return l == r;
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
 
         const EncodedLiteral* evaluatedPath(const HIRConstGenericUnevaluated& value, const HIRExprNodePathValue& node) const {
@@ -3236,7 +3236,7 @@ namespace {
                     return true;
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
 
         bool equateNode(const HIRConstGenericUnevaluated& leftValue, const HIRExprNode& left, const HIRConstGenericUnevaluated& rightValue, const HIRExprNode& right) const {
@@ -3685,7 +3685,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         break;
                     }
                 }
-                throw "";
+                UNREACHABLE();
             }
 
             ::std::optional<HIRTypeRef> getPossibleTypeInner(Context& context, HIRPattern& pattern) const {
@@ -3953,7 +3953,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         break;
                     }
                 }
-                throw "";
+                UNREACHABLE();
             }
 
             static bool directlyMatches(const HIRPattern& pattern, const HIRTypeData* type) {
@@ -4018,7 +4018,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         return !e.empty() && directlyMatches(e.front(), type);
                     }
                 }
-                throw "";
+                UNREACHABLE();
             }
 
             bool revisitInnerReal(Context& context, HIRPattern& pattern, const HIRTypeData* type, HIRPatternBinding::Type bindingMode, bool isFallback) const {
@@ -4447,7 +4447,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
 
                         switch (e.binding.tag()) {
                             case HIRPatternPathBinding::TAG_Unbound: {
-                                throw "";
+                                UNREACHABLE();
                             }
                             case HIRPatternPathBinding::TAG_Struct: {
                                 auto& be = e.binding.as_Struct();
@@ -4833,7 +4833,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     return context.crate.types.path(getParentPath(p), HIRTypePathBinding(be.ptr));
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
     };
 
@@ -5099,7 +5099,7 @@ default:
                             return true;
                         }
                     }
-                    throw "unreachable"; //UNREACHABLE();
+                    UNREACHABLE(); //UNREACHABLE();
                         }
                     };
                     this->addRevisitAdv(box$((SlicePatRevisit{sp, mv$(inner), ty, static_cast<unsigned int>(e.subPatterns.size())})));
@@ -6906,7 +6906,7 @@ default:
             const auto& isrc = ppSrc.types.at(sm.coerceParam);
             switch (sm.coerceUnsized) {
                 case HIRStructMarkings::Coerce::None:
-                    throw "";
+                    UNREACHABLE();
                 case HIRStructMarkings::Coerce::Passthrough:
                     DEBUG("Passthough CoerceUnsized");
                     // TODO: Force emitting `_Unsize` instead of anything else
@@ -7049,7 +7049,7 @@ default:
                                 }
                                 return CoerceResult::Custom;
                         }
-                        throw "";
+                        UNREACHABLE();
                     } else {
                         //TODO(sp, "Borrow strength reduction with no node pointer - " << src << " -> " << dst);
                         DEBUG("Pointer strength reduction with no node pointer - " << src << " -> " << dst);
@@ -7128,7 +7128,7 @@ default:
                         }
                         return CoerceResult::Custom;
                 }
-                throw "";
+                UNREACHABLE();
             } else if (const auto* dep = dst->opt_Borrow()) {
                 // The expected pointee type reaches through a borrow
                 // expression. This is observably different from coercing an
@@ -7233,7 +7233,7 @@ default:
                                 }
                                 return CoerceResult::Custom;
                         }
-                        throw "";
+                        UNREACHABLE();
                     } else {
                         //TODO(sp, "Borrow strength reduction with no node pointer - " << src << " -> " << dst);
                         DEBUG("Borrow strength reduction with no node pointer - " << src << " -> " << dst);
@@ -7495,7 +7495,7 @@ default:
                 nodePtr = NEWNODE(tyDst, span, Unsize, mv$(nodePtr), tyDst);
                 return true;
         }
-        throw "";
+        UNREACHABLE();
     }
 
     void addImplBounds(Context& context, const Span& sp, const ImplRef& implRef) {
@@ -7611,7 +7611,7 @@ default:
                         return e.isLit();
                     }
                 }
-                throw "unreachable";
+                UNREACHABLE();
             }
 
             static bool unaryCanUseExpected(TypeckPrimitiveOperator op, const HIRTypeData* type) {
@@ -7906,7 +7906,7 @@ default:
 
         ::std::vector<Possibility> possibleImpls;
         bool sawAmbiguousIdentity = false;
-        try {
+        {
             const HIRTraitImpl* specialisableImpl = nullptr;
             bool selectSpecialisableFallback = false;
             const auto selectExactImpl = [&](const ImplRef& impl) {
@@ -8358,9 +8358,6 @@ default:
                 }
                 return AssociatedCheckResult::Ambiguous;
             }
-        } catch (const TraitResolution::RecursionDetected&) {
-            DEBUG("Recursion detected, deferring");
-            return AssociatedCheckResult::Retry;
         }
     }
 
@@ -9211,7 +9208,7 @@ default:
                     return OrdEqual;
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
 
         /// Ordering of `l` relative to `r` for ?unsizing
@@ -9476,7 +9473,7 @@ default:
                     return (score == 0 ? Same : (score < 0 ? Less : More));
                 }
             }
-            throw "unreachable";
+            UNREACHABLE();
         }
 
         static eInfoOrdering compareTop(const Context& context, const HIRTypeData* tyL, const HIRTypeData* tyR, bool shouldDeref) {
@@ -9534,7 +9531,7 @@ default:
                     case Incompatible:
                         return Same;
                 }
-                throw "";
+                UNREACHABLE();
             }
             return Incompatible;
         }
@@ -12401,7 +12398,7 @@ public:
             auto operatorKind = TypeckPrimitiveOperator::None;
             switch (node.op) {
                 case HIRExprNodeAssign::Op::None:
-                    throw "";
+                    UNREACHABLE();
                 case HIRExprNodeAssign::Op::Add:
                     langItem = "add_assign";
                     operatorKind = TypeckPrimitiveOperator::AddAssign;
@@ -12551,21 +12548,21 @@ public:
                 auto operatorKind = TypeckPrimitiveOperator::None;
                 switch (node.op) {
                     case HIRExprNodeBinOp::Op::CmpEqu:
-                        throw "";
+                        UNREACHABLE();
                     case HIRExprNodeBinOp::Op::CmpNEqu:
-                        throw "";
+                        UNREACHABLE();
                     case HIRExprNodeBinOp::Op::CmpLt:
-                        throw "";
+                        UNREACHABLE();
                     case HIRExprNodeBinOp::Op::CmpLtE:
-                        throw "";
+                        UNREACHABLE();
                     case HIRExprNodeBinOp::Op::CmpGt:
-                        throw "";
+                        UNREACHABLE();
                     case HIRExprNodeBinOp::Op::CmpGtE:
-                        throw "";
+                        UNREACHABLE();
                     case HIRExprNodeBinOp::Op::BoolAnd:
-                        throw "";
+                        UNREACHABLE();
                     case HIRExprNodeBinOp::Op::BoolOr:
-                        throw "";
+                        UNREACHABLE();
 
                     case HIRExprNodeBinOp::Op::Add:
                         itemName = "add";

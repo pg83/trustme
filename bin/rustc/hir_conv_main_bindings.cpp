@@ -37,7 +37,7 @@ namespace {
                 case Target::TypeItem:
                     return &ti;
                 case Target::EnumVariant:
-                    throw "";
+                    UNREACHABLE();
 
                 case Target::Struct:
                     if (ti.is_Struct()) {
@@ -58,7 +58,7 @@ namespace {
                     }
                     break;
             }
-            throw "";
+            UNREACHABLE();
         }
     }
 
@@ -503,7 +503,7 @@ default:
                                 break;
                             }
                             case HIRPathData::TAG_UfcsUnknown: {
-                                throw "";
+                                UNREACHABLE();
                             }
                         }
                         ee->index = fcnErasedCount++;
@@ -2936,7 +2936,7 @@ namespace {
                 const auto& paramTy = gp.params.types.at(innerIdx);
                 switch (innerType) {
                     case HIRStructMarkings::Coerce::None:
-                        throw "";
+                        UNREACHABLE();
                     case HIRStructMarkings::Coerce::Passthrough:
                         // Recurse on the generic type.
                         fieldTy = paramTy;

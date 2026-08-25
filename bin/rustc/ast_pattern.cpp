@@ -359,7 +359,7 @@ ASTPattern ASTPattern::clone() const {
                     return Value::make_Named(ASTPath(e));
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
     };
 
@@ -579,7 +579,7 @@ namespace {
                 return ae.ord(be);
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 }
 
@@ -654,5 +654,5 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
             throw CompileErrorBugCheck("ord on unsupported split-slice pattern type");
         }
     }
-    throw "";
+    UNREACHABLE();
 }

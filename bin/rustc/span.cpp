@@ -78,6 +78,11 @@ void Span::printSpanMessage(SpanMessageCallback& tag, SpanMessageCallback& msg) 
     sink << ::std::flush;
 }
 
+void spanUnreachableAt(const char* file, int line) {
+    fprintf(stderr, "unreachable: %s:%d\n", file, line);
+    abort();
+}
+
 void Span::bugCb(SpanMessageCallback& msg) const {
     auto tag = makeCallable<SpanMessageCb>([](auto& os) {
         os << "BUG";

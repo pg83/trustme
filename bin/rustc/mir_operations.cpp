@@ -67,7 +67,7 @@ namespace {
                                 return getMetadataType(state, monomorph(se.back().ty));
                             }
                         }
-                        throw "";
+                        UNREACHABLE();
                     }
                     case HIRStructMarkings::DstType::Slice:
                         return types.primitive(HIRCoreType::Usize);
@@ -522,7 +522,7 @@ default:
                 case HIRCoreType::Str:
                     MIR_BUG(state, "Const of type `str` - " << path);
             }
-            throw "";
+            UNREACHABLE();
         }
         case HIRTypeData::TAG_Pattern: {
             auto& te = (*ty).as_Pattern();
@@ -718,7 +718,7 @@ default:
             return MIRConstant::make_ItemAddr(box$(dataReloc->p->clone()));
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& receiverLvp, const HIRPath::Data::Data_UfcsKnown& pe) {
@@ -890,7 +890,7 @@ default:
                     return MIRCleanupUnsizeGetMetadata(state, mutator, tyD, tyS, ptrValue, outMetaVal, outMetaTy, outSrcIsDst);
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
         case HIRTypeData::TAG_Slice: {
             // Source must be an array (or generic)
@@ -947,7 +947,7 @@ default:
             return true;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 MIRRValue MIRCleanupUnsize(const MIRTypeResolve& state, MirMutator& mutator, const HIRTypeData* dstTy, const HIRTypeData* srcTyInner, MIRLValue ptrValue) {
@@ -1088,7 +1088,7 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
     }
 
     MIR_BUG(state, "Unknown CoerceUnsized target " << dstTy << " from " << srcTy);
-    throw "";
+    UNREACHABLE();
 }
 
 void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& lval) {
@@ -3240,7 +3240,7 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
                         return MIRTerminator::make_Unreachable({});
                     }
                 }
-                throw "";
+                UNREACHABLE();
             } else {
                 return MIRCloner::cloneTerm(src);
             }
@@ -5275,7 +5275,7 @@ bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
                             bbIdx = blockOrigins[bbIdx];
                             stmtIdx = fcn.blocks[bbIdx].statements.size() + 1;
                         }
-                        throw "";
+                        UNREACHABLE();
                     }
                 }
 
@@ -6286,7 +6286,7 @@ default:
                                 }
                                 case MIRParam::TAG_Borrow: {
                                     auto& _ = newValue.as_Borrow();
-                                    throw "";
+                                    UNREACHABLE();
                                 }
                                 case MIRParam::TAG_Constant: {
                                     auto& v = newValue.as_Constant();

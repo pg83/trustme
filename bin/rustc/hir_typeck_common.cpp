@@ -76,7 +76,7 @@ struct TyVisitor {
                 return visitType(e.type) || visitPathParams(e.params);
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 
     virtual bool visitType(const HIRTypeData* ty) {
@@ -299,7 +299,7 @@ namespace {
                     return rewriteType(e.type) || rewritePathParams(e.params);
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
 
         bool rewriteType(HIRTypeRef& type) {
@@ -632,7 +632,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
             return tpl;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRPath Monomorphiser::monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer /*=true*/) const {
@@ -655,7 +655,7 @@ HIRPath Monomorphiser::monomorphPath(const Span& sp, const HIRPath& tpl, bool al
             return HIRPath::Data::make_UfcsInherent({this->monomorphType(sp, e2.type, allowInfer), e2.item, this->monomorphPathParams(sp, e2.params, allowInfer), this->monomorphPathParams(sp, e2.implParams, allowInfer)});
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRTraitPath Monomorphiser::monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer) const {
@@ -973,7 +973,7 @@ bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRTypeData* 
         case TypeckPrimitiveOperator::Deref:
             return false;
     }
-    throw "";
+    UNREACHABLE();
 }
 
 // For these binary language operations, once the left-hand type is known
@@ -1021,7 +1021,7 @@ bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const HIRType
         case TypeckPrimitiveOperator::Deref:
             return false;
     }
-    throw "";
+    UNREACHABLE();
 }
 
 // A binary language candidate is available either when both operands are

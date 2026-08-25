@@ -38,28 +38,28 @@ MIRFunctionPointer& MIRFunctionPointer::operator=(MIRFunctionPointer&& x) {
 
 MIRFunction* MIRFunctionPointer::operator->() {
     if (!ptr) {
-        throw "";
+        UNREACHABLE();
     }
     return ptr;
 }
 
 const MIRFunction* MIRFunctionPointer::operator->() const {
     if (!ptr) {
-        throw "";
+        UNREACHABLE();
     }
     return ptr;
 }
 
 MIRFunction& MIRFunctionPointer::operator*() {
     if (!ptr) {
-        throw "";
+        UNREACHABLE();
     }
     return *ptr;
 }
 
 const MIRFunction& MIRFunctionPointer::operator*() const {
     if (!ptr) {
-        throw "";
+        UNREACHABLE();
     }
     return *ptr;
 }

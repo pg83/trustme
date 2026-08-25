@@ -497,7 +497,7 @@ break;
                             case HIRStructMarkings::DstType::TraitObject:
                                 return MetadataType::TraitObject;
                         }
-                        throw "";
+                        UNREACHABLE();
                         }
                     }
                     break;
@@ -510,7 +510,7 @@ break;
                     default:
                         MIR_BUG(*mirRes, "Unbound/opaque path in trans - " << ty);
                 }
-                throw "";
+                UNREACHABLE();
             } else {
                 return MetadataType::None;
             }

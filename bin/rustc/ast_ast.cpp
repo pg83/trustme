@@ -370,7 +370,7 @@ ASTStruct ASTStruct::clone() const {
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 ASTUnion ASTUnion::clone() const {
@@ -608,7 +608,7 @@ ASTItem ASTItem::clone() const {
             return ASTItem(e.clone());
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTTypeParam& tp) {

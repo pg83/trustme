@@ -1,5 +1,7 @@
 #include "hir_asm.h"
 
+#include "span.h"
+
 AsmLineFragment::AsmLineFragment()
     : index(UINT_MAX)
     , modifier('\0')
@@ -127,7 +129,7 @@ const char* to_string(const AsmRegisterClass& c) {
         case AsmRegisterClass::riscvFreg:
             return "freg";
     }
-    throw "";
+    UNREACHABLE();
 }
 
 std::ostream& operator<<(std::ostream& os, const AsmRegisterSpec& s) {

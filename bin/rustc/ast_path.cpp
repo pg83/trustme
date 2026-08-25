@@ -215,7 +215,7 @@ ASTPathParamEnt ASTPathParamEnt::clone() const {
             return ::std::make_pair(v.first, v.second);
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 Ordering ASTPathParamEnt::ord(const ASTPathParamEnt& x) const {
@@ -264,7 +264,7 @@ Ordering ASTPathParamEnt::ord(const ASTPathParamEnt& x) const {
             return ::OrdEqual;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 void ASTPathParamEnt::fmt(::std::ostream& os) const {

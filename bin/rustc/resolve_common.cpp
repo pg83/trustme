@@ -297,7 +297,7 @@ default: {
                     break;
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
 
         ResolveModuleRef getModuleForMacro(const ASTPath& basePath, const ASTPath& path, ASTAbsolutePath* outPath) {
@@ -498,7 +498,7 @@ default:
                 case ASTItem::TAG_None:
                     return false;
             }
-            throw "";
+            UNREACHABLE();
         }
 
         ResolveItemRef findItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr)
@@ -1004,5 +1004,5 @@ ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& s
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }

@@ -123,7 +123,7 @@ HIRGenericBound HIRGenericBound::clone() const {
             return HIRGenericBound::make_TypeEquality({e.type, e.otherType});
         }
     }
-    throw "Unreachable";
+    UNREACHABLE();
 }
 
 Ordering HIRTypeParamDef::ord(const HIRTypeParamDef& x) const {

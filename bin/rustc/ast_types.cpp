@@ -195,7 +195,7 @@ ASTType* ASTType::clone() const {
 #undef _COPY
 #undef _CLONE
     }
-    throw "";
+    UNREACHABLE();
 }
 
 TypeTraitPath::TypeTraitPath(ASTHigherRankedBounds hrbs, ASTPath path, ASTBoundConstness constness)

@@ -926,7 +926,7 @@ HIRTypeRef HIRExprVisitorDef::visitType(HIRTypeRef ty) {
                 case Op::Shl:
                     return "<<";
             }
-            throw "";
+            UNREACHABLE();
         }
 
         HIRExprNodeAssign::HIRExprNodeAssign(Span sp, Op op, HIRExprNodeP slot, HIRExprNodeP value)
@@ -998,7 +998,7 @@ HIRTypeRef HIRExprVisitorDef::visitType(HIRTypeRef ty) {
                 case Op::Negate:
                     return "-";
             }
-            throw "";
+            UNREACHABLE();
         }
 
         HIRExprNodeUniOp::HIRExprNodeUniOp(Span sp, Op op, HIRExprNodeP value)

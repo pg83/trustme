@@ -77,19 +77,19 @@ public:
 
     const SpanInnerSource& getTopFileSpan() const;
 
-    void bugCb(SpanMessageCallback& msg) const;
-    void errorCb(ErrorType tag, SpanMessageCallback& msg) const;
+    [[noreturn]] void bugCb(SpanMessageCallback& msg) const;
+    [[noreturn]] void errorCb(ErrorType tag, SpanMessageCallback& msg) const;
     void warningCb(WarningType tag, SpanMessageCallback& msg) const;
     void noteCb(SpanMessageCallback& msg) const;
 
     template <typename F>
-    void bug(F f) const {
+    [[noreturn]] void bug(F f) const {
         SpanMessageCb<F> cb(f);
         bugCb(cb);
     }
 
     template <typename F>
-    void error(ErrorType tag, F f) const {
+    [[noreturn]] void error(ErrorType tag, F f) const {
         SpanMessageCb<F> cb(f);
         errorCb(tag, cb);
     }
@@ -197,6 +197,10 @@ private:
     static SpanInner* alloc(Span parent, RcString crate, RcString macro);
 };
 
+// Control reached a spot the surrounding logic rules out.
+[[noreturn]] void spanUnreachableAt(const char* file, int line);
+#define UNREACHABLE() ::spanUnreachableAt(__FILE__, __LINE__)
+
 template <typename T>
 struct Spanned {
     Span sp;
@@ -208,12 +212,11 @@ Spanned<T> makeSpanned(Span sp, T val) {
     return Spanned<T>{::std::move(sp), ::std::move(val)};
 }
 
-#define ERROR(span, code, msg)                                  \
-    do {                                                        \
-        ::Span(span).error(code, [&](::std::ostream& os) {      \
-            os << msg;                                          \
-        });                                                     \
-        throw ::std::runtime_error("Error fell through" #code); \
+#define ERROR(span, code, msg)                             \
+    do {                                                    \
+        ::Span(span).error(code, [&](::std::ostream& os) {  \
+            os << msg;                                      \
+        });                                                 \
     } while (0)
 #define WARNING(span, code, msg)                             \
     do {                                                     \
@@ -232,7 +235,6 @@ Spanned<T> makeSpanned(Span sp, T val) {
         ::Span(span).bug([&](::std::ostream& os) {            \
             os << __FILE__ << ":" << __LINE__ << ": " << msg; \
         });                                                   \
-        throw ::std::runtime_error("Bug fell through");       \
     } while (0)
 #define TODO(span, msg)                                                                     \
     do {                                                                                    \
@@ -240,7 +242,6 @@ Spanned<T> makeSpanned(Span sp, T val) {
         ::Span(span).bug([&](::std::ostream& os) {                                          \
             os << __FILE__ << ":" << __LINE__ << ": TODO: " << __TODO_func << " - " << msg; \
         });                                                                                 \
-        throw ::std::runtime_error("Bug (todo) fell through");                              \
     } while (0)
 
 #define ASSERT_BUG(span, cnd, msg)                                                               \

@@ -808,7 +808,7 @@ namespace {
                             case HIRPatternBinding::Type::MutRef:
                                 return HIRBorrowType::Unique;
                         }
-                        throw "";
+                        UNREACHABLE();
                     }
                 };
 
@@ -2056,7 +2056,7 @@ default:
                 MIRBinOp op;
                 switch (node.op) {
                     case _(None):
-                        throw "";
+                        UNREACHABLE();
                     case _(Add):
                         op = MIRBinOp::ADD;
                         if (0) {
@@ -4464,7 +4464,7 @@ public:
             if (const auto* re = parentRule.opt_Variant()) {
                 return re->subRules;
             } else {
-                throw "TODO";
+                UNREACHABLE();
             }
         }
     }
@@ -5240,7 +5240,7 @@ namespace {
             return ::ord(te.isInclusive, xe.isInclusive);
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 PatternRule PatternRule::clone() const {
@@ -5284,7 +5284,7 @@ PatternRule PatternRule::clone() const {
                     return PatternRule::make_ValueRange({te.first.clone(), te.last.clone(), te.isInclusive});
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
     };
 
@@ -5357,7 +5357,7 @@ PatternRule PatternRule::clone() const {
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 bool PatternRuleset::isBefore(const PatternRuleset& other) const {
@@ -5888,7 +5888,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     break;
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
 
         static S128 getPatternValueSigned(const Span& sp, const StaticTraitResolve& resolve, const HIRPattern& pat, const HIRPattern::Value& val) {
@@ -5907,7 +5907,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     break;
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
 
         static FloatValue getPatternValueFloat(const Span& sp, const StaticTraitResolve& resolve, const HIRPattern& pat, const HIRPattern::Value& val) {
@@ -5926,7 +5926,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     break;
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
 
         static MIRConstant getPatternValue(const Span& sp, const StaticTraitResolve& resolve, const HIRPattern& pat, const HIRPattern::Value& val, const HIRCoreType& e) {
@@ -5961,7 +5961,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     BUG(sp, "Hit match over `str` - must be `&str`");
                     break;
             }
-            throw "";
+            UNREACHABLE();
         }
 
         static MIRConstant getPatternValueMin(const Span& sp, const HIRPattern& pat, const HIRCoreType& e) {
@@ -5996,7 +5996,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     BUG(sp, "Hit match over `str` - must be `&str`");
                     break;
             }
-            throw "";
+            UNREACHABLE();
         }
 
         static MIRConstant getPatternValueMax(const Span& sp, const HIRPattern& pat, const HIRCoreType& e) {
@@ -6031,7 +6031,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     BUG(sp, "Hit match over `str` - must be `&str`");
                     break;
             }
-            throw "";
+            UNREACHABLE();
         }
     };
 
@@ -6911,7 +6911,7 @@ namespace {
                 return ::ord(ae.isInclusive, be.isInclusive);
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 
     bool ruleCompatible(const PatternRule& a, const PatternRule& b) {
@@ -11213,7 +11213,7 @@ outOfLoop:
             ASSERT_BUG(sp, idx < argStates.size(), "Argument " << idx << " out of range for state table");
             return argStates.at(idx);
     }
-    throw "";
+    UNREACHABLE();
 }
 
 VarState& MirBuilder::getSlotStateMut(const Span& sp, unsigned int idx, SlotType type) {
@@ -11808,7 +11808,7 @@ VarState VarState::clone() const {
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 bool VarState::operator==(const VarState& x) const {
@@ -11856,7 +11856,7 @@ bool VarState::operator==(const VarState& x) const {
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const VarState& x) {

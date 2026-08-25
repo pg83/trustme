@@ -2773,7 +2773,7 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
             return true;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) const {
@@ -2898,7 +2898,7 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
             return true;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 bool StaticTraitResolve::typeIsSized(const Span& sp, const HIRTypeData* ty) const {
@@ -3033,7 +3033,7 @@ break;
             return false;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, const HIRTypeData* srcTy) const {
@@ -3559,7 +3559,7 @@ default:
                                     return se.empty() ? MetadataType::None : this->metadataType(sp, monomorph(se.back().ty));
                                 }
                             }
-                            throw "";
+                            UNREACHABLE();
                         }
                     }
                     break;
@@ -3611,7 +3611,7 @@ default:
             return e.empty() ? MetadataType::None : this->metadataType(sp, e.back(), errOnUnknown);
         }
     }
-    throw "bug";
+    UNREACHABLE();
 }
 
 bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty) const {
@@ -3788,7 +3788,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
         }
     }
     assert(!"Fell off the end of type_needs_drop_glue");
-    throw "";
+    UNREACHABLE();
 }
 
 bool StaticTraitResolve::findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path, HIRTypeRef& futureTy) const {
@@ -4072,7 +4072,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     break;
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& pe = p.data.as_UfcsKnown();
@@ -4242,7 +4242,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 ASSERT_BUG(sp, !rv.is_NotFound(), "");
                 return rv;
             }
-            throw "";
+            UNREACHABLE();
         }
         case HIRPathData::TAG_UfcsInherent: {
             auto& pe = p.data.as_UfcsInherent();
@@ -4301,7 +4301,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 StaticTraitResolve::StaticTraitResolve(const WireBoard& wb)

@@ -1273,7 +1273,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 break;
             }
         }
-        throw "";
+        UNREACHABLE();
     };
     //TU_MATCH(::HIR::TypeData, (this->get_type(ty).m_data), (e),
     switch ((*ty).tag()) {
@@ -1363,7 +1363,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             return false;
         }
     }
-    throw "";
+    UNREACHABLE();
         }
 
         namespace {
@@ -1434,7 +1434,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                             break;
                         }
                     }
-                    throw "";
+                    UNREACHABLE();
                 }
             };
 
@@ -1566,7 +1566,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             return typeListEqual(*this, le, re);
         }
     }
-    throw "";
+    UNREACHABLE();
         }
 
         // --------------------------------------------------------------------
@@ -3935,7 +3935,7 @@ default:
                     return evaluateInner(e.inner);
                 }
             }
-            throw "";
+            UNREACHABLE();
             }
 
             Certainty evaluateCandidate(size_t frameIndex, size_t candidateIndex, const HIRSimplePath& trait, const HIRTraitPath::assocListT* associated) {
@@ -4156,11 +4156,7 @@ default:
                     }
                 };
 
-                try {
-                    assembleCandidates(frameIndex, trait, goalParams, resolvedType);
-                } catch (const TraitResolution::RecursionDetected&) {
-                    return cacheResult(Certainty::Ambiguous);
-                }
+                assembleCandidates(frameIndex, trait, goalParams, resolvedType);
 
                 bool sawAmbiguous = false;
                 bool suppressAutoBuiltin = false;
@@ -4380,7 +4376,7 @@ default:
                     case Certainty::Proven:
                         return HIRCompare::Equal;
                 }
-                throw "";
+                UNREACHABLE();
             }
 
             bool evaluateOverlap(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right) {
@@ -4596,11 +4592,7 @@ default:
                     }
                 };
 
-                try {
-                    assembleCandidates(frameIndex, trait, goalParams, resolvedType);
-                } catch (const TraitResolution::RecursionDetected&) {
-                    return false;
-                }
+                assembleCandidates(frameIndex, trait, goalParams, resolvedType);
                 auto& frame = *frames[frameIndex];
                 const size_t candidateCount = frame.candidates.size();
                 DEBUG("next-solver assembled " << candidateCount << " candidate(s) for " << type << ": " << trait << params);
@@ -5045,7 +5037,7 @@ default:
                             break;
                         }
                     }
-                    throw "";
+                    UNREACHABLE();
                 }
             };
 
@@ -6791,7 +6783,7 @@ default:
             return typeImplsTrait(e.inner);
         }
     }
-    throw "";
+    UNREACHABLE();
         }
 
         HIRCompare TraitResolution::fticCheckParams(
@@ -7434,7 +7426,7 @@ default:
                         case HIRCompare::Unequal:
                             return false;
                     }
-                    throw "";
+                    UNREACHABLE();
                 }, /*magic_trait_impls=*/false);
             }
             if (hasEq) {
@@ -7571,7 +7563,7 @@ default: {
                     case HIRCompare::Unequal:
                         return false;
                 }
-                throw "";
+                UNREACHABLE();
             }, /*magic_trait_impls=*/false);
             if (hasEq) {
                 return HIRCompare::Equal;
@@ -7651,7 +7643,7 @@ default: {
             return typeIsCopy(sp, e.inner);
         }
     }
-    throw "";
+    UNREACHABLE();
         }
 
         HIRCompare TraitResolution::typeIsClone(const Span& sp, const HIRTypeData* ty) const {
@@ -7674,7 +7666,7 @@ default: {
                     case HIRCompare::Unequal:
                         return false;
                 }
-                throw "";
+                UNREACHABLE();
             }, /*magic_trait_impls=*/false);
             if (hasEq) {
                 return HIRCompare::Equal;
@@ -7752,7 +7744,7 @@ default: {
             return typeIsClone(sp, e.inner);
         }
     }
-    throw "";
+    UNREACHABLE();
         }
 
         // Checks if a type can unsize to another
@@ -8222,7 +8214,7 @@ default: {
             const RcString& methodName,
             /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities
         ) const {
-            try {
+            {
                 TRACE_FUNCTION_F("{" << topTy << "}." << methodName);
                 unsigned int derefCount = 0;
                 HIRTypeRef tmpType; // Temporary type used for handling Deref
@@ -8395,9 +8387,6 @@ default: {
                 // No method found, return an empty list and return 0
                 assert(possibilities.empty());
                 return 0;
-            } catch (const TraitResolution::RecursionDetected&) {
-                DEBUG("Recursion detected, deferring");
-                return ~0u;
             }
         }
 
@@ -8789,7 +8778,7 @@ default: {
                         const auto& trait = crate.getTraitByPath(sp, finalTraitPath.path);
                         auto traitParams = getIvaredParams(trait.params);
 
-                        try {
+                        {
                             bool crateImplFound = false;
                             // Method probing only establishes that some implementation of the
                             // trait can apply to the receiver.  The trait arguments are inference
@@ -8808,9 +8797,6 @@ default: {
                                 return true;
                             } else {
                             }
-                        } catch (const TraitResolution::RecursionDetected&) {
-                            DEBUG("Recursion detected, deferring");
-                            return false;
                         }
                     }
                 }
@@ -9043,7 +9029,7 @@ default: {
                     });
 
                     // NOTE: This just detects the presence of a trait impl, not the specifics
-                    try {
+                    {
                         // Keep this an existential probe over the trait arguments.  They are
                         // committed only after the method signature has constrained the shared
                         // inference variables (matching rustc's probe/confirm split).
@@ -9076,9 +9062,6 @@ default: {
                             implFound = findTraitImplsLegacy(sp, *traitRef.first, traitParams, selfTy, acceptImpl, true, false, true);
                             findTraitImplsCrate(sp, *traitRef.first, nullptr, selfTy, onImpl);
                         }
-                    } catch (const TraitResolution::RecursionDetected&) {
-                        DEBUG("Recursion detected, assuming good");
-                        implFound = true;
                     }
                     if (implFound) {
                         DEBUG("Found trait impl " << *traitRef.first << traitParams << " for " << selfTy << " (" << this->ivars.fmtType(selfTy) << ")");

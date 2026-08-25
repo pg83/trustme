@@ -130,7 +130,7 @@ namespace {
             case ASTBoundConstness::Maybe:
                 return HIRBoundConstness::Maybe;
         }
-        throw "Invalid bound constness";
+        UNREACHABLE();
     }
 }
 
@@ -318,7 +318,7 @@ namespace {
             case ASTPatternBinding::Type::MUTREF:
                 return HIRPatternBinding::Type::MutRef;
         }
-        throw "";
+        UNREACHABLE();
     }
 }
 
@@ -575,7 +575,7 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
             return HIRPattern{mv$(bindings), HIRPattern::Data::make_Or(mv$(subpats))};
         }
     }
-    throw "unreachable";
+    UNREACHABLE();
 }
 
 HIRExprPtr AST2HIR::LowerHIRExpr(const ::std::shared_ptr<ASTExprNode>& e) {
@@ -1788,7 +1788,7 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
                         break;
                     }
                 }
-                throw "";
+                UNREACHABLE();
             };
 
             HIRTypePattern pattern;
@@ -2417,7 +2417,7 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
                     auto fields = LowerHIRStructFields(path, params, ve->fields, outMod);
                     data = HIRStruct::Data::make_Named(mv$(fields));
                 } else {
-                    throw "";
+                    UNREACHABLE();
                 }
 
                 auto tyName = RcString::newInterned(FMT(path.name << "#" << var.name));
@@ -4673,7 +4673,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                     case ASTExprNodeAssign::SHL:
                         return HIRExprNodeAssign::Op::Shl;
                 }
-                throw "";
+                UNREACHABLE();
             }
         };
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdio>
+
 // A thin vector type (single-pointer) that cannot resize past its capacity
 // without reallocating, and stores the length/capacity in the pointed-to
 // memory. Used for HIR structures to save significant amounts of memory.
@@ -179,28 +181,32 @@ public:
 
     const T& front() const {
         if (this->size() == 0) {
-            throw std::out_of_range("ThinVector::front");
+            fprintf(stderr, "%s: index out of range\n", "ThinVector::front");
+            abort();
         }
         return *ptr;
     }
 
     T& front() {
         if (this->size() == 0) {
-            throw std::out_of_range("ThinVector::front");
+            fprintf(stderr, "%s: index out of range\n", "ThinVector::front");
+            abort();
         }
         return *ptr;
     }
 
     const T& back() const {
         if (this->size() == 0) {
-            throw std::out_of_range("ThinVector::back");
+            fprintf(stderr, "%s: index out of range\n", "ThinVector::back");
+            abort();
         }
         return ptr[size() - 1];
     }
 
     T& back() {
         if (this->size() == 0) {
-            throw std::out_of_range("ThinVector::back");
+            fprintf(stderr, "%s: index out of range\n", "ThinVector::back");
+            abort();
         }
         return ptr[size() - 1];
     }
@@ -231,14 +237,16 @@ public:
 
     const T& at(size_t i) const {
         if (i >= this->size()) {
-            throw std::out_of_range("ThinVector::at");
+            fprintf(stderr, "%s: index out of range\n", "ThinVector::at");
+            abort();
         }
         return ptr[i];
     }
 
     T& at(size_t i) {
         if (i >= this->size()) {
-            throw std::out_of_range("ThinVector::at");
+            fprintf(stderr, "%s: index out of range\n", "ThinVector::at");
+            abort();
         }
         return ptr[i];
     }

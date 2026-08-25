@@ -49,7 +49,7 @@ struct MIRPathCb final: MIRPathCallback {
         (state).printBug([&](auto& _os) {        \
             _os << __fcn << ": " << __VA_ARGS__; \
         });                                      \
-        throw "";                                \
+        UNREACHABLE();                                \
     } while (0)
 #define MIR_ASSERT(state, cnd, ...)                                                                \
     do {                                                                                           \
@@ -63,7 +63,7 @@ struct MIRPathCb final: MIRPathCallback {
         (state).printTodo([&](auto& _os) {                             \
             _os << __FILE__ << ":" << __LINE__ << ": " << __VA_ARGS__; \
         });                                                            \
-        throw "";                                                      \
+        UNREACHABLE();                                                      \
     } while (0)
 #define MIR_DEBUG(state, ...)                                    \
     do {                                                         \
@@ -375,7 +375,7 @@ default:
                     return visitConst(e);
                 }
             }
-            throw "";
+            UNREACHABLE();
     }
 
     virtual bool visitRvalue(typename Dec<MIRRValue>::Type& rval) {

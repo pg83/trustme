@@ -502,7 +502,7 @@ HIRPath HIRPath::clone() const {
             return HIRPath(Data::make_UfcsUnknown({e.type, e.item, e.params.clone()}));
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRCompare HIRPathParams::compareWithPlaceholders(const Span& sp, const HIRPathParams& x, tCbResolveType resolvePlaceholder) const {
@@ -726,7 +726,7 @@ HIRCompare HIRPath::compareWithPlaceholders(const Span& sp, const HIRPath& x, tC
             return rv;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 Ordering HIRPath::ord(const HIRPath& x) const {
@@ -756,7 +756,7 @@ Ordering HIRPath::ord(const HIRPath& x) const {
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 bool HIRPath::equalsIgnoringRegions(const HIRPath& x) const {
@@ -785,7 +785,7 @@ bool HIRPath::equalsIgnoringRegions(const HIRPath& x) const {
             return lhs.item == rhs.item && (lhs.type == rhs.type || lhs.type->equalsIgnoringRegions(rhs.type)) && lhs.params.equalsIgnoringRegions(rhs.params);
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 bool HIRPath::operator==(const HIRPath& x) const {

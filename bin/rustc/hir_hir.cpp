@@ -216,7 +216,7 @@ namespace {
                     return l == r;
                 }
             }
-            throw "";
+            UNREACHABLE();
     }
 
     bool constExprNodesEqual(const HIRConstGenericUnevaluated& leftValue, const HIRExprNode& left, const HIRConstGenericUnevaluated& rightValue, const HIRExprNode& right) {
@@ -399,7 +399,7 @@ HIRConstGeneric HIRConstGeneric::clone() const {
             return e;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 ::std::shared_ptr<HIRSimplePath> HIRPublicity::nonePath = ::std::make_shared<HIRSimplePath>(HIRSimplePath{"#", {}});
@@ -488,7 +488,7 @@ U128 HIREnum::getValue(size_t idx) const {
         return e.variants[idx].val;
     } else {
         assert(!"TODO: Enum::get_value on non-value enum?");
-        throw "";
+        UNREACHABLE();
     }
 }
 
@@ -534,7 +534,7 @@ U128 HIREnum::getValue(size_t idx) const {
             return HIRCoreType::I128;
             break;
     }
-    throw "";
+    UNREACHABLE();
 }
 
 const HIRSimplePath& HIRCrate::getLangItemPath(const Span& sp, const char* name) const {
@@ -968,7 +968,7 @@ namespace {
 
         switch ((*left).tag()) {
             case HIRTypeData::TAG_Generic: {
-                throw "";
+                UNREACHABLE();
             }
             case HIRTypeData::TAG_Infer: {
                 BUG(sp, "Hit infer");
@@ -1119,7 +1119,7 @@ namespace {
                 break;
             }
         }
-        throw "Fell off end of type_ord_specific";
+        UNREACHABLE();
     }
 
     ::Ordering typelistOrdSpecific(const Span& sp, const ThinVector<HIRTypeRef>& le, const ThinVector<HIRTypeRef>& re) {

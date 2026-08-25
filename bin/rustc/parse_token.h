@@ -125,7 +125,7 @@ public:
                 assert(!"Getting datatype of invalid token type");
                 break;
             }
-        } throw "";
+        } UNREACHABLE();
     }
 
     U128 intval() const {

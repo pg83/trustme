@@ -1491,7 +1491,7 @@ namespace {
                 break;
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 
     const RcString* getRustcIntrinsicName(const Span& sp, const StaticTraitResolve& resolve, const HIRPath& path) {
@@ -1593,7 +1593,7 @@ namespace {
             } else if (bits == 128) {
                 return v;
             } else {
-                throw "";
+                UNREACHABLE();
             }
         }
 
@@ -2090,7 +2090,7 @@ public:
                                 // Get metadata
                                 size = metadata.readUsize(state);
                             } else {
-                                throw "";
+                                UNREACHABLE();
                             }
                             metadata = MIREvalValueRef();
                             size_t sz, al;
@@ -2467,7 +2467,7 @@ public:
                     return *ve;
                 }
             }
-            throw "";
+            UNREACHABLE();
     }
 
     /// Read a floating point value from a MIR::Param

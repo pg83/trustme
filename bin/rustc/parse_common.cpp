@@ -2058,7 +2058,7 @@ ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode) {
                 // NOTE: <Foo>::BAR is actually `<Foo as _>::BAR` (in trustme parleance)
                 return ASTPath::newUfcsTy(mv$(ty), ParsePathNodes(lex, genericMode));
             }
-            throw "";
+            UNREACHABLE();
         }
 
         default:
@@ -2287,7 +2287,7 @@ ASTPathParams ParsePathGenericList(TokenStream& lex) {
                         }
                         rv.entries.push_back(::std::make_pair(mv$(n), std::move(traits)));
                     } else {
-                        throw "Unreachable";
+                        UNREACHABLE();
                     }
                 }
                 break;
@@ -2471,7 +2471,7 @@ ASTPattern ParsePattern1(TokenStream& lex, AllowOrPattern allowOr) {
                 else {
                     return ASTPattern(ASTPattern::TagBind(), lex.endSpan(ps), mv$(name), bindType, isMut);
                 }
-                throw "";
+                UNREACHABLE();
             }
         }
     } else {
@@ -2671,7 +2671,7 @@ ASTPattern ParsePatternReal1(TokenStream& lex, AllowOrPattern allowOr) {
         default:
             throw ParseErrorUnexpected(lex, tok);
     }
-    throw "unreachable";
+    UNREACHABLE();
 }
 
 ASTPattern ParsePatternRealPath(TokenStream& lex, ProtoSpan ps, ASTPath path) {

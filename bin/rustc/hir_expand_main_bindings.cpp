@@ -986,7 +986,7 @@ namespace {
             auto& ent = closureStack.back();
             switch (ent.tag()) {
                 case Scope::TAG_None: {
-                    throw "";
+                    UNREACHABLE();
                 }
                 case Scope::TAG_Closure: {
                     auto& e = ent.as_Closure();
@@ -1118,7 +1118,7 @@ namespace {
                 case HIRPatternBinding::Type::Ref:
                     return HIRValueUsage::Borrow;
             }
-            throw "";
+            UNREACHABLE();
         }
 
         HIRValueUsage getUsageForPattern(const Span& sp, const HIRPattern& pat, const HIRTypeData* outerTy) const {
@@ -1289,7 +1289,7 @@ namespace {
                     return rv;
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
 
         // --- Closure/generator usage tracking ---
@@ -1429,7 +1429,7 @@ namespace {
             auto& ent = closureStack.back();
             switch (ent.tag()) {
                 case Scope::TAG_None: {
-                    throw "";
+                    UNREACHABLE();
                 }
                 case Scope::TAG_Closure: {
                     auto& e = ent.as_Closure();
@@ -2620,7 +2620,7 @@ namespace {
                         break;
                     }
                 }
-                throw "";
+                UNREACHABLE();
             }
 
             HIRGenericBound monomorphBound(const Span& sp, const HIRGenericBound& b) const {
@@ -2634,7 +2634,7 @@ namespace {
                         return HIRGenericBound::make_TypeEquality({this->monomorphType(sp, e.type), this->monomorphType(sp, e.otherType)});
                     }
                 }
-                throw "";
+                UNREACHABLE();
             }
         };
 
@@ -2911,7 +2911,7 @@ namespace {
                                     fcn = H::makeFn(types, mv$(params), mv$(traitParams), closureType, mv$(argsArg), retType, mv$(dispatchNode));
                                     break;
                                 default:
-                                    throw "";
+                                    UNREACHABLE();
                             }
                             return ::std::make_pair(c, mv$(fcn));
                         }
@@ -5183,7 +5183,7 @@ public:
                         return HIRGenericBound::make_TypeEquality({monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphType(sp, e.otherType)});
                     }
                 }
-                throw "";
+                UNREACHABLE();
         };
         for (const auto& bound : resolve_.implGenerics().bounds) {
             DEBUG("IMPL - " << bound);

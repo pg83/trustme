@@ -691,7 +691,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
             }
             return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
     }
-    throw "";
+    UNREACHABLE();
 }
 
 /// Parse the input TokenTree according to the `macro_rules!` patterns and return a token stream of the replacement
@@ -2993,9 +2993,9 @@ MacroRulesPtr::~MacroRulesPtr() {
             os << "$" << x.name << ":";
             switch (x.type) {
                 case MacroPatEnt::PAT_TOKEN:
-                    throw "";
+                    UNREACHABLE();
                 case MacroPatEnt::PAT_LOOP:
-                    throw "";
+                    UNREACHABLE();
                 case MacroPatEnt::PAT_TT:
                     os << "tt";
                     break;

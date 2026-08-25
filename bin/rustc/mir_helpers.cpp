@@ -234,7 +234,7 @@ default:
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 const HIRTypeData* MIRTypeResolve::getParamType(HIRTypeRef& tmp, const MIRParam& val) const {
@@ -253,7 +253,7 @@ const HIRTypeData* MIRTypeResolve::getParamType(HIRTypeRef& tmp, const MIRParam&
             return tmp = crate.types.borrow(e.type, getLvalueType(tmp2, e.val));
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
@@ -411,7 +411,7 @@ default:
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 bool MIRTypeResolve::lvalueIsCopy(const MIRLValue& val) const {

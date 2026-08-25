@@ -1101,13 +1101,13 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             if (state.resolve.typeNeedsDropGlue(sp, ty)) {
                 switch ((*ty).tag()) {
                     case HIRTypeData::TAG_Infer: {
-                        throw "";
+                        UNREACHABLE();
                     }
                     case HIRTypeData::TAG_Generic: {
-                        throw "";
+                        UNREACHABLE();
                     }
                     case HIRTypeData::TAG_ErasedType: {
-                        throw "";
+                        UNREACHABLE();
                     }
                     case HIRTypeData::TAG_TraitObject: {
                         TODO(sp, "Drop glue for TraitObject? " << ty);
@@ -1187,10 +1187,10 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         bool hasDrop = false;
                         switch (te.binding.tag()) {
                             case HIRTypePathBinding::TAG_Unbound: {
-                                throw "";
+                                UNREACHABLE();
                             }
                             case HIRTypePathBinding::TAG_Opaque: {
-                                throw "";
+                                UNREACHABLE();
                             }
                             case HIRTypePathBinding::TAG_ExternType: {
                                 // Why is this trying to be dropped?
@@ -3518,7 +3518,7 @@ default:
                 return EntPtr::make_AutoGenerate({});
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 }
 

@@ -416,7 +416,7 @@ namespace {
                 return HIRPattern::Value::make_Named({e.path.clone(), e.binding});
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 } // namespace
 
@@ -480,7 +480,7 @@ namespace {
         }
     }
 
-    throw "";
+    UNREACHABLE();
     }
 }
 

@@ -189,7 +189,7 @@ struct HIRTypeDataInfer {
                 return true;
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 };
 

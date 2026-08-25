@@ -470,7 +470,7 @@ namespace {
                                 switch (t) {
                                     case AllocatorDataTy::Unit:
                                     case AllocatorDataTy::ResultPtr: // (..., *mut i8) + *mut u8
-                                        throw "";
+                                        UNREACHABLE();
                                     // - Args
                                     case AllocatorDataTy::Layout: // usize, usize
                                         out.push_back("uintptr_t");
@@ -495,9 +495,9 @@ namespace {
                                     case AllocatorDataTy::Layout: // usize, usize
                                     case AllocatorDataTy::Ptr:    // *mut u8
                                     case AllocatorDataTy::Usize:
-                                        throw "";
+                                        UNREACHABLE();
                                 }
-                                throw "";
+                                UNREACHABLE();
                             }
 
                             static void emitProto(::std::ostream& os, const AllocatorMethod& method, const char* namePrefix, const ::std::vector<const char*>& args) {
@@ -554,7 +554,7 @@ namespace {
                                         break;
                                     case AllocatorDataTy::Unit:
                                     case AllocatorDataTy::ResultPtr:
-                                        throw "";
+                                        UNREACHABLE();
                                 }
                             }
 
@@ -585,7 +585,7 @@ namespace {
                                         break;
                                     case AllocatorDataTy::Unit:
                                     case AllocatorDataTy::ResultPtr:
-                                        throw "";
+                                        UNREACHABLE();
                                 }
                             }
                             of << ")";
@@ -1218,10 +1218,10 @@ default:
                     auto& te = (*ty).as_Path();
                     switch (te.binding.tag()) {
                         case HIRTypePathBinding::TAG_Unbound: {
-                            throw "";
+                            UNREACHABLE();
                         }
                         case HIRTypePathBinding::TAG_Opaque: {
-                            throw "";
+                            UNREACHABLE();
                         }
                         case HIRTypePathBinding::TAG_Struct: {
                             of << "struct s_" << TransMangle(te.path) << ";\n";
@@ -5979,7 +5979,7 @@ default:
                         return "label";
                     }
                 }
-                throw "";
+                UNREACHABLE();
             }
 
             static const char* getDirText(const AsmDirection& d) {
@@ -5995,7 +5995,7 @@ default:
                     case AsmDirection::InLateOut:
                         return "inlateout";
                 }
-                throw "";
+                UNREACHABLE();
             }
 
             static bool checkList(const std::vector<std::string>& have, const ::std::initializer_list<const char*>& exp) {
@@ -6918,7 +6918,7 @@ default:
                     case Ordering::AcqRel:
                         return "__ATOMIC_ACQ_REL";
                 }
-                throw "";
+                UNREACHABLE();
             };
             auto getAtomicOrdering = [&](const RcString& name, size_t prefixLen) -> Ordering {
                 if (name.size() < prefixLen) {
@@ -6942,7 +6942,7 @@ default:
                 } else {
                     MIR_BUG(localMirRes, "Unknown atomic ordering suffix - '" << suffix << "'");
                 }
-                throw "";
+                UNREACHABLE();
             };
             auto getPrimSize = [&localMirRes](const HIRTypeData* ty) -> unsigned {
                 if (ty->is_Pointer()) {
@@ -9208,7 +9208,7 @@ default:
                     // Shuffle in 8 entries
                     size_t sizeSlot = 0;
                     TargetGetSizeOf(sp, resolve_, params.types.at(1), sizeSlot);
-                    size_t div = nameStrip == "simd_shuffle128" ? 128 : nameStrip == "simd_shuffle64" ? 64 : nameStrip == "simd_shuffle32" ? 32 : nameStrip == "simd_shuffle16" ? 16 : nameStrip == "simd_shuffle8" ? 8 : nameStrip == "simd_shuffle4" ? 4 : nameStrip == "simd_shuffle2" ? 2 : throw "";
+                    size_t div = nameStrip == "simd_shuffle128" ? 128 : nameStrip == "simd_shuffle64" ? 64 : nameStrip == "simd_shuffle32" ? 32 : nameStrip == "simd_shuffle16" ? 16 : nameStrip == "simd_shuffle8" ? 8 : nameStrip == "simd_shuffle4" ? 4 : nameStrip == "simd_shuffle2" ? 2 : (UNREACHABLE(), 0);
                     size_t sizeVal = sizeSlot / div;
                     MIR_ASSERT(localMirRes, sizeVal > 0, sizeSlot << " / " << div << " == 0?");
                     MIR_ASSERT(localMirRes, sizeSlot >= sizeVal, sizeSlot << " < " << sizeVal);
@@ -10529,7 +10529,7 @@ break;
                     switch (tuMatch.tag()) {
 default:
                     MIR_BUG(*mirRes, "Unbound/opaque path in trans - " << ty);
-                    throw "";
+                    UNREACHABLE();
                         case HIRTypePathBinding::TAG_ExternType: {
                             return ty;
                         }
@@ -10562,7 +10562,7 @@ default:
                                     return getInnerUnsizedType(monomorph(se.back().ty));
                                 }
                             }
-                            throw "";
+                            UNREACHABLE();
                                 }
                             }
                             break;
@@ -10575,7 +10575,7 @@ default:
                         }
                     }
                 }
-                throw "";
+                UNREACHABLE();
             } else {
                 return HIRTypeRef();
             }

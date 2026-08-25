@@ -149,7 +149,7 @@ class CMacroUseHandler: public ExpandDecorator {
                 MacroRef mr;
                 switch (e->ent.tag()) {
                     case HIRMacroItem::TAG_Import: {
-                        throw "Unexpected";
+                        UNREACHABLE();
                     }
                     case HIRMacroItem::TAG_MacroRules: {
                         auto& macPtr = e->ent.as_MacroRules();

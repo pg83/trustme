@@ -187,7 +187,7 @@ Ordering HIRArraySize::ord(const HIRArraySize& x) const {
             return ::ord(tse, xse);
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRArraySize HIRArraySize::clone() const {
@@ -201,7 +201,7 @@ HIRArraySize HIRArraySize::clone() const {
             return se;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRTypeDataErasedTypeAliasInner::HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& paramsOuter, const HIRGenericParams* paramsInner)
@@ -611,7 +611,7 @@ HIRTypeDataNodeType HIRTypeDataNodeType::clone() const {
             return e;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 namespace {
@@ -650,7 +650,7 @@ namespace {
                 return ae->expr.get() == be->expr.get() && ae->selfType == be->selfType && exactPathParamsEqual(ae->paramsImpl, be->paramsImpl) && exactPathParamsEqual(ae->paramsItem, be->paramsItem);
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 
     bool exactPathParamsEqual(const HIRPathParams& a, const HIRPathParams& b) {
@@ -704,7 +704,7 @@ namespace {
                 return ae.type == be.type && ae.item == be.item && exactPathParamsEqual(ae.params, be.params);
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 
     bool exactTraitPathEqual(const HIRTraitPath& a, const HIRTraitPath& b) {
@@ -750,7 +750,7 @@ namespace {
                 return ae.type == be.type && ae.otherType == be.otherType;
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 
     bool exactGenericParamsEqual(const HIRGenericParams& a, const HIRGenericParams& b) {
@@ -807,7 +807,7 @@ namespace {
                 return ae == be;
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 
     bool exactErasedInnerEqual(const TypeDataErasedTypeInner& a, const TypeDataErasedTypeInner& b) {
@@ -831,7 +831,7 @@ namespace {
                 return ae.inner->path == be.inner->path && exactPathParamsEqual(ae.params, be.params);
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 
     bool exactArraySizeEqual(const HIRArraySize& a, const HIRArraySize& b) {
@@ -850,7 +850,7 @@ namespace {
                 return exactConstGenericEqual(ae, be);
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 
     bool exactTypeDataEqual(const HIRTypeData& a, const HIRTypeData& b) {
@@ -960,7 +960,7 @@ namespace {
                         return ad == bd;
                     }
                 }
-                throw "";
+                UNREACHABLE();
             }
             case HIRTypeData::TAG_Function: {
                 auto& ae = a.as_Function();
@@ -973,7 +973,7 @@ namespace {
                 return ae == be;
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 
     void addTypeFlags(u32& flags, HIRTypeRef type) {
@@ -1728,7 +1728,7 @@ bool HIRTypeData::equalsIgnoringRegions(HIRTypeRef x) const {
             return te == xe;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 Ordering ord(const TypeDataErasedTypeInner& l, const TypeDataErasedTypeInner& r) {
@@ -1854,7 +1854,7 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
             return te.ord(xe);
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 namespace {
@@ -1890,7 +1890,7 @@ namespace {
 
         switch (t.tag()) {
             case HIRConstGeneric::TAG_Infer: {
-                throw "Unreachable";
+                UNREACHABLE();
             }
             case HIRConstGeneric::TAG_Unevaluated: {
                 auto& te = t.as_Unevaluated();
@@ -1898,7 +1898,7 @@ namespace {
                 return te->equivalent(*xe) ? HIRCompare::Equal : HIRCompare::Unequal;
             }
             case HIRConstGeneric::TAG_Generic: {
-                throw "Unreachable";
+                UNREACHABLE();
             }
             case HIRConstGeneric::TAG_Evaluated: {
                 auto& te = t.as_Evaluated();
@@ -1906,7 +1906,7 @@ namespace {
                 return *te == *xe ? HIRCompare::Equal : HIRCompare::Unequal;
             }
         }
-        throw "Unreachable";
+        UNREACHABLE();
     }
 }
 
@@ -2156,7 +2156,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            throw "";
+            UNREACHABLE();
         }
         case HIRTypeData::TAG_Primitive: {
             auto& te = (*v).as_Primitive();
@@ -2239,7 +2239,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                     return l.index == r.index ? this->cmpPath(sp, l.origin, r.origin, resolvePlaceholder) : HIRCompare::Unequal;
                 }
             }
-            throw "";
+            UNREACHABLE();
         }
         case HIRTypeData::TAG_Array: {
             auto& te = (*v).as_Array();
@@ -2342,7 +2342,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             return te == xe ? HIRCompare::Equal : HIRCompare::Unequal;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRTypePathBinding HIRTypePathBinding::clone() const {
@@ -2371,7 +2371,7 @@ HIRTypePathBinding HIRTypePathBinding::clone() const {
         }
     }
     assert(!"Fell off end of clone_binding");
-    throw "";
+    UNREACHABLE();
 }
 
 bool HIRTypePathBinding::operator==(const HIRTypePathBinding& x) const {
@@ -2406,7 +2406,7 @@ bool HIRTypePathBinding::operator==(const HIRTypePathBinding& x) const {
             return te == xe;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 const HIRTraitMarkings* HIRTypePathBinding::getTraitMarkings() const {
@@ -2490,7 +2490,7 @@ HIRTypeDataNamedFunctionTy HIRTypeDataNamedFunctionTy::clone() const {
             return e;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRTypeData HIRTypeData::cloneData() const {
@@ -2606,7 +2606,7 @@ HIRTypeData HIRTypeData::cloneData() const {
             return HIRTypeData::make_NodeType(e.clone());
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tCbResolveType resolvePlaceholder) const {
@@ -2715,7 +2715,7 @@ default:
                 }
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 
     // If righthand side is infer, it's a fuzzy match (or not a match)
@@ -2776,7 +2776,7 @@ default:
                 }
             }
         }
-        throw "";
+        UNREACHABLE();
     }
 
     // If righthand is a type parameter, it can only match another type parameter
@@ -2982,7 +2982,7 @@ default:
             return le == re ? HIRCompare::Equal : HIRCompare::Unequal;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRTypeInterner::HIRTypeInterner(stl::ObjPool& pool)

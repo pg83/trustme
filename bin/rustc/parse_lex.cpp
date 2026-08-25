@@ -1142,7 +1142,7 @@ Token Lexer::getTokenInt() {
     } catch (const Lexer::EndOfFile& /*e*/) {
         return Token(TOK_EOF);
     }
-    throw "Fell off the end of getTokenInt";
+    UNREACHABLE();
 }
 
 Token Lexer::getTokenIntRawString(eTokenType kind) {

@@ -3527,7 +3527,7 @@ eCoreType HIRCoreTypeToAST(HIRCoreType type) {
         case HIRCoreType::Char: return CORETYPE_CHAR;
         case HIRCoreType::Str: return CORETYPE_STR;
     }
-    throw "";
+    UNREACHABLE();
 }
 
 ASTBoundConstness HIRConstnessToAST(HIRBoundConstness constness) {
@@ -3536,7 +3536,7 @@ ASTBoundConstness HIRConstnessToAST(HIRBoundConstness constness) {
         case HIRBoundConstness::Always: return ASTBoundConstness::Always;
         case HIRBoundConstness::Maybe: return ASTBoundConstness::Maybe;
     }
-    throw "";
+    UNREACHABLE();
 }
 
 ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type);
@@ -3594,7 +3594,7 @@ ASTPath HIRPathToAST(Context& context, const Span& span, const HIRPath& path) {
             );
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
@@ -3675,7 +3675,7 @@ ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 ASTGenericParams HIRGenericParamsToAST(Context& context, const Span& span, const HIRGenericParams& params) {
@@ -4281,7 +4281,7 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
         case IndexName::Macro:
             return os << "macro";
     }
-    throw "";
+    UNREACHABLE();
 }
 
 ::std::unordered_map<RcString, ASTModule::IndexEnt>& getModIndex(ASTModule& mod, IndexName location) {
@@ -4295,7 +4295,7 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
         case IndexName::Macro:
             return mod.macroItems;
     }
-    throw "";
+    UNREACHABLE();
 }
 
 namespace {
@@ -4698,7 +4698,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
             switch ((*vep).tag()) {
                 case HIRTypeItem::TAG_Import: {
                     auto& e = (*vep).as_Import();
-                    //throw "";
+                    //UNREACHABLE();
                     TODO(sp, "Get binding for HIR import? " << e.path);
                     break;
                 }
@@ -4779,7 +4779,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
             assert(vep);
             switch ((*vep).tag()) {
                 case HIRValueItem::TAG_Import: {
-                    throw "";
+                    UNREACHABLE();
                 }
                 case HIRValueItem::TAG_Constant: {
                     pb.binding = ASTPathBindingValue::make_Static({nullptr});
@@ -6871,7 +6871,7 @@ default:
 
 //::AST::PathBinding_Macro Resolve_Use_GetBinding_Macro(const Span& span, const ::AST::Crate& crate, const ::AST::Path& path, ::std::span< const ::AST::Module* > parent_modules)
 //{
-//    throw "";
+//    UNREACHABLE();
 //}
 
 // Bodies of the generated local unions (see resolve_ctx_ent.tu).

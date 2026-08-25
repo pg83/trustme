@@ -2457,7 +2457,7 @@ Token ProcMacroInv::realGetToken_() {
     }
     BUG(this->parentSpan, "Invalid token class from child process - " << int(v));
 
-    throw "";
+    UNREACHABLE();
 }
 
 Token ProcMacroInv::takePendingSymbol() {

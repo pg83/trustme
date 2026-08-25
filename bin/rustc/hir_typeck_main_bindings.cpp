@@ -96,7 +96,7 @@ namespace {
                 }
             } break;
         }
-        throw "";
+        UNREACHABLE();
     }
 
     class Visitor: public HIRVisitor {

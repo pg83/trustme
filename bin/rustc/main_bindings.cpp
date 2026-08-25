@@ -1042,7 +1042,7 @@ static int compile(int argc, char* argv[]) {
 
         switch (crateType) {
             case ASTCrate::Type::Unknown:
-                throw "";
+                UNREACHABLE();
             case ASTCrate::Type::RustLib:
                 // Generate a linkable .o
                 CompilePhaseV("Trans Codegen", [&]() {

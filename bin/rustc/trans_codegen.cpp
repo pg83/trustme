@@ -288,10 +288,10 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
             if (const auto* te = ty.first->opt_Path()) {
                 switch (te->binding.tag()) {
                     case HIRTypePathBinding::TAG_Unbound: {
-                        throw "";
+                        UNREACHABLE();
                     }
                     case HIRTypePathBinding::TAG_Opaque: {
-                        throw "";
+                        UNREACHABLE();
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
                         break;

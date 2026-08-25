@@ -33,7 +33,7 @@ bool ImplRef::moreSpecificThan(HIRTypeInterner& types, const ImplRef& other) con
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 bool ImplRef::overlapsWith(const HIRCrate& crate, const ImplRef& other) const {
@@ -107,7 +107,7 @@ bool ImplRef::typeIsSpecialisable(const char* name) const {
             return false;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 // Returns a closure to monomorphise including placeholders (if present)
@@ -158,7 +158,7 @@ HIRTypeRef ImplRef::getImplType(HIRTypeInterner& types) const {
             return e.type;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRPathParams ImplRef::getTraitParams(HIRTypeInterner& types) const {
@@ -180,7 +180,7 @@ HIRPathParams ImplRef::getTraitParams(HIRTypeInterner& types) const {
             return e.traitArgs.clone();
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRTypeRef ImplRef::getTraitTyParam(HIRTypeInterner& types, unsigned int idx) const {
@@ -211,7 +211,7 @@ HIRTypeRef ImplRef::getTraitTyParam(HIRTypeInterner& types, unsigned int idx) co
             return e.traitArgs.types.at(idx);
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRPathParams& params) const {

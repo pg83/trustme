@@ -455,7 +455,6 @@ public:
         return findTraitImplsTypesCb(sp, trait, params, type, cb);
     }
 
-    struct RecursionDetected {};
 
 private:
     friend class NextTraitGoalEvaluator;

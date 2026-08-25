@@ -1791,7 +1791,7 @@ namespace {
             u32 outval = ((v1 & 0x07) << 18) | ((e1 & 0x3F) << 12) | ((e2 & 0x3F) << 6) | ((e3 & 0x3F) << 0);
             return outval;
         } else {
-            throw ""; // Should be impossible.
+            UNREACHABLE(); // Should be impossible.
         }
     }
 

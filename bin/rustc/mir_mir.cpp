@@ -151,7 +151,7 @@
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 void MIRLValue::RefCommon::fmt(::std::ostream& os) const {
@@ -297,7 +297,7 @@ bool MIRParam::operator==(const MIRParam& x) const {
             return ea == eb;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const MIRRValue& x) {
@@ -542,7 +542,7 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const MIRTerminator& x) {
@@ -1010,7 +1010,7 @@ bool operator==(const MIRStatement& a, const MIRStatement& b) {
                 return ae.slots == be.slots;
             }
         }
-        throw "";
+        UNREACHABLE();
 }
 
 MIRLValue::Storage MIRLValue::Storage::clone() const {
@@ -1068,7 +1068,7 @@ MIRConstant MIRConstant::clone() const {
             return MIRConstant::make_ItemAddr(e2.clone());
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 MIRParam MIRParam::clone() const {
@@ -1086,7 +1086,7 @@ MIRParam MIRParam::clone() const {
             return e.clone();
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 MIRRValue MIRRValue::clone() const {
@@ -1161,7 +1161,7 @@ MIRRValue MIRRValue::clone() const {
             break;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 MIRSwitchValues MIRSwitchValues::clone() const {
@@ -1183,7 +1183,7 @@ MIRSwitchValues MIRSwitchValues::clone() const {
             return ve;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 bool MIRSwitchValues::operator==(const MIRSwitchValues& x) const {
@@ -1364,7 +1364,7 @@ MIRStatement MIRCloner::cloneStmt(const MIRStatement& src) const {
             return MIRStatement(mv$(newSe));
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
@@ -1503,7 +1503,7 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
             return MIRTerminator::make_Asm2({se.options, se.lines, this->cloneAsmParams(se.params), se.retBlock == ~0u ? ~0u : mapBbIdx(se.retBlock)});
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 ::std::vector<::std::pair<::std::string, MIRLValue>> MIRCloner::cloneNameLvalVec(const ::std::vector<::std::pair<::std::string, MIRLValue>>& src) const {
@@ -1557,7 +1557,7 @@ MIRLValue MIRCloner::cloneLval(const MIRLValue& src) const {
             return MIRLValue(MIRLValue::Storage::newStatic(this->monomorph(se)), mv$(wrappers));
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 MIRConstant MIRCloner::cloneConstant(const MIRConstant& src) const {
@@ -1663,7 +1663,7 @@ MIRConstant MIRCloner::cloneConstant(const MIRConstant& src) const {
             return MIRConstant::make_ItemAddr({box$(this->monomorph(*ce)), ce.offset});
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 MIRParam MIRCloner::cloneParam(const MIRParam& src) const {
@@ -1681,7 +1681,7 @@ MIRParam MIRCloner::cloneParam(const MIRParam& src) const {
             return cloneConstant(se);
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 MIRRValue MIRCloner::cloneRval(const MIRRValue& src) const {
@@ -1753,7 +1753,7 @@ MIRRValue MIRCloner::cloneRval(const MIRRValue& src) const {
             return MIRRValue::make_Struct({this->monomorph(se.path), this->cloneParamVec(se.vals)});
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 MIRLValue::Storage::Storage(uintptr_t v)
@@ -2001,7 +2001,7 @@ MIRLValue::RefCommon::Tag MIRLValue::RefCommon::tag() const {
                 return TAG_Index;
         }
     }
-    throw "";
+    UNREACHABLE();
 }
 
 unsigned MIRLValue::RefCommon::as_Local() const {

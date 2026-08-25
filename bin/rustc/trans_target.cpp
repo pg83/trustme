@@ -379,7 +379,7 @@ namespace {
             ::std::cerr << "Unknown target name '" << targetName << "'" << ::std::endl;
             abort();
         }
-        throw "";
+        UNREACHABLE();
     }
 }
 
@@ -2564,7 +2564,7 @@ namespace {
                     case HIRTypePathBinding::TAG_Unbound:
                         BUG(sp, "Encountered invalid type in make_type_repr - " << ty);
                 }
-                throw "unreachable";
+                UNREACHABLE();
             case HIRTypeData::TAG_NodeType:
                 if (const auto* closure = ty->as_NodeType().opt_Closure(); closure && closureHasNoCaptures(resolve, **closure)) {
                     auto repr = box$(TypeRepr());

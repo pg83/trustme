@@ -2780,7 +2780,7 @@ default:
                 break;
             }
             case ASTItem::TAG_Module: {
-                throw "";
+                UNREACHABLE();
             }
             case ASTItem::TAG_Crate: {
                 auto& e = dat.as_Crate();
