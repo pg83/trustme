@@ -788,15 +788,11 @@ default:
         findImplStack.push_back(::std::make_tuple(&traitPath, traitParams, type));
         pushedNonMarkerGoal = true;
     }
-    struct NonMarkerFindImplStackGuard {
-        decltype(findImplStack)& stack;
-        bool active;
-        ~NonMarkerFindImplStackGuard() {
-            if (active) {
-                stack.pop_back();
-            }
+    STD_DEFER {
+        if (pushedNonMarkerGoal) {
+            findImplStack.pop_back();
         }
-    } nonMarkerStackGuard{findImplStack, pushedNonMarkerGoal};
+    };
 
     bool ret;
 
@@ -844,12 +840,9 @@ default:
             return foundCb.visit(ImplRef(type, traitParams, &nullAssoc), false);
         }
         findImplStack.push_back(::std::make_tuple(&traitPath, traitParams, type));
-        struct FindImplStackGuard {
-            decltype(findImplStack)& stack;
-            ~FindImplStackGuard() {
-                stack.pop_back();
-            }
-        } stackGuard{findImplStack};
+        STD_DEFER {
+            findImplStack.pop_back();
+        };
 
         auto cmp = this->checkAutoTraitImplDestructure(sp, traitPath, traitParams, type);
         if (cmp != HIRCompare::Unequal) {
@@ -2218,13 +2211,10 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         }
     }
 
-    struct StackGuard {
-        ~StackGuard() {
-            sRecursionStack.pop_back();
-        }
-    } _;
-
     sRecursionStack.push_back(RecurseEntry{crate.types.path(HIRPath(e2.type, e2.trait.clone(), e2.item), {}), sRecursionLevel});
+    STD_DEFER {
+        sRecursionStack.pop_back();
+    };
 
     sRecursionLevel += 1;
     e2.type = this->expandAssociatedTypesInner(sp, e2.type);

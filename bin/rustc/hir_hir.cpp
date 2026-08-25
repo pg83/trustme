@@ -1,6 +1,7 @@
 #include "hir_hir.h"
 
 #include <std/mem/obj_pool.h>
+#include <std/alg/defer.h>
 #include <std/lib/vector.h>
 
 #include "floats.h"
@@ -884,13 +885,9 @@ namespace {
         static stl::Vector<HIRTypeRef> matcherBufs[8];
         static unsigned matcherDepth = 0;
         ASSERT_BUG(Span(), matcherDepth < 8, "impl matcher nested too deep");
-        struct DepthGuard {
-            unsigned& depth;
-
-            ~DepthGuard() {
-                depth--;
-            }
-        } depthGuard{matcherDepth};
+        STD_DEFER {
+            matcherDepth--;
+        };
         ImplMatcher m{matcherBufs[matcherDepth++], params};
         auto cmp = implTy->matchTestGenericsFuzz(Span(), matchType, tyRes, m);
         return cmp != HIRCompare::Unequal;

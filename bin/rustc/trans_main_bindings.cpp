@@ -1,6 +1,8 @@
 #include "trans_main_bindings.h"
 #include "trans_main_bindings.h"
 
+#include <std/alg/defer.h>
+
 #include "hir_hir.h"
 #include "mir_mir.h"
 #include "wire_board.h"
@@ -3593,14 +3595,9 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
         DEBUG("> Already being enumerated");
         return;
     }
-    struct ActivePathGuard {
-        ::std::set<HIRPath>& paths;
-        ::std::set<HIRPath>::iterator path;
-
-        ~ActivePathGuard() {
-            paths.erase(path);
-        }
-    } activePathGuard{state.activePaths, activePath.first};
+    STD_DEFER {
+        state.activePaths.erase(activePath.first);
+    };
 
     enumerateConstRelocations(state, pathMono, subPp);
     switch (itemRef.tag()) {

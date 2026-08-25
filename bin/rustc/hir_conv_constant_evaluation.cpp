@@ -54,6 +54,8 @@ namespace {
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+
+#include <std/alg/defer.h>
 #include <algorithm>
 
 ::std::ostream& operator<<(::std::ostream& os, Defer::Reason r) {
@@ -1862,12 +1864,9 @@ public:
 
                 if (!item.valueEvaluating) {
                     item.valueEvaluating = true;
-                    struct ClearEvaluating {
-                        HIRStatic& item;
-                        ~ClearEvaluating() {
-                            item.valueEvaluating = false;
-                        }
-                    } clearEvaluating{item};
+                    STD_DEFER {
+                        item.valueEvaluating = false;
+                    };
                     ConvertHIRConstantEvaluateStatic(resolve.board(), resolve.hirCrate(), implParamsDef, p, item);
                 } else {
                     DEBUG("Static " << p << " is already being evaluated; address-only reference");
@@ -4806,15 +4805,12 @@ void HIREvaluator::callConstDestructor(MIREvalCallStackEntry& localState, HIRTyp
     // terminator has no return slot for the evaluator to resume into.
     auto saved = ::std::move(this->callStack);
     this->callStack.clear();
-    try {
-        if (this->callFunction(localState, MIRLValue::newReturn(), path, ::std::move(callArgs), localState.callerLocation, false)) {
-            this->runUntilStackEmpty();
-        }
-    } catch (...) {
+    STD_DEFER {
         this->callStack = ::std::move(saved);
-        throw;
+    };
+    if (this->callFunction(localState, MIRLValue::newReturn(), path, ::std::move(callArgs), localState.callerLocation, false)) {
+        this->runUntilStackEmpty();
     }
-    this->callStack = ::std::move(saved);
 }
 
 /// Run the destructors of a value going out of scope during constant
@@ -5544,12 +5540,9 @@ namespace {
                 auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << "#")};
                 auto eval = getEval(item.value.span(), nvs);
                 item.valueEvaluating = true;
-                struct ClearEvaluating {
-                    HIRStatic& item;
-                    ~ClearEvaluating() {
-                        item.valueEvaluating = false;
-                    }
-                } clearEvaluating{item};
+                STD_DEFER {
+                    item.valueEvaluating = false;
+                };
                 try {
                     item.valueRes = eval.evaluateConstant(p, item.value, item.type);
                     item.valueGenerated = true;
@@ -5717,12 +5710,9 @@ namespace {
             // targets the previous pass settled. A cycle never settles, and the
             // last pass's values are then reported as they stand.
             item.discriminantsEvaluating = true;
-            struct ClearEvaluating {
-                HIREnum& item;
-                ~ClearEvaluating() {
-                    item.discriminantsEvaluating = false;
-                }
-            } clearEvaluating{item};
+            STD_DEFER {
+                item.discriminantsEvaluating = false;
+            };
             for (unsigned pass = 0; pass < 16; pass++) {
                 bool changed = false;
                 size_t lastChanged = 0;

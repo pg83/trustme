@@ -541,13 +541,9 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
     }
     expandStack.push_back(type);
 
-    struct Guard {
-        ::std::vector<HIRTypeRef>& stack;
-
-        ~Guard() {
-            stack.pop_back();
-        }
-    } guard{expandStack};
+    STD_DEFER {
+        expandStack.pop_back();
+    };
 
     if (type->is_Infer()) {
         const auto& resolved = this->getType(type);
@@ -4135,14 +4131,9 @@ default:
 
                 auto* activeGoal = pushActiveGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated);
 
-                struct StackGuard {
-                    NextTraitGoalEvaluator& self;
-                    GoalKey* goal;
-
-                    ~StackGuard() {
-                        self.popActiveGoal(goal);
-                    }
-                } guard{*this, activeGoal};
+                STD_DEFER {
+                    popActiveGoal(activeGoal);
+                };
 
                 auto cacheResult = [&](Certainty certainty) {
                     return cacheGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated, certainty);
@@ -4155,20 +4146,15 @@ default:
                 frames[frameIndex]->clear(candidateNodes);
                 frames[frameIndex]->availableDepth = *availableDepth;
 
-                struct FrameGuard {
-                    NextTraitGoalEvaluator& self;
-                    size_t index;
-
-                    ~FrameGuard() {
-                        const bool encounteredOverflow = self.frames[index]->encounteredOverflow;
-                        self.frames[index]->clear(self.candidateNodes);
-                        assert(self.frameDepth == index + 1);
-                        self.frameDepth--;
-                        if (encounteredOverflow && index > 0) {
-                            self.frames[index - 1]->encounteredOverflow = true;
-                        }
+                STD_DEFER {
+                    const bool encounteredOverflow = frames[frameIndex]->encounteredOverflow;
+                    frames[frameIndex]->clear(candidateNodes);
+                    assert(frameDepth == frameIndex + 1);
+                    frameDepth--;
+                    if (encounteredOverflow && frameIndex > 0) {
+                        frames[frameIndex - 1]->encounteredOverflow = true;
                     }
-                } frameGuard{*this, frameIndex};
+                };
 
                 try {
                     assembleCandidates(frameIndex, trait, goalParams, resolvedType);
@@ -4376,20 +4362,15 @@ default:
                     span_ = &callSpan;
                 }
 
-                struct SessionGuard {
-                    NextTraitGoalEvaluator& self;
-                    bool outermost;
-
-                    ~SessionGuard() {
-                        if (outermost) {
-                            assert(self.goalStack.empty());
-                            assert(self.activeGoalIndex.empty());
-                            self.clearGoalCache();
-                            self.frameDepth = 0;
-                            self.span_ = nullptr;
-                        }
+                STD_DEFER {
+                    if (outermost) {
+                        assert(goalStack.empty());
+                        assert(activeGoalIndex.empty());
+                        clearGoalCache();
+                        frameDepth = 0;
+                        span_ = nullptr;
                     }
-                } sessionGuard{*this, outermost};
+                };
 
                 switch (solveGoal(trait, params, type, nullptr)) {
                     case Certainty::NoSolution:
@@ -4440,18 +4421,14 @@ default:
                 span_ = &callSpan;
                 coherenceMode = true;
 
-                struct SessionGuard {
-                    NextTraitGoalEvaluator& self;
-
-                    ~SessionGuard() {
-                        assert(self.goalStack.empty());
-                        assert(self.activeGoalIndex.empty());
-                        self.clearGoalCache();
-                        self.frameDepth = 0;
-                        self.coherenceMode = false;
-                        self.span_ = nullptr;
-                    }
-                } sessionGuard{*this};
+                STD_DEFER {
+                    assert(goalStack.empty());
+                    assert(activeGoalIndex.empty());
+                    clearGoalCache();
+                    frameDepth = 0;
+                    coherenceMode = false;
+                    span_ = nullptr;
+                };
 
                 // Instantiate the first header with fresh inference variables, then
                 // match the second header against it.  This is a unification of two
@@ -4474,20 +4451,15 @@ default:
                 frames[frameIndex]->clear(candidateNodes);
                 frames[frameIndex]->availableDepth = ROOT_DEPTH;
 
-                struct FrameGuard {
-                    NextTraitGoalEvaluator& self;
-                    size_t index;
-
-                    ~FrameGuard() {
-                        const bool encounteredOverflow = self.frames[index]->encounteredOverflow;
-                        self.frames[index]->clear(self.candidateNodes);
-                        assert(self.frameDepth == index + 1);
-                        self.frameDepth--;
-                        if (encounteredOverflow && index > 0) {
-                            self.frames[index - 1]->encounteredOverflow = true;
-                        }
+                STD_DEFER {
+                    const bool encounteredOverflow = frames[frameIndex]->encounteredOverflow;
+                    frames[frameIndex]->clear(candidateNodes);
+                    assert(frameDepth == frameIndex + 1);
+                    frameDepth--;
+                    if (encounteredOverflow && frameIndex > 0) {
+                        frames[frameIndex - 1]->encounteredOverflow = true;
                     }
-                } frameGuard{*this, frameIndex};
+                };
 
                 const auto& traitDef = crate.getTraitByPath(callSpan, trait);
                 pushCandidate(frameIndex, ImplRef(::std::move(leftParams), traitDef, trait, left), HIRCompare::Equal, nullptr, {}, false, CandidateSource::TraitImpl);
@@ -4513,20 +4485,15 @@ default:
                     span_ = &callSpan;
                 }
 
-                struct SessionGuard {
-                    NextTraitGoalEvaluator& self;
-                    bool outermost;
-
-                    ~SessionGuard() {
-                        if (outermost) {
-                            assert(self.goalStack.empty());
-                            assert(self.activeGoalIndex.empty());
-                            self.clearGoalCache();
-                            self.frameDepth = 0;
-                            self.span_ = nullptr;
-                        }
+                STD_DEFER {
+                    if (outermost) {
+                        assert(goalStack.empty());
+                        assert(activeGoalIndex.empty());
+                        clearGoalCache();
+                        frameDepth = 0;
+                        span_ = nullptr;
                     }
-                } sessionGuard{*this, outermost};
+                };
 
                 auto goalType = type;
                 auto goalParams = params.clone();
@@ -4608,14 +4575,9 @@ default:
                 }
                 auto* rootGoal = pushActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr);
 
-                struct RootStackGuard {
-                    NextTraitGoalEvaluator& self;
-                    GoalKey* goal;
-
-                    ~RootStackGuard() {
-                        self.popActiveGoal(goal);
-                    }
-                } rootGuard{*this, rootGoal};
+                STD_DEFER {
+                    popActiveGoal(rootGoal);
+                };
 
                 const size_t frameIndex = frameDepth++;
                 if (frameIndex == frames.size()) {
@@ -4624,20 +4586,15 @@ default:
                 frames[frameIndex]->clear(candidateNodes);
                 frames[frameIndex]->availableDepth = ROOT_DEPTH;
 
-                struct FrameGuard {
-                    NextTraitGoalEvaluator& self;
-                    size_t index;
-
-                    ~FrameGuard() {
-                        const bool encounteredOverflow = self.frames[index]->encounteredOverflow;
-                        self.frames[index]->clear(self.candidateNodes);
-                        assert(self.frameDepth == index + 1);
-                        self.frameDepth--;
-                        if (encounteredOverflow && index > 0) {
-                            self.frames[index - 1]->encounteredOverflow = true;
-                        }
+                STD_DEFER {
+                    const bool encounteredOverflow = frames[frameIndex]->encounteredOverflow;
+                    frames[frameIndex]->clear(candidateNodes);
+                    assert(frameDepth == frameIndex + 1);
+                    frameDepth--;
+                    if (encounteredOverflow && frameIndex > 0) {
+                        frames[frameIndex - 1]->encounteredOverflow = true;
                     }
-                } frameGuard{*this, frameIndex};
+                };
 
                 try {
                     assembleCandidates(frameIndex, trait, goalParams, resolvedType);

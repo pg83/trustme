@@ -1,5 +1,7 @@
 #include "resolve_common.h"
 
+#include <std/alg/defer.h>
+
 #include "ast_ast.h"
 #include "hir_hir.h"
 #include <span> // std::span
@@ -516,19 +518,10 @@ default:
                 visitUse = false;
             }
 
-            struct Guard {
-                std::vector<antirecurseStackEntT>& s;
-
-                Guard(std::vector<antirecurseStackEntT>& s, antirecurseStackEntT e)
-                    : s(s)
-                {
-                    s.push_back(std::move(e));
-                }
-
-                ~Guard() {
-                    s.pop_back();
-                }
-            } guard(antirecurseStack, guardEnt);
+            antirecurseStack.push_back(std::move(guardEnt));
+            STD_DEFER {
+                antirecurseStack.pop_back();
+            };
 
             if (ns == ResolveNamespace::Macro) {
                 for (const auto& i : mod.macros()) {

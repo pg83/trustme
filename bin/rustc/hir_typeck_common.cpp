@@ -5,6 +5,8 @@
 #include "trans_target.h"
 #include "hir_conv_main_bindings.h"
 
+#include <std/alg/defer.h>
+
 template <typename I>
 struct WConst {
     typedef const I T;
@@ -86,22 +88,11 @@ struct TyVisitor {
             }
         }
 
-        struct _ {
-            typedef LList<const HIRTypeData*> stack_t;
-            const stack_t*& dst;
-            stack_t stack;
-
-            _(const stack_t*& dst, const HIRTypeData* ty)
-                : dst(dst)
-                , stack(dst, ty)
-            {
-                dst = &stack;
-            }
-
-            ~_() {
-                dst = stack.prev;
-            }
-        } h(curRecurseStack, ty);
+        LList<const HIRTypeData*> recurseNode(curRecurseStack, ty);
+        curRecurseStack = &recurseNode;
+        STD_DEFER {
+            curRecurseStack = recurseNode.prev;
+        };
 
         {
             auto& tuMatch = (this->getTyData(ty));

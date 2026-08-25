@@ -4,6 +4,7 @@
 #include "hir_expr.h" // ArraySize::Unevaluated cloning needs the complete expression definition.
 
 #include <std/mem/obj_pool.h>
+#include <std/alg/defer.h>
 
 #include <cstdint>
 #include <cassert>
@@ -332,15 +333,10 @@ void HIRTypeData::fmt(::std::ostream& os) const {
         }
     }
 
-    struct _ {
-        _(const HIRTypeData* ptr) {
-            sRecurseStack.push_back(ptr);
-        }
-
-        ~_() {
-            sRecurseStack.pop_back();
-        }
-    } h(this);
+    sRecurseStack.push_back(this);
+    STD_DEFER {
+        sRecurseStack.pop_back();
+    };
 
     switch ((*this).tag()) {
         case HIRTypeData::TAG_Infer: {
