@@ -2264,26 +2264,42 @@ public:
         }
         if (c.valueState == HIRConstant::ValueState::Unknown) {
             auto& item = const_cast<HIRConstant&>(c);
-            // Challenge: Adding items to the module might invalidate an iterator.
-            HIRItemPath modIp{item.value.state->modPath};
-            auto nvs = NewvalState(item.value.state->module, modIp, FMT("const" << &c << "#"));
-            auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
-            eval.resolve.setBothGenericsRaw(implParamsDef, &c.params);
-            auto tempPpImpl = implParamsDef ? implParamsDef->makeNopParams(rootResolve.crate.types, 0) : HIRPathParams();
-            auto tempPpMethod = c.params.makeNopParams(rootResolve.crate.types, 1);
-            MonomorphState tempMs(rootResolve.crate.types);
-            tempMs.ppImpl = &tempPpImpl;
-            tempMs.ppMethod = &tempPpMethod;
-            if (!p.data.is_Generic()) {
-                tempMs.selfTy = rootResolve.crate.types.self();
-            }
-            DEBUG("- Evaluate " << p);
-            item.valueState = HIRConstant::ValueState::InProgress;
-            try {
-                item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, item.type, std::move(tempMs));
-                item.valueState = HIRConstant::ValueState::Known;
-            } catch (const Defer&) {
+            // This evaluates the *definition* under an identity substitution:
+            // a body that names its generic environment (impl params, Self)
+            // is per-instantiation and goes through the monomorph cache
+            // below instead of being attempted here.
+            const auto& caps = exprCaptures(rootResolve.crate.types, item.value);
+            const bool bodyNamesEnv = caps.usesSelf || caps.typeMask[0] || caps.typeMask[1] || caps.valueMask[0] || caps.valueMask[1];
+            if (!caps.unknown && bodyNamesEnv) {
                 item.valueState = HIRConstant::ValueState::Generic;
+            } else {
+                // Challenge: Adding items to the module might invalidate an iterator.
+                HIRItemPath modIp{item.value.state->modPath};
+                auto nvs = NewvalState(item.value.state->module, modIp, FMT("const" << &c << "#"));
+                auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
+                eval.resolve.setBothGenericsRaw(implParamsDef, &c.params);
+                auto tempPpImpl = implParamsDef ? implParamsDef->makeNopParams(rootResolve.crate.types, 0) : HIRPathParams();
+                auto tempPpMethod = c.params.makeNopParams(rootResolve.crate.types, 1);
+                MonomorphState tempMs(rootResolve.crate.types);
+                tempMs.ppImpl = &tempPpImpl;
+                tempMs.ppMethod = &tempPpMethod;
+                if (!p.data.is_Generic()) {
+                    tempMs.selfTy = rootResolve.crate.types.self();
+                }
+                DEBUG("- Evaluate " << p);
+                item.valueState = HIRConstant::ValueState::InProgress;
+                try {
+                    item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, item.type, std::move(tempMs));
+                    item.valueState = HIRConstant::ValueState::Known;
+                } catch (const Defer& e) {
+                    // NotYetKnown: the legacy solver could not commit (DEFER.md
+                    // stage 4). GenericValue with unknown captures: the scan
+                    // could not rule out the environment, the interpreter did.
+                    if (e.reason != Defer::Reason::NotYetKnown && !(caps.unknown && e.reason == Defer::Reason::GenericValue)) {
+                        MIR_BUG(state, "Defer(" << e.reason << ") evaluating concrete constant " << p);
+                    }
+                    item.valueState = HIRConstant::ValueState::Generic;
+                }
             }
         }
         if (outTy) {
@@ -5681,7 +5697,10 @@ namespace {
                 try {
                     item.valueRes = eval.evaluateConstant(p, item.value, item.type, monomorphState.clone());
                     item.valueState = HIRConstant::ValueState::Known;
-                } catch (const Defer&) {
+                } catch (const Defer& e) {
+                    if (e.reason != Defer::Reason::NotYetKnown) {
+                        BUG(item.value.span(), "Defer(" << e.reason << ") evaluating constant " << p);
+                    }
                     item.valueState = HIRConstant::ValueState::Generic;
                 }
 
