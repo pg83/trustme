@@ -48,7 +48,7 @@
 | Typeck helpers | `hir_typeck_helpers.cpp:7184` | Opaque fuzzy matching. |
 | Typeck impls | `hir_typeck_main_bindings.cpp:2118,2346,2380` | Lifetime bounds копируются или заменяются для совпадения представления. |
 | Static solver | `hir_typeck_static.cpp:488,518,1251,2122` | Associated bounds дописываются, `_` автоматически проходит bound, opaque equality обходится локально. |
-| Const eval | `hir_conv_constant_evaluation.cpp:1523,3639,3654` | One-past-end допуск и lazy/«roughly-correct» monomorph state. `impl const Drop` неотличим от обычного `Drop`: parser не сохраняет constness trait impl (`parse_common.cpp:3450`). |
+| Const eval | `hir_conv_constant_evaluation.cpp` | One-past-end допуск и «roughly-correct» monomorph state в `evaluateConstant`. `impl const Drop` неотличим от обычного `Drop`: parser не сохраняет constness trait impl (`parse_common.cpp:3450`). Последний `throw Defer` (NotYetKnown в `getEntFullpath`) — долг солвера, умирает с next-solver (dev/DEFER.md, итог). |
 | MIR lowering | `mir_from_hir.cpp:203,1129,1614` | Generator drop-flag remap, assignment borrow-extension suppression и virtual unsize cast. |
 | MIR passes | `mir_operations.cpp:4749` | Usage downgrade при move. |
 | C backend | `trans_codegen_c.cpp:1309,1320,1944,2130,2587,2945,2951,5092,5731` | Принудительный `-O1`, platform workarounds, incomplete asm/AVX translation и runtime `abort()`. |
