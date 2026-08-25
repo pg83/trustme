@@ -248,69 +248,6 @@ namespace {
         return false;
     }
 
-    /// Does this expression name any generic parameter -- directly, in a
-    /// path, or in a type it carries? Only such an expression can need the
-    /// generic environment; a generic-free one evaluates at its definition
-    /// even inside a generic item. Conservative: an unresolved method call
-    /// counts as generic (its target is unknown before main typecheck).
-    struct ExprGenericScan final: HIRExprVisitorDef {
-        bool found = false;
-
-        explicit ExprGenericScan(HIRTypeInterner& types)
-            : HIRExprVisitorDef(types)
-        {
-        }
-
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
-            // NOTE: interim Infer slots are normal before typecheck; the
-            // evaluation itself typechecks the body, so only real generic
-            // parameters make the expression environment-dependent.
-            if (ty && monomorphiseTypeNeeded(ty)) {
-                found = true;
-            }
-            return HIRExprVisitorDef::visitType(ty);
-        }
-
-        void visitPath(HIRVisitor::PathContext pc, HIRPath& path) override {
-            if (monomorphisePathNeeded(path)) {
-                found = true;
-            }
-            HIRExprVisitorDef::visitPath(pc, path);
-        }
-
-        void visitPathParams(HIRPathParams& pp) override {
-            if (monomorphisePathparamsNeeded(pp)) {
-                found = true;
-            }
-            HIRExprVisitorDef::visitPathParams(pp);
-        }
-
-        void visit(HIRExprNodeConstParam& node) override {
-            found = true;
-            HIRExprVisitorDef::visit(node);
-        }
-
-        void visit(HIRExprNodeCallMethod& node) override {
-            found = true;
-            HIRExprVisitorDef::visit(node);
-        }
-    };
-
-    /// Whether an unevaluated const can be evaluated where it stands: its
-    /// captured environment is concrete, or its expression does not need
-    /// the environment at all.
-    bool unevaluatedCanEvaluate(HIRTypeInterner& types, const HIRConstGenericUnevaluated& ue) {
-        if (unevaluatedEnvIsConcrete(ue)) {
-            return true;
-        }
-        if (!ue.expr || !*ue.expr) {
-            return false;
-        }
-        ExprGenericScan scan(types);
-        const_cast<HIRExprPtr&>(*ue.expr)->visit(scan);
-        return !scan.found;
-    }
-
     struct NewvalStateNop: public HIREvaluator::Newval {
         const Span& sp;
 
@@ -5225,11 +5162,6 @@ namespace {
 
         void evalulateConstGeneric(const Span& sp, const HIRTypeData* ty, HIRConstGeneric& v) {
             if (v.is_Unevaluated()) {
-                // A generic environment stays symbolic unless the
-                // expression does not read it.
-                if (!unevaluatedCanEvaluate(crate.types, *v.as_Unevaluated())) {
-                    return;
-                }
                 try {
                     v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *v.as_Unevaluated())));
                 } catch (const Defer&) {
@@ -5483,17 +5415,15 @@ namespace {
                 const auto& unevaluated = *as.as_Unevaluated().as_Unevaluated();
                 const auto& exprPtr = *unevaluated.expr;
 
-                if (!unevaluatedCanEvaluate(crate.types, unevaluated)) {
-                    // A bare const parameter gets its symbolic form; anything
-                    // else stays Unevaluated for monomorphisation-time demand.
+                try {
+                    auto val = evaluateConstgeneric(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
+                    as = val.readUsize(0);
+                } catch (const Defer&) {
                     const auto* tn = cast<const HIRExprNodeConstParam>(&*exprPtr);
                     if (tn) {
                         as = HIRConstGeneric(HIRGenericRef(tn->name, tn->binding));
                     }
-                    return;
                 }
-                auto val = evaluateConstgeneric(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
-                as = val.readUsize(0);
             } else {
                 DEBUG("Array size (known) = " << as);
             }
@@ -6029,9 +5959,6 @@ void ConvertHIRConstantEvaluateConstant(const StaticTraitResolve& callerResolve,
 void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRTypeData* ty, HIRConstGeneric& cg) {
     if (auto* cgeP = cg.opt_Unevaluated()) {
         const auto& cge = *cgeP;
-        if (!unevaluatedCanEvaluate(crate.types, *cge)) {
-            return;
-        }
         try {
             cg = freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *cge));
         } catch (const Defer&) {
@@ -6075,9 +6002,6 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
 
             // Need to look up the required type - to do that requires knowing the item it's for
             // - Which, might not be known at this point - might be a UfcsInherent
-            if (!unevaluatedCanEvaluate(crate.types, ue)) {
-                continue;
-            }
             try {
 
                 ASSERT_BUG(sp, paramsDef, "Missing generic parameter definitions for " << params);
