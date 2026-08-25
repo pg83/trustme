@@ -113,6 +113,10 @@ public:
 
     EncodedLiteral valueRes;
     bool valueGenerated = false;
+    // Value generation for this static is on the stack right now. Taking its
+    // address meanwhile is legal (self-referential statics); reading its
+    // bytes is a cycle.
+    bool valueEvaluating = false;
     bool saveLiteral = false;
     bool noEmitValue = false;
     /// Storage the compiler made for a promoted borrow, not a `static` the
@@ -136,6 +140,9 @@ public:
     EncodedLiteral valueRes;
     enum class ValueState {
         Unknown,
+        // Evaluation of this constant is on the stack right now; reaching it
+        // again through value resolution is a cycle, not a retry.
+        InProgress,
         Generic,
         Known
     } valueState = ValueState::Unknown;

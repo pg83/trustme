@@ -211,6 +211,8 @@ const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const H
                 }
                 return &it->second;
             }
+            case HIRConstant::ValueState::InProgress:
+                ERROR(state.sp, E0000, "cycle detected when evaluating constant `" << path << "`");
             case HIRConstant::ValueState::Unknown:
                 MIR_ASSERT(state, monomorphisePathNeeded(path), "Unevaluated constant - " << path);
                 return nullptr;

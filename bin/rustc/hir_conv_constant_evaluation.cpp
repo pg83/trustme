@@ -369,7 +369,7 @@ public:
 /// Reference to a `static`
 class MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
 public:
-    static MIREvalStaticRefPtr allocate(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len);
+    static MIREvalStaticRefPtr allocate(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending = false);
 };
 
 /// Common interface for data storage
@@ -812,12 +812,16 @@ class MIREvalStaticRef final: public IValue {
     HIRPath path_;
     const EncodedLiteral* encoded;
     size_t length;
+    // The referenced static is being evaluated right now: its address is
+    // usable, reading its bytes is a value cycle.
+    bool valuePending;
 
-    MIREvalStaticRef(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len)
+    MIREvalStaticRef(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending)
         : pool(pool)
         , path_(std::move(p))
         , encoded(lit)
         , length(len)
+        , valuePending(valuePending)
     {
         assert(!encoded || encoded->bytes.size() == length);
     }
@@ -858,6 +862,9 @@ public:
             if (len == 0 && ofs == 0) {
                 static u8 null;
                 return &null;
+            }
+            if (valuePending) {
+                ERROR(Span(), E0000, "cycle detected when evaluating static `" << path_ << "`");
             }
             return nullptr;
         }
@@ -1266,9 +1273,9 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocateRo(stl::ObjPool* pool, const 
 }
 
 // ---
-MIREvalStaticRefPtr MIREvalStaticRefPtr::allocate(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len) {
+MIREvalStaticRefPtr MIREvalStaticRefPtr::allocate(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending) {
     MIREvalStaticRefPtr rv;
-    rv.ptr = pool->make<MIREvalStaticRef>(pool, std::move(p), lit, len);
+    rv.ptr = pool->make<MIREvalStaticRef>(pool, std::move(p), lit, len, valuePending);
     return rv;
 }
 
@@ -1853,13 +1860,17 @@ public:
 
                 auto& item = const_cast<HIRStatic&>(s);
 
-                static ::std::set<HIRStatic*> sNonRecurse;
-                if (sNonRecurse.count(&item) == 0) {
-                    sNonRecurse.insert(&item);
+                if (!item.valueEvaluating) {
+                    item.valueEvaluating = true;
+                    struct ClearEvaluating {
+                        HIRStatic& item;
+                        ~ClearEvaluating() {
+                            item.valueEvaluating = false;
+                        }
+                    } clearEvaluating{item};
                     ConvertHIRConstantEvaluateStatic(resolve.board(), resolve.hirCrate(), implParamsDef, p, item);
-                    sNonRecurse.erase(sNonRecurse.find(&item));
                 } else {
-                    DEBUG("Recursion detected");
+                    DEBUG("Static " << p << " is already being evaluated; address-only reference");
                 }
             }
 
@@ -1869,6 +1880,11 @@ public:
                 // A static that names itself (through a promoted, say) only
                 // needs its address here, which is a relocation -- asking for
                 // its bytes while they are being worked out would never finish.
+                // Reading the bytes of such a reference is a value cycle.
+                if (item.valueEvaluating) {
+                    DEBUG("- Already being evaluated, taking the address only: " << p);
+                    return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, staticSize, /*valuePending=*/true);
+                }
                 if (item.value.state) {
                     switch (item.value.state->stage) {
                         case HIRExprState::Stage::ConstEvalRequest:
@@ -1877,7 +1893,7 @@ public:
                         case HIRExprState::Stage::ExpandRequest:
                         case HIRExprState::Stage::MirRequest:
                             DEBUG("- Already being worked out, taking the address only: " << p);
-                            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, staticSize);
+                            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, staticSize, /*valuePending=*/true);
                         default:
                             break;
                     }
@@ -2111,6 +2127,9 @@ public:
         auto ent = getEntFullpath(state.sp, rootResolve, p, EntNS::Value, constMs, &implParamsDef);
         MIR_ASSERT(state, ent.is_Constant(), "MIR Constant::Const(" << p << ") didn't point to a Constant - " << ent.tagStr());
         const auto& c = *ent.as_Constant();
+        if (c.valueState == HIRConstant::ValueState::InProgress) {
+            ERROR(state.sp, E0000, "cycle detected when evaluating constant `" << p << "`");
+        }
         if (c.valueState == HIRConstant::ValueState::Unknown) {
             auto& item = const_cast<HIRConstant&>(c);
             // Challenge: Adding items to the module might invalidate an iterator.
@@ -2127,6 +2146,7 @@ public:
                 tempMs.selfTy = rootResolve.crate.types.self();
             }
             DEBUG("- Evaluate " << p);
+            item.valueState = HIRConstant::ValueState::InProgress;
             try {
                 item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, item.type, std::move(tempMs));
                 item.valueState = HIRConstant::ValueState::Known;
@@ -5490,9 +5510,12 @@ namespace {
                 // while visiting the definition: the instantiation may be
                 // unused or occur only in a dead branch.
                 item.valueState = HIRConstant::ValueState::Generic;
+            } else if (item.valueState == HIRConstant::ValueState::InProgress) {
+                ERROR(item.value.span(), E0000, "cycle detected when evaluating constant `" << p << "`");
             } else if (item.value || item.value.mir) {
                 auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << "#")};
                 auto eval = getEval(item.value.span(), nvs);
+                item.valueState = HIRConstant::ValueState::InProgress;
                 try {
                     item.valueRes = eval.evaluateConstant(p, item.value, item.type, monomorphState.clone());
                     item.valueState = HIRConstant::ValueState::Known;
@@ -5520,6 +5543,13 @@ namespace {
             } else if (item.value) {
                 auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << "#")};
                 auto eval = getEval(item.value.span(), nvs);
+                item.valueEvaluating = true;
+                struct ClearEvaluating {
+                    HIRStatic& item;
+                    ~ClearEvaluating() {
+                        item.valueEvaluating = false;
+                    }
+                } clearEvaluating{item};
                 try {
                     item.valueRes = eval.evaluateConstant(p, item.value, item.type);
                     item.valueGenerated = true;

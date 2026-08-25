@@ -3722,6 +3722,8 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 return;
             }
             switch (e->valueState) {
+                case HIRConstant::ValueState::InProgress:
+                    BUG(sp, "Constant still marked in-progress at translation: " << pathMono);
                 case HIRConstant::ValueState::Unknown:
                     BUG(sp, "Unevaluated constant: " << pathMono);
                 case HIRConstant::ValueState::Generic:

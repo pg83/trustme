@@ -5819,6 +5819,9 @@ namespace {
         if (const auto* constant = value.opt_Constant()) {
             binding = *constant;
         }
+        if (binding->valueState == HIRConstant::ValueState::InProgress) {
+            ERROR(sp, E0000, "cycle detected when evaluating constant `" << pve->path << "`");
+        }
         if (binding->valueState == HIRConstant::ValueState::Unknown
             || (binding->valueState == HIRConstant::ValueState::Generic && !binding->monomorphCache.count(pve->path))) {
             try {
