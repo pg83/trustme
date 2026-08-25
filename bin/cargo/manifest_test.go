@@ -115,6 +115,51 @@ path = "tests/integration.rs"
 	}
 }
 
+func TestExplicitTargetsInferDirectoryMain(t *testing.T) {
+	dir := t.TempDir()
+
+	want := map[string]string{
+		"bin:tool":      filepath.Join("src", "bin", "tool", "main.rs"),
+		"test:accuracy": filepath.Join("tests", "accuracy", "main.rs"),
+		"bench:speed":   filepath.Join("benches", "speed", "main.rs"),
+		"example:demo":  filepath.Join("examples", "demo", "main.rs"),
+	}
+	for _, path := range want {
+		writeTestFile(t, filepath.Join(dir, path), "")
+	}
+
+	manifest := `[package]
+name = "demo"
+version = "1.0.0"
+
+[[bin]]
+name = "tool"
+
+[[test]]
+name = "accuracy"
+
+[[bench]]
+name = "speed"
+
+[[example]]
+name = "demo"
+`
+	path := filepath.Join(dir, "Cargo.toml")
+	writeTestFile(t, path, manifest)
+
+	workspace := &Workspace{dir: dir, dependencies: map[string]*Dependency{}, patches: map[string]string{}}
+	pkg := parsePackage(path, readToml(path), workspace)
+	if len(pkg.targets) != len(want) {
+		t.Fatalf("got %d targets, want %d: %#v", len(pkg.targets), len(want), pkg.targets)
+	}
+	for _, target := range pkg.targets {
+		key := target.kind + ":" + target.name
+		if target.path != want[key] {
+			t.Errorf("%s path is %q, want %q", key, target.path, want[key])
+		}
+	}
+}
+
 func TestAbsoluteTargetPathIsCompilerAndCacheInput(t *testing.T) {
 	dir := t.TempDir()
 	packageDir := filepath.Join(dir, "generated")

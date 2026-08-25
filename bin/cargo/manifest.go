@@ -552,18 +552,7 @@ func parseTarget(kind string, table map[string]any, pkg *Package) *Target {
 	}
 
 	if target.path == "" {
-		switch kind {
-		case "lib":
-			target.path = "src/lib.rs"
-		case "bin":
-			target.path = "src/main.rs"
-		case "test":
-			target.path = filepath.Join("tests", target.name+".rs")
-		case "bench":
-			target.path = filepath.Join("benches", target.name+".rs")
-		case "example":
-			target.path = filepath.Join("examples", target.name+".rs")
-		}
+		target.path = inferTargetPath(pkg, kind, target.name)
 	}
 
 	if target.edition == "" {
@@ -579,6 +568,38 @@ func parseTarget(kind string, table map[string]any, pkg *Package) *Target {
 	}
 
 	return target
+}
+
+func inferTargetPath(pkg *Package, kind, name string) string {
+	if kind == "lib" {
+		return filepath.Join("src", "lib.rs")
+	}
+
+	var dir string
+	switch kind {
+	case "bin":
+		dir = filepath.Join("src", "bin")
+	case "test":
+		dir = "tests"
+	case "bench":
+		dir = "benches"
+	case "example":
+		dir = "examples"
+	default:
+		return ""
+	}
+	flat := filepath.Join(dir, name+".rs")
+	directoryMain := filepath.Join(dir, name, "main.rs")
+	if fileExists(filepath.Join(pkg.dir, flat)) {
+		return flat
+	}
+	if fileExists(filepath.Join(pkg.dir, directoryMain)) {
+		return directoryMain
+	}
+	if kind == "bin" {
+		return filepath.Join("src", "main.rs")
+	}
+	return flat
 }
 
 func addAutomaticBins(pkg *Package) {
