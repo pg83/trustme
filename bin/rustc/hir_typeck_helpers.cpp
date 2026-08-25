@@ -260,29 +260,28 @@ void HMTypeInferrence::compactIvars() {
     }
 }
 
-bool HMTypeInferrence::applyDefaults() {
-    bool rv = false;
-    for (auto& v : ivars) {
-        if (!v.isAlias()) {
-            if (const auto* e = v.type->opt_Infer()) {
-                switch (e->tyClass) {
-                    case HIRInferClass::None:
-                        break;
-                    case HIRInferClass::Integer:
-                        rv = true;
-                        DEBUG("- IVar " << e->index << " = i32");
-                        v.type = types.primitive(HIRCoreType::I32);
-                        break;
-                    case HIRInferClass::Float:
-                        rv = true;
-                        DEBUG("- IVar " << e->index << " = f64");
-                        v.type = types.primitive(HIRCoreType::F64);
-                        break;
-                }
-            }
-        }
+bool HMTypeInferrence::applyDefault(unsigned int index) {
+    auto& v = ivars.at(index);
+    if (v.isAlias()) {
+        return false;
     }
-    return rv;
+    const auto* e = v.type->opt_Infer();
+    if (!e) {
+        return false;
+    }
+    switch (e->tyClass) {
+        case HIRInferClass::None:
+            return false;
+        case HIRInferClass::Integer:
+            DEBUG("- IVar " << e->index << " = i32");
+            v.type = types.primitive(HIRCoreType::I32);
+            return true;
+        case HIRInferClass::Float:
+            DEBUG("- IVar " << e->index << " = f64");
+            v.type = types.primitive(HIRCoreType::F64);
+            return true;
+    }
+    return false;
 }
 
 void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LList<const HIRTypeData*> outerStack) const {

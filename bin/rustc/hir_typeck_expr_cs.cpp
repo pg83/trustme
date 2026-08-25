@@ -8555,6 +8555,50 @@ namespace {
         }
     };
 
+    bool typeHasUnresolvedNonLiteralIvar(const Context& context, const HIRTypeData* type, unsigned int exceptIndex) {
+        bool found = false;
+        visitTyWith(type, [&](const HIRTypeData* inner) {
+            if (found) {
+                return true;
+            }
+            const auto* resolved = context.getType(inner);
+            if (resolved != inner) {
+                found = typeHasUnresolvedNonLiteralIvar(context, resolved, exceptIndex);
+                return true;
+            }
+            if (const auto* infer = resolved->opt_Infer()) {
+                found = infer->index != exceptIndex && !infer->isLit();
+            }
+            return found;
+        });
+        return found;
+    }
+
+    // Numeric fallback is not an operator constraint. If the other operand is
+    // an ordinary ivar, a surrounding generic obligation may still determine
+    // it and thereby determine the literal (`unknown / 5` in a closure). Let
+    // that obligation settle instead of prematurely turning the literal into
+    // i32. Fully numeric expressions such as `1 + 2` still use normal fallback.
+    bool numericDefaultMustWait(const Context& context, const IvarBoundIndex& boundIndex, unsigned int index) {
+        if (index >= context.possibleIvarVals.size()) {
+            return false;
+        }
+        for (const auto* associated : boundIndex[index].associated) {
+            if (!associated->isOperator) {
+                continue;
+            }
+            if (typeHasUnresolvedNonLiteralIvar(context, associated->implTy, index)) {
+                return true;
+            }
+            for (const auto& type : associated->params.types) {
+                if (typeHasUnresolvedNonLiteralIvar(context, type, index)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     bool checkIvarPossFailsBounds(
         const Span& sp,
         Context& context,
@@ -10701,7 +10745,13 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
         // the candidate selected by the actual `i32` obligation.
         if (!context.ivars.peekChanged()) {
             DEBUG("- Applying defaults");
-            if (context.ivars.applyDefaults()) {
+            bool appliedDefault = false;
+            for (unsigned int i = 0; i < context.ivars.ivars.size(); i++) {
+                if (!numericDefaultMustWait(context, *ivarBoundIndex, i)) {
+                    appliedDefault |= context.ivars.applyDefault(i);
+                }
+            }
+            if (appliedDefault) {
                 context.ivars.markChange();
             }
         }

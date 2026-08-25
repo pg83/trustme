@@ -76,7 +76,7 @@ public:
     void markChange();
 
     void compactIvars();
-    bool applyDefaults();
+    bool applyDefault(unsigned int index);
 
     void dump() const;
 
