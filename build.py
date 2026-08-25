@@ -631,6 +631,7 @@ rayon_1_12_0 = add_project_test(
     name="rayon_1_12_0",
     url="https://github.com/rayon-rs/rayon.git",
     rev="c9ced185ae3508246a9eb70c8407a1199bb1b77f",
+    lockfile="$(S)/tst/projects/rayon_1_12_0/Cargo.lock",
 )
 
 crossbeam_utils_0_8_22 = add_project_test(
