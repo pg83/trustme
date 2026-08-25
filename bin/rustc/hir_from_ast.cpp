@@ -423,7 +423,7 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
                     return HIRPattern::Value::make_Named({ctx.LowerHIRPatternPath(sp, e, FromASTPathClass::Value), nullptr});
                 }
             }
-            throw "BUGCHECK: Reached end of LowerHIR_Pattern::H::lowerhir_pattern_value";
+            UNREACHABLE();
         }
     };
 
@@ -1148,7 +1148,7 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
             break;
         }
     }
-    throw "BUGCHECK: Reached end of LowerHIR_Path";
+    UNREACHABLE();
 }
 
 namespace {
@@ -1921,7 +1921,7 @@ default:
             return crate->types.generic(e.name, e.index);
         }
     }
-    throw "BUGCHECK: Reached end of LowerHIR_Type";
+    UNREACHABLE();
 }
 
 HIRTypeAlias AST2HIR::LowerHIRTypeAlias(const HIRItemPath& p, const ASTTypeAlias& ta) {
@@ -4128,7 +4128,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
                         case ASTProcMacroTy::Attribute:
                             return HIRProcMacro::Ty::Attribute;
                     }
-                    throw "Invalid AST macro type";
+                    UNREACHABLE();
                 }
             };
 

@@ -5573,7 +5573,7 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
             return path;
         }
     }
-    throw "BUG: Reached end of Resolve_Use_AbsolutisePath";
+    UNREACHABLE();
 }
 
 void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::span<const ASTModule*> parentModules) {
