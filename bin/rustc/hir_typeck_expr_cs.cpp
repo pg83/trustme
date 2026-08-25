@@ -7883,6 +7883,27 @@ default:
                         const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
                         return alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
                     });
+                    // A selected method can expose its closure bound only
+                    // after a later projection has fixed the method's other
+                    // type parameters.  By then an unannotated, wholly
+                    // diverging closure may already have settled its result
+                    // ivar to `!`.  Apply the now-known expected output to the
+                    // closure signature; its body still validly coerces from
+                    // `!` to that type.
+                    const auto* implType = context.getType(v.implTy);
+                    const auto* closure = implType->is_NodeType() ? implType->as_NodeType().opt_Closure() : nullptr;
+                    const auto* expectedOutput = context.getType(v.leftTy);
+                    if (cmp2 == HIRCompare::Unequal && closure
+                        && (*closure)->returnType->is_Infer()
+                        && context.getType(outTyO)->is_Diverge()
+                        && !expectedOutput->is_Diverge()
+                        && !context.ivars.typeContainsIvars(expectedOutput)) {
+                        DEBUG("[check_associated] - apply late expected output " << expectedOutput << " to diverging closure");
+                        const_cast<HIRExprNodeClosure*>(*closure)->returnType = expectedOutput;
+                        outTyO = expectedOutput;
+                        cmp2 = HIRCompare::Equal;
+                        context.ivars.markChange();
+                    }
                     if (cmp2 == HIRCompare::Unequal && !definingOpaqueOutput) {
                         DEBUG("[check_associated] - (fail) known result can't match (" << context.ivars.fmtType(v.leftTy) << " and " << context.ivars.fmtType(outTyO) << ")");
                         return false;
