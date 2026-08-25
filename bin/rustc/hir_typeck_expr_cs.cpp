@@ -111,16 +111,18 @@ namespace {
         /// more extreme actions (e.g. ignoring an ambigious inherent method
         /// and using a trait method instead)
         bool isFallback;
+        const stl::Vector<const HIRTypeData*>* passStartIvars;
 
         bool nodeDiverges(const HIRExprNode& node) const {
             return node.diverges || this->context.getType(node.resType)->is_Diverge();
         }
 
     public:
-        ExprVisitorRevisit(Context& context, bool fallback = false)
+        ExprVisitorRevisit(Context& context, bool fallback = false, const stl::Vector<const HIRTypeData*>* passStartIvars = nullptr)
             : context(context)
             , completed(false)
             , isFallback(fallback)
+            , passStartIvars(passStartIvars)
         {
         }
 
@@ -1071,20 +1073,33 @@ default: {
             }
 
             // A preceding expression can expose an expected type for an
-            // inference variable nested in this receiver. Give ivar
-            // possibilities a chance to apply it before inherent-method
-            // priority commits to an impl whose implicit `Sized` bound would
-            // make that expected type impossible.
+            // inference variable nested in this receiver. Give pending
+            // coercions a chance to apply it before inherent-method priority
+            // commits to an impl whose implicit `Sized` bound would make that
+            // expected type impossible.
             if (!this->isFallback) {
                 bool hasPendingReceiverCoercion = false;
+                if (this->passStartIvars) {
+                    hasPendingReceiverCoercion = visitTyWith(ty, [&](const HIRTypeData* inner) {
+                        const auto* infer = inner->opt_Infer();
+                        return infer
+                            && infer->index < this->passStartIvars->length()
+                            && (*this->passStartIvars)[infer->index] != this->context.getType(inner);
+                    });
+                }
                 visitTyWith(ty, [&](const HIRTypeData* inner) {
+                    if (hasPendingReceiverCoercion) {
+                        return true;
+                    }
                     const auto* resolved = this->context.getType(inner);
                     const auto* infer = resolved->opt_Infer();
-                    if (!infer || infer->index >= this->context.possibleIvarVals.size()) {
+                    if (!infer) {
                         return false;
                     }
-                    const auto& possible = this->context.possibleIvarVals[infer->index];
-                    hasPendingReceiverCoercion = !possible.typesCoerceTo.empty() || !possible.typesCoerceFrom.empty();
+                    if (infer->index < this->context.possibleIvarVals.size()) {
+                        const auto& possible = this->context.possibleIvarVals[infer->index];
+                        hasPendingReceiverCoercion = !possible.typesCoerceTo.empty() || !possible.typesCoerceFrom.empty();
+                    }
                     return hasPendingReceiverCoercion;
                 });
                 if (hasPendingReceiverCoercion) {
@@ -10737,9 +10752,14 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
         // 4. Revisit nodes that require revisiting
         if (!context.ivars.peekChanged()) {
             DEBUG("--- Node revisits");
+            stl::Vector<const HIRTypeData*> passStartIvars;
+            passStartIvars.grow(context.ivars.ivars.size());
+            for (unsigned int i = 0; i < context.ivars.ivars.size(); i++) {
+                passStartIvars.pushBack(context.ivars.getType(i));
+            }
             for (auto it = context.toVisit.begin(); it != context.toVisit.end();) {
                 HIRExprNode& node = **it;
-                ExprVisitorRevisit visitor{context};
+                ExprVisitorRevisit visitor{context, false, &passStartIvars};
                 DEBUG("> " << &node << " " << typeid(node).name() << " -> " << context.ivars.fmtType(node.resType));
                 node.visit(visitor);
                 //  - If the node is completed, remove it
@@ -10748,12 +10768,6 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                     it = context.toVisit.erase(it);
                 } else {
                     ++it;
-                }
-                // Let coercions observe every newly resolved node before a
-                // later method probe can commit to a candidate using stale
-                // expected-type information.
-                if (context.ivars.peekChanged()) {
-                    break;
                 }
             }
             {
@@ -10857,9 +10871,6 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                     it = context.toVisit.erase(it);
                 } else {
                     ++it;
-                }
-                if (context.ivars.peekChanged()) {
-                    break;
                 }
             }
             {
