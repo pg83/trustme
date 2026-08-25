@@ -404,3 +404,42 @@ impl<T, U> TryFrom2<U> for T where U: Into2<T> {
 ## Перф-заметка
 
 Кэш целей NextTraitGoalEvaluator живёт на `TraitResolution` (per-function) и чистится SessionGuard'ами — при выходе в дефолт нужен кэш времени жизни крейта (канонизация уже есть). «Normalization timeout» (закрыт `1854a44cf`) — симптом этой же короткой жизни кэша.
+
+# П1, заход 2 (2026-08-26): симметрия заголовков и специализация
+
+Гол сессии: одновременно убрать жадность (сделано), три солвера и сделать next
+дефолтом — `throw Defer` исчезает потому, что становится не нужен, а не потому,
+что протаскивается статусом.
+
+## Закрыто и запушено
+
+1. **`e5484eb48`** — (а)-фаза-1: impl-заголовок — декларация; `visitTypeImpl`
+   ставит тот же `DeclaredTypeGuard`, что поля и сигнатуры, дефолтный параметр
+   `Foo<T, U = <() as Constrain<T>>::Assoc>` остаётся ригидным алиасом, receiver
+   декларационной формы матчится структурно (alias-vs-alias, как rustc).
+   Чинит WF-блокер №4 под globally. Регрессия:
+   `test_next_solver_globally_impl_header_rigid_default.rs`.
+   Ретраи-компенсации (нормализация receiver'а в env impl'а) вычеркнуты как
+   не-rustc-операция.
+2. **`186c340c3`** — правило «любой не-глобальный ParamEnv-кандидат затеняет
+   нормализацию» возвращено (ранее откатывалось из-за асимметрии заголовков —
+   после 1 легло чисто). tf2-паттерн (`U::Error` не фолдится в `Never` через
+   reverse-blanket) — регрессия
+   `test_next_solver_globally_paramenv_shadows_normalization.rs`.
+   libcore под globally прошёл convert (реальный TryFrom/TryInto блапкет).
+3. **(в работе)** специализация: наследование assoc-item'а по specialization-графу —
+   специализирующий impl без `type Item` наследует значение ближайшего
+   вытесненного предка; проецировать можно только финальное (без `default`).
+   `Candidate::specializationItemSource` пишется при discard'е в merge,
+   `traitCertainty` хранит сертинти цели до даунгрейда за отсутствующий item.
+   Чинит fuse.rs:407 (`FuseImpl` наследует `Item` из default-impl'а).
+   Репро: `test_next_solver_globally_specialization_inherited_assoc.rs`.
+
+## Заметки
+
+- Выбор из нескольких inherent-impl'ов по баундам (`impl<T: Copy> Bar<T>` vs
+  `impl Bar<Other>`, оба с методом) — давняя дыра, падает и без алиасов
+  («Spare rule», count>1 → «try again later» не сходится). rustc принимает.
+  Не связана с ригидностью заголовков.
+- WF-тест под чистым legacy (без -Z) падал и до этих правок — гейт гоняет его
+  только с `-Znext-solver`. Legacy-путь умирает по программе, не чиним.

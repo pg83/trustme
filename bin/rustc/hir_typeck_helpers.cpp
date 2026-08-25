@@ -2574,6 +2574,13 @@ default:
                 CandidateSource source;
                 bool ambiguityBeyondHead = false;
                 bool discarded = false;
+                // The certainty of the trait goal alone, before the root
+                // associated-item requirement could downgrade it.
+                Certainty traitCertainty = Certainty::Ambiguous;
+                // The most specific impl this candidate shadowed during merge:
+                // a specialising impl that omits an associated item inherits
+                // the value from this chain (rustc's specialization graph).
+                const Candidate* specializationItemSource = nullptr;
 
                 Candidate(ImplRef impl, HIRCompare headMatch, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source)
                     : impl(::std::move(impl))
@@ -4621,6 +4628,7 @@ default:
                 for (size_t i = 0; i < candidateCount; i++) {
                     auto certainty = evaluateCandidate(frameIndex, i, trait, rootAssociated.empty() ? nullptr : &rootAssociated);
                     auto* candidate = frame.candidates[i];
+                    candidate->traitCertainty = certainty;
                     if (!candidate->isNegative()) {
                         const auto assocCertainty = matchRootAssociated(trait, candidate->impl, assocName, candidateAssocType, assocParams);
                         if (assocCertainty == Certainty::NoSolution) {
@@ -4752,7 +4760,16 @@ default:
                 // Apply specialization only after nested goals have been probed.
                 for (auto* candidate : frame.viable) {
                     candidate->discarded = false;
+                    candidate->specializationItemSource = nullptr;
                 }
+                auto recordItemSource = [&](Candidate* winner, const Candidate* shadowed) {
+                    if (!shadowed->impl.data.is_TraitImpl()) {
+                        return;
+                    }
+                    if (!winner->specializationItemSource || shadowed->impl.moreSpecificThan(crate.types, winner->specializationItemSource->impl)) {
+                        winner->specializationItemSource = shadowed;
+                    }
+                };
                 for (size_t i = 0; i < frame.viable.size(); i++) {
                     if (frame.viable[i]->discarded) {
                         continue;
@@ -4788,8 +4805,10 @@ default:
                         // remains eligible for specialization.
                         if (left.moreSpecificThan(crate.types, right) && !frame.viable[i]->ambiguityBeyondHead) {
                             frame.viable[j]->discarded = true;
+                            recordItemSource(frame.viable[i], frame.viable[j]);
                         } else if (right.moreSpecificThan(crate.types, left) && !frame.viable[j]->ambiguityBeyondHead) {
                             frame.viable[i]->discarded = true;
+                            recordItemSource(frame.viable[j], frame.viable[i]);
                             break;
                         }
                     }
@@ -4823,6 +4842,41 @@ default:
                     }
                     const auto certainty = selected->certainty;
                     DEBUG("next-solver: applying merged response " << selected->impl << " certainty=" << static_cast<unsigned>(certainty));
+                    // rustc specialization graph: a specialising impl that
+                    // omits an associated item inherits the nearest shadowed
+                    // ancestor's value.  Projecting it is legal only when the
+                    // ancestor declared the item final (no `default`); a
+                    // `default` value stays rigid here.  The trait goal itself
+                    // must be proven -- only the missing item downgraded it.
+                    if (assocName && assocName[0] && selected->impl.data.is_TraitImpl() && selected->traitCertainty == Certainty::Proven) {
+                        const static HIRPathParams noParams;
+                        const auto& itemParams = assocParams ? *assocParams : noParams;
+                        if (selected->impl.getType(crate.types, assocName, itemParams) == HIRTypeRef()) {
+                            for (const Candidate* source = selected->specializationItemSource; source; source = source->specializationItemSource) {
+                                const auto* sourceImpl = source->impl.data.opt_TraitImpl();
+                                if (!sourceImpl || !sourceImpl->impl) {
+                                    break;
+                                }
+                                const auto it = sourceImpl->impl->types.find(assocName);
+                                if (it == sourceImpl->impl->types.end()) {
+                                    continue;
+                                }
+                                if (it->second.isSpecialisable) {
+                                    break;
+                                }
+                                auto inherited = source->impl.getType(crate.types, assocName, itemParams);
+                                if (inherited == HIRTypeRef()) {
+                                    break;
+                                }
+                                auto implType = selected->impl.getImplType(crate.types);
+                                auto traitParams = selected->impl.getTraitParams(crate.types);
+                                auto sourceTrait = HIRGenericPath(trait, traitParams.clone());
+                                HIRTraitPath::assocListT associated;
+                                associated.insert({RcString::newInterned(assocName), HIRTraitPath::AtyEqual{::std::move(sourceTrait), itemParams.clone(), ::std::move(inherited)}});
+                                return emitResponse(ImplRef(::std::move(implType), ::std::move(traitParams), ::std::move(associated)), HIRCompare::Equal);
+                            }
+                        }
+                    }
                     if (certainty != Certainty::Proven) {
                         return emitResponse(::std::move(selected->impl), HIRCompare::Fuzzy);
                     }
