@@ -1714,6 +1714,8 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     this->crateType = ASTCrate::Type::RustLib;
                 } else if (strcmp(typeStr, "dylib") == 0) {
                     this->crateType = ASTCrate::Type::RustDylib;
+                } else if (strcmp(typeStr, "cdylib") == 0) {
+                    this->crateType = ASTCrate::Type::CDylib;
                 } else if (strcmp(typeStr, "bin") == 0) {
                     this->crateType = ASTCrate::Type::Executable;
                 } else if (strcmp(typeStr, "proc-macro") == 0) {
@@ -1875,7 +1877,7 @@ void ProgramParams::showHelp() const {
                    "                   : Bind a source crate name to an available unique crate\n"
                    "--crate-tag <str>  : Specify a suffix for symbols and output files\n"
                    "--crate-name <str> : Override/set the crate name\n"
-                   "--crate-type <ty>  : Override/set the crate type (rlib, bin, proc-macro)\n"
+                   "--crate-type <ty>  : Override/set the crate type (rlib, dylib, cdylib, bin, proc-macro)\n"
                    "--cfg flag         : Set a boolean #[cfg]/cfg! flag\n"
                    "--cfg flag=\"val\"   : Set a string #[cfg]/cfg! flag\n"
                    "--target <name>    : Compile code for the given target\n"

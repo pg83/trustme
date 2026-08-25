@@ -41,7 +41,7 @@ def main() -> int:
         r"^//@\s*crate-type:\s*([a-z_]+)\s*$", source_text, re.MULTILINE
     )
     crate_type = crate_type_match.group(1) if crate_type_match else "bin"
-    if crate_type not in {"bin", "lib"}:
+    if crate_type not in {"bin", "cdylib", "lib"}:
         raise RuntimeError(f"unsupported unit crate type: {crate_type}")
     rust_lib_dependencies = "//@ rust-lib-dev-dependencies" in source_text
 
