@@ -683,7 +683,16 @@ camino_1_1_12 = add_project_test(
     url="https://github.com/camino-rs/camino.git",
     rev="e5edcb948d31dc66000a560725ed9f22c98672f3",
     adapter_args=["--all-features"],
-    lockfile="$(S)/tst/projects/zerocopy/Cargo.lock",
+    lockfile="$(S)/tst/projects/camino_1_1_12/Cargo.lock",
+)
+
+proptest_1_11_0 = add_project_test(
+    name="proptest_1_11_0",
+    url="https://github.com/proptest-rs/proptest.git",
+    rev="7f1367f9a4dc8440c47b93166a38ed064f63ea8c",
+    manifest="proptest",
+    vendor_manifest=".",
+    lockfile="$(S)/tst/projects/proptest_1_11_0/Cargo.lock",
 )
 
 alloca = add_project_test(
