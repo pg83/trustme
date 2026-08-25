@@ -7,10 +7,65 @@
 Environment: RUSTC, CARGO, CC, BUILD_JOBS.
 """
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib  # noqa: E402
+
+
+def split_test_args(args: list[str]) -> tuple[list[str], list[str], list[str]]:
+    cargo_args = []
+    harness_args = []
+    xfails = []
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "--":
+            harness_args = args[index + 1:]
+            break
+        if arg == "--xfail":
+            index += 1
+            if index == len(args):
+                raise RuntimeError("--xfail requires a test name")
+            xfails.append(args[index])
+        elif arg.startswith("--xfail="):
+            name = arg.split("=", 1)[1]
+            if not name:
+                raise RuntimeError("--xfail requires a test name")
+            xfails.append(name)
+        else:
+            cargo_args.append(arg)
+        index += 1
+    return cargo_args, harness_args, xfails
+
+
+def run_tests(command: list[str], test_args: list[str], *, cwd: str, env: dict) -> None:
+    cargo_args, harness_args, xfails = split_test_args(test_args)
+    if not xfails:
+        lib.run([*command, *test_args], cwd=cwd, env=env)
+        return
+
+    # Compile every test before allowing an expected runtime failure to pass.
+    lib.run([*command, *cargo_args, "--no-run"], cwd=cwd, env=env)
+
+    skips = [argument for name in xfails for argument in ("--skip", name)]
+    lib.run(
+        [*command, *cargo_args, "--", *harness_args, *skips],
+        cwd=cwd,
+        env=env,
+    )
+
+    for name in xfails:
+        result = subprocess.run(
+            [*command, *cargo_args, "--", name, "--exact", *harness_args],
+            cwd=cwd,
+            env=env,
+            check=False,
+        )
+        if result.returncode == 0:
+            raise RuntimeError(f"xfail unexpectedly passed: {name}")
+        lib.log(f"[xfail] {name}")
 
 
 def main() -> int:
@@ -35,14 +90,14 @@ def main() -> int:
 
         manifest = os.path.join(src, subdir, "Cargo.toml")
         lib.log(f"[test] {subdir}")
-        lib.run([
+        command = [
             cargo, "test", "--locked", "-j", jobs,
             "--manifest-path", manifest,
             "--target-dir", out,
             "-Zvendor-dir=" + os.path.join(vroot, "vendor"),
             "-Zlib-search=" + os.path.join(libstd, "release"),
-            *test_args,
-        ], cwd=os.path.join(src, subdir), env=env)
+        ]
+        run_tests(command, test_args, cwd=os.path.join(src, subdir), env=env)
     return 0
 
 

@@ -603,6 +603,7 @@ ron_0_4_2 = add_project_test(
     url="https://github.com/ron-rs/ron.git",
     rev="be6bebab49d29bf3cf0fcf1c96fb870597e2c7b9",
     lockfile="$(S)/tst/projects/ron_0_4_2/Cargo.lock",
+    adapter_args=["--xfail", "::test_nul_in_string"],
 )
 
 console_0_7_7 = add_project_test(
@@ -1204,6 +1205,28 @@ unit_tests.append(command(
         "$(B)/tst/unit/driver_lint_cfg_options.stamp",
     ],
     deps=[rustc],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
+    name="unit_project_xfail",
+    inputs=[
+        "$(S)/tst/test_project.py",
+        "$(S)/tst/unit/test_project_xfail.py",
+        *TESTS_LIB,
+        *TIMEOUT_INPUT,
+    ],
+    outputs=["$(B)/tst/unit/project_xfail.stamp"],
+    cmd=[
+        [
+            *TEST_TIMEOUT,
+            "python3", "$(S)/tst/unit/test_project_xfail.py", "-v",
+        ],
+        [
+            *TEST_TIMEOUT,
+            "sh", "-c", "> $(B)/tst/unit/project_xfail.stamp",
+        ],
+    ],
     descr="UT",
     color="green",
 ))
