@@ -597,7 +597,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
 
         case MacroPatEnt::PAT_TT:
             if (GET_TOK(tok, lex) == TOK_EOF) {
-                throw ParseErrorUnexpected(lex, TOK_EOF);
+                parseErrorUnexpected(lex, TOK_EOF);
             } else {
                 PUTBACK(tok, lex);
             }
@@ -670,7 +670,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
                         toks.push_back(tok);
                         break;
                     default:
-                        throw ParseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT});
+                        parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT});
                 }
                 GET_TOK(tok, lex);
                 toks.push_back(tok);
@@ -687,7 +687,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
                 case TOK_RWORD_FALSE:
                     break;
                 default:
-                    throw ParseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT, TOK_STRING, TOK_BYTESTRING, TOK_CSTRING, TOK_RWORD_TRUE, TOK_RWORD_FALSE});
+                    parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT, TOK_STRING, TOK_BYTESTRING, TOK_CSTRING, TOK_RWORD_TRUE, TOK_RWORD_FALSE});
             }
             return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
     }
@@ -3304,7 +3304,7 @@ public:
             depth++;
         } else if (tok.type() == close) {
             if (depth == 0) {
-                throw CompileErrorGeneric(FMT("Unmatched " << Token(close) << " in macro pattern"));
+                compileErrorGeneric(FMT("Unmatched " << Token(close) << " in macro pattern").c_str());
             }
             depth--;
         }
@@ -3318,11 +3318,11 @@ public:
                         PUTBACK(tok, lex);
                         break;
                     case TOK_RWORD_CRATE: // Not valid, as `$crate` already has meaning
-                        throw ParseErrorUnexpected(lex, tok);
+                        parseErrorUnexpected(lex, tok);
                     default:
                         // NOTE: Allow any reserved word
                         if (!Token::typeIsRword(tok.type())) {
-                            throw ParseErrorUnexpected(lex, tok);
+                            parseErrorUnexpected(lex, tok);
                         }
                     case TOK_UNDERSCORE:
                     case TOK_IDENT: {
@@ -3413,9 +3413,9 @@ public:
                                 break;
                             default:
                                 if (lex.editionAfter(ASTEdition::Rust2018)) {
-                                    throw ParseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
+                                    parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
                                 } else {
-                                    throw ParseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
+                                    parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
                                 }
                         }
                         assert(sepFlag);
@@ -3426,7 +3426,7 @@ public:
                 }
                 break;
             case TOK_EOF:
-                throw ParseErrorUnexpected(lex, tok);
+                parseErrorUnexpected(lex, tok);
             default:
                 ret.push_back(MacroPatEnt(lex.endSpan(ps), tok));
                 break;
@@ -3630,7 +3630,7 @@ default:
     int depth = 0;
     while (GET_TOK(tok, lex) != close || depth > 0) {
         if (tok.type() == TOK_EOF) {
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
         }
         if (tok.type() == TOK_NULL) {
             continue;
@@ -3694,9 +3694,9 @@ default:
                         break;
                     default:
                         if (lex.editionAfter(ASTEdition::Rust2018)) {
-                            throw ParseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
+                            parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
                         } else {
-                            throw ParseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
+                            parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
                         }
                 }
                 bool isOptional = (loopType != '+'); // Only '+' has to be entered
@@ -3894,7 +3894,7 @@ default:
                 ret.push_back(MacroExpansionEnt(Token(TOK_DOLLAR)));
             } else {
                 // Expected reserved word, ident, or `(`
-                throw ParseErrorUnexpected(lex, tok);
+                parseErrorUnexpected(lex, tok);
             }
         } else {
             ret.push_back(MacroExpansionEnt(mv$(tok)));
@@ -3924,7 +3924,7 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
             close = TOK_SQUARE_CLOSE;
             break;
         default:
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
     }
     // - Pattern entries
     RuleParseState state;
@@ -3949,7 +3949,7 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
             close = TOK_SQUARE_CLOSE;
             break;
         default:
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
     }
     rule.contents = ParseMacroRulesCont(lex, tok.type(), close, state);
     ASSERT_BUG(lex.pointSpan(), lex.parseState().wb, "Macro parser has no WireBoard");
@@ -4012,7 +4012,7 @@ MacroRulesPtr ParseMacroRules(TokenStream& lex) {
     }
     GET_TOK(tok, lex);
     if (tok.type() != TOK_EOF && tok.type() != TOK_BRACE_CLOSE) {
-        throw ParseErrorUnexpected(lex, tok, {TOK_EOF, TOK_BRACE_CLOSE});
+        parseErrorUnexpected(lex, tok, {TOK_EOF, TOK_BRACE_CLOSE});
     }
     DEBUG("- " << rules.size() << " rules");
 

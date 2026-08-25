@@ -1070,12 +1070,12 @@ static int compile(int argc, char* argv[]) {
                 });
                 break;
         }
-    } catch (unsigned int) {
+    } catch (const ::std::exception& e) {
+        // The one place a real runtime error (I/O, corrupt metadata, bad
+        // TOML) is allowed to land; everything else aborts at its site.
+        ::std::cerr << "error: " << e.what() << ::std::endl;
+        ::exit(1);
     }
-    //catch(const CompileError::Base& e)
-    //{
-    //    ::std::cerr << "Parser Error: " << e.what() << ::std::endl;
-    //}
     //catch(const ::std::exception& e)
     //{
     //    ::std::cerr << "Misc Error: " << e.what() << ::std::endl;

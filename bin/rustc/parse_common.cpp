@@ -305,7 +305,7 @@ static void normaliseAbiFragment(TokenStream& lex) {
         lex.putback(Token(TOK_STRING, ::std::string(s->value), Ident::Hygiene()));
         return;
     }
-    throw ParseErrorUnexpected(lex, tok, TOK_STRING);
+    parseErrorUnexpected(lex, tok, TOK_STRING);
 }
 
 /// Returns false (consuming nothing) when no ABI is present.
@@ -373,7 +373,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                 //case TOK_RWORD_MATCH:
 
             default:
-                throw ParseErrorUnexpected(lex, tok);
+                parseErrorUnexpected(lex, tok);
         }
 
         return isBlockLine ? finishBlockExpression(mv$(ret)) : mv$(ret);
@@ -1307,7 +1307,7 @@ ASTExprNodeP ParseExprFC(TokenStream& lex) {
                         }
                         const auto indexLimit = FloatValue(18446744073709551616.0);
                         if (!foundFractionalIndex || value < FloatValue() || whole >= indexLimit || fractionalIndex >= indexLimit) {
-                            throw ParseErrorUnexpected(lex, mv$(tok));
+                            parseErrorUnexpected(lex, mv$(tok));
                         }
                         val = NEWNODE(ASTExprNodeField, ::std::move(val), RcString::newInterned(FMT(static_cast<u64>(whole))));
                         val = NEWNODE(ASTExprNodeField, ::std::move(val), RcString::newInterned(FMT(static_cast<u64>(fractionalIndex))));
@@ -1328,7 +1328,7 @@ ASTExprNodeP ParseExprFC(TokenStream& lex) {
                         val = NEWNODE(ASTExprNodeFlow, ASTExprNodeFlow::YIELD, Ident(""), ::std::move(val));
                         break;
                     default:
-                        throw ParseErrorUnexpected(lex, mv$(tok));
+                        parseErrorUnexpected(lex, mv$(tok));
                 }
                 break;
             default:
@@ -1509,7 +1509,7 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRanked
         }
         CHECK_TOK(tok, TOK_PIPE);
     } else {
-        throw ParseErrorUnexpected(lex, tok, {TOK_PIPE, TOK_DOUBLE_PIPE, TOK_RWORD_MOVE, TOK_RWORD_USE, TOK_RWORD_STATIC});
+        parseErrorUnexpected(lex, tok, {TOK_PIPE, TOK_DOUBLE_PIPE, TOK_RWORD_MOVE, TOK_RWORD_USE, TOK_RWORD_STATIC});
     }
 
     auto rt = mkType(lex.typePool(), lex.pointSpan());
@@ -1609,7 +1609,7 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
             else if (tok.type() == TOK_IDENT && tok.ident().name == "yeet") {
                 return ParseFlowControl(lex, ASTExprNodeFlow::YEET);
             } else {
-                throw ParseErrorUnexpected(lex, tok);
+                parseErrorUnexpected(lex, tok);
             }
         case TOK_RWORD_MATCH:
             return ParseExprMatch(lex);
@@ -1884,9 +1884,9 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                     return NEWNODE(ASTExprNodeArray, ::std::move(items));
                 }
             }
-            throw CompileErrorBugCheck(lex, "Array literal fell");
+            compileErrorBugCheck(lex, "Array literal fell");
         default:
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
     }
 }
 
@@ -1915,7 +1915,7 @@ ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath path, Span pathSpan) {
     }
     TokenTree tt = ParseTT(lex, true);
     if (tt.isToken()) {
-        throw ParseErrorUnexpected(lex, tt.tok());
+        parseErrorUnexpected(lex, tt.tok());
     }
     if (isMacro) {
         lex.popHygine();
@@ -1951,7 +1951,7 @@ TokenTree ParseTT(TokenStream& lex, bool unwrapped) {
         case TOK_PAREN_CLOSE:
         case TOK_SQUARE_CLOSE:
         case TOK_BRACE_CLOSE:
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
         default:
             rv = TokenTree(edition, lex.getHygiene(), mv$(tok));
             DEBUG(rv);
@@ -1964,7 +1964,7 @@ TokenTree ParseTT(TokenStream& lex, bool unwrapped) {
     }
     while (!lex.getTokenIf(closer, tok) && !lex.getTokenIf(TOK_EOF, tok)) {
         if (lex.lookahead(0) == TOK_NULL) {
-            throw ParseErrorUnexpected(lex, lex.getToken());
+            parseErrorUnexpected(lex, lex.getToken());
         }
         items.push_back(ParseTT(lex, false));
     }
@@ -2106,7 +2106,7 @@ ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMod
         } else if (tok.type() == TOK_RWORD_SELF || tok.type() == TOK_RWORD_SUPER || tok.type() == TOK_RWORD_CRATE) {
             component = Ident(RcString::newInterned(tok.toStr()));
         } else {
-            throw ParseErrorUnexpected(lex, tok, TOK_IDENT);
+            parseErrorUnexpected(lex, tok, TOK_IDENT);
         }
 
         if (genericMode == PATH_GENERIC_TYPE) {
@@ -2495,20 +2495,20 @@ ASTPattern ParsePatternReal(TokenStream& lex, AllowOrPattern allowOr) {
     ASTPattern ret = ParsePatternReal1(lex, allowOr);
     if ((GET_TOK(tok, lex) == TOK_TRIPLE_DOT) || tok.type() == TOK_DOUBLE_DOT_EQUAL) {
         if (!ret.data().is_Value()) {
-            throw CompileErrorGeneric(lex, "Using '...' with a non-value on left");
+            compileErrorGeneric(lex, "Using '...' with a non-value on left");
         }
         auto& retV = ret.data().as_Value();
         auto leftval = std::move(retV.start);
 
         auto rightval = ParsePatternValue(lex);
         if (rightval.is_Invalid()) {
-            throw CompileErrorGeneric(lex, "Using '...' with a no RHS value");
+            compileErrorGeneric(lex, "Using '...' with a no RHS value");
         }
 
         return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Value({mv$(leftval), mv$(rightval)}));
     } else if (tok.type() == TOK_DOUBLE_DOT) {
         if (!ret.data().is_Value()) {
-            throw CompileErrorGeneric(lex, "Using `..` with a non-value on left");
+            compileErrorGeneric(lex, "Using `..` with a non-value on left");
         }
         auto& retV = ret.data().as_Value();
         auto leftval = std::move(retV.start);
@@ -2550,7 +2550,7 @@ ASTPattern::Value ParsePatternValue(TokenStream& lex) {
             } else if (tok.type() == TOK_FLOAT) {
                 return ASTPattern::Value::make_Float({tok.datatype(), -tok.floatval()});
             } else {
-                throw ParseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT});
+                parseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT});
             }
         case TOK_FLOAT:
             return ASTPattern::Value::make_Float({tok.datatype(), tok.floatval()});
@@ -2669,7 +2669,7 @@ ASTPattern ParsePatternReal1(TokenStream& lex, AllowOrPattern allowOr) {
         case TOK_SQUARE_OPEN:
             return ParsePatternRealSlice(lex);
         default:
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
     }
     UNREACHABLE();
 }
@@ -3078,7 +3078,7 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                             }
                             break;
                         default:
-                            throw ParseErrorUnexpected(lex, tok);
+                            parseErrorUnexpected(lex, tok);
                     }
                     while (lex.getTokenIf(TOK_DOUBLE_COLON)) {
                         // `pub(in self::super::super)` walks up from wherever
@@ -3103,7 +3103,7 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                     return ASTVisibility::makeRestricted(std::move(path), std::move(astPath));
                 }
                 default:
-                    throw ParseErrorUnexpected(lex, tok);
+                    parseErrorUnexpected(lex, tok);
             }
         }
         return ASTVisibility::makeGlobal();
@@ -3147,7 +3147,7 @@ ASTHigherRankedBounds ParseHRB(TokenStream& lex) {
                 }
                 break;
             default:
-                throw ParseErrorUnexpected(lex, tok, {TOK_LIFETIME, TOK_IDENT});
+                parseErrorUnexpected(lex, tok, {TOK_LIFETIME, TOK_IDENT});
         }
     } while (GET_TOK(tok, lex) == TOK_COMMA);
     CHECK_TOK(tok, TOK_GT);
@@ -3355,7 +3355,7 @@ ASTGenericParams ParseGenericParams(TokenStream& lex) {
 
             ret.addValueParam(lex.pointSpan(), mv$(attrs), mv$(paramName), mv$(ty), mv$(val));
         } else {
-            throw ParseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_LIFETIME});
+            parseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_LIFETIME});
         }
     } while (tok.type() == TOK_COMMA);
 
@@ -3363,7 +3363,7 @@ ASTGenericParams ParseGenericParams(TokenStream& lex) {
     } else if (tok.type() == TOK_GTE) {
         lex.putback(TOK_EQUAL);
     } else {
-        throw ParseErrorUnexpected(lex, tok, {TOK_GT, TOK_GTE});
+        parseErrorUnexpected(lex, tok, {TOK_GT, TOK_GTE});
     }
     return ret;
 }
@@ -3677,7 +3677,7 @@ ASTFunction ParseFunctionDefWithCode(TokenStream& lex, Span definitionSpan, bool
         // Used for #[rustc_intrinsic] tagged functions
         return ret;
     } else {
-        throw ParseErrorUnexpected(lex, tok, {TOK_BRACE_OPEN, TOK_INTERPOLATED_BLOCK});
+        parseErrorUnexpected(lex, tok, {TOK_BRACE_OPEN, TOK_INTERPOLATED_BLOCK});
     }
     // Enter a new hygine scope for the function (TODO: Should this be in Parse_ExprBlock?)
     lex.pushHygine();
@@ -3789,7 +3789,7 @@ ASTStruct ParseStruct(TokenStream& lex, const ASTAttributeList& metaItems) {
             //if( items.size() == 0 )
             return ASTStruct(mv$(params), mv$(items));
         } else {
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
         }
     }
 }
@@ -4002,7 +4002,7 @@ default:
                 // Accept it
             } else {
                 GET_TOK(tok, lex);
-                throw ParseErrorUnexpected(lex, tok, {TOK_BRACE_OPEN, TOK_INTERPOLATED_BLOCK, TOK_SEMICOLON});
+                parseErrorUnexpected(lex, tok, {TOK_BRACE_OPEN, TOK_INTERPOLATED_BLOCK, TOK_SEMICOLON});
             }
             rv = ::std::move(fcn);
             break;
@@ -4013,9 +4013,9 @@ default:
                 rv = mv$(fcn);
                 break;
             }
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
         default:
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
     }
 
     return ASTNamed<ASTItem>(lex.endSpan(ps), mv$(itemAttrs), ASTVisibility::makeGlobal(), mv$(name), mv$(rv));
@@ -4262,7 +4262,7 @@ namespace {
         if (Token::typeIsRword(tok.type())) {
             return tok.toStr().c_str();
         }
-        throw ParseErrorUnexpected(lex, tok, TOK_IDENT);
+        parseErrorUnexpected(lex, tok, TOK_IDENT);
     }
 }
 
@@ -4384,7 +4384,7 @@ ASTItem ParseImpl(TokenStream& lex, ASTAttributeList& attrs, bool isUnsafe = fal
     if (GET_TOK(tok, lex) == TOK_RWORD_FOR) {
         // Trickery! All traits parse as valid types, so this works.
         if (!implType->isPath()) {
-            throw CompileErrorGeneric(lex, "Trait was not a path");
+            compileErrorGeneric(lex, "Trait was not a path");
         }
         traitPath = Spanned<ASTPath>{implType->span(), mv$(implType->path())};
         // Implementing a trait for another type, get the target type
@@ -4657,7 +4657,7 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
             break;
         }
         default:
-            throw ParseErrorUnexpected(lex, tok, {TOK_RWORD_FN, TOK_RWORD_STATIC, TOK_RWORD_TYPE});
+            parseErrorUnexpected(lex, tok, {TOK_RWORD_FN, TOK_RWORD_STATIC, TOK_RWORD_TYPE});
     }
 }
 
@@ -4694,7 +4694,7 @@ RcString getOptionalIdent(TokenStream& lex, RcString* sourceName) {
         }
         return tok.ident().hygienicName();
     } else {
-        throw ParseErrorUnexpected(lex, tok, {TOK_UNDERSCORE, TOK_IDENT});
+        parseErrorUnexpected(lex, tok, {TOK_UNDERSCORE, TOK_IDENT});
     }
 }
 
@@ -4787,7 +4787,7 @@ void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, AS
                 entries.push_back({lex.pointSpan(), ASTPath(path), ""});
                 return;
             default:
-                throw ParseErrorUnexpected(lex, tok);
+                parseErrorUnexpected(lex, tok);
         }
     } while (GET_TOK(tok, lex) == TOK_DOUBLE_COLON);
 
@@ -4871,11 +4871,11 @@ void ParseUseRoot(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries) {
             break;
         case TOK_INTERPOLATED_TYPE: {
             if (!tok.fragType()->isPath()) {
-                throw ParseErrorUnexpected(lex, tok);
+                parseErrorUnexpected(lex, tok);
             }
             auto& p = tok.fragType()->path();
             if (p.cls.is_UFCS()) {
-                throw ParseErrorUnexpected(lex, tok);
+                parseErrorUnexpected(lex, tok);
             }
             path = std::move(tok.fragType()->path());
             GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
@@ -5031,7 +5031,7 @@ ASTMacroInvocation ParseMacroInvocation(ProtoSpan spanStart, ASTPath name, Token
     }
     TokenTree tt = ParseTT(lex, true);
     if (tt.isToken()) {
-        throw ParseErrorUnexpected(lex, tt.tok());
+        parseErrorUnexpected(lex, tt.tok());
     }
     if (isMacro) {
         lex.popHygine();
@@ -5142,7 +5142,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             itemData = ASTItem(ParseExternBlock(lex, mv$(abi), metaItems));
                             break;
                         default:
-                            throw ParseErrorUnexpected(lex, tok, {TOK_RWORD_FN, TOK_BRACE_OPEN});
+                            parseErrorUnexpected(lex, tok, {TOK_RWORD_FN, TOK_BRACE_OPEN});
                     }
                     break;
                 }
@@ -5197,12 +5197,12 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             }
                             break;
                         default:
-                            throw ParseErrorUnexpected(lex, tok, {TOK_STRING, TOK_IDENT});
+                            parseErrorUnexpected(lex, tok, {TOK_STRING, TOK_IDENT});
                     }
                     GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
                     break;
                 default:
-                    throw ParseErrorUnexpected(lex, tok, {TOK_STRING, TOK_RWORD_FN, TOK_BRACE_OPEN, TOK_RWORD_CRATE});
+                    parseErrorUnexpected(lex, tok, {TOK_STRING, TOK_RWORD_FN, TOK_BRACE_OPEN, TOK_RWORD_CRATE});
             }
             break;
 
@@ -5286,7 +5286,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     break;
                 }
                 default:
-                    throw ParseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_UNDERSCORE, TOK_RWORD_UNSAFE, TOK_RWORD_FN});
+                    parseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_UNDERSCORE, TOK_RWORD_UNSAFE, TOK_RWORD_FN});
             }
             break;
         // `static NAME`
@@ -5381,7 +5381,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     }
                     //goto default;
                 default:
-                    throw ParseErrorUnexpected(lex, tok, {TOK_RWORD_FN, TOK_RWORD_TRAIT, TOK_RWORD_IMPL});
+                    parseErrorUnexpected(lex, tok, {TOK_RWORD_FN, TOK_RWORD_TRAIT, TOK_RWORD_IMPL});
             }
             break;
         case TOK_RWORD_ASYNC: {
@@ -5469,7 +5469,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             } else if (tok.ident().name == "reuse") {
                 itemData = ASTItem(ParseDelegationFunction(lex, itemName));
             } else {
-                throw ParseErrorUnexpected(lex, tok);
+                parseErrorUnexpected(lex, tok);
             }
             break;
 
@@ -5534,7 +5534,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 mrp = ParseMacroRulesSingleArm(lex);
             } else {
                 GET_TOK(tok, lex);
-                throw ParseErrorUnexpected(lex, tok);
+                parseErrorUnexpected(lex, tok);
             }
 
             {
@@ -5712,7 +5712,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     }
                     break;
                 default:
-                    throw CompileErrorGeneric("Expected { or ; after module name");
+                    compileErrorGeneric("Expected { or ; after module name");
             }
             itemName = mv$(name);
             itemData = ASTItem(mv$(submod));
@@ -5720,7 +5720,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
         }
 
         default:
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
     }
 
     return ASTNamed<ASTItem>{lex.endSpan(ps), mv$(metaItems), vis, mv$(itemName), mv$(itemData)};
@@ -5893,7 +5893,7 @@ ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
             if (allowTraitList) {
                 return ParseTypeTraitObject(lex, {});
             }
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
         // `<'a + Trait>::Assoc` -- a lifetime can only start a bare trait
         // object, whose first bound is that lifetime.
         case TOK_LIFETIME:
@@ -5901,7 +5901,7 @@ ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
                 PUTBACK(tok, lex);
                 return ParseTypeTraitObject(lex, {});
             }
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
         // <ident> - Either a primitive, or a path
         case TOK_IDENT:
             // TODO: Only allow if the next token isn't `::` or `!`
@@ -5970,9 +5970,9 @@ ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
                     // Immutable pointer
                     return mkType(lex.typePool(), ASTTypeTags::Pointer(), lex.endSpan(ps), false, ParseType(lex, false));
                 default:
-                    throw ParseErrorUnexpected(lex, tok, {TOK_RWORD_CONST, TOK_RWORD_MUT});
+                    parseErrorUnexpected(lex, tok, {TOK_RWORD_CONST, TOK_RWORD_MUT});
             }
-            throw CompileErrorBugCheck("Reached end of Parse_Type:STAR");
+            compileErrorBugCheck("Reached end of Parse_Type:STAR");
         // '[' - Array type
         case TOK_SQUARE_OPEN: {
             // Array
@@ -5991,7 +5991,7 @@ ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
             } else if (tok.type() == TOK_SQUARE_CLOSE) {
                 return mkType(lex.typePool(), ASTTypeTags::UnsizedArray(), lex.endSpan(ps), mv$(inner));
             } else {
-                throw ParseErrorUnexpected(lex, tok /*, "; or ]"*/);
+                parseErrorUnexpected(lex, tok /*, "; or ]"*/);
             }
         }
 
@@ -6024,9 +6024,9 @@ ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
             }
         }
         default:
-            throw ParseErrorUnexpected(lex, tok);
+            parseErrorUnexpected(lex, tok);
     }
-    throw CompileErrorBugCheck("Reached end of Parse_Type");
+    compileErrorBugCheck("Reached end of Parse_Type");
 }
 
 ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs) {

@@ -68,7 +68,6 @@
 3	std::string	bin/rustc/common_debug.cpp
 1	std::string	bin/rustc/common_debug.h
 2	std::vector	bin/rustc/common_debug.h
-9	std::string	bin/rustc/compile_error.h
 1	std::set	bin/rustc/debug.cpp
 4	std::string	bin/rustc/debug.cpp
 2	std::map	bin/rustc/expand_cfg.cpp
@@ -99,7 +98,7 @@
 1	std::vector	bin/rustc/hir_asm.h
 1	new	bin/rustc/hir_conv_constant_evaluation.cpp
 1	std::map	bin/rustc/hir_conv_constant_evaluation.cpp
-3	std::set	bin/rustc/hir_conv_constant_evaluation.cpp
+2	std::set	bin/rustc/hir_conv_constant_evaluation.cpp
 4	std::string	bin/rustc/hir_conv_constant_evaluation.cpp
 15	std::vector	bin/rustc/hir_conv_constant_evaluation.cpp
 3	std::vector	bin/rustc/hir_conv_constant_evaluation.h
@@ -190,7 +189,7 @@
 3	std::vector	bin/rustc/hir_typeck_expr_visit.h
 1	new	bin/rustc/hir_typeck_helpers.cpp
 2	std::unordered	bin/rustc/hir_typeck_helpers.cpp
-29	std::vector	bin/rustc/hir_typeck_helpers.cpp
+28	std::vector	bin/rustc/hir_typeck_helpers.cpp
 10	std::vector	bin/rustc/hir_typeck_helpers.h
 1	unique_ptr	bin/rustc/hir_typeck_helpers.h
 2	std::map	bin/rustc/hir_typeck_main_bindings.cpp
@@ -264,7 +263,6 @@
 5	std::string	bin/rustc/parse_lex.h
 2	std::vector	bin/rustc/parse_lex.h
 1	unique_ptr	bin/rustc/parse_lex.h
-6	std::string	bin/rustc/parse_parseerror.cpp
 1	std::vector	bin/rustc/parse_parseerror.cpp
 1	std::vector	bin/rustc/parse_parseerror.h
 11	new	bin/rustc/parse_token.cpp
@@ -284,7 +282,7 @@
 5	unique_ptr	bin/rustc/range_vec_map.h
 1	std::string	bin/rustc/rc_string.cpp
 7	std::string	bin/rustc/rc_string.h
-4	std::vector	bin/rustc/resolve_common.cpp
+2	std::vector	bin/rustc/resolve_common.cpp
 1	make_unique	bin/rustc/resolve_main_bindings.cpp
 5	new	bin/rustc/resolve_main_bindings.cpp
 4	std::set	bin/rustc/resolve_main_bindings.cpp
@@ -343,7 +341,7 @@
 4	new	bin/rustc/trans_main_bindings.cpp
 2	std::deque	bin/rustc/trans_main_bindings.cpp
 2	std::map	bin/rustc/trans_main_bindings.cpp
-4	std::set	bin/rustc/trans_main_bindings.cpp
+2	std::set	bin/rustc/trans_main_bindings.cpp
 3	std::string	bin/rustc/trans_main_bindings.cpp
 2	std::unordered	bin/rustc/trans_main_bindings.cpp
 22	std::vector	bin/rustc/trans_main_bindings.cpp

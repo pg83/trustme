@@ -4549,7 +4549,7 @@ class CTestHandlerSP: public ExpandDecorator {
                         if (auto* v = cast<ASTExprNodeString>(&*n)) {
                             td.expectedPanicMessage = v->value;
                         } else {
-                            throw ParseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
+                            parseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
                         }
                     };
                     if (lex.getTokenIf(TOK_EQUAL)) {

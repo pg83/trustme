@@ -869,7 +869,7 @@ Token Lexer::getTokenInt() {
                                 auto v = this->parseEscape('"');
                                 if (v != ~0u) {
                                     if (v > 256) {
-                                        throw CompileErrorGeneric(*this, "Value out of range for byte literal");
+                                        compileErrorGeneric(*this, "Value out of range for byte literal");
                                     }
                                     str += (char)v;
                                 }
@@ -886,12 +886,12 @@ Token Lexer::getTokenInt() {
                         if (ch == '\\') {
                             u32 val = this->parseEscape('\'');
                             if (this->getc() != '\'') {
-                                throw CompileErrorGeneric(*this, "Multi-byte character literal");
+                                compileErrorGeneric(*this, "Multi-byte character literal");
                             }
                             return this->withLiteralSuffix(Token(U128(val), CORETYPE_U8));
                         } else {
                             if (this->getc() != '\'') {
-                                throw CompileErrorGeneric(*this, "Multi-byte character literal");
+                                compileErrorGeneric(*this, "Multi-byte character literal");
                             }
                             return this->withLiteralSuffix(Token(U128(ch.v), CORETYPE_U8));
                         }
@@ -906,7 +906,7 @@ Token Lexer::getTokenInt() {
             else if (issym(ch)) {
                 return this->getTokenIntIdentifier(ch);
             } else {
-                throw ParseErrorBadChar(*this, ch.v);
+                parseErrorBadChar(*this, ch.v);
             }
         } else if (sym > 0) {
             // If the symbol is `TOK_DOT`, check if the next character is a digit and consume an integer
@@ -1097,7 +1097,7 @@ Token Lexer::getTokenInt() {
                             ::std::string str;
                             ch = this->getc();
                             if (!issym(ch)) {
-                                throw CompileErrorGeneric(*this, "Invalid raw lifetime");
+                                compileErrorGeneric(*this, "Invalid raw lifetime");
                             }
                             while (issym(ch)) {
                                 str += ch;
@@ -1170,7 +1170,7 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
         else if (hashes == 1) {
             return this->getTokenIntIdentifier(ch, Codepoint(), /*parse_reserved_word*/ false);
         } else {
-            throw CompileErrorGeneric(*this, "Expected '\"' after hashes following `r`");
+            compileErrorGeneric(*this, "Expected '\"' after hashes following `r`");
         }
     }
     auto terminator = ch;
@@ -1182,7 +1182,7 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
         try {
             ch = this->getc();
         } catch (const Lexer::EndOfFile& /*e*/) {
-            throw CompileErrorGeneric(*this, "EOF reached in raw string");
+            compileErrorGeneric(*this, "EOF reached in raw string");
         }
 
         if (terminatingHashes > 0) {
@@ -1303,7 +1303,7 @@ U128 Lexer::parseInt(NumMode* numModeOut) {
                 } else if (ch.v == '1') {
                     val += 1;
                 } else {
-                    throw CompileErrorGeneric("Invalid digit in binary literal");
+                    compileErrorGeneric("Invalid digit in binary literal");
                 }
             }
         } else if (ch == 'o') {
@@ -1313,7 +1313,7 @@ U128 Lexer::parseInt(NumMode* numModeOut) {
                 if ('0' <= ch.v && ch.v <= '7') {
                     val += U128(ch.v - '0');
                 } else {
-                    throw CompileErrorGeneric("Invalid digit in octal literal");
+                    compileErrorGeneric("Invalid digit in octal literal");
                 }
             }
         } else {
@@ -1434,7 +1434,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
                 ch = this->getcNum();
             }
             if (!ch.isdigit()) {
-                throw CompileErrorGeneric(FMT("Non-numeric '" << ch << "' in float exponent"));
+                compileErrorGeneric(FMT("Non-numeric '" << ch << "' in float exponent").c_str());
             }
             do {
                 PUTC(ch);
@@ -1460,12 +1460,12 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
             }
             ch = this->getc();
             if (!ch.isxdigit()) {
-                throw CompileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence"));
+                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence").c_str());
             }
             char tmp[3] = {static_cast<char>(ch.v), 0, 0};
             ch = this->getc();
             if (!ch.isxdigit()) {
-                throw CompileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence"));
+                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence").c_str());
             }
             tmp[1] = static_cast<char>(ch.v);
             return ::std::strtol(tmp, NULL, 16);
@@ -1480,7 +1480,7 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
                 ch = this->getc();
             }
             if (!ch.isxdigit()) {
-                throw CompileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence"));
+                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence").c_str());
             }
             // `\u{10__FFFF}` -- an underscore may separate the digits, as it
             // may in any other numeric literal.
@@ -1495,7 +1495,7 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
             if (!reqCloseBrace) {
                 this->ungetc();
             } else if (ch != '}') {
-                throw CompileErrorGeneric(*this, "Expected terminating } in \\u sequence");
+                compileErrorGeneric(*this, "Expected terminating } in \\u sequence");
             } else {
             }
             return val;
@@ -1531,7 +1531,7 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
                 return ch.v;
             }
         default:
-            throw CompileErrorTodo(*this, FMT("Unknown escape sequence \\" << ch));
+            compileErrorTodo(*this, FMT("Unknown escape sequence \\" << ch).c_str());
     }
 }
 
@@ -1642,7 +1642,7 @@ Codepoint Lexer::getcCp() {
         u32 outval = ((v1 & 0x07) << 18) | ((e1 & 0x3F) << 12) | ((e2 & 0x3F) << 6) | ((e3 & 0x3F) << 0);
         return {outval};
     } else {
-        throw CompileErrorGeneric("Invalid UTF-8 (too long)");
+        compileErrorGeneric("Invalid UTF-8 (too long)");
     }
 }
 

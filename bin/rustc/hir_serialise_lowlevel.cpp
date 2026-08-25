@@ -258,7 +258,7 @@ HIRSerialiseReaderInner::HIRSerialiseReaderInner(const ::std::string& filename)
     , buffer(16 * 1024)
 {
     if (!backing.is_open()) {
-        throw ::std::runtime_error("Unable to open file");
+        throw ::std::runtime_error("Unable to open " + filename);
     }
 
     zstream.zalloc = Z_NULL;

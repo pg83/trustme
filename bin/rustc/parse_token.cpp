@@ -503,7 +503,7 @@ void printEscapedLiteral(::std::ostream& os, eTokenType type, const u8* value, s
             os << "c\"" << EscapedString(bytes) << "\"";
             return;
         default:
-            throw CompileErrorBugCheck("printEscapedLiteral called for a non-string token");
+            compileErrorBugCheck("printEscapedLiteral called for a non-string token");
     }
 }
 
@@ -929,7 +929,7 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         case TOK_RWORD_TRY:
             return "try";
     }
-    throw CompileErrorBugCheck("Reached end of Token::to_str");
+    compileErrorBugCheck("Reached end of Token::to_str");
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const Token& tok) {

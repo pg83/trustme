@@ -47,7 +47,7 @@ namespace {
         if (Token::typeIsRword(tok.type())) {
             return tok.toStr().c_str();
         }
-        throw ParseErrorUnexpected(lex, tok, TOK_IDENT);
+        parseErrorUnexpected(lex, tok, TOK_IDENT);
     }
 }
 
@@ -564,7 +564,7 @@ public:
                 } else if (tok.type() == TOK_STRING) {
                     regSpec = AsmRegisterSpec::make_Explicit(tok.str());
                 } else {
-                    throw ParseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_STRING});
+                    parseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_STRING});
                 }
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
@@ -1321,7 +1321,7 @@ class CExpanderAssert: public ExpandProcMacro {
                 toks.push_back(Token(TOK_PAREN_CLOSE));
             }
         } else {
-            throw ParseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
+            parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
         }
 
         toks.push_back(Token(TOK_BRACE_CLOSE));
@@ -1397,7 +1397,7 @@ class CConcatExpander: public ExpandProcMacro {
             }
         } while (GET_TOK(tok, lex) == TOK_COMMA);
         if (tok.type() != TOK_EOF) {
-            throw ParseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
+            parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
         }
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_STRING, mv$(rv), {}))));
@@ -1462,7 +1462,7 @@ class CConcatBytesExpander: public ExpandProcMacro {
             append(sp, output, *value);
         } while (GET_TOK(tok, lex) == TOK_COMMA);
         if (tok.type() != TOK_EOF) {
-            throw ParseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
+            parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
         }
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_BYTESTRING, mv$(output), {}))));
@@ -1488,7 +1488,7 @@ class CConcatIdentsExpander: public ExpandProcMacro {
 
         } while (GET_TOK(tok, lex) == TOK_COMMA);
         if (tok.type() != TOK_EOF) {
-            throw ParseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
+            parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
         }
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_IDENT, Ident(lex.getHygiene(), RcString::newInterned(rv))))));

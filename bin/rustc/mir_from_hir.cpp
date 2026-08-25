@@ -11770,12 +11770,8 @@ MIRUnwindAction MirBuilder::makeUnwindAction(const Span& sp, const MIRLValue* co
 
 ScopeHandle::~ScopeHandle() {
     if (idx != ~0u) {
-        try {
-            ASSERT_BUG(Span(), builder.scopes.size() > idx, "Scope invalid");
-            ASSERT_BUG(Span(), builder.scopes.at(idx).complete, "Scope " << idx << " not completed");
-        } catch (...) {
-            abort();
-        }
+        ASSERT_BUG(Span(), builder.scopes.size() > idx, "Scope invalid");
+        ASSERT_BUG(Span(), builder.scopes.at(idx).complete, "Scope " << idx << " not completed");
     }
 }
 

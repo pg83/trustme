@@ -1679,34 +1679,24 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
 //}
 
 HIRCrate* HIRDeserialise(stl::ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename) {
-    try {
+    {
         HIRSerialiseReader in{metadataFilename(filename)};
         HirDeserialiser s{*pool, in, types};
 
         auto* rv = pool->make<HIRCrate>(pool, types);
         s.deserialiseCrate(*rv);
         return rv;
-    } catch (int) {
-        ::std::abort();
-    } catch (const ::std::runtime_error& e) {
-        ::std::cerr << "Unable to deserialise crate metadata from " << filename << ": " << e.what() << ::std::endl;
-        ::std::abort();
     }
 }
 
 RcString HIRDeserialiseJustName(const ::std::string& filename) {
-    try {
+    {
         HIRSerialiseReader in{metadataFilename(filename)};
 
         // NOTE: This is the first item loaded by deserialise_crate
         auto crateName = in.readIstring();
         assert(crateName != "" && "Empty crate name loaded from metadata");
         return crateName;
-    } catch (int) {
-        ::std::abort();
-    } catch (const ::std::runtime_error& e) {
-        ::std::cerr << "Unable to deserialise crate metadata from " << filename << ": " << e.what() << ::std::endl;
-        ::std::abort();
     }
 }
 

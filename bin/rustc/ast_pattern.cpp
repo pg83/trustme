@@ -611,7 +611,7 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
             return ::ord(ae.name.name, be.name.name);
         }
         case ASTPattern::Data::TAG_Macro: {
-            throw CompileErrorBugCheck("ord on unexpanded pattern macro");
+            compileErrorBugCheck("ord on unexpanded pattern macro");
         }
         case ASTPattern::Data::TAG_Any: {
             return OrdEqual;
@@ -625,7 +625,7 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
             return ::ord(*ae.sub, *be.sub);
         }
         case ASTPattern::Data::TAG_Guard: {
-            throw CompileErrorBugCheck("ord on a guard pattern");
+            compileErrorBugCheck("ord on a guard pattern");
         }
         case ASTPattern::Data::TAG_Deref: {
             auto& ae = a.data().as_Deref();
@@ -639,19 +639,19 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
             break;
         }
         case ASTPattern::Data::TAG_Tuple: {
-            throw CompileErrorBugCheck("ord on unsupported tuple pattern type");
+            compileErrorBugCheck("ord on unsupported tuple pattern type");
         }
         case ASTPattern::Data::TAG_StructTuple: {
-            throw CompileErrorBugCheck("ord on unsupported tuple-struct pattern type");
+            compileErrorBugCheck("ord on unsupported tuple-struct pattern type");
         }
         case ASTPattern::Data::TAG_Struct: {
-            throw CompileErrorBugCheck("ord on unsupported struct pattern type");
+            compileErrorBugCheck("ord on unsupported struct pattern type");
         }
         case ASTPattern::Data::TAG_Slice: {
-            throw CompileErrorBugCheck("ord on unsupported slice pattern type");
+            compileErrorBugCheck("ord on unsupported slice pattern type");
         }
         case ASTPattern::Data::TAG_SplitSlice: {
-            throw CompileErrorBugCheck("ord on unsupported split-slice pattern type");
+            compileErrorBugCheck("ord on unsupported split-slice pattern type");
         }
     }
     UNREACHABLE();

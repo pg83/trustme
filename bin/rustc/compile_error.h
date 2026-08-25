@@ -1,40 +1,13 @@
 #pragma once
 
-#include <string>
-#include <exception>
-
 class TokenStream;
 
-class CompileErrorBase: public ::std::exception {
-public:
-    virtual ~CompileErrorBase() throw();
-};
-
-class CompileErrorGeneric: public CompileErrorBase {
-    ::std::string message;
-
-public:
-    CompileErrorGeneric(::std::string message);
-    CompileErrorGeneric(const TokenStream& lex, ::std::string message);
-
-    virtual ~CompileErrorGeneric() throw();
-};
-
-class CompileErrorBugCheck: public CompileErrorBase {
-    ::std::string message;
-
-public:
-    CompileErrorBugCheck(::std::string message);
-    CompileErrorBugCheck(const TokenStream& lex, ::std::string message);
-
-    virtual ~CompileErrorBugCheck() throw();
-};
-
-class CompileErrorTodo: public CompileErrorBase {
-    ::std::string message;
-
-public:
-    CompileErrorTodo(::std::string message);
-    CompileErrorTodo(const TokenStream& lex, ::std::string message);
-    virtual ~CompileErrorTodo() throw();
-};
+// Fatal compile-error reporters: print and abort at the call site. These were
+// exception classes whose constructors already did the reporting; the throw
+// never carried information anywhere.
+[[noreturn]] void compileErrorGeneric(const char* message);
+[[noreturn]] void compileErrorGeneric(const TokenStream& lex, const char* message);
+[[noreturn]] void compileErrorBugCheck(const char* message);
+[[noreturn]] void compileErrorBugCheck(const TokenStream& lex, const char* message);
+[[noreturn]] void compileErrorTodo(const char* message);
+[[noreturn]] void compileErrorTodo(const TokenStream& lex, const char* message);

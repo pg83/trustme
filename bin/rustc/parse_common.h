@@ -12,14 +12,14 @@
     do {                                                            \
         if ((tok = lex.getToken()).type() != exp) {                 \
             DEBUG("GET_CHECK_TOK " << __FILE__ << ":" << __LINE__); \
-            throw ParseErrorUnexpected(lex, tok, Token(exp));       \
+            parseErrorUnexpected(lex, tok, Token(exp));       \
         }                                                           \
     } while (0)
 #define CHECK_TOK(tok, exp)                                     \
     do {                                                        \
         if (tok.type() != exp) {                                \
             DEBUG("CHECK_TOK " << __FILE__ << ":" << __LINE__); \
-            throw ParseErrorUnexpected(lex, tok, Token(exp));   \
+            parseErrorUnexpected(lex, tok, Token(exp));   \
         }                                                       \
     } while (0)
 

@@ -246,7 +246,7 @@ Ordering ASTType::ord(const ASTType& x) const {
             return OrdEqual;
         }
         case TypeData::TAG_Macro: {
-            throw CompileErrorBugCheck("ASTType*::ord - unexpanded macro");
+            compileErrorBugCheck("ASTType*::ord - unexpanded macro");
         }
         case TypeData::TAG_Any: {
             return OrdEqual;

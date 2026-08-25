@@ -3,27 +3,14 @@
 #include "compile_error.h"
 #include "parse_tokenstream.h"
 
-#include <stdexcept>
+// Fatal parse-error reporters: print with the lexer position and abort.
+[[noreturn]] void parseErrorBadChar(const TokenStream& lex, char character);
+[[noreturn]] void parseErrorUnexpected(const TokenStream& lex, const Token& tok);
+[[noreturn]] void parseErrorUnexpected(const TokenStream& lex, const Token& tok, Token exp);
+[[noreturn]] void parseErrorUnexpected(const TokenStream& lex, const Token& tok, ::std::vector<eTokenType> exp);
 
-class ParseErrorBadChar: public CompileErrorBase {
-    //char    m_char;
-public:
-    ParseErrorBadChar(const TokenStream& lex, char character);
-    virtual ~ParseErrorBadChar() throw();
-};
-
-class ParseErrorUnexpected: public CompileErrorBase {
-    Token tok_;
-
-public:
-    ParseErrorUnexpected(const TokenStream& lex, const Token& tok);
-    ParseErrorUnexpected(const TokenStream& lex, const Token& tok, Token exp);
-    ParseErrorUnexpected(const TokenStream& lex, const Token& tok, ::std::vector<eTokenType> exp);
-    virtual ~ParseErrorUnexpected() throw();
-};
-
-#define ASSERT(lex, cnd)                                                               \
-    do {                                                                               \
-        if (!(cnd))                                                                    \
-            throw CompileErrorBugCheck(lex, "Assertion failed: " __FILE__ " - " #cnd); \
+#define ASSERT(lex, cnd)                                                          \
+    do {                                                                          \
+        if (!(cnd))                                                               \
+            compileErrorBugCheck(lex, "Assertion failed: " __FILE__ " - " #cnd);  \
     } while (0)

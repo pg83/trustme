@@ -250,6 +250,5 @@ Spanned<T> makeSpanned(Span sp, T val) {
             ::Span(span).bug([&](::std::ostream& os) {                                           \
                 os << "ASSERT FAIL: " << __FILE__ << ":" << __LINE__ << ":" #cnd << ": " << msg; \
             });                                                                                  \
-            throw ::std::runtime_error("Bug fell through");                                      \
         }                                                                                        \
     } while (0)
