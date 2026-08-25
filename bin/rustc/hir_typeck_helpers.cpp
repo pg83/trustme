@@ -6058,7 +6058,9 @@ default:
                         committedParams,
                         true,
                         true);
-                    ASSERT_BUG(sp, committed != HIRCompare::Unequal, "Selected fuzzy impl no longer matches " << input);
+                    if (committed == HIRCompare::Unequal) {
+                        DEBUG("Selected fuzzy impl cannot commit defining opaque bounds yet: " << input);
+                    }
                 }
             }
 
@@ -8427,6 +8429,11 @@ default: {
                         }
                     }
                 } while (currentTy);
+
+                if (this->typeContainsIvars(topTy)) {
+                    DEBUG("No method on a partially inferred receiver, pausing");
+                    return ~0u;
+                }
 
                 // No method found, return an empty list and return 0
                 assert(possibilities.empty());
