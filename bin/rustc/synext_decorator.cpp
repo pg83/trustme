@@ -4508,7 +4508,9 @@ class CTestHandler: public ExpandDecorator {
             ASTTestDesc td;
             td.span = sp;
             for (const auto& node : path.nodes) {
-                td.name += "::";
+                if (!td.name.empty()) {
+                    td.name += "::";
+                }
                 td.name += node.c_str();
             }
             td.path = path;
