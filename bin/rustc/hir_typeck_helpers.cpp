@@ -4686,20 +4686,14 @@ default:
                 }
 
                 // rustc prefers all ParamEnv responses when any applicable
-                // non-global where-bound can answer this goal. In particular,
-                // `T: Pointee<Metadata = ()>` must retain the environment
-                // response instead of normalising through the generic builtin
-                // fallback. A bare `T: Trait` bound proves the trait but cannot
-                // shadow an impl when the goal asks to normalise `Trait::Assoc`.
+                // non-global where-bound can answer this goal (dev-guide,
+                // candidate preference): normalisation does not consider
+                // impls when the trait goal is proven via ParamEnv, so a bare
+                // `U: Trait` bound keeps `Trait::Assoc` rigid -- verified
+                // against rustc -Znext-solver on the TryFrom/TryInto blanket
+                // pair.
                 const bool hasNonGlobalParamEnv = ::std::any_of(frame.viable.begin(), frame.viable.end(), [&](const Candidate* candidate) {
-                    if (!paramEnvCandidateIsNonGlobal(*candidate)) {
-                        return false;
-                    }
-                    if (!assocName || !assocName[0]) {
-                        return true;
-                    }
-                    const static HIRPathParams noParams;
-                    return candidate->impl.getType(crate.types, assocName, assocParams ? *assocParams : noParams) != HIRTypeRef();
+                    return paramEnvCandidateIsNonGlobal(*candidate);
                 });
                 if (hasNonGlobalParamEnv) {
                     auto& viable = frame.viable;
