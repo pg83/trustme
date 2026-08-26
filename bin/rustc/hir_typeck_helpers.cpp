@@ -1873,8 +1873,11 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
 
         namespace {
             HIRCompare compareValue(const Span& sp, const HIRConstGeneric& leftRaw, const HIRConstGeneric& rightRaw, const HMTypeInferrence& infer) {
-                const auto& left = leftRaw.is_Infer() ? infer.getValue(leftRaw.as_Infer().index) : leftRaw;
-                const auto& right = rightRaw.is_Infer() ? infer.getValue(rightRaw.as_Infer().index) : rightRaw;
+                // The guarded overload keeps reserved-range indexes (alias
+                // inputs and solver-canonical value slots) rigid instead of
+                // asserting on the table bounds.
+                const auto& left = infer.getValue(leftRaw);
+                const auto& right = infer.getValue(rightRaw);
                 if (left == right) {
                     return HIRCompare::Equal;
                 }
@@ -4596,7 +4599,10 @@ default:
                 // goal whose lane count had already resolved to 2).
                 for (auto& value : goalParams.values) {
                     if (const auto* infer = value.opt_Infer(); infer && infer->index != ~0u) {
-                        const auto& resolved = resolve_.ivars.getValue(infer->index);
+                        // The guarded overload keeps reserved-range indexes
+                        // (a nested goal in canonical space carries canonical
+                        // value slots) rigid instead of asserting.
+                        const auto& resolved = resolve_.ivars.getValue(value);
                         if (!resolved.is_Infer()) {
                             value = resolved.clone();
                         }
@@ -5240,7 +5246,10 @@ default:
                 // goal whose lane count had already resolved to 2).
                 for (auto& value : goalParams.values) {
                     if (const auto* infer = value.opt_Infer(); infer && infer->index != ~0u) {
-                        const auto& resolved = resolve_.ivars.getValue(infer->index);
+                        // The guarded overload keeps reserved-range indexes
+                        // (a nested goal in canonical space carries canonical
+                        // value slots) rigid instead of asserting.
+                        const auto& resolved = resolve_.ivars.getValue(value);
                         if (!resolved.is_Infer()) {
                             value = resolved.clone();
                         }
