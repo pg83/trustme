@@ -5043,6 +5043,22 @@ default:
                             break;
                         }
                     }
+                    // Equal responses are interchangeable for inference, but
+                    // the caller may fetch an item BODY from the returned
+                    // impl: specialization still picks the most specific one
+                    // (`impl<T> Foo for T` vs `impl<T: Clone> Foo for T` --
+                    // same head for u8, different default fn).
+                    for (auto* candidate : frame.viable) {
+                        if (candidate == selected || candidate->certainty != selected->certainty || candidate->ambiguityBeyondHead) {
+                            continue;
+                        }
+                        const auto* selImpl = selected->impl.data.opt_TraitImpl();
+                        const auto* candImpl = candidate->impl.data.opt_TraitImpl();
+                        if (selImpl && selImpl->impl && candImpl && candImpl->impl && candImpl->impl->moreSpecificThan(crate.types, *selImpl->impl)) {
+                            recordItemSource(candidate, selected);
+                            selected = candidate;
+                        }
+                    }
                     // Among equal responses, prefer the one that actually
                     // carries the requested associated value: the bare
                     // predicate variant of the same where-clause cannot
