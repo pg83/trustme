@@ -3992,6 +3992,9 @@ default:
                     // The projection response may contain the very caller-owned
                     // inference variable from the requested equality. That is an
                     // exact response, not an ambiguous comparison of two ivars.
+                    if (containsDefiningOpaque(output) || containsDefiningOpaque(aty.type)) {
+                        continue;
+                    }
                     auto cmp = output == aty.type ? HIRCompare::Equal : resolve_.compareTy(span(), output, aty.type);
                     if (cmp != HIRCompare::Equal && !aliasRelateActive_ && (resolve_.hasAssociatedType(output) || resolve_.hasAssociatedType(aty.type))) {
                         aliasRelateActive_ = true;
@@ -4435,6 +4438,23 @@ default:
                 return cacheResult(Certainty::NoSolution);
             }
 
+            bool containsDefiningOpaque(const HIRTypeData* ty) const {
+                return visitTyWith(ty, [&](const HIRTypeData* inner) {
+                    const auto* erased = inner->opt_ErasedType();
+                    if (!erased) {
+                        return false;
+                    }
+                    // A return-position opaque (Fcn origin) is revealed by
+                    // the typeck consumer in its defining scope; the solver
+                    // cannot reject on it either way.
+                    if (erased->inner.is_Fcn()) {
+                        return true;
+                    }
+                    const auto* alias = erased->inner.opt_Alias();
+                    return alias && resolve_.isOpaqueAliasDefiningScope(*alias->inner);
+                });
+            }
+
             Certainty matchRootAssociated(const HIRSimplePath& trait, const ImplRef& impl, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams) const {
                 if (!assocName || !assocName[0]) {
                     return Certainty::Proven;
@@ -4467,6 +4487,12 @@ default:
                     output = makeAssociatedProjection(impl, ::std::move(sourceTrait), RcString::newInterned(assocName), params);
                 }
                 if (!assocType) {
+                    return Certainty::Proven;
+                }
+                // A defining-scope opaque in the response is an OUTPUT of
+                // alias-relate (the requirement defines its hidden type), not
+                // an input that can reject an otherwise valid candidate.
+                if (containsDefiningOpaque(output) || containsDefiningOpaque(assocType)) {
                     return Certainty::Proven;
                 }
                 auto cmp = resolve_.compareTy(span(), assocType, output);
