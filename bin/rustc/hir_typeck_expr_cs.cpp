@@ -11110,6 +11110,23 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
             }
         }
 
+        // Last resort before giving up: rustc's integer/float fallback is
+        // unconditional once nothing else makes progress. The must-wait
+        // guard above deadlocks when the other ivar in an operator bound can
+        // only be inferred FROM the default (`sum += &i` over an unconstrained
+        // element type: `_a:i AddAssign<&_b>` — defaulting `_a = i32` is what
+        // pins `_b` through the only matching impl).
+        if (!context.ivars.peekChanged()) {
+            DEBUG("- Applying defaults (unconditional)");
+            bool appliedDefault = false;
+            for (unsigned int i = 0; i < context.ivars.ivars.size(); i++) {
+                appliedDefault |= context.ivars.applyDefault(i);
+            }
+            if (appliedDefault) {
+                context.ivars.markChange();
+            }
+        }
+
         // Clear ivar possibilities for next pass
         for (auto& ivarEnt : context.possibleIvarVals) {
             ivarEnt.reset();
