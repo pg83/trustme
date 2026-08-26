@@ -2366,6 +2366,33 @@ default:
             }
             break;
         }
+        case HIRTypeData::TAG_Path: {
+            // A closure lowered to its struct (post-typecheck phases): its
+            // `Fn*` impls are generated, so async-callability forwards
+            // through them.  StaticTraitResolve has the same forwarding, but
+            // the goal bridge answers before reaching it.
+            if (isAsyncCallableTrait && type->as_Path().isClosure() && params.types.size() == 1 && params.types.front()->is_Tuple()) {
+                const auto& fnTrait = trait == langAsyncFn() ? langFn() : (trait == langAsyncFnMut() ? langFnMut() : langFnOnce());
+                HIRTypeRef futureType;
+                this->findTraitImplsCrate(sp, langFnOnce(), params, type, [&](ImplRef impl, HIRCompare cmp) {
+                    if (cmp != HIRCompare::Equal) {
+                        return false;
+                    }
+                    futureType = impl.getType(crate.types, "Output", {});
+                    return futureType != HIRTypeRef();
+                });
+                bool callable = fnTrait == langFnOnce();
+                if (!callable) {
+                    callable = this->findTraitImplsCrate(sp, fnTrait, params, type, [](ImplRef, HIRCompare cmp) {
+                        return cmp == HIRCompare::Equal;
+                    });
+                }
+                if (callable && futureType != HIRTypeRef() && findAsyncCallable(params.types.front()->as_Tuple(), futureType, true, true)) {
+                    return true;
+                }
+            }
+            break;
+        }
         case HIRTypeData::TAG_Function: {
             auto& e = (*type).as_Function();
             if (isAsyncCallableTrait) {
