@@ -2460,7 +2460,7 @@ default:
 
     bool replacementHappened = true;
     ::ImplRef  bestImpl;
-    rv = this->findImpl(sp, traitPath.path, traitPath.params, e2.type, [&](ImplRef impl, bool fuzzy) {
+    auto cbFindImpl = [&](ImplRef impl, bool fuzzy) {
         DEBUG("[expand_associated_types] Found " << impl);
         // If a fuzzy match was found, monomorphise and EAT the checked types and try again
         // - A fuzzy can be caused by an opaque match.
@@ -2512,7 +2512,17 @@ default:
             }
             return true;
         }
-        });
+        };
+    rv = this->findImpl(sp, traitPath.path, traitPath.params, e2.type, cbFindImpl);
+    if (!rv && bestImpl.isValid() && this->wb.settings->solver.globally) {
+        // The goal bridge folds a specialisable default and the sibling impl
+        // that overrides it into ONE merged response, so the loop above only
+        // ever saw the default.  Only the legacy iteration shows every impl;
+        // re-run it to find the specialised value (mirrors getValue's
+        // two-pass search).
+        bestImpl = ImplRef();
+        rv = this->findImpl(sp, traitPath.path, &traitPath.params, e2.type, cbFindImpl, /*dontHandoffToSpecialised=*/false, /*noGoalBridge=*/true);
+    }
     if( rv ) {
         if (recurse) {
             this->expandAssociatedTypes(sp, input);

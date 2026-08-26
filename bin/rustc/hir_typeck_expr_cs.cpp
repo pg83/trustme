@@ -8061,7 +8061,10 @@ default:
                     // A default associated type is only a fallback.  Keep
                     // looking for a proven child impl before committing its
                     // output; the crate index is not ordered by specialization.
-                    if (!context.resolve.board().settings->solver.globally && v.name != "" && impl.typeIsSpecialisable(v.name.c_str()) && traitImpl && traitImpl->impl) {
+                    // This applies under the goal bridge too: the identity
+                    // fallback re-enters through the legacy enumeration, which
+                    // reports the specialisable default before its sibling.
+                    if (v.name != "" && impl.typeIsSpecialisable(v.name.c_str()) && traitImpl && traitImpl->impl) {
                         if (!specialisableImpl || traitImpl->impl->moreSpecificThan(context.crate.types, *specialisableImpl)) {
                             DEBUG("[check_associated] - exact specialisable fallback " << impl);
                             specialisableImpl = traitImpl->impl;
