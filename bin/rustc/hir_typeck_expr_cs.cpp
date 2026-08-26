@@ -8187,14 +8187,11 @@ default:
                 if (!hasFuzzySpecialisation) {
                     // ImplRef owns its inferred impl arguments, so locate the
                     // stable HIR impl again instead of retaining a response
-                    // past its callback.  The repeat must enumerate impls the
-                    // legacy way: the goal bridge folds the specialisable
-                    // default behind its merged sibling and the exact impl
-                    // would not reappear.
+                    // past its callback.  The repeat re-runs the solver: the
+                    // exporting mode re-visits the specialisable default with
+                    // its Equal head, and the callback now commits it.
                     selectSpecialisableFallback = true;
-                    found = context.resolve.findTraitImplsLegacy(sp, v.trait, v.params, v.implTy, candidateCallback)
-                        || context.resolve.findTraitImplsMagic(sp, v.trait, v.params, v.implTy, candidateCallback)
-                        || context.resolve.findTraitImplsBound(sp, v.trait, v.params, v.implTy, candidateCallback);
+                    found = context.resolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp, false, true);
                     ASSERT_BUG(sp, found, "Selected specialisable impl disappeared during repeated lookup");
                 }
             }
