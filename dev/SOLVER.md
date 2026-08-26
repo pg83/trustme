@@ -216,3 +216,64 @@ forced-ambiguity правила для плейсхолдеров умирают
 WF/implied bounds, const traits в солвере — после стабилизации
 этапов 0-8, отдельными заходами. Region obligations из плана исключены:
 на семантику корректных программ не влияют (см. п.13 карты).
+
+# Дополнение к карте: о чём выше умолчано
+
+Дописано после ревизии кода 2026-08-26; предыдущие 13 пунктов были
+неполны. План этапов 0-5 твёрдый (якоря по живому коду), 6-9 —
+направления. Ниже — срезы, не попавшие ни в карту, ни в план.
+
+### 14. Клоужеры и async: вывод вне солвера
+
+Вывод сигнатуры клоужера из expected type (expr_cs:7258+), вывод
+Fn/FnMut/FnOnce kind, AsyncFn→Fn форвардинг closure-структур
+(TAG_Path-хак в findTraitImplsTypesCb) — легаси-механика. rustc
+выводит сигнатуру/kind через obligations в солвере.
+
+### 15. RPITIT: строковый синтез ассоциатов
+
+`impl Trait` в трейтах живёт на интернированных именах
+`erased#<item>_<i>` (hir_from_ast:1081, hir_expand:6587,
+NotYetKnown-ветка revealOpaqueType). Идентичность синтетического
+ассоц-типа держится на строковом префиксе, не на структуре. Работает,
+но это конвенция, а не модель.
+
+### 16. Never type: точечные правила
+
+Diverge в матчинге ассоциатов принудительно Ambiguous
+(helpers:4251, 4850); RPIT, ограниченный только собой, фолбэчится в
+`()` (fallbackUnresolvedRpitType). Никакой never-type-fallback модели
+rustc (diverging ivars) за этим нет.
+
+### 17. Coherence/intercrate: частично
+
+coherenceMode + traitRefIsKnowable в эвалюаторе есть, явные
+positive/negative auto-impl'ы учитываются (helpers:3871, 4666+). Но
+полнота intercrate-семантики (ambiguity для чужих крейтов, negative
+reasoning, orphan-полнота) против rustc систематически не сверялась.
+
+### 18. Фазовая перепутанность reveal → getOrGenMir
+
+revealOpaqueType лениво генерит MIR ЧУЖОГО итема, чтобы достать
+erasedTypes; транс тянет typeck-лоуринг посреди себя. Порядок фаз
+держится на кэше и удаче, не на модели зависимостей.
+
+### 19. Coercion-граф целиком
+
+linkCoerce/checkCoerceTys/checkIvarPossFailsBounds/autoderef — свой
+fuzzy-механизм унификации с коэрциями; в плане затронут только краем
+(CoerceUnsized-проба, этап 5). rustc-коэрции опираются на солверные
+Unsize/CoerceUnsized цели.
+
+## Страховки в коде без плана удаления
+
+- Двойной reveal в trans поверх фикспойнта: TypeVisitor::visitType
+  (trans_main_bindings) и вход TargetGetTypeRepr — избыточны после
+  59a9e999b, не проверены на удаляемость.
+- One-shot ответы (сброс response-кэша на входе outermost) — маскируют
+  невалидность реплея ответов внутри функции; убрать сможет только
+  этап 0/1 (абсолютные ключи).
+- Slot-count гард в emitResponse («ответ ивар-цели без слотов не
+  кэшировать») — заплатка того же корня.
+- Исключение Sized-семейства из крейт-кэша generic-целей — обход
+  ?Sized-контекста (умрёт на этапе 4).
