@@ -613,16 +613,20 @@ default:
                     DEBUG("[visit(_Index)] cmp=" << cmp << " - " << impl);
                     possibleResType = impl.getType(context.crate.types, "Output", {});
                     count += 1;
-                    if (cmp == HIRCompare::Equal) {
-                        return true;
-                    }
                     possibleIndexType = impl.getTraitTyParam(context.crate.types, 0);
-                    return false;
+                    return cmp == HIRCompare::Equal;
                 });
                 if (rv) {
                     // If a non-fuzzy impl was found, but there was no result type - then the result must be opaque
                     if (possibleResType == HIRTypeRef()) {
                         possibleResType = context.crate.types.path(HIRPath(ty, HIRGenericPath(langIndex, mv$(traitPp)), "Output"), HIRTypePathBinding::make_Opaque({}));
+                    }
+                    // An environment response can prove the goal while its
+                    // parameters still carry the actual index type (a fuzzy
+                    // `[T]: Index<usize>` bound answering `Index<?lit>`):
+                    // apply that constraint, or the literal falls back to i32.
+                    if (possibleIndexType != HIRTypeRef() && !typeContainsImplPlaceholder(context.crate.types, possibleIndexType)) {
+                        this->context.equateTypes(node.span(), node.cache.indexTy, possibleIndexType);
                     }
                     // TODO: Node's result type could be an &-ptr?
                     this->context.equateTypes(node.span(), node.resType, possibleResType);
