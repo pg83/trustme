@@ -4418,7 +4418,18 @@ default:
                     }
                     sawAmbiguous |= autoBuiltinResult == Certainty::Ambiguous;
                 }
-                if (sawAmbiguous || resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams) || (coherenceMode && !traitRefIsKnowable(trait, goalParams, resolvedType))) {
+                // Zero viable candidates: heads are selected by the self
+                // CONSTRUCTOR, so a concrete constructor stays NoSolution no
+                // matter what its arguments or the trait parameters resolve
+                // to ([?i; 3]: ExactSizeIterator).  A bare-ivar self can
+                // still match anything, and a rigid projection self is not a
+                // constructor -- inference elsewhere in the goal can still
+                // unlock an environment candidate for it.
+                const auto* selfPath = resolvedType->opt_Path();
+                const bool selfIsAlias = selfPath && (selfPath->binding.is_Opaque() || selfPath->binding.is_Unbound());
+                const bool inferMayUnlock = resolvedType->is_Infer()
+                    || (selfIsAlias && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)));
+                if (sawAmbiguous || inferMayUnlock || (coherenceMode && !traitRefIsKnowable(trait, goalParams, resolvedType))) {
                     return cacheResult(Certainty::Ambiguous);
                 }
                 return cacheResult(Certainty::NoSolution);
@@ -4964,14 +4975,20 @@ default:
                     // `<_ as IntoIterator>::IntoIter: Iterator` into NoSolution
                     // and incorrectly discard an enclosing `Zip` candidate.
                     //
-                    // Only inference in the *self type* warrants that: heads
-                    // are selected by self, so with a concrete self and zero
-                    // head matches no instantiation of a trait parameter can
-                    // produce a candidate. An inference variable there (e.g.
-                    // `Option<T>: AsRef<_>`) must stay NoSolution, or a
-                    // blanket impl's unprovable where-clause keeps a method
-                    // candidate alive and shadows the inherent method.
-                    if (resolve_.typeContainsIvars(resolvedType)) {
+                    // Only inference at the *root* of the self type warrants
+                    // that: heads are selected by the self CONSTRUCTOR, so a
+                    // concrete constructor with zero head matches stays
+                    // NoSolution no matter what its arguments resolve to
+                    // (`[?i; 3]: ExactSizeIterator` -- no impl has an array
+                    // self; keeping it ambiguous lets the `&mut I` blanket
+                    // shadow the inherent slice `len`).  A bare-ivar self can
+                    // still match anything, and a rigid projection self is
+                    // not a constructor -- inference elsewhere in the goal
+                    // can still unlock an environment candidate for it.
+                    const auto* noViableSelfPath = resolvedType->opt_Path();
+                    const bool noViableSelfIsAlias = noViableSelfPath && (noViableSelfPath->binding.is_Opaque() || noViableSelfPath->binding.is_Unbound());
+                    if (resolvedType->is_Infer()
+                        || (noViableSelfIsAlias && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)))) {
                         return emitForcedAmbiguity();
                     }
                     return false;
