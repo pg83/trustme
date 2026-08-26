@@ -7612,6 +7612,16 @@ default:
         normalizeConstParams(v.params, &traitDef.params);
         normalizeConstParams(v.atyPp, nullptr);
 
+        // In the defining scope a return-position opaque reveals to its
+        // hidden type; a goal parameter carrying one can then resolve
+        // normally (`u8: From<<opaque as Iterator>::Item>`).
+        for (auto& ty : v.params.types) {
+            auto revealed = context.revealOpaqueTypes(ty);
+            if (revealed != ty) {
+                ty = context.resolve.expandAssociatedTypes(sp, mv$(revealed));
+            }
+        }
+
         ::std::optional<HIRTypeRef> outputType;
 
         struct H {
@@ -8153,6 +8163,12 @@ default:
                 found = context.resolve.findTraitImplsLegacy(sp, v.trait, v.params, v.implTy, candidateCallback)
                     || context.resolve.findTraitImplsMagic(sp, v.trait, v.params, v.implTy, candidateCallback)
                     || context.resolve.findTraitImplsBound(sp, v.trait, v.params, v.implTy, candidateCallback);
+                if (!found && count == 0) {
+                    // The legacy walk added nothing either: the goal is still
+                    // the ambiguity the identity response reported, not a
+                    // definitive absence of impls.
+                    sawAmbiguousIdentity = true;
+                }
             }
             if (!found && specialisableImpl) {
                 // An applicability predicate on a more-specific impl can be
@@ -8955,7 +8971,11 @@ namespace {
             // Search for any trait impl that could match this,
             bool boundFailed = true;
             bool boundExact = false;
-            context.resolve.findTraitImpls(sp, bound->trait, p, t, [&](const auto impl, auto cmp) {
+            // An ENUMERATION, like the overload probe: the canonical solver's
+            // merged/identity response hides candidates it folded away and
+            // answers NoSolution for opaque-laden goals it cannot judge, so a
+            // viable possibility would be filtered out.  Walk legacy paths.
+            auto boundProbe = [&](const auto impl, auto cmp) {
                 // If this bound specifies an associated type, then check that that type could match
                 if (bound->name != "") {
                     auto aty = impl.getType(context.crate.types, bound->name.c_str(), bound->atyPp);
@@ -8982,7 +9002,10 @@ namespace {
                     return true;
                 }
                 return false;
-            });
+            };
+            context.resolve.findTraitImplsLegacy(sp, bound->trait, p, t, boundProbe)
+                || context.resolve.findTraitImplsMagic(sp, bound->trait, p, t, boundProbe)
+                || context.resolve.findTraitImplsBound(sp, bound->trait, p, t, boundProbe);
             if (boundFailed && !t->is_Infer()) {
                 // If none was found, remove from the possibility list
                 DEBUG("Remove possibility " << newTy << " because it failed a bound");
