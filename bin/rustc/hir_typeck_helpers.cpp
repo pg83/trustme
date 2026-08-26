@@ -4113,6 +4113,14 @@ default:
                         }
                     }
                     if (cmp == HIRCompare::Unequal) {
+                        // `!` coerces into any requirement: a diverging
+                        // closure's Output does not reject the candidate, the
+                        // caller's coercion machinery settles it (rustc seeds
+                        // the closure signature from the expectation instead).
+                        if (resolve_.ivars.getType(output)->is_Diverge()) {
+                            result = Certainty::Ambiguous;
+                            continue;
+                        }
                         return Certainty::NoSolution;
                     }
                     if (cmp == HIRCompare::Fuzzy) {
@@ -4659,6 +4667,13 @@ default:
                     }
                 }
                 if (cmp == HIRCompare::Unequal) {
+                    // `!` coerces into any requirement: a diverging closure's
+                    // Output does not reject the candidate, the caller's
+                    // coercion machinery settles it (rustc seeds the closure
+                    // signature from the expectation instead).
+                    if (resolve_.ivars.getType(output)->is_Diverge()) {
+                        return Certainty::Ambiguous;
+                    }
                     return Certainty::NoSolution;
                 }
                 // A normalizes-to goal with a caller inference variable has a
