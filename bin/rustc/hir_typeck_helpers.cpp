@@ -5817,7 +5817,6 @@ default:
             , currentTraitPtr(currentTrait ? &crate.getTraitByPath(Span(), currentTrait->path) : nullptr)
             , eatCachePool(stl::ObjPool::fromMemory())
             , eatCache(eatCachePool.mutPtr())
-            , coherenceIvars(crate.types)
         {
             implGenerics_ = implParams;
             itemGenerics_ = itemParams;
@@ -5925,21 +5924,23 @@ default:
                 return false;
             }
 
-            // The probe resolver is pool-owned and reused, while its inference table
-            // is reset per overlap query.  No probe variable can escape into m_ivars.
-            coherenceIvars.ivars.clear();
-            coherenceIvars.values.clear();
-            coherenceIvars.hasChanged = false;
-            if (!coherenceResolve) {
+            // The probe runs on the caller's own inference table under a
+            // snapshot: every binding and fresh variable it creates is rolled
+            // back, so nothing escapes into the type-checking context.  A
+            // dedicated evaluator keeps the probe's goal bookkeeping out of
+            // any evaluation session currently on the stack.
+            if (!coherenceEvaluator) {
                 ASSERT_BUG(sp, crate.pool, "next-solver coherence requires the crate object pool");
-                coherenceResolve = crate.pool->make<TraitResolution>(coherenceIvars, this->wb, implGenerics_, itemGenerics_, visPath, currentTraitPath_);
-            } else {
-                coherenceResolve->setGenericContext(implGenerics_, itemGenerics_);
+                coherenceEvaluator = crate.pool->make<NextTraitGoalEvaluator>(*this, crate);
             }
-            if (!coherenceResolve->nextSolver) {
-                coherenceResolve->nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*coherenceResolve, crate);
-            }
-            return coherenceResolve->nextSolver->evaluateOverlap(sp, *leftImpl->traitPath, *leftImpl->impl, *rightImpl->impl);
+            auto snapshot = ivars.snapshot();
+            auto* savedConstraint = typeConstraint;
+            typeConstraint = nullptr;
+            STD_DEFER {
+                typeConstraint = savedConstraint;
+                ivars.rollbackTo(snapshot);
+            };
+            return coherenceEvaluator->evaluateOverlap(sp, *leftImpl->traitPath, *leftImpl->impl, *rightImpl->impl);
         }
 
         bool TraitResolution::findTraitImplsNextCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams, bool allowInferInputs) const {

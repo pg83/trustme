@@ -385,11 +385,14 @@ private:
     // Owned by the crate ObjPool.  TraitResolution only keeps a stable
     // pointer into the compiler-lifetime arena.
     mutable NextTraitGoalEvaluator* nextSolver = nullptr;
-    // Coherence probes use an isolated inference table, so overlap checks
-    // cannot bind or append variables in the caller's type-checking context.
-    mutable HMTypeInferrence coherenceIvars;
-    mutable TraitResolution* coherenceResolve = nullptr;
-    TraitTypeConstraintCallback* typeConstraint = nullptr;
+    // Coherence probes run on the caller's own inference table under a
+    // snapshot that is rolled back afterwards; a dedicated evaluator keeps
+    // the probe's goal bookkeeping out of any active evaluation session.
+    mutable NextTraitGoalEvaluator* coherenceEvaluator = nullptr;
+    // Mutable so a coherence probe can detach it for its own duration:
+    // constraint callbacks fired under a rolled-back snapshot would leak
+    // probe-internal types into the type-checking context.
+    mutable TraitTypeConstraintCallback* typeConstraint = nullptr;
     // Bumped when the defining-opaque registrations change: they alter what
     // containsDefiningOpaque answers, so cached goals must not outlive them.
     mutable u64 solverEnvGeneration = 0;
