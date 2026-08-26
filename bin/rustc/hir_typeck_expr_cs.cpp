@@ -7733,7 +7733,11 @@ default:
                     probeParams.types.front() = source;
                 }
             }
-            context.resolve.findTraitImpls(sp, v.trait, probeParams, v.implTy, [&](ImplRef impl, HIRCompare) {
+            // A semantic-overload PROBE is an enumeration, not a decision:
+            // the canonical solver's merged/identity response hides the
+            // overload impls it folded away (u32 / NonZero<u32> would look
+            // like a builtin-only operator).  Walk the legacy paths.
+            auto probeCallback = [&](ImplRef impl, HIRCompare) {
                 if (impl.isAmbiguousIdentity()) {
                     // A merged identity response says that no concrete impl
                     // may guide inference.  It is not itself an overloaded
@@ -7750,7 +7754,10 @@ default:
                     return true;
                 }
                 return false;
-            });
+            };
+            context.resolve.findTraitImplsLegacy(sp, v.trait, probeParams, v.implTy, probeCallback)
+                || context.resolve.findTraitImplsMagic(sp, v.trait, probeParams, v.implTy, probeCallback)
+                || context.resolve.findTraitImplsBound(sp, v.trait, probeParams, v.implTy, probeCallback);
         }
 
         // An integer literal can only become a primitive integer, and shifting
@@ -8143,7 +8150,9 @@ default:
                 // fallback picks the wrong default.
                 DEBUG("[check_associated] identity response, retrying with legacy possibilities");
                 sawAmbiguousIdentity = false;
-                found = context.resolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
+                found = context.resolve.findTraitImplsLegacy(sp, v.trait, v.params, v.implTy, candidateCallback)
+                    || context.resolve.findTraitImplsMagic(sp, v.trait, v.params, v.implTy, candidateCallback)
+                    || context.resolve.findTraitImplsBound(sp, v.trait, v.params, v.implTy, candidateCallback);
             }
             if (!found && specialisableImpl) {
                 // An applicability predicate on a more-specific impl can be
