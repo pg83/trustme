@@ -500,3 +500,28 @@ impl<T, U> TryFrom2<U> for T where U: Into2<T> {
 - «clang++ linker failed» в гейте при параллельной второй 72-джобной сборке —
   ресурсный флак; недетерминированные падения гейта сначала проверять
   одиночным прогоном узла.
+
+## Карта slow-корпуса под globally (2026-08-26, бинарь da959dd57)
+
+79 узлов красных (unit-гейт — зелёный целиком). Классы по гистограмме:
+
+1. **Литеральные ивары в целях** (~35: doctest'ы, `assert_eq!(2+3+4,
+   (2..).take(3).sum())`, Vec/slice-литералы; `?N:i : Debug/PartialEq/Sum`).
+   Диагноз: legacy сходится через fallback-стадию checkIvarPoss — перечисляет
+   примитивы как possibilities и фильтрует их bound-тестами
+   (`i128: Sum<i32>` → нет → i32 единственный). Под globally стадию блокирует
+   коэрционный барьер, а identity-ответы не кормят possibilities.
+   Точечные мосты сделаны (7f0d7b808) — системный фикс: канонические ивары
+   в goal-машине ((б)-ядро): ивары канонизуются в экзистенциалы, ответы
+   применяют constraints через существующий instantiate-канал, forced
+   ambiguity уходит.
+2. TAIT/opaque (6 ассертов) — закрыто 70b8a834d (после старта корпуса).
+3. ExactSizeIterator (10), trans Item-not-found (4), Spare rules (4),
+   MyFrom/issue-75053 (4), dyn-upcasting, implied-bounds — по одному.
+
+Список одиночных UI-хвостов (16 воспроизведённых на da959dd57):
+nested-hkl (Cyclic anon type в Expand), copy-check-deferred/side-effects,
+array-impls-length-32, trait-resolution-breakage, fn-ptr-int-float,
+defined-by-trait-resolution, different_where_bounds,
+implied_bounds_entailment_alias_var, issue-75053, slice-patterns-nested,
+issue-70442, mono-impossible, destructuring, issue-89952.

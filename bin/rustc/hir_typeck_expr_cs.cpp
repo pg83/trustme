@@ -8141,6 +8141,7 @@ default:
                 // single-candidate commit below and guide inference
                 // (binding T := ?e) instead of stalling until the literal
                 // fallback picks the wrong default.
+                DEBUG("[check_associated] identity response, retrying with legacy possibilities");
                 sawAmbiguousIdentity = false;
                 found = context.resolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
             }
