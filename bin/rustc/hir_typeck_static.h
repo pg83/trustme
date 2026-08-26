@@ -192,7 +192,12 @@ public:
         return this->findImplCb(sp, traitPath, &traitParams, type, foundCb);
     }
 
-    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, bool dontHandoffToSpecialised = false) const;
+    // dontHandoffToSpecialised: skip the Copy/Clone/Sized/Unsize
+    // definitional shortcuts.  noGoalBridge: keep the legacy impl
+    // iteration even in globally mode -- for callers that resolve an
+    // ITEM through the specialization graph and need every impl, not
+    // one merged response.
+    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, bool dontHandoffToSpecialised = false, bool noGoalBridge = false) const;
 
     template <typename F>
     bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRTypeData* type, F f) const {
@@ -201,9 +206,9 @@ public:
     }
 
     template <typename F>
-    bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, F f, bool dontHandoffToSpecialised = false) const {
+    bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, F f, bool dontHandoffToSpecialised = false, bool noGoalBridge = false) const {
         StaticImplCb<F> cb(f);
-        return findImplCb(sp, traitPath, traitParams, type, cb, dontHandoffToSpecialised);
+        return findImplCb(sp, traitPath, traitParams, type, cb, dontHandoffToSpecialised, noGoalBridge);
     }
 
 private:

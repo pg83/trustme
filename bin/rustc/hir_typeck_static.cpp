@@ -106,7 +106,7 @@ bool StaticTraitResolve::genericBoundsUnresolved(const HIRGenericParams* params)
     return false;
 }
 
-bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, bool dontHandoffToSpecialised) const {
+bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, bool dontHandoffToSpecialised, bool noGoalBridge) const {
     TRACE_FUNCTION_F(traitPath << FMT_CB(os, if (traitParams) { os << *traitParams; } else { os << "<?>"; }) << " for " << type);
     auto cbIdent = HIRResolvePlaceholdersNop();
 
@@ -114,7 +114,7 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
         HIRTypeRef normalizedType = type;
         this->expandAssociatedTypes(sp, normalizedType);
         if (normalizedType != type) {
-            return this->findImplCb(sp, traitPath, traitParams, normalizedType, foundCb, dontHandoffToSpecialised);
+            return this->findImplCb(sp, traitPath, traitParams, normalizedType, foundCb, dontHandoffToSpecialised, noGoalBridge);
         }
     }
 
@@ -306,7 +306,7 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
     // still hold those in unresolved UfcsUnknown form -- data the goal
     // machinery must not see. Once the bounds are resolved the bridge takes
     // every query.
-    if (this->wb.settings->solver.globally && !dontHandoffToSpecialised
+    if (this->wb.settings->solver.globally && !dontHandoffToSpecialised && !noGoalBridge
         && !genericBoundsUnresolved(implGenerics_) && !genericBoundsUnresolved(itemGenerics_)) {
         if (!nextSolver) {
             ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
@@ -4156,6 +4156,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 ImplRef bestImpl;
                 ValuePtr rv;
                 bool lookupNeedsResolution = specializationLookupNeedsResolution(pe.type, pe.trait.params);
+                auto searchImpls = [&](bool noGoalBridge) {
                 this->findImpl(sp, pe.trait.path, &pe.trait.params, pe.type, [&](auto impl, bool isFuzz) -> bool {
                     DEBUG(impl);
                     if (!impl.data.is_TraitImpl()) {
@@ -4212,7 +4213,19 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                         // NOTE: There could be an overlapping and more-specific impl without `default` being involved
                         return false;
                     }
-                });
+                }, /*dontHandoffToSpecialised=*/false, noGoalBridge);
+                };
+                searchImpls(/*noGoalBridge=*/false);
+                if (!bestImpl.isValid() && this->wb.settings->solver.globally) {
+                    // The goal bridge returns one merged response -- the most
+                    // specific impl.  When that impl omits the requested item
+                    // (`SizeHint for Empty` overrides only upper_bound), the
+                    // item is inherited from the impl it shadows: iterate
+                    // impls the legacy way to find the providing ancestor.
+                    hasBoundedImpl = false;
+                    hasFuzzyImpl = false;
+                    searchImpls(/*noGoalBridge=*/true);
+                }
                 if (!bestImpl.isValid()) {
                     if (hasBoundedImpl || hasFuzzyImpl) {
                         DEBUG("Trait item depends on an in-scope bound or fuzzy impl");

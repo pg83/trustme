@@ -7496,7 +7496,7 @@ default:
         UNREACHABLE();
     }
 
-    void addImplBounds(Context& context, const Span& sp, const ImplRef& implRef) {
+    void addImplBounds(Context& context, const Span& sp, const ImplRef& implRef, bool onlyWithIvars = false) {
         const auto* ep = implRef.data.opt_TraitImpl();
         if (!ep) {
             return;
@@ -7515,6 +7515,32 @@ default:
                 auto bTyMono = ms.monomorphType(sp, be.type);
                 auto bTpMono = ms.monomorphTraitpath(sp, be.trait, true);
                 DEBUG("- " << bTyMono << " : " << bTpMono);
+                if (onlyWithIvars) {
+                    // The next solver proved this bound while building the
+                    // response, but a proof through a builtin candidate can
+                    // carry inference effects the certainty-only path drops
+                    // (a closure's parameter types from `F: FnMut(char)`).
+                    // Re-export exactly the bounds that still mention live
+                    // inference variables; a fully rigid bound is settled.
+                    // A closure/generator NodeType hides its signature ivars
+                    // from typeContainsIvars; an Fn-trait bound on one is
+                    // exactly the signature-seeding case.
+                    auto needsExport = [&](const HIRTypeData* ty) {
+                        return context.ivars.typeContainsIvars(ty, false) || visitTyWith(ty, [](const HIRTypeData* inner) {
+                            return inner->is_NodeType();
+                        });
+                    };
+                    bool hasIvars = needsExport(bTyMono);
+                    for (const auto& ty : bTpMono.path.params.types) {
+                        hasIvars |= needsExport(ty);
+                    }
+                    for (const auto& aty : bTpMono.typeBounds) {
+                        hasIvars |= needsExport(aty.second.type);
+                    }
+                    if (!hasIvars) {
+                        break;
+                    }
+                }
                 if (bTpMono.typeBounds.size() > 0) {
                     for (const auto& atyBound : bTpMono.typeBounds) {
                         context.equateTypesAssoc(sp, atyBound.second.type, bTpMono.path.path, bTpMono.path.params.clone(), bTyMono, atyBound.first.c_str(), atyBound.second.atyParams, false);
@@ -7919,12 +7945,14 @@ default:
                 }
                 // The next solver has already evaluated the selected impl's
                 // where-clauses while building this response.  Re-exporting
-                // them into the legacy constraint loop evaluates the same
-                // proof a second time and turns a coinductive fixed point into
-                // an endless new rule.
-                if (!context.resolve.board().settings->solver.globally) {
-                    addImplBounds(context, sp, impl);
-                }
+                // all of them into the legacy constraint loop evaluates the
+                // same proof a second time and turns a coinductive fixed
+                // point into an endless new rule -- but a bound still holding
+                // live inference variables carries constraints the
+                // certainty-only nested evaluation dropped (a closure's
+                // parameter types from `F: FnMut(char) -> bool`), so those
+                // are re-exported.
+                addImplBounds(context, sp, impl, /*onlyWithIvars=*/context.resolve.board().settings->solver.globally);
             };
             auto candidateCallback = [&](ImplRef impl, HIRCompare cmp) {
                 DEBUG("[check_associated] Found cmp=" << cmp << " " << impl);

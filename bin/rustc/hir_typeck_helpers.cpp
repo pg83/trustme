@@ -3996,7 +3996,11 @@ default:
                 if (associated) {
                     bindCandidatePlaceholders(*candidate, candidate->impl.getImplType(crate.types), *associated, true);
                 }
-                const bool environmentResponseConstraint = candidate->headMatch == HIRCompare::Fuzzy && isEnvironmentOrBuiltin(candidate->impl) && !candidateHasPlaceholders(*candidate);
+                // An ambiguous-identity response is by definition a
+                // non-committal answer (e.g. Copy on a union whose params
+                // still carry inference variables); it can never be promoted
+                // to a proven response constraint.
+                const bool environmentResponseConstraint = candidate->headMatch == HIRCompare::Fuzzy && isEnvironmentOrBuiltin(candidate->impl) && !candidate->impl.isAmbiguousIdentity() && !candidateHasPlaceholders(*candidate);
                 auto result = candidate->headMatch == HIRCompare::Equal || environmentResponseConstraint ? Certainty::Proven : Certainty::Ambiguous;
 
                 const bool autoBuiltin = candidate->autoBuiltin;

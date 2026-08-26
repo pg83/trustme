@@ -427,13 +427,46 @@ impl<T, U> TryFrom2<U> for T where U: Into2<T> {
    reverse-blanket) — регрессия
    `test_next_solver_globally_paramenv_shadows_normalization.rs`.
    libcore под globally прошёл convert (реальный TryFrom/TryInto блапкет).
-3. **(в работе)** специализация: наследование assoc-item'а по specialization-графу —
+3. **`e7fe8d20f`** специализация: наследование assoc-item'а по specialization-графу —
    специализирующий impl без `type Item` наследует значение ближайшего
    вытесненного предка; проецировать можно только финальное (без `default`).
    `Candidate::specializationItemSource` пишется при discard'е в merge,
    `traitCertainty` хранит сертинти цели до даунгрейда за отсутствующий item.
    Чинит fuse.rs:407 (`FuseImpl` наследует `Item` из default-impl'а).
    Репро: `test_next_solver_globally_specialization_inherited_assoc.rs`.
+   **Веха: libcore собирается end-to-end под `-Znext-solver=globally`.**
+4. **`9e4e934eb`** — пять швов liballoc одной пачкой:
+   mixed ordering в `moreSpecificThan` = «несравнимы», не ICE;
+   overlap-префильтр головами legacy `overlapsWith` (occurs-check:
+   `Extend<T>`/`Extend<&T>` не пересекаются; headOnly — у legacy bound-обхода
+   нет цикл-гвардов на коиндуктивных маркерах);
+   AliasRelate в `matchAssociatedTypes`/`matchRootAssociated` (ненормализованная
+   проекция ≠ wildcard и ≠ структурный мисматч — нормализовать обе стороны в
+   текущем env, с гвардом от повторного входа);
+   требование assoc-item'а проецируется через ДЕКЛАРИРУЮЩИЙ трейт
+   (`Output` цели `FnMut` живёт на `FnOnce`);
+   имплицитный `Sized` на параметрах impl'а — часто единственный предикат,
+   отличающий специализирующий impl (`Box<I>` vs `Box<I: ?Sized>`).
+   Репро-регрессии: `..._paramenv_assoc_normalizes`, `..._implicit_sized_specialization`,
+   `..._output_declared_on_fnonce`.
+   **Веха: liballoc проходит весь фронтенд под globally.**
+
+5. **`d98c10721`** — швы compiler-builtins одной пачкой:
+   alias-bounds = env-класс предпочтений (shadow не выбрасывает
+   `CastFrom<u16>`-подобные супертрейт-элаборированные баунды ATY —
+   sqrt RSQRT_TAB); assoc-equality супертрейта едет с alias-bound
+   кандидатом (`Int: BitXor<Output=Self>` отвечает Output для ригидного
+   `F::Int`); голый env-предикат не имеет мнения о значении assoc
+   (та же where-клауза приходит в сборку дважды — уточнение, не конфликт;
+   div.rs `Shr<u32, Output=HalfRep<F>>`); принтер дампа лишних правил
+   больше не абортится (UNREACHABLE маскировал каждую «Spare rule»
+   диагностику ICE'ом); `TRUSTME_NEXT_SOLVER=globally` — env-переключатель
+   дефолта для обзорных прогонов корпусов.
+   Регрессии: `..._alias_bounds_are_env_class`, `..._supertrait_assoc_equality`,
+   `..._bare_predicate_refines`.
+   **Веха: compiler-builtins проходит фронтенд под globally.**
+   Обзор `TRUSTME_NEXT_SOLVER=globally` на unit-гейте: падал ровно один
+   узел — сборка тестового libstd; весь остальной гейт — каскад от него.
 
 ## Заметки
 
