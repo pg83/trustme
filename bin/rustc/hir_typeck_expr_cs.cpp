@@ -8326,8 +8326,16 @@ default:
                     return AssociatedCheckResult::Ambiguous;
                 }
                 assert(possibleImplTy != HIRTypeRef());
-                context.equateTypes(sp, v.implTy, possibleImplTy);
+                // A tentative impl placeholder is not a commitment; equating
+                // it would leak `impl_?_*` into the inference table (matches
+                // selectExactImpl above).
+                if (!typeContainsImplPlaceholder(context.crate.types, possibleImplTy)) {
+                    context.equateTypes(sp, v.implTy, possibleImplTy);
+                }
                 for (unsigned int i = 0; i < possibleParams.types.size(); i++) {
+                    if (typeContainsImplPlaceholder(context.crate.types, possibleParams.types[i])) {
+                        continue;
+                    }
                     context.equateTypes(sp, v.params.types[i], possibleParams.types[i]);
                 }
                 for (unsigned int i = 0; i < possibleParams.values.size(); i++) {
