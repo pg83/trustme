@@ -682,12 +682,10 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             ms.selfTy = pp.selfType;
             ms.ppImpl = &pp.ppImpl;
             ms.ppMethod = &pp.ppMethod;
-            try {
+            {
                 auto newLit = eval.evaluateConstant(path, c.value, ::std::move(ty), ::std::move(ms));
                 auto inserted = c.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
                 generatedLiterals.pushBack(&inserted.first->second);
-            } catch (const Defer&) {
-                BUG(pp.sp, "Solver could not commit during monomorphised evaluation of: " << path);
             }
         }
 
@@ -708,11 +706,9 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             ms.selfTy = pp.selfType;
             ms.ppImpl = &pp.ppImpl;
             ms.ppMethod = &pp.ppMethod;
-            try {
+            {
                 auto newLit = eval.evaluateConstant(path, s.value, ::std::move(ty), ::std::move(ms));
                 s.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
-            } catch (const Defer&) {
-                BUG(pp.sp, "Solver could not commit during monomorphised evaluation of: " << path);
             }
         }
 

@@ -66,23 +66,31 @@ namespace {
     // no, and report a loud PREDICATE MISS when the attempt succeeds.
     const bool sCapsOracle = getenv("TRUSTME_CAPS_ORACLE") != nullptr;
 
-    // Dumped at exit when TRUSTME_DEFER_STATS is set: how often the solver
-    // tail fired (the only deferral left).
-    struct DeferStats {
-        unsigned notYetKnown = 0;
-
-        ~DeferStats() {
-            if (!getenv("TRUSTME_DEFER_STATS")) {
-                return;
-            }
-            fprintf(stderr, "defer-stats: not-yet-known=%u\n", notYetKnown);
-        }
-    } gDeferStats;
 }
 
 namespace {
 
     bool constGenericIsConcrete(const HIRConstGeneric& value);
+
+    // A constant declared under trait-bound where-clauses (its own or the
+    // enclosing impl's) may name projections those bounds justify; resolving
+    // them needs the bounds' environment, which pre-evaluation phases do not
+    // model.  Such constants stay symbolic until monomorphisation asks with
+    // concrete substitutions -- the replacement for the old Defer unwind.
+    bool constItemMustStaySymbolic(const HIRGenericParams* implParams, const HIRGenericParams& itemParams) {
+        auto hasTraitBounds = [](const HIRGenericParams* params) {
+            if (!params) {
+                return false;
+            }
+            for (const auto& bound : params->bounds) {
+                if (bound.is_TraitBound()) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        return hasTraitBounds(implParams) || hasTraitBounds(&itemParams);
+    }
 
     struct MonomorphAvailability: HIRVisitor {
         const MonomorphState& ms;
@@ -1455,12 +1463,9 @@ namespace {
                 return EntPtr();
             }
             case TypeckValuePtr::TAG_NotYetKnown: {
-                // The legacy solver could not commit to an impl for a
-                // concrete path: the one deferral left, dying with the
-                // next-solver work.
-                gDeferStats.notYetKnown++;
-                DEBUG("Defer(NotYetKnown) value of " << path);
-                throw Defer{Span(sp)};
+                // With the goal solver as the default, resolution for a
+                // concrete path must answer definitively.
+                BUG(sp, "getValue could not commit to an impl for " << path);
             }
             case TypeckValuePtr::TAG_Constant: {
                 auto& e = v.as_Constant();
@@ -2016,13 +2021,8 @@ public:
                 auto nvs = NewvalState(item.value.state->module, modIp, FMT("static" << &item << "#"));
                 auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
                 DEBUG("- Evaluate " << p);
-                try {
-                    item.valueGenerated = true;
-                    item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, staticTy, std::move(constMs));
-                    item.valueGenerated = true;
-                } catch (const Defer&) {
-                    MIR_BUG(state, p << ": solver could not commit during value generation");
-                }
+                item.valueGenerated = true;
+                item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, staticTy, std::move(constMs));
                 DEBUG(p << " = " << item.valueRes);
             }
             const auto* value = s.valueRes.bytes.size() == staticSize ? &s.valueRes : nullptr;
@@ -2272,13 +2272,12 @@ public:
                     tempMs.selfTy = rootResolve.crate.types.self();
                 }
                 DEBUG("- Evaluate " << p);
-                item.valueState = HIRConstant::ValueState::InProgress;
-                try {
+                if (constItemMustStaySymbolic(implParamsDef, c.params)) {
+                    item.valueState = HIRConstant::ValueState::Generic;
+                } else {
+                    item.valueState = HIRConstant::ValueState::InProgress;
                     item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.value, item.type, std::move(tempMs));
                     item.valueState = HIRConstant::ValueState::Known;
-                } catch (const Defer&) {
-                    // The solver could not commit: symbolic until it can.
-                    item.valueState = HIRConstant::ValueState::Generic;
                 }
             }
         }
@@ -5292,13 +5291,9 @@ namespace {
                 if (!predicted && !sCapsOracle) {
                     return;
                 }
-                try {
-                    v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *v.as_Unevaluated())));
-                    if (!predicted) {
-                        fprintf(stderr, "PREDICATE MISS [evalulateConstGeneric]\n");
-                    }
-                } catch (const Defer&) {
-                    // Deferred - no update
+                v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *v.as_Unevaluated())));
+                if (!predicted) {
+                    fprintf(stderr, "PREDICATE MISS [evalulateConstGeneric]\n");
                 }
             }
         }
@@ -5311,7 +5306,7 @@ namespace {
                         ASSERT_BUG(sp, paramsUnresolved, "Path parameters visited without their definition");
                         continue;
                     }
-                    try {
+                    {
                         const auto& paramsDef = getParams->get(sp);
                         auto idx = static_cast<size_t>(&v - &p.values.front());
                         ASSERT_BUG(sp, idx < paramsDef.values.size(), "");
@@ -5323,8 +5318,6 @@ namespace {
                             continue;
                         }
                         evalulateConstGeneric(sp, ty, v);
-                    } catch (const Defer&) {
-                        // Deferred - no update
                     }
                 }
             }
@@ -5561,17 +5554,10 @@ namespace {
                     }
                     return;
                 }
-                try {
-                    auto val = evaluateConstgeneric(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
-                    as = val.readUsize(0);
-                    if (!predicted) {
-                        fprintf(stderr, "PREDICATE MISS [visitArraysize]\n");
-                    }
-                } catch (const Defer&) {
-                    const auto* tn = cast<const HIRExprNodeConstParam>(&*exprPtr);
-                    if (tn) {
-                        as = HIRConstGeneric(HIRGenericRef(tn->name, tn->binding));
-                    }
+                auto val = evaluateConstgeneric(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
+                as = val.readUsize(0);
+                if (!predicted) {
+                    fprintf(stderr, "PREDICATE MISS [visitArraysize]\n");
                 }
             } else {
                 DEBUG("Array size (known) = " << as);
@@ -5601,10 +5587,7 @@ namespace {
                         if (!predicted && !sCapsOracle) {
                             return;
                         }
-                        try {
-                            value = freezeEncodedLiteral(evaluateConstgeneric(Span(), wb, crate, e.inner, **unevaluated));
-                        } catch (const Defer&) {
-                        }
+                        value = freezeEncodedLiteral(evaluateConstgeneric(Span(), wb, crate, e.inner, **unevaluated));
                     }
                 };
                 for (auto& range : e.pattern.alternatives) {
@@ -5674,16 +5657,14 @@ namespace {
             } else if (item.value || item.value.mir) {
                 auto nvs = NewvalState{*mod, *modPath, FMT(p.getName() << "#")};
                 auto eval = getEval(item.value.span(), nvs);
-                item.valueState = HIRConstant::ValueState::InProgress;
-                try {
+                if (constItemMustStaySymbolic(implParams, item.params)) {
+                    item.valueState = HIRConstant::ValueState::Generic;
+                } else {
+                    item.valueState = HIRConstant::ValueState::InProgress;
                     item.valueRes = eval.evaluateConstant(p, item.value, item.type, monomorphState.clone());
                     item.valueState = HIRConstant::ValueState::Known;
-                } catch (const Defer&) {
-                    // The solver could not commit: symbolic until it can.
-                    item.valueState = HIRConstant::ValueState::Generic;
+                    DEBUG("constant: " << item.type << " = " << item.valueRes);
                 }
-
-                DEBUG("constant: " << item.type << " = " << item.valueRes);
             } else {
                 DEBUG("constant?"); // " << *item.m_value);
             }
@@ -5707,12 +5688,8 @@ namespace {
                 STD_DEFER {
                     item.valueEvaluating = false;
                 };
-                try {
-                    item.valueRes = eval.evaluateConstant(p, item.value, item.type);
-                    item.valueGenerated = true;
-                } catch (const Defer&) {
-                    ERROR(item.value->span(), E0000, "solver could not commit while evaluating top-level static");
-                }
+                item.valueRes = eval.evaluateConstant(p, item.value, item.type);
+                item.valueGenerated = true;
 
                 DEBUG("static: " << item.type << " = " << item.valueRes);
             }
@@ -5898,7 +5875,7 @@ namespace {
                 auto nvs = NewvalState{mod, modPath, FMT(name << "#" << varName << "_")};
                 auto eval = HIREvaluator{(*expr)->span(), wb, nvs};
                 eval.resolve.setImplGenericsRaw(MetadataType::None, item.params);
-                try {
+                {
                     auto val = eval.evaluateConstant(p, *expr, crate.types.primitive(ty));
                     DEBUG("enum variant: " << p << "::" << varName << " = " << val);
                     if (enumTagIsSigned(ty)) {
@@ -5906,8 +5883,6 @@ namespace {
                     } else {
                         value = EncodedLiteralSlice(val).readUint();
                     }
-                } catch (const Defer&) {
-                    BUG((*expr)->span(), "solver could not commit during evaluation of enum discriminant");
                 }
             } else if (idx > 0) {
                 visitEnumVariant(wb, crate, p, mod, modPath, name, item, idx - 1);
@@ -6122,13 +6097,9 @@ void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb,
         if (!predicted) {
             fprintf(stderr, "PREDICATE ATTEMPT [ConvertConstGeneric4]\n");
         }
-        try {
-            cg = freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *cge));
-            if (!predicted) {
-                fprintf(stderr, "PREDICATE MISS [ConvertConstGeneric4]\n");
-            }
-        } catch (const Defer&) {
-            // Deferred - no update
+        cg = freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *cge));
+        if (!predicted) {
+            fprintf(stderr, "PREDICATE MISS [ConvertConstGeneric4]\n");
         }
     }
 }
@@ -6168,7 +6139,7 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
 
             // Need to look up the required type - to do that requires knowing the item it's for
             // - Which, might not be known at this point - might be a UfcsInherent
-            try {
+            {
                 ASSERT_BUG(sp, paramsDef, "Missing generic parameter definitions for " << params);
                 auto idx = static_cast<size_t>(&v - &params.values.front());
                 ASSERT_BUG(sp, idx < paramsDef->values.size(), "");
@@ -6192,8 +6163,6 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
                 if (!predicted) {
                     fprintf(stderr, "PREDICATE MISS [MethodParams]\n");
                 }
-            } catch (const Defer&) {
-                // Deferred - no update
             }
         }
     }

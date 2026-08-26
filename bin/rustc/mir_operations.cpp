@@ -8,7 +8,7 @@
 #include "mir_helpers.h"
 #include "trans_target.h"
 #include "hir_conv_main_bindings.h"
-#include "hir_conv_constant_evaluation.h" // Defer
+#include "hir_conv_constant_evaluation.h"
 #include "trans_trans_list.h" // Note: This is included for inlining after enumeration and monomorph
 #include "hir_typeck_static.h"
 #include "mir_main_bindings.h"
@@ -193,11 +193,7 @@ const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const H
                 // - Maybe on the `Constant` entry there can be a list of pre-monomorphised values
                 auto it = hirConst.monomorphCache.find(path);
                 if (it == hirConst.monomorphCache.end() && !monomorphisePathNeeded(path)) {
-                    try {
-                        ConvertHIRConstantEvaluateConstant(state.resolve, implParams, HIRItemPath(path), hirConst);
-                    } catch (const Defer&) {
-                        MIR_BUG(state, "Solver could not commit while evaluating concrete constant " << path);
-                    }
+                    ConvertHIRConstantEvaluateConstant(state.resolve, implParams, HIRItemPath(path), hirConst);
                     it = hirConst.monomorphCache.find(path);
                 }
                 if (it == hirConst.monomorphCache.end()) {

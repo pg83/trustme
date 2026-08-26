@@ -5824,11 +5824,7 @@ namespace {
         }
         if (binding->valueState == HIRConstant::ValueState::Unknown
             || (binding->valueState == HIRConstant::ValueState::Generic && !binding->monomorphCache.count(pve->path))) {
-            try {
-                ConvertHIRConstantEvaluateConstant(resolve, implDef, pve->path, const_cast<HIRConstant&>(*binding));
-            } catch (const Defer&) {
-                BUG(sp, "Solver could not commit while evaluating pattern constant " << pve->path);
-            }
+            ConvertHIRConstantEvaluateConstant(resolve, implDef, pve->path, const_cast<HIRConstant&>(*binding));
         }
         if (binding->valueState == HIRConstant::ValueState::Known) {
             return &binding->valueRes;

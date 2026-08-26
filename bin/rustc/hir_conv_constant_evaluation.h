@@ -17,15 +17,6 @@ class MIRTerminator;
 class MIRTypeResolve;
 
 // Thrown by constant evaluation for exactly one reason: the legacy trait
-// solver could not commit to an impl for a concrete path (NotYetKnown).
-// This is solver debt, not architecture -- it disappears with the
-// next-solver work (HACKS.md, dev/DEFER.md stage 5); with concrete
-// substitutions resolution must answer yes/no/error. Everything else that
-// used to defer is a precondition of the caller or a BUG.
-struct Defer {
-    Span span;
-};
-
 struct HIREvaluator {
     class Newval {
     public:

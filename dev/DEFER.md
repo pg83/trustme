@@ -653,3 +653,33 @@ de92178c3), equality-rpass, issue-75053, ui-хэши ×4.
 simd/array-type — вывод intrinsic-аргументов), example-calendar,
 exercism-1, rust_lib×4, ui×3 (728335c8633b, d73f6adee092, e7fe71e02540),
 nested-hkl (Cyclic anon type в Expand), implied-bounds.
+
+## ВЕХА: throw Defer удалён (2026-08-26, вечер)
+
+Дефолтный солвер — goal solver (b1a114061: -Znext-solver=globally стал
+дефолтом; TRUSTME_NEXT_SOLVER=legacy / -Z next-solver=no — запасной ход
+до выпила legacy-путей). Поверх этого:
+
+- `struct Defer`, единственный `throw Defer` (getEntFullpath
+  NotYetKnown) и все ~13 catch-обёрток удалены. NotYetKnown в
+  getEntFullpath теперь BUG-инвариант: с goal-солвером по умолчанию
+  резолв конкретного пути обязан отвечать определённо.
+- Легитимные «отложенные» константы (self-bound / where-clause на
+  const-итеме) больше не разматываются исключением: предикат
+  constItemMustStaySymbolic решает ДО запуска интерпретатора — фазовая
+  предоценка оставляет их Generic, mono вычисляет с конкретными
+  подстановками. Ровно «не нужен, а не протаскивается как состояние».
+- defer-stats: not-yet-known=0 на libcore подтверждён до сноса.
+
+Перф-итог дня: libcore full pipeline globally 87s → 41s (тёплый
+certainty-кэш по generation'ам таблицы ивар/env; ответы one-shot;
+NextSolverCrateCache — крейт-lifetime кэш конкретных целей; ключи с
+value-Infer больше не считаются конкретными — ловилось на
+core swap_bytes). Default-режим (теперь тот же goal solver) — гейт
+зелёный целиком, включая dead-branch чекер и ratchet.
+
+Остаток до полного закрытия темы: выпил legacy-веток
+findImpl/StaticTraitResolve (после смены дефолта они достижимы только
+через TRUSTME_NEXT_SOLVER=legacy), корпусный хвост ~10 узлов
+(литеральный класс, rust_lib, nested-hkl, exercism), крейт-кэш шире
+(env-free целей с генериками).
