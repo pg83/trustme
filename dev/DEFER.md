@@ -694,3 +694,34 @@ Expand-фаза переписывала все сайты; под goal один
 откатены; следующий заход — найти неперезаписанный сайт Expand-фазы.
 Остальное: литеральный класс (i32-fallback, simd×2), rust_lib×4,
 nested-hkl (+хэш), exercism-1.
+
+## Корпус-8 (2026-08-26, поздний вечер, 73a800d7f)
+
+needs-reveal-all закрыт не поиском неперезаписанного Expand-сайта, а
+правильной моделью: OpaqueReveal — свойство резолвера, задаётся при
+конструировании (rustc typing modes). Транс-фазы строят
+StaticTraitResolve{wb, OpaqueReveal::All}, и expandAssociatedTypes
+раскрывает опаки как часть нормализационного фикспойнта
+(shallow-подстановка hidden-типа → renormalize до неподвижной точки).
+Первый заход (глобальный флаг + thread_local реентри-гард, 827a73a5e)
+переделан в 59a9e999b: никакого амбиентного стейта, поведение зависит
+только от заявленного режима объекта, не от стека входа.
+
+i32-fallback (73a800d7f): numericDefaultMustWait дедлочился, когда
+второй ивар операторного bound'а выводим только ИЗ дефолта
+(`sum += &i` по несвязанному типу элемента). Числовые дефолты теперь
+применяются безусловно последней стадией, когда всё остальное встало —
+как в rustc.
+
+Остаток корпуса (8 узлов): simd/array-type (вывод intrinsic-аргументов,
+exit 101), nested-hkl 728335c8633b (Cyclic anon type, exit -6),
+exercism-1 (timeout 60s), rust_lib×4 (297ac coretests
+mem::test_transmute_copy — runtime; 66549/4fcc alloctests
+str::test_chars_decoding/rev; ed05 coretests scan::test_iterator_scan).
+
+Отдельный долг вне корпуса: инвентаризация мутабельных статиков со
+стейтом алгоритмов (thread_local стеки рекурсии resolve/hir_type,
+repr-кэши trans_target на std::unordered_map, счётчики имён,
+sActiveDiscriminants, nextAliasInputInfer, статический скретч в
+helpers:392) — снята, зачистка отдельным проходом: всё это кандидаты
+на пул/резолвер/wire board по канону.
