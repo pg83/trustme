@@ -2909,6 +2909,12 @@ default:
                 bool autoBuiltin;
                 CandidateSource source;
                 bool ambiguityBeyondHead = false;
+                // Ambiguity from the candidate's own predicates (nested
+                // bounds, implicit Sized, type equalities, the structural
+                // auto walk) -- NOT from comparing the requested associated
+                // output, which is an output rather than a filter.  Decides
+                // whether an exported possibility keeps its Equal head.
+                bool nestedAmbiguity = false;
                 stl::Vector<const HIRGenericBound*> normalizationNestedGoals;
                 bool discarded = false;
                 // The certainty of the trait goal alone, before the root
@@ -4414,6 +4420,7 @@ default:
             Certainty evaluateCandidate(size_t frameIndex, size_t candidateIndex, const HIRSimplePath& trait, const HIRTraitPath::assocListT* associated) {
                 auto* candidate = frames[frameIndex]->candidates[candidateIndex];
                 candidate->ambiguityBeyondHead = false;
+                candidate->nestedAmbiguity = false;
                 if (associated) {
                     bindCandidatePlaceholders(*candidate, candidate->impl.getImplType(crate.types), *associated, true);
                 }
@@ -4434,6 +4441,7 @@ default:
                     }
                     if (structural == Certainty::Ambiguous) {
                         candidate->ambiguityBeyondHead = true;
+                        candidate->nestedAmbiguity = true;
                         result = Certainty::Ambiguous;
                     }
                 }
@@ -4484,6 +4492,7 @@ default:
                         if (sized == HIRCompare::Fuzzy) {
                             DEBUG("candidate downgrade: implicit sized");
                             candidate->ambiguityBeyondHead = true;
+                            candidate->nestedAmbiguity = true;
                             result = Certainty::Ambiguous;
                         }
                     }
@@ -4558,6 +4567,7 @@ default:
                         if (nested == Certainty::Ambiguous) {
                             DEBUG("candidate downgrade: nested bound");
                             candidate->ambiguityBeyondHead = true;
+                            candidate->nestedAmbiguity = true;
                             candidate->normalizationNestedGoals.pushBack(&bound);
                             result = Certainty::Ambiguous;
                         }
@@ -4579,6 +4589,7 @@ default:
                         }
                         if (cmp == HIRCompare::Fuzzy) {
                             candidate->ambiguityBeyondHead = true;
+                            candidate->nestedAmbiguity = true;
                             result = Certainty::Ambiguous;
                         }
                     }
@@ -5185,7 +5196,7 @@ default:
                 return rightResult != Certainty::NoSolution;
             }
 
-            bool evaluate(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams, bool allowInferInputs) {
+            bool evaluate(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams, bool allowInferInputs, bool exportAmbiguousCandidates = false) {
                 const bool outermost = span_ == nullptr;
                 DEBUG("evaluate >> " << trait << params << " for " << type << " outermost=" << outermost);
                 if (outermost) {
@@ -5280,9 +5291,13 @@ default:
                 // Match rustc's forced-ambiguity response for a genuinely
                 // unconstrained `Self` type.  A known associated output is an
                 // input constraint and can legitimately select a unique response.
+                // An exporting caller instead wants the viable candidate set
+                // for its possibility machinery (the trait arguments bound the
+                // enumeration), so assembly proceeds with the canonical Self
+                // variable.
                 const bool associatedConstrainsSelf = assocName && assocName[0] && assocType && !typeHasUnknown(assocType);
                 if (const auto* infer = resolvedType->opt_Infer()) {
-                    if (!infer->isLit() && !associatedConstrainsSelf) {
+                    if (!infer->isLit() && !associatedConstrainsSelf && !exportAmbiguousCandidates) {
                         return emitForcedAmbiguity();
                     }
                     if (infer->isLit() && goalParams.types.empty() && goalParams.values.empty() && !literalClassCanMatch(trait, goalParams, infer->tyClass)) {
@@ -5387,15 +5402,18 @@ default:
                 // slots is rejected by the slot-count check in emitResponse.
                 const bool cacheableResponse = assocName && !assocName[0];
                 const bool crateCacheableResponse = cacheableResponse && crateCacheUsable() && goalIsConcrete(trait, canonical);
+                // An exporting caller cannot consume a replayed identity: the
+                // possibility visits that accompany it are not cached, so an
+                // identity replay must fall through to full evaluation.
                 if (cacheableResponse) {
-                    if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse) {
+                    if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse && !(exportAmbiguousCandidates && cached->response.isAmbiguousIdentity())) {
                         InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
                         auto response = monomorphImplRef(cached->response, instantiator);
                         DEBUG("evaluate exit: local replay");
                         return visitResponse(::std::move(response), cached->responseCertainty);
                     }
                     if (crateCacheableResponse) {
-                        if (const auto* global = crateCache().find(rootHash, trait, canonical.params, canonical.type); global && global->hasResponse) {
+                        if (const auto* global = crateCache().find(rootHash, trait, canonical.params, canonical.type); global && global->hasResponse && !(exportAmbiguousCandidates && global->response.isAmbiguousIdentity())) {
                             InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
                             auto response = monomorphImplRef(global->response, instantiator);
                             DEBUG("evaluate exit: crate replay");
@@ -5801,12 +5819,41 @@ default:
                     return emitResponse(materializeRootAssociated(::std::move(selectedResponse), trait, assocName, canonicalAssocParams), HIRCompare::Equal, selected);
                 }
 
-                // Distinct canonical responses cannot guide inference.  Return a
-                // single identity response for the original goal: exposing any
-                // concrete candidate here lets a callback accidentally commit the
-                // first candidate's substitutions despite the ambiguity.
+                // Distinct canonical responses cannot guide inference through
+                // one committed response.  When the caller asked for them,
+                // surface each viable candidate head as an explicit fuzzy
+                // possibility first: the possibility machinery consumes the
+                // solver's own candidate set where it used to re-enumerate
+                // through the legacy walk.  Existential candidate parameters
+                // become instance-numbered placeholders, exactly like a
+                // replayed response, so no caller inference state is touched.
+                if (exportAmbiguousCandidates) {
+                    for (auto* candidate : frame.viable) {
+                        InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
+                        auto possibility = monomorphImplRef(candidate->impl, instantiator);
+                        // A candidate with a definite head and proven own
+                        // predicates keeps its Equal comparison: the
+                        // consumer's exact-commit and specialisable-default
+                        // handling reacts to Equal just as it did on the
+                        // legacy enumeration.  The requested associated output
+                        // is an output, not a filter -- its comparison against
+                        // an unresolved variable must not hide a proven
+                        // default from specialization -- so only the
+                        // candidate's own predicate ambiguity demotes it to a
+                        // fuzzy possibility.
+                        const auto exportedCmp = candidate->headMatch == HIRCompare::Equal && !candidate->nestedAmbiguity ? HIRCompare::Equal : HIRCompare::Fuzzy;
+                        if (callback.visit(::std::move(possibility), exportedCmp)) {
+                            return true;
+                        }
+                    }
+                }
                 auto ambiguous = ImplRef(resolvedType, goalParams.clone(), HIRTraitPath::assocListT());
                 ambiguous.markAmbiguousIdentity();
+                if (exportAmbiguousCandidates) {
+                    // A cached identity would replay without the possibility
+                    // visits above; keep this response out of the cache.
+                    return visitResponse(materializeRootAssociated(::std::move(ambiguous), trait, assocName, canonicalAssocParams), HIRCompare::Fuzzy);
+                }
                 return emitResponse(materializeRootAssociated(::std::move(ambiguous), trait, assocName, canonicalAssocParams), HIRCompare::Fuzzy);
             }
         };
@@ -5946,13 +5993,13 @@ default:
             return coherenceEvaluator->evaluateOverlap(sp, *leftImpl->traitPath, *leftImpl->impl, *rightImpl->impl);
         }
 
-        bool TraitResolution::findTraitImplsNextCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams, bool allowInferInputs) const {
+        bool TraitResolution::findTraitImplsNextCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams, bool allowInferInputs, bool exportAmbiguousCandidates) const {
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
             if (!nextSolver) {
                 ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
                 nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*this, crate);
             }
-            return nextSolver->evaluate(sp, trait, params, type, callback, assocName, assocType, assocParams, allowInferInputs);
+            return nextSolver->evaluate(sp, trait, params, type, callback, assocName, assocType, assocParams, allowInferInputs, exportAmbiguousCandidates);
         }
 
         bool TraitResolution::findTraitImplsCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, bool magicTraitImpls) const {

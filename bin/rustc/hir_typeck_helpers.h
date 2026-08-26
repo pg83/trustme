@@ -510,13 +510,18 @@ public:
     /// Evaluate a trait goal using the next-solver candidate model.  Candidate
     /// assembly is exhaustive, impl where-clauses are evaluated recursively,
     /// and only a merged response is exposed to the caller.  `assoc_name` and
-    /// `assoc_type` add an associated-type equality to the goal.
-    bool findTraitImplsNextCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const char* assocName = nullptr, const HIRTypeData* assocType = nullptr, const HIRPathParams* assocParams = nullptr, bool allowInferInputs = false) const;
+    /// `assoc_type` add an associated-type equality to the goal.  With
+    /// `exportAmbiguousCandidates`, an ambiguity between distinct responses
+    /// first visits each viable candidate head (cmp=Fuzzy) so the caller's
+    /// possibility machinery consumes the solver's own candidate set instead
+    /// of re-enumerating through the legacy walk; the identity response still
+    /// follows.
+    bool findTraitImplsNextCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const char* assocName = nullptr, const HIRTypeData* assocType = nullptr, const HIRPathParams* assocParams = nullptr, bool allowInferInputs = false, bool exportAmbiguousCandidates = false) const;
 
     template <typename F>
-    bool findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, const char* assocName = nullptr, const HIRTypeData* assocType = nullptr, const HIRPathParams* assocParams = nullptr, bool allowInferInputs = false) const {
+    bool findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, const char* assocName = nullptr, const HIRTypeData* assocType = nullptr, const HIRPathParams* assocParams = nullptr, bool allowInferInputs = false, bool exportAmbiguousCandidates = false) const {
         TraitImplCb<F> cb(f);
-        return findTraitImplsNextCb(sp, trait, params, type, cb, assocName, assocType, assocParams, allowInferInputs);
+        return findTraitImplsNextCb(sp, trait, params, type, cb, assocName, assocType, assocParams, allowInferInputs, exportAmbiguousCandidates);
     }
 
     /// Whether two concrete impl candidates may apply to one canonical goal.
