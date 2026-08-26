@@ -3695,6 +3695,17 @@ default:
                     }
                     return false;
                 };
+                // An alias bound -- a predicate whose self is a rigid
+                // projection -- is not a where-clause at all: rustc keeps
+                // alias-bound candidates preferred over impls regardless of
+                // globalness (the ATB `Output: Into<u8>` on an opaque's
+                // associated chain must win over the blanket Into impl).
+                {
+                    const auto* implSelf = resolve_.resolveType(candidate.impl.getImplType(crate.types));
+                    if (const auto* selfPath = implSelf->opt_Path(); selfPath && selfPath->binding.is_Opaque()) {
+                        return true;
+                    }
+                }
                 if (typeIsNonGlobal(candidate.impl.getImplType(crate.types)) || paramsAreNonGlobal(candidate.impl.getTraitParams(crate.types))) {
                     return true;
                 }
