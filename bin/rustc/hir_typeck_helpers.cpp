@@ -4591,7 +4591,15 @@ default:
                 // unlock an environment candidate for it.
                 const auto* selfPath = resolvedType->opt_Path();
                 const bool selfIsAlias = selfPath && (selfPath->binding.is_Opaque() || selfPath->binding.is_Unbound());
-                bool paramsHoldOpaque = containsDefiningOpaque(resolvedType);
+                // A return-position opaque SELF with zero candidates lacks
+                // the goal trait in its declared bounds: its trait repertoire
+                // is exactly those bounds, so the answer is a rigid
+                // NoSolution -- forced ambiguity here re-evaluates the same
+                // dead blanket exponentially (issue-64848's
+                // `F: FnOnce() -> T` against `impl AssociatedConstant`).
+                const auto* selfErased = resolvedType->opt_ErasedType();
+                const bool selfIsRigidOpaque = selfErased && selfErased->inner.is_Fcn();
+                bool paramsHoldOpaque = !selfIsRigidOpaque && containsDefiningOpaque(resolvedType);
                 for (const auto& ty : goalParams.types) {
                     paramsHoldOpaque |= containsDefiningOpaque(ty);
                 }
@@ -5256,7 +5264,12 @@ default:
                     // can still unlock an environment candidate for it.
                     const auto* noViableSelfPath = resolvedType->opt_Path();
                     const bool noViableSelfIsAlias = noViableSelfPath && (noViableSelfPath->binding.is_Opaque() || noViableSelfPath->binding.is_Unbound());
-                    bool noViableOpaque = containsDefiningOpaque(resolvedType);
+                    // Same repertoire rule as solve_goal's zero-candidate
+                    // branch: a return-position opaque self with no matching
+                    // head is rigid NoSolution, not ambiguity.
+                    const auto* noViableSelfErased = resolvedType->opt_ErasedType();
+                    const bool noViableSelfRigidOpaque = noViableSelfErased && noViableSelfErased->inner.is_Fcn();
+                    bool noViableOpaque = !noViableSelfRigidOpaque && containsDefiningOpaque(resolvedType);
                     for (const auto& ty : goalParams.types) {
                         noViableOpaque |= containsDefiningOpaque(ty);
                     }
@@ -5833,6 +5846,20 @@ default:
                 }
             };
 
+            // A pathological blanket (`F: FnOnce() -> T, T: AssociatedConstant`)
+            // grows the projection chain on every expansion attempt, so the
+            // identity-based cycle checks never fire.  Cap the recursion
+            // depth: an unexpanded projection is a valid rigid alias.
+            {
+                size_t depth = 0;
+                for (const auto* node = &stack; node->prev; node = node->prev) {
+                    depth++;
+                }
+                if (depth > 64) {
+                    DEBUG("EAT recursion depth cap - leaving " << input);
+                    return;
+                }
+            }
             for (const auto& ty : eatActiveStack) {
                 if (input == ty) {
                     DEBUG("Recursive lookup, skipping - &input = " << &input);
@@ -5878,6 +5905,15 @@ default:
                 }
                 case HIRPathData::TAG_UfcsKnown: {
                     auto& pe = e.path.data.as_UfcsKnown();
+                    // The identity check above cannot terminate a mutually
+                    // recursive expansion whose projection GROWS each round
+                    // (a `F: FnOnce() -> T, T: AssociatedConstant` blanket
+                    // via the goal machinery re-entering expansion).  Depth
+                    // caps it; an unexpanded projection is a valid alias.
+                    if (eatActiveStack.length() > 64) {
+                        DEBUG("EAT active-stack depth cap - leaving " << input);
+                        return;
+                    }
                     eatActiveStack.pushBack(input);
                     STD_DEFER {
                         eatActiveStack.popBack();
@@ -6504,7 +6540,30 @@ default:
         }
         return false;
     };
-    if (this->wb.settings->solver.globally && !definingUse()) {
+    // A projection whose self repeats the same (trait, item) frame several
+    // times is a self-similar chain a pathological blanket keeps growing
+    // (`F: FnOnce() -> T, T: AssociatedConstant`): every expansion attempt
+    // re-enters the goal machinery on a longer chain, which is exponential.
+    // Treat deep self-similar chains as rigid.
+    const auto selfSimilarChain = [&]() {
+        size_t repeats = 0;
+        for (const HIRTypeData* t = pe.type; ; ) {
+            const auto* path = t->opt_Path();
+            const auto* inner = path ? path->path.data.opt_UfcsKnown() : nullptr;
+            if (!inner) {
+                break;
+            }
+            if (inner->trait.path == pe.trait.path && inner->item == pe.item) {
+                repeats++;
+                if (repeats >= 2) {
+                    return true;
+                }
+            }
+            t = inner->type;
+        }
+        return false;
+    };
+    if (this->wb.settings->solver.globally && !definingUse() && !selfSimilarChain()) {
         bool normalized = false;
         bool ambiguous = false;
         this->findTraitImplsNext(sp, traitPath.path, traitPath.params, pe.type, [&](ImplRef impl, HIRCompare certainty) {
