@@ -1,0 +1,39 @@
+Ощущение верное. Прочитав всё целиком, я вижу: легаси нельзя выпилить не потому, что «потребители не переведены», а потому что солверу не хватает четырёх базовых примитивов. Каждый fuzzy-костыль — компенсация одного из них. Сначала диагноз с уликами, потом план.
+
+## Диагноз: четыре корневых дефекта
+
+**1. В `HMTypeInferrence` нет транзакций (snapshot/rollback).** `setIvarTo` необратим. Поэтому солвер не может проверить кандидата настоящей унификацией с откатом — и вся «изоляция» сделана суррогатами:
+- канонические переменные — интернированные Infer-узлы в зарезервированном диапазоне, а плейсхолдеры — **строки, именованные адресами**: `FMT("impl_?_" << &implParamsDef)` (helpers:7987, static:1173), `static_find_impl_<адрес>` (static:59), `method_wf_<адрес>` (helpers:9639);
+- вместо унификации — восемь рукописных Match-биндеров (`BindPlaceholders` helpers:3912, `BindResponse` helpers:4069, `GetParams`×2, `Matcher`×2, `HrtbBoundMatcher`, `OwnedImplMatcher`), каждый — частичная унификация с ручным «saved/restore» клонов параметров и своим набором дыр; fticCheckParams крутит фикспойнт плейсхолдеров с потолком `loops < 4` (helpers:8150);
+- coherence вынуждена держать **второй резолвер со своей таблицей** (`coherenceIvars`/`coherenceResolve`, helpers:5875), потому что форкнуть таблицу нельзя;
+- `makeFreshImplParams` мутирует таблицу через `const_cast` (helpers:5837).
+
+**2. Ответ солвера не несёт ограничений.** `evaluate()` возвращает один `ImplRef` + `HIRCompare` — связывания слотов и nested-цели в ответе не существуют как данные. Отсюда:
+- `markAmbiguousIdentity` — хак «ответ есть, но он ничего не значит», и его потребительский парный костыль identity-retry через legacy-перечисление (expr_cs:8170-8190);
+- ограничения доказательства доставляются **побочными каналами**: `typeConstraint->registerSolverObligation` (helpers:5295-5318), ре-экспорт баундов `addImplBounds(onlyWithIvars=true)` (expr_cs:7996) — с комментарием «certainty-only path drops inference effects»;
+- ответы **одноразовые** («RESPONSES are one-shot», helpers:5026): реплей нелегален, потому что констант-ивары не канонизируются в слоты (helpers:3007, `keyHoldsValues` в 5335 выключает кэш ответов) — отсюда вся серия swap_bytes-хаков;
+- `ImplRef::BoundedPtr` — сырые указатели внутрь кэшей баундов, с ручными «repoint traitPath before the caller's frame dies» (helpers:5376-5389).
+
+**3. Нормализация — три независимых селектора.** Динамический EAT (helpers:6108-7092), статический EAT (static:2222-2596) и `matchAssociatedTypes`/AliasRelate внутри эвалюатора выбирают impl'ы каждый по-своему. Они расходятся — и ровно для сверки расхождений живут: `noGoalBridge` двухпроходности (static:2546, 4257-4281), specialisable-repeat (expr_cs:8191-8215), фолбэк EAT в `findTraitImplsMagic/Types/Crate` (helpers:6883-6985). Бонус: статический EAT держит стек рекурсии в **function-local `static`** (`sRecursionLevel`, `sRecursionStack`, static:2231-2238) — тот самый стейт «зависит от того, как вошли по стеку», который ты уже выжигал.
+
+**4. Инференс-догадки живут в потребителе.** `possibleIvarVals`/`checkIvarPoss` — 1500 строк эвристик с шестью уровнями фолбэка и авторским комментарием «TODO: Rewrite ALL of the below» (expr_cs:9929). Он питается fuzzy-ответами (expr_cs:8437-8462 собирает bounded-множества из legacy-перечисления) и потому не может умереть, пока солвер не отдаёт ограничения сам.
+
+Плюс точечные запахи по пути: `methodProbeMustDecide` — mutable-флаг режима, выставляемый вокруг вызова (helpers.h:370, expr_cs:1130); `const_cast<HIRExprNodeClosure*>(...)->returnType = ...` — мутация HIR-узла из глубины сравнения (expr_cs:8049); defining-опаки обязаны идти legacy-путём, потому что только он доходит до `equateErasedAlias` (helpers:6804 — комментарий прямо это признаёт).
+
+## План: примитивы → потом выпил
+
+Это пререквизит-слой под пункт 1 текущего SOLVER.md. Каждый этап: гейт `unit` + корпус, коммит, вычеркнуть.
+
+**П0. Транзакции инференса.** Журнал мутаций в `HMTypeInferrence` (setIvarTo / ivarUnify / setIvarValTo / рост векторов) + маркер + `rollbackTo(marker)`; сверху `probe(f)`-хелпер. Проверка боем: заменить `coherenceIvars`/`coherenceResolve` на probe по основной таблице и убрать `const_cast` из `makeFreshImplParams`. *Критерий выхода: второго резолвера нет, гейт зелёный.*
+
+**П1. Один примитив унификации.** `unify(sp, a, b) -> Proven / Ambiguous(nested AliasRelate-цели) / Fail`, работающий на настоящей таблице под snapshot. Им переписывается проверка кандидата в `evaluateCandidate`/`matchAssociatedTypes`; Match-биндеры схлопываются на него по одному. `HIRCompare::Fuzzy` перестаёт быть носителем потерянных ограничений — внутри солвера сравнение больше не «трёхзначный бит», а унификация с откатом. *Критерий: `BindPlaceholders`/`BindResponse` удалены; строковые плейсхолдеры остаются только в legacy-путях.*
+
+**П2. Типизированный ответ.** `SolverResponse { certainty; значения типовых и константных слотов; obligations }` — владеющий, в пуле, без указателей в кэши. Констант-ивары входят в слоты (умирает `keyHoldsValues` и одноразовость ответов: реплей = унификация значений слотов, легален по построению). `ImplRef`+callback остаются адаптером для непереведённых мест. *Критерий: кэш ответов больше не сбрасывается на каждом outermost-входе (helpers:5026-5034 удалены); swap_bytes-класс хаков не нужен.*
+
+**П3. Эффекты как obligations.** Всё, что сейчас идёт побочными каналами — `registerSolverObligation`, `addImplBounds(onlyWithIvars)`, hidden-type для defining-опаков — становится obligations в ответе; в `Context` один аппликатор, который для opaque-obligation зовёт `equateErasedAlias`. *Критерий: `typeConstraint`-канал удалён; `definingUse()`-байпас в EAT (helpers:6804-6849) удалён.*
+
+**П4. NormalizesTo — и смерть трёх EAT-селекторов.** Цель `NormalizesTo(проекция, ?out)` в эвалюаторе (?out — слот, связывается ответом из П2). Динамический EAT становится чистым обходчиком, ставящим цели; статический EAT зовёт тот же эвалюатор через бридж. Удаляются: `sRecursionStack`-статики, depth-64 капы, `selfSimilarChain`, `eatActiveStack`, EAT-фолбэки в Magic/Types/Crate; циклы — семантикой solver table. Specialization-ответ на «дай item» — отдельный запрос к эвалюатору (цепочка `specializationItemSource` уже есть — расширить до getValue), что убивает оба `noGoalBridge`-повтора. *Критерий: параметр `noGoalBridge` удалён из сигнатуры `findImplCb`.*
+
+**П5. Перевод потребителей и выпил** — это уже пункты 3-4 SOLVER.md, но теперь они механические: identity-retry, specialisable-repeat, операторный probe, `checkIvarPoss`-bounded-probe переходят на solve+apply; trait-possibilities выпадают из `possibleIvarVals` (коэрционный граф остаётся); `Fuzzy` уходит с границы солвера. Сюда же зачистка запахов: `methodProbeMustDecide` → параметр probe-запроса, `const_cast` на closure returnType → obligation.
+
+Порядок жёсткий: П0→П1→П2 последовательно (каждый стоит на предыдущем), П3/П4 после П2 в любом порядке, П5 последним. Без П0-П2 любая попытка «просто выпилить» упрётся ровно в те костыли, которые ты чувствуешь: они не мусор, они несущие — подпирают отсутствующие примитивы.
