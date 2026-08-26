@@ -4131,6 +4131,7 @@ default:
                         continue;
                     }
                     auto cmp = output == aty.type ? HIRCompare::Equal : resolve_.compareTy(span(), output, aty.type);
+                    DEBUG("matchAssociatedTypes " << requirement.first << ": " << output << " vs " << aty.type << " => " << cmp);
                     if (cmp != HIRCompare::Equal && !aliasRelateActive_ && (resolve_.hasAssociatedType(output) || resolve_.hasAssociatedType(aty.type))) {
                         aliasRelateActive_ = true;
                         STD_DEFER {
@@ -4306,6 +4307,7 @@ default:
                     return Certainty::NoSolution;
                 }
                 if (assocResult == Certainty::Ambiguous) {
+                    DEBUG("candidate downgrade: assoc");
                     candidate->ambiguityBeyondHead = true;
                     result = Certainty::Ambiguous;
                 }
@@ -4331,11 +4333,20 @@ default:
                         if (bound == HIRTypeRef()) {
                             continue;
                         }
+                        // A tentative impl placeholder is a parameter the
+                        // nested goals have not inferred yet; its sizedness
+                        // is checked through whatever it resolves to, not
+                        // here (a placeholder always reads as fuzzy and
+                        // would wrongly downgrade the candidate).
+                        if (typeHasCandidatePlaceholder(bound)) {
+                            continue;
+                        }
                         const auto sized = resolve_.typeIsSized(span(), bound);
                         if (sized == HIRCompare::Unequal) {
                             return Certainty::NoSolution;
                         }
                         if (sized == HIRCompare::Fuzzy) {
+                            DEBUG("candidate downgrade: implicit sized");
                             candidate->ambiguityBeyondHead = true;
                             result = Certainty::Ambiguous;
                         }
@@ -4409,6 +4420,7 @@ default:
                             nested = responseCertainty;
                         }
                         if (nested == Certainty::Ambiguous) {
+                            DEBUG("candidate downgrade: nested bound");
                             candidate->ambiguityBeyondHead = true;
                             result = Certainty::Ambiguous;
                         }
