@@ -117,6 +117,9 @@ HIRPathParams clonePathParamsWith(HIRTypeInterner& types, const Span& sp, const 
 }
 
 extern void checkTypeClassPrimitive(const Span& sp, const HIRTypeData* type, HIRInferClass ic, HIRCoreType ct);
+/// Non-fatal form of the same compatibility rule, for callers that report a
+/// mismatch as a result instead of a diagnostic.
+extern bool typeClassPrimitiveCompatible(HIRInferClass ic, HIRCoreType ct);
 
 // The primitive operation is a language candidate, separate from an
 // implementation of the operator trait.  Keeping this classification in

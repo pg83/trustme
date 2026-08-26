@@ -201,6 +201,7 @@ public:
         return snapshotDepth != 0;
     }
 
+
     // Lookup
     //::HIR::ASTType*& get_type(::HIR::ASTType*& type);
     const HIRTypeData* getType(const HIRTypeData* type) const;
@@ -255,6 +256,67 @@ private:
 
     unsigned int rootIvarIndex(unsigned int slot) const;
     IVar& getPointedIvar(unsigned int slot) const;
+
+    /// Occurs check: whether `type`, fully resolved through the table,
+    /// reaches the live variable rooted at `rootIndex`.
+    bool containsLiveIvar(const HIRTypeData* type, unsigned int rootIndex) const;
+
+    friend class Unifier;
+};
+
+/// One structural-unification session over an inference table.  Bindings go
+/// through the table's journal (occurs check and literal-class rules
+/// included), so a caller controls wider transactionality with table
+/// snapshots.  Every equality the walk can neither prove nor refute
+/// structurally -- an unresolved projection, opaque, placeholder or
+/// canonical variable on either side -- is collected on the session as
+/// data, never dropped: the caller turns it into goals or reports
+/// ambiguity carrying it.
+class Unifier {
+public:
+    enum class Outcome : u8 {
+        /// Equal under the recorded bindings, provided every pending
+        /// equality collected on the session also holds.
+        Unified,
+        /// The types can never be equal; bindings made by the failed call
+        /// were rolled back and the pending lists are unchanged.
+        Mismatch,
+    };
+
+    struct PendingEquality {
+        HIRTypeRef left;
+        HIRTypeRef right;
+    };
+
+    struct PendingValueEquality {
+        HIRConstGeneric left;
+        HIRConstGeneric right;
+    };
+
+    Unifier(const Span& sp, HMTypeInferrence& table);
+
+    Outcome unify(const HIRTypeData* left, const HIRTypeData* right);
+    Outcome unifyValues(const HIRConstGeneric& left, const HIRConstGeneric& right);
+
+    const stl::Vector<PendingEquality>& pending() const {
+        return pending_;
+    }
+
+    const ThinVector<PendingValueEquality>& pendingValues() const {
+        return pendingValues_;
+    }
+
+private:
+    Outcome unifyResolved(const HIRTypeData* left, const HIRTypeData* right);
+    Outcome unifyParams(const HIRPathParams& left, const HIRPathParams& right);
+    Outcome unifyValuesResolved(const HIRConstGeneric& left, const HIRConstGeneric& right);
+    Outcome defer(const HIRTypeData* left, const HIRTypeData* right);
+
+    // Reserved for the diagnostics the goal-emission callers will need.
+    [[maybe_unused]] const Span& sp_;
+    HMTypeInferrence& table_;
+    stl::Vector<PendingEquality> pending_;
+    ThinVector<PendingValueEquality> pendingValues_;
 };
 
 class NextTraitGoalEvaluator;

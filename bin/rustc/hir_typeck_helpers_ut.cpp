@@ -144,6 +144,98 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(!table.probing());
     }
 
+    STD_TEST(testUnifyBindsAndUnifies) {
+        auto pool = stl::ObjPool::fromMemory();
+        HIRTypeInterner types(*pool.mutPtr());
+        HMTypeInferrence table(types);
+        Span sp;
+
+        const auto a = table.newIvar();
+        const auto b = table.newIvar();
+        Unifier unifier(sp, table);
+
+        // ?a := (i32, ?b), then ?b := u8: both propagate through the table.
+        const auto pairTy = types.tuple({types.primitive(HIRCoreType::I32), types.infer(b)});
+        STD_INSIST(unifier.unify(types.infer(a), pairTy) == Unifier::Outcome::Unified);
+        STD_INSIST(unifier.unify(types.infer(b), types.primitive(HIRCoreType::U8)) == Unifier::Outcome::Unified);
+        STD_INSIST(table.getType(b)->is_Primitive());
+        STD_INSIST(unifier.pending().length() == 0);
+    }
+
+    STD_TEST(testUnifyMismatchRollsBack) {
+        auto pool = stl::ObjPool::fromMemory();
+        HIRTypeInterner types(*pool.mutPtr());
+        HMTypeInferrence table(types);
+        Span sp;
+
+        const auto a = table.newIvar();
+        Unifier unifier(sp, table);
+
+        // (?a, i32) vs (u8, u16): ?a binds underway, then the mismatch on
+        // the second element must roll that binding back.
+        const auto leftTy = types.tuple({types.infer(a), types.primitive(HIRCoreType::I32)});
+        const auto rightTy = types.tuple({types.primitive(HIRCoreType::U8), types.primitive(HIRCoreType::U16)});
+        STD_INSIST(unifier.unify(leftTy, rightTy) == Unifier::Outcome::Mismatch);
+        STD_INSIST(table.getType(a)->is_Infer());
+    }
+
+    STD_TEST(testUnifyOccursCheck) {
+        auto pool = stl::ObjPool::fromMemory();
+        HIRTypeInterner types(*pool.mutPtr());
+        HMTypeInferrence table(types);
+        Span sp;
+
+        const auto a = table.newIvar();
+        Unifier unifier(sp, table);
+
+        const auto recursive = types.tuple({types.infer(a)});
+        STD_INSIST(unifier.unify(types.infer(a), recursive) == Unifier::Outcome::Mismatch);
+        STD_INSIST(table.getType(a)->is_Infer());
+    }
+
+    STD_TEST(testUnifyLiteralClasses) {
+        auto pool = stl::ObjPool::fromMemory();
+        HIRTypeInterner types(*pool.mutPtr());
+        HMTypeInferrence table(types);
+        Span sp;
+
+        const auto lit = table.newIvar(HIRInferClass::Integer);
+        const auto fl = table.newIvar(HIRInferClass::Float);
+        Unifier unifier(sp, table);
+
+        STD_INSIST(unifier.unify(types.infer(lit), types.primitive(HIRCoreType::F64)) == Unifier::Outcome::Mismatch);
+        STD_INSIST(unifier.unify(types.infer(lit), types.infer(fl)) == Unifier::Outcome::Mismatch);
+        STD_INSIST(unifier.unify(types.infer(lit), types.primitive(HIRCoreType::U32)) == Unifier::Outcome::Unified);
+        STD_INSIST(table.getType(lit)->is_Primitive());
+    }
+
+    STD_TEST(testUnifyDefersRigidUnknowns) {
+        auto pool = stl::ObjPool::fromMemory();
+        HIRTypeInterner types(*pool.mutPtr());
+        HMTypeInferrence table(types);
+        Span sp;
+
+        Unifier unifier(sp, table);
+
+        // A match placeholder is a rigid unknown: the equality is neither
+        // proven nor refuted, it is collected as data.
+        const auto placeholder = types.generic(RcString::newInterned("impl_?_test"), GENERICPlaceholder << 8);
+        STD_INSIST(unifier.unify(placeholder, types.primitive(HIRCoreType::I32)) == Unifier::Outcome::Unified);
+        STD_INSIST(unifier.pending().length() == 1);
+        STD_INSIST(unifier.pending()[0].right->is_Primitive() || unifier.pending()[0].left->is_Primitive());
+
+        // A solver-canonical variable stays rigid too.
+        const auto canonical = types.infer(HIR_INFER_SOLVER_CANONICAL_MIN);
+        STD_INSIST(unifier.unify(canonical, types.primitive(HIRCoreType::U8)) == Unifier::Outcome::Unified);
+        STD_INSIST(unifier.pending().length() == 2);
+
+        // Distinct rigid generics can never be equal.
+        const auto genericT = types.generic(RcString::newInterned("T"), 0);
+        const auto genericU = types.generic(RcString::newInterned("U"), 1);
+        STD_INSIST(unifier.unify(genericT, genericU) == Unifier::Outcome::Mismatch);
+        STD_INSIST(unifier.pending().length() == 2);
+    }
+
     STD_TEST(testRollbackRestoresChangedFlag) {
         auto pool = stl::ObjPool::fromMemory();
         HIRTypeInterner types(*pool.mutPtr());

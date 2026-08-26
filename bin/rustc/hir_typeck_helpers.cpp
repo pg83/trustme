@@ -1868,6 +1868,355 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
         }
 
         // --------------------------------------------------------------------
+        // Unifier
+        // --------------------------------------------------------------------
+
+        bool HMTypeInferrence::containsLiveIvar(const HIRTypeData* type, unsigned int rootIndex) const {
+            const auto* resolved = this->getType(type);
+            return visitTyWith(resolved, [&](const HIRTypeData* inner) {
+                const auto* infer = inner->opt_Infer();
+                if (!infer || infer->index == ~0u || isAliasInputInfer(infer->index)) {
+                    return false;
+                }
+                if (this->rootIvarIndex(infer->index) == rootIndex) {
+                    return true;
+                }
+                const auto* bound = this->getType(inner);
+                return bound != inner && this->containsLiveIvar(bound, rootIndex);
+            });
+        }
+
+        namespace {
+            bool inferIsLive(const HIRTypeData* type) {
+                const auto* infer = type->opt_Infer();
+                return infer && infer->index != ~0u && !isAliasInputInfer(infer->index);
+            }
+
+            /// An unresolved projection or opaque may still normalise to
+            /// anything: it can neither prove nor refute an equality here.
+            bool typeIsRigidUnknown(const HIRTypeData* type) {
+                if (const auto* path = type->opt_Path()) {
+                    if (!path->path.data.is_Generic()) {
+                        return true;
+                    }
+                    return path->binding.is_Unbound() || path->binding.is_Opaque();
+                }
+                return type->is_ErasedType();
+            }
+
+            bool literalClassAccepts(const HMTypeInferrence& table, HIRInferClass tyClass, const HIRTypeData* type) {
+                if (tyClass == HIRInferClass::None) {
+                    return true;
+                }
+                if (const auto* primitive = type->opt_Primitive()) {
+                    return typeClassPrimitiveCompatible(tyClass, *primitive);
+                }
+                if (const auto* pattern = type->opt_Pattern()) {
+                    const auto* primitive = table.getType(pattern->inner)->opt_Primitive();
+                    return primitive && typeClassPrimitiveCompatible(tyClass, *primitive);
+                }
+                return type->is_Diverge();
+            }
+        }
+
+        Unifier::Unifier(const Span& sp, HMTypeInferrence& table)
+            : sp_(sp)
+            , table_(table)
+        {
+        }
+
+        Unifier::Outcome Unifier::defer(const HIRTypeData* left, const HIRTypeData* right) {
+            pending_.pushBack(PendingEquality{left, right});
+            return Outcome::Unified;
+        }
+
+        Unifier::Outcome Unifier::unify(const HIRTypeData* left, const HIRTypeData* right) {
+            const auto snapshot = table_.snapshot();
+            const auto pendingBefore = pending_.length();
+            const auto pendingValuesBefore = pendingValues_.size();
+            const auto outcome = this->unifyResolved(left, right);
+            if (outcome == Outcome::Mismatch) {
+                table_.rollbackTo(snapshot);
+                while (pending_.length() > pendingBefore) {
+                    pending_.popBack();
+                }
+                while (pendingValues_.size() > pendingValuesBefore) {
+                    pendingValues_.pop_back();
+                }
+            } else {
+                table_.commit(snapshot);
+            }
+            return outcome;
+        }
+
+        Unifier::Outcome Unifier::unifyValues(const HIRConstGeneric& left, const HIRConstGeneric& right) {
+            const auto snapshot = table_.snapshot();
+            const auto pendingValuesBefore = pendingValues_.size();
+            const auto outcome = this->unifyValuesResolved(left, right);
+            if (outcome == Outcome::Mismatch) {
+                table_.rollbackTo(snapshot);
+                while (pendingValues_.size() > pendingValuesBefore) {
+                    pendingValues_.pop_back();
+                }
+            } else {
+                table_.commit(snapshot);
+            }
+            return outcome;
+        }
+
+        Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTypeData* rightRaw) {
+            const auto* left = table_.getType(leftRaw);
+            const auto* right = table_.getType(rightRaw);
+            if (left == right) {
+                return Outcome::Unified;
+            }
+
+            const bool leftLive = inferIsLive(left);
+            const bool rightLive = inferIsLive(right);
+            if (leftLive && rightLive) {
+                const auto leftClass = left->as_Infer().tyClass;
+                const auto rightClass = right->as_Infer().tyClass;
+                if (leftClass != HIRInferClass::None && rightClass != HIRInferClass::None && leftClass != rightClass) {
+                    return Outcome::Mismatch;
+                }
+                table_.ivarUnify(table_.rootIvarIndex(left->as_Infer().index), table_.rootIvarIndex(right->as_Infer().index));
+                return Outcome::Unified;
+            }
+            if (leftLive || rightLive) {
+                const auto* infer = leftLive ? left : right;
+                const auto* other = leftLive ? right : left;
+                if (other->is_Infer() || typeIsRigidUnknown(other)) {
+                    return this->defer(left, right);
+                }
+                if (!literalClassAccepts(table_, infer->as_Infer().tyClass, other)) {
+                    return Outcome::Mismatch;
+                }
+                const auto rootIndex = table_.rootIvarIndex(infer->as_Infer().index);
+                if (table_.containsLiveIvar(other, rootIndex)) {
+                    return Outcome::Mismatch;
+                }
+                table_.setIvarTo(rootIndex, other);
+                return Outcome::Unified;
+            }
+            if (left->is_Infer() || right->is_Infer()) {
+                // Rigid unknowns: canonical variables, alias inputs, or a
+                // still-unassigned wildcard.
+                return this->defer(left, right);
+            }
+            if (typeIsRigidUnknown(left) || typeIsRigidUnknown(right)) {
+                return this->defer(left, right);
+            }
+
+            if (left->tag() != right->tag()) {
+                if ((left->is_Generic() && left->as_Generic().isPlaceholder()) || (right->is_Generic() && right->as_Generic().isPlaceholder())) {
+                    return this->defer(left, right);
+                }
+                return Outcome::Mismatch;
+            }
+
+            switch ((*left).tag()) {
+                case HIRTypeData::TAG_Infer: {
+                    UNREACHABLE();
+                }
+                case HIRTypeData::TAG_Primitive:
+                case HIRTypeData::TAG_Diverge:
+                case HIRTypeData::TAG_NodeType: {
+                    // Interned: equality is pointer identity, checked above.
+                    return Outcome::Mismatch;
+                }
+                case HIRTypeData::TAG_Generic: {
+                    if (left->as_Generic().isPlaceholder() || right->as_Generic().isPlaceholder()) {
+                        return this->defer(left, right);
+                    }
+                    return Outcome::Mismatch;
+                }
+                case HIRTypeData::TAG_Path: {
+                    // Rigid-unknown paths (any UFCS form, unbound or opaque
+                    // bindings) were deferred above; both sides are nominal.
+                    const auto& le = left->as_Path().path.data.as_Generic();
+                    const auto& re = right->as_Path().path.data.as_Generic();
+                    if (le.path != re.path) {
+                        return Outcome::Mismatch;
+                    }
+                    return this->unifyParams(le.params, re.params);
+                }
+                case HIRTypeData::TAG_Borrow: {
+                    const auto& le = left->as_Borrow();
+                    const auto& re = right->as_Borrow();
+                    if (le.type != re.type) {
+                        return Outcome::Mismatch;
+                    }
+                    return this->unifyResolved(le.inner, re.inner);
+                }
+                case HIRTypeData::TAG_Pointer: {
+                    const auto& le = left->as_Pointer();
+                    const auto& re = right->as_Pointer();
+                    if (le.type != re.type) {
+                        return Outcome::Mismatch;
+                    }
+                    return this->unifyResolved(le.inner, re.inner);
+                }
+                case HIRTypeData::TAG_Slice: {
+                    return this->unifyResolved(left->as_Slice().inner, right->as_Slice().inner);
+                }
+                case HIRTypeData::TAG_Array: {
+                    const auto& le = left->as_Array();
+                    const auto& re = right->as_Array();
+                    const auto inner = this->unifyResolved(le.inner, re.inner);
+                    if (inner == Outcome::Mismatch) {
+                        return Outcome::Mismatch;
+                    }
+                    if (!(le.size != re.size)) {
+                        return inner;
+                    }
+                    const auto* leftSize = le.size.opt_Unevaluated();
+                    const auto* rightSize = re.size.opt_Unevaluated();
+                    if (leftSize && rightSize) {
+                        return this->unifyValuesResolved(*leftSize, *rightSize) == Outcome::Mismatch ? Outcome::Mismatch : inner;
+                    }
+                    // One side is a known length, the other an unevaluated
+                    // expression: defer the whole array equality.
+                    return this->defer(left, right);
+                }
+                case HIRTypeData::TAG_Pattern: {
+                    const auto& le = left->as_Pattern();
+                    const auto& re = right->as_Pattern();
+                    if (le.pattern.ord(re.pattern) != OrdEqual) {
+                        return Outcome::Mismatch;
+                    }
+                    return this->unifyResolved(le.inner, re.inner);
+                }
+                case HIRTypeData::TAG_Tuple: {
+                    const auto& le = left->as_Tuple();
+                    const auto& re = right->as_Tuple();
+                    if (le.size() != re.size()) {
+                        return Outcome::Mismatch;
+                    }
+                    for (size_t i = 0; i < le.size(); i++) {
+                        if (this->unifyResolved(le[i], re[i]) == Outcome::Mismatch) {
+                            return Outcome::Mismatch;
+                        }
+                    }
+                    return Outcome::Unified;
+                }
+                case HIRTypeData::TAG_Function: {
+                    const auto& le = left->as_Function();
+                    const auto& re = right->as_Function();
+                    if (le.isUnsafe != re.isUnsafe || le.abi != re.abi || le.isVariadic != re.isVariadic || le.trackCaller != re.trackCaller || le.argTypes.size() != re.argTypes.size()) {
+                        return Outcome::Mismatch;
+                    }
+                    for (size_t i = 0; i < le.argTypes.size(); i++) {
+                        if (this->unifyResolved(le.argTypes[i], re.argTypes[i]) == Outcome::Mismatch) {
+                            return Outcome::Mismatch;
+                        }
+                    }
+                    return this->unifyResolved(le.rettype, re.rettype);
+                }
+                case HIRTypeData::TAG_NamedFunction: {
+                    // Distinct fn items never unify, but comparing their
+                    // paths structurally is not implemented here yet.
+                    return this->defer(left, right);
+                }
+                case HIRTypeData::TAG_TraitObject: {
+                    const auto& le = left->as_TraitObject();
+                    const auto& re = right->as_TraitObject();
+                    if (le.trait.path.path != re.trait.path.path || le.markers.size() != re.markers.size()) {
+                        return Outcome::Mismatch;
+                    }
+                    for (size_t i = 0; i < le.markers.size(); i++) {
+                        if (le.markers[i].path != re.markers[i].path) {
+                            return Outcome::Mismatch;
+                        }
+                        if (this->unifyParams(le.markers[i].params, re.markers[i].params) == Outcome::Mismatch) {
+                            return Outcome::Mismatch;
+                        }
+                    }
+                    if (!le.trait.typeBounds.empty() || !re.trait.typeBounds.empty()) {
+                        // Associated-type bounds carry their own structure;
+                        // defer the whole object equality for now.
+                        return this->defer(left, right);
+                    }
+                    return this->unifyParams(le.trait.path.params, re.trait.path.params);
+                }
+                case HIRTypeData::TAG_ErasedType: {
+                    UNREACHABLE();
+                }
+            }
+            UNREACHABLE();
+        }
+
+        Unifier::Outcome Unifier::unifyParams(const HIRPathParams& left, const HIRPathParams& right) {
+            if (left.types.size() != right.types.size() || left.values.size() != right.values.size()) {
+                return Outcome::Mismatch;
+            }
+            for (size_t i = 0; i < left.types.size(); i++) {
+                if (this->unifyResolved(left.types[i], right.types[i]) == Outcome::Mismatch) {
+                    return Outcome::Mismatch;
+                }
+            }
+            for (size_t i = 0; i < left.values.size(); i++) {
+                if (this->unifyValuesResolved(left.values[i], right.values[i]) == Outcome::Mismatch) {
+                    return Outcome::Mismatch;
+                }
+            }
+            return Outcome::Unified;
+        }
+
+        Unifier::Outcome Unifier::unifyValuesResolved(const HIRConstGeneric& leftRaw, const HIRConstGeneric& rightRaw) {
+            const auto& left = table_.getValue(leftRaw);
+            const auto& right = table_.getValue(rightRaw);
+            if (left == right) {
+                return Outcome::Unified;
+            }
+
+            const auto liveIndex = [&](const HIRConstGeneric& value) -> ::std::optional<unsigned> {
+                const auto* infer = value.opt_Infer();
+                if (!infer || infer->index == ~0u || isAliasInputInfer(infer->index)) {
+                    return {};
+                }
+                return infer->index;
+            };
+            const auto deferValue = [&]() {
+                pendingValues_.push_back(PendingValueEquality{left.clone(), right.clone()});
+                return Outcome::Unified;
+            };
+
+            const auto leftLive = liveIndex(left);
+            const auto rightLive = liveIndex(right);
+            if (leftLive && rightLive) {
+                table_.ivarValUnify(*leftLive, *rightLive);
+                return Outcome::Unified;
+            }
+            if (leftLive || rightLive) {
+                const auto& other = leftLive ? right : left;
+                if (other.is_Evaluated() || (other.is_Generic() && !other.as_Generic().isPlaceholder())) {
+                    table_.setIvarValTo(leftLive ? *leftLive : *rightLive, other.clone());
+                    return Outcome::Unified;
+                }
+                // Placeholders, unevaluated expressions and rigid unknowns.
+                return deferValue();
+            }
+            if (left.is_Infer() || right.is_Infer()) {
+                return deferValue();
+            }
+            if (left.is_Evaluated() && right.is_Evaluated()) {
+                return Outcome::Mismatch;
+            }
+            if (left.is_Generic() && right.is_Generic()) {
+                if (left.as_Generic().isPlaceholder() || right.as_Generic().isPlaceholder()) {
+                    return deferValue();
+                }
+                return Outcome::Mismatch;
+            }
+            if ((left.is_Generic() && !left.as_Generic().isPlaceholder() && right.is_Evaluated())
+                || (right.is_Generic() && !right.as_Generic().isPlaceholder() && left.is_Evaluated())) {
+                return Outcome::Mismatch;
+            }
+            // Unevaluated expressions or placeholder/value mixtures.
+            return deferValue();
+        }
+
+        // --------------------------------------------------------------------
         // TraitResolution
         // --------------------------------------------------------------------
 

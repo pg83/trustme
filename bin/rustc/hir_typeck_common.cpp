@@ -881,21 +881,20 @@ HIRConstGeneric MonomorphiserPP::getValue(const Span& sp, const HIRGenericRef& v
     return os;
 }
 
-void checkTypeClassPrimitive(const Span& sp, const HIRTypeData* type, HIRInferClass ic, HIRCoreType ct) {
+bool typeClassPrimitiveCompatible(HIRInferClass ic, HIRCoreType ct) {
     switch (ic) {
         case HIRInferClass::None:
-            break;
+            return true;
         case HIRInferClass::Float:
             switch (ct) {
                 case HIRCoreType::F16:
                 case HIRCoreType::F32:
                 case HIRCoreType::F64:
                 case HIRCoreType::F128:
-                    break;
+                    return true;
                 default:
-                    ERROR(sp, E0000, "Type unificiation of float literal with non-float - " << type);
+                    return false;
             }
-            break;
         case HIRInferClass::Integer:
             switch (ct) {
                 case HIRCoreType::I8:
@@ -910,11 +909,20 @@ void checkTypeClassPrimitive(const Span& sp, const HIRTypeData* type, HIRInferCl
                 case HIRCoreType::U128:
                 case HIRCoreType::Isize:
                 case HIRCoreType::Usize:
-                    break;
+                    return true;
                 default:
-                    ERROR(sp, E0000, "Type unificiation of integer literal with non-integer - " << type);
+                    return false;
             }
-            break;
+    }
+    return false;
+}
+
+void checkTypeClassPrimitive(const Span& sp, const HIRTypeData* type, HIRInferClass ic, HIRCoreType ct) {
+    if (!typeClassPrimitiveCompatible(ic, ct)) {
+        if (ic == HIRInferClass::Float) {
+            ERROR(sp, E0000, "Type unificiation of float literal with non-float - " << type);
+        }
+        ERROR(sp, E0000, "Type unificiation of integer literal with non-integer - " << type);
     }
 }
 
