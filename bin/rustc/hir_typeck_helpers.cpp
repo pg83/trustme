@@ -2926,8 +2926,9 @@ default:
             // Fully concrete canonical goals (no inference variables, no
             // generics, no placeholders, no opaques, no unbound paths) have
             // context-free answers whenever the resolver carries no bounds.
-            bool goalIsConcrete(const CanonicalGoal& canonical) const {
-                auto concrete = [](const HIRTypeData* ty) {
+            bool goalIsConcrete(const HIRSimplePath& trait, const CanonicalGoal& canonical) const {
+                bool sawGeneric = false;
+                auto concrete = [&sawGeneric](const HIRTypeData* ty) {
                     // The type visitor does not walk const-generic VALUES, so
                     // a value-Infer hiding in a path's parameters (Simd<f32,
                     // {Infer}>) would read as concrete and poison the
@@ -2936,8 +2937,20 @@ default:
                     if (ty->flags & (HIRTypeData::HAS_TYPE_INFER | HIRTypeData::HAS_DEFERRED_CONST | HIRTypeData::HAS_UNEVALUATED_CONST)) {
                         return false;
                     }
-                    return !visitTyWith(ty, [](const HIRTypeData* inner) {
-                        if (inner->is_Infer() || inner->is_Generic() || inner->is_NodeType() || inner->is_ErasedType()) {
+                    return !visitTyWith(ty, [&sawGeneric](const HIRTypeData* inner) {
+                        if (const auto* generic = inner->opt_Generic()) {
+                            // A rigid user generic in a bound-free env is
+                            // answered structurally (blanket impls only), so
+                            // the answer transfers between functions.  A
+                            // candidate-match placeholder does not: its
+                            // answers run under forced-ambiguity rules.
+                            if (generic->group() == GENERICPlaceholder) {
+                                return true;
+                            }
+                            sawGeneric = true;
+                            return false;
+                        }
+                        if (inner->is_Infer() || inner->is_NodeType() || inner->is_ErasedType()) {
                             return true;
                         }
                         if (const auto* path = inner->opt_Path()) {
@@ -2958,6 +2971,13 @@ default:
                     if (!value.is_Evaluated()) {
                         return false;
                     }
+                }
+                if (sawGeneric
+                        && (trait == resolve_.langSized() || trait == resolve_.langMetaSized() || trait == resolve_.langPointeeSized())) {
+                    // Sized-family answers on a rigid generic read the
+                    // parameter's ?Sized declaration -- context the
+                    // empty-bounds gate does not cover.
+                    return false;
                 }
                 return canonical.associated.empty();
             }
@@ -4588,7 +4608,7 @@ default:
                 if (const auto* cached = findCachedGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated)) {
                     return cached->certainty;
                 }
-                const bool crateCacheable = !canonicalAssociated && crateCacheUsable() && goalIsConcrete(canonical);
+                const bool crateCacheable = !canonicalAssociated && crateCacheUsable() && goalIsConcrete(trait, canonical);
                 if (crateCacheable) {
                     if (const auto* global = crateCache().find(hash, trait, canonical.params, canonical.type)) {
                         return static_cast<Certainty>(global->certainty);
@@ -5279,7 +5299,7 @@ default:
                 // Keep such goals certainty-only.
                 const bool keyHoldsValues = !canonical.params.values.empty();
                 const bool cacheableResponse = assocName && !assocName[0] && !keyHoldsValues;
-                const bool crateCacheableResponse = cacheableResponse && crateCacheUsable() && goalIsConcrete(canonical);
+                const bool crateCacheableResponse = cacheableResponse && crateCacheUsable() && goalIsConcrete(trait, canonical);
                 if (cacheableResponse) {
                     if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse) {
                         InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
