@@ -7530,8 +7530,22 @@ default:
                     // from typeContainsIvars; an Fn-trait bound on one is
                     // exactly the signature-seeding case.
                     auto needsExport = [&](const HIRTypeData* ty) {
-                        return context.ivars.typeContainsIvars(ty, false) || visitTyWith(ty, [](const HIRTypeData* inner) {
-                            return inner->is_NodeType();
+                        return context.ivars.typeContainsIvars(ty, false) || visitTyWith(ty, [&](const HIRTypeData* inner) {
+                            if (inner->is_NodeType()) {
+                                return true;
+                            }
+                            // A bound mentioning an opaque this body defines
+                            // is a defining use: solving it inside the goal
+                            // machinery proves it but never records the
+                            // hidden type.  Re-export it so the constraint
+                            // loop's associated-equality commit reaches
+                            // equateErasedAlias.
+                            if (const auto* erased = inner->opt_ErasedType()) {
+                                if (const auto* alias = erased->inner.opt_Alias()) {
+                                    return context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
+                                }
+                            }
+                            return false;
                         });
                     };
                     bool hasIvars = needsExport(bTyMono);

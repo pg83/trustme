@@ -6459,7 +6459,29 @@ default:
         }
     }
 
-    if (this->wb.settings->solver.globally) {
+    // A projection whose inputs mention an opaque this body defines is a
+    // defining use: the goal machinery can prove it, but only the legacy
+    // rule path reaches the associated-equality commit that records the
+    // hidden type (equateErasedAlias).  Leave those to the constraint loop.
+    const auto definingUse = [&]() {
+        auto holds = [&](const HIRTypeData* ty) {
+            return visitTyWith(ty, [&](const HIRTypeData* inner) {
+                const auto* erased = inner->opt_ErasedType();
+                const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+                return alias && this->isOpaqueAliasDefiningScope(*alias->inner);
+            });
+        };
+        if (holds(pe.type)) {
+            return true;
+        }
+        for (const auto& ty : traitPath.params.types) {
+            if (holds(ty)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    if (this->wb.settings->solver.globally && !definingUse()) {
         bool normalized = false;
         bool ambiguous = false;
         this->findTraitImplsNext(sp, traitPath.path, traitPath.params, pe.type, [&](ImplRef impl, HIRCompare certainty) {
