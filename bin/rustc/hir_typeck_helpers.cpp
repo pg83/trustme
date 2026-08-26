@@ -4338,6 +4338,9 @@ default:
                     if (!infer->isLit() && !associatedConstrainsSelf) {
                         return Certainty::Ambiguous;
                     }
+                    if (infer->isLit() && !literalClassCanMatch(trait, goalParams, infer->tyClass)) {
+                        return Certainty::NoSolution;
+                    }
                 }
                 CanonicalizeTraitGoal canonicalizer(crate.types);
                 const auto canonical = canonicalizeGoal(goalParams, resolvedType, associated, canonicalizer);
@@ -4436,6 +4439,41 @@ default:
                     return cacheResult(Certainty::Ambiguous);
                 }
                 return cacheResult(Certainty::NoSolution);
+            }
+
+            // A literal (integer/float class) inference variable can only
+            // become one of its class's primitives.  If no impl or bound
+            // head matches ANY of them, the goal can never be proven --
+            // rustc probes literal receivers per primitive type, which is
+            // what keeps `(&mut ?int).partial_cmp(..)` from selecting
+            // Iterator::partial_cmp through the &mut I blanket.
+            bool literalClassCanMatch(const HIRSimplePath& trait, const HIRPathParams& params, HIRInferClass tyClass) const {
+                static const HIRCoreType intPrims[] = {HIRCoreType::I8, HIRCoreType::U8, HIRCoreType::I16, HIRCoreType::U16, HIRCoreType::I32, HIRCoreType::U32, HIRCoreType::I64, HIRCoreType::U64, HIRCoreType::I128, HIRCoreType::U128, HIRCoreType::Isize, HIRCoreType::Usize};
+                static const HIRCoreType floatPrims[] = {HIRCoreType::F16, HIRCoreType::F32, HIRCoreType::F64, HIRCoreType::F128};
+                const HIRCoreType* prims = tyClass == HIRInferClass::Integer ? intPrims : floatPrims;
+                const size_t count = tyClass == HIRInferClass::Integer ? 12 : 4;
+                for (size_t i = 0; i < count; i++) {
+                    const auto prim = crate.types.primitive(prims[i]);
+                    bool matches = false;
+                    auto probe = [&](ImplRef, HIRCompare) {
+                        matches = true;
+                        return true;
+                    };
+                    resolve_.findTraitImplsMagic(span(), trait, params, prim, probe);
+                    if (!matches) {
+                        resolve_.findTraitImplsBound(span(), trait, params, prim, probe);
+                    }
+                    if (!matches) {
+                        crate.findTraitImpls(trait, prim, HIRResolvePlaceholdersNop(), [&](const HIRTraitImpl&) {
+                            matches = true;
+                            return true;
+                        });
+                    }
+                    if (matches) {
+                        return true;
+                    }
+                }
+                return false;
             }
 
             bool containsDefiningOpaque(const HIRTypeData* ty) const {
@@ -4834,6 +4872,9 @@ default:
                 if (const auto* infer = resolvedType->opt_Infer()) {
                     if (!infer->isLit() && !associatedConstrainsSelf) {
                         return emitForcedAmbiguity();
+                    }
+                    if (infer->isLit() && !literalClassCanMatch(trait, goalParams, infer->tyClass)) {
+                        return false;
                     }
                 }
                 CanonicalizeTraitGoal canonicalizer(crate.types);
