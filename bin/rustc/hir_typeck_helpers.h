@@ -283,6 +283,7 @@ private:
     TraitTypeConstraintCallback* typeConstraint = nullptr;
     ::std::vector<HIRSimplePath> opaqueAliasScopes;
     ::std::vector<HIRSimplePath> definingOpaqueAliases;
+    ::std::vector<HIRPath> definingFcnOrigins;
 
 public:
     TraitResolution(const HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait);
@@ -293,6 +294,11 @@ public:
     void addOpaqueAliasScope(const HIRSimplePath& path);
 
     void addDefiningOpaqueAlias(const HIRSimplePath& path);
+
+    /// The current function's own return-position opaques: their goals are
+    /// defining uses, everywhere else a Fcn-origin opaque is rigid.
+    void addDefiningFcnOrigin(const HIRPath& origin);
+    bool isDefiningFcnOrigin(const HIRPath& origin) const;
 
     /// While set, a method probe must answer from what is known: type checking
     /// has stabilised, so waiting for the receiver would wait forever.

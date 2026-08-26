@@ -10762,6 +10762,19 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
     HIRExprNodeP rootPtr(expr.get());
     assert(!ms.modPaths.empty());
     Context context{ms.wb, ms.implGenerics, ms.itemGenerics, ms.modPaths.back(), ms.currentTrait, ms.currentTraitImpl};
+    // The function's own return-position opaques are defining uses in this
+    // body; register their origins so the solver keeps them conservative
+    // while everyone else's RPITs stay rigid.
+    if (resultType) {
+        visitTyWith(resultType, [&](const HIRTypeData* inner) {
+            if (const auto* erased = inner->opt_ErasedType()) {
+                if (const auto* fcn = erased->inner.opt_Fcn()) {
+                    context.resolve.addDefiningFcnOrigin(fcn->origin);
+                }
+            }
+            return false;
+        });
+    }
     for (const auto& path : expr.state->defineOpaque) {
         context.resolve.addDefiningOpaqueAlias(path);
     }

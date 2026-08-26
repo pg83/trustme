@@ -4659,11 +4659,16 @@ default:
                     if (!erased) {
                         return false;
                     }
-                    // A return-position opaque (Fcn origin) is revealed by
-                    // the typeck consumer in its defining scope; the solver
-                    // cannot reject on it either way.
-                    if (erased->inner.is_Fcn()) {
-                        return true;
+                    // A return-position opaque outside its defining function
+                    // is rigid like any nominal type (its repertoire is its
+                    // declared bounds); treating every Fcn-origin opaque as
+                    // "may still be defined" held goals ambiguous forever
+                    // (example-calendar) or re-evaluated dead blankets
+                    // exponentially (issue-64848).  Inside the defining
+                    // function (its own return opaques, registered at
+                    // typecheck start) the conservative treatment stays.
+                    if (const auto* fcn = erased->inner.opt_Fcn()) {
+                        return resolve_.isDefiningFcnOrigin(fcn->origin);
                     }
                     const auto* alias = erased->inner.opt_Alias();
                     return alias && resolve_.isOpaqueAliasDefiningScope(*alias->inner);
@@ -5531,6 +5536,24 @@ default:
             if (::std::find(opaqueAliasScopes.begin(), opaqueAliasScopes.end(), path) == opaqueAliasScopes.end()) {
                 opaqueAliasScopes.push_back(path);
             }
+        }
+
+        void TraitResolution::addDefiningFcnOrigin(const HIRPath& origin) {
+            for (const auto& existing : definingFcnOrigins) {
+                if (existing == origin) {
+                    return;
+                }
+            }
+            definingFcnOrigins.push_back(origin.clone());
+        }
+
+        bool TraitResolution::isDefiningFcnOrigin(const HIRPath& origin) const {
+            for (const auto& existing : definingFcnOrigins) {
+                if (existing == origin) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         void TraitResolution::addDefiningOpaqueAlias(const HIRSimplePath& path) {
