@@ -1,279 +1,212 @@
-# Семантическая карта недоделанного: typeck и goal solver
+# SOLVER.md — план доведения typeck/солвера до rustc-модели
 
-Снимок на 2026-08-26 (после выпила legacy-селекции, c7299e188).
-Дефолт — goal solver; ниже — что в нём и вокруг него семантически
-не доведено до rustc-модели, по весу.
+Снимок 2026-08-26: goal solver — единственный (legacy-селекция выпилена,
+c7299e188), throw Defer не существует (15173547a), корпус — 8 узлов,
+libcore full pipeline 41-44s. Всё недоделанное по семантике собрано
+ниже — не отдельной «картой», а этапами с якорями по живому коду:
+каждый пункт долга лежит в этапе, который его убивает.
 
-## Ядро солвера
+Дисциплина каждого этапа: unit-гейт, полный корпус, libcore-время не
+хуже 41-44s, commit+push, запись в DEFER.md. Порядок этапов —
+зависимость, не приоритет вкуса: этап 0 разблокирует почти всё.
 
-### 1. Нормализация (EAT) не через солвер
+Не трогаем: перечислители Magic/Legacy/Bound внутри СБОРКИ КАНДИДАТОВ
+солвера (helpers:3853-3855, CandidateSource) — это источники
+кандидатов; костыли — их вызовы ИЗ typeck, они и выпиливаются.
 
-`expandAssociatedTypes` — отдельная машинерия с `bestImpl`/fuzzy-
-сравнениями. Goal-путь внутри неё частичен и огорожен эвристиками:
-`definingUse`-гейт, `selfSimilarChain`-гейт, depth-caps `>64` (числа с
-потолка, введены при отладке зависаний). В rustc next-solver
-нормализация — это `NormalizesTo`/`AliasRelate` цели ВНУТРИ солвера, с
-теми же кэшами и циклной семантикой. У нас два мира и мосты между ними.
-
-### 2. Ответы не каноничны по-настоящему
-
-Цель с иварами, через которые солвер не коммитит, отвечается
-forced-ambiguity identity (`emitForcedAmbiguity`; недоступен ordinary
-lookup без assocName). Вывод дальше тянут legacy fuzzy-обход +
-single-candidate commit из `possibleIvarVals`
-(identity-retry в `hir_typeck_expr_cs.cpp`, check_associated). rustc
-возвращает канонический ответ со связываниями иваров. Пока это так,
-«выпил legacy» неполон принципиально: fuzzy-обходы — костыль вместо
-canonical response inference.
-
-### 3. Специализация не смоделирована
-
-Мост сворачивает default-impl и перекрывающий его sibling в ОДИН
-merged-ответ; наследование итемов и `moreSpecificThan` живут снаружи
-солвера (двухпроходность `noGoalBridge`, specialisable-повтор в
-`hir_typeck_static.cpp` и expr_cs). В rustc — candidate preference
-внутри селекции.
-
-### 4. Циклы — эвристика
-
-«Productive recursive proves provisional, ordinary cycle → Ambiguous» —
-приближение. rustc: точная coinductive/inductive семантика (auto
-traits/Sized коиндуктивны) с fixpoint-итерацией провизорных
-результатов. Наши active-goal циклы индуктивность не различают.
-
-### 5. Канонизация не context-free
-
-Generic-биндинги сравниваются только по binding — `M:0` разных функций
-совпадают. Отсюда ПОЛНЫЙ флаш warm-кэша на смене eatCacheGeneration
-вместо честных ключей. Симптом: канонические ключи не абсолютны.
-
-### 6. Нет universes/HRTB
-
-Placeholder-генерики (`GENERICPlaceholder`) с правилами принудительной
-Ambiguous вместо universe-семантики и leak check. Higher-ranked цели
-матчатся приближённо; nested-hkl в корпусе падает (Cyclic anon type).
-
-## Typeck вокруг солвера
-
-### 7. Магические трейты вне солвера
-
-Sized/Copy/Clone/FnPtr/Transmute/DiscriminantKind — структурные ответы
-в `findTraitImplsMagicCb` ДО goal-машинерии; в канонических
-кэшах/циклах не участвуют единообразно. `MetaSized` — буквально
-`TODO(sp)` (`hir_typeck_helpers.cpp:2180`). `?Sized`-декларация
-параметра — контекст вне env-модели (исключение Sized-семейства из
-крейт-кэша для generic-целей — обход, не модель).
-
-### 8. Опаки: нет TypingMode
-
-Для trans есть `OpaqueReveal::All` (свойство резолвера, 59a9e999b), но
-analysis-режим — набор точечных правил (definingFcnOrigins, rigid вне
-defining function, autoderef над defining-опаком → Ambiguous,
-defining-use у constraint loop), а не rustc-овское хранение hidden type
-candidates в infcx с member constraints.
-
-### 9. Литеральный вывод — легаси-пласт целиком
-
-`possibleIvarVals` + четыре яруса `checkIvarPoss`
-(Assume/IgnoreWeakDisable/PickFirstBound/FinalOption) + безусловный
-числовой fallback последней стадией (73a800d7f) — эвристики. rustc:
-fallback через анализ diverging-переменных и coercion-графа.
-simd/array-type (вывод intrinsic-аргументов) падает именно тут.
-
-### 10. Method probe не через солвер
-
-Пробинг и shadowing where-bound против крейт-impl'ов
-(`foundNonGlobalBound`) — аппроксимация rustc candidate ordering.
-
-### 11. WF и implied bounds поверхностны
-
-`selectWellFormed` — узкий обход проекций; полных WF-обязательств и
-implied bounds нет.
-
-### 12. Const-generics частичны
-
-Value-Infer ключи в кэшах certainty-only; unevaluated consts блокируют
-кэширование; `constItemMustStaySymbolic` — предикат-эвристика вместо
-символической оценки под where-clauses; const traits (`[const]`) в
-солвере не смоделированы.
-
-### 13. Регионы: вне скоупа, кроме leak check
-
-Семантика корректной программы от borrowck и region obligations не
-зависит: они только отвергают некорректные программы (rustc стирает
-регионы в codegen, trait-селекция region-erased). Borrowck-only
-диагностики — xfail по договорённости, долгом солвера НЕ считаются.
-Единственное регион-зависимое, что влияет на селекцию в корректных
-программах, — leak check при HR-матчинге (может отфильтровать
-кандидата и изменить выбор impl'а); это часть п.6, не отдельный пункт.
-
-## Приоритет
-
-П.1-2 (нормализация и канонические ответы в солвере) — они же убьют
-fuzzy-костыли и половину гейтов. Затем циклы (п.4) и специализация
-(п.3). Корпусный остаток (rust_lib «Failed to infer» ×3) почти
-наверняка упирается в п.2/п.9.
-
-# План: удаление fuzzy/legacy путей и реализация недостающего
-
-Порядок не произвольный: этап 0 разблокирует 1, 2 и 5; без него любые
-выпилы fuzzy-обходов ломают вывод. Дисциплина на каждом этапе: unit-гейт,
-полный корпус, libcore-время (не хуже 41-44s), commit+push, запись в
-DEFER.md. Легитимные перечислители в СБОРКЕ КАНДИДАТОВ солвера
-(helpers:3853-3855 — Magic/Legacy/Bound как CandidateSource) не трогаем:
-это источники кандидатов, а не костыли; костыли — их вызовы ИЗ typeck.
+Вне скоупа: регионы. Семантика корректной программы region-erased;
+borrowck/region obligations только отвергают некорректные программы
+(borrowck-only диагностики — xfail по договорённости). Единственное
+регион-зависимое, влияющее на выбор impl'а в корректных программах, —
+leak check при HR-матчинге; он в этапе 10.
 
 ## Этап 0. Канонические ответы со связываниями иваров
 
-Солвер на цель с иварами отвечает подстановками для канонических слотов,
-декануниазация применяет их к caller-иварам. Обобщить существующий
-точечный коммит «параметров-констрейнтов на голые ивары» (const_cast +
-setIvarTo в globally-EAT) в единый механизм применения ответа — без
-const_cast, через явный мутабельный канал к таблице иваров.
+Долг: солвер на цель с иварами, через которые не коммитит, отвечает
+forced-ambiguity identity (`emitForcedAmbiguity`; недоступен ordinary
+lookup без assocName), и вывод дальше тянут fuzzy-обходы. rustc
+возвращает канонический ответ с подстановками.
+
+Сделать: ответ несёт подстановки для канонических слотов цели;
+деканонизация применяет их к caller-иварам. Обобщить точечный
+const_cast+setIvarTo-коммит «голых иваров» из globally-EAT в единый
+механизм применения ответа — без const_cast, через явный мутабельный
+канал к таблице иваров.
 
 Убивает:
-- emitForcedAmbiguity identity как способ ответа (остаётся только как
-  честная ambiguity без кандидатов);
+- identity как способ ответа (остаётся честная ambiguity без кандидатов);
 - identity-retry fuzzy-обход (expr_cs:8181-8183);
-- probe-обходы для possibilities (expr_cs:7783-7785, 9029-9031).
+- probe-обходы для possibilities (expr_cs:7783-7785, 9029-9031);
+- slot-count гард в emitResponse («ответ ивар-цели без слотов не
+  кэшировать») — заплатка этого же корня.
 
-Ожидание по корпусу: rust_lib «Failed to infer» ×3 (4fcc, 66549, ed05).
-Выход: перечисленные сайты удалены, гейт+корпус зелёные.
+Корпус-ожидание: rust_lib «Failed to infer» ×3 (4fcc, 66549, ed05);
+вероятно exercism-timeout (перф от исчезновения ретраев).
 
 ## Этап 1. NormalizesTo: EAT через солвер
 
-Новый вид цели — нормализация алиаса (`<T as Trait>::Assoc = ?out`).
-EAT-globally-ветка превращается в вызов солвера; структурный fast-path
-(конкретный self, единственный impl) остаётся вне для скорости.
+Долг: `expandAssociatedTypes` — отдельная машинерия с bestImpl/fuzzy-
+сравнениями; goal-канал внутри неё огорожен `definingUse`-гейтом,
+`selfSimilarChain`-гейтом и depth-caps `>64` (числа с потолка). Два
+мира и мосты. Канонические ключи не абсолютны (generic-биндинги
+сравниваются только по binding → M:0 разных функций совпадают), отсюда
+полный флаш warm-кэша на eatCacheGeneration и one-shot ответы (сброс
+response-кэша на входе outermost — маскирует невалидность реплея).
 
-Убивает: definingUse-гейт, selfSimilarChain-гейт, depth-caps >64
-(циклы переходят к солверу), отдельный goal-канал внутри EAT.
+Сделать: цель-нормализация алиаса (`<T as Trait>::Assoc = ?out`)
+внутри солвера; EAT-globally-ветка — вызов солвера; структурный
+fast-path (конкретный self, единственный impl) остаётся для скорости.
+Ключи каноничны абсолютно → флаш и one-shot умирают, реплей ответов
+внутри функции легален; переоценить крейт-кэш generic-целей (сейчас
+допущены, прироста нет — 9039f32b2).
+
 Зависимость: этап 0 (результат нормализации — биндинг выходного ивара).
-Побочный эффект: канонические ключи становятся абсолютными → снять
-полный флаш warm-кэша на eatCacheGeneration (долг п.5) и переоценить
-крейт-кэш для generic-целей (сейчас — без измеримого прироста).
+Делать вместе с этапом 2 (циклы normalizes-to).
 
-## Этап 2. Специализация в селекции
+## Этап 2. Семантика циклов
 
-Candidate preference внутри солвера: более специфичный impl побеждает до
-merge; ответ несёт выбранный impl и его shadowed-предка (для
-наследования итемов) вместо повторного перечисления.
+Долг: «productive recursive proves provisional, ordinary cycle →
+Ambiguous» — эвристика; индуктивность не различается.
+
+Сделать: коиндуктивные цели (auto traits, Sized-семейство) vs
+индуктивные; fixpoint-итерация провизорных результатов. Вместе с
+этапом 1 — normalizes-to добавляет новые классы циклов.
+
+## Этап 3. Специализация в селекции
+
+Долг: мост сворачивает default-impl и перекрывающий sibling в один
+merged-ответ; `moreSpecificThan` и наследование итемов — снаружи.
+
+Сделать: candidate preference внутри солвера; ответ несёт выбранный
+impl и shadowed-предка (для наследования итемов).
 
 Убивает: noGoalBridge-двухпроходность (static:2546, 4258, 4272),
 specialisable-repeat (expr_cs:8211-8213), selectSpecialisableFallback.
-Зависимость: этап 1 (lookup итема через нормализацию).
+Зависимость: этап 1.
 
-## Этап 3. Семантика циклов
+## Этап 4. Builtin-кандидаты и Sized-иерархия
 
-Коиндуктивные цели (auto traits, Sized-семейство) vs индуктивные;
-fixpoint-итерация провизорных результатов вместо эвристики
-«productive proves provisional». Делать вместе с этапом 1 —
-normalizes-to добавляет новые классы циклов.
+Долг: Sized/Copy/Clone/FnPtr/Transmute/DiscriminantKind отвечаются в
+`findTraitImplsMagicCb` ДО goal-машинерии — вне канонических
+кэшей/циклов. `MetaSized` — TODO (helpers:2180). `?Sized`-декларация
+параметра — контекст вне env-модели (крейт-кэш исключает
+Sized-семейство для generic-целей как обход).
 
-## Этап 4. Builtin-кандидаты вместо magic-претрапа
+Сделать: перенести структурные правила в builtin-кандидаты сборки
+(канал CandidateSource::Builtin есть); реализовать MetaSized;
+?Sized — в env-модель.
 
-Sized/Copy/Clone/FnPtr/Transmute/DiscriminantKind — builtin-кандидаты
-сборки (канал CandidateSource::Builtin уже есть). Реализовать MetaSized
-(TODO helpers:2180). ?Sized-декларации параметров — в env-модель;
-снять исключение Sized-семейства из крейт-кэша.
+Убивает: magic-претрап, флаг magicTraitImpls и с ним последний
+legacy-маршрут в findTraitImplsCb; кэш-исключение Sized-семейства.
 
-Убивает: findTraitImplsMagicCb-претрап до солвера, magicTraitImpls-флаг
-маршрутизации и с ним последний legacy-маршрут в findTraitImplsCb.
+## Этап 5. Литеральный и never вывод
 
-## Этап 5. Литеральный вывод
+Долг: `possibleIvarVals` + четыре яруса `checkIvarPoss`
+(Assume/IgnoreWeakDisable/PickFirstBound/FinalOption) + безусловный
+числовой fallback (73a800d7f — временная ступень) — эвристики вместо
+rustc-анализа diverging-переменных. Never type — точечные заплатки:
+Diverge в матчинге ассоциатов принудительно Ambiguous (helpers:4251,
+4850), RPIT-only-self фолбэк в `()` (fallbackUnresolvedRpitType).
+simd/array-type падает здесь (вывод intrinsic-аргументов).
 
-После этапа 0 single-candidate commit — солверный (биндинги
-единственного кандидата). Ярусы checkIvarPoss срезать поэтапно с
-корпусом между шагами: сначала PickFirstBound/FinalOption, затем
-Assume/IgnoreWeakDisable; числовой fallback остаётся стадией
-«применить дефолты → пере-решить отложенные цели». Конечная цель —
-possibleIvarVals удалён целиком, CoerceUnsized-проба (expr_cs:6737)
-уходит в солверные Unsize-цели.
+Сделать: после этапа 0 single-candidate commit — солверный (биндинги
+единственного кандидата); ярусы срезать поэтапно с корпусом между
+шагами (сначала PickFirstBound/FinalOption, затем
+Assume/IgnoreWeakDisable); fallback = «применить дефолты → пере-решить
+цели», never-fallback как diverging-класс, Diverge-заплатки убрать.
 
-Ожидание по корпусу: simd/array-type, i32-fallback-класс закрыт
-системно (сегодняшний безусловный fallback — временная ступень).
+Конечная цель: possibleIvarVals удалён целиком.
+Корпус-ожидание: simd/array-type.
 
-## Этап 6. Method probe через солвер
+## Этап 6. Коэрции и autoderef через солвер
 
-Кандидаты метода формулируются целями; порядок и where-bound shadowing
-по rustc candidate ordering. Убивает foundNonGlobalBound-эвристику.
+Долг: linkCoerce/checkCoerceTys/checkIvarPossFailsBounds/autoderef —
+собственный fuzzy-механизм унификации с коэрциями; CoerceUnsized-проба
+(expr_cs:6737); autoderef над defining-опаком → Ambiguous (заглушка).
+rustc-коэрции опираются на солверные Unsize/CoerceUnsized цели.
 
-## Этап 7. TypingMode для опаков
+Сделать: Unsize/CoerceUnsized как цели солвера; coercion-граф
+переиспользует ответы со связываниями (этап 0); autoderef-шаг задаёт
+Deref-цели.
 
-Hidden-type кандидаты хранятся в инференс-таблице; defining-scope —
-режим тайпчека; member constraints. OpaqueReveal::All становится
-TypingMode::PostAnalysis. Убивает definingFcnOrigins-правила и
-autoderef-заглушку (defining-опак → Ambiguous).
+Зависимость: этапы 0 и 5.
 
-## Этап 8. Universes/HRTB + leak check
+## Этап 7. Клоужеры и async
 
-Канонизация с универсами; GENERICPlaceholder → placeholder с универсом;
-forced-ambiguity правила для плейсхолдеров умирают.
-Ожидание по корпусу: nested-hkl (Cyclic anon type).
+Долг: вывод сигнатуры клоужера из expected type (expr_cs:7258+) и
+Fn/FnMut/FnOnce kind — легаси-механика; AsyncFn→Fn форвардинг
+closure-структур — хак в findTraitImplsTypesCb.
 
-## Этап 9. Хвост
+Сделать: сигнатура/kind выводятся через obligations (Fn-family цели с
+ивар-сигнатурой; kind — по требуемому трейту); async-структуры дают
+честные AsyncFn-кандидаты вместо форвардинга.
 
-WF/implied bounds, const traits в солвере — после стабилизации
-этапов 0-8, отдельными заходами. Region obligations из плана исключены:
-на семантику корректных программ не влияют (см. п.13 карты).
+Зависимость: этап 6 (коэрции сигнатур), этап 0.
 
-# Дополнение к карте: о чём выше умолчано
+## Этап 8. Method probe через солвер
 
-Дописано после ревизии кода 2026-08-26; предыдущие 13 пунктов были
-неполны. План этапов 0-5 твёрдый (якоря по живому коду), 6-9 —
-направления. Ниже — срезы, не попавшие ни в карту, ни в план.
+Долг: пробинг и where-bound shadowing (`foundNonGlobalBound`) —
+аппроксимация rustc candidate ordering.
 
-### 14. Клоужеры и async: вывод вне солвера
+Сделать: кандидаты метода — цели; порядок и shadowing по rustc.
+Зависимость: этап 0; лучше после 6 (receiver-коэрции).
 
-Вывод сигнатуры клоужера из expected type (expr_cs:7258+), вывод
-Fn/FnMut/FnOnce kind, AsyncFn→Fn форвардинг closure-структур
-(TAG_Path-хак в findTraitImplsTypesCb) — легаси-механика. rustc
-выводит сигнатуру/kind через obligations в солвере.
+## Этап 9. Опаки: TypingMode и RPITIT
 
-### 15. RPITIT: строковый синтез ассоциатов
+Долг: analysis-режим — набор точечных правил (definingFcnOrigins,
+rigid вне defining function, defining-use у constraint loop) вместо
+хранения hidden-type кандидатов в инференс-таблице с member
+constraints. RPITIT живёт на строковых именах `erased#<item>_<i>`
+(hir_from_ast:1081, hir_expand:6587, NotYetKnown-ветка
+revealOpaqueType) — конвенция, не модель. Фазовая перепутанность:
+revealOpaqueType лениво генерит MIR чужого итема ради erasedTypes —
+транс тянет typeck-лоуринг. Плюс двойная страховка в trans:
+TypeVisitor::visitType и вход TargetGetTypeRepr reveal'ят поверх
+фикспойнта EAT (59a9e999b) — не проверены на удаляемость.
 
-`impl Trait` в трейтах живёт на интернированных именах
-`erased#<item>_<i>` (hir_from_ast:1081, hir_expand:6587,
-NotYetKnown-ветка revealOpaqueType). Идентичность синтетического
-ассоц-типа держится на строковом префиксе, не на структуре. Работает,
-но это конвенция, а не модель.
+Сделать: TypingMode {Analysis(defining scope), PostAnalysis} —
+OpaqueReveal::All становится частным случаем; hidden-type кандидаты в
+таблице; RPITIT — структурные синтетические ассоциаты; erasedTypes
+предвычисляются на границе фаз (getOrGenMir из reveal уходит);
+страховочные reveal-заходы в trans снять.
 
-### 16. Never type: точечные правила
+## Этап 10. Universes/HRTB и leak check
 
-Diverge в матчинге ассоциатов принудительно Ambiguous
-(helpers:4251, 4850); RPIT, ограниченный только собой, фолбэчится в
-`()` (fallbackUnresolvedRpitType). Никакой never-type-fallback модели
-rustc (diverging ivars) за этим нет.
+Долг: placeholder-генерики (GENERICPlaceholder) с принудительной
+Ambiguous вместо universe-семантики; leak check отсутствует — а он
+влияет на выбор impl'а в корректных программах (HR fn-ptr vs
+'static-impl). nested-hkl падает (Cyclic anon type).
 
-### 17. Coherence/intercrate: частично
+Сделать: канонизация с универсами, placeholder с универсом, leak check
+в матчинге.
 
-coherenceMode + traitRefIsKnowable в эвалюаторе есть, явные
-positive/negative auto-impl'ы учитываются (helpers:3871, 4666+). Но
-полнота intercrate-семантики (ambiguity для чужих крейтов, negative
-reasoning, orphan-полнота) против rustc систематически не сверялась.
+Корпус-ожидание: nested-hkl (728335c8633b).
 
-### 18. Фазовая перепутанность reveal → getOrGenMir
+## Этап 11. Coherence: сверка intercrate
 
-revealOpaqueType лениво генерит MIR ЧУЖОГО итема, чтобы достать
-erasedTypes; транс тянет typeck-лоуринг посреди себя. Порядок фаз
-держится на кэше и удаче, не на модели зависимостей.
+Долг: coherenceMode + traitRefIsKnowable и учёт positive/negative
+auto-impl'ов есть (helpers:3477, 3871, 4666+), но полнота
+intercrate-семантики (ambiguity чужих крейтов, negative reasoning,
+orphan-полнота) против rustc системно не сверялась — только тестами.
 
-### 19. Coercion-граф целиком
+Сделать: аудит против rustc-правил + направленные тесты. Независим,
+можно в любой момент.
 
-linkCoerce/checkCoerceTys/checkIvarPossFailsBounds/autoderef — свой
-fuzzy-механизм унификации с коэрциями; в плане затронут только краем
-(CoerceUnsized-проба, этап 5). rustc-коэрции опираются на солверные
-Unsize/CoerceUnsized цели.
+## Этап 12. Хвост
 
-## Страховки в коде без плана удаления
+- WF-обязательства и implied bounds (`selectWellFormed` — узкий обход
+  проекций).
+- Const traits (`[const]`) в солвере; символическая оценка констант под
+  where вместо предиката `constItemMustStaySymbolic`; value-Infer ключи
+  и unevaluated consts в кэшах (сейчас certainty-only/исключены).
 
-- Двойной reveal в trans поверх фикспойнта: TypeVisitor::visitType
-  (trans_main_bindings) и вход TargetGetTypeRepr — избыточны после
-  59a9e999b, не проверены на удаляемость.
-- One-shot ответы (сброс response-кэша на входе outermost) — маскируют
-  невалидность реплея ответов внутри функции; убрать сможет только
-  этап 0/1 (абсолютные ключи).
-- Slot-count гард в emitResponse («ответ ивар-цели без слотов не
-  кэшировать») — заплатка того же корня.
-- Исключение Sized-семейства из крейт-кэша generic-целей — обход
-  ?Sized-контекста (умрёт на этапе 4).
+После стабилизации этапов 0-11.
+
+## Вне плана (не солвер)
+
+- rust_lib 297ac (`mem::test_transmute_copy`, runtime) — trans/layout,
+  отдельный разбор.
+- Зачистка мутабельных статиков со стейтом (стеки рекурсии
+  resolve/hir_type, repr-кэши trans_target на std::unordered_map,
+  счётчики имён, sActiveDiscriminants, nextAliasInputInfer, скретч
+  helpers:392) — отдельный проход по канону пул/резолвер/wire board.
