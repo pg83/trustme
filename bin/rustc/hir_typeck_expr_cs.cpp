@@ -7934,10 +7934,19 @@ default:
             const HIRTraitImpl* specialisableImpl = nullptr;
             bool selectSpecialisableFallback = false;
             const auto selectExactImpl = [&](const ImplRef& impl) {
-                context.equateTypes(sp, v.implTy, impl.getImplType(context.crate.types));
+                // A tentative impl placeholder in the response is not a
+                // commitment; equating it would leak `impl_?_*` into the
+                // inference table (matches the possibilities path below).
+                const auto implSelfTy = impl.getImplType(context.crate.types);
+                if (!typeContainsImplPlaceholder(context.crate.types, implSelfTy)) {
+                    context.equateTypes(sp, v.implTy, implSelfTy);
+                }
                 auto implParams = impl.getTraitParams(context.crate.types);
                 ASSERT_BUG(sp, v.params.types.size() == implParams.types.size(), "Parameter count mismatch between impl and rule: r=" << v.params << " i=" << implParams);
                 for (unsigned int i = 0; i < v.params.types.size(); i++) {
+                    if (typeContainsImplPlaceholder(context.crate.types, implParams.types[i])) {
+                        continue;
+                    }
                     context.equateTypes(sp, v.params.types[i], implParams.types[i]);
                 }
                 for (unsigned int i = 0; i < v.params.values.size(); i++) {
