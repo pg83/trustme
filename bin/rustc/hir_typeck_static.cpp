@@ -306,7 +306,7 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
     // still hold those in unresolved UfcsUnknown form -- data the goal
     // machinery must not see. Once the bounds are resolved the bridge takes
     // every query.
-    if (this->wb.settings->solver.globally && !dontHandoffToSpecialised && !noGoalBridge
+    if (!dontHandoffToSpecialised && !noGoalBridge
         && !genericBoundsUnresolved(implGenerics_) && !genericBoundsUnresolved(itemGenerics_)) {
         if (!nextSolver) {
             ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
@@ -2543,7 +2543,7 @@ default:
         }
         };
     rv = this->findImpl(sp, traitPath.path, traitPath.params, e2.type, cbFindImpl);
-    if (!rv && bestImpl.isValid() && this->wb.settings->solver.globally) {
+    if (!rv && bestImpl.isValid()) {
         // The goal bridge folds a specialisable default and the sibling impl
         // that overrides it into ONE merged response, so the loop above only
         // ever saw the default.  Only the legacy iteration shows every impl;
@@ -4255,7 +4255,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 }, /*dontHandoffToSpecialised=*/false, noGoalBridge);
                 };
                 searchImpls(/*noGoalBridge=*/false);
-                if (bestImpl.isValid() && bestIsSpec && this->wb.settings->solver.globally) {
+                if (bestImpl.isValid() && bestIsSpec) {
                     // The bridge's merged response is ONE impl; a `default`
                     // item found through it can still be specialised by an
                     // overlapping impl the merge folded away (equal heads:
@@ -4269,7 +4269,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     hasFuzzyImpl = false;
                     searchImpls(/*noGoalBridge=*/true);
                 }
-                if (!bestImpl.isValid() && this->wb.settings->solver.globally) {
+                if (!bestImpl.isValid()) {
                     // The goal bridge returns one merged response -- the most
                     // specific impl.  When that impl omits the requested item
                     // (`SizeHint for Empty` overrides only upper_bound), the

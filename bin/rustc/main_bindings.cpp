@@ -215,8 +215,6 @@ struct ProgramParams {
     // NOTE: if true, no parse/compilation performed (target is loaded though)
     bool printCfgs = false;
 
-    TraitSolverConfig traitSolver;
-
     ::std::vector<::std::string> crateSearchDirs;
     ::std::vector<::std::string> nativeLibSearchDirs;
     ::std::vector<::std::string> frameworkSearchDirs;
@@ -380,7 +378,6 @@ static int compile(int argc, char* argv[]) {
     wb.settings = pool->make<Settings>(pool);
     wb.settings->cfg = CfgCreateState(*pool);
     ProgramParams params(*wb.settings, argc, argv);
-    wb.settings->solver = params.traitSolver;
     wb.settings->overflowChecks = params.overflowChecksEnabled();
     wb.settings->ubChecks = params.ubChecksEnabled();
     wb.settings->fmtDebug = params.fmtDebug;
@@ -1479,17 +1476,10 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             exit(1);
                         }
                     } else if (optname == "next-solver") {
-                        if (eqPos == ::std::string::npos || optval == "globally") {
-                            this->traitSolver.coherence = true;
-                            this->traitSolver.globally = true;
-                        } else if (optval == "coherence") {
-                            this->traitSolver.coherence = true;
-                            this->traitSolver.globally = false;
-                        } else if (optval == "no") {
-                            this->traitSolver.coherence = false;
-                            this->traitSolver.globally = false;
-                        } else {
-                            ::std::cerr << "Invalid value for -Z next-solver: '" << optval << "' (expected 'no', 'coherence', or 'globally')" << ::std::endl;
+                        // The goal solver is the only solver; the flag is
+                        // accepted for compatibility but selects nothing.
+                        if (!(eqPos == ::std::string::npos || optval == "globally" || optval == "coherence")) {
+                            ::std::cerr << "Invalid value for -Z next-solver: '" << optval << "' (the legacy trait solver has been removed)" << ::std::endl;
                             exit(1);
                         }
                     } else if (optname == "dump-ast") {

@@ -2963,7 +2963,7 @@ default:
             }
 
             bool crateCacheUsable() const {
-                return resolve_.board().settings->solver.globally && resolve_.traitBounds.size() == 0 && !coherenceMode;
+                return resolve_.traitBounds.size() == 0 && !coherenceMode;
             }
 
             NextSolverCrateCache& crateCache() const {
@@ -5794,7 +5794,7 @@ default:
         bool TraitResolution::implsOverlap(const Span& sp, const ImplRef& left, const ImplRef& right) const {
             const auto* leftImpl = left.data.opt_TraitImpl();
             const auto* rightImpl = right.data.opt_TraitImpl();
-            if (!this->wb.settings->solver.coherence || !leftImpl || !rightImpl || !leftImpl->impl || !rightImpl->impl) {
+            if (!leftImpl || !rightImpl || !leftImpl->impl || !rightImpl->impl) {
                 return left.overlapsWith(crate, right);
             }
             if (!leftImpl->traitPath || !rightImpl->traitPath || *leftImpl->traitPath != *rightImpl->traitPath) {
@@ -5856,7 +5856,7 @@ default:
                     }
                 }
             }
-            if (this->wb.settings->solver.globally && magicTraitImpls) {
+            if (magicTraitImpls) {
                 return findTraitImplsNextCb(sp, trait, params, type, callback);
             }
             return findTraitImplsLegacyCb(sp, trait, params, type, callback, magicTraitImpls);
@@ -6790,7 +6790,7 @@ default:
         }
         return false;
     };
-    if (this->wb.settings->solver.globally && !definingUse() && !selfSimilarChain()) {
+    if (!definingUse() && !selfSimilarChain()) {
         bool normalized = false;
         bool ambiguous = false;
         this->findTraitImplsNext(sp, traitPath.path, traitPath.params, pe.type, [&](ImplRef impl, HIRCompare certainty) {
@@ -9606,7 +9606,7 @@ default: {
                         if (outUndecided && typeIsUnboundedInfer(this->ivars.getType(selfTy))) {
                             *outUndecided = true;
                         }
-                        if (this->wb.settings->solver.globally) {
+                        {
                             HIRPathParams methodParams;
                             RcString placeholderName;
                             if (method.data.params.isGeneric()) {
@@ -9680,9 +9680,6 @@ default: {
                 return false;
             };
             auto recordBoundGlobalness = [&](const HIRTypeData* type, const HIRGenericPath& trait, const CachedBound& info) {
-                if (!this->wb.settings->solver.globally) {
-                    return;
-                }
                 foundNonGlobalBound |= typeIsNonGlobalAfterNormalization(type) || paramsAreNonGlobalAfterNormalization(trait.params);
                 for (const auto& associated : info.assoc) {
                     foundNonGlobalBound |= paramsAreNonGlobalAfterNormalization(associated.second.sourceTrait.params)
@@ -9764,7 +9761,7 @@ default: {
             // The next solver only lets a non-global where-bound shadow crate
             // impls. A global bound remains a method candidate, but probing must
             // continue so the call signature can disambiguate it from an impl.
-            if (foundBound && (!this->wb.settings->solver.globally || foundNonGlobalBound)) {
+            if (foundBound && foundNonGlobalBound) {
                 return rv;
             }
 

@@ -5548,9 +5548,6 @@ void Context::removeAssociated(unsigned index, u64 oldKey) {
 }
 
 void Context::selectWellFormed(const Span& sp, const HIRTypeData* type) {
-    if (!resolve.board().settings->solver.globally) {
-        return;
-    }
     visitTyWith(type, [&](const HIRTypeData* inner) {
         const auto* path = inner->opt_Path();
         const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
@@ -7996,7 +7993,7 @@ default:
                 // certainty-only nested evaluation dropped (a closure's
                 // parameter types from `F: FnMut(char) -> bool`), so those
                 // are re-exported.
-                addImplBounds(context, sp, impl, /*onlyWithIvars=*/context.resolve.board().settings->solver.globally);
+                addImplBounds(context, sp, impl, /*onlyWithIvars=*/true);
             };
             auto candidateCallback = [&](ImplRef impl, HIRCompare cmp) {
                 DEBUG("[check_associated] Found cmp=" << cmp << " " << impl);
@@ -8169,7 +8166,7 @@ default:
                     return false;
                 }
             };
-            bool found = context.resolve.board().settings->solver.globally ? context.resolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp) : context.resolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
+            bool found = context.resolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp);
             if (!found && count == 0 && sawAmbiguousIdentity) {
                 // The canonical solver answered with the identity: the goal
                 // still holds inference variables it will not commit through
@@ -8211,13 +8208,9 @@ default:
                     // default behind its merged sibling and the exact impl
                     // would not reappear.
                     selectSpecialisableFallback = true;
-                    if (context.resolve.board().settings->solver.globally) {
-                        found = context.resolve.findTraitImplsLegacy(sp, v.trait, v.params, v.implTy, candidateCallback)
-                            || context.resolve.findTraitImplsMagic(sp, v.trait, v.params, v.implTy, candidateCallback)
-                            || context.resolve.findTraitImplsBound(sp, v.trait, v.params, v.implTy, candidateCallback);
-                    } else {
-                        found = context.resolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
-                    }
+                    found = context.resolve.findTraitImplsLegacy(sp, v.trait, v.params, v.implTy, candidateCallback)
+                        || context.resolve.findTraitImplsMagic(sp, v.trait, v.params, v.implTy, candidateCallback)
+                        || context.resolve.findTraitImplsBound(sp, v.trait, v.params, v.implTy, candidateCallback);
                     ASSERT_BUG(sp, found, "Selected specialisable impl disappeared during repeated lookup");
                 }
             }

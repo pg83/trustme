@@ -13,25 +13,6 @@
 #include <string>
 #include <vector>
 
-// Trait solver selection.  The goal solver answers every trait query by
-// default (the unit gate and libstd build green under it); the legacy
-// selector remains reachable for comparison via TRUSTME_NEXT_SOLVER=legacy
-// or -Z next-solver=no until its call paths are deleted.
-struct TraitSolverConfig {
-    bool coherence = true;
-    bool globally = true;
-
-    TraitSolverConfig() {
-        if (const char* env = getenv("TRUSTME_NEXT_SOLVER")) {
-            if (strcmp(env, "legacy") == 0 || strcmp(env, "no") == 0) {
-                globally = false;
-            } else if (strcmp(env, "globally") == 0) {
-                globally = true;
-            }
-        }
-    }
-};
-
 // Lint reporting level, as set by `-A/-W/-D/-F` and by `#![allow(...)]` and
 // friends on the crate.
 enum class CfgLintLevel {
@@ -120,7 +101,6 @@ struct Settings {
         return crateOverrides.find(name.rawId());
     }
 
-    TraitSolverConfig solver;
     bool overflowChecks = false;
     /// Whether the library's UB checks are compiled in (`-Zub-checks`, which
     /// follows debug assertions unless it is given).
