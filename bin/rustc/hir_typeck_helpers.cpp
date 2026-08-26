@@ -6468,6 +6468,35 @@ default:
                 return true;
             }
 
+            // The response can carry parameter constraints the projection
+            // must not lose: `Select<?m>` answered through
+            // `impl Select<Target<Args>>` pins `?m := Target<?fresh>`.
+            // Dropping that mints a new existential on every retry and the
+            // pieces never meet.  Commit concrete response parameters onto
+            // bare goal variables.
+            {
+                auto responseParams = impl.getTraitParams(crate.types);
+                if (responseParams.types.size() == traitPath.params.types.size()) {
+                    for (size_t i = 0; i < responseParams.types.size(); i++) {
+                        const auto* goalTy = this->ivars.getType(traitPath.params.types[i]);
+                        const auto* goalInfer = goalTy->opt_Infer();
+                        if (!goalInfer || goalInfer->isLit() || isAliasInputInfer(goalInfer->index)) {
+                            continue;
+                        }
+                        const auto* respTy = this->ivars.getType(responseParams.types[i]);
+                        if (respTy->is_Infer() || respTy == goalTy) {
+                            continue;
+                        }
+                        // Impl generics or tentative placeholders in the
+                        // response are not commitments.
+                        if (visitTyWith(respTy, [](const HIRTypeData* inner) { return inner->is_Generic(); })) {
+                            continue;
+                        }
+                        const_cast<HMTypeInferrence&>(this->ivars).setIvarTo(goalInfer->index, respTy);
+                    }
+                }
+            }
+
             auto output = impl.getType(crate.types, pe.item.c_str(), pe.params);
             if (output == HIRTypeRef() || output == input) {
                 ambiguous = true;
