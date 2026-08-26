@@ -595,3 +595,27 @@ opaque_definer_user_annotation, specialization_opaque_associated_type,
 specialization_opaque_auto_trait, trait_obligation_guides_method_inference).
 Их регресс — где-то в последних коммитах после вехи «982/982 под
 globally»; нужен bisect и починка (следующая работа вместе с корпусом-9).
+
+## Разбор хвоста globally-гейта (2026-08-26, после шага B)
+
+Закрыто 4 из 9 (каждое — коммит с verify-циклом):
+- index_inference_from_bound (a7ed747be): visit(Index) при Equal-ответе
+  применяет индекс-параметр ответа (env-бound `[T]: Index<usize>` против
+  `Index<?lit>` повышается до Proven, параметр нёс usize и терялся).
+- diverging_fn_output_coercion (cb5400042): Unequal по ассоц-выходу, чей
+  candidate-тип резолвится в `!`, даунгрейдит кандидата в Ambiguous
+  (never-коэрция за caller'ом), а не в NoSolution.
+- specialization_opaque_{associated_type,auto_trait} (847efeffc): два
+  места, где merged-ответ моста прятал специализирующий impl за
+  `default type`: static-EAT (двухпроходность с noGoalBridge, зеркало
+  getValue) и Equal-коммит checkAssociated (отсрочка specialisable
+  default теперь и под globally — identity-фолбэк заходит через
+  legacy-перечисление).
+
+Остаток (5): trait_obligation_guides_method_inference +
+opaque_definer_user_annotation (TAIT: вывод U из унификации
+Opaque<U>==Opaque<()> не доезжает; «Loop in constant evaluation» на
+definer-аннотации), async_callable + async_fn_bound_sugar (транс:
+«Item not found ...future#twice::poll» — poll не enumerated),
+const_generic_arithmetic_trait_selection (транс-манглинг получает
+Unevaluated `{N+1}` — конст не свёрнут при mono под мостом).
