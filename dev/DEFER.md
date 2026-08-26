@@ -501,6 +501,32 @@ impl<T, U> TryFrom2<U> for T where U: Into2<T> {
   ресурсный флак; недетерминированные падения гейта сначала проверять
   одиночным прогоном узла.
 
+## Итерация «корпус под globally» (2026-08-26, вторая половина)
+
+Динамика FAIL-строк slow-корпуса (`TRUSTME_NEXT_SOLVER=globally`):
+**168 → 120 → 79 → 62 → 34 → 30 → 28** за один день итераций.
+Закрытые классы (каждый — коммит с регрессией):
+специализация тел (getValue-двухпроходность), TAIT-плейсхолдеры (два
+гварда equate), zero-heads-конкретный-конструктор = NoSolution
+(ExactSizeIterator-кластер), NonZero-операторы (legacy-перечисление для
+overload-probe и identity-фолбэка), defining-opaque принадлежит
+консьюмеру (RPIT/Fn-defining uses), литеральный класс receiver'ов
+(param-free, не-маркер).
+Уроки процесса: (1) unit-гейт не покрывает libcore-под-globally — каждый
+солверный цикл гоняет его отдельно; (2) пробы — только против
+globally-собранного libstd (гейтовый .build/tst/libstd.tar после
+TRUSTME_NEXT_SOLVER-прогона); (3) legacy-перечисления (probe/possibilities)
+не должны сворачивать на канонический мост — merged/identity-ответ прячет
+сложенные имплы.
+
+Остаток (28 строк, ~19 узлов): TAIT-alias (destructuring/65918/
+defined-by-user-annotation), async-closures (2), rpit-тройка
+(checkIvarPoss «bounded types don't fit»), coretests-рантайм
+(mem-should_panic, scan, str×2), simd/array-type, i32-fallback,
+MyFrom-75053, implied-bounds, nested-hkl (Cyclic anon type в Expand),
+exercism-1 и ~8 ui-хвостов. Дальше по списку + (б)-ядро шаг B
+(канонизация сборки) + крейт-lifetime кэш перед флипом дефолта.
+
 ## Карта slow-корпуса под globally (2026-08-26, бинарь da959dd57)
 
 79 узлов красных (unit-гейт — зелёный целиком). Классы по гистограмме:
