@@ -36,6 +36,15 @@ impl'а по `HIRCompare::Fuzzy`, повторного legacy-поиска и у
 
 Готово, когда нормализация не имеет собственного выбора best/fuzzy impl'а.
 
+Текущий срез:
+
+- `NormalizesTo` возвращает неоднозначные nested goals выбранного кандидата
+  вызывающей стороне; typeck регистрирует их как obligations.
+- Локальный `const_cast`/`setIvarTo` из EAT удалён; прямые входные type-var
+  применяются на границе ответа нормализации.
+- Осталось заменить это полным canonical response (`var_values` + external
+  constraints) и хранить его целиком в solver cache.
+
 ## 3. Перевести всех потребителей
 
 По одному, с отдельным regression-тестом:

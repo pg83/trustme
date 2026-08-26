@@ -214,6 +214,7 @@ class NextTraitGoalEvaluator;
 
 struct TraitTypeConstraintCallback {
     virtual void constrain(const Span& sp, const HIRTypeData* receiver, const HIRTypeData* implType) = 0;
+    virtual void registerSolverObligation(const Span& sp, HIRTypeRef type, HIRTraitPath trait) = 0;
 };
 
 struct TraitBoundCallback {
@@ -296,7 +297,7 @@ struct UnsizeInferCallback {
 
 class TraitResolution: public TraitResolveCommon {
     const HIRSimplePath& langDeref_;
-    const HMTypeInferrence& ivars;
+    HMTypeInferrence& ivars;
 
 public:
     const HIRSimplePath& visPath;
@@ -350,7 +351,7 @@ private:
     stl::Vector<const HIRPath*> definingFcnOrigins;
 
 public:
-    TraitResolution(const HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait);
+    TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait);
     ~TraitResolution();
 
     void setGenericContext(const HIRGenericParams* implParams, const HIRGenericParams* itemParams);

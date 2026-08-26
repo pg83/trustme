@@ -725,3 +725,17 @@ repr-кэши trans_target на std::unordered_map, счётчики имён,
 sActiveDiscriminants, nextAliasInputInfer, статический скретч в
 helpers:392) — снята, зачистка отдельным проходом: всё это кандидаты
 на пул/резолвер/wire board по канону.
+
+## NormalizesTo возвращает nested goals (2026-08-26)
+
+Проверено по rustc 1.90: shallow-успешный `NormalizesTo` поднимает
+неоднозначные nested goals в canonical response, а caller регистрирует их
+после применения ответа. Реализован тот же поток: выбранный кандидат хранит
+такие bounds, ответ мономорфизует их один раз и передаёт typeck как
+obligations. Локальный EAT-коммит через `const_cast`/`setIvarTo` удалён.
+
+Регрессия: `Range` → `FilterMap<char::from_u32>` теперь связывает item с
+`char` через поднятый `FnMut<..., Output = Option<B>>`, а не через повторный
+legacy-поиск. Полный `var_values`/external-constraints response остаётся
+следующим шагом: структурно восстанавливать его из готового `ImplRef`
+нельзя из-за alias-типов.

@@ -8467,6 +8467,16 @@ default:
 
 } // namespace "" - check_associated and check_coerce
 
+void Context::registerSolverObligation(const Span& sp, HIRTypeRef type, HIRTraitPath trait) {
+    if (trait.typeBounds.empty()) {
+        addTraitBound(sp, type, trait.path.path, ::std::move(trait.path.params));
+        return;
+    }
+    for (auto& associated : trait.typeBounds) {
+        equateTypesAssoc(sp, associated.second.type, trait.path.path, trait.path.params.clone(), type, associated.first.c_str(), associated.second.atyParams, false);
+    }
+}
+
 // check_ivar_poss (and helpers)
 namespace {
     bool pathParamsHaveUntrackedConst(const HIRPathParams& params) {

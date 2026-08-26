@@ -183,6 +183,7 @@ struct Context: TraitTypeConstraintCallback {
     void constrain(const Span& sp, const HIRTypeData* receiver, const HIRTypeData* implType) override {
         equateTypesInner(sp, receiver, implType);
     }
+    void registerSolverObligation(const Span& sp, HIRTypeRef type, HIRTraitPath trait) override;
     // - Equate two types, allowing inferrence
     void equateTypesCoerce(const Span& sp, const HIRTypeData* l, HIRExprNodeP& nodePtr);
     void recordCoercionHint(const HIRTypeData* type, HIRExprNodeP& nodePtr);

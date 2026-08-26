@@ -2781,6 +2781,7 @@ default:
                 bool autoBuiltin;
                 CandidateSource source;
                 bool ambiguityBeyondHead = false;
+                stl::Vector<const HIRGenericBound*> normalizationNestedGoals;
                 bool discarded = false;
                 // The certainty of the trait goal alone, before the root
                 // associated-item requirement could downgrade it.
@@ -4054,7 +4055,7 @@ default:
                 return binder.changed;
             }
 
-            bool bindCandidateResponse(Candidate& candidate, const HIRTypeData* nestedType, const HIRPathParams& nestedParams, const ImplRef& response) {
+            bool bindCandidateResponse(Candidate& candidate, const HIRTypeData* nestedType, const HIRPathParams& nestedParams, const HIRTraitPath::assocListT& nestedAssociated, const ImplRef& response) {
                 HIRPathParams* candidateParams = nullptr;
                 if (auto* traitImpl = candidate.impl.data.opt_TraitImpl()) {
                     candidateParams = &traitImpl->implParams;
@@ -4162,6 +4163,14 @@ default:
                 const auto saved = candidateParams->clone();
                 auto match = nestedType->matchTestGenericsFuzz(span(), response.getImplType(crate.types), resolve_.ivars.callbackResolveInfer(), binder);
                 match &= nestedParams.matchTestGenericsFuzz(span(), response.getTraitParams(crate.types), resolve_.ivars.callbackResolveInfer(), binder);
+                for (const auto& requirement : nestedAssociated) {
+                    auto output = response.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams);
+                    if (output == HIRTypeRef()) {
+                        match = HIRCompare::Unequal;
+                        break;
+                    }
+                    match &= requirement.second.type->matchTestGenericsFuzz(span(), output, resolve_.ivars.callbackResolveInfer(), binder);
+                }
                 if (match == HIRCompare::Unequal) {
                     *candidateParams = saved.clone();
                     return false;
@@ -4501,7 +4510,7 @@ default:
                         if (nested == Certainty::Ambiguous && candidateNeedsResponseConstraints(*candidate)) {
                             Certainty responseCertainty = Certainty::NoSolution;
                             auto nestedCallback = makeCallable<TraitImplCb>([&](ImplRef response, HIRCompare certainty) {
-                                bindCandidateResponse(*candidate, nestedType, nestedParams, response);
+                                bindCandidateResponse(*candidate, nestedType, nestedParams, nestedAssociated, response);
                                 responseCertainty = certainty == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous;
                                 return true;
                             });
@@ -4514,6 +4523,7 @@ default:
                         if (nested == Certainty::Ambiguous) {
                             DEBUG("candidate downgrade: nested bound");
                             candidate->ambiguityBeyondHead = true;
+                            candidate->normalizationNestedGoals.pushBack(&bound);
                             result = Certainty::Ambiguous;
                         }
                     } else if (const auto* equality = bound.opt_TypeEquality()) {
@@ -5269,19 +5279,71 @@ default:
                     canonicalAssocParams = &canonicalAssocParamsStorage;
                 }
                 const auto rootHash = goalHash(trait, canonical.params, canonical.type, nullptr);
-                auto instantiateForCaller = [&](ImplRef response) {
+                auto visitResponse = [&](ImplRef response, HIRCompare certainty, const Candidate* responseCandidate = nullptr) {
                     if (!outermost) {
                         // A nested caller still lives inside its own canonical
                         // space: strip only this level's canonical variables
                         // and placeholder spellings.
                         if (canonicalizer.ivarNodes().length() != 0 || !canonicalizer.placeholderNames().empty()) {
                             DecanonicalizeSolverInfers mapper(crate.types, canonicalizer);
-                            return monomorphImplRef(response, mapper);
+                            response = monomorphImplRef(response, mapper);
                         }
-                        return response;
+                        return callback.visit(::std::move(response), certainty);
                     }
-                    InstantiateTraitResponseForCaller instantiator(crate.types, const_cast<HMTypeInferrence&>(resolve_.ivars), canonicalizer.placeholderNames(), &canonicalizer);
-                    return monomorphImplRef(response, instantiator);
+                    InstantiateTraitResponseForCaller instantiator(crate.types, resolve_.ivars, canonicalizer.placeholderNames(), &canonicalizer);
+                    auto callerResponse = monomorphImplRef(response, instantiator);
+                    if (!callerResponse.isAmbiguousIdentity() && resolve_.typeConstraint && assocName && assocName[0] && !assocType) {
+                        auto constrainDirectInput = [&](const HIRTypeData* input, const HIRTypeData* value) {
+                            const auto* infer = input ? input->opt_Infer() : nullptr;
+                            if (!infer || !isSolverCanonicalInfer(infer->index) || !value) {
+                                return;
+                            }
+                            auto callerValue = instantiator.monomorphType(span(), value, true);
+                            const bool hasGeneric = visitTyWith(callerValue, [](const HIRTypeData* inner) {
+                                return inner->is_Generic();
+                            });
+                            const auto* original = canonicalizer.originalIvar(infer->index);
+                            ASSERT_BUG(span(), original, "canonical response variable is outside the input");
+                            const auto* resolvedOriginal = resolve_.ivars.getType(original);
+                            const auto* originalInfer = resolvedOriginal->opt_Infer();
+                            if (hasGeneric || !originalInfer || originalInfer->isLit() || callerValue->is_Infer() || callerValue == resolvedOriginal) {
+                                return;
+                            }
+                            resolve_.typeConstraint->constrain(span(), resolvedOriginal, callerValue);
+                        };
+
+                        const auto responseParams = response.getTraitParams(crate.types);
+                        if (canonical.params.types.size() == responseParams.types.size()) {
+                            for (size_t i = 0; i < canonical.params.types.size(); i++) {
+                                constrainDirectInput(canonical.params.types[i], responseParams.types[i]);
+                            }
+                        }
+                    }
+                    if (!callerResponse.isAmbiguousIdentity() && resolve_.typeConstraint && assocName && assocName[0] && responseCandidate) {
+                        for (const auto* bound : responseCandidate->normalizationNestedGoals) {
+                            const auto* traitBound = bound->opt_TraitBound();
+                            if (!traitBound) {
+                                continue;
+                            }
+                            HIRTypeRef nestedType;
+                            HIRTraitPath nestedTrait;
+                            if (responseCandidate->markerImpl) {
+                                auto monomorph = MonomorphStatePtr(crate.types, nullptr, &responseCandidate->markerImplParams, nullptr);
+                                nestedType = monomorph.monomorphType(span(), traitBound->type);
+                                nestedTrait = monomorph.monomorphTraitpath(span(), traitBound->trait, true);
+                            } else {
+                                auto monomorph = responseCandidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
+                                nestedType = monomorph.monomorphType(span(), traitBound->type);
+                                nestedTrait = monomorph.monomorphTraitpath(span(), traitBound->trait, true);
+                            }
+                            resolve_.typeConstraint->registerSolverObligation(
+                                span(),
+                                instantiator.monomorphType(span(), nestedType, true),
+                                instantiator.monomorphTraitpath(span(), nestedTrait, true)
+                            );
+                        }
+                    }
+                    return callback.visit(::std::move(callerResponse), certainty);
                 };
                 // Extended callers use an explicit empty associated-item name
                 // when they need the canonical trait response itself. Cache that
@@ -5305,22 +5367,22 @@ default:
                         InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
                         auto response = monomorphImplRef(cached->response, instantiator);
                         DEBUG("evaluate exit: local replay");
-                        return callback.visit(instantiateForCaller(::std::move(response)), cached->responseCertainty);
+                        return visitResponse(::std::move(response), cached->responseCertainty);
                     }
                     if (crateCacheableResponse) {
                         if (const auto* global = crateCache().find(rootHash, trait, canonical.params, canonical.type); global && global->hasResponse) {
                             InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
                             auto response = monomorphImplRef(global->response, instantiator);
                             DEBUG("evaluate exit: crate replay");
-                            return callback.visit(instantiateForCaller(::std::move(response)), global->responseCertainty);
+                            return visitResponse(::std::move(response), global->responseCertainty);
                         }
                     }
                 }
                 const auto cycleHitsBefore = cycleHits_;
                 const bool rigidKey = canonicalGoalIsRigid(canonical);
-                auto emitResponse = [&](ImplRef response, HIRCompare certainty) {
+                auto emitResponse = [&](ImplRef response, HIRCompare certainty, const Candidate* responseCandidate = nullptr) {
                     if (!cacheableResponse) {
-                        return callback.visit(instantiateForCaller(::std::move(response)), certainty);
+                        return visitResponse(::std::move(response), certainty, responseCandidate);
                     }
                     // An ivar-free goal can still produce a response holding
                     // live inference variables (an environment bound pulled a
@@ -5331,7 +5393,7 @@ default:
                     const auto slotsBefore = canonicalizer.ivarNodes().length();
                     auto canonicalResponse = monomorphImplRef(response, canonicalizer);
                     if (canonicalizer.ivarNodes().length() != slotsBefore) {
-                        return callback.visit(instantiateForCaller(::std::move(response)), certainty);
+                        return visitResponse(::std::move(response), certainty, responseCandidate);
                     }
                     if (crateCacheableResponse && rigidKey && cycleHits_ == cycleHitsBefore && !canonicalResponse.data.is_BoundedPtr()) {
                         auto* global = crateCache().insert(rootHash, trait, canonical.params.clone(), canonical.type, static_cast<unsigned>(certainty == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous));
@@ -5352,7 +5414,7 @@ default:
                     if (auto* stored = cached->response.data.opt_TraitImpl()) {
                         stored->traitPath = &cached->goal.trait;
                     }
-                    return callback.visit(instantiateForCaller(::std::move(response)), cached->responseCertainty);
+                    return visitResponse(::std::move(response), cached->responseCertainty, responseCandidate);
                 };
                 if (findActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr)) {
                     static const HIRTraitPath::assocListT noAssociated;
@@ -5704,10 +5766,11 @@ default:
                             }
                         }
                     }
+                    auto selectedResponse = monomorphImplRef(selected->impl, MonomorphiserNop(crate.types));
                     if (certainty != Certainty::Proven) {
-                        return emitResponse(::std::move(selected->impl), HIRCompare::Fuzzy);
+                        return emitResponse(::std::move(selectedResponse), HIRCompare::Fuzzy, selected);
                     }
-                    return emitResponse(materializeRootAssociated(::std::move(selected->impl), trait, assocName, canonicalAssocParams), HIRCompare::Equal);
+                    return emitResponse(materializeRootAssociated(::std::move(selectedResponse), trait, assocName, canonicalAssocParams), HIRCompare::Equal, selected);
                 }
 
                 // Distinct canonical responses cannot guide inference.  Return a
@@ -5720,7 +5783,7 @@ default:
             }
         };
 
-        TraitResolution::TraitResolution(const HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait)
+        TraitResolution::TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait)
             : TraitResolveCommon(wb)
             , langDeref_(crate.getLangItemPathOpt("deref"))
             , ivars(ivars)
@@ -6818,42 +6881,12 @@ default:
                 ambiguous = true;
                 return true;
             }
-
-            // The response can carry parameter constraints the projection
-            // must not lose: `Select<?m>` answered through
-            // `impl Select<Target<Args>>` pins `?m := Target<?fresh>`.
-            // Dropping that mints a new existential on every retry and the
-            // pieces never meet.  Commit concrete response parameters onto
-            // bare goal variables.
-            {
-                auto responseParams = impl.getTraitParams(crate.types);
-                if (responseParams.types.size() == traitPath.params.types.size()) {
-                    for (size_t i = 0; i < responseParams.types.size(); i++) {
-                        const auto* goalTy = this->ivars.getType(traitPath.params.types[i]);
-                        const auto* goalInfer = goalTy->opt_Infer();
-                        if (!goalInfer || goalInfer->isLit() || isAliasInputInfer(goalInfer->index)) {
-                            continue;
-                        }
-                        const auto* respTy = this->ivars.getType(responseParams.types[i]);
-                        if (respTy->is_Infer() || respTy == goalTy) {
-                            continue;
-                        }
-                        // Impl generics or tentative placeholders in the
-                        // response are not commitments.
-                        if (visitTyWith(respTy, [](const HIRTypeData* inner) { return inner->is_Generic(); })) {
-                            continue;
-                        }
-                        const_cast<HMTypeInferrence&>(this->ivars).setIvarTo(goalInfer->index, respTy);
-                    }
-                }
-            }
-
-            auto output = impl.getType(crate.types, pe.item.c_str(), pe.params);
-            if (output == HIRTypeRef() || output == input) {
+            auto candidateOutput = impl.getType(crate.types, pe.item.c_str(), pe.params);
+            if (candidateOutput == HIRTypeRef() || candidateOutput == input) {
                 ambiguous = true;
                 return true;
             }
-            input = ::std::move(output);
+            input = ::std::move(candidateOutput);
             normalized = true;
             ambiguous = certainty == HIRCompare::Fuzzy;
             return true;
