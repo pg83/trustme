@@ -551,3 +551,47 @@ array-impls-length-32, trait-resolution-breakage, fn-ptr-int-float,
 defined-by-trait-resolution, different_where_bounds,
 implied_bounds_entailment_alias_var, issue-75053, slice-patterns-nested,
 issue-70442, mono-impossible, destructuring, issue-89952.
+
+## (б)-ядро, шаг B: сборка в каноническом пространстве (2026-08-26, 8ea66301f)
+
+Сделано (после отравленного захода «только ключи»):
+- Канонические ивары — интернированные `Infer` в резервном диапазоне
+  `HIR_INFER_SOLVER_CANONICAL_MIN` (0xF0000000, внутри alias-input
+  диапазона → таблица пропускает их насквозь), с сохранением
+  литерального класса — матчинг ведёт их ровно как настоящие ивары.
+- `canonicalizeGoal` канонизирует ивары глубоко (через таблицу), и
+  `assembleCandidates`/`evaluateCandidate` бегут по канонической цели:
+  наборы кандидатов и certainty — функции ключа кэша.
+- Уровни ренумеруют родительские канонические слоты в свои
+  (все уровни интернируют одни и те же узлы — без ренумерации
+  декан-маппер уровня подменял чужие слоты; rustc-demangle ловил OOB в
+  getPointedIvar).
+- Ответы деканонизируются на КАЖДОЙ границе: nested — свои слоты + свои
+  канонические имена плейсхолдеров (DecanonicalizeSolverInfers); root —
+  InstantiateTraitResponseForCaller (canonical→caller имена ДО решения
+  «экзистенциал или нет»; иначе goal-плейсхолдеры превращались в свежие
+  ивары — первый красный libcore).
+- Opaque-биндинг путей переживает канонизацию (переименование не меняет
+  резолюцию): alias-bound кандидаты распознаются по нему; без этого
+  libcore `array::try_from_fn` терял `TryType: Try<Residual=Self>` →
+  супертрейт-кандидат `R: FromResidual<..>` эквачил R с проекцией.
+  Регрессия: test_next_solver_globally_canonical_assembly_opaque_binding.
+- Кэш ответов: цель без иваров может дать ответ, втянувший живые ивары
+  из env-бounds (GetParams связал impл-парам с иваром контекста) —
+  канонизация ответа при записи добавляла слоты «задним числом», второй
+  запрос по тому же ключу получал канонику без отображения. Теперь такой
+  ответ не кэшируется (slotsBefore-проверка в emitResponse).
+
+Верификация: default-гейт зелёный; globally-гейт = 9 фейлов, ИДЕНТИЧНЫХ
+чистому HEAD (проверено отдельным HEAD-гейтом под globally) — т.е. хвост
+pre-existing, шаг B регрессий не внёс; tff-класс (Try/Residual) починен.
+
+ВАЖНО (процесс): вчерашние «зелёные» гейты последних коммитов бегали в
+default-режиме («lc=1» в их выводе — проигнорированный красный
+libcore-чек) — globally-гейт на HEAD был красен на 9 юнитах
+(async_callable, async_fn_bound_sugar, const_generic_arithmetic,
+diverging_fn_output_coercion, index_inference_from_bound,
+opaque_definer_user_annotation, specialization_opaque_associated_type,
+specialization_opaque_auto_trait, trait_obligation_guides_method_inference).
+Их регресс — где-то в последних коммитах после вехи «982/982 под
+globally»; нужен bisect и починка (следующая работа вместе с корпусом-9).
