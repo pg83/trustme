@@ -8123,6 +8123,18 @@ default:
                 }
             };
             bool found = context.resolve.board().settings->solver.globally ? context.resolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp) : context.resolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
+            if (!found && count == 0 && sawAmbiguousIdentity) {
+                // The canonical solver answered with the identity: the goal
+                // still holds inference variables it will not commit through
+                // (`&[?e; 4]: IntoIterator`).  rustc proceeds here with
+                // canonical inference variables; our transitional equivalent
+                // is the legacy fuzzy walk, whose possibilities feed the
+                // single-candidate commit below and guide inference
+                // (binding T := ?e) instead of stalling until the literal
+                // fallback picks the wrong default.
+                sawAmbiguousIdentity = false;
+                found = context.resolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
+            }
             if (!found && specialisableImpl) {
                 // An applicability predicate on a more-specific impl can be
                 // resolved by later inference.  Do not select the default
