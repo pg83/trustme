@@ -5030,19 +5030,13 @@ default:
                         ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
                         solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
                         clearGoalCache();
-                    } else {
-                        // Certainties stay warm; RESPONSES are one-shot.  A
-                        // replayed response re-instantiates existentials in a
-                        // query whose canonicalizer no longer matches the one
-                        // that built it, which resurrected stale constants
-                        // (core's swap_bytes) and dangling prints.
-                        for (auto* goal : goalCache) {
-                            if (goal->hasResponse) {
-                                goal->hasResponse = false;
-                                goal->response = ImplRef();
-                            }
-                        }
                     }
+                    // Responses stay warm alongside certainties.  The goal
+                    // key is the complete canonical input (type AND const
+                    // slots), so an equal key implies the current query's
+                    // canonicalizer maps every slot of the cached response to
+                    // its own variables, and existential placeholders are
+                    // instantiated fresh per replay.
                     span_ = &callSpan;
                 }
 
@@ -5192,19 +5186,13 @@ default:
                         ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
                         solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
                         clearGoalCache();
-                    } else {
-                        // Certainties stay warm; RESPONSES are one-shot.  A
-                        // replayed response re-instantiates existentials in a
-                        // query whose canonicalizer no longer matches the one
-                        // that built it, which resurrected stale constants
-                        // (core's swap_bytes) and dangling prints.
-                        for (auto* goal : goalCache) {
-                            if (goal->hasResponse) {
-                                goal->hasResponse = false;
-                                goal->response = ImplRef();
-                            }
-                        }
                     }
+                    // Responses stay warm alongside certainties.  The goal
+                    // key is the complete canonical input (type AND const
+                    // slots), so an equal key implies the current query's
+                    // canonicalizer maps every slot of the cached response to
+                    // its own variables, and existential placeholders are
+                    // instantiated fresh per replay.
                     span_ = &callSpan;
                 }
 
