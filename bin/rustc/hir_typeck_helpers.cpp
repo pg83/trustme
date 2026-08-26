@@ -33,6 +33,10 @@ namespace {
         // regardless of which caller variables they hold.  The canonical
         // name is derived from the position, so only the node is stored.
         mutable stl::Vector<const HIRTypeData*> ivarNodes_;
+        // Unresolved const inference variables, canonicalised positionally
+        // into the same reserved index range (value ivars live in their own
+        // index space).  Stores the original table index per slot.
+        mutable stl::Vector<unsigned> valueIvarIndexes_;
         // Present only for canonicalizers that fold unresolved inference
         // variables into the reserved solver range; null keeps the legacy
         // placeholder-only behaviour (ivars pass through untouched).
@@ -77,6 +81,24 @@ namespace {
             return slot < ivarNodes_.length() ? ivarNodes_[slot] : nullptr;
         }
 
+        HIRConstGeneric canonicalValueIvar(unsigned original) const {
+            for (size_t i = 0; i < valueIvarIndexes_.length(); i++) {
+                if (valueIvarIndexes_[i] == original) {
+                    return HIRConstGeneric::make_Infer({HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(i)});
+                }
+            }
+            valueIvarIndexes_.pushBack(original);
+            return HIRConstGeneric::make_Infer({HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(valueIvarIndexes_.length() - 1)});
+        }
+
+        const unsigned* originalValueIvar(unsigned index) const {
+            if (!isSolverCanonicalInfer(index)) {
+                return nullptr;
+            }
+            const size_t slot = index - HIR_INFER_SOLVER_CANONICAL_MIN;
+            return slot < valueIvarIndexes_.length() ? &valueIvarIndexes_[slot] : nullptr;
+        }
+
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override {
             if (ivarTable_ && ty->is_Infer()) {
                 const auto* resolved = ivarTable_->getType(ty);
@@ -118,6 +140,27 @@ namespace {
             return HIRConstGeneric(generic.isPlaceholder() ? HIRGenericRef(canonicalPlaceholderName(generic.name), generic.binding) : generic);
         }
 
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override {
+            if (ivarTable_) {
+                if (const auto* infer = val.opt_Infer(); infer && infer->index != ~0u) {
+                    const auto& resolved = ivarTable_->getValue(val);
+                    if (const auto* resolvedInfer = resolved.opt_Infer()) {
+                        // Alias-input value placeholders stay rigid; a parent
+                        // level's canonical value is renumbered into THIS
+                        // level's slots, mirroring the type-ivar rule above.
+                        if (isAliasInputInfer(resolvedInfer->index) && !isSolverCanonicalInfer(resolvedInfer->index)) {
+                            return resolved.clone();
+                        }
+                        return canonicalValueIvar(resolvedInfer->index);
+                    }
+                    // A bound value can still hold generics or nested params;
+                    // canonicalise its content through the base walk.
+                    return Monomorphiser::monomorphConstgeneric(sp, resolved, allowInfer);
+                }
+            }
+            return Monomorphiser::monomorphConstgeneric(sp, val, allowInfer);
+        }
+
         const ::std::vector<::std::pair<RcString, RcString>>& placeholderNames() const {
             return placeholderNames_;
         }
@@ -133,6 +176,10 @@ namespace {
 
         const stl::Vector<const HIRTypeData*>& ivarNodes() const {
             return ivarNodes_;
+        }
+
+        size_t valueIvarCount() const {
+            return valueIvarIndexes_.length();
         }
     };
 
@@ -178,6 +225,17 @@ namespace {
                 }
             }
             return Monomorphiser::monomorphType(sp, ty, allowInfer);
+        }
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override {
+            if (goalCanonicalizer) {
+                if (const auto* infer = val.opt_Infer()) {
+                    if (const auto* original = goalCanonicalizer->originalValueIvar(infer->index)) {
+                        return HIRConstGeneric::make_Infer({*original});
+                    }
+                }
+            }
+            return Monomorphiser::monomorphConstgeneric(sp, val, allowInfer);
         }
 
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
@@ -228,6 +286,17 @@ namespace {
                 }
             }
             return Monomorphiser::monomorphType(sp, ty, allowInfer);
+        }
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override {
+            if (goalCanonicalizer) {
+                if (const auto* infer = val.opt_Infer()) {
+                    if (const auto* original = goalCanonicalizer->originalValueIvar(infer->index)) {
+                        return HIRConstGeneric::make_Infer({*original});
+                    }
+                }
+            }
+            return Monomorphiser::monomorphConstgeneric(sp, val, allowInfer);
         }
 
         // Assembly runs in the canonical space, so a response names goal
@@ -312,6 +381,15 @@ namespace {
                 }
             }
             return types.generic(generic.name, generic.binding);
+        }
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override {
+            if (const auto* infer = val.opt_Infer()) {
+                if (const auto* original = canonicalizer_.originalValueIvar(infer->index)) {
+                    return HIRConstGeneric::make_Infer({*original});
+                }
+            }
+            return MonomorphiserNop::monomorphConstgeneric(sp, val, allowInfer);
         }
 
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
@@ -3026,19 +3104,11 @@ default:
             // which caller variables they hold, and assembly/evaluation run in
             // the same canonical space the key describes.
             CanonicalGoal canonicalizeGoal(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, CanonicalizeTraitGoal& canonicalizer) const {
+                // Const inference variables resolve through the table inside
+                // the canonicalizer: bound values enter the key by value and
+                // unresolved ones become canonical value slots, exactly like
+                // type variables.
                 auto canonicalParams = canonicalizer.monomorphPathParams(span(), params, true);
-                // Const inference variables are not canonicalised into slots;
-                // resolve them through the table so a later-bound value forms
-                // a fresh key instead of hitting a stale cached answer
-                // (core's swap_bytes died on a 2-vs-1 byte-width const).
-                for (auto& value : canonicalParams.values) {
-                    if (const auto* infer = value.opt_Infer()) {
-                        const auto& resolved = resolve_.ivars.getValue(infer->index);
-                        if (!resolved.is_Infer()) {
-                            value = resolved.clone();
-                        }
-                    }
-                }
                 const auto canonicalType = canonicalizer.monomorphType(span(), type, true);
                 CanonicalGoal result(::std::move(canonicalParams), canonicalType);
                 if (associated) {
@@ -5292,15 +5362,11 @@ default:
                 // Since step B the goal's inference variables are canonical
                 // slots shared by the key, the assembly, and the cached
                 // response; replay maps each slot back to the CURRENT query's
-                // variable through the query's own canonicalizer.  A response
-                // that pulls in variables beyond the goal's slots is rejected
-                // by the slot-count check in emitResponse.
-                // Const inference variables are not canonicalised into
-                // slots: a response replayed under a value-Infer key can
-                // resurrect a stale constant (core's swap_bytes 2-vs-1).
-                // Keep such goals certainty-only.
-                const bool keyHoldsValues = !canonical.params.values.empty();
-                const bool cacheableResponse = assocName && !assocName[0] && !keyHoldsValues;
+                // variable through the query's own canonicalizer.  Const
+                // inference variables canonicalise into value slots the same
+                // way.  A response that pulls in variables beyond the goal's
+                // slots is rejected by the slot-count check in emitResponse.
+                const bool cacheableResponse = assocName && !assocName[0];
                 const bool crateCacheableResponse = cacheableResponse && crateCacheUsable() && goalIsConcrete(trait, canonical);
                 if (cacheableResponse) {
                     if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse) {
@@ -5331,8 +5397,9 @@ default:
                     // key other queries share: detect the new slots and skip
                     // the cache instead.
                     const auto slotsBefore = canonicalizer.ivarNodes().length();
+                    const auto valueSlotsBefore = canonicalizer.valueIvarCount();
                     auto canonicalResponse = monomorphImplRef(response, canonicalizer);
-                    if (canonicalizer.ivarNodes().length() != slotsBefore) {
+                    if (canonicalizer.ivarNodes().length() != slotsBefore || canonicalizer.valueIvarCount() != valueSlotsBefore) {
                         return visitResponse(::std::move(response), certainty, responseCandidate);
                     }
                     if (crateCacheableResponse && rigidKey && cycleHits_ == cycleHitsBefore && !canonicalResponse.data.is_BoundedPtr()) {

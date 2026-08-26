@@ -726,7 +726,9 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
         } else if (se->is_Unevaluated()) {
             sz = HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(se->as_Unevaluated()->monomorph(sp, *this, true)));
         } else {
-            sz = se->clone();
+            // Routes const inference variables through the virtual hook so a
+            // canonicalising monomorphiser sees array sizes too.
+            sz = this->monomorphConstgeneric(sp, *se, true);
         }
         se = sz.opt_Unevaluated();
         assert(se);
