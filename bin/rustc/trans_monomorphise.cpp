@@ -610,7 +610,7 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
 
 /// Monomorphise all values and functions in a TransList.
 void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list, unsigned mirOptLevel) {
-    ::StaticTraitResolve resolve{wb};
+    ::StaticTraitResolve resolve{wb, OpaqueReveal::All};
 
     struct Nvs: public HIREvaluator::Newval {
         TransList& out;

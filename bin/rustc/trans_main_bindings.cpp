@@ -34,7 +34,7 @@ namespace {
 
         State(const WireBoard& wb, HIRCrate& crate, const TransList& transList)
             : crate(crate)
-            , resolve(wb)
+            , resolve(wb, OpaqueReveal::All)
             , transList(transList)
         {
             langClone = crate.getLangItemPathOpt("clone");
@@ -1483,7 +1483,7 @@ default:
 
         EnumState(const WireBoard& wb)
             : crate(*wb.crate)
-            , resolve(wb)
+            , resolve(wb, OpaqueReveal::All)
             , rv()
             , origList(nullptr)
         {
@@ -2109,7 +2109,7 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
     TransEnumeratePublicMod(state, crate.rootModule, HIRSimplePath(crate.crateName, {}), true);
 
     // Impl blocks
-    StaticTraitResolve resolve{wb};
+    StaticTraitResolve resolve{wb, OpaqueReveal::All};
     for (auto& implGroup : crate.traitImpls) {
         const auto& traitPath = implGroup.first;
         for (auto& implList : implGroup.second.named) {
@@ -2636,7 +2636,7 @@ namespace {
 
         TypeVisitor(const WireBoard& wb, TransList& out, const TransList* prevList)
             : crate(*wb.crate)
-            , resolve(wb)
+            , resolve(wb, OpaqueReveal::All)
             , out(out)
             , prevList(prevList)
         {
@@ -3443,7 +3443,7 @@ namespace {
 
     EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate& crate, HIRPath& path, TransParams& params) {
         TRACE_FUNCTION_F(path);
-        StaticTraitResolve resolve{wb};
+        StaticTraitResolve resolve{wb, OpaqueReveal::All};
 
         if (path.data.is_UfcsInherent() && path.data.as_UfcsInherent().item == "#type_id") {
             return EntPtr::make_AutoGenerate({});
@@ -3661,7 +3661,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 ASSERT_BUG(sp, pe.item == "clone" || pe.item == "clone_from", "Unexpected Clone method called, " << pathMono);
                 const auto& innerTy = pe.type;
                 // If this is !Copy, then we need to ensure that the inner type's clone impls are also available
-                ::StaticTraitResolve resolve{state.resolve.board()};
+                ::StaticTraitResolve resolve{state.resolve.board(), OpaqueReveal::All};
                 if (!resolve.typeIsCopy(sp, innerTy)) {
                     auto enumImpl = [&](const HIRTypeData* ity) {
                         if (!resolve.typeIsCopy(sp, ity)) {

@@ -91,10 +91,14 @@ struct StaticTraitPathCb final: StaticTraitPathCallback {
 // Definitions generated from hir_typeck_static.tu.
 #include "hir_typeck_static_tu.h"
 
-/// Flipped on when trans starts: analysis is done, every opaque type an
-/// associated-type expansion produces is immediately replaced by its hidden
-/// type (rustc's post-analysis RevealAll mode).
-extern bool gTransRevealAllOpaques;
+/// How a resolver treats opaque (`impl Trait`) types, mirroring rustc's
+/// typing modes: analysis-phase resolvers keep opaques rigid outside their
+/// defining scope; trans-phase resolvers see through every opaque to its
+/// hidden type (rustc's post-analysis RevealAll).
+enum class OpaqueReveal {
+    UserFacing,
+    All,
+};
 
 class StaticTraitResolve: public TraitResolveCommon {
     class NextSolverBridge;
@@ -145,11 +149,13 @@ class StaticTraitResolve: public TraitResolveCommon {
     mutable ::std::map<ImplCheckKey, ThinVector<ImplCheckEntry>> cachedImplChecks;
     mutable ::std::vector<::std::tuple<const HIRSimplePath*, const HIRPathParams*, const HIRTypeData*>> findImplStack;
     mutable bool normalizingBoundType = false;
+    /// Set at construction; never changes over the resolver's lifetime.
+    OpaqueReveal reveal_ = OpaqueReveal::UserFacing;
     // Owned by the crate ObjPool and reused across all fully-static goals.
     mutable NextSolverBridge* nextSolver = nullptr;
 
 public:
-    explicit StaticTraitResolve(const WireBoard& wb);
+    explicit StaticTraitResolve(const WireBoard& wb, OpaqueReveal reveal = OpaqueReveal::UserFacing);
 
 private:
     void prepIndexes();
@@ -240,6 +246,9 @@ public:
 
     void expandAssociatedTypes(const Span& sp, HIRTypeRef& input) const;
     void revealOpaqueTypes(const Span& sp, HIRTypeRef& input) const;
+    /// One substitution pass: every opaque node in the type is replaced by
+    /// its (un-normalised) hidden type. No associated-type expansion.
+    void revealOpaqueTypesShallow(const Span& sp, HIRTypeRef& input) const;
     void revealOpaqueTypesPath(const Span& sp, HIRPath& input) const;
     void expandAssociatedTypesPath(const Span& sp, HIRPath& input) const;
     void evaluateArraySize(const Span& sp, HIRArraySize& size) const;

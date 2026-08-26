@@ -393,7 +393,7 @@ namespace {
         CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile)
             : wb_(wb)
             , crate(crate)
-            , resolve_(wb)
+            , resolve_(wb, OpaqueReveal::All)
             , outfilePath(outfile)
             , outfilePathC(outfile + ".cpp")
             , of(outfilePathC)

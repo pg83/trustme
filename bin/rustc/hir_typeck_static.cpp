@@ -1608,27 +1608,23 @@ const HIRTypeData* StaticTraitResolve::fixTraitDefaultReturn(const Span& sp, con
     return tpl;
 }
 
-bool gTransRevealAllOpaques = false;
-
 void StaticTraitResolve::expandAssociatedTypes(const Span& sp, HIRTypeRef& input) const {
     TRACE_FUNCTION_FR(input, input);
     input = this->expandAssociatedTypesInner(sp, input);
-    // Trans is reveal-all: analysis is done, so any opaque a projection
-    // normalises to (e.g. `<fn{bar} as Func>::Ret` through the fn-def's
-    // return type) is immediately replaced by its hidden type — matching
-    // rustc's post-analysis RevealAll mode.
-    // The reentrancy guard keeps revealOpaqueTypes' own internal expansions
-    // from looping back here.
-    static thread_local bool tInReveal = false;
-    if (gTransRevealAllOpaques && !tInReveal
+    // A RevealAll resolver sees through opaques as part of normalisation
+    // itself: any opaque the expansion produces (e.g. `<fn{bar} as
+    // Func>::Ret` through the fn-def's return type) is substituted by its
+    // hidden type and the result normalised again, to a fixpoint. Each
+    // substitution eliminates the opaques present and can only surface
+    // strictly-nested ones, so the loop terminates.
+    while (reveal_ == OpaqueReveal::All
             && visitTyWith(input, [](const HIRTypeData* inner) { return inner->is_ErasedType(); })) {
-        tInReveal = true;
-        this->revealOpaqueTypes(sp, input);
-        tInReveal = false;
+        this->revealOpaqueTypesShallow(sp, input);
+        input = this->expandAssociatedTypesInner(sp, input);
     }
 }
 
-void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) const {
+void StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, HIRTypeRef& input) const {
     class Visitor: public HIRVisitor {
         const Span& sp;
         const StaticTraitResolve& resolve;
@@ -1656,7 +1652,6 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
                         ASSERT_BUG(sp, e.index < function.code.erasedTypes.size(), "Erased type index out of range for " << e.origin << " - " << e.index << " >= " << function.code.erasedTypes.size());
                         revealed = monomorph.monomorphType(sp, function.code.erasedTypes[e.index]);
                     }
-                    resolve.expandAssociatedTypes(sp, revealed);
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
@@ -1680,7 +1675,6 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
                         }
                     }
                     revealed = MonomorphStatePtr(resolve.hirCrate().types, nullptr, &e.params, nullptr).monomorphType(sp, e.inner->type);
-                    resolve.expandAssociatedTypes(sp, revealed);
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Known: {
@@ -1722,9 +1716,20 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
         }
     } visitor(sp, *this);
 
-    expandAssociatedTypes(sp, input);
     input = visitor.visitType(input);
-    expandAssociatedTypes(sp, input);
+}
+
+void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) const {
+    // Substitute hidden types and re-normalise to a fixpoint; the shallow
+    // pass eliminates every opaque it visits, so only strictly-nested
+    // hidden types keep the loop going. A RevealAll resolver's
+    // expandAssociatedTypes already runs this loop internally, and the
+    // extra pass here then finds nothing to do.
+    this->expandAssociatedTypes(sp, input);
+    while (visitTyWith(input, [](const HIRTypeData* inner) { return inner->is_ErasedType(); })) {
+        this->revealOpaqueTypesShallow(sp, input);
+        this->expandAssociatedTypes(sp, input);
+    }
 }
 
 void StaticTraitResolve::revealOpaqueTypesPath(const Span& sp, HIRPath& input) const {
@@ -4404,8 +4409,9 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
     UNREACHABLE();
 }
 
-StaticTraitResolve::StaticTraitResolve(const WireBoard& wb)
+StaticTraitResolve::StaticTraitResolve(const WireBoard& wb, OpaqueReveal reveal)
     : TraitResolveCommon(wb)
+    , reveal_(reveal)
 {
 }
 

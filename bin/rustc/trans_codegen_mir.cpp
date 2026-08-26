@@ -350,7 +350,7 @@ break;
     public:
         CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile)
             : crate(crate)
-            , resolve_(wb)
+            , resolve_(wb, OpaqueReveal::All)
             , outfilePath(outfile)
             , of(outfilePath + ".mir")
         {

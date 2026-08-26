@@ -973,7 +973,6 @@ static int compile(int argc, char* argv[]) {
         }
 
         // Enumerate items to be passed to codegen
-        gTransRevealAllOpaques = true;
         TransList items = CompilePhase<TransList>("Trans Enumerate", [&]() {
             switch (crateType) {
                 case ASTCrate::Type::Unknown:

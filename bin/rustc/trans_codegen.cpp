@@ -244,7 +244,7 @@ namespace {
         FunctionOrder(const WireBoard& wb, TransList& list, const Span& sp)
             : list(list)
             , sp(sp)
-            , resolve(wb)
+            , resolve(wb, OpaqueReveal::All)
         {
             for (const auto& entry : list.functions) {
                 if (!functionHasDefinition(*entry.second)) {
