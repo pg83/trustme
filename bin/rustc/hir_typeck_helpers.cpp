@@ -1142,6 +1142,9 @@ void HMTypeInferrence::setIvarValTo(unsigned int slot, HIRConstGeneric val) {
         ASSERT_BUG(Span(), values[slot].val->is_Infer(), "slot " << slot << " - " << *values[slot].val);
         ASSERT_BUG(Span(), values[slot].val->as_Infer().index == slot, "slot " << slot << " - " << *values[slot].val);
         *values[slot].val = std::move(val);
+        // The warm goal cache keys on this generation; a const-value
+        // binding invalidates it just like a type binding does.
+        this->markChange();
     }
 }
 
@@ -2925,6 +2928,14 @@ default:
             // context-free answers whenever the resolver carries no bounds.
             bool goalIsConcrete(const CanonicalGoal& canonical) const {
                 auto concrete = [](const HIRTypeData* ty) {
+                    // The type visitor does not walk const-generic VALUES, so
+                    // a value-Infer hiding in a path's parameters (Simd<f32,
+                    // {Infer}>) would read as concrete and poison the
+                    // crate-lifetime cache across functions; the aggregate
+                    // flags do see them.
+                    if (ty->flags & (HIRTypeData::HAS_TYPE_INFER | HIRTypeData::HAS_DEFERRED_CONST | HIRTypeData::HAS_UNEVALUATED_CONST)) {
+                        return false;
+                    }
                     return !visitTyWith(ty, [](const HIRTypeData* inner) {
                         if (inner->is_Infer() || inner->is_Generic() || inner->is_NodeType() || inner->is_ErasedType()) {
                             return true;
@@ -2970,6 +2981,18 @@ default:
             // the same canonical space the key describes.
             CanonicalGoal canonicalizeGoal(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, CanonicalizeTraitGoal& canonicalizer) const {
                 auto canonicalParams = canonicalizer.monomorphPathParams(span(), params, true);
+                // Const inference variables are not canonicalised into slots;
+                // resolve them through the table so a later-bound value forms
+                // a fresh key instead of hitting a stale cached answer
+                // (core's swap_bytes died on a 2-vs-1 byte-width const).
+                for (auto& value : canonicalParams.values) {
+                    if (const auto* infer = value.opt_Infer()) {
+                        const auto& resolved = resolve_.ivars.getValue(infer->index);
+                        if (!resolved.is_Infer()) {
+                            value = resolved.clone();
+                        }
+                    }
+                }
                 const auto canonicalType = canonicalizer.monomorphType(span(), type, true);
                 CanonicalGoal result(::std::move(canonicalParams), canonicalType);
                 if (associated) {
@@ -4505,6 +4528,18 @@ default:
                 }
                 auto goalType = type;
                 auto goalParams = params.clone();
+                // Resolve const inference variables up front: assembly and
+                // parameter binding must see the bound value, or a nested
+                // enumeration invents one (core's swap_bytes bound N=1 for a
+                // goal whose lane count had already resolved to 2).
+                for (auto& value : goalParams.values) {
+                    if (const auto* infer = value.opt_Infer(); infer && infer->index != ~0u) {
+                        const auto& resolved = resolve_.ivars.getValue(infer->index);
+                        if (!resolved.is_Infer()) {
+                            value = resolved.clone();
+                        }
+                    }
+                }
                 if (goalHasUnassignedInfer(goalParams, goalType, associated)) {
                     return Certainty::Ambiguous;
                 }
@@ -4955,6 +4990,18 @@ default:
                         ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
                         solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
                         clearGoalCache();
+                    } else {
+                        // Certainties stay warm; RESPONSES are one-shot.  A
+                        // replayed response re-instantiates existentials in a
+                        // query whose canonicalizer no longer matches the one
+                        // that built it, which resurrected stale constants
+                        // (core's swap_bytes) and dangling prints.
+                        for (auto* goal : goalCache) {
+                            if (goal->hasResponse) {
+                                goal->hasResponse = false;
+                                goal->response = ImplRef();
+                            }
+                        }
                     }
                     span_ = &callSpan;
                 }
@@ -5078,6 +5125,7 @@ default:
 
             bool evaluate(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams, bool allowInferInputs) {
                 const bool outermost = span_ == nullptr;
+                DEBUG("evaluate >> " << trait << params << " for " << type << " outermost=" << outermost);
                 if (outermost) {
                     ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked between evaluations");
                     ASSERT_BUG(callSpan, activeGoalIndex.empty(), "next-solver active goal index leaked between evaluations");
@@ -5104,6 +5152,18 @@ default:
                         ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
                         solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
                         clearGoalCache();
+                    } else {
+                        // Certainties stay warm; RESPONSES are one-shot.  A
+                        // replayed response re-instantiates existentials in a
+                        // query whose canonicalizer no longer matches the one
+                        // that built it, which resurrected stale constants
+                        // (core's swap_bytes) and dangling prints.
+                        for (auto* goal : goalCache) {
+                            if (goal->hasResponse) {
+                                goal->hasResponse = false;
+                                goal->response = ImplRef();
+                            }
+                        }
                     }
                     span_ = &callSpan;
                 }
@@ -5124,6 +5184,18 @@ default:
 
                 auto goalType = type;
                 auto goalParams = params.clone();
+                // Resolve const inference variables up front: assembly and
+                // parameter binding must see the bound value, or a nested
+                // enumeration invents one (core's swap_bytes bound N=1 for a
+                // goal whose lane count had already resolved to 2).
+                for (auto& value : goalParams.values) {
+                    if (const auto* infer = value.opt_Infer(); infer && infer->index != ~0u) {
+                        const auto& resolved = resolve_.ivars.getValue(infer->index);
+                        if (!resolved.is_Infer()) {
+                            value = resolved.clone();
+                        }
+                    }
+                }
                 auto emitForcedAmbiguity = [&]() {
                     // Ordinary lookup cannot consume an identity response, while
                     // extended solver callers use it to retain the original goal
@@ -5201,18 +5273,25 @@ default:
                 // variable through the query's own canonicalizer.  A response
                 // that pulls in variables beyond the goal's slots is rejected
                 // by the slot-count check in emitResponse.
-                const bool cacheableResponse = assocName && !assocName[0];
+                // Const inference variables are not canonicalised into
+                // slots: a response replayed under a value-Infer key can
+                // resurrect a stale constant (core's swap_bytes 2-vs-1).
+                // Keep such goals certainty-only.
+                const bool keyHoldsValues = !canonical.params.values.empty();
+                const bool cacheableResponse = assocName && !assocName[0] && !keyHoldsValues;
                 const bool crateCacheableResponse = cacheableResponse && crateCacheUsable() && goalIsConcrete(canonical);
                 if (cacheableResponse) {
                     if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse) {
                         InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
                         auto response = monomorphImplRef(cached->response, instantiator);
+                        DEBUG("evaluate exit: local replay");
                         return callback.visit(instantiateForCaller(::std::move(response)), cached->responseCertainty);
                     }
                     if (crateCacheableResponse) {
                         if (const auto* global = crateCache().find(rootHash, trait, canonical.params, canonical.type); global && global->hasResponse) {
                             InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
                             auto response = monomorphImplRef(global->response, instantiator);
+                            DEBUG("evaluate exit: crate replay");
                             return callback.visit(instantiateForCaller(::std::move(response)), global->responseCertainty);
                         }
                     }
@@ -5239,15 +5318,27 @@ default:
                         global->response = monomorphImplRef(canonicalResponse, MonomorphiserNop(crate.types));
                         global->responseCertainty = certainty;
                         global->hasResponse = true;
+                        // The response's trait-path pointer refers to the
+                        // CALLER's goal argument; repoint it at the entry's
+                        // own by-value copy before the caller's frame dies.
+                        if (auto* stored = global->response.data.opt_TraitImpl()) {
+                            stored->traitPath = &global->trait;
+                        }
                     }
                     auto* cached = cacheResponse(rootHash, trait, canonical.params, canonical.type, nullptr, ::std::move(canonicalResponse), certainty);
                     cached->persistent = rigidKey && cycleHits_ == cycleHitsBefore;
+                    // Same trait-path lifetime fix as the crate cache: the
+                    // stored response must not point into the caller's frame.
+                    if (auto* stored = cached->response.data.opt_TraitImpl()) {
+                        stored->traitPath = &cached->goal.trait;
+                    }
                     return callback.visit(instantiateForCaller(::std::move(response)), cached->responseCertainty);
                 };
                 if (findActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr)) {
                     static const HIRTraitPath::assocListT noAssociated;
                     const bool coinductive = crate.getTraitByPath(span(), trait).isCoinductive;
                     cycleHits_++;
+                    DEBUG("evaluate exit: active-goal cycle");
                     return callback.visit(ImplRef(resolvedType, &goalParams, &noAssociated), coinductive ? HIRCompare::Equal : HIRCompare::Fuzzy);
                 }
                 auto* rootGoal = pushActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr);
@@ -5649,18 +5740,18 @@ default:
         }
 
         void TraitResolution::addDefiningFcnOrigin(const HIRPath& origin) {
-            for (const auto& existing : definingFcnOrigins) {
-                if (existing == origin) {
+            for (const auto* existing : definingFcnOrigins) {
+                if (*existing == origin) {
                     return;
                 }
             }
-            definingFcnOrigins.push_back(origin.clone());
+            definingFcnOrigins.pushBack(eatCachePool.mutPtr()->make<HIRPath>(origin.clone()));
             solverEnvGeneration++;
         }
 
         bool TraitResolution::isDefiningFcnOrigin(const HIRPath& origin) const {
-            for (const auto& existing : definingFcnOrigins) {
-                if (existing == origin) {
+            for (const auto* existing : definingFcnOrigins) {
+                if (*existing == origin) {
                     return true;
                 }
             }
@@ -6078,7 +6169,8 @@ default:
                         // - This avoids VERY slow typechecking in 1.90's librustc_target
                         const auto cacheKey = input->uid;
                         auto* cached = eatCache.find(cacheKey);
-                        if (cached && cached->generation == eatCacheGeneration) {
+                        if (cached && cached->generation == eatCacheGeneration
+                            && (!(input->flags & (HIRTypeData::HAS_TYPE_INFER | HIRTypeData::HAS_DEFERRED_CONST)) || cached->ivarGeneration == ivars.mutationGeneration)) {
                             if (input != cached->type) {
                                 this->expandAssociatedTypesInplace(sp, cached->type, stack);
                             }
@@ -6089,7 +6181,7 @@ default:
                             if (input->is_Path() && (input->as_Path().binding.is_Unbound() || input->as_Path().binding.is_Opaque())) {
                             } else {
                                 DEBUG("CACHE+: " << cacheKey << " = " << input);
-                                eatCache.insert(cacheKey, EatCacheEntry{eatCacheGeneration, input});
+                                eatCache.insert(cacheKey, EatCacheEntry{eatCacheGeneration, ivars.mutationGeneration, input});
                             }
                         }
                     }

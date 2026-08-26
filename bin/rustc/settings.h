@@ -13,18 +13,19 @@
 #include <string>
 #include <vector>
 
-// Trait solver selection. rustc 1.90 uses the new solver for coherence by
-// default, while ordinary type checking keeps the legacy solver unless
-// explicitly requested.  TRUSTME_NEXT_SOLVER=globally overrides the default
-// (not an explicit -Z next-solver) -- the survey tool for flipping the
-// default: run any corpus under the goal solver without editing call sites.
+// Trait solver selection.  The goal solver answers every trait query by
+// default (the unit gate and libstd build green under it); the legacy
+// selector remains reachable for comparison via TRUSTME_NEXT_SOLVER=legacy
+// or -Z next-solver=no until its call paths are deleted.
 struct TraitSolverConfig {
     bool coherence = true;
-    bool globally = false;
+    bool globally = true;
 
     TraitSolverConfig() {
         if (const char* env = getenv("TRUSTME_NEXT_SOLVER")) {
-            if (strcmp(env, "globally") == 0) {
+            if (strcmp(env, "legacy") == 0 || strcmp(env, "no") == 0) {
+                globally = false;
+            } else if (strcmp(env, "globally") == 0) {
                 globally = true;
             }
         }

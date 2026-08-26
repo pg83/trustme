@@ -321,6 +321,9 @@ private:
 
     struct EatCacheEntry {
         u64 generation;
+        // An expansion touching inference variables is only valid until the
+        // table mutates.
+        u64 ivarGeneration;
         HIRTypeRef type;
     };
 
@@ -344,7 +347,7 @@ private:
     mutable u64 solverEnvGeneration = 0;
     ::std::vector<HIRSimplePath> opaqueAliasScopes;
     ::std::vector<HIRSimplePath> definingOpaqueAliases;
-    ::std::vector<HIRPath> definingFcnOrigins;
+    stl::Vector<const HIRPath*> definingFcnOrigins;
 
 public:
     TraitResolution(const HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait);
