@@ -619,3 +619,24 @@ definer-аннотации), async_callable + async_fn_bound_sugar (транс:
 «Item not found ...future#twice::poll» — poll не enumerated),
 const_generic_arithmetic_trait_selection (транс-манглинг получает
 Unevaluated `{N+1}` — конст не свёрнут при mono под мостом).
+
+## ВЕХА: unit-гейт полностью зелёный под TRUSTME_NEXT_SOLVER=globally (2026-08-26, 928758363)
+
+Все девять юнит-хвостов закрыты за один день (a7ed747be..928758363):
+Index-параметр ответа; Diverge-ассоциат = Ambiguous; специализируемые
+default'ы сквозь merge моста (static-EAT двухпроходность + отсрочка
+Equal-коммита + legacy-повтор specialisable-фолбэка, регрессия 70442
+поймана корпусом-10); async-форвардинг closure-структур (закрыл и
+корпусные async-closures); конст-фолд Unevaluated-аргументов в
+static-EAT; коммит параметров-констрейнтов ответа в globally-EAT
+(trait_obligation); defining-use TAIT остаётся у constraint loop +
+реэкспорт defining-opaque bounds (oua + defined-by-user-annotation +
+issue-65918). Проверено: gate=0 под globally, default-гейт зелёный,
+весь репро-набор + rustc-demangle зелёные.
+
+Корпусный остаток (после корпуса-10 минус закрытое сейчас, ~20 узлов):
+TAIT destructuring (паттерн против нераскрытого опака), rpit/-alias-tr,
+i32-fallback, example-calendar, simd/array-type, rust_lib×4, ui-хэши
+×~7, nested-hkl, implied-bounds, issue-75053, exercism-1, coretests.
+Следующее: корпус-11 фиксация, затем хвост, (б)-B step-2 (кэш ответов
+для ивар-целей), крейт-lifetime кэш, флип дефолта.
