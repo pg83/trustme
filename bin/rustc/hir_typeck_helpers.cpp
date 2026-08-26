@@ -3923,6 +3923,104 @@ default:
                 return makeAssociatedProjection(impl.getImplType(crate.types), sourceTrait, name, associatedParams);
             }
 
+            // Binds a candidate's free parameters (match placeholders and
+            // non-literal inference wildcards occurring in its params) to the
+            // values a requirement matches them against, rewriting the params
+            // in place.  Shared by requirement binding and nested-response
+            // binding; both restore the saved params on mismatch.
+            class BindCandidateParams final: public HIRMatchGenerics {
+                const Span& span_;
+                HIRTypeInterner& types;
+                HIRPathParams& params_;
+                ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> bindings_;
+
+                bool isBindable(const HIRTypeData* type) const {
+                    if (const auto* generic = type->opt_Generic()) {
+                        return generic->group() == GENERICPlaceholder;
+                    }
+                    if (const auto* infer = type->opt_Infer()) {
+                        return !infer->isLit();
+                    }
+                    return false;
+                }
+
+                ::std::optional<HIRCompare> bindType(const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) {
+                    for (const auto& binding : bindings_) {
+                        if (binding.first == pattern) {
+                            return binding.second->compareWithPlaceholders(span_, value, resolve);
+                        }
+                    }
+                    if (!isBindable(pattern)) {
+                        return {};
+                    }
+                    bool isParameter = false;
+                    for (const auto& parameter : params_.types) {
+                        isParameter |= visitTyWith(parameter, [&](const HIRTypeData* inner) {
+                            return inner == pattern;
+                        });
+                    }
+                    if (!isParameter) {
+                        return {};
+                    }
+                    if (pattern == value) {
+                        return HIRCompare::Equal;
+                    }
+                    for (auto& parameter : params_.types) {
+                        parameter = cloneTyWith(types, span_, parameter, [&](const HIRTypeData* input, HIRTypeRef& output) {
+                            if (input != pattern) {
+                                return false;
+                            }
+                            output = value;
+                            return true;
+                        });
+                    }
+                    bindings_.push_back({pattern, value});
+                    changed = true;
+                    return HIRCompare::Equal;
+                }
+
+            public:
+                bool changed = false;
+
+                BindCandidateParams(const Span& span, HIRTypeInterner& types, HIRPathParams& params)
+                    : span_(span)
+                    , types(types)
+                    , params_(params)
+                {
+                }
+
+                HIRCompare cmpType(const Span& span, const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) override {
+                    if (auto result = bindType(pattern, value, resolve)) {
+                        return *result;
+                    }
+                    return HIRMatchGenerics::cmpType(span, pattern, value, resolve);
+                }
+
+                HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override {
+                    const auto pattern = types.generic(generic.name, generic.binding);
+                    if (auto result = bindType(pattern, type, resolve)) {
+                        return *result;
+                    }
+                    return pattern->compareWithPlaceholders(span_, type, resolve);
+                }
+
+                HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
+                    if (value.is_Generic() && value.as_Generic() == generic) {
+                        return HIRCompare::Equal;
+                    }
+                    if (generic.group() == GENERICPlaceholder) {
+                        for (auto& parameter : params_.values) {
+                            if (parameter.is_Generic() && parameter.as_Generic() == generic) {
+                                parameter = value.clone();
+                                changed = true;
+                                return HIRCompare::Equal;
+                            }
+                        }
+                    }
+                    return HIRCompare::Fuzzy;
+                }
+            };
+
             bool bindCandidatePlaceholders(Candidate& candidate, const HIRTypeData* nestedType, const HIRTraitPath::assocListT& associated, bool useCandidateResponse = false) {
                 HIRPathParams* candidateParams = nullptr;
                 if (auto* traitImpl = candidate.impl.data.opt_TraitImpl()) {
@@ -3934,98 +4032,7 @@ default:
                     return false;
                 }
 
-                class BindPlaceholders final: public HIRMatchGenerics {
-                    const Span& span_;
-                    HIRTypeInterner& types;
-                    HIRPathParams& params_;
-                    ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> bindings_;
-
-                    bool isBindable(const HIRTypeData* type) const {
-                        if (const auto* generic = type->opt_Generic()) {
-                            return generic->group() == GENERICPlaceholder;
-                        }
-                        if (const auto* infer = type->opt_Infer()) {
-                            return !infer->isLit();
-                        }
-                        return false;
-                    }
-
-                    ::std::optional<HIRCompare> bindType(const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) {
-                        for (const auto& binding : bindings_) {
-                            if (binding.first == pattern) {
-                                return binding.second->compareWithPlaceholders(span_, value, resolve);
-                            }
-                        }
-                        if (!isBindable(pattern)) {
-                            return {};
-                        }
-                        bool isParameter = false;
-                        for (const auto& parameter : params_.types) {
-                            isParameter |= visitTyWith(parameter, [&](const HIRTypeData* inner) {
-                                return inner == pattern;
-                            });
-                        }
-                        if (!isParameter) {
-                            return {};
-                        }
-                        if (pattern == value) {
-                            return HIRCompare::Equal;
-                        }
-                        for (auto& parameter : params_.types) {
-                            parameter = cloneTyWith(types, span_, parameter, [&](const HIRTypeData* input, HIRTypeRef& output) {
-                                if (input != pattern) {
-                                    return false;
-                                }
-                                output = value;
-                                return true;
-                            });
-                        }
-                        bindings_.push_back({pattern, value});
-                        changed = true;
-                        return HIRCompare::Equal;
-                    }
-
-                public:
-                    bool changed = false;
-
-                    BindPlaceholders(const Span& span, HIRTypeInterner& types, HIRPathParams& params)
-                        : span_(span)
-                        , types(types)
-                        , params_(params)
-                    {
-                    }
-
-                    HIRCompare cmpType(const Span& span, const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) override {
-                        if (auto result = bindType(pattern, value, resolve)) {
-                            return *result;
-                        }
-                        return HIRMatchGenerics::cmpType(span, pattern, value, resolve);
-                    }
-
-                    HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override {
-                        const auto pattern = types.generic(generic.name, generic.binding);
-                        if (auto result = bindType(pattern, type, resolve)) {
-                            return *result;
-                        }
-                        return pattern->compareWithPlaceholders(span_, type, resolve);
-                    }
-
-                    HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
-                        if (value.is_Generic() && value.as_Generic() == generic) {
-                            return HIRCompare::Equal;
-                        }
-                        if (generic.group() == GENERICPlaceholder) {
-                            for (auto& parameter : params_.values) {
-                                if (parameter.is_Generic() && parameter.as_Generic() == generic) {
-                                    parameter = value.clone();
-                                    changed = true;
-                                    return HIRCompare::Equal;
-                                }
-                            }
-                        }
-                        return HIRCompare::Fuzzy;
-                    }
-                } binder{span(), crate.types, *candidateParams};
+                BindCandidateParams binder{span(), crate.types, *candidateParams};
 
                 for (const auto& requirement : associated) {
                     const auto saved = candidateParams->clone();
@@ -4091,99 +4098,7 @@ default:
                     return false;
                 }
 
-                class BindResponse final: public HIRMatchGenerics {
-                    const Span& span_;
-                    HIRTypeInterner& types;
-                    HIRPathParams& params_;
-                    ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> bindings_;
-
-                    bool isBindable(const HIRTypeData* type) const {
-                        if (const auto* generic = type->opt_Generic()) {
-                            return generic->group() == GENERICPlaceholder;
-                        }
-                        if (const auto* infer = type->opt_Infer()) {
-                            return !infer->isLit();
-                        }
-                        return false;
-                    }
-
-                    ::std::optional<HIRCompare> bindType(const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) {
-                        for (const auto& binding : bindings_) {
-                            if (binding.first == pattern) {
-                                return binding.second->compareWithPlaceholders(span_, value, resolve);
-                            }
-                        }
-                        if (!isBindable(pattern)) {
-                            return {};
-                        }
-                        bool isParameter = false;
-                        for (const auto& parameter : params_.types) {
-                            isParameter |= visitTyWith(parameter, [&](const HIRTypeData* inner) {
-                                return inner == pattern;
-                            });
-                        }
-                        if (!isParameter) {
-                            return {};
-                        }
-                        if (pattern == value) {
-                            return HIRCompare::Equal;
-                        }
-                        for (auto& parameter : params_.types) {
-                            parameter = cloneTyWith(types, span_, parameter, [&](const HIRTypeData* input, HIRTypeRef& output) {
-                                if (input != pattern) {
-                                    return false;
-                                }
-                                output = value;
-                                return true;
-                            });
-                        }
-                        bindings_.push_back({pattern, value});
-                        changed = true;
-                        return HIRCompare::Equal;
-                    }
-
-                public:
-                    bool changed = false;
-
-                    BindResponse(const Span& span, HIRTypeInterner& types, HIRPathParams& params)
-                        : span_(span)
-                        , types(types)
-                        , params_(params)
-                    {
-                    }
-
-                    HIRCompare cmpType(const Span& span, const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) override {
-                        if (auto result = bindType(pattern, value, resolve)) {
-                            return *result;
-                        }
-                        return HIRMatchGenerics::cmpType(span, pattern, value, resolve);
-                    }
-
-                    HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* value, tCbResolveType resolve) override {
-                        const auto pattern = types.generic(generic.name, generic.binding);
-                        if (auto result = bindType(pattern, value, resolve)) {
-                            return *result;
-                        }
-                        return pattern->compareWithPlaceholders(span_, value, resolve);
-                    }
-
-                    HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
-                        if (value.is_Generic() && value.as_Generic() == generic) {
-                            return HIRCompare::Equal;
-                        }
-                        if (generic.group() != GENERICPlaceholder) {
-                            return HIRCompare::Fuzzy;
-                        }
-                        for (auto& parameter : params_.values) {
-                            if (parameter.is_Generic() && parameter.as_Generic() == generic) {
-                                parameter = value.clone();
-                                changed = true;
-                                return HIRCompare::Equal;
-                            }
-                        }
-                        return HIRCompare::Fuzzy;
-                    }
-                } binder{span(), crate.types, *candidateParams};
+                BindCandidateParams binder{span(), crate.types, *candidateParams};
 
                 const auto saved = candidateParams->clone();
                 auto match = nestedType->matchTestGenericsFuzz(span(), response.getImplType(crate.types), resolve_.ivars.callbackResolveInfer(), binder);

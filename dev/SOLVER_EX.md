@@ -24,7 +24,7 @@
 
 Это пререквизит-слой под пункт 1 текущего SOLVER.md. Каждый этап: гейт `unit` + корпус, коммит, вычеркнуть.
 
-**П0. Транзакции инференса.** Журнал мутаций в `HMTypeInferrence` (setIvarTo / ivarUnify / setIvarValTo / рост векторов) + маркер + `rollbackTo(marker)`; сверху `probe(f)`-хелпер. Проверка боем: заменить `coherenceIvars`/`coherenceResolve` на probe по основной таблице и убрать `const_cast` из `makeFreshImplParams`. *Критерий выхода: второго резолвера нет, гейт зелёный.*
+**~~П0. Транзакции инференса.~~ СДЕЛАНО** (e6dd783ff, c964be55b). Журнал мутаций в `HMTypeInferrence` + `snapshot()`/`rollbackTo()`/`commit()`; поколения монотонны и не повторяются после отката. Coherence-probe работает на основной таблице под снапшотом с отцепленным `typeConstraint`; `coherenceIvars`/`coherenceResolve` удалены, `const_cast` из `makeFreshImplParams` убран. UT: `hir_typeck_helpers_ut.cpp`.
 
 **П1. Один примитив унификации.** `unify(sp, a, b) -> Proven / Ambiguous(nested AliasRelate-цели) / Fail`, работающий на настоящей таблице под snapshot. Им переписывается проверка кандидата в `evaluateCandidate`/`matchAssociatedTypes`; Match-биндеры схлопываются на него по одному. `HIRCompare::Fuzzy` перестаёт быть носителем потерянных ограничений — внутри солвера сравнение больше не «трёхзначный бит», а унификация с откатом. *Критерий: `BindPlaceholders`/`BindResponse` удалены; строковые плейсхолдеры остаются только в legacy-путях.*
 
