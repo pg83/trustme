@@ -2658,6 +2658,11 @@ default:
                 ImplRef response;
                 HIRCompare responseCertainty = HIRCompare::Fuzzy;
                 bool hasResponse = false;
+                // A fully rigid canonical goal (no inference variables in the
+                // key) evaluated without touching a goal cycle depends only on
+                // the resolver's ParamEnv: it stays valid for the resolver's
+                // whole lifetime, not just one outermost evaluation.
+                bool persistent = false;
 
                 CachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, Certainty certainty)
                     : goal(hash, trait, params, type, associated)
@@ -2670,6 +2675,12 @@ default:
             const HIRCrate& crate;
             const Span* span_ = nullptr;
             bool coherenceMode = false;
+            // Counts cycle-head hits; a result computed while this moved is
+            // provisional and must not persist across evaluations.
+            mutable u64 cycleHits_ = 0;
+            // Tracks the resolver's generic-context generation for the
+            // persistent slice of the goal cache.
+            mutable u64 envGeneration_ = ~0ull;
 
             // Frames and candidates have stable pool-backed addresses.  Vectors
             // are pointer indexes only, so recursive growth never moves an ImplRef
@@ -3358,8 +3369,9 @@ default:
                 ::std::abort();
             }
 
-            Certainty cacheGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, Certainty certainty) {
+            Certainty cacheGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, Certainty certainty, bool persistent = false) {
                 auto* goal = cachedGoalNodes.make(hash, trait, params, type, associated, certainty);
+                goal->persistent = persistent;
                 goalCache.push_back(goal);
                 goalCacheIndex.emplace(hash, goal);
                 return certainty;
@@ -3382,10 +3394,58 @@ default:
 
             void clearGoalCache() {
                 goalCacheIndex.clear();
+                size_t kept = 0;
                 for (auto* goal : goalCache) {
-                    cachedGoalNodes.release(goal);
+                    if (goal->persistent) {
+                        goalCache[kept++] = goal;
+                        goalCacheIndex.emplace(goal->goal.hash, goal);
+                    } else {
+                        cachedGoalNodes.release(goal);
+                    }
                 }
-                goalCache.clear();
+                goalCache.resize(kept);
+            }
+
+            static bool canonicalGoalIsRigid(const CanonicalGoal& canonical) {
+                auto typeIsRigid = [](const HIRTypeData* ty) {
+                    return !visitTyWith(ty, [](const HIRTypeData* inner) {
+                        if (inner->is_Infer()) {
+                            return true;
+                        }
+                        // Canonical placeholders are position-normalised
+                        // per evaluation: identical keys can name different
+                        // tentative variables across evaluations.
+                        if (const auto* generic = inner->opt_Generic(); generic && generic->group() == GENERICPlaceholder) {
+                            return true;
+                        }
+                        if (const auto* path = inner->opt_Path(); path && path->binding.is_Unbound()) {
+                            return true;
+                        }
+                        return false;
+                    });
+                };
+                if (!typeIsRigid(canonical.type)) {
+                    return false;
+                }
+                for (const auto& ty : canonical.params.types) {
+                    if (!typeIsRigid(ty)) {
+                        return false;
+                    }
+                }
+                for (const auto& value : canonical.params.values) {
+                    if (value.is_Infer()) {
+                        return false;
+                    }
+                    if (value.is_Generic() && value.as_Generic().group() == GENERICPlaceholder) {
+                        return false;
+                    }
+                }
+                for (const auto& entry : canonical.associated) {
+                    if (!typeIsRigid(entry.second.type)) {
+                        return false;
+                    }
+                }
+                return true;
             }
 
             static const HIRTraitPath::assocListT& boundedAssociated(const ImplRef& impl) {
@@ -4208,6 +4268,7 @@ default:
                 if (findActiveGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated)) {
                     // Productive recursive traits prove their provisional goal;
                     // ordinary trait cycles remain ambiguous.
+                    cycleHits_++;
                     return crate.getTraitByPath(span(), trait).isCoinductive ? Certainty::Proven : Certainty::Ambiguous;
                 }
 
@@ -4217,9 +4278,13 @@ default:
                     popActiveGoal(activeGoal);
                 };
 
+                const auto cycleHitsBefore = cycleHits_;
+                const bool rigidKey = canonicalGoalIsRigid(canonical);
                 auto cacheResult = [&](Certainty certainty) {
                     DEBUG("solveGoal " << trait << " for " << type << " => " << static_cast<unsigned>(certainty));
-                    return cacheGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated, certainty);
+                    // Provisional results computed under a goal cycle depend on
+                    // the cycle head and must not outlive this evaluation.
+                    return cacheGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated, certainty, rigidKey && cycleHits_ == cycleHitsBefore);
                 };
 
                 const size_t frameIndex = frameDepth++;
@@ -4468,6 +4533,15 @@ default:
                     ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked between evaluations");
                     ASSERT_BUG(callSpan, activeGoalIndex.empty(), "next-solver active goal index leaked between evaluations");
                     ASSERT_BUG(callSpan, frameDepth == 0, "next-solver candidate frames leaked between evaluations");
+                    // Persistent entries key on generic-parameter names; a
+                    // switched generic context (Typecheck Outer walks impls on
+                    // one resolver) changes what those names mean.
+                    if (envGeneration_ != resolve_.eatCacheGeneration) {
+                        envGeneration_ = resolve_.eatCacheGeneration;
+                        for (auto* goal : goalCache) {
+                            goal->persistent = false;
+                        }
+                    }
                     clearGoalCache();
                     span_ = &callSpan;
                 }
@@ -4591,6 +4665,15 @@ default:
                     ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked between evaluations");
                     ASSERT_BUG(callSpan, activeGoalIndex.empty(), "next-solver active goal index leaked between evaluations");
                     ASSERT_BUG(callSpan, frameDepth == 0, "next-solver candidate frames leaked between evaluations");
+                    // Persistent entries key on generic-parameter names; a
+                    // switched generic context (Typecheck Outer walks impls on
+                    // one resolver) changes what those names mean.
+                    if (envGeneration_ != resolve_.eatCacheGeneration) {
+                        envGeneration_ = resolve_.eatCacheGeneration;
+                        for (auto* goal : goalCache) {
+                            goal->persistent = false;
+                        }
+                    }
                     clearGoalCache();
                     span_ = &callSpan;
                 }
@@ -4670,17 +4753,21 @@ default:
                         return callback.visit(instantiateForCaller(::std::move(response)), cached->responseCertainty);
                     }
                 }
+                const auto cycleHitsBefore = cycleHits_;
+                const bool rigidKey = canonicalGoalIsRigid(canonical);
                 auto emitResponse = [&](ImplRef response, HIRCompare certainty) {
                     if (!cacheableResponse) {
                         return callback.visit(instantiateForCaller(::std::move(response)), certainty);
                     }
                     auto canonicalResponse = monomorphImplRef(response, canonicalizer);
                     auto* cached = cacheResponse(rootHash, trait, canonical.params, canonical.type, nullptr, ::std::move(canonicalResponse), certainty);
+                    cached->persistent = rigidKey && cycleHits_ == cycleHitsBefore;
                     return callback.visit(instantiateForCaller(::std::move(response)), cached->responseCertainty);
                 };
                 if (findActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr)) {
                     static const HIRTraitPath::assocListT noAssociated;
                     const bool coinductive = crate.getTraitByPath(span(), trait).isCoinductive;
+                    cycleHits_++;
                     return callback.visit(ImplRef(resolvedType, &goalParams, &noAssociated), coinductive ? HIRCompare::Equal : HIRCompare::Fuzzy);
                 }
                 auto* rootGoal = pushActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr);

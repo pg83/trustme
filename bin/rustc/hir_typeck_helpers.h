@@ -270,6 +270,7 @@ private:
     mutable stl::ObjPool::Ref eatCachePool;
     mutable stl::IntMap<EatCacheEntry> eatCache;
     mutable u64 eatCacheGeneration = 0;
+    friend class NextTraitGoalEvaluator;
     mutable stl::Vector<HIRTypeRef> eatActiveStack;
     mutable bool normalizingBoundType = false;
     // Owned by the crate ObjPool.  TraitResolution only keeps a stable
