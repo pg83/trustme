@@ -70,7 +70,7 @@ public:
 
         return resolve_.findTraitImplsNext(sp, trait, *params, type, [&](ImplRef impl, HIRCompare match) {
             return callback.visit(::std::move(impl), match != HIRCompare::Equal);
-        }, "");
+        }, {.assocName = ""});
     }
 };
 

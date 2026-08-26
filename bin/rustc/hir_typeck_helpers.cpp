@@ -4154,7 +4154,7 @@ default:
                             candidateOutput = ::std::move(output);
                             return true;
                         });
-                        evaluate(span(), requirement.second.sourceTrait.path, requirement.second.sourceTrait.params, nestedType, nestedCallback, requirement.first.c_str(), nullptr, &requirement.second.atyParams, false);
+                        evaluate(span(), requirement.second.sourceTrait.path, requirement.second.sourceTrait.params, nestedType, nestedCallback, {.assocName = requirement.first.c_str(), .assocParams = &requirement.second.atyParams});
                     }
                     if (candidateOutput == HIRTypeRef()) {
                         candidateOutput = makeAssociatedProjection(nestedType, requirement.second.sourceTrait, requirement.first, requirement.second.atyParams);
@@ -4558,7 +4558,7 @@ default:
                                 responseCertainty = certainty == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous;
                                 return true;
                             });
-                            const bool hasResponse = evaluate(span(), nestedTrait, nestedParams, nestedType, nestedCallback, "", nullptr, nullptr, false);
+                            const bool hasResponse = evaluate(span(), nestedTrait, nestedParams, nestedType, nestedCallback, {.assocName = ""});
                             if (!hasResponse) {
                                 return Certainty::NoSolution;
                             }
@@ -5196,7 +5196,12 @@ default:
                 return rightResult != Certainty::NoSolution;
             }
 
-            bool evaluate(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams, bool allowInferInputs, bool exportAmbiguousCandidates = false) {
+            bool evaluate(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const TraitGoalQuery& query) {
+                const char* assocName = query.assocName;
+                const HIRTypeData* assocType = query.assocType;
+                const HIRPathParams* assocParams = query.assocParams;
+                const bool allowInferInputs = query.allowInferInputs;
+                const bool exportAmbiguousCandidates = query.exportAmbiguousCandidates;
                 const bool outermost = span_ == nullptr;
                 DEBUG("evaluate >> " << trait << params << " for " << type << " outermost=" << outermost);
                 if (outermost) {
@@ -5993,13 +5998,13 @@ default:
             return coherenceEvaluator->evaluateOverlap(sp, *leftImpl->traitPath, *leftImpl->impl, *rightImpl->impl);
         }
 
-        bool TraitResolution::findTraitImplsNextCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams, bool allowInferInputs, bool exportAmbiguousCandidates) const {
+        bool TraitResolution::findTraitImplsNextCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const TraitGoalQuery& query) const {
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
             if (!nextSolver) {
                 ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
                 nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*this, crate);
             }
-            return nextSolver->evaluate(sp, trait, params, type, callback, assocName, assocType, assocParams, allowInferInputs, exportAmbiguousCandidates);
+            return nextSolver->evaluate(sp, trait, params, type, callback, query);
         }
 
         bool TraitResolution::findTraitImplsCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, bool magicTraitImpls) const {
@@ -6968,7 +6973,7 @@ default:
             normalized = true;
             ambiguous = certainty == HIRCompare::Fuzzy;
             return true;
-        }, pe.item.c_str(), nullptr, &pe.params);
+        }, {.assocName = pe.item.c_str(), .assocParams = &pe.params});
         if (normalized) {
             this->expandAssociatedTypesInplace(sp, input, stack);
             return;

@@ -5569,7 +5569,7 @@ void Context::selectWellFormed(const Span& sp, const HIRTypeData* type) {
                 equateValues(sp, projection->trait.params.values[i], responseParams.values[i]);
             }
             return true;
-        }, "", nullptr, nullptr, true);
+        }, {.assocName = "", .allowInferInputs = true});
         return false;
     });
 }
@@ -8171,7 +8171,13 @@ default:
             // the possibility handling in the callback directly, replacing
             // the legacy fuzzy re-walk this path used to perform on an
             // identity response.
-            bool found = context.resolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp, false, true);
+            const TraitGoalQuery goalQuery{
+                .assocName = v.name.c_str(),
+                .assocType = v.name == "" ? nullptr : v.leftTy,
+                .assocParams = v.name == "" ? nullptr : &v.atyPp,
+                .exportAmbiguousCandidates = true,
+            };
+            bool found = context.resolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, goalQuery);
             if (!found && specialisableImpl) {
                 // An applicability predicate on a more-specific impl can be
                 // resolved by later inference.  Do not select the default
@@ -8191,7 +8197,7 @@ default:
                     // exporting mode re-visits the specialisable default with
                     // its Equal head, and the callback now commits it.
                     selectSpecialisableFallback = true;
-                    found = context.resolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp, false, true);
+                    found = context.resolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, goalQuery);
                     ASSERT_BUG(sp, found, "Selected specialisable impl disappeared during repeated lookup");
                 }
             }

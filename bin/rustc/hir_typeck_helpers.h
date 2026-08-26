@@ -259,6 +259,23 @@ private:
 
 class NextTraitGoalEvaluator;
 
+/// Options for a next-solver goal query.
+struct TraitGoalQuery {
+    /// With `assocName`/`assocType`/`assocParams`, an associated-type
+    /// equality is added to the goal; an empty (non-null) name requests the
+    /// canonical trait response itself.
+    const char* assocName = nullptr;
+    const HIRTypeData* assocType = nullptr;
+    const HIRPathParams* assocParams = nullptr;
+    /// Evaluate even when the inputs still hold unassigned inference
+    /// variables.
+    bool allowInferInputs = false;
+    /// On ambiguity between distinct responses, visit each viable candidate
+    /// head (Equal only for a definite head with proven own predicates)
+    /// before the identity response.
+    bool exportAmbiguousCandidates = false;
+};
+
 struct TraitTypeConstraintCallback {
     virtual void constrain(const Span& sp, const HIRTypeData* receiver, const HIRTypeData* implType) = 0;
     virtual void registerSolverObligation(const Span& sp, HIRTypeRef type, HIRTraitPath trait) = 0;
@@ -509,19 +526,14 @@ public:
 
     /// Evaluate a trait goal using the next-solver candidate model.  Candidate
     /// assembly is exhaustive, impl where-clauses are evaluated recursively,
-    /// and only a merged response is exposed to the caller.  `assoc_name` and
-    /// `assoc_type` add an associated-type equality to the goal.  With
-    /// `exportAmbiguousCandidates`, an ambiguity between distinct responses
-    /// first visits each viable candidate head (cmp=Fuzzy) so the caller's
-    /// possibility machinery consumes the solver's own candidate set instead
-    /// of re-enumerating through the legacy walk; the identity response still
-    /// follows.
-    bool findTraitImplsNextCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const char* assocName = nullptr, const HIRTypeData* assocType = nullptr, const HIRPathParams* assocParams = nullptr, bool allowInferInputs = false, bool exportAmbiguousCandidates = false) const;
+    /// and only a merged response is exposed to the caller; `query` selects
+    /// the extended behaviours.
+    bool findTraitImplsNextCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const TraitGoalQuery& query = {}) const;
 
     template <typename F>
-    bool findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, const char* assocName = nullptr, const HIRTypeData* assocType = nullptr, const HIRPathParams* assocParams = nullptr, bool allowInferInputs = false, bool exportAmbiguousCandidates = false) const {
+    bool findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, const TraitGoalQuery& query = {}) const {
         TraitImplCb<F> cb(f);
-        return findTraitImplsNextCb(sp, trait, params, type, cb, assocName, assocType, assocParams, allowInferInputs, exportAmbiguousCandidates);
+        return findTraitImplsNextCb(sp, trait, params, type, cb, query);
     }
 
     /// Whether two concrete impl candidates may apply to one canonical goal.
