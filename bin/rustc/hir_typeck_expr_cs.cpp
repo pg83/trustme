@@ -7759,9 +7759,9 @@ default:
                 }
             }
             // A semantic-overload PROBE is an enumeration, not a decision:
-            // the exporting mode surfaces the viable candidate heads an
-            // ambiguity would otherwise fold away (u32 / NonZero<u32> must
-            // not look like a builtin-only operator).
+            // the canonical solver's merged/identity response hides the
+            // overload impls it folded away (u32 / NonZero<u32> would look
+            // like a builtin-only operator).  Walk the legacy paths.
             auto probeCallback = [&](ImplRef impl, HIRCompare) {
                 if (impl.isAmbiguousIdentity()) {
                     // A merged identity response says that no concrete impl
@@ -7780,7 +7780,9 @@ default:
                 }
                 return false;
             };
-            context.resolve.findTraitImplsNext(sp, v.trait, probeParams, v.implTy, probeCallback, {.assocName = "", .exportAmbiguousCandidates = true});
+            context.resolve.findTraitImplsLegacy(sp, v.trait, probeParams, v.implTy, probeCallback)
+                || context.resolve.findTraitImplsMagic(sp, v.trait, probeParams, v.implTy, probeCallback)
+                || context.resolve.findTraitImplsBound(sp, v.trait, probeParams, v.implTy, probeCallback);
         }
 
         // An integer literal can only become a primitive integer, and shifting
