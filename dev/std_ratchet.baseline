@@ -189,7 +189,7 @@
 3	std::vector	bin/rustc/hir_typeck_expr_visit.h
 1	new	bin/rustc/hir_typeck_helpers.cpp
 2	std::unordered	bin/rustc/hir_typeck_helpers.cpp
-28	std::vector	bin/rustc/hir_typeck_helpers.cpp
+27	std::vector	bin/rustc/hir_typeck_helpers.cpp
 10	std::vector	bin/rustc/hir_typeck_helpers.h
 1	unique_ptr	bin/rustc/hir_typeck_helpers.h
 2	std::map	bin/rustc/hir_typeck_main_bindings.cpp

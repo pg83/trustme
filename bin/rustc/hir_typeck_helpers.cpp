@@ -3336,12 +3336,24 @@ default:
                 }
             };
 
+            /// One viable candidate head exported alongside an ambiguous
+            /// identity response, in canonical space.
+            struct ExportedCandidate {
+                ImplRef impl;
+                HIRCompare cmp;
+            };
+
             struct CachedGoal {
                 GoalKey goal;
                 Certainty certainty;
                 ImplRef response;
                 HIRCompare responseCertainty = HIRCompare::Fuzzy;
                 bool hasResponse = false;
+                // Captured when the ambiguity had distinct responses, so an
+                // exporting caller replays the candidate visits together
+                // with the identity instead of re-running the evaluation.
+                ThinVector<ExportedCandidate> exportedCandidates;
+                bool hasExportedCandidates = false;
                 // A fully rigid canonical goal (no inference variables in the
                 // key) evaluated without touching a goal cycle depends only on
                 // the resolver's ParamEnv: it stays valid for the resolver's
@@ -5644,14 +5656,14 @@ default:
                 const auto& resolvedType = resolve_.resolveType(goalType);
                 // Match rustc's forced-ambiguity response for a genuinely
                 // unconstrained `Self` type.  A known associated output is an
-                // input constraint and can legitimately select a unique response.
-                // An exporting caller instead wants the viable candidate set
-                // for its possibility machinery (the trait arguments bound the
-                // enumeration), so assembly proceeds with the canonical Self
-                // variable.
+                // input constraint and can legitimately select a unique
+                // response.  This holds for exporting callers too: assembling
+                // every impl of the trait against a bare variable was a
+                // full-crate enumeration on each probe (coretests/num timed
+                // out on it).
                 const bool associatedConstrainsSelf = assocName && assocName[0] && assocType && !typeHasUnknown(assocType);
                 if (const auto* infer = resolvedType->opt_Infer()) {
-                    if (!infer->isLit() && !associatedConstrainsSelf && !exportAmbiguousCandidates) {
+                    if (!infer->isLit() && !associatedConstrainsSelf) {
                         return emitForcedAmbiguity();
                     }
                     if (infer->isLit() && goalParams.types.empty() && goalParams.values.empty() && !literalClassCanMatch(trait, goalParams, infer->tyClass)) {
@@ -5756,11 +5768,21 @@ default:
                 // slots is rejected by the slot-count check in emitResponse.
                 const bool cacheableResponse = assocName && !assocName[0];
                 const bool crateCacheableResponse = cacheableResponse && crateCacheUsable() && goalIsConcrete(trait, canonical);
-                // An exporting caller cannot consume a replayed identity: the
-                // possibility visits that accompany it are not cached, so an
-                // identity replay must fall through to full evaluation.
+                // An exporting caller consumes an identity replay only when
+                // the entry carries the candidate visits that accompany it;
+                // an identity cached without them falls through to full
+                // evaluation (crate-cache entries never carry candidates).
                 if (cacheableResponse) {
-                    if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse && !(exportAmbiguousCandidates && cached->response.isAmbiguousIdentity())) {
+                    if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse && !(exportAmbiguousCandidates && cached->response.isAmbiguousIdentity() && !cached->hasExportedCandidates)) {
+                        if (exportAmbiguousCandidates && cached->hasExportedCandidates) {
+                            for (const auto& candidate : cached->exportedCandidates) {
+                                InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
+                                if (callback.visit(monomorphImplRef(candidate.impl, instantiator), candidate.cmp)) {
+                                    DEBUG("evaluate exit: candidate replay");
+                                    return true;
+                                }
+                            }
+                        }
                         InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
                         auto response = monomorphImplRef(cached->response, instantiator);
                         DEBUG("evaluate exit: local replay");
@@ -5777,6 +5799,10 @@ default:
                 }
                 const auto cycleHitsBefore = cycleHits_;
                 const bool rigidKey = canonicalGoalIsRigid(canonical);
+                // Filled by the distinct-responses branch: the viable
+                // candidate heads (with their exported comparisons) that must
+                // be cached next to the identity so replays can re-visit them.
+                stl::Vector<::std::pair<const Candidate*, HIRCompare>> distinctViable;
                 auto emitResponse = [&](ImplRef response, HIRCompare certainty, const Candidate* responseCandidate = nullptr) {
                     if (!cacheableResponse) {
                         return visitResponse(::std::move(response), certainty, responseCandidate);
@@ -5813,6 +5839,26 @@ default:
                     // stored response must not point into the caller's frame.
                     if (auto* stored = cached->response.data.opt_TraitImpl()) {
                         stored->traitPath = &cached->goal.trait;
+                    }
+                    if (distinctViable.length() != 0) {
+                        // A candidate can pull a live caller variable in the
+                        // same way a response can; the foreign-ivar report
+                        // covers the batch, and without it the entry simply
+                        // stays candidate-less (exporting replays then fall
+                        // through to full evaluation).
+                        ThinVector<ExportedCandidate> canonicalCandidates;
+                        for (size_t i = 0; i < distinctViable.length(); i++) {
+                            canonicalCandidates.push_back(ExportedCandidate{monomorphImplRef(distinctViable[i].first->impl, canonicalizer), distinctViable[i].second});
+                        }
+                        if (!canonicalizer.sawForeignIvar()) {
+                            cached->exportedCandidates = ::std::move(canonicalCandidates);
+                            cached->hasExportedCandidates = true;
+                            for (auto& candidate : cached->exportedCandidates) {
+                                if (auto* stored = candidate.impl.data.opt_TraitImpl()) {
+                                    stored->traitPath = &cached->goal.trait;
+                                }
+                            }
+                        }
                     }
                     return visitResponse(::std::move(response), cached->responseCertainty, responseCandidate);
                 };
@@ -6181,21 +6227,21 @@ default:
                 // through the legacy walk.  Existential candidate parameters
                 // become instance-numbered placeholders, exactly like a
                 // replayed response, so no caller inference state is touched.
-                if (exportAmbiguousCandidates) {
-                    for (auto* candidate : frame.viable) {
+                for (auto* candidate : frame.viable) {
+                    // A candidate with a definite head and proven own
+                    // predicates keeps its Equal comparison: the consumer's
+                    // exact-commit and specialisable-default handling reacts
+                    // to Equal just as it did on the legacy enumeration.  The
+                    // requested associated output is an output, not a filter
+                    // -- its comparison against an unresolved variable must
+                    // not hide a proven default from specialization -- so
+                    // only the candidate's own predicate ambiguity demotes it
+                    // to a fuzzy possibility.
+                    const auto exportedCmp = candidate->headMatch == HIRCompare::Equal && !candidate->nestedAmbiguity ? HIRCompare::Equal : HIRCompare::Fuzzy;
+                    distinctViable.pushBack({candidate, exportedCmp});
+                    if (exportAmbiguousCandidates) {
                         InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
                         auto possibility = monomorphImplRef(candidate->impl, instantiator);
-                        // A candidate with a definite head and proven own
-                        // predicates keeps its Equal comparison: the
-                        // consumer's exact-commit and specialisable-default
-                        // handling reacts to Equal just as it did on the
-                        // legacy enumeration.  The requested associated output
-                        // is an output, not a filter -- its comparison against
-                        // an unresolved variable must not hide a proven
-                        // default from specialization -- so only the
-                        // candidate's own predicate ambiguity demotes it to a
-                        // fuzzy possibility.
-                        const auto exportedCmp = candidate->headMatch == HIRCompare::Equal && !candidate->nestedAmbiguity ? HIRCompare::Equal : HIRCompare::Fuzzy;
                         if (callback.visit(::std::move(possibility), exportedCmp)) {
                             return true;
                         }
@@ -6203,11 +6249,9 @@ default:
                 }
                 auto ambiguous = ImplRef(resolvedType, goalParams.clone(), HIRTraitPath::assocListT());
                 ambiguous.markAmbiguousIdentity();
-                if (exportAmbiguousCandidates) {
-                    // A cached identity would replay without the possibility
-                    // visits above; keep this response out of the cache.
-                    return visitResponse(materializeRootAssociated(::std::move(ambiguous), trait, assocName, canonicalAssocParams), HIRCompare::Fuzzy);
-                }
+                // The identity is cached together with the candidate visits
+                // (emitResponse attaches distinctViable), so an exporting
+                // replay re-plays both instead of re-running the evaluation.
                 return emitResponse(materializeRootAssociated(::std::move(ambiguous), trait, assocName, canonicalAssocParams), HIRCompare::Fuzzy);
             }
         };
