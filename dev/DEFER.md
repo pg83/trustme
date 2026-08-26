@@ -468,6 +468,27 @@ impl<T, U> TryFrom2<U> for T where U: Into2<T> {
    Обзор `TRUSTME_NEXT_SOLVER=globally` на unit-гейте: падал ровно один
    узел — сборка тестового libstd; весь остальной гейт — каскад от него.
 
+6. **`45d519d88`** — три шва libstd: реэкспорт баундов выбранного impl'а с
+   живыми иварами (closure-сигнатуры из `F: FnMut(char)->bool`; NodeType
+   прячет свои ивары от typeContainsIvars); identity-ответ никогда не
+   повышается до Proven-констрейнта (Copy на union с иваром); value-lookup —
+   два прохода: мост (инференс const-параметров) → при отсутствии item'а
+   legacy-итерация (наследование `SizeHint for Empty::lower_bound`).
+   Отдельный урок: переиспользование `dontHandoffToSpecialised` в первом
+   заходе выключило definitional-шорткаты в ДЕФОЛТ-режиме → undefined
+   symbol в liballoc гейта; флаг расщеплён (`noGoalBridge`).
+7. **`7f0d7b808`** — identity-ответ (цель с иварами, `&[?e;4]: IntoIterator`)
+   фолбэчит на legacy-возможности: одиночный fuzzy-кандидат коммитится и
+   ведёт инференс (T := ?e) вместо стопора до литерального i32-фолбэка
+   (libtest fmt_thousands_sep). Переходный мост: настоящий фикс — канонические
+   ивары в goal-машине ((б)-ядро в полный рост).
+   **Веха: ПОЛНЫЙ libstd-архив (38 крейтов: core→std→test→proc_macro)
+   собирается end-to-end под `-Znext-solver=globally`.**
+   **Веха: весь unit-гейт (977 узлов, включая сборку libstd в графе)
+   зелёный под `TRUSTME_NEXT_SOLVER=globally` — 0 FAIL.**
+   До флипа дефолта: медленный корпус (`test`-группа) + перф
+   (крейт-lifetime кэш целей).
+
 ## Заметки
 
 - Выбор из нескольких inherent-impl'ов по баундам (`impl<T: Copy> Bar<T>` vs
@@ -476,3 +497,6 @@ impl<T, U> TryFrom2<U> for T where U: Into2<T> {
   Не связана с ригидностью заголовков.
 - WF-тест под чистым legacy (без -Z) падал и до этих правок — гейт гоняет его
   только с `-Znext-solver`. Legacy-путь умирает по программе, не чиним.
+- «clang++ linker failed» в гейте при параллельной второй 72-джобной сборке —
+  ресурсный флак; недетерминированные падения гейта сначала проверять
+  одиночным прогоном узла.
