@@ -640,3 +640,16 @@ i32-fallback, example-calendar, simd/array-type, rust_lib×4, ui-хэши
 ×~7, nested-hkl, implied-bounds, issue-75053, exercism-1, coretests.
 Следующее: корпус-11 фиксация, затем хвост, (б)-B step-2 (кэш ответов
 для ивар-целей), крейт-lifetime кэш, флип дефолта.
+
+## Корпус под globally: 26 → 18 → 14 (2026-08-26, de92178c3)
+
+После вехи гейта закрыты корпусные: issue-70442 (+хэш-двойник),
+async-closures×2, defined-by-user-annotation, issue-65918, destructuring
+(autoderef над defining-опаком → Ambiguous, cef1bdf43), rpit.rs +
+trait-alias-impl-trait.rs (alias-bound ≠ глобальный where-фолбэк,
+de92178c3), equality-rpass, issue-75053, ui-хэши ×4.
+
+Остаток (14 строк, ~12 узлов): литеральный класс (i32-fallback,
+simd/array-type — вывод intrinsic-аргументов), example-calendar,
+exercism-1, rust_lib×4, ui×3 (728335c8633b, d73f6adee092, e7fe71e02540),
+nested-hkl (Cyclic anon type в Expand), implied-bounds.
