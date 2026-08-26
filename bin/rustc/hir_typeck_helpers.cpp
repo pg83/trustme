@@ -41,6 +41,10 @@ namespace {
         // variables into the reserved solver range; null keeps the legacy
         // placeholder-only behaviour (ivars pass through untouched).
         const HMTypeInferrence* ivarTable_ = nullptr;
+        // Once frozen, unknown variables pass through raw instead of
+        // claiming new slots; sawForeignIvar_ records that it happened.
+        mutable bool frozen_ = false;
+        mutable bool sawForeignIvar_ = false;
 
         RcString canonicalPlaceholderName(const RcString& name) const {
             for (const auto& entry : placeholderNames_) {
@@ -69,8 +73,26 @@ namespace {
                     return types.infer(HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(i), infer->as_Infer().tyClass);
                 }
             }
+            if (frozen_) {
+                // The goal's slots are sealed: a variable beyond them (an
+                // environment bound pulled a live caller variable into the
+                // response) passes through raw and is reported, so the
+                // caller can restrict how the response is cached.
+                sawForeignIvar_ = true;
+                return infer;
+            }
             ivarNodes_.pushBack(infer);
             return types.infer(HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(ivarNodes_.length() - 1), infer->as_Infer().tyClass);
+        }
+
+        /// Seal the slot set once the goal key is complete; only responses
+        /// are canonicalised afterwards.
+        void freeze() const {
+            frozen_ = true;
+        }
+
+        bool sawForeignIvar() const {
+            return sawForeignIvar_;
         }
 
         const HIRTypeData* originalIvar(unsigned index) const {
@@ -86,6 +108,10 @@ namespace {
                 if (valueIvarIndexes_[i] == original) {
                     return HIRConstGeneric::make_Infer({HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(i)});
                 }
+            }
+            if (frozen_) {
+                sawForeignIvar_ = true;
+                return HIRConstGeneric::make_Infer({original});
             }
             valueIvarIndexes_.pushBack(original);
             return HIRConstGeneric::make_Infer({HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(valueIvarIndexes_.length() - 1)});
@@ -176,10 +202,6 @@ namespace {
 
         const stl::Vector<const HIRTypeData*>& ivarNodes() const {
             return ivarNodes_;
-        }
-
-        size_t valueIvarCount() const {
-            return valueIvarIndexes_.length();
         }
     };
 
@@ -5378,16 +5400,18 @@ default:
                     if (!cacheableResponse) {
                         return visitResponse(::std::move(response), certainty, responseCandidate);
                     }
-                    // An ivar-free goal can still produce a response holding
-                    // live inference variables (an environment bound pulled a
-                    // caller variable into an impl parameter).  Canonicalising
-                    // the response would pin THIS query's variables under a
-                    // key other queries share: detect the new slots and skip
-                    // the cache instead.
-                    const auto slotsBefore = canonicalizer.ivarNodes().length();
-                    const auto valueSlotsBefore = canonicalizer.valueIvarCount();
+                    // A response can hold live inference variables beyond the
+                    // goal's slots (an environment bound pulled a caller
+                    // variable into an impl parameter).  Those pass through
+                    // the frozen canonicalizer raw and make the response
+                    // uncacheable: the goal key does not capture which caller
+                    // variable the environment linked in, and the table can
+                    // mutate between write and replay even inside one
+                    // outermost evaluation (replaying then imports a binding
+                    // the current goal never established).
+                    canonicalizer.freeze();
                     auto canonicalResponse = monomorphImplRef(response, canonicalizer);
-                    if (canonicalizer.ivarNodes().length() != slotsBefore || canonicalizer.valueIvarCount() != valueSlotsBefore) {
+                    if (canonicalizer.sawForeignIvar()) {
                         return visitResponse(::std::move(response), certainty, responseCandidate);
                     }
                     if (crateCacheableResponse && rigidKey && cycleHits_ == cycleHitsBefore && !canonicalResponse.data.is_BoundedPtr()) {
