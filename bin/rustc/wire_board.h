@@ -11,6 +11,7 @@ class HIRInherentCache;
 class LangItems;
 struct Settings;
 struct TargetSpec;
+struct NextSolverCrateCache;
 
 // The wiring board: main creates one as the first object of the root pool
 // (so it outlives every subsystem holding the reference) and fills the
@@ -56,4 +57,9 @@ struct WireBoard {
     // compilation. Built by the HIR conversion pipeline over the root crate
     // and every extern crate; read by typeck method resolution.
     HIRInherentCache* inherentMethods = nullptr;
+
+    // Crate-lifetime next-solver answer cache for fully concrete goals;
+    // created lazily by the first evaluator that stores into it.  See
+    // hir_typeck_helpers.h.
+    NextSolverCrateCache* solverCache = nullptr;
 };
