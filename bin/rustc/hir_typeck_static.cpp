@@ -2260,6 +2260,15 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
     for (auto& arg : e2.trait.params.types) {
         arg = this->expandAssociatedTypesInner(sp, arg);
     }
+    // An unevaluated const argument whose environment is concrete after
+    // monomorphisation must fold before impl selection: the goal machinery
+    // compares it only fuzzily, so `Foo<{N + 1}>` with N substituted would
+    // otherwise never pick between `Foo<0>` and `Foo<3>` (the typecheck-side
+    // expansion performs the same fold).
+    {
+        const auto& traitDef = crate.getTraitByPath(sp, e2.trait.path);
+        ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &traitDef.params, e2.trait.params);
+    }
     sRecursionLevel -= 1;
     publish();
 
