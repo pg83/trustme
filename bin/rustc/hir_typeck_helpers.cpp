@@ -28,6 +28,21 @@ namespace {
     // type data or inference state.
     class CanonicalizeTraitGoal final: public Monomorphiser {
         mutable ::std::vector<::std::pair<RcString, RcString>> placeholderNames_;
+        // Unresolved inference variables in the goal, canonicalised
+        // positionally so structurally identical goals share one cache key
+        // regardless of which caller variables they hold.  The canonical
+        // name is derived from the position, so only the node is stored.
+        mutable stl::Vector<const HIRTypeData*> ivarNodes_;
+
+        RcString canonicalIvarName(const HIRTypeData* infer, size_t index) const {
+            const char* cls = "";
+            switch (infer->as_Infer().tyClass) {
+                case HIRInferClass::None: break;
+                case HIRInferClass::Integer: cls = "-int"; break;
+                case HIRInferClass::Float: cls = "-float"; break;
+            }
+            return RcString::newInterned(FMT("#solver-ivar" << cls << "-" << index));
+        }
 
         RcString canonicalPlaceholderName(const RcString& name) const {
             for (const auto& entry : placeholderNames_) {
@@ -46,6 +61,25 @@ namespace {
         {
         }
 
+        HIRTypeRef canonicalIvar(const HIRTypeData* infer) const {
+            for (size_t i = 0; i < ivarNodes_.length(); i++) {
+                if (ivarNodes_[i] == infer) {
+                    return types.generic(canonicalIvarName(infer, i), GENERICPlaceholder * 256 + static_cast<unsigned>(i));
+                }
+            }
+            ivarNodes_.pushBack(infer);
+            return types.generic(canonicalIvarName(infer, ivarNodes_.length() - 1), GENERICPlaceholder * 256 + static_cast<unsigned>(ivarNodes_.length() - 1));
+        }
+
+        const HIRTypeData* originalIvar(const RcString& name) const {
+            for (size_t i = 0; i < ivarNodes_.length(); i++) {
+                if (canonicalIvarName(ivarNodes_[i], i) == name) {
+                    return ivarNodes_[i];
+                }
+            }
+            return nullptr;
+        }
+
         HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
             return generic.isPlaceholder() ? types.generic(canonicalPlaceholderName(generic.name), generic.binding) : types.generic(generic.name, generic.binding);
         }
@@ -57,10 +91,15 @@ namespace {
         const ::std::vector<::std::pair<RcString, RcString>>& placeholderNames() const {
             return placeholderNames_;
         }
+
+        const stl::Vector<const HIRTypeData*>& ivarNodes() const {
+            return ivarNodes_;
+        }
     };
 
     class InstantiateCanonicalTraitResponse final: public Monomorphiser {
         const ::std::vector<::std::pair<RcString, RcString>>& goalNames;
+        const class CanonicalizeTraitGoal* goalCanonicalizer = nullptr;
         const u64 instance;
         mutable ::std::vector<::std::pair<RcString, RcString>> freshNames;
 
@@ -81,21 +120,29 @@ namespace {
         }
 
     public:
-        InstantiateCanonicalTraitResponse(HIRTypeInterner& types, const ::std::vector<::std::pair<RcString, RcString>>& goalNames, u64 instance)
+        InstantiateCanonicalTraitResponse(HIRTypeInterner& types, const ::std::vector<::std::pair<RcString, RcString>>& goalNames, u64 instance, const CanonicalizeTraitGoal* goalCanonicalizer = nullptr)
             : Monomorphiser(types)
             , goalNames(goalNames)
+            , goalCanonicalizer(goalCanonicalizer)
             , instance(instance)
         {
         }
 
-        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
-            return types.generic(generic.isPlaceholder() ? instantiatePlaceholderName(generic.name) : generic.name, generic.binding);
-        }
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
 
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
             return HIRConstGeneric(generic.isPlaceholder() ? HIRGenericRef(instantiatePlaceholderName(generic.name), generic.binding) : generic);
         }
     };
+
+    HIRTypeRef InstantiateCanonicalTraitResponse::getType(const Span&, const HIRGenericRef& generic) const {
+        if (generic.isPlaceholder() && goalCanonicalizer) {
+            if (const auto* original = goalCanonicalizer->originalIvar(generic.name)) {
+                return original;
+            }
+        }
+        return types.generic(generic.isPlaceholder() ? instantiatePlaceholderName(generic.name) : generic.name, generic.binding);
+    }
 
     // Canonical query variables created while evaluating a goal are
     // existential.  They must be instantiated as fresh variables in the
@@ -105,6 +152,7 @@ namespace {
     class InstantiateTraitResponseForCaller final: public Monomorphiser {
         HMTypeInferrence& ivars;
         const ::std::vector<::std::pair<RcString, RcString>>& goalNames;
+        const CanonicalizeTraitGoal* goalCanonicalizer = nullptr;
         mutable ::std::vector<::std::pair<HIRGenericRef, HIRTypeRef>> typeValues;
         mutable ::std::vector<::std::pair<HIRGenericRef, HIRConstGeneric>> values;
 
@@ -118,14 +166,20 @@ namespace {
         }
 
     public:
-        InstantiateTraitResponseForCaller(HIRTypeInterner& types, HMTypeInferrence& ivars, const ::std::vector<::std::pair<RcString, RcString>>& goalNames)
+        InstantiateTraitResponseForCaller(HIRTypeInterner& types, HMTypeInferrence& ivars, const ::std::vector<::std::pair<RcString, RcString>>& goalNames, const CanonicalizeTraitGoal* goalCanonicalizer = nullptr)
             : Monomorphiser(types)
             , ivars(ivars)
             , goalNames(goalNames)
+            , goalCanonicalizer(goalCanonicalizer)
         {
         }
 
         HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
+            if (generic.isPlaceholder() && goalCanonicalizer) {
+                if (const auto* original = goalCanonicalizer->originalIvar(generic.name)) {
+                    return original;
+                }
+            }
             if (!generic.isPlaceholder() || isGoalPlaceholder(generic)) {
                 return Monomorphiser::types.generic(generic.name, generic.binding);
             }
@@ -2717,7 +2771,31 @@ default:
                 return *span_;
             }
 
+            // Resolve inference variables through the table and canonicalise
+            // the unresolved ones positionally: structurally identical goals
+            // share one cache key regardless of which caller variables they
+            // hold, and a variable resolved since the last query naturally
+            // forms a different (fresh) key.
+            HIRTypeRef canonicalizeIvarsDeep(const HIRTypeData* ty, CanonicalizeTraitGoal& canonicalizer) const {
+                return cloneTyWith(crate.types, span(), ty, [&](const HIRTypeData* input, HIRTypeRef& output) {
+                    if (!input->is_Infer()) {
+                        return false;
+                    }
+                    const auto& resolved = resolve_.ivars.getType(input);
+                    if (resolved != input) {
+                        output = canonicalizeIvarsDeep(resolved, canonicalizer);
+                    } else {
+                        output = canonicalizer.canonicalIvar(input);
+                    }
+                    return true;
+                });
+            }
+
             CanonicalGoal canonicalizeGoal(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, CanonicalizeTraitGoal& canonicalizer) const {
+                // TODO((б)-ядро, шаг B): canonicalise inference variables here
+                // via canonicalizeIvarsDeep AND run assembly/responses in the
+                // canonical space consistently.  Keys alone poison certainty
+                // reuse (Typecheck Outer's Zip signature check regressed).
                 auto canonicalParams = canonicalizer.monomorphPathParams(span(), params, true);
                 const auto canonicalType = canonicalizer.monomorphType(span(), type, true);
                 CanonicalGoal result(::std::move(canonicalParams), canonicalType);
@@ -4738,17 +4816,20 @@ default:
                     if (!outermost) {
                         return response;
                     }
-                    InstantiateTraitResponseForCaller instantiator(crate.types, const_cast<HMTypeInferrence&>(resolve_.ivars), canonicalizer.placeholderNames());
+                    InstantiateTraitResponseForCaller instantiator(crate.types, const_cast<HMTypeInferrence&>(resolve_.ivars), canonicalizer.placeholderNames(), &canonicalizer);
                     return monomorphImplRef(response, instantiator);
                 };
                 // Extended callers use an explicit empty associated-item name
                 // when they need the canonical trait response itself. Cache that
                 // completed response, not just its certainty: otherwise every
                 // repeated nested obligation rebuilds the entire candidate graph.
-                const bool cacheableResponse = assocName && !assocName[0];
+                // A goal holding unresolved inference variables cannot cache its
+                // response yet: the response would carry the FIRST query's raw
+                // variables under a canonical key that other queries now share.
+                const bool cacheableResponse = assocName && !assocName[0] && canonicalizer.ivarNodes().length() == 0;
                 if (cacheableResponse) {
                     if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse) {
-                        InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++);
+                        InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
                         auto response = monomorphImplRef(cached->response, instantiator);
                         return callback.visit(instantiateForCaller(::std::move(response)), cached->responseCertainty);
                     }
@@ -5041,22 +5122,6 @@ default:
                         if (candidate->certainty == Certainty::Proven) {
                             selected = candidate;
                             break;
-                        }
-                    }
-                    // Equal responses are interchangeable for inference, but
-                    // the caller may fetch an item BODY from the returned
-                    // impl: specialization still picks the most specific one
-                    // (`impl<T> Foo for T` vs `impl<T: Clone> Foo for T` --
-                    // same head for u8, different default fn).
-                    for (auto* candidate : frame.viable) {
-                        if (candidate == selected || candidate->certainty != selected->certainty || candidate->ambiguityBeyondHead) {
-                            continue;
-                        }
-                        const auto* selImpl = selected->impl.data.opt_TraitImpl();
-                        const auto* candImpl = candidate->impl.data.opt_TraitImpl();
-                        if (selImpl && selImpl->impl && candImpl && candImpl->impl && candImpl->impl->moreSpecificThan(crate.types, *selImpl->impl)) {
-                            recordItemSource(candidate, selected);
-                            selected = candidate;
                         }
                     }
                     // Among equal responses, prefer the one that actually

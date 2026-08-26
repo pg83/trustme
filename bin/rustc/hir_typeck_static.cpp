@@ -4216,6 +4216,20 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 }, /*dontHandoffToSpecialised=*/false, noGoalBridge);
                 };
                 searchImpls(/*noGoalBridge=*/false);
+                if (bestImpl.isValid() && bestIsSpec && this->wb.settings->solver.globally) {
+                    // The bridge's merged response is ONE impl; a `default`
+                    // item found through it can still be specialised by an
+                    // overlapping impl the merge folded away (equal heads:
+                    // impl<T> Foo for T vs impl<T: Clone> Foo for T).  The
+                    // legacy iteration sees every impl and picks the most
+                    // specific provider itself.
+                    bestIsSpec = false;
+                    bestImpl = ImplRef();
+                    rv = ValuePtr();
+                    hasBoundedImpl = false;
+                    hasFuzzyImpl = false;
+                    searchImpls(/*noGoalBridge=*/true);
+                }
                 if (!bestImpl.isValid() && this->wb.settings->solver.globally) {
                     // The goal bridge returns one merged response -- the most
                     // specific impl.  When that impl omits the requested item
