@@ -2878,6 +2878,11 @@ default:
             // Tracks the resolver's generic-context generation for the
             // persistent slice of the goal cache.
             mutable u64 envGeneration_ = ~0ull;
+            // Inference-table + defining-opaque registration state the
+            // non-persistent cache slice was built against; the slice stays
+            // warm across evaluations until either changes.
+            mutable u64 ivarGenerationSeen_ = ~0ull;
+            mutable u64 solverEnvGenerationSeen_ = ~0ull;
 
             // Frames and candidates have stable pool-backed addresses.  Vectors
             // are pointer indexes only, so recursive growth never moves an ImplRef
@@ -2912,6 +2917,50 @@ default:
             const Span& span() const {
                 ASSERT_BUG(Span(), span_, "next-solver session used outside an evaluation");
                 return *span_;
+            }
+
+            // ---- Crate-lifetime concrete-goal cache ----
+            // Fully concrete canonical goals (no inference variables, no
+            // generics, no placeholders, no opaques, no unbound paths) have
+            // context-free answers whenever the resolver carries no bounds.
+            bool goalIsConcrete(const CanonicalGoal& canonical) const {
+                auto concrete = [](const HIRTypeData* ty) {
+                    return !visitTyWith(ty, [](const HIRTypeData* inner) {
+                        if (inner->is_Infer() || inner->is_Generic() || inner->is_NodeType() || inner->is_ErasedType()) {
+                            return true;
+                        }
+                        if (const auto* path = inner->opt_Path()) {
+                            return path->binding.is_Unbound();
+                        }
+                        return false;
+                    });
+                };
+                if (!concrete(canonical.type)) {
+                    return false;
+                }
+                for (const auto& ty : canonical.params.types) {
+                    if (!concrete(ty)) {
+                        return false;
+                    }
+                }
+                for (const auto& value : canonical.params.values) {
+                    if (!value.is_Evaluated()) {
+                        return false;
+                    }
+                }
+                return canonical.associated.empty();
+            }
+
+            bool crateCacheUsable() const {
+                return resolve_.board().settings->solver.globally && resolve_.traitBounds.size() == 0 && !coherenceMode;
+            }
+
+            NextSolverCrateCache& crateCache() const {
+                auto& wb = const_cast<WireBoard&>(resolve_.board());
+                if (!wb.solverCache) {
+                    wb.solverCache = wb.pool->make<NextSolverCrateCache>();
+                }
+                return *wb.solverCache;
             }
 
             // Unresolved inference variables canonicalise positionally into
@@ -4504,6 +4553,12 @@ default:
                 if (const auto* cached = findCachedGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated)) {
                     return cached->certainty;
                 }
+                const bool crateCacheable = !canonicalAssociated && crateCacheUsable() && goalIsConcrete(canonical);
+                if (crateCacheable) {
+                    if (const auto* global = crateCache().find(hash, trait, canonical.params, canonical.type)) {
+                        return static_cast<Certainty>(global->certainty);
+                    }
+                }
                 if (findActiveGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated)) {
                     // Productive recursive traits prove their provisional goal;
                     // ordinary trait cycles remain ambiguous.
@@ -4521,6 +4576,9 @@ default:
                 const bool rigidKey = canonicalGoalIsRigid(canonical);
                 auto cacheResult = [&](Certainty certainty) {
                     DEBUG("solveGoal " << trait << " for " << type << " => " << static_cast<unsigned>(certainty));
+                    if (crateCacheable && rigidKey && cycleHits_ == cycleHitsBefore) {
+                        crateCache().insert(hash, trait, canonical.params.clone(), canonical.type, static_cast<unsigned>(certainty));
+                    }
                     // Provisional results computed under a goal cycle depend on
                     // the cycle head and must not outlive this evaluation.
                     return cacheGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated, certainty, rigidKey && cycleHits_ == cycleHitsBefore);
@@ -4880,11 +4938,24 @@ default:
                     // one resolver) changes what those names mean.
                     if (envGeneration_ != resolve_.eatCacheGeneration) {
                         envGeneration_ = resolve_.eatCacheGeneration;
+                        // A switched generic context renames what generic
+                        // bindings mean (M:0 of one function equals M:0 of
+                        // another); nothing keyed on them may survive.
                         for (auto* goal : goalCache) {
                             goal->persistent = false;
                         }
+                        ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
+                        solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
+                        clearGoalCache();
                     }
-                    clearGoalCache();
+                    // The non-persistent slice keys on canonical inference
+                    // variables: it stays valid until the table (or the
+                    // defining-opaque registrations) actually mutates.
+                    else if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
+                        ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
+                        solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
+                        clearGoalCache();
+                    }
                     span_ = &callSpan;
                 }
 
@@ -4892,7 +4963,11 @@ default:
                     if (outermost) {
                         assert(goalStack.empty());
                         assert(activeGoalIndex.empty());
-                        clearGoalCache();
+                        if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
+                            ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
+                            solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
+                            clearGoalCache();
+                        }
                         frameDepth = 0;
                         span_ = nullptr;
                     }
@@ -5012,11 +5087,24 @@ default:
                     // one resolver) changes what those names mean.
                     if (envGeneration_ != resolve_.eatCacheGeneration) {
                         envGeneration_ = resolve_.eatCacheGeneration;
+                        // A switched generic context renames what generic
+                        // bindings mean (M:0 of one function equals M:0 of
+                        // another); nothing keyed on them may survive.
                         for (auto* goal : goalCache) {
                             goal->persistent = false;
                         }
+                        ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
+                        solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
+                        clearGoalCache();
                     }
-                    clearGoalCache();
+                    // The non-persistent slice keys on canonical inference
+                    // variables: it stays valid until the table (or the
+                    // defining-opaque registrations) actually mutates.
+                    else if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
+                        ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
+                        solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
+                        clearGoalCache();
+                    }
                     span_ = &callSpan;
                 }
 
@@ -5024,7 +5112,11 @@ default:
                     if (outermost) {
                         assert(goalStack.empty());
                         assert(activeGoalIndex.empty());
-                        clearGoalCache();
+                        if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
+                            ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
+                            solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
+                            clearGoalCache();
+                        }
                         frameDepth = 0;
                         span_ = nullptr;
                     }
@@ -5103,15 +5195,26 @@ default:
                 // when they need the canonical trait response itself. Cache that
                 // completed response, not just its certainty: otherwise every
                 // repeated nested obligation rebuilds the entire candidate graph.
-                // A goal holding unresolved inference variables cannot cache its
-                // response yet: the response would carry the FIRST query's raw
-                // variables under a canonical key that other queries now share.
-                const bool cacheableResponse = assocName && !assocName[0] && canonicalizer.ivarNodes().length() == 0;
+                // Since step B the goal's inference variables are canonical
+                // slots shared by the key, the assembly, and the cached
+                // response; replay maps each slot back to the CURRENT query's
+                // variable through the query's own canonicalizer.  A response
+                // that pulls in variables beyond the goal's slots is rejected
+                // by the slot-count check in emitResponse.
+                const bool cacheableResponse = assocName && !assocName[0];
+                const bool crateCacheableResponse = cacheableResponse && crateCacheUsable() && goalIsConcrete(canonical);
                 if (cacheableResponse) {
                     if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse) {
                         InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
                         auto response = monomorphImplRef(cached->response, instantiator);
                         return callback.visit(instantiateForCaller(::std::move(response)), cached->responseCertainty);
+                    }
+                    if (crateCacheableResponse) {
+                        if (const auto* global = crateCache().find(rootHash, trait, canonical.params, canonical.type); global && global->hasResponse) {
+                            InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
+                            auto response = monomorphImplRef(global->response, instantiator);
+                            return callback.visit(instantiateForCaller(::std::move(response)), global->responseCertainty);
+                        }
                     }
                 }
                 const auto cycleHitsBefore = cycleHits_;
@@ -5130,6 +5233,12 @@ default:
                     auto canonicalResponse = monomorphImplRef(response, canonicalizer);
                     if (canonicalizer.ivarNodes().length() != slotsBefore) {
                         return callback.visit(instantiateForCaller(::std::move(response)), certainty);
+                    }
+                    if (crateCacheableResponse && rigidKey && cycleHits_ == cycleHitsBefore && !canonicalResponse.data.is_BoundedPtr()) {
+                        auto* global = crateCache().insert(rootHash, trait, canonical.params.clone(), canonical.type, static_cast<unsigned>(certainty == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous));
+                        global->response = monomorphImplRef(canonicalResponse, MonomorphiserNop(crate.types));
+                        global->responseCertainty = certainty;
+                        global->hasResponse = true;
                     }
                     auto* cached = cacheResponse(rootHash, trait, canonical.params, canonical.type, nullptr, ::std::move(canonicalResponse), certainty);
                     cached->persistent = rigidKey && cycleHits_ == cycleHitsBefore;
@@ -5535,6 +5644,7 @@ default:
             }
             if (::std::find(opaqueAliasScopes.begin(), opaqueAliasScopes.end(), path) == opaqueAliasScopes.end()) {
                 opaqueAliasScopes.push_back(path);
+                solverEnvGeneration++;
             }
         }
 
@@ -5545,6 +5655,7 @@ default:
                 }
             }
             definingFcnOrigins.push_back(origin.clone());
+            solverEnvGeneration++;
         }
 
         bool TraitResolution::isDefiningFcnOrigin(const HIRPath& origin) const {
@@ -5559,6 +5670,7 @@ default:
         void TraitResolution::addDefiningOpaqueAlias(const HIRSimplePath& path) {
             if (::std::find(definingOpaqueAliases.begin(), definingOpaqueAliases.end(), path) == definingOpaqueAliases.end()) {
                 definingOpaqueAliases.push_back(path);
+                solverEnvGeneration++;
             }
         }
 
@@ -10047,6 +10159,7 @@ default: {
         }
 
         void HMTypeInferrence::markChange() {
+            mutationGeneration++;
             if (!hasChanged) {
                 DEBUG("- CHANGE");
                 hasChanged = true;

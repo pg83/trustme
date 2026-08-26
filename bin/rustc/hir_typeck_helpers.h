@@ -10,6 +10,61 @@
 
 bool typeIsUnboundedInfer(const HIRTypeData* ty);
 
+// Crate-lifetime cache of solver answers for fully concrete goals (no
+// inference variables, no generics, no placeholders): those answers cannot
+// depend on any function's ParamEnv when the resolver carries no bounds, so
+// they are shared across every per-function resolver and every phase.  The
+// monomorphised phases (MIR inline, trans) query the same concrete goals
+// thousands of times; without this each one rebuilt the candidate graph.
+struct NextSolverCrateCache {
+    struct Entry {
+        Entry* next = nullptr;
+        size_t hash = 0;
+        HIRSimplePath trait;
+        HIRPathParams params;
+        const HIRTypeData* type = nullptr;
+        unsigned certainty = 0;
+        bool hasResponse = false;
+        ImplRef response;
+        HIRCompare responseCertainty = HIRCompare::Unequal;
+    };
+
+    stl::ObjPool::Ref pool;
+    stl::IntMap<Entry*> index;
+
+    NextSolverCrateCache()
+        : pool(stl::ObjPool::fromMemory())
+        , index(pool.mutPtr())
+    {
+    }
+
+    Entry* find(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) const {
+        auto* head = index.find(hash);
+        for (Entry* entry = head ? *head : nullptr; entry; entry = entry->next) {
+            if (entry->type == type && entry->trait == trait && entry->params == params) {
+                return entry;
+            }
+        }
+        return nullptr;
+    }
+
+    Entry* insert(size_t hash, const HIRSimplePath& trait, HIRPathParams params, const HIRTypeData* type, unsigned certainty) {
+        auto* entry = pool.mutPtr()->make<Entry>();
+        entry->hash = hash;
+        entry->trait = trait;
+        entry->params = ::std::move(params);
+        entry->type = type;
+        entry->certainty = certainty;
+        if (auto* head = index.find(hash)) {
+            entry->next = *head;
+            *head = entry;
+        } else {
+            index.insert(hash, entry);
+        }
+        return entry;
+    }
+};
+
 class HMTypeInferrence {
 public:
     struct FmtType {
@@ -59,6 +114,9 @@ public: // ?? - Needed once, anymore?
 
     HIRTypeInterner& types;
     bool hasChanged;
+    // Bumped on every inference-table mutation; the goal cache keys on it
+    // to stay warm across evaluations until the table actually changes.
+    u64 mutationGeneration = 0;
     ::std::vector<HIRTypeRef> expandStack;
     stl::ObjPool::Ref aliasIvarPool;
     stl::IntMap<HIRTypeRef> aliasTypeIvars;
@@ -281,6 +339,9 @@ private:
     mutable HMTypeInferrence coherenceIvars;
     mutable TraitResolution* coherenceResolve = nullptr;
     TraitTypeConstraintCallback* typeConstraint = nullptr;
+    // Bumped when the defining-opaque registrations change: they alter what
+    // containsDefiningOpaque answers, so cached goals must not outlive them.
+    mutable u64 solverEnvGeneration = 0;
     ::std::vector<HIRSimplePath> opaqueAliasScopes;
     ::std::vector<HIRSimplePath> definingOpaqueAliases;
     ::std::vector<HIRPath> definingFcnOrigins;
