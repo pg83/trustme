@@ -33,16 +33,10 @@ namespace {
         // regardless of which caller variables they hold.  The canonical
         // name is derived from the position, so only the node is stored.
         mutable stl::Vector<const HIRTypeData*> ivarNodes_;
-
-        RcString canonicalIvarName(const HIRTypeData* infer, size_t index) const {
-            const char* cls = "";
-            switch (infer->as_Infer().tyClass) {
-                case HIRInferClass::None: break;
-                case HIRInferClass::Integer: cls = "-int"; break;
-                case HIRInferClass::Float: cls = "-float"; break;
-            }
-            return RcString::newInterned(FMT("#solver-ivar" << cls << "-" << index));
-        }
+        // Present only for canonicalizers that fold unresolved inference
+        // variables into the reserved solver range; null keeps the legacy
+        // placeholder-only behaviour (ivars pass through untouched).
+        const HMTypeInferrence* ivarTable_ = nullptr;
 
         RcString canonicalPlaceholderName(const RcString& name) const {
             for (const auto& entry : placeholderNames_) {
@@ -56,28 +50,64 @@ namespace {
         }
 
     public:
-        explicit CanonicalizeTraitGoal(HIRTypeInterner& types)
+        explicit CanonicalizeTraitGoal(HIRTypeInterner& types, const HMTypeInferrence* ivarTable = nullptr)
             : Monomorphiser(types)
+            , ivarTable_(ivarTable)
         {
         }
 
+        // Canonical variables are interned Infer nodes in a reserved index
+        // range: they keep the literal class of the variable they stand for,
+        // so impl matching treats them exactly like the caller's variable.
         HIRTypeRef canonicalIvar(const HIRTypeData* infer) const {
             for (size_t i = 0; i < ivarNodes_.length(); i++) {
                 if (ivarNodes_[i] == infer) {
-                    return types.generic(canonicalIvarName(infer, i), GENERICPlaceholder * 256 + static_cast<unsigned>(i));
+                    return types.infer(HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(i), infer->as_Infer().tyClass);
                 }
             }
             ivarNodes_.pushBack(infer);
-            return types.generic(canonicalIvarName(infer, ivarNodes_.length() - 1), GENERICPlaceholder * 256 + static_cast<unsigned>(ivarNodes_.length() - 1));
+            return types.infer(HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(ivarNodes_.length() - 1), infer->as_Infer().tyClass);
         }
 
-        const HIRTypeData* originalIvar(const RcString& name) const {
-            for (size_t i = 0; i < ivarNodes_.length(); i++) {
-                if (canonicalIvarName(ivarNodes_[i], i) == name) {
-                    return ivarNodes_[i];
-                }
+        const HIRTypeData* originalIvar(unsigned index) const {
+            if (!isSolverCanonicalInfer(index)) {
+                return nullptr;
             }
-            return nullptr;
+            const size_t slot = index - HIR_INFER_SOLVER_CANONICAL_MIN;
+            return slot < ivarNodes_.length() ? ivarNodes_[slot] : nullptr;
+        }
+
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override {
+            if (ivarTable_ && ty->is_Infer()) {
+                const auto* resolved = ivarTable_->getType(ty);
+                if (const auto* infer = resolved->opt_Infer()) {
+                    // Alias-input placeholders predate the inference table
+                    // and stay rigid.  A parent level's canonical variable is
+                    // renumbered into THIS level's slots (its node becomes the
+                    // "original"): every level then owns all canonical indices
+                    // in its goal, so boundary decanonicalisation is exact --
+                    // levels sharing raw indices would otherwise alias each
+                    // other's slots (all levels intern the same Infer nodes).
+                    if (isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index)) {
+                        return resolved;
+                    }
+                    return canonicalIvar(resolved);
+                }
+                return monomorphType(sp, resolved, allowInfer);
+            }
+            if (const auto* path = ty->opt_Path(); path && path->binding.is_Opaque()) {
+                // Canonicalisation only renames variables; the path still
+                // resolves to the same item, so the Opaque binding stays
+                // valid and must survive -- assembly recognises rigid
+                // projections (alias-bound self) by it, where the generic
+                // monomorphiser would have to drop it for re-resolution.
+                auto base = Monomorphiser::monomorphType(sp, ty, allowInfer);
+                if (const auto* basePath = base->opt_Path(); basePath && !basePath->binding.is_Opaque()) {
+                    return types.intern(HIRTypeData::make_Path({basePath->path.clone(), path->binding.clone()}));
+                }
+                return base;
+            }
+            return Monomorphiser::monomorphType(sp, ty, allowInfer);
         }
 
         HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
@@ -90,6 +120,15 @@ namespace {
 
         const ::std::vector<::std::pair<RcString, RcString>>& placeholderNames() const {
             return placeholderNames_;
+        }
+
+        const RcString* originalPlaceholderName(const RcString& canonical) const {
+            for (const auto& entry : placeholderNames_) {
+                if (entry.second == canonical) {
+                    return &entry.first;
+                }
+            }
+            return nullptr;
         }
 
         const stl::Vector<const HIRTypeData*>& ivarNodes() const {
@@ -130,17 +169,23 @@ namespace {
 
         HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
 
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override {
+            if (goalCanonicalizer) {
+                if (const auto* infer = ty->opt_Infer()) {
+                    if (const auto* original = goalCanonicalizer->originalIvar(infer->index)) {
+                        return original;
+                    }
+                }
+            }
+            return Monomorphiser::monomorphType(sp, ty, allowInfer);
+        }
+
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
             return HIRConstGeneric(generic.isPlaceholder() ? HIRGenericRef(instantiatePlaceholderName(generic.name), generic.binding) : generic);
         }
     };
 
     HIRTypeRef InstantiateCanonicalTraitResponse::getType(const Span&, const HIRGenericRef& generic) const {
-        if (generic.isPlaceholder() && goalCanonicalizer) {
-            if (const auto* original = goalCanonicalizer->originalIvar(generic.name)) {
-                return original;
-            }
-        }
         return types.generic(generic.isPlaceholder() ? instantiatePlaceholderName(generic.name) : generic.name, generic.binding);
     }
 
@@ -174,12 +219,31 @@ namespace {
         {
         }
 
-        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
-            if (generic.isPlaceholder() && goalCanonicalizer) {
-                if (const auto* original = goalCanonicalizer->originalIvar(generic.name)) {
-                    return original;
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override {
+            if (goalCanonicalizer) {
+                if (const auto* infer = ty->opt_Infer()) {
+                    if (const auto* original = goalCanonicalizer->originalIvar(infer->index)) {
+                        return original;
+                    }
                 }
             }
+            return Monomorphiser::monomorphType(sp, ty, allowInfer);
+        }
+
+        // Assembly runs in the canonical space, so a response names goal
+        // placeholders by their canonical spelling: translate those back to
+        // the caller's names before deciding what is existential.
+        HIRGenericRef callerGeneric(const HIRGenericRef& generic) const {
+            if (generic.isPlaceholder() && goalCanonicalizer) {
+                if (const auto* original = goalCanonicalizer->originalPlaceholderName(generic.name)) {
+                    return HIRGenericRef(*original, generic.binding);
+                }
+            }
+            return generic;
+        }
+
+        HIRTypeRef getType(const Span&, const HIRGenericRef& raw) const override {
+            const auto generic = callerGeneric(raw);
             if (!generic.isPlaceholder() || isGoalPlaceholder(generic)) {
                 return Monomorphiser::types.generic(generic.name, generic.binding);
             }
@@ -193,7 +257,8 @@ namespace {
             return fresh;
         }
 
-        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& raw) const override {
+            const auto generic = callerGeneric(raw);
             if (!generic.isPlaceholder() || isGoalPlaceholder(generic)) {
                 return HIRConstGeneric(generic);
             }
@@ -205,6 +270,57 @@ namespace {
             auto fresh = HIRConstGeneric::make_Infer({ivars.newIvarVal()});
             values.push_back({generic, fresh.clone()});
             return fresh;
+        }
+    };
+
+    // Maps one level's canonical solver variables and placeholder spellings
+    // back to what they stood for, so a response crossing a nested goal
+    // boundary never leaks that level's canonical names into the parent.
+    class DecanonicalizeSolverInfers final: public MonomorphiserNop {
+        const CanonicalizeTraitGoal& canonicalizer_;
+
+    public:
+        DecanonicalizeSolverInfers(HIRTypeInterner& types, const CanonicalizeTraitGoal& canonicalizer)
+            : MonomorphiserNop(types)
+            , canonicalizer_(canonicalizer)
+        {
+        }
+
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override {
+            if (const auto* infer = ty->opt_Infer()) {
+                if (const auto* original = canonicalizer_.originalIvar(infer->index)) {
+                    return original;
+                }
+                return ty;
+            }
+            if (const auto* path = ty->opt_Path(); path && path->binding.is_Opaque()) {
+                // Only names change here; the resolution is intact, so the
+                // Opaque binding survives for the parent's assembly.
+                auto base = MonomorphiserNop::monomorphType(sp, ty, allowInfer);
+                if (const auto* basePath = base->opt_Path(); basePath && !basePath->binding.is_Opaque()) {
+                    return types.intern(HIRTypeData::make_Path({basePath->path.clone(), path->binding.clone()}));
+                }
+                return base;
+            }
+            return MonomorphiserNop::monomorphType(sp, ty, allowInfer);
+        }
+
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
+            if (generic.isPlaceholder()) {
+                if (const auto* original = canonicalizer_.originalPlaceholderName(generic.name)) {
+                    return types.generic(*original, generic.binding);
+                }
+            }
+            return types.generic(generic.name, generic.binding);
+        }
+
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
+            if (generic.isPlaceholder()) {
+                if (const auto* original = canonicalizer_.originalPlaceholderName(generic.name)) {
+                    return HIRConstGeneric(HIRGenericRef(*original, generic.binding));
+                }
+            }
+            return HIRConstGeneric(generic);
         }
     };
 
@@ -2771,31 +2887,12 @@ default:
                 return *span_;
             }
 
-            // Resolve inference variables through the table and canonicalise
-            // the unresolved ones positionally: structurally identical goals
-            // share one cache key regardless of which caller variables they
-            // hold, and a variable resolved since the last query naturally
-            // forms a different (fresh) key.
-            HIRTypeRef canonicalizeIvarsDeep(const HIRTypeData* ty, CanonicalizeTraitGoal& canonicalizer) const {
-                return cloneTyWith(crate.types, span(), ty, [&](const HIRTypeData* input, HIRTypeRef& output) {
-                    if (!input->is_Infer()) {
-                        return false;
-                    }
-                    const auto& resolved = resolve_.ivars.getType(input);
-                    if (resolved != input) {
-                        output = canonicalizeIvarsDeep(resolved, canonicalizer);
-                    } else {
-                        output = canonicalizer.canonicalIvar(input);
-                    }
-                    return true;
-                });
-            }
-
+            // Unresolved inference variables canonicalise positionally into
+            // the reserved solver range (CanonicalizeTraitGoal::monomorphType):
+            // structurally identical goals share one cache key regardless of
+            // which caller variables they hold, and assembly/evaluation run in
+            // the same canonical space the key describes.
             CanonicalGoal canonicalizeGoal(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, CanonicalizeTraitGoal& canonicalizer) const {
-                // TODO((б)-ядро, шаг B): canonicalise inference variables here
-                // via canonicalizeIvarsDeep AND run assembly/responses in the
-                // canonical space consistently.  Keys alone poison certainty
-                // reuse (Typecheck Outer's Zip signature check regressed).
                 auto canonicalParams = canonicalizer.monomorphPathParams(span(), params, true);
                 const auto canonicalType = canonicalizer.monomorphType(span(), type, true);
                 CanonicalGoal result(::std::move(canonicalParams), canonicalType);
@@ -4342,7 +4439,7 @@ default:
                         return Certainty::NoSolution;
                     }
                 }
-                CanonicalizeTraitGoal canonicalizer(crate.types);
+                CanonicalizeTraitGoal canonicalizer(crate.types, &resolve_.ivars);
                 const auto canonical = canonicalizeGoal(goalParams, resolvedType, associated, canonicalizer);
                 const auto* canonicalAssociated = canonical.associated.empty() ? nullptr : &canonical.associated;
                 const auto hash = goalHash(trait, canonical.params, canonical.type, canonicalAssociated);
@@ -4388,7 +4485,10 @@ default:
                     }
                 };
 
-                assembleCandidates(frameIndex, trait, goalParams, resolvedType);
+                // Assembly and evaluation run against the canonical goal, so
+                // candidate sets and certainties are functions of the cache
+                // key rather than of caller variable identity.
+                assembleCandidates(frameIndex, trait, canonical.params, canonical.type);
 
                 bool sawAmbiguous = false;
                 bool suppressAutoBuiltin = false;
@@ -4397,7 +4497,7 @@ default:
                 Certainty autoBuiltinResult = Certainty::NoSolution;
                 const size_t candidateCount = frames[frameIndex]->candidates.size();
                 for (size_t i = 0; i < candidateCount; i++) {
-                    const auto result = evaluateCandidate(frameIndex, i, trait, associated);
+                    const auto result = evaluateCandidate(frameIndex, i, trait, canonicalAssociated);
                     auto* candidate = frames[frameIndex]->candidates[i];
                     candidate->certainty = result;
                     if (candidate->isNegative()) {
@@ -4433,7 +4533,12 @@ default:
                 // unlock an environment candidate for it.
                 const auto* selfPath = resolvedType->opt_Path();
                 const bool selfIsAlias = selfPath && (selfPath->binding.is_Opaque() || selfPath->binding.is_Unbound());
+                bool paramsHoldOpaque = containsDefiningOpaque(resolvedType);
+                for (const auto& ty : goalParams.types) {
+                    paramsHoldOpaque |= containsDefiningOpaque(ty);
+                }
                 const bool inferMayUnlock = resolvedType->is_Infer()
+                    || paramsHoldOpaque
                     || (selfIsAlias && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)));
                 if (sawAmbiguous || inferMayUnlock || (coherenceMode && !traitRefIsKnowable(trait, goalParams, resolvedType))) {
                     return cacheResult(Certainty::Ambiguous);
@@ -4883,21 +4988,34 @@ default:
                         return false;
                     }
                 }
-                CanonicalizeTraitGoal canonicalizer(crate.types);
+                CanonicalizeTraitGoal canonicalizer(crate.types, &resolve_.ivars);
                 const auto canonical = canonicalizeGoal(goalParams, resolvedType, nullptr, canonicalizer);
                 // The associated output is not part of the response cache key,
-                // but its placeholders are still inputs of this query.  Record
-                // them so root response instantiation does not mistake them for
-                // existential variables created by candidate evaluation.
+                // but its placeholders (and canonical variables) are still
+                // inputs of this query.  Canonicalise it too so evaluation and
+                // response instantiation see one consistent space.
+                HIRTypeRef canonicalAssocTypeStorage;
+                const HIRTypeData* canonicalAssocType = nullptr;
                 if (assocType) {
-                    canonicalizer.monomorphType(span(), assocType, true);
+                    canonicalAssocTypeStorage = canonicalizer.monomorphType(span(), assocType, true);
+                    canonicalAssocType = canonicalAssocTypeStorage;
                 }
+                HIRPathParams canonicalAssocParamsStorage;
+                const HIRPathParams* canonicalAssocParams = nullptr;
                 if (assocParams) {
-                    canonicalizer.monomorphPathParams(span(), *assocParams, true);
+                    canonicalAssocParamsStorage = canonicalizer.monomorphPathParams(span(), *assocParams, true);
+                    canonicalAssocParams = &canonicalAssocParamsStorage;
                 }
                 const auto rootHash = goalHash(trait, canonical.params, canonical.type, nullptr);
                 auto instantiateForCaller = [&](ImplRef response) {
                     if (!outermost) {
+                        // A nested caller still lives inside its own canonical
+                        // space: strip only this level's canonical variables
+                        // and placeholder spellings.
+                        if (canonicalizer.ivarNodes().length() != 0 || !canonicalizer.placeholderNames().empty()) {
+                            DecanonicalizeSolverInfers mapper(crate.types, canonicalizer);
+                            return monomorphImplRef(response, mapper);
+                        }
                         return response;
                     }
                     InstantiateTraitResponseForCaller instantiator(crate.types, const_cast<HMTypeInferrence&>(resolve_.ivars), canonicalizer.placeholderNames(), &canonicalizer);
@@ -4924,7 +5042,17 @@ default:
                     if (!cacheableResponse) {
                         return callback.visit(instantiateForCaller(::std::move(response)), certainty);
                     }
+                    // An ivar-free goal can still produce a response holding
+                    // live inference variables (an environment bound pulled a
+                    // caller variable into an impl parameter).  Canonicalising
+                    // the response would pin THIS query's variables under a
+                    // key other queries share: detect the new slots and skip
+                    // the cache instead.
+                    const auto slotsBefore = canonicalizer.ivarNodes().length();
                     auto canonicalResponse = monomorphImplRef(response, canonicalizer);
+                    if (canonicalizer.ivarNodes().length() != slotsBefore) {
+                        return callback.visit(instantiateForCaller(::std::move(response)), certainty);
+                    }
                     auto* cached = cacheResponse(rootHash, trait, canonical.params, canonical.type, nullptr, ::std::move(canonicalResponse), certainty);
                     cached->persistent = rigidKey && cycleHits_ == cycleHitsBefore;
                     return callback.visit(instantiateForCaller(::std::move(response)), cached->responseCertainty);
@@ -4958,7 +5086,10 @@ default:
                     }
                 };
 
-                assembleCandidates(frameIndex, trait, goalParams, resolvedType);
+                // Assembly and evaluation run against the canonical goal, so
+                // candidate sets and certainties are functions of the cache
+                // key rather than of caller variable identity.
+                assembleCandidates(frameIndex, trait, canonical.params, canonical.type);
                 auto& frame = *frames[frameIndex];
                 const size_t candidateCount = frame.candidates.size();
                 DEBUG("next-solver assembled " << candidateCount << " candidate(s) for " << type << ": " << trait << params);
@@ -4966,7 +5097,7 @@ default:
                 bool suppressAutoBuiltin = false;
                 bool negativeProven = false;
                 bool negativeAmbiguous = false;
-                const HIRTypeData* candidateAssocType = assocType;
+                const HIRTypeData* candidateAssocType = canonicalAssocType;
                 if (candidateAssocType) {
                     if (const auto* erased = candidateAssocType->opt_ErasedType()) {
                         if (const auto* alias = erased->inner.opt_Alias(); alias && resolve_.isOpaqueAliasDefiningScope(*alias->inner)) {
@@ -4986,19 +5117,19 @@ default:
                     // the item: `Output` on an `FnMut` goal is declared on
                     // `FnOnce`, and only the declaring trait's projection folds
                     // through the elaborated ParamEnv equality.
-                    auto sourceTrait = HIRGenericPath(trait, goalParams.clone());
+                    auto sourceTrait = HIRGenericPath(trait, canonical.params.clone());
                     HIRGenericPath declaringTrait;
                     if (resolve_.traitContainsType(span(), sourceTrait, crate.getTraitByPath(span(), trait), assocName, declaringTrait)) {
                         sourceTrait = ::std::move(declaringTrait);
                     }
-                    rootAssociated.insert({RcString::newInterned(assocName), HIRTraitPath::AtyEqual{::std::move(sourceTrait), assocParams ? assocParams->clone() : noAssocParams.clone(), candidateAssocType}});
+                    rootAssociated.insert({RcString::newInterned(assocName), HIRTraitPath::AtyEqual{::std::move(sourceTrait), canonicalAssocParams ? canonicalAssocParams->clone() : noAssocParams.clone(), candidateAssocType}});
                 }
                 for (size_t i = 0; i < candidateCount; i++) {
                     auto certainty = evaluateCandidate(frameIndex, i, trait, rootAssociated.empty() ? nullptr : &rootAssociated);
                     auto* candidate = frame.candidates[i];
                     candidate->traitCertainty = certainty;
                     if (!candidate->isNegative()) {
-                        const auto assocCertainty = matchRootAssociated(trait, candidate->impl, assocName, candidateAssocType, assocParams);
+                        const auto assocCertainty = matchRootAssociated(trait, candidate->impl, assocName, candidateAssocType, canonicalAssocParams);
                         if (assocCertainty == Certainty::NoSolution) {
                             certainty = Certainty::NoSolution;
                         } else if (assocCertainty == Certainty::Ambiguous && certainty == Certainty::Proven) {
@@ -5060,7 +5191,12 @@ default:
                     // can still unlock an environment candidate for it.
                     const auto* noViableSelfPath = resolvedType->opt_Path();
                     const bool noViableSelfIsAlias = noViableSelfPath && (noViableSelfPath->binding.is_Opaque() || noViableSelfPath->binding.is_Unbound());
+                    bool noViableOpaque = containsDefiningOpaque(resolvedType);
+                    for (const auto& ty : goalParams.types) {
+                        noViableOpaque |= containsDefiningOpaque(ty);
+                    }
                     if (resolvedType->is_Infer()
+                        || noViableOpaque
                         || (noViableSelfIsAlias && (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)))) {
                         return emitForcedAmbiguity();
                     }
@@ -5159,7 +5295,7 @@ default:
                         // exactly the same way, merge their certainties instead;
                         // a proven route must not be discarded behind an
                         // ambiguous, cyclic route to the same response.
-                        if (responsesEqual(left, right, assocName, assocParams)) {
+                        if (responsesEqual(left, right, assocName, canonicalAssocParams)) {
                             continue;
                         }
                         if (!left.data.is_TraitImpl() || !right.data.is_TraitImpl()) {
@@ -5200,7 +5336,7 @@ default:
 
                 bool oneResponse = true;
                 for (size_t i = 1; i < frame.viable.size(); i++) {
-                    if (!responsesEqual(frame.viable.front()->impl, frame.viable[i]->impl, assocName, assocParams)) {
+                    if (!responsesEqual(frame.viable.front()->impl, frame.viable[i]->impl, assocName, canonicalAssocParams)) {
                         oneResponse = false;
                         break;
                     }
@@ -5220,7 +5356,7 @@ default:
                     // answer the normalizes-to part.
                     if (assocName && assocName[0]) {
                         const static HIRPathParams noItemParams;
-                        const auto& itemParams = assocParams ? *assocParams : noItemParams;
+                        const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noItemParams;
                         for (auto* candidate : frame.viable) {
                             if (candidate->certainty == selected->certainty && candidate->impl.getType(crate.types, assocName, itemParams) != HIRTypeRef()) {
                                 selected = candidate;
@@ -5238,7 +5374,7 @@ default:
                     // must be proven -- only the missing item downgraded it.
                     if (assocName && assocName[0] && selected->impl.data.is_TraitImpl() && selected->traitCertainty == Certainty::Proven) {
                         const static HIRPathParams noParams;
-                        const auto& itemParams = assocParams ? *assocParams : noParams;
+                        const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noParams;
                         if (selected->impl.getType(crate.types, assocName, itemParams) == HIRTypeRef()) {
                             for (const Candidate* source = selected->specializationItemSource; source; source = source->specializationItemSource) {
                                 const auto* sourceImpl = source->impl.data.opt_TraitImpl();
@@ -5268,7 +5404,7 @@ default:
                     if (certainty != Certainty::Proven) {
                         return emitResponse(::std::move(selected->impl), HIRCompare::Fuzzy);
                     }
-                    return emitResponse(materializeRootAssociated(::std::move(selected->impl), trait, assocName, assocParams), HIRCompare::Equal);
+                    return emitResponse(materializeRootAssociated(::std::move(selected->impl), trait, assocName, canonicalAssocParams), HIRCompare::Equal);
                 }
 
                 // Distinct canonical responses cannot guide inference.  Return a
@@ -5277,7 +5413,7 @@ default:
                 // first candidate's substitutions despite the ambiguity.
                 auto ambiguous = ImplRef(resolvedType, goalParams.clone(), HIRTraitPath::assocListT());
                 ambiguous.markAmbiguousIdentity();
-                return emitResponse(materializeRootAssociated(::std::move(ambiguous), trait, assocName, assocParams), HIRCompare::Fuzzy);
+                return emitResponse(materializeRootAssociated(::std::move(ambiguous), trait, assocName, canonicalAssocParams), HIRCompare::Fuzzy);
             }
         };
 

@@ -84,6 +84,15 @@ inline bool isAliasInputInfer(unsigned index) {
     return index >= HIR_INFER_ALIAS_INPUT_MIN && index != ~0u;
 }
 
+// The trait solver canonicalises unresolved inference variables into this
+// reserved sub-range so structurally identical goals share one cache key.
+// Nested inside the alias-input range, so the inference table passes these
+// through untouched; they never outlive one solver evaluation.
+constexpr unsigned HIR_INFER_SOLVER_CANONICAL_MIN = 0xF0000000u;
+inline bool isSolverCanonicalInfer(unsigned index) {
+    return index >= HIR_INFER_SOLVER_CANONICAL_MIN && index != ~0u;
+}
+
 enum class HIRCoreType;
 enum class HIRBorrowType;
 struct HIRTypeDataFunctionPointer;
