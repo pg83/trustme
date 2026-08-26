@@ -8823,7 +8823,19 @@ default: {
             const auto& ty = this->ivars.getType(tyIn);
             if (ty->is_Infer()) {
                 return AutoderefResult::NoMatch;
-            } else if (const auto* e = ty->opt_Borrow()) {
+            }
+            // A type mentioning an opaque alias this body defines cannot be
+            // dereferenced until its hidden type is recorded; the ordinary
+            // lookup path cannot consume the solver's identity response, so
+            // report the ambiguity directly and let the caller retry.
+            if (visitTyWith(ty, [&](const HIRTypeData* inner) {
+                const auto* erased = inner->opt_ErasedType();
+                const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+                return alias && this->isOpaqueAliasDefiningScope(*alias->inner);
+            })) {
+                return AutoderefResult::Ambiguous;
+            }
+            if (const auto* e = ty->opt_Borrow()) {
                 DEBUG("Deref " << ty << " into " << e->inner);
                 target = this->ivars.getType(e->inner);
                 return AutoderefResult::Match;
