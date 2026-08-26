@@ -91,6 +91,11 @@ struct StaticTraitPathCb final: StaticTraitPathCallback {
 // Definitions generated from hir_typeck_static.tu.
 #include "hir_typeck_static_tu.h"
 
+/// Flipped on when trans starts: analysis is done, every opaque type an
+/// associated-type expansion produces is immediately replaced by its hidden
+/// type (rustc's post-analysis RevealAll mode).
+extern bool gTransRevealAllOpaques;
+
 class StaticTraitResolve: public TraitResolveCommon {
     class NextSolverBridge;
 

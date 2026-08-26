@@ -1,4 +1,5 @@
 #include "trans_target.h"
+#include "hir_typeck_common.h"
 #include "wire_board.h"
 #include "settings.h"
 #include <std/mem/obj_pool.h>
@@ -2651,6 +2652,19 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     auto exact = sCacheExact.find(ty);
     if (exact != sCacheExact.end()) {
         return exact->second;
+    }
+
+    // Trans is reveal-all: a projection through a fn-def's return-position
+    // opaque (e.g. a struct field of `<fn{bar} as Func>::Ret`) only becomes
+    // a layout-able type once the opaque is revealed.
+    if (visitTyWith(ty, [](const HIRTypeData* inner) { return inner->is_ErasedType(); })) {
+        HIRTypeRef revealed = ty;
+        resolve.revealOpaqueTypes(sp, revealed);
+        if (revealed != ty) {
+            const auto* repr = TargetGetTypeRepr(sp, resolve, revealed);
+            sCacheExact.emplace(ty, repr);
+            return repr;
+        }
     }
 
     if (!hasAbiIdentity(ty)) {

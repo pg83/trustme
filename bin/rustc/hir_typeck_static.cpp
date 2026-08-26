@@ -1608,9 +1608,24 @@ const HIRTypeData* StaticTraitResolve::fixTraitDefaultReturn(const Span& sp, con
     return tpl;
 }
 
+bool gTransRevealAllOpaques = false;
+
 void StaticTraitResolve::expandAssociatedTypes(const Span& sp, HIRTypeRef& input) const {
     TRACE_FUNCTION_FR(input, input);
     input = this->expandAssociatedTypesInner(sp, input);
+    // Trans is reveal-all: analysis is done, so any opaque a projection
+    // normalises to (e.g. `<fn{bar} as Func>::Ret` through the fn-def's
+    // return type) is immediately replaced by its hidden type — matching
+    // rustc's post-analysis RevealAll mode.
+    // The reentrancy guard keeps revealOpaqueTypes' own internal expansions
+    // from looping back here.
+    static thread_local bool tInReveal = false;
+    if (gTransRevealAllOpaques && !tInReveal
+            && visitTyWith(input, [](const HIRTypeData* inner) { return inner->is_ErasedType(); })) {
+        tInReveal = true;
+        this->revealOpaqueTypes(sp, input);
+        tInReveal = false;
+    }
 }
 
 void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) const {

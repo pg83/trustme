@@ -2715,6 +2715,16 @@ namespace {
 
         void visitType(const HIRTypeData* ty, Mode mode = Mode::Normal) {
             Span sp;
+            // Trans is reveal-all: a projection over someone's
+            // return-position opaque (a struct field instantiated with a
+            // fn-def parameter) may only normalise once the opaque is
+            // revealed (mir/validate/needs-reveal-all).
+            if (visitTyWith(ty, [](const HIRTypeData* inner) { return inner->is_ErasedType(); })) {
+                HIRTypeRef revealed = ty;
+                resolve.revealOpaqueTypes(sp, revealed);
+                resolve.expandAssociatedTypes(sp, revealed);
+                ty = revealed;
+            }
             // If the type has already been visited, AND either this is a shallow visit, or the previous wasn't
             if (out.hasType(ty, mode == Mode::Shallow)) {
                 return;
