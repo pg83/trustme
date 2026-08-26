@@ -4338,7 +4338,7 @@ default:
                     if (!infer->isLit() && !associatedConstrainsSelf) {
                         return Certainty::Ambiguous;
                     }
-                    if (infer->isLit() && !literalClassCanMatch(trait, goalParams, infer->tyClass)) {
+                    if (infer->isLit() && goalParams.types.empty() && goalParams.values.empty() && !literalClassCanMatch(trait, goalParams, infer->tyClass)) {
                         return Certainty::NoSolution;
                     }
                 }
@@ -4448,6 +4448,12 @@ default:
             // what keeps `(&mut ?int).partial_cmp(..)` from selecting
             // Iterator::partial_cmp through the &mut I blanket.
             bool literalClassCanMatch(const HIRSimplePath& trait, const HIRPathParams& params, HIRInferClass tyClass) const {
+                // Auto/marker traits have no impl heads for primitives: they
+                // are proven structurally, and every primitive satisfies the
+                // structural probe.
+                if (crate.getTraitByPath(span(), trait).isMarker) {
+                    return true;
+                }
                 static const HIRCoreType intPrims[] = {HIRCoreType::I8, HIRCoreType::U8, HIRCoreType::I16, HIRCoreType::U16, HIRCoreType::I32, HIRCoreType::U32, HIRCoreType::I64, HIRCoreType::U64, HIRCoreType::I128, HIRCoreType::U128, HIRCoreType::Isize, HIRCoreType::Usize};
                 static const HIRCoreType floatPrims[] = {HIRCoreType::F16, HIRCoreType::F32, HIRCoreType::F64, HIRCoreType::F128};
                 const HIRCoreType* prims = tyClass == HIRInferClass::Integer ? intPrims : floatPrims;
@@ -4873,7 +4879,7 @@ default:
                     if (!infer->isLit() && !associatedConstrainsSelf) {
                         return emitForcedAmbiguity();
                     }
-                    if (infer->isLit() && !literalClassCanMatch(trait, goalParams, infer->tyClass)) {
+                    if (infer->isLit() && goalParams.types.empty() && goalParams.values.empty() && !literalClassCanMatch(trait, goalParams, infer->tyClass)) {
                         return false;
                     }
                 }
