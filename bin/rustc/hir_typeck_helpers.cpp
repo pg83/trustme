@@ -403,6 +403,9 @@ void HMTypeInferrence::checkForLoops() {
 }
 
 void HMTypeInferrence::compactIvars() {
+    // Compaction rewrites stored types in place, which the journal does not
+    // model; it must never run while a probe could still roll back.
+    ASSERT_BUG(Span(), snapshotDepth == 0, "ivar compaction during an active inference snapshot");
     this->checkForLoops();
 
     unsigned int i = 0;
@@ -444,10 +447,12 @@ bool HMTypeInferrence::applyDefault(unsigned int index) {
             return false;
         case HIRInferClass::Integer:
             DEBUG("- IVar " << e->index << " = i32");
+            this->journalMutation(JournalEntry::Kind::TypeSet, index, v.type);
             v.type = types.primitive(HIRCoreType::I32);
             return true;
         case HIRInferClass::Float:
             DEBUG("- IVar " << e->index << " = f64");
+            this->journalMutation(JournalEntry::Kind::TypeSet, index, v.type);
             v.type = types.primitive(HIRCoreType::F64);
             return true;
     }
@@ -920,6 +925,7 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
             auto* mapped = aliasTypeIvars.find(infer->index);
             if (!mapped) {
                 aliasTypeIvars.insert(infer->index, newIvarTr(infer->tyClass));
+                this->journalMutation(JournalEntry::Kind::AliasTypeMap, infer->index, nullptr);
                 mapped = aliasTypeIvars.find(infer->index);
             }
             type = *mapped;
@@ -1062,6 +1068,7 @@ void HMTypeInferrence::addIvars(HIRConstGeneric& val) {
             auto* mapped = aliasValueIvars.find(val.as_Infer().index);
             if (!mapped) {
                 aliasValueIvars.insert(val.as_Infer().index, HIRConstGeneric::make_Infer({newIvarVal()}));
+                this->journalMutation(JournalEntry::Kind::AliasValueMap, val.as_Infer().index, nullptr);
                 mapped = aliasValueIvars.find(val.as_Infer().index);
             }
             val = mapped->clone();
@@ -1141,6 +1148,7 @@ void HMTypeInferrence::setIvarValTo(unsigned int slot, HIRConstGeneric val) {
         DEBUG("Set ValIVar " << slot << " = " << val);
         ASSERT_BUG(Span(), values[slot].val->is_Infer(), "slot " << slot << " - " << *values[slot].val);
         ASSERT_BUG(Span(), values[slot].val->as_Infer().index == slot, "slot " << slot << " - " << *values[slot].val);
+        this->journalMutation(JournalEntry::Kind::ValSet, slot, nullptr);
         *values[slot].val = std::move(val);
         // The warm goal cache keys on this generation; a const-value
         // binding invalidates it just like a type binding does.
@@ -1158,7 +1166,12 @@ void HMTypeInferrence::ivarValUnify(unsigned int leftSlot, unsigned int rightSlo
     if (/*const auto* re =*/values[rightSlot].val->opt_Infer()) {
         DEBUG("Set ValIVar " << rightSlot << " = @" << leftSlot);
         values[rightSlot].alias = leftSlot;
-        values[rightSlot].val.reset();
+        if (snapshotDepth != 0) {
+            // Keep the Infer value alive so rollback only clears the alias.
+            this->journalMutation(JournalEntry::Kind::ValAlias, rightSlot, nullptr);
+        } else {
+            values[rightSlot].val.reset();
+        }
 
         this->markChange();
     } else {
@@ -1232,7 +1245,8 @@ const HIRTypeData* HMTypeInferrence::getType(unsigned idx) const {
 
 void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
     auto sp = Span();
-    auto& rootIvar = this->getPointedIvar(slot);
+    const auto rootIndex = this->rootIvarIndex(slot);
+    auto& rootIvar = ivars.at(rootIndex);
     DEBUG("set_ivar_to(" << slot << " { " << rootIvar.type << " }, " << type << ")");
 
     // If the left type was '_', alias the right to it
@@ -1265,7 +1279,9 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
 
         // Alias `l_e.index` to this slot
         DEBUG("Set IVar " << lE->index << " = @" << slot);
-        auto& rIvar = this->getPointedIvar(lE->index);
+        const auto rightIndex = this->rootIvarIndex(lE->index);
+        auto& rIvar = ivars.at(rightIndex);
+        this->journalMutation(JournalEntry::Kind::TypeAlias, rightIndex, rIvar.type);
         rIvar.alias = slot;
         rIvar.type = nullptr;
     } else if (rootIvar.type == type) {
@@ -1318,6 +1334,7 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
             BUG(sp, "Overwriting ivar " << slot << " (" << rootIvar.type << ") with " << type);
         }
 
+        this->journalMutation(JournalEntry::Kind::TypeSet, rootIndex, rootIvar.type);
         rootIvar.type = type;
     }
 
@@ -1327,10 +1344,12 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
 void HMTypeInferrence::ivarUnify(unsigned int leftSlot, unsigned int rightSlot) {
     auto sp = Span();
     if (leftSlot != rightSlot) {
-        auto& leftIvar = this->getPointedIvar(leftSlot);
+        const auto leftIndex = this->rootIvarIndex(leftSlot);
+        auto& leftIvar = ivars.at(leftIndex);
 
         // TODO: Assert that setting this won't cause a loop.
-        auto& rootIvar = this->getPointedIvar(rightSlot);
+        const auto rightIndex = this->rootIvarIndex(rightSlot);
+        auto& rootIvar = ivars.at(rightIndex);
 
         if (const auto* re = rootIvar.type->opt_Infer()) {
             DEBUG("Class unify " << leftIvar.type << " <- " << rootIvar.type);
@@ -1341,6 +1360,7 @@ void HMTypeInferrence::ivarUnify(unsigned int leftSlot, unsigned int rightSlot) 
                         ERROR(sp, E0000, "Unifying types with mismatching literal classes - " << leftIvar.type << " := " << rootIvar.type);
                     }
                     if (le->tyClass == HIRInferClass::None) {
+                        this->journalMutation(JournalEntry::Kind::TypeSet, leftIndex, leftIvar.type);
                         leftIvar.type = types.infer(le->index, re->tyClass);
                     }
                 } else if (const auto* le = leftIvar.type->opt_Primitive()) {
@@ -1361,6 +1381,7 @@ void HMTypeInferrence::ivarUnify(unsigned int leftSlot, unsigned int rightSlot) 
         }
 
         DEBUG("IVar " << rootIvar.type->as_Infer().index << " = @" << leftSlot);
+        this->journalMutation(JournalEntry::Kind::TypeAlias, rightIndex, rootIvar.type);
         rootIvar.alias = leftSlot;
         rootIvar.type = nullptr;
 
@@ -1395,7 +1416,7 @@ const HIRConstGeneric& HMTypeInferrence::getValue(unsigned slot) const {
     BUG(Span(), "Loop detected in ivar list when starting at " << slot << ", current is " << index);
 }
 
-HMTypeInferrence::IVar& HMTypeInferrence::getPointedIvar(unsigned int slot) const {
+unsigned int HMTypeInferrence::rootIvarIndex(unsigned int slot) const {
     auto index = slot;
     unsigned int count = 0;
     assert(index < ivars.size());
@@ -1408,7 +1429,11 @@ HMTypeInferrence::IVar& HMTypeInferrence::getPointedIvar(unsigned int slot) cons
         }
         count++;
     }
-    return const_cast<IVar&>(ivars.at(index));
+    return index;
+}
+
+HMTypeInferrence::IVar& HMTypeInferrence::getPointedIvar(unsigned int slot) const {
+    return const_cast<IVar&>(ivars.at(this->rootIvarIndex(slot)));
 }
 
 bool HMTypeInferrence::pathparamsContainIvars(const HIRPathParams& pps, bool onlyUnbound) const {
@@ -5861,15 +5886,16 @@ default:
         }
 
         HIRPathParams TraitResolution::makeFreshImplParams(const HIRGenericParams& params) const {
-            auto& mutIvars = const_cast<HMTypeInferrence&>(this->ivars);
+            // `ivars` is a reference member: constness of the resolver does
+            // not propagate through it, so no cast is needed to mutate.
             HIRPathParams result;
             result.types.reserve(params.types.size());
             for (size_t i = 0; i < params.types.size(); i++) {
-                result.types.push_back(mutIvars.newIvarTr());
+                result.types.push_back(this->ivars.newIvarTr());
             }
             result.values.reserve(params.values.size());
             for (size_t i = 0; i < params.values.size(); i++) {
-                result.values.push_back(HIRConstGeneric::make_Infer({mutIvars.newIvarVal()}));
+                result.values.push_back(HIRConstGeneric::make_Infer({this->ivars.newIvarVal()}));
             }
             return result;
         }
@@ -5949,6 +5975,7 @@ default:
         // -------------------------------------------------------------------------------------------------------------------
 
         void TraitResolution::compactIvars(HMTypeInferrence& ivars) {
+            ASSERT_BUG(Span(), !ivars.probing(), "ivar compaction during an active inference snapshot");
             ivars.checkForLoops();
 
             unsigned int i = 0;
@@ -10301,11 +10328,88 @@ default: {
         }
 
         void HMTypeInferrence::markChange() {
-            mutationGeneration++;
+            // Generations are allocated by a counter that survives rollback:
+            // a generation observed inside a rolled-back probe never recurs,
+            // so nothing cached against it can be mistaken for a live state.
+            mutationGeneration = ++generationCounter;
             if (!hasChanged) {
                 DEBUG("- CHANGE");
                 hasChanged = true;
             }
+        }
+
+        void HMTypeInferrence::journalMutation(JournalEntry::Kind kind, unsigned slot, HIRTypeRef oldType) {
+            if (snapshotDepth != 0) {
+                journal.pushBack(JournalEntry{kind, slot, oldType});
+            }
+        }
+
+        HMTypeInferrence::Snapshot HMTypeInferrence::snapshot() {
+            snapshotDepth++;
+            return Snapshot{journal.length(), ivars.size(), values.size(), mutationGeneration, hasChanged};
+        }
+
+        void HMTypeInferrence::commit(const Snapshot& snapshot) {
+            ASSERT_BUG(Span(), snapshotDepth != 0, "commit without an active inference snapshot");
+            ASSERT_BUG(Span(), journal.length() >= snapshot.journalLength, "inference snapshots committed out of order");
+            snapshotDepth--;
+            if (snapshotDepth == 0) {
+                // Value aliases keep their Infer payload alive for rollback;
+                // once nothing can roll back any more, release it as the
+                // non-probing path does.
+                for (size_t i = 0; i < journal.length(); i++) {
+                    const auto& entry = journal[i];
+                    if (entry.kind == JournalEntry::Kind::ValAlias) {
+                        values.at(entry.slot).val.reset();
+                    }
+                }
+                journal.clear();
+            }
+        }
+
+        void HMTypeInferrence::rollbackTo(const Snapshot& snapshot) {
+            ASSERT_BUG(Span(), snapshotDepth != 0, "rollback without an active inference snapshot");
+            ASSERT_BUG(Span(), journal.length() >= snapshot.journalLength, "inference snapshots rolled back out of order");
+            snapshotDepth--;
+            while (journal.length() > snapshot.journalLength) {
+                const auto& entry = journal[journal.length() - 1];
+                switch (entry.kind) {
+                    case JournalEntry::Kind::TypeSet: {
+                        ivars.at(entry.slot).type = entry.oldType;
+                        break;
+                    }
+                    case JournalEntry::Kind::TypeAlias: {
+                        auto& ivar = ivars.at(entry.slot);
+                        ivar.alias = ~0u;
+                        ivar.type = entry.oldType;
+                        break;
+                    }
+                    case JournalEntry::Kind::ValSet: {
+                        *values.at(entry.slot).val = HIRConstGeneric::make_Infer({entry.slot});
+                        break;
+                    }
+                    case JournalEntry::Kind::ValAlias: {
+                        // The Infer payload was kept alive at mutation time.
+                        values.at(entry.slot).alias = ~0u;
+                        break;
+                    }
+                    case JournalEntry::Kind::AliasTypeMap: {
+                        aliasTypeIvars.erase(entry.slot);
+                        break;
+                    }
+                    case JournalEntry::Kind::AliasValueMap: {
+                        aliasValueIvars.erase(entry.slot);
+                        break;
+                    }
+                }
+                journal.popBack();
+            }
+            ASSERT_BUG(Span(), ivars.size() >= snapshot.ivarCount, "inference snapshot saw the ivar table shrink");
+            ASSERT_BUG(Span(), values.size() >= snapshot.valueCount, "inference snapshot saw the value table shrink");
+            ivars.erase(ivars.begin() + snapshot.ivarCount, ivars.end());
+            values.erase(values.begin() + snapshot.valueCount, values.end());
+            mutationGeneration = snapshot.generation;
+            hasChanged = snapshot.hasChanged;
         }
 
         HMTypeInferrence::ResolvePlaceholders::ResolvePlaceholders(const HMTypeInferrence& parent)

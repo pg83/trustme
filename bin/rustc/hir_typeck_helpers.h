@@ -180,8 +180,26 @@ public:
     void setIvarValTo(unsigned int slot, HIRConstGeneric val);
     void ivarValUnify(unsigned int leftSlot, unsigned int rightSlot);
 
-    HIRConstGeneric newValIvar();
-    void setValIvarTo(unsigned int slot, HIRConstGeneric val);
+    // Transactional probes.  While at least one snapshot is active every
+    // table mutation is journaled; rollbackTo restores the exact
+    // pre-snapshot state.  mutationGeneration values are allocated by a
+    // monotonic counter that survives rollback, so a generation observed
+    // inside a rolled-back probe can never be mistaken for a live state.
+    struct Snapshot {
+        size_t journalLength;
+        size_t ivarCount;
+        size_t valueCount;
+        u64 generation;
+        bool hasChanged;
+    };
+
+    Snapshot snapshot();
+    void commit(const Snapshot& snapshot);
+    void rollbackTo(const Snapshot& snapshot);
+
+    bool probing() const {
+        return snapshotDepth != 0;
+    }
 
     // Lookup
     //::HIR::ASTType*& get_type(::HIR::ASTType*& type);
@@ -204,9 +222,38 @@ public:
     bool typesEqual(const HIRTypeData* l, const HIRTypeData* r) const;
 
 private:
+    struct JournalEntry {
+        enum class Kind : u8 {
+            /// ivars[slot].type was overwritten; alias untouched.
+            TypeSet,
+            /// ivars[slot] became an alias; alias was ~0 before.
+            TypeAlias,
+            /// values[slot].val was overwritten; it was Infer{slot} before.
+            ValSet,
+            /// values[slot] became an alias; its val is kept alive while a
+            /// snapshot is active, so undo only clears the alias.
+            ValAlias,
+            /// aliasTypeIvars gained the key `slot`.
+            AliasTypeMap,
+            /// aliasValueIvars gained the key `slot`.
+            AliasValueMap,
+        };
+
+        Kind kind;
+        unsigned slot;
+        HIRTypeRef oldType;
+    };
+
+    stl::Vector<JournalEntry> journal;
+    unsigned snapshotDepth = 0;
+    u64 generationCounter = 0;
+
+    void journalMutation(JournalEntry::Kind kind, unsigned slot, HIRTypeRef oldType);
+
     void addIvarsTraitPath(HIRTraitPath& path);
     void expandIvarsTraitPath(HIRTraitPath& path);
 
+    unsigned int rootIvarIndex(unsigned int slot) const;
     IVar& getPointedIvar(unsigned int slot) const;
 };
 
