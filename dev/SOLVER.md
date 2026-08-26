@@ -109,3 +109,105 @@ Borrowck отсутствует (borrowck-only диагностики — xfail 
 fuzzy-костыли и половину гейтов. Затем циклы (п.4) и специализация
 (п.3). Корпусный остаток (rust_lib «Failed to infer» ×3) почти
 наверняка упирается в п.2/п.9.
+
+# План: удаление fuzzy/legacy путей и реализация недостающего
+
+Порядок не произвольный: этап 0 разблокирует 1, 2 и 5; без него любые
+выпилы fuzzy-обходов ломают вывод. Дисциплина на каждом этапе: unit-гейт,
+полный корпус, libcore-время (не хуже 41-44s), commit+push, запись в
+DEFER.md. Легитимные перечислители в СБОРКЕ КАНДИДАТОВ солвера
+(helpers:3853-3855 — Magic/Legacy/Bound как CandidateSource) не трогаем:
+это источники кандидатов, а не костыли; костыли — их вызовы ИЗ typeck.
+
+## Этап 0. Канонические ответы со связываниями иваров
+
+Солвер на цель с иварами отвечает подстановками для канонических слотов,
+декануниазация применяет их к caller-иварам. Обобщить существующий
+точечный коммит «параметров-констрейнтов на голые ивары» (const_cast +
+setIvarTo в globally-EAT) в единый механизм применения ответа — без
+const_cast, через явный мутабельный канал к таблице иваров.
+
+Убивает:
+- emitForcedAmbiguity identity как способ ответа (остаётся только как
+  честная ambiguity без кандидатов);
+- identity-retry fuzzy-обход (expr_cs:8181-8183);
+- probe-обходы для possibilities (expr_cs:7783-7785, 9029-9031).
+
+Ожидание по корпусу: rust_lib «Failed to infer» ×3 (4fcc, 66549, ed05).
+Выход: перечисленные сайты удалены, гейт+корпус зелёные.
+
+## Этап 1. NormalizesTo: EAT через солвер
+
+Новый вид цели — нормализация алиаса (`<T as Trait>::Assoc = ?out`).
+EAT-globally-ветка превращается в вызов солвера; структурный fast-path
+(конкретный self, единственный impl) остаётся вне для скорости.
+
+Убивает: definingUse-гейт, selfSimilarChain-гейт, depth-caps >64
+(циклы переходят к солверу), отдельный goal-канал внутри EAT.
+Зависимость: этап 0 (результат нормализации — биндинг выходного ивара).
+Побочный эффект: канонические ключи становятся абсолютными → снять
+полный флаш warm-кэша на eatCacheGeneration (долг п.5) и переоценить
+крейт-кэш для generic-целей (сейчас — без измеримого прироста).
+
+## Этап 2. Специализация в селекции
+
+Candidate preference внутри солвера: более специфичный impl побеждает до
+merge; ответ несёт выбранный impl и его shadowed-предка (для
+наследования итемов) вместо повторного перечисления.
+
+Убивает: noGoalBridge-двухпроходность (static:2546, 4258, 4272),
+specialisable-repeat (expr_cs:8211-8213), selectSpecialisableFallback.
+Зависимость: этап 1 (lookup итема через нормализацию).
+
+## Этап 3. Семантика циклов
+
+Коиндуктивные цели (auto traits, Sized-семейство) vs индуктивные;
+fixpoint-итерация провизорных результатов вместо эвристики
+«productive proves provisional». Делать вместе с этапом 1 —
+normalizes-to добавляет новые классы циклов.
+
+## Этап 4. Builtin-кандидаты вместо magic-претрапа
+
+Sized/Copy/Clone/FnPtr/Transmute/DiscriminantKind — builtin-кандидаты
+сборки (канал CandidateSource::Builtin уже есть). Реализовать MetaSized
+(TODO helpers:2180). ?Sized-декларации параметров — в env-модель;
+снять исключение Sized-семейства из крейт-кэша.
+
+Убивает: findTraitImplsMagicCb-претрап до солвера, magicTraitImpls-флаг
+маршрутизации и с ним последний legacy-маршрут в findTraitImplsCb.
+
+## Этап 5. Литеральный вывод
+
+После этапа 0 single-candidate commit — солверный (биндинги
+единственного кандидата). Ярусы checkIvarPoss срезать поэтапно с
+корпусом между шагами: сначала PickFirstBound/FinalOption, затем
+Assume/IgnoreWeakDisable; числовой fallback остаётся стадией
+«применить дефолты → пере-решить отложенные цели». Конечная цель —
+possibleIvarVals удалён целиком, CoerceUnsized-проба (expr_cs:6737)
+уходит в солверные Unsize-цели.
+
+Ожидание по корпусу: simd/array-type, i32-fallback-класс закрыт
+системно (сегодняшний безусловный fallback — временная ступень).
+
+## Этап 6. Method probe через солвер
+
+Кандидаты метода формулируются целями; порядок и where-bound shadowing
+по rustc candidate ordering. Убивает foundNonGlobalBound-эвристику.
+
+## Этап 7. TypingMode для опаков
+
+Hidden-type кандидаты хранятся в инференс-таблице; defining-scope —
+режим тайпчека; member constraints. OpaqueReveal::All становится
+TypingMode::PostAnalysis. Убивает definingFcnOrigins-правила и
+autoderef-заглушку (defining-опак → Ambiguous).
+
+## Этап 8. Universes/HRTB + leak check
+
+Канонизация с универсами; GENERICPlaceholder → placeholder с универсом;
+forced-ambiguity правила для плейсхолдеров умирают.
+Ожидание по корпусу: nested-hkl (Cyclic anon type).
+
+## Этап 9. Хвост
+
+WF/implied bounds, const traits в солвере, region obligations —
+после стабилизации этапов 0-8, отдельными заходами.
