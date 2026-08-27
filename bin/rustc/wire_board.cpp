@@ -3,6 +3,7 @@
 #include "ident.h"
 #include "hir_expand_main_bindings.h"
 #include "macro_rules_macro_rules.h"
+#include "parse_context.h"
 
 #include <std/mem/obj_pool.h>
 
@@ -13,5 +14,6 @@ WireBoard::WireBoard(stl::ObjPool* pool)
     , hirExpand(pool->make<HIRExpandContext>())
     , macroDefinitions(pool->make<MacroDefinitionContext>())
     , macroLog(pool->make<MacroLogContext>())
+    , parser(pool->make<ParseContext>())
 {
 }

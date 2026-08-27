@@ -198,8 +198,6 @@ namespace {
 
 }
 
-static const RcString rcstringCfg = RcString::newInterned("cfg");
-
 void CfgDump(const Settings& settings, ::std::ostream& os) {
     const auto& cfg = *settings.cfg;
     for (const auto& v : cfg.values) {
@@ -312,12 +310,7 @@ namespace {
             case TOK_PAREN_OPEN:
                 GET_TOK(tok, lex);
 
-                static const RcString rcstringAny = RcString::newInterned("any");
-                static const RcString rcstringNot = RcString::newInterned("not");
-                static const RcString rcstringAll = RcString::newInterned("all");
-                static const RcString rcstringTarget = RcString::newInterned("target");
-                static const RcString rcstringVersion = RcString::newInterned("version");
-                if (name == rcstringAny || name == rcstringCfg) {
+                if (name == "any" || name == "cfg") {
                     bool rv = false;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
                         rv |= checkCfgInner(cfg, lex);
@@ -328,13 +321,13 @@ namespace {
                     }
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return rv;
-                } else if (name == rcstringNot) {
+                } else if (name == "not") {
                     bool rv = checkCfgInner(cfg, lex);
                     // Allow a trailing comma
                     lex.getTokenIf(TOK_COMMA);
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return !rv;
-                } else if (name == rcstringAll) {
+                } else if (name == "all") {
                     bool rv = true;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
                         rv &= checkCfgInner(cfg, lex);
@@ -345,7 +338,7 @@ namespace {
                     }
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return rv;
-                } else if (name == rcstringTarget) {
+                } else if (name == "target") {
                     // `target(os = "linux", arch = "x86_64")` is the compact
                     // spelling of `all(target_os = "linux", target_arch =
                     // "x86_64")`.  Keep evaluation in the ordinary cfg path
@@ -366,7 +359,7 @@ namespace {
                 // `version("1.49.0")` holds when the compiler is at least that
                 // version. `RUSTC_OVERRIDE_VERSION_STRING` replaces the version
                 // it compares against, which is how upstream tests pin it.
-                else if (name == rcstringVersion) {
+                else if (name == "version") {
                     auto wanted = lex.getTokenCheck(TOK_STRING).str();
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
@@ -436,7 +429,7 @@ bool checkCfg(const Settings& settings, const Span& sp, const ASTAttribute& mi) 
 
 bool checkCfgAttrs(const Settings& settings, const ASTAttributeList& attrs) {
     for (auto& a : attrs.items) {
-        if (a.name() == rcstringCfg) {
+        if (a.name() == "cfg") {
             if (!checkCfg(settings, a.span(), a)) {
                 return false;
             }

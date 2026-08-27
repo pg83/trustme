@@ -13,6 +13,7 @@
 #include "wire_board.h"
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"
+#include "parse_context.h"
 #include "macro_rules_macro_rules.h"
 #include "parse_interpolated_fragment.h"
 
@@ -1647,7 +1648,7 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
         // `self` can be a value, or start a path
         case TOK_RWORD_SELF:
             if (LOOK_AHEAD(lex) != TOK_DOUBLE_COLON) {
-                static const RcString rcstringSelfLower = RcString::newInterned("self");
+                const RcString rcstringSelfLower = RcString::newInterned("self");
                 return NEWNODE(ASTExprNodeNamedValue, ASTPath(rcstringSelfLower));
             }
             // Fall through to normal paths
@@ -3430,7 +3431,7 @@ bool ParseParamAttrsKeep(TokenStream& lex, ASTAttributeList* attrsOut) {
     bool keep = true;
     if (const auto* wb = lex.parseState().wb) {
         // A `cfg_attr` may itself produce the `cfg` that decides this.
-        static const RcString rcstringCfgAttr = RcString::newInterned("cfg_attr");
+        const RcString rcstringCfgAttr = RcString::newInterned("cfg_attr");
         for (auto it = attrs.items.begin(); it != attrs.items.end();) {
             if (it->name() == rcstringCfgAttr) {
                 auto produced = checkCfgAttr(*wb->settings, *it);
@@ -3472,8 +3473,8 @@ ASTFunction::Arg ParseFunctionArg(TokenStream& lex, bool expectNamed, ASTAttribu
 /// Parse a function definition (after the 'fn <name>')
 ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSelf, bool canBePrototype, std::string abi, ASTFunction::Flags flags) {
     TRACE_FUNCTION;
-    static const RcString rcstringSelfLower = RcString::newInterned("self");
-    static const RcString rcstringSelf = RcString::newInterned("Self");
+    const RcString rcstringSelfLower = RcString::newInterned("self");
+    const RcString rcstringSelf = RcString::newInterned("Self");
     ProtoSpan ps = lex.startSpan();
 
     Token tok;
@@ -4682,8 +4683,8 @@ RcString getOptionalIdent(TokenStream& lex, RcString* sourceName) {
     Token tok;
     GET_TOK(tok, lex);
     if (tok.type() == TOK_UNDERSCORE) {
-        static unsigned anonIndex = 0;
-        auto name = RcString::newInterned(FMT(" " << anonIndex++));
+        ASSERT_BUG(lex.pointSpan(), lex.parseState().wb, "Parser has no WireBoard");
+        auto name = RcString::newInterned(FMT(" " << lex.parseState().wb->parser->newAnonymousItem()));
         if (sourceName) {
             *sourceName = name;
         }
