@@ -57,6 +57,10 @@ public:
         return pool->make<T>(stl::forward<A>(args)...);
     }
 
+    stl::ObjPool* objectPool() const {
+        return pool;
+    }
+
     ExpandProcMacro* findMacro(const RcString& name) const;
     ExpandDecorator* findDecorator(const RcString& name) const;
 

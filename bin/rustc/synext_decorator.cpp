@@ -17,6 +17,8 @@
 #include "expand_proc_macro.h"
 #include "parse_interpolated_fragment.h"
 
+#include <std/sym/s_map.h>
+
 namespace {
     class CommonFunction: public ExpandDecorator {
     public:
@@ -3421,13 +3423,16 @@ struct Handler {
     }
 };
 
-struct StrcmpTy {
-    bool operator()(const char* a, const char* b) const {
-        return std::strcmp(a, b) < 0;
+class LangItemRegistry {
+    stl::SymbolMap<Handler> handlers;
+
+public:
+    explicit LangItemRegistry(stl::ObjPool* pool);
+
+    const Handler* find(const char* name) const {
+        return handlers.find(name);
     }
 };
-
-static std::map<const char*, Handler, StrcmpTy> gHandlers;
 
 void handleSave(const Span& sp, ASTCrate& crate, const std::string& name, const ASTAbsolutePath& path) {
     auto rv = crate.langItems.insert(::std::make_pair(name, path));
@@ -3442,239 +3447,241 @@ void handleSave(const Span& sp, ASTCrate& crate, const std::string& name, const 
     }
 }
 
-void handleLangItem(const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path, const ::std::string& name, eItemType type, ASTItem& item) {
-    if (gHandlers.empty()) {
-        struct H {
-            static void add(const char* n, Handler h) {
-                gHandlers.insert(std::make_pair(n, std::move(h)));
-            }
-        };
+LangItemRegistry::LangItemRegistry(stl::ObjPool* pool)
+    : handlers(pool)
+{
+    auto add = [&](const char* name, Handler handler) {
+        handlers.insert(name, mv$(handler));
+    };
 
-        H::add("phantom_fn", Handler(ITEM_FN, handleSave));
-        H::add("send", Handler(ITEM_TRAIT, handleSave));
-        H::add("sync", Handler(ITEM_TRAIT, handleSave));
-        H::add("sized", Handler(ITEM_TRAIT, handleSave));
-        H::add("copy", Handler(ITEM_TRAIT, handleSave));
+        add("phantom_fn", Handler(ITEM_FN, handleSave));
+        add("send", Handler(ITEM_TRAIT, handleSave));
+        add("sync", Handler(ITEM_TRAIT, handleSave));
+        add("sized", Handler(ITEM_TRAIT, handleSave));
+        add("copy", Handler(ITEM_TRAIT, handleSave));
         {
-            H::add("clone", Handler(ITEM_TRAIT, handleSave));
+            add("clone", Handler(ITEM_TRAIT, handleSave));
         }
         // ops traits
-        H::add("drop", Handler(ITEM_TRAIT, handleSave));
-        H::add("add", Handler(ITEM_TRAIT, handleSave));
-        H::add("sub", Handler(ITEM_TRAIT, handleSave));
-        H::add("mul", Handler(ITEM_TRAIT, handleSave));
-        H::add("div", Handler(ITEM_TRAIT, handleSave));
-        H::add("rem", Handler(ITEM_TRAIT, handleSave));
+        add("drop", Handler(ITEM_TRAIT, handleSave));
+        add("add", Handler(ITEM_TRAIT, handleSave));
+        add("sub", Handler(ITEM_TRAIT, handleSave));
+        add("mul", Handler(ITEM_TRAIT, handleSave));
+        add("div", Handler(ITEM_TRAIT, handleSave));
+        add("rem", Handler(ITEM_TRAIT, handleSave));
 
-        H::add("neg", Handler(ITEM_TRAIT, handleSave));
-        H::add("not", Handler(ITEM_TRAIT, handleSave));
+        add("neg", Handler(ITEM_TRAIT, handleSave));
+        add("not", Handler(ITEM_TRAIT, handleSave));
 
-        H::add("bitand", Handler(ITEM_TRAIT, handleSave));
-        H::add("bitor", Handler(ITEM_TRAIT, handleSave));
-        H::add("bitxor", Handler(ITEM_TRAIT, handleSave));
-        H::add("shl", Handler(ITEM_TRAIT, handleSave));
-        H::add("shr", Handler(ITEM_TRAIT, handleSave));
+        add("bitand", Handler(ITEM_TRAIT, handleSave));
+        add("bitor", Handler(ITEM_TRAIT, handleSave));
+        add("bitxor", Handler(ITEM_TRAIT, handleSave));
+        add("shl", Handler(ITEM_TRAIT, handleSave));
+        add("shr", Handler(ITEM_TRAIT, handleSave));
 
-        H::add("add_assign", Handler(ITEM_TRAIT, handleSave));
-        H::add("sub_assign", Handler(ITEM_TRAIT, handleSave));
-        H::add("div_assign", Handler(ITEM_TRAIT, handleSave));
-        H::add("rem_assign", Handler(ITEM_TRAIT, handleSave));
-        H::add("mul_assign", Handler(ITEM_TRAIT, handleSave));
-        H::add("bitand_assign", Handler(ITEM_TRAIT, handleSave));
-        H::add("bitor_assign", Handler(ITEM_TRAIT, handleSave));
-        H::add("bitxor_assign", Handler(ITEM_TRAIT, handleSave));
-        H::add("shl_assign", Handler(ITEM_TRAIT, handleSave));
-        H::add("shr_assign", Handler(ITEM_TRAIT, handleSave));
+        add("add_assign", Handler(ITEM_TRAIT, handleSave));
+        add("sub_assign", Handler(ITEM_TRAIT, handleSave));
+        add("div_assign", Handler(ITEM_TRAIT, handleSave));
+        add("rem_assign", Handler(ITEM_TRAIT, handleSave));
+        add("mul_assign", Handler(ITEM_TRAIT, handleSave));
+        add("bitand_assign", Handler(ITEM_TRAIT, handleSave));
+        add("bitor_assign", Handler(ITEM_TRAIT, handleSave));
+        add("bitxor_assign", Handler(ITEM_TRAIT, handleSave));
+        add("shl_assign", Handler(ITEM_TRAIT, handleSave));
+        add("shr_assign", Handler(ITEM_TRAIT, handleSave));
 
-        H::add("index", Handler(ITEM_TRAIT, handleSave));
-        H::add("deref", Handler(ITEM_TRAIT, handleSave));
-        H::add("index_mut", Handler(ITEM_TRAIT, handleSave));
-        H::add("deref_mut", Handler(ITEM_TRAIT, handleSave));
-        H::add("fn", Handler(ITEM_TRAIT, handleSave));
-        H::add("fn_mut", Handler(ITEM_TRAIT, handleSave));
-        H::add("fn_once", Handler(ITEM_TRAIT, handleSave));
+        add("index", Handler(ITEM_TRAIT, handleSave));
+        add("deref", Handler(ITEM_TRAIT, handleSave));
+        add("index_mut", Handler(ITEM_TRAIT, handleSave));
+        add("deref_mut", Handler(ITEM_TRAIT, handleSave));
+        add("fn", Handler(ITEM_TRAIT, handleSave));
+        add("fn_mut", Handler(ITEM_TRAIT, handleSave));
+        add("fn_once", Handler(ITEM_TRAIT, handleSave));
 
-        H::add("eq", Handler(ITEM_TRAIT, handleSave));
-        H::add("ord", Handler(ITEM_TRAIT, handleSave)); // In 1.29 this is Ord, before it was PartialOrd
+        add("eq", Handler(ITEM_TRAIT, handleSave));
+        add("ord", Handler(ITEM_TRAIT, handleSave)); // In 1.29 this is Ord, before it was PartialOrd
         {
-            H::add("partial_ord", Handler(ITEM_TRAIT, handleSave)); // New name for v1.29
+            add("partial_ord", Handler(ITEM_TRAIT, handleSave)); // New name for v1.29
         }
 
-        H::add("unsize", Handler(ITEM_TRAIT, handleSave));
-        H::add("coerce_unsized", Handler(ITEM_TRAIT, handleSave));
-        H::add("freeze", Handler(ITEM_TRAIT, handleSave)); // TODO: What version?
+        add("unsize", Handler(ITEM_TRAIT, handleSave));
+        add("coerce_unsized", Handler(ITEM_TRAIT, handleSave));
+        add("freeze", Handler(ITEM_TRAIT, handleSave)); // TODO: What version?
 
-        H::add("iterator", Handler(ITEM_TRAIT, handleSave));    /* trustme just desugars? */
-        H::add("debug_trait", Handler(ITEM_TRAIT, handleSave)); /* TODO: Poke derive() with this */
+        add("iterator", Handler(ITEM_TRAIT, handleSave));    /* trustme just desugars? */
+        add("debug_trait", Handler(ITEM_TRAIT, handleSave)); /* TODO: Poke derive() with this */
 
         {
-            H::add("termination", Handler(ITEM_TRAIT, handleSave)); // 1.29 - trait used for non-() main
+            add("termination", Handler(ITEM_TRAIT, handleSave)); // 1.29 - trait used for non-() main
         }
 
         {
-            H::add("pointee_trait", Handler(ITEM_TRAIT, handleSave));     // 1.54 - pointer metadata trait
-            H::add("dyn_metadata", Handler(ITEM_STRUCT, handleSave));     // 1.54 - `dyn Trait` metadata structure
-            H::add("structural_peq", Handler(ITEM_TRAIT, handleSave));    // 1.54 - Structural equality trait (partial)
-            H::add("structural_teq", Handler(ITEM_TRAIT, handleSave));    // 1.54 - Structural equality trait (total)
-            H::add("discriminant_kind", Handler(ITEM_TRAIT, handleSave)); // 1.54 - trait: used for the `discriminant_kind` intrinsic
+            add("pointee_trait", Handler(ITEM_TRAIT, handleSave));     // 1.54 - pointer metadata trait
+            add("dyn_metadata", Handler(ITEM_STRUCT, handleSave));     // 1.54 - `dyn Trait` metadata structure
+            add("structural_peq", Handler(ITEM_TRAIT, handleSave));    // 1.54 - Structural equality trait (partial)
+            add("structural_teq", Handler(ITEM_TRAIT, handleSave));    // 1.54 - Structural equality trait (total)
+            add("discriminant_kind", Handler(ITEM_TRAIT, handleSave)); // 1.54 - trait: used for the `discriminant_kind` intrinsic
         }
 
-        H::add("non_zero", Handler(ITEM_STRUCT, handleSave));
-        H::add("phantom_data", Handler(ITEM_STRUCT, handleSave));
-        H::add("unsafe_cell", Handler(ITEM_STRUCT, handleSave));
+        add("non_zero", Handler(ITEM_STRUCT, handleSave));
+        add("phantom_data", Handler(ITEM_STRUCT, handleSave));
+        add("unsafe_cell", Handler(ITEM_STRUCT, handleSave));
 
         {
-            H::add("RangeFull", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
+            add("RangeFull", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
                 handleSave(sp, crate, "range_full", p);
             }));
-            H::add("Range", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
+            add("Range", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
                 handleSave(sp, crate, "range", p);
             }));
-            H::add("RangeFrom", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
+            add("RangeFrom", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
                 handleSave(sp, crate, "range_from", p);
             }));
-            H::add("RangeTo", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
+            add("RangeTo", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
                 handleSave(sp, crate, "range_to", p);
             }));
-            H::add("RangeInclusive", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
+            add("RangeInclusive", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
                 handleSave(sp, crate, "range_inclusive", p);
             }));
-            H::add("RangeToInclusive", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
+            add("RangeToInclusive", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
                 handleSave(sp, crate, "range_to_inclusive", p);
             }));
         }
 
         {
-            H::add("unwind_safe", Handler(ITEM_TRAIT, handleSave));     // 1.54 - UnwindSafe trait
-            H::add("ref_unwind_safe", Handler(ITEM_TRAIT, handleSave)); // 1.54 - RefUnwindSafe trait
+            add("unwind_safe", Handler(ITEM_TRAIT, handleSave));     // 1.54 - UnwindSafe trait
+            add("ref_unwind_safe", Handler(ITEM_TRAIT, handleSave)); // 1.54 - RefUnwindSafe trait
         }
         {
-            H::add("transmute_trait", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `BikeshedIntrinsicFrom` trait
+            add("transmute_trait", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `BikeshedIntrinsicFrom` trait
             // - Markers
-            H::add("destruct", Handler(ITEM_TRAIT, handleSave));       // 1.74 - `Destruct` trait
-            H::add("tuple_trait", Handler(ITEM_TRAIT, handleSave));    // 1.74 - `Tuple` trait (must be implemented for all tuples)
-            H::add("pointer_like", Handler(ITEM_TRAIT, handleSave));   // 1.74 - `PointerLike` trait
-            H::add("const_param_ty", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `ConstParamTy` trait
-            H::add("fn_ptr_trait", Handler(ITEM_TRAIT, handleSave));   // 1.74 - `FnPtr` trait
+            add("destruct", Handler(ITEM_TRAIT, handleSave));       // 1.74 - `Destruct` trait
+            add("tuple_trait", Handler(ITEM_TRAIT, handleSave));    // 1.74 - `Tuple` trait (must be implemented for all tuples)
+            add("pointer_like", Handler(ITEM_TRAIT, handleSave));   // 1.74 - `PointerLike` trait
+            add("const_param_ty", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `ConstParamTy` trait
+            add("fn_ptr_trait", Handler(ITEM_TRAIT, handleSave));   // 1.74 - `FnPtr` trait
 
             // Structs
-            H::add("transmute_opts", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `Assume` struct
-            H::add("ptr_unique", Handler(ITEM_STRUCT, handleSave));     // 1.74 - `::core::ptr::Unique`
-            H::add("CStr", Handler(ITEM_STRUCT, handleSave));           // 1.74 - `::core::ffi::CStr` - Why? (miri?)
-            H::add("String", Handler(ITEM_STRUCT, handleSave));         // 1.74 - `::alloc::string::String` - Why? (miri?)
+            add("transmute_opts", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `Assume` struct
+            add("ptr_unique", Handler(ITEM_STRUCT, handleSave));     // 1.74 - `::core::ptr::Unique`
+            add("CStr", Handler(ITEM_STRUCT, handleSave));           // 1.74 - `::core::ffi::CStr` - Why? (miri?)
+            add("String", Handler(ITEM_STRUCT, handleSave));         // 1.74 - `::alloc::string::String` - Why? (miri?)
 
-            H::add("from_yeet", Handler(ITEM_FN, handleSave));                            // 1.74 - `::core::try_trait::from_yeet`
-            H::add("panic_nounwind", Handler(ITEM_FN, handleSave));                       // 1.74 - `::core::panicking::panic`
-            H::add("panic_display", Handler(ITEM_FN, handleSave));                        // 1.74 - `::core::panicking::panic_display`
-            H::add("panic_bounds_check", Handler(ITEM_FN, handleSave));                   // 1.74 - `::core::panicking::panic_bounds_check`
-            H::add("panic_misaligned_pointer_dereference", Handler(ITEM_FN, handleSave)); // 1.74 - `::core::panicking::panic_misaligned_pointer_dereference`
-            H::add("panic_cannot_unwind", Handler(ITEM_FN, handleSave));                  // 1.74 - `::core::panicking::panic_cannot_unwind`
-            H::add("panic_in_cleanup", Handler(ITEM_FN, handleSave));                     // 1.74 - `::core::panicking::panic_in_cleanup `
-            H::add("const_panic_fmt", Handler(ITEM_FN, handleSave));                      // 1.74 - `::core::panicking::const_panic_fmt`
+            add("from_yeet", Handler(ITEM_FN, handleSave));                            // 1.74 - `::core::try_trait::from_yeet`
+            add("panic_nounwind", Handler(ITEM_FN, handleSave));                       // 1.74 - `::core::panicking::panic`
+            add("panic_display", Handler(ITEM_FN, handleSave));                        // 1.74 - `::core::panicking::panic_display`
+            add("panic_bounds_check", Handler(ITEM_FN, handleSave));                   // 1.74 - `::core::panicking::panic_bounds_check`
+            add("panic_misaligned_pointer_dereference", Handler(ITEM_FN, handleSave)); // 1.74 - `::core::panicking::panic_misaligned_pointer_dereference`
+            add("panic_cannot_unwind", Handler(ITEM_FN, handleSave));                  // 1.74 - `::core::panicking::panic_cannot_unwind`
+            add("panic_in_cleanup", Handler(ITEM_FN, handleSave));                     // 1.74 - `::core::panicking::panic_in_cleanup `
+            add("const_panic_fmt", Handler(ITEM_FN, handleSave));                      // 1.74 - `::core::panicking::const_panic_fmt`
 
             // Enums
-            H::add("c_void", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::ffi::c_void` - Why? (miri?)
-            H::add("Option", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::option::Option`
+            add("c_void", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::ffi::c_void` - Why? (miri?)
+            add("Option", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::option::Option`
 
             // - Formatting
-            H::add("format_arguments", Handler(ITEM_STRUCT, handleSave));   // 1.74 - `::core::fmt::Arguments`
-            H::add("format_placeholder", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::fmt::rt::Placeholder`
-            H::add("format_argument", Handler(ITEM_STRUCT, handleSave));    // 1.74 - `::core::fmt::rt::Argument`
-            H::add("format_unsafe_arg", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::fmt::rt::UnsafeArg`
-            H::add("format_alignment", Handler(ITEM_ENUM, handleSave));     // 1.74 - `::core::fmt::rt::Alignment`
-            H::add("format_count", Handler(ITEM_ENUM, handleSave));         // 1.74 - `::core::fmt::rt::Count`
+            add("format_arguments", Handler(ITEM_STRUCT, handleSave));   // 1.74 - `::core::fmt::Arguments`
+            add("format_placeholder", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::fmt::rt::Placeholder`
+            add("format_argument", Handler(ITEM_STRUCT, handleSave));    // 1.74 - `::core::fmt::rt::Argument`
+            add("format_unsafe_arg", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::fmt::rt::UnsafeArg`
+            add("format_alignment", Handler(ITEM_ENUM, handleSave));     // 1.74 - `::core::fmt::rt::Alignment`
+            add("format_count", Handler(ITEM_ENUM, handleSave));         // 1.74 - `::core::fmt::rt::Count`
 
             // - Futures
-            H::add("ResumeTy", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::future::ResumeTy`
-            H::add("Poll", Handler(ITEM_ENUM, handleSave));       // 1.74 - `::core::task::poll::Poll`
-            H::add("Context", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::task::wake::Context`
+            add("ResumeTy", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::future::ResumeTy`
+            add("Poll", Handler(ITEM_ENUM, handleSave));       // 1.74 - `::core::task::poll::Poll`
+            add("Context", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::task::wake::Context`
         }
         {
-            H::add("contract_build_check_ensures", Handler(ITEM_FN, handleSave)); // 1.90 - `::core::contracts::build_check_ensures`
-            H::add("contract_check_requires", Handler(ITEM_FN, handleSave));      // 1.90 - `::core::intrinsics::contract_check_requires`
-            H::add("contract_check_ensures", Handler(ITEM_FN, handleSave));       // 1.90 - `::core::intrinsics::contract_check_ensures`
-            H::add("use_cloned", Handler(ITEM_TRAIT, handleSave));                // 1.90 - `::core::clone::use_cloned` - for the `.use` syntax
+            add("contract_build_check_ensures", Handler(ITEM_FN, handleSave)); // 1.90 - `::core::contracts::build_check_ensures`
+            add("contract_check_requires", Handler(ITEM_FN, handleSave));      // 1.90 - `::core::intrinsics::contract_check_requires`
+            add("contract_check_ensures", Handler(ITEM_FN, handleSave));       // 1.90 - `::core::intrinsics::contract_check_ensures`
+            add("use_cloned", Handler(ITEM_TRAIT, handleSave));                // 1.90 - `::core::clone::use_cloned` - for the `.use` syntax
 
-            H::add("Ordering", Handler(ITEM_ENUM, handleSave)); // comparison ordering
+            add("Ordering", Handler(ITEM_ENUM, handleSave)); // comparison ordering
 
-            H::add("meta_sized", Handler(ITEM_TRAIT, handleSave));                  // ::core::marker::MetaSized
-            H::add("pointee_sized", Handler(ITEM_TRAIT, handleSave));               // ::core::marker::PointeeSized
-            H::add("bikeshed_guaranteed_no_drop", Handler(ITEM_TRAIT, handleSave)); // ::core::marker::BikeshedGuaranteedNoDrop
-            H::add("unsafe_unpin", Handler(ITEM_TRAIT, handleSave));                // ::core::marker::UnsafeUnpin
-            H::add("unsized_const_param_ty", Handler(ITEM_TRAIT, handleSave));      // ::core::marker::UnsizedConstParamTy
-            H::add("coerce_pointee_validated", Handler(ITEM_TRAIT, handleSave));    // ::core::marker::CoercePointeeValidated
+            add("meta_sized", Handler(ITEM_TRAIT, handleSave));                  // ::core::marker::MetaSized
+            add("pointee_sized", Handler(ITEM_TRAIT, handleSave));               // ::core::marker::PointeeSized
+            add("bikeshed_guaranteed_no_drop", Handler(ITEM_TRAIT, handleSave)); // ::core::marker::BikeshedGuaranteedNoDrop
+            add("unsafe_unpin", Handler(ITEM_TRAIT, handleSave));                // ::core::marker::UnsafeUnpin
+            add("unsized_const_param_ty", Handler(ITEM_TRAIT, handleSave));      // ::core::marker::UnsizedConstParamTy
+            add("coerce_pointee_validated", Handler(ITEM_TRAIT, handleSave));    // ::core::marker::CoercePointeeValidated
             // `-Zexperimental-default-bounds` names auto traits that every type
             // is bounded by. Nothing here adds those bounds; the names are known
             // so that a crate declaring them still compiles.
-            H::add("default_trait1", Handler(ITEM_TRAIT, handleSave));
-            H::add("default_trait2", Handler(ITEM_TRAIT, handleSave));
-            H::add("default_trait3", Handler(ITEM_TRAIT, handleSave));
-            H::add("default_trait4", Handler(ITEM_TRAIT, handleSave));
+            add("default_trait1", Handler(ITEM_TRAIT, handleSave));
+            add("default_trait2", Handler(ITEM_TRAIT, handleSave));
+            add("default_trait3", Handler(ITEM_TRAIT, handleSave));
+            add("default_trait4", Handler(ITEM_TRAIT, handleSave));
 
-            H::add("async_fn", Handler(ITEM_TRAIT, handleSave));
-            H::add("async_fn_mut", Handler(ITEM_TRAIT, handleSave));
-            H::add("async_fn_once", Handler(ITEM_TRAIT, handleSave));
+            add("async_fn", Handler(ITEM_TRAIT, handleSave));
+            add("async_fn_mut", Handler(ITEM_TRAIT, handleSave));
+            add("async_fn_once", Handler(ITEM_TRAIT, handleSave));
 
-            H::add("async_fn_kind_helper", Handler(ITEM_TRAIT, handleSave)); // ::core::ops::async_function::internal_implementation_detail::AsyncFnKindHelper
-            H::add("coroutine_state", Handler(ITEM_ENUM, handleSave));       // ::core::ops::coroutine::CoroutineState
-            H::add("coroutine", Handler(ITEM_TRAIT, handleSave));            // ::core::ops::coroutine::Coroutine
-            H::add("deref_pure", Handler(ITEM_TRAIT, handleSave));           // ::core::ops::deref::DerefPure
-            H::add("legacy_receiver", Handler(ITEM_TRAIT, handleSave));      // ::core::ops::deref::LegacyReceiver
+            add("async_fn_kind_helper", Handler(ITEM_TRAIT, handleSave)); // ::core::ops::async_function::internal_implementation_detail::AsyncFnKindHelper
+            add("coroutine_state", Handler(ITEM_ENUM, handleSave));       // ::core::ops::coroutine::CoroutineState
+            add("coroutine", Handler(ITEM_TRAIT, handleSave));            // ::core::ops::coroutine::Coroutine
+            add("deref_pure", Handler(ITEM_TRAIT, handleSave));           // ::core::ops::deref::DerefPure
+            add("legacy_receiver", Handler(ITEM_TRAIT, handleSave));      // ::core::ops::deref::LegacyReceiver
 
-            H::add("type_id", Handler(ITEM_STRUCT, handleSave)); // ::core::any::TypeId
+            add("type_id", Handler(ITEM_STRUCT, handleSave)); // ::core::any::TypeId
 
-            H::add("async_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::async_iter::async_iter::AsyncIterator
-            H::add("fused_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::iter::traits::marker::FusedIterator
+            add("async_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::async_iter::async_iter::AsyncIterator
+            add("fused_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::iter::traits::marker::FusedIterator
 
             // Various panic handlers
-            H::add("panic_const_add_overflow", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_sub_overflow", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_mul_overflow", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_div_overflow", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_rem_overflow", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_neg_overflow", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_shr_overflow", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_shl_overflow", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_div_by_zero", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_rem_by_zero", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_coroutine_resumed", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_async_fn_resumed", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_async_gen_fn_resumed", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_gen_fn_none", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_coroutine_resumed_panic", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_async_fn_resumed_panic", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_async_gen_fn_resumed_panic", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_gen_fn_none_panic", Handler(ITEM_FN, handleSave));
+            add("panic_const_add_overflow", Handler(ITEM_FN, handleSave));
+            add("panic_const_sub_overflow", Handler(ITEM_FN, handleSave));
+            add("panic_const_mul_overflow", Handler(ITEM_FN, handleSave));
+            add("panic_const_div_overflow", Handler(ITEM_FN, handleSave));
+            add("panic_const_rem_overflow", Handler(ITEM_FN, handleSave));
+            add("panic_const_neg_overflow", Handler(ITEM_FN, handleSave));
+            add("panic_const_shr_overflow", Handler(ITEM_FN, handleSave));
+            add("panic_const_shl_overflow", Handler(ITEM_FN, handleSave));
+            add("panic_const_div_by_zero", Handler(ITEM_FN, handleSave));
+            add("panic_const_rem_by_zero", Handler(ITEM_FN, handleSave));
+            add("panic_const_coroutine_resumed", Handler(ITEM_FN, handleSave));
+            add("panic_const_async_fn_resumed", Handler(ITEM_FN, handleSave));
+            add("panic_const_async_gen_fn_resumed", Handler(ITEM_FN, handleSave));
+            add("panic_const_gen_fn_none", Handler(ITEM_FN, handleSave));
+            add("panic_const_coroutine_resumed_panic", Handler(ITEM_FN, handleSave));
+            add("panic_const_async_fn_resumed_panic", Handler(ITEM_FN, handleSave));
+            add("panic_const_async_gen_fn_resumed_panic", Handler(ITEM_FN, handleSave));
+            add("panic_const_gen_fn_none_panic", Handler(ITEM_FN, handleSave));
 
-            H::add("panic_const_coroutine_resumed_drop", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_async_fn_resumed_drop", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_async_gen_fn_resumed_drop", Handler(ITEM_FN, handleSave));
-            H::add("panic_const_gen_fn_none_drop", Handler(ITEM_FN, handleSave));
+            add("panic_const_coroutine_resumed_drop", Handler(ITEM_FN, handleSave));
+            add("panic_const_async_fn_resumed_drop", Handler(ITEM_FN, handleSave));
+            add("panic_const_async_gen_fn_resumed_drop", Handler(ITEM_FN, handleSave));
+            add("panic_const_gen_fn_none_drop", Handler(ITEM_FN, handleSave));
 
-            H::add("panic_null_pointer_dereference", Handler(ITEM_FN, handleSave));
-            H::add("panic_invalid_enum_construction", Handler(ITEM_FN, handleSave));
+            add("panic_null_pointer_dereference", Handler(ITEM_FN, handleSave));
+            add("panic_invalid_enum_construction", Handler(ITEM_FN, handleSave));
 
-            H::add("unsafe_pinned", Handler(ITEM_STRUCT, handleSave)); // ::core::pin::unsafe_pinned::UnsafePinned
+            add("unsafe_pinned", Handler(ITEM_STRUCT, handleSave)); // ::core::pin::unsafe_pinned::UnsafePinned
 
-            H::add("RangeCopy", Handler(ITEM_STRUCT, handleSave));          // ::core::range::Range
-            H::add("RangeInclusiveCopy", Handler(ITEM_STRUCT, handleSave)); // ::core::range::RangeInclusive
-            H::add("RangeFromCopy", Handler(ITEM_STRUCT, handleSave));      // ::core::range::RangeFrom
+            add("RangeCopy", Handler(ITEM_STRUCT, handleSave));          // ::core::range::Range
+            add("RangeInclusiveCopy", Handler(ITEM_STRUCT, handleSave)); // ::core::range::RangeInclusive
+            add("RangeFromCopy", Handler(ITEM_STRUCT, handleSave));      // ::core::range::RangeFrom
 
-            H::add("async_drop", Handler(ITEM_TRAIT, handleSave));       // ::core::future::async_drop::AsyncDrop
-            H::add("async_drop_in_place", Handler(ITEM_FN, handleSave)); // ::core::future::async_drop::async_drop_in_place
+            add("async_drop", Handler(ITEM_TRAIT, handleSave));       // ::core::future::async_drop::AsyncDrop
+            add("async_drop_in_place", Handler(ITEM_FN, handleSave)); // ::core::future::async_drop::async_drop_in_place
 
-            H::add("into_future", Handler(ITEM_FN, handleSave)); // ::core::future::IntoFuture::into_future
+            add("into_future", Handler(ITEM_FN, handleSave)); // ::core::future::IntoFuture::into_future
 
-            H::add("global_alloc_ty", Handler(ITEM_STRUCT, handleSave)); // ::alloc::alloc::Global
+            add("global_alloc_ty", Handler(ITEM_STRUCT, handleSave)); // ::alloc::alloc::Global
         }
-    }
+}
+
+void handleLangItem(const LangItemRegistry& registry, const Span& sp,
+    ASTCrate& crate, const ASTAbsolutePath& path, const ::std::string& name,
+    eItemType type, ASTItem& item) {
     const char* realName = nullptr; // For when lang items have their name changed
-    auto it = gHandlers.find(name.c_str());
-    if (it != gHandlers.end()) {
-        if (type != it->second.type) {
-            ERROR(sp, E0000, "Language item '" << name << "' " << path << " - on incorrect item type " << type << " != " << it->second.type);
+    if (const auto* handler = registry.find(name.c_str())) {
+        if (type != handler->type) {
+            ERROR(sp, E0000, "Language item '" << name << "' " << path << " - on incorrect item type " << type << " != " << handler->type);
         }
-        it->second.cb(sp, crate, name, path);
+        handler->cb(sp, crate, name, path);
         return;
     }
 
@@ -3809,7 +3816,14 @@ void handleLangItem(const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path
 }
 
 class DecoratorLangItem: public ExpandDecorator {
+    const LangItemRegistry& registry;
+
 public:
+    explicit DecoratorLangItem(const LangItemRegistry& registry)
+        : registry(registry)
+    {
+    }
+
     AttrStage stage() const override {
         return AttrStage::Post;
     }
@@ -3874,34 +3888,34 @@ default:
             case ASTItem::TAG_Function: {
                 auto& e = i.as_Function();
                 if (e.code().isValid()) {
-                    handleLangItem(sp, crate, path, name, ITEM_FN, i);
+                    handleLangItem(registry, sp, crate, path, name, ITEM_FN, i);
                 } else {
-                    handleLangItem(sp, crate, path, name, ITEM_EXTERN_FN, i);
+                    handleLangItem(registry, sp, crate, path, name, ITEM_EXTERN_FN, i);
                 }
                 break;
             }
             case ASTItem::TAG_Type: {
-                handleLangItem(sp, crate, path, name, ITEM_TYPE_ALIAS, i);
+                handleLangItem(registry, sp, crate, path, name, ITEM_TYPE_ALIAS, i);
                 break;
             }
             case ASTItem::TAG_Static: {
-                handleLangItem(sp, crate, path, name, ITEM_STATIC, i);
+                handleLangItem(registry, sp, crate, path, name, ITEM_STATIC, i);
                 break;
             }
             case ASTItem::TAG_Struct: {
-                handleLangItem(sp, crate, path, name, ITEM_STRUCT, i);
+                handleLangItem(registry, sp, crate, path, name, ITEM_STRUCT, i);
                 break;
             }
             case ASTItem::TAG_Enum: {
-                handleLangItem(sp, crate, path, name, ITEM_ENUM, i);
+                handleLangItem(registry, sp, crate, path, name, ITEM_ENUM, i);
                 break;
             }
             case ASTItem::TAG_Union: {
-                handleLangItem(sp, crate, path, name, ITEM_UNION, i);
+                handleLangItem(registry, sp, crate, path, name, ITEM_UNION, i);
                 break;
             }
             case ASTItem::TAG_Trait: {
-                handleLangItem(sp, crate, path, name, ITEM_TRAIT, i);
+                handleLangItem(registry, sp, crate, path, name, ITEM_TRAIT, i);
                 break;
             }
         }
@@ -3911,7 +3925,7 @@ default:
         auto name = mi.parseEqualsString(wb, crate, crate.rootModule_);
         if (name == "into_future") {
             ASSERT_BUG(sp, i.is_Function(), "#[lang = \"into_future\"] on non-function trait item " << path);
-            handleLangItem(sp, crate, path, name, ITEM_FN, i);
+            handleLangItem(registry, sp, crate, path, name, ITEM_FN, i);
         }
     }
 
@@ -4554,6 +4568,7 @@ class CTestHandlerIgnore: public ExpandDecorator {
 
 void RegisterBuiltinDecorators(ExpandRegistry& registry) {
     auto& derives = *registry.make<DeriveRegistry>();
+    auto& langItems = *registry.make<LangItemRegistry>(registry.objectPool());
     registry.addDecorator<CHandlerInline>("inline");
     registry.addDecorator<CHandlerCold>("cold");
     registry.addDecorator<CHandlerRustcAlign>("rustc_align");
@@ -4580,7 +4595,7 @@ void RegisterBuiltinDecorators(ExpandRegistry& registry) {
     registry.addDecorator<DecoratorDerive>("derive", derives);
     registry.addDecorator<DecoratorDeriveConst>("derive_const", derives);
     registry.addDecorator<CDocHandler>("doc");
-    registry.addDecorator<DecoratorLangItem>("lang");
+    registry.addDecorator<DecoratorLangItem>("lang", langItems);
     registry.addDecorator<DecoratorMain>("main");
     registry.addDecorator<DecoratorStart>("start");
     registry.addDecorator<DecoratorPanicImplementation>("panic_implementation");
