@@ -70,7 +70,6 @@ public:
         crate.procMacros.push_back(ASTProcMacroDef{ASTProcMacroTy::Derive, RcString::newInterned(FMT(traitName)), path, mv$(attributes)});
     }
 };
-STATIC_DECORATOR("proc_macro_derive", DecoratorProcMacroDerive)
 
 class DecoratorProcMacroAttribute: public ExpandDecorator {
 public:
@@ -90,7 +89,6 @@ public:
         crate.procMacros.push_back(ASTProcMacroDef{ASTProcMacroTy::Attribute, path.nodes.back(), path, {}});
     }
 };
-STATIC_DECORATOR("proc_macro_attribute", DecoratorProcMacroAttribute)
 
 class DecoratorProcMacro: public ExpandDecorator {
 public:
@@ -110,7 +108,12 @@ public:
         crate.procMacros.push_back(ASTProcMacroDef{ASTProcMacroTy::Function, path.nodes.back(), path, {}});
     }
 };
-STATIC_DECORATOR("proc_macro", DecoratorProcMacro)
+
+void RegisterProcMacroBuiltins(ExpandRegistry& registry) {
+    registry.addDecorator<DecoratorProcMacroDerive>("proc_macro_derive");
+    registry.addDecorator<DecoratorProcMacroAttribute>("proc_macro_attribute");
+    registry.addDecorator<DecoratorProcMacro>("proc_macro");
+}
 
 void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     auto pmCrateName = RcString::newInterned("proc_macro");

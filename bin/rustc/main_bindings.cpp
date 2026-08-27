@@ -442,7 +442,7 @@ static int compile(int argc, char* argv[]) {
         CfgSetFlag(*wb.settings, "test");
     }
 
-    ExpandInit();
+    ExpandInit(*wb.expandRegistry);
 
     // The AST gets its own pool so parse/expand-lifetime data can be dropped
     // wholesale right after HIR lowering (the one place a pool dies early).

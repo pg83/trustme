@@ -15,16 +15,9 @@
 #include "expand_proc_macro.h"
 #include "macro_rules_macro_rules.h"
 
-#include <map>
-
-
-DecoratorDef* gDecoratorsList = nullptr;
-MacroDef* gMacrosList = nullptr;
-::std::map<RcString, ::std::unique_ptr<ExpandDecorator>> gDecorators;
-::std::map<RcString, ::std::unique_ptr<ExpandProcMacro>> gMacros;
-// HACK: Used for expanding proc macros, which need to re-parse without access to the current module
-// - Parsing needs module for 1) anon modules, and 2) expanding `#[path]`
-ASTModule* gCurrentMod = nullptr;
+void RegisterSynextBuiltins(ExpandRegistry& registry);
+void RegisterCfgBuiltins(ExpandRegistry& registry);
+void RegisterProcMacroBuiltins(ExpandRegistry& registry);
 
 enum class ExpandMode {
     FirstPass,
@@ -37,14 +30,17 @@ struct ExpandState {
     ASTCrate& crate;
     LList<const ASTModule*> modstack;
     ExpandMode mode;
+    ASTModule* currentMod;
     mutable bool change;
     mutable bool hasMissing;
 
-    ExpandState(const WireBoard& wb, ASTCrate& crate, LList<const ASTModule*> modstack, ExpandMode mode)
+    ExpandState(const WireBoard& wb, ASTCrate& crate, LList<const ASTModule*> modstack,
+        ExpandMode mode, ASTModule* currentMod)
         : wb(wb)
         , crate(crate)
         , modstack(modstack)
         , mode(mode)
+        , currentMod(currentMod)
         , change(false)
         , hasMissing(false)
     {
@@ -84,56 +80,50 @@ void ExpandExpr(const ExpandState& es, ::std::shared_ptr<ASTExprNode>& node);
 void ExpandPath(const ExpandState& es, ASTModule& mod, ASTPath& p);
 void ExpandPathParams(const ExpandState& es, ASTModule& mod, ASTPathParams& params);
 
-void RegisterSynextDecorator(::std::string name, ::std::unique_ptr<ExpandDecorator> handler) {
-    gDecorators.insert(::std::make_pair(RcString::newInterned(name), mv$(handler)));
+void ExpandRegistry::addDecorator(const char* name, ExpandDecorator* handler) {
+    decorators = pool->make<DecoratorEntry>(DecoratorEntry{name, handler, decorators});
 }
 
-void RegisterSynextMacro(::std::string name, ::std::unique_ptr<ExpandProcMacro> handler) {
-    gMacros.insert(::std::make_pair(RcString::newInterned(name), mv$(handler)));
+void ExpandRegistry::addMacro(const char* name, ExpandProcMacro* handler) {
+    macros = pool->make<MacroEntry>(MacroEntry{name, handler, macros});
 }
 
-void RegisterSynextDecoratorStatic(DecoratorDef* def) {
-    def->prev = gDecoratorsList;
-    gDecoratorsList = def;
-}
-
-void RegisterSynextMacroStatic(MacroDef* def) {
-    def->prev = gMacrosList;
-    gMacrosList = def;
-}
-
-void ExpandInit() {
-    // TODO: Initialise all macros here.
-    void ExpandInitAssert();
-    ExpandInitAssert();
-    void ExpandInitStdPrelude();
-    ExpandInitStdPrelude();
-    void ExpandInitPanic();
-    ExpandInitPanic();
-
-    // Fill macro/decorator map from init list
-    while (gDecoratorsList) {
-        gDecorators.insert(::std::make_pair(RcString::newInterned(gDecoratorsList->name), mv$(gDecoratorsList->def)));
-        gDecoratorsList = gDecoratorsList->prev;
+ExpandProcMacro* ExpandRegistry::findMacro(const RcString& name) const {
+    for (auto* entry = macros; entry; entry = entry->next) {
+        if (name == entry->name) {
+            return entry->handler;
+        }
     }
-    while (gMacrosList) {
-        gMacros.insert(::std::make_pair(RcString::newInterned(gMacrosList->name), mv$(gMacrosList->def)));
-        gMacrosList = gMacrosList->prev;
+    return nullptr;
+}
+
+ExpandDecorator* ExpandRegistry::findDecorator(const RcString& name) const {
+    for (auto* entry = decorators; entry; entry = entry->next) {
+        if (name == entry->name) {
+            return entry->handler;
+        }
     }
+    return nullptr;
+}
+
+void ExpandInit(ExpandRegistry& registry) {
+    RegisterBuiltinDecorators(registry);
+    RegisterBuiltinMacros(registry);
+    RegisterSynextBuiltins(registry);
+    RegisterCfgBuiltins(registry);
+    RegisterProcMacroBuiltins(registry);
 }
 
 void ExpandDecorator::unexpected(const Span& sp, const ASTAttribute& mi, const char* locStr) const {
     WARNING(sp, W0000, "Unexpected attribute " << mi.name() << " on " << locStr);
 }
 
-ExpandProcMacro* ExpandFindProcMacro(const RcString& name) {
-    auto it = gMacros.find(name);
-    return it != gMacros.end() ? it->second.get() : nullptr;
+ExpandProcMacro* ExpandFindProcMacro(const WireBoard& wb, const RcString& name) {
+    return wb.expandRegistry->findMacro(name);
 }
 
-ExpandDecorator* ExpandFindDecorator(const RcString& name) {
-    auto it = gDecorators.find(name);
-    return it != gDecorators.end() ? it->second.get() : nullptr;
+ExpandDecorator* ExpandFindDecorator(const WireBoard& wb, const RcString& name) {
+    return wb.expandRegistry->findDecorator(name);
 }
 
 void ParseModRootItemsInto(ASTModule& mod, size_t idx, TokenStream& lex) {
@@ -184,34 +174,26 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
         // Annotate the attribute as having been handled
         a.markInert();
     };
-    for (auto& d : gDecorators) {
-        if (a.name() == d.first
-            // HACK: Handle `::core::prelude::v1::<FOO>`
-            || (a.name().elems.size() == 4 && a.name().elems[0] == "core" && a.name().elems[1] == "prelude" && a.name().elems[2] == "v1" && a.name().elems[3] == d.first)) {
+    const RcString* builtinName = nullptr;
+    if (a.name().elems.size() == 1) {
+        builtinName = &a.name().elems[0];
+    } else if (a.name().elems.size() == 4 && a.name().elems[0] == "core"
+        && a.name().elems[1] == "prelude" && a.name().elems[2] == "v1") {
+        // HACK: Handle `::core::prelude::v1::<FOO>`.
+        builtinName = &a.name().elems[3];
+    }
+    if (builtinName) {
+        if (const auto* d = ExpandFindDecorator(es.wb, *builtinName)) {
             found = true;
-            if (d.second->stage() != stage) {
-                DEBUG("#[" << d.first << "] Ignore: Wrong stage " << (int)d.second->stage() << " != " << (int)stage);
+            if (d->stage() != stage) {
+                DEBUG("#[" << *builtinName << "] Ignore: Wrong stage " << (int)d->stage() << " != " << (int)stage);
+            } else if (!d->runDuringIter()
+                && ((es.mode != ExpandMode::Final && stage != AttrStage::Pre)
+                    || (es.mode == ExpandMode::Final && stage != AttrStage::Post))) {
+                DEBUG("#[" << *builtinName << "] m=" << (int)es.mode);
             } else {
-                if (!d.second->runDuringIter()) {
-                    switch (es.mode) {
-                        case ExpandMode::FirstPass:
-                        case ExpandMode::Iterate:
-                            if (stage != AttrStage::Pre) {
-                                DEBUG("#[" << d.first << "] m=" << (int)es.mode);
-                                continue;
-                            }
-                            break;
-                        case ExpandMode::Final:
-                            if (stage != AttrStage::Post) {
-                                DEBUG("#[" << d.first << "] m=" << (int)es.mode);
-                                continue;
-                            }
-                            break;
-                    }
-                }
-                DEBUG("#[" << d.first << "]");
-                f.run(sp, *d.second, a);
-                // Annotate the attribute as having been handled
+                DEBUG("#[" << *builtinName << "]");
+                f.run(sp, *d, a);
                 a.markInert();
             }
         }
@@ -243,7 +225,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
                             target = ent.path.nodes().back().name();
                         }
                         if (target != RcString()) {
-                            if (const auto* d = ExpandFindDecorator(target)) {
+                            if (const auto* d = ExpandFindDecorator(es.wb, target)) {
                                 found = true;
                                 runDecorator(target, *d);
                             }
@@ -307,8 +289,8 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
                         auto lex = ProcMacroInvoke(sp, wb, crate, this->macPath, attr.data(), attrs, vis, name, i);
                         if (lex) {
                             i = ASTItem::make_None({});
-                            assert(gCurrentMod);
-                            lex->parseState().module = gCurrentMod;
+                            assert(currentMod);
+                            lex->parseState().module = currentMod;
                             while (lex->lookahead(0) != TOK_EOF) {
                                 ParseImplItem(*lex, impl);
                             }
@@ -317,10 +299,12 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
                         }
                     }
                 }
+                ASTModule* currentMod = nullptr;
             } d;
 
             // Only run proc macros on first pass (before inner)
             if (stage == AttrStage::Pre) {
+                d.currentMod = es.currentMod;
                 d.macPath.push_back(procMac->path.crateName());
                 d.macPath.insert(d.macPath.end(), procMac->path.components().begin(), procMac->path.components().end());
                 f.run(sp, d, a);
@@ -412,23 +396,19 @@ void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage
 }
 
 void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ASTAbsolutePath& path, ASTModule& mod, ASTTrait& trait, ASTItem& item) {
-    gCurrentMod = &mod;
     ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
         if (!item.is_None()) {
             d.handle(sp, a, es.wb, es.crate, path, trait, getAttrsAfter(attrs, a), item);
         }
     }));
-    gCurrentMod = nullptr;
 }
 
 void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, ASTModule& mod, ASTImpl& impl, const ASTVisibility& vis, const RcString& name, ASTItem& item) {
-    gCurrentMod = &mod;
     ExpandAttrs(es, attrs, stage, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) {
         if (!item.is_None()) {
             d.handle(sp, a, es.wb, es.crate, impl, name, getAttrsAfter(attrs, a), vis, item);
         }
     }));
-    gCurrentMod = nullptr;
 }
 
 bool ExpandAttrsCfgOnly(const ExpandState& es, ASTAttributeList& attrs) {
@@ -504,7 +484,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
             }
         }
         // Search compiler-provided proc macros (after locals)
-        if (auto* pm = ExpandFindProcMacro(name)) {
+        if (auto* pm = ExpandFindProcMacro(wb, name)) {
             DEBUG("Found builtin");
             return MacroRef(pm);
         }
@@ -517,7 +497,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
     // HACK: If the crate name is empty, look up builtins
     if (path.isAbsolute() && path.cls.as_Absolute().crate == "" && path.nodes().size() == 1) {
         const auto& name = path.nodes()[0].name();
-        if (auto* pm = ExpandFindProcMacro(name)) {
+        if (auto* pm = ExpandFindProcMacro(wb, name)) {
             return MacroRef(pm);
         }
     }
@@ -555,7 +535,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
     // tells the two apart.
     MacroRef mac;
     if (inputIdent != "" && path.isTrivial() && path.asTrivial() == "macro_rules") {
-        if (auto* pm = ExpandFindProcMacro(path.asTrivial())) {
+        if (auto* pm = ExpandFindProcMacro(wb, path.asTrivial())) {
             mac = MacroRef(pm);
         }
     }
@@ -2283,7 +2263,9 @@ void ExpandGenericParams(const ExpandState& es, ASTModule& mod, ASTGenericParams
 }
 
 void ExpandBareExpr(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, ASTExprNodeP& node) {
-    ExpandState es{wb, const_cast<ASTCrate&>(crate), LList<const ASTModule*>(nullptr, &mod), ExpandMode::FirstPass};
+    ExpandState es{wb, const_cast<ASTCrate&>(crate),
+        LList<const ASTModule*>(nullptr, &mod), ExpandMode::FirstPass,
+        const_cast<ASTModule*>(&mod)};
     ExpandExpr(es, node);
     es.mode = ExpandMode::Final;
 }
@@ -2648,7 +2630,7 @@ default:
         if (i.data.is_Module()) {
             auto& e = i.data.as_Module();
             LList<const ASTModule*> subModstack(&es.modstack, &e);
-            ExpandState esInner(es.wb, es.crate, subModstack, es.mode);
+            ExpandState esInner(es.wb, es.crate, subModstack, es.mode, &e);
             ExpandMod(esInner, path, e, 0);
             ExpandAttrs(es, attrs, AttrStage::Post, path, mod, idx, vis, i.data);
             es.change |= esInner.change;
@@ -3162,7 +3144,7 @@ void Expand_Mod_Early(const WireBoard& wb, ASTCrate& crate, ASTModule& mod, std:
 
                 TRACE_FUNCTION_F("Macro invoke " << miOwned.path());
 
-                ExpandState es{wb, crate, {}, ExpandMode::Iterate};
+                ExpandState es{wb, crate, {}, ExpandMode::Iterate, &mod};
                 auto ttl = ExpandMacro(es, mod, miOwned);
                 ASSERT_BUG(miOwned.span(), ttl, "BUG: macro_rules not expanded");
                 assert(miOwned.path().isValid());
@@ -3182,14 +3164,15 @@ void Expand_Mod_Early(const WireBoard& wb, ASTCrate& crate, ASTModule& mod, std:
 }
 
 void Expand(const WireBoard& wb, ASTCrate& crate) {
-    for (const auto& e : gDecorators) {
-        DEBUG("Decorator: " << e.first);
-    }
-    for (const auto& e : gMacros) {
-        DEBUG("Macro: " << e.first);
-    }
+    wb.expandRegistry->eachDecorator([](const char* name, const ExpandDecorator&) {
+        DEBUG("Decorator: " << name);
+    });
+    wb.expandRegistry->eachMacro([](const char* name, const ExpandProcMacro&) {
+        DEBUG("Macro: " << name);
+    });
 
-    ExpandState es{wb, crate, LList<const ASTModule*>(nullptr, &crate.rootModule_), ExpandMode::FirstPass};
+    ExpandState es{wb, crate, LList<const ASTModule*>(nullptr, &crate.rootModule_),
+        ExpandMode::FirstPass, &crate.rootModule_};
 
     // 1. Crate attributes
     ExpandAttrsCfgAttr(*es.wb.settings, crate.attrs);
@@ -3246,15 +3229,7 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
         ExpandAttrs(es, i.attrs, AttrStage::Post, ASTAbsolutePath(), crate.rootModule_, 0, i.vis, i.data);
     }
 
-    // 2. Module attributes
-    for (auto& a : crate.attrs.items) {
-        for (auto& d : gDecorators) {
-            if (a.name() == d.first && d.second->stage() == AttrStage::Pre) {
-            }
-        }
-    }
-
-    // 3. Module tree
+    // 2. Module tree
     // Loop until no more expansions happen
     // - Combine this with allowing macros to fail to expand, to be caught with a final pass
     ExpandMod(es, ASTAbsolutePath(), crate.rootModule_);

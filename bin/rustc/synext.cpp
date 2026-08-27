@@ -6,6 +6,7 @@
 #include "hir_hir.h" // for HIR::Crate
 #include "ast_expr.h"
 #include "ast_crate.h"
+#include "expand_common.h"
 #include "parse_common.h"
 #include "parse_ttstream.h"
 #include "macro_rules_macro_rules.h"
@@ -372,8 +373,10 @@ class CBuiltinMacroHandler: public ExpandDecorator {
     }
 };
 
-STATIC_MACRO("macro_rules", CMacroRulesExpander);
-STATIC_DECORATOR("macro_use", CMacroUseHandler);
-STATIC_DECORATOR("macro_export", CMacroExportHandler);
-STATIC_DECORATOR("macro_reexport", CMacroReexportHandler);
-STATIC_DECORATOR("rustc_builtin_macro", CBuiltinMacroHandler);
+void RegisterSynextBuiltins(ExpandRegistry& registry) {
+    registry.addMacro<CMacroRulesExpander>("macro_rules");
+    registry.addDecorator<CMacroUseHandler>("macro_use");
+    registry.addDecorator<CMacroExportHandler>("macro_export");
+    registry.addDecorator<CMacroReexportHandler>("macro_reexport");
+    registry.addDecorator<CBuiltinMacroHandler>("rustc_builtin_macro");
+}

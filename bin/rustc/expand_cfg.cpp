@@ -584,6 +584,8 @@ class CCfgHandler: public ExpandDecorator {
     }
 };
 
-STATIC_MACRO("cfg", CCfgExpander);
-STATIC_MACRO("cfg_select", CCfgSelectExpander);
-STATIC_DECORATOR("cfg", CCfgHandler);
+void RegisterCfgBuiltins(ExpandRegistry& registry) {
+    registry.addMacro<CCfgExpander>("cfg");
+    registry.addMacro<CCfgSelectExpander>("cfg_select");
+    registry.addDecorator<CCfgHandler>("cfg");
+}

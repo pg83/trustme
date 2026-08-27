@@ -9,6 +9,7 @@ class HIRCrate;
 class HIRTypeInterner;
 class HIRInherentCache;
 class HygieneContext;
+class ExpandRegistry;
 class MacroDefinitionContext;
 class MacroLogContext;
 class LangItems;
@@ -36,6 +37,7 @@ struct WireBoard {
     HIRTypeInterner* types = nullptr;
     // Monotonic lexical/macro scope identity for this compiler invocation.
     HygieneContext* hygiene = nullptr;
+    ExpandRegistry* expandRegistry = nullptr;
     MacroDefinitionContext* macroDefinitions = nullptr;
     MacroLogContext* macroLog = nullptr;
 

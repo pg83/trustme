@@ -590,7 +590,7 @@ default:
                         case ResolveNamespace::Macro:
                             if (const auto* mac = i->data.opt_Macro()) {
                                 if (i->attrs.get("rustc_builtin_macro")) {
-                                    auto* rv = ExpandFindProcMacro(name);
+                                    auto* rv = ExpandFindProcMacro(crate.wb, name);
                                     if (rv) {
                                         return ResolveItemRefMacro(rv);
                                     }
@@ -623,7 +623,7 @@ default:
                                         outPath->crate = pe.crate;
                                         outPath->nodes = makeVec1<RcString>(RcString(pe.nodes.front().name()));
                                     }
-                                    return ResolveItemRefMacro(ExpandFindProcMacro(pe.nodes.front().name()));
+                                    return ResolveItemRefMacro(ExpandFindProcMacro(crate.wb, pe.nodes.front().name()));
                                 }
                             }
                             if (e.path.cls.is_Absolute() && e.path.cls.as_Absolute().nodes.empty()) {
@@ -850,9 +850,9 @@ default:
                             }
 
                             struct H2 {
-                                static ResolveItemRefMacro getBuiltin(const Span& sp, const RcString& name) {
+                                static ResolveItemRefMacro getBuiltin(const WireBoard& wb, const Span& sp, const RcString& name) {
                                     // TODO: What if it's a derive? Or it's an attribute
-                                    if (auto* pm = ExpandFindProcMacro(name)) {
+                                    if (auto* pm = ExpandFindProcMacro(wb, name)) {
                                         return ResolveItemRefMacro(pm);
                                     }
                                     //    TODO(sp, "Resolve HIR import to decorator");
@@ -864,7 +864,7 @@ default:
                             };
 
                             if (p->path.crateName() == CRATE_BUILTINS) {
-                                auto v = H2::getBuiltin(sp, p->path.components().back());
+                                auto v = H2::getBuiltin(crate.wb, sp, p->path.components().back());
                                 if (v.is_None()) {
                                     break;
                                 }
@@ -873,7 +873,7 @@ default:
                             mi = &H::getCrate(sp, crate, p->path).getMacroitemByPath(sp, p->path, true);
                             if (const auto* p = mi->opt_Import()) {
                                 if (p->path.crateName() == CRATE_BUILTINS) {
-                                    auto v = H2::getBuiltin(sp, p->path.components().back());
+                                    auto v = H2::getBuiltin(crate.wb, sp, p->path.components().back());
                                     if (v.is_None()) {
                                         break;
                                     }

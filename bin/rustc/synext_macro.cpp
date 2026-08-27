@@ -10,6 +10,7 @@
 #include "ast_crate.h"
 #include "parse_lex.h" // For Codepoint
 #include "expand_cfg.h"
+#include "expand_common.h"
 #include "wire_board.h"
 #include "parse_common.h"
 #include "trans_target.h"
@@ -65,7 +66,6 @@ public:
         return makeMacroExpansionPlaceholder(sp);
     }
 };
-STATIC_MACRO("trace_macros", CTraceMacrosExpander);
 
 class CLogSyntaxExpander: public ExpandProcMacro {
 public:
@@ -83,7 +83,6 @@ public:
         return makeMacroExpansionPlaceholder(sp);
     }
 };
-STATIC_MACRO("log_syntax", CLogSyntaxExpander);
 
 class CPatternTypeExpander: public ExpandProcMacro {
 public:
@@ -91,7 +90,6 @@ public:
         return box$(TTStreamO(sp, ParseState(), tt.clone()));
     }
 };
-STATIC_MACRO("pattern_type", CPatternTypeExpander);
 
 class CIterExpander: public ExpandProcMacro {
 public:
@@ -118,7 +116,6 @@ public:
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
     }
 };
-STATIC_MACRO("iter", CIterExpander);
 
 class CLlvmAsmExpander: public ExpandProcMacro {
 public:
@@ -944,10 +941,6 @@ public:
     }
 };
 
-STATIC_MACRO("llvm_asm", CLlvmAsmExpander);
-STATIC_MACRO("asm", CAsmExpander);
-STATIC_MACRO("global_asm", CGlobalAsmExpander);
-STATIC_MACRO("naked_asm", CNakedAsmExpander);
 
 class GenericAssertCaptureVisitor: public ASTNodeVisitor {
 public:
@@ -1333,17 +1326,12 @@ class CExpanderAssert: public ExpandProcMacro {
     }
 };
 
-void ExpandInitAssert() {
-    RegisterSynextMacro("assert", ::std::unique_ptr<ExpandProcMacro>(new CExpanderAssert));
-}
-
 class CExpanderCompileError: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         ERROR(sp, E0000, "compile_error! " << tt);
     }
 };
 
-STATIC_MACRO("compile_error", CExpanderCompileError);
 
 class CConcatExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
@@ -1495,9 +1483,6 @@ class CConcatIdentsExpander: public ExpandProcMacro {
     }
 };
 
-STATIC_MACRO("concat", CConcatExpander);
-STATIC_MACRO("concat_bytes", CConcatBytesExpander);
-STATIC_MACRO("concat_idents", CConcatIdentsExpander);
 
 namespace {
     // Read a string out of the input stream
@@ -1561,8 +1546,6 @@ class CExpanderOptionEnv: public ExpandProcMacro {
     }
 };
 
-STATIC_MACRO("env", CExpanderEnv);
-STATIC_MACRO("option_env", CExpanderOptionEnv);
 
 class CExpanderFile: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
@@ -1611,11 +1594,6 @@ class CExpanderModulePath: public ExpandProcMacro {
     }
 };
 
-STATIC_MACRO("file", CExpanderFile);
-STATIC_MACRO("line", CExpanderLine);
-STATIC_MACRO("column", CExpanderColumn);
-STATIC_MACRO("__rust_unstable_column", CExpanderUnstableColumn);
-STATIC_MACRO("module_path", CExpanderModulePath);
 
 namespace {
 
@@ -2543,9 +2521,6 @@ class CFormatArgsNlExpander: public ExpandProcMacro {
     }
 };
 
-STATIC_MACRO("format_args", CFormatArgsExpander);
-STATIC_MACRO("const_format_args", CConstFormatArgsExpander);
-STATIC_MACRO("format_args_nl", CFormatArgsNlExpander);
 
 #undef CMP
 
@@ -2667,9 +2642,6 @@ class CIncludeStrExpander: public ExpandProcMacro {
 
 // TODO: include_str! and include_bytes!
 
-STATIC_MACRO("include", CIncludeExpander);
-STATIC_MACRO("include_bytes", CIncludeBytesExpander);
-STATIC_MACRO("include_str", CIncludeStrExpander);
 
 class CExpanderPanic: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
@@ -2744,11 +2716,6 @@ class CExpanderUnreachable: public ExpandProcMacro {
     }
 };
 
-void ExpandInitPanic() {
-    RegisterSynextMacro("panic", ::std::unique_ptr<ExpandProcMacro>(new CExpanderPanic));
-    RegisterSynextMacro("unreachable", ::std::unique_ptr<ExpandProcMacro>(new CExpanderUnreachable));
-}
-
 class CExpanderRegisterDiagnostic: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         return box$(TTStreamO(sp, ParseState(), TokenTree()));
@@ -2803,9 +2770,6 @@ class CExpanderBuildDiagnosticArray: public ExpandProcMacro {
     }
 };
 
-STATIC_MACRO("__register_diagnostic", CExpanderRegisterDiagnostic)
-STATIC_MACRO("__diagnostic_used", CExpanderDiagnosticUsed)
-STATIC_MACRO("__build_diagnostic_array", CExpanderBuildDiagnosticArray)
 
 class CExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
@@ -2828,14 +2792,40 @@ class CExpander: public ExpandProcMacro {
     }
 };
 
-STATIC_MACRO("stringify", CExpander);
 
-MacroDef::MacroDef(::std::string name, ::std::unique_ptr<ExpandProcMacro> def)
-    : prev(nullptr)
-    , name(::std::move(name))
-    , def(::std::move(def))
-{
-    RegisterSynextMacroStatic(this);
+void RegisterBuiltinMacros(ExpandRegistry& registry) {
+    registry.addMacro<CTraceMacrosExpander>("trace_macros");
+    registry.addMacro<CLogSyntaxExpander>("log_syntax");
+    registry.addMacro<CPatternTypeExpander>("pattern_type");
+    registry.addMacro<CIterExpander>("iter");
+    registry.addMacro<CLlvmAsmExpander>("llvm_asm");
+    registry.addMacro<CAsmExpander>("asm");
+    registry.addMacro<CGlobalAsmExpander>("global_asm");
+    registry.addMacro<CNakedAsmExpander>("naked_asm");
+    registry.addMacro<CExpanderAssert>("assert");
+    registry.addMacro<CExpanderCompileError>("compile_error");
+    registry.addMacro<CConcatExpander>("concat");
+    registry.addMacro<CConcatBytesExpander>("concat_bytes");
+    registry.addMacro<CConcatIdentsExpander>("concat_idents");
+    registry.addMacro<CExpanderEnv>("env");
+    registry.addMacro<CExpanderOptionEnv>("option_env");
+    registry.addMacro<CExpanderFile>("file");
+    registry.addMacro<CExpanderLine>("line");
+    registry.addMacro<CExpanderColumn>("column");
+    registry.addMacro<CExpanderUnstableColumn>("__rust_unstable_column");
+    registry.addMacro<CExpanderModulePath>("module_path");
+    registry.addMacro<CFormatArgsExpander>("format_args");
+    registry.addMacro<CConstFormatArgsExpander>("const_format_args");
+    registry.addMacro<CFormatArgsNlExpander>("format_args_nl");
+    registry.addMacro<CIncludeExpander>("include");
+    registry.addMacro<CIncludeBytesExpander>("include_bytes");
+    registry.addMacro<CIncludeStrExpander>("include_str");
+    registry.addMacro<CExpanderPanic>("panic");
+    registry.addMacro<CExpanderUnreachable>("unreachable");
+    registry.addMacro<CExpanderRegisterDiagnostic>("__register_diagnostic");
+    registry.addMacro<CExpanderDiagnosticUsed>("__diagnostic_used");
+    registry.addMacro<CExpanderBuildDiagnosticArray>("__build_diagnostic_array");
+    registry.addMacro<CExpander>("stringify");
 }
 
 ::std::unique_ptr<TokenStream> ExpandProcMacro::expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) {

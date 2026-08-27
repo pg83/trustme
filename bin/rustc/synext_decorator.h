@@ -12,6 +12,7 @@ struct ASTType;
 
 class ASTCrate;
 struct WireBoard;
+class ExpandRegistry;
 class ASTAttribute;
 class ASTPath;
 
@@ -73,21 +74,4 @@ public:
     virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const;
 };
 
-struct DecoratorDef;
-extern void RegisterSynextDecorator(::std::string name, ::std::unique_ptr<ExpandDecorator> handler);
-extern void RegisterSynextDecoratorStatic(DecoratorDef* def);
-
-template <typename T>
-void RegisterSynextDecoratorG(::std::string name) {
-    RegisterSynextDecorator(mv$(name), ::std::unique_ptr<ExpandDecorator>(new T()));
-}
-
-struct DecoratorDef {
-    DecoratorDef* prev;
-    ::std::string name;
-    ::std::unique_ptr<ExpandDecorator> def;
-
-    DecoratorDef(::std::string name, ::std::unique_ptr<ExpandDecorator> def);
-};
-
-#define STATIC_DECORATOR(ident, _handler_class) static DecoratorDef s_register_##_handler_class(ident, ::std::unique_ptr<ExpandDecorator>(new _handler_class()));
+void RegisterBuiltinDecorators(ExpandRegistry& registry);

@@ -14,11 +14,12 @@ namespace stl {
 }
 
 class HIRTypeInterner;
+class ExpandRegistry;
 
 /// Parse a crate from the given file
 extern ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, ::std::string mainfile, ASTEdition edition);
 
-extern void ExpandInit();
+extern void ExpandInit(ExpandRegistry& registry);
 extern void Expand(const WireBoard& wb, ASTCrate& crate);
 extern void ExpandTestHarness(ASTCrate& crate);
 extern void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate);

@@ -76,7 +76,6 @@ public:
     }
 };
 
-STATIC_DECORATOR("inline", CHandlerInline);
 
 class CHandlerCold: public CommonFunction {
 public:
@@ -87,7 +86,6 @@ public:
     }
 };
 
-STATIC_DECORATOR("cold", CHandlerCold);
 
 class CHandlerRustcAlign: public CommonFunction {
 public:
@@ -104,7 +102,6 @@ public:
     }
 };
 
-STATIC_DECORATOR("rustc_align", CHandlerRustcAlign);
 
 class CHandlerRustcLegacyConstGenerics: public CommonFunction {
     void handle(const ASTAttribute& mi, ASTFunction& fcn) const override {
@@ -125,7 +122,6 @@ class CHandlerRustcLegacyConstGenerics: public CommonFunction {
     }
 };
 
-STATIC_DECORATOR("rustc_legacy_const_generics", CHandlerRustcLegacyConstGenerics);
 
 class CHandlerRepr: public ExpandDecorator {
     AttrStage stage() const override {
@@ -349,7 +345,6 @@ class CHandlerRepr: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("repr", CHandlerRepr);
 
 class CHandlerRustcNonnullOptimizationGuaranteed: public ExpandDecorator {
     AttrStage stage() const override {
@@ -364,7 +359,6 @@ class CHandlerRustcNonnullOptimizationGuaranteed: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_nonnull_optimization_guaranteed", CHandlerRustcNonnullOptimizationGuaranteed);
 
 // 1.39
 class CHandlerRustcLayoutScalarValidRangeStart: public ExpandDecorator {
@@ -393,7 +387,6 @@ class CHandlerRustcLayoutScalarValidRangeStart: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_layout_scalar_valid_range_start", CHandlerRustcLayoutScalarValidRangeStart);
 
 class CHandlerRustcLayoutScalarValidRangeEnd: public ExpandDecorator {
     AttrStage stage() const override {
@@ -420,7 +413,6 @@ class CHandlerRustcLayoutScalarValidRangeEnd: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_layout_scalar_valid_range_end", CHandlerRustcLayoutScalarValidRangeEnd);
 
 class CHandlerLinkName: public ExpandDecorator {
     AttrStage stage() const override {
@@ -444,7 +436,6 @@ class CHandlerLinkName: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("link_name", CHandlerLinkName);
 
 class CHandlerLinkSection: public ExpandDecorator {
     AttrStage stage() const override {
@@ -468,7 +459,6 @@ class CHandlerLinkSection: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("link_section", CHandlerLinkSection);
 
 class CHandlerLink: public ExpandDecorator {
     AttrStage stage() const override {
@@ -531,7 +521,6 @@ class CHandlerLink: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("link", CHandlerLink);
 
 class CHandlerLinkage: public ExpandDecorator {
     AttrStage stage() const override {
@@ -589,7 +578,6 @@ class CHandlerLinkage: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("linkage", CHandlerLinkage);
 
 class CHandlerTargetFeature: public ExpandDecorator {
     AttrStage stage() const override {
@@ -601,7 +589,6 @@ class CHandlerTargetFeature: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("target_feature", CHandlerTargetFeature);
 
 class CHandlerRustcIntrinsic: public ExpandDecorator {
     AttrStage stage() const override {
@@ -623,7 +610,6 @@ class CHandlerRustcIntrinsic: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_intrinsic", CHandlerRustcIntrinsic);
 
 class CHandlerTrackCaller: public ExpandDecorator {
     AttrStage stage() const override {
@@ -667,7 +653,6 @@ class CHandlerTrackCaller: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("track_caller", CHandlerTrackCaller);
 
 /// @brief Various unsafe attributes, addded around 1.90
 class CHandlerUnsafe: public ExpandDecorator {
@@ -756,7 +741,6 @@ class CHandlerUnsafe: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("unsafe", CHandlerUnsafe);
 
 class DecoratorCrateType: public ExpandDecorator {
 public:
@@ -816,7 +800,6 @@ public:
         wb.settings->recursionLimit = static_cast<unsigned int>(value);
     }
 };
-STATIC_DECORATOR("recursion_limit", DecoratorRecursionLimit)
 
 class DecoratorFeature: public ExpandDecorator {
 public:
@@ -830,7 +813,6 @@ public:
         });
     }
 };
-STATIC_DECORATOR("feature", DecoratorFeature)
 
 class DecoratorAllocator: public ExpandDecorator {
 public:
@@ -875,12 +857,7 @@ public:
     }
 };
 
-STATIC_DECORATOR("crate_type", DecoratorCrateType)
-STATIC_DECORATOR("crate_name", DecoratorCrateName)
 
-STATIC_DECORATOR("allocator", DecoratorAllocator)
-STATIC_DECORATOR("panic_runtime", DecoratorPanicRuntime)
-STATIC_DECORATOR("needs_panic_runtime", DecoratorNeedsPanicRuntime)
 
 namespace {
     const RcString rcstringSelf = RcString::newInterned("Self");
@@ -3383,10 +3360,8 @@ public:
     }
 };
 
-STATIC_DECORATOR("derive", DecoratorDerive)
 
 class DecoratorDeriveConst: public DecoratorDerive {};
-STATIC_DECORATOR("derive_const", DecoratorDeriveConst)
 
 class CDocHandler: public ExpandDecorator {
     AttrStage stage() const override {
@@ -3418,7 +3393,6 @@ class CDocHandler: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("doc", CDocHandler);
 
 enum eItemType {
     ITEM_TRAIT,
@@ -4070,14 +4044,6 @@ public:
     }
 };
 
-STATIC_DECORATOR("lang", DecoratorLangItem)
-STATIC_DECORATOR("main", DecoratorMain);
-STATIC_DECORATOR("start", DecoratorStart);
-STATIC_DECORATOR("panic_implementation", DecoratorPanicImplementation);
-STATIC_DECORATOR("panic_handler", DecoratorPanicHandler);
-STATIC_DECORATOR("rustc_std_internal_symbol", DecoratorRustcStdInternalSymbol);
-STATIC_DECORATOR("alloc_error_handler", DecoratorAllocErrorHandler);
-STATIC_DECORATOR("global_allocator", DecoratorGlobalAllocator);
 
 class CMultiHandlerLint: public ExpandDecorator {
     /// The level this attribute sets.
@@ -4189,7 +4155,6 @@ class CHandlerAllow: public CMultiHandlerLint {
     }
 };
 
-STATIC_DECORATOR("allow", CHandlerAllow);
 
 class CHandlerWarn: public CMultiHandlerLint {
     CfgLintLevel level() const override {
@@ -4197,7 +4162,6 @@ class CHandlerWarn: public CMultiHandlerLint {
     }
 };
 
-STATIC_DECORATOR("warn", CHandlerWarn);
 
 class CHandlerDeny: public CMultiHandlerLint {
     CfgLintLevel level() const override {
@@ -4205,7 +4169,6 @@ class CHandlerDeny: public CMultiHandlerLint {
     }
 };
 
-STATIC_DECORATOR("deny", CHandlerDeny);
 
 class CHandlerForbid: public CMultiHandlerLint {
     CfgLintLevel level() const override {
@@ -4213,7 +4176,6 @@ class CHandlerForbid: public CMultiHandlerLint {
     }
 };
 
-STATIC_DECORATOR("forbid", CHandlerForbid);
 
 // #[must_use] - Marks a type needing to be consumed
 class CHandlerMustUse: public ExpandDecorator {
@@ -4234,7 +4196,6 @@ class CHandlerMustUse: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("must_use", CHandlerMustUse);
 
 // #[non_exhaustive] - Tag an enum as being extensible
 class CHandlerNonExhaustive: public ExpandDecorator {
@@ -4247,7 +4208,6 @@ class CHandlerNonExhaustive: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("non_exhaustive", CHandlerNonExhaustive);
 
 // #[path] - Already used by this stage
 class CHandlerPath: public ExpandDecorator {
@@ -4260,7 +4220,6 @@ class CHandlerPath: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("path", CHandlerPath);
 
 // #[rustc_promotable] - ?
 class CHandlerRustcPromotable: public ExpandDecorator {
@@ -4280,7 +4239,6 @@ class CHandlerRustcPromotable: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_promotable", CHandlerRustcPromotable);
 
 // #[rustc_inherit_overflow_checks]
 class CHandlerRustcInheritOverflowChecks: public ExpandDecorator {
@@ -4301,7 +4259,6 @@ class CHandlerRustcInheritOverflowChecks: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_inherit_overflow_checks", CHandlerRustcInheritOverflowChecks);
 
 // #[rustc_on_unimplemented]
 class CHandlerRustcOnUnimiplemented: public ExpandDecorator {
@@ -4314,7 +4271,6 @@ class CHandlerRustcOnUnimiplemented: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_on_unimplemented", CHandlerRustcOnUnimiplemented);
 
 // #[rustc_box] - Marks the `Box::new` inner constructor
 class CHandlerRustBox: public ExpandDecorator {
@@ -4333,7 +4289,6 @@ class CHandlerRustBox: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("rustc_box", CHandlerRustBox);
 
 class CMultiHandlerStability: public ExpandDecorator {
     AttrStage stage() const override {
@@ -4364,24 +4319,19 @@ class CMultiHandlerStability: public ExpandDecorator {
 
 class CHandlerStable: public CMultiHandlerStability {};
 
-STATIC_DECORATOR("stable", CHandlerStable);
 
 class CHandlerUnstable: public CMultiHandlerStability {};
 
-STATIC_DECORATOR("unstable", CHandlerUnstable);
 
 class CHandlerRustcDeprecated: public CMultiHandlerStability {};
 
-STATIC_DECORATOR("rustc_deprecated", CHandlerRustcDeprecated);
 
 // #[rustc_const_unstable] - Unstable in const context
 class CHandlerRustcConstUnstable: public CMultiHandlerStability {};
 
-STATIC_DECORATOR("rustc_const_unstable", CHandlerRustcConstUnstable);
 
 class CHandlerDeprecated: public CMultiHandlerStability {};
 
-STATIC_DECORATOR("deprecated", CHandlerDeprecated);
 
 class CHandlerAllowInternalUnstable: public ExpandDecorator {
     AttrStage stage() const override {
@@ -4392,7 +4342,6 @@ class CHandlerAllowInternalUnstable: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("allow_internal_unstable", CHandlerAllowInternalUnstable);
 
 class DecoratorNoStd: public ExpandDecorator {
 public:
@@ -4485,14 +4434,6 @@ public:
         }
     }
 };
-
-void ExpandInitStdPrelude() {
-    RegisterSynextDecoratorG<DecoratorNoStd>("no_std");
-    RegisterSynextDecoratorG<DecoratorNoCore>("no_core");
-    RegisterSynextDecoratorG<DecoratorNoMain>("no_main");
-    RegisterSynextDecoratorG<DecoratorPreludeImport>("prelude_import");
-    RegisterSynextDecoratorG<DecoratorNoPrelude>("no_prelude");
-}
 
 class CTestHandler: public ExpandDecorator {
     AttrStage stage() const override {
@@ -4606,16 +4547,67 @@ class CTestHandlerIgnore: public ExpandDecorator {
     }
 };
 
-STATIC_DECORATOR("test", CTestHandler);
-STATIC_DECORATOR("should_panic", CTestHandlerSP);
-STATIC_DECORATOR("ignore", CTestHandlerIgnore);
 
-DecoratorDef::DecoratorDef(::std::string name, ::std::unique_ptr<ExpandDecorator> def)
-    : prev(nullptr)
-    , name(::std::move(name))
-    , def(::std::move(def))
-{
-    RegisterSynextDecoratorStatic(this);
+void RegisterBuiltinDecorators(ExpandRegistry& registry) {
+    registry.addDecorator<CHandlerInline>("inline");
+    registry.addDecorator<CHandlerCold>("cold");
+    registry.addDecorator<CHandlerRustcAlign>("rustc_align");
+    registry.addDecorator<CHandlerRustcLegacyConstGenerics>("rustc_legacy_const_generics");
+    registry.addDecorator<CHandlerRepr>("repr");
+    registry.addDecorator<CHandlerRustcNonnullOptimizationGuaranteed>("rustc_nonnull_optimization_guaranteed");
+    registry.addDecorator<CHandlerRustcLayoutScalarValidRangeStart>("rustc_layout_scalar_valid_range_start");
+    registry.addDecorator<CHandlerRustcLayoutScalarValidRangeEnd>("rustc_layout_scalar_valid_range_end");
+    registry.addDecorator<CHandlerLinkName>("link_name");
+    registry.addDecorator<CHandlerLinkSection>("link_section");
+    registry.addDecorator<CHandlerLink>("link");
+    registry.addDecorator<CHandlerLinkage>("linkage");
+    registry.addDecorator<CHandlerTargetFeature>("target_feature");
+    registry.addDecorator<CHandlerRustcIntrinsic>("rustc_intrinsic");
+    registry.addDecorator<CHandlerTrackCaller>("track_caller");
+    registry.addDecorator<CHandlerUnsafe>("unsafe");
+    registry.addDecorator<DecoratorRecursionLimit>("recursion_limit");
+    registry.addDecorator<DecoratorFeature>("feature");
+    registry.addDecorator<DecoratorCrateType>("crate_type");
+    registry.addDecorator<DecoratorCrateName>("crate_name");
+    registry.addDecorator<DecoratorAllocator>("allocator");
+    registry.addDecorator<DecoratorPanicRuntime>("panic_runtime");
+    registry.addDecorator<DecoratorNeedsPanicRuntime>("needs_panic_runtime");
+    registry.addDecorator<DecoratorDerive>("derive");
+    registry.addDecorator<DecoratorDeriveConst>("derive_const");
+    registry.addDecorator<CDocHandler>("doc");
+    registry.addDecorator<DecoratorLangItem>("lang");
+    registry.addDecorator<DecoratorMain>("main");
+    registry.addDecorator<DecoratorStart>("start");
+    registry.addDecorator<DecoratorPanicImplementation>("panic_implementation");
+    registry.addDecorator<DecoratorPanicHandler>("panic_handler");
+    registry.addDecorator<DecoratorRustcStdInternalSymbol>("rustc_std_internal_symbol");
+    registry.addDecorator<DecoratorAllocErrorHandler>("alloc_error_handler");
+    registry.addDecorator<DecoratorGlobalAllocator>("global_allocator");
+    registry.addDecorator<CHandlerAllow>("allow");
+    registry.addDecorator<CHandlerWarn>("warn");
+    registry.addDecorator<CHandlerDeny>("deny");
+    registry.addDecorator<CHandlerForbid>("forbid");
+    registry.addDecorator<CHandlerMustUse>("must_use");
+    registry.addDecorator<CHandlerNonExhaustive>("non_exhaustive");
+    registry.addDecorator<CHandlerPath>("path");
+    registry.addDecorator<CHandlerRustcPromotable>("rustc_promotable");
+    registry.addDecorator<CHandlerRustcInheritOverflowChecks>("rustc_inherit_overflow_checks");
+    registry.addDecorator<CHandlerRustcOnUnimiplemented>("rustc_on_unimplemented");
+    registry.addDecorator<CHandlerRustBox>("rustc_box");
+    registry.addDecorator<CHandlerStable>("stable");
+    registry.addDecorator<CHandlerUnstable>("unstable");
+    registry.addDecorator<CHandlerRustcDeprecated>("rustc_deprecated");
+    registry.addDecorator<CHandlerRustcConstUnstable>("rustc_const_unstable");
+    registry.addDecorator<CHandlerDeprecated>("deprecated");
+    registry.addDecorator<CHandlerAllowInternalUnstable>("allow_internal_unstable");
+    registry.addDecorator<DecoratorNoStd>("no_std");
+    registry.addDecorator<DecoratorNoCore>("no_core");
+    registry.addDecorator<DecoratorNoMain>("no_main");
+    registry.addDecorator<DecoratorPreludeImport>("prelude_import");
+    registry.addDecorator<DecoratorNoPrelude>("no_prelude");
+    registry.addDecorator<CTestHandler>("test");
+    registry.addDecorator<CTestHandlerSP>("should_panic");
+    registry.addDecorator<CTestHandlerIgnore>("ignore");
 }
 
 bool ExpandDecorator::runDuringIter() const {
