@@ -2,6 +2,7 @@
 #include "expand_common.h"
 #include "ident.h"
 #include "hir_expand_main_bindings.h"
+#include "hir_conv_constant_evaluation.h"
 #include "macro_rules_macro_rules.h"
 #include "mir_operations.h"
 #include "parse_context.h"
@@ -21,5 +22,6 @@ WireBoard::WireBoard(stl::ObjPool* pool)
     , procMacros(pool->make<ProcMacroContext>())
     , targetLayouts(TargetCreateLayoutContext(*pool))
     , mirOperations(MIRCreateOperationsContext(*pool))
+    , ctfe(CtfeCreateContext(*pool))
 {
 }

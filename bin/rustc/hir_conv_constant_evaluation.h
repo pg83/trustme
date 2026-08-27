@@ -15,6 +15,9 @@ class MIRLValue;
 class MIRStatement;
 class MIRTerminator;
 class MIRTypeResolve;
+class CtfeContext;
+
+CtfeContext* CtfeCreateContext(stl::ObjPool& pool);
 
 // Thrown by constant evaluation for exactly one reason: the legacy trait
 struct HIREvaluator {
@@ -59,8 +62,6 @@ struct HIREvaluator {
     bool requireConstCalls;
     // Note: Pointer is needed to maintain internal reference stability
     ::std::vector<CsePtr> callStack;
-
-    static unsigned sNextEvalIndex;
 
 public:
     HIREvaluator(const Span& sp, const WireBoard& wb, Newval& nvs);

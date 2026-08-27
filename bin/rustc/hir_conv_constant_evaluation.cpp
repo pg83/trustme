@@ -58,13 +58,55 @@ namespace {
 #include <std/alg/defer.h>
 #include <algorithm>
 
+class CtfeContext {
+    struct ActiveDiscriminant {
+        const HIREnum* enm;
+        size_t idx;
+    };
+
+    unsigned nextEvalIndex_ = 0;
+    const bool capsOracle_ = getenv("TRUSTME_CAPS_ORACLE") != nullptr;
+    const RcString vtableName_ = RcString::newInterned("vtable#");
+    stl::Vector<ActiveDiscriminant> activeDiscriminants_;
+
+public:
+    unsigned newEvalIndex() {
+        return nextEvalIndex_++;
+    }
+
+    bool capsOracle() const {
+        return capsOracle_;
+    }
+
+    const RcString& vtableName() const {
+        return vtableName_;
+    }
+
+    bool discriminantActive(const HIREnum& enm, size_t idx) const {
+        for (const auto& active : activeDiscriminants_) {
+            if (active.enm == &enm && active.idx == idx) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void pushDiscriminant(const HIREnum& enm, size_t idx) {
+        activeDiscriminants_.pushBack({&enm, idx});
+    }
+
+    void popDiscriminant() {
+        activeDiscriminants_.popBack();
+    }
+};
+
+CtfeContext* CtfeCreateContext(stl::ObjPool& pool) {
+    return pool.make<CtfeContext>();
+}
+
 namespace {
     void ConvertHIRConstantEvaluateStatic(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRStatic& e);
     void ConvertHIRConstantEvaluateFcnSig(const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* implParams, const HIRItemPath& ip, HIRFunction& fcn);
-
-    // Diagnostic: attempt evaluation even when the captures predicate says
-    // no, and report a loud PREDICATE MISS when the attempt succeeds.
-    const bool sCapsOracle = getenv("TRUSTME_CAPS_ORACLE") != nullptr;
 
 }
 
@@ -978,8 +1020,7 @@ public:
             return encoded->bytes.data() + ofs;
         } else {
             if (len == 0 && ofs == 0) {
-                static u8 null;
-                return &null;
+                return reinterpret_cast<const u8*>("");
             }
             if (valuePending) {
                 ERROR(Span(), E0000, "cycle detected when evaluating static `" << path_ << "`");
@@ -1195,12 +1236,7 @@ public:
         ensureLive(state);
         MIR_ASSERT(state, storage, "Writing to invalid slot");
         MIR_ASSERT(state, storage.asValue().isWritable(), "Writing to read-only slot");
-        if (len > 0) {
-            return storage.asValue().extWriteBytes(ofs, len);
-        } else {
-            static u8 emptyBuf;
-            return &emptyBuf;
-        }
+        return storage.asValue().extWriteBytes(ofs, len);
     }
 
     void writeByte(const MIRTypeResolve& state, u8 v) {
@@ -3114,8 +3150,6 @@ namespace {
     }
 }
 
-unsigned int HIREvaluator::sNextEvalIndex = 0;
-
 HIREvaluator::CsePtr::~CsePtr() {
     if (inner) {
         delete inner;
@@ -3198,8 +3232,7 @@ static void writeCtfeUnsizeMetadata(
     if (const auto* traitObject = dynamicTypeD->opt_TraitObject()) {
         MIR_ASSERT(state, !dynamicTypeS->is_TraitObject(),
             "Trait-object pointer upcast must provide explicit metadata");
-        static const RcString rcstringVtable = RcString::newInterned("vtable#");
-        auto vtablePath = HIRPath(dynamicTypeS, traitObject->trait.path.clone(), rcstringVtable);
+        auto vtablePath = HIRPath(dynamicTypeS, traitObject->trait.path.clone(), localState.rootResolve.board().ctfe->vtableName());
         auto vtable = MIREvalStaticRefPtr::allocate(localState.valuePool, std::move(vtablePath), nullptr, 0);
         dst.slice(ptrSize).writePtr(state, EncodedLiteral::PTR_BASE, std::move(vtable));
     } else if (dynamicTypeD->is_Slice()) {
@@ -5288,7 +5321,7 @@ namespace {
             if (v.is_Unevaluated()) {
                 translateConstExprBody(sp, wb, crate, ty, *v.as_Unevaluated());
                 const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, *v.as_Unevaluated());
-                if (!predicted && !sCapsOracle) {
+                if (!predicted && !wb.ctfe->capsOracle()) {
                     return;
                 }
                 v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *v.as_Unevaluated())));
@@ -5546,7 +5579,7 @@ namespace {
                     translateConstExprBody(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
                 }
                 const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, unevaluated);
-                if (!predicted && !sCapsOracle) {
+                if (!predicted && !wb.ctfe->capsOracle()) {
                     // A bare const parameter gets its symbolic form; anything
                     // else stays Unevaluated for monomorphisation-time demand.
                     if (tn) {
@@ -5584,7 +5617,7 @@ namespace {
                     if (const auto* unevaluated = value.opt_Unevaluated()) {
                         translateConstExprBody(Span(), wb, crate, e.inner, **unevaluated);
                         const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, **unevaluated);
-                        if (!predicted && !sCapsOracle) {
+                        if (!predicted && !wb.ctfe->capsOracle()) {
                             return;
                         }
                         value = freezeEncodedLiteral(evaluateConstgeneric(Span(), wb, crate, e.inner, **unevaluated));
@@ -5815,17 +5848,6 @@ namespace {
             return false;
         }
 
-        /// The chain of variant evaluations currently on the stack. A variant
-        /// expression that casts another variant of the same enum re-enters
-        /// evaluation through the MIR constant fold; finding the target
-        /// already in this chain is a cycle.
-        struct ActiveDiscriminant {
-            const HIREnum* enm;
-            size_t idx;
-            const ActiveDiscriminant* prev;
-        };
-        static inline const ActiveDiscriminant* sActiveDiscriminants = nullptr;
-
         /// Compute one variant's discriminant, following its dependencies:
         /// the previous variant for an auto value, any variant its expression
         /// casts through the constant fold.
@@ -5858,15 +5880,13 @@ namespace {
             if (*known) {
                 return;
             }
-            for (const auto* active = sActiveDiscriminants; active; active = active->prev) {
-                if (active->enm == &item && active->idx == idx) {
-                    ERROR(*expr ? (*expr)->span() : Span(), E0000, "cycle detected when evaluating discriminant of `" << p << "::" << varName << "`");
-                }
+            auto& ctfe = *wb.ctfe;
+            if (ctfe.discriminantActive(item, idx)) {
+                ERROR(*expr ? (*expr)->span() : Span(), E0000, "cycle detected when evaluating discriminant of `" << p << "::" << varName << "`");
             }
-            ActiveDiscriminant node{&item, idx, sActiveDiscriminants};
-            sActiveDiscriminants = &node;
+            ctfe.pushDiscriminant(item, idx);
             STD_DEFER {
-                sActiveDiscriminants = node.prev;
+                ctfe.popDiscriminant();
             };
 
             const auto ty = HIREnum::getReprType(item.tagRepr);
@@ -6091,7 +6111,7 @@ void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb,
         const auto& cge = *cgeP;
         translateConstExprBody(sp, wb, crate, ty, *cge);
         const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, *cge);
-        if (!predicted && !sCapsOracle) {
+        if (!predicted && !wb.ctfe->capsOracle()) {
             return;
         }
         if (!predicted) {
@@ -6156,7 +6176,7 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
                 }
                 translateConstExprBody(sp, wb, crate, ty, ue);
                 const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, ue);
-                if (!predicted && !sCapsOracle) {
+                if (!predicted && !wb.ctfe->capsOracle()) {
                     continue;
                 }
                 v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, ue)));
@@ -6191,7 +6211,7 @@ HIREvaluator::HIREvaluator(const Span& sp, const WireBoard& wb, Newval& nvs)
     , valuePool(stl::ObjPool::fromMemory())
     , resolve(wb)
     , nvs(nvs)
-    , evalIndex(sNextEvalIndex++)
+    , evalIndex(wb.ctfe->newEvalIndex())
     , numFrames(0)
     , requireConstCalls(false)
 {
