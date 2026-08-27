@@ -14,7 +14,9 @@
 #define FLAG_CONST_GENERIC (1u << 31)
 
 namespace {
-    static const RcString rcstringSelf = RcString::newInterned("Self");
+    RcString selfName() {
+        return RcString::newInterned("Self");
+    }
 
     ASTAbsolutePath spToAp(const HIRSimplePath& sp) {
         return ASTAbsolutePath(sp.crateName(), sp.componentsVec());
@@ -160,7 +162,7 @@ namespace {
             auto& data = e.as_Generic();
 
             if (hasSelf) {
-                data.types.push_back(Named<GenericSlot>{rcstringSelf, GenericSlot{level, GENERICSelf}});
+                data.types.push_back(Named<GenericSlot>{selfName(), GenericSlot{level, GENERICSelf}});
                 nameContext.push_back(Ent::make_ConcreteSelf(nullptr));
             }
             if (!params.params.empty()) {
@@ -284,7 +286,7 @@ namespace {
                 switch ((*it).tag()) {
                     case Ent::TAG_ConcreteSelf: {
                         auto& e = (*it).as_ConcreteSelf();
-                        if (false && e) { return (*e)->clone(); } else { return ::mkType(typePool(), Span(), rcstringSelf, GENERICSelf); }
+                        if (false && e) { return (*e)->clone(); } else { return ::mkType(typePool(), Span(), selfName(), GENERICSelf); }
                         break;
                     }
                     default: {
@@ -743,7 +745,7 @@ default:
                     case Ent::TAG_ConcreteSelf: {
                         auto& e = (*it).as_ConcreteSelf();
                         DEBUG("- ConcreteSelf");
-                        if (name == rcstringSelf) {
+                        if (name == selfName()) {
                             switch (mode) {
                                 case LookupMode::PatternType:
                                 case LookupMode::Type:
@@ -2105,7 +2107,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                     // including its impl generic arguments.  Replacing those with
                     // the syntactically empty arguments on `Self` loses the link to
                     // the current impl and creates fresh inference variables later.
-                    if (e.nodes[0].name() != rcstringSelf) {
+                    if (e.nodes[0].name() != selfName()) {
                         p.nodes().back().args() = mv$(e.nodes.back().args());
                     }
                 }
@@ -2463,7 +2465,7 @@ void ResolveAbsoluteType(Context& context, ASTType*& type) {
         }
         case TypeData::TAG_Generic: {
             auto& e = type->data.as_Generic();
-            if (e.name == rcstringSelf) {
+            if (e.name == selfName()) {
                 type = context.getSelf();
             } else {
                 auto idx = context.lookupLocal(type->span(), e.name, Context::LookupMode::Type);
@@ -3420,7 +3422,7 @@ void ReplaceDelegatedSelf(ASTType*& type, const RcString& replacementName) {
         }
         case TypeData::TAG_Generic: {
             auto& e = type->data.as_Generic();
-            if (e.name == rcstringSelf) { e.name = replacementName; }
+            if (e.name == selfName()) { e.name = replacementName; }
             break;
         }
         case TypeData::TAG_Path: {
@@ -4268,7 +4270,7 @@ enum class IndexName {
     Macro,
 };
 
-void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const ASTUseItem::Ent& iData, const ASTVisibility& vis, bool fromPrelude, bool nested = false);
+void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const ASTUseItem::Ent& iData, const ASTVisibility& vis, bool fromPrelude, ::std::set<const ASTModule*>& recursionStack, bool nested = false);
 
 ::std::ostream& operator<<(::std::ostream& os, const IndexName& loc) {
     switch (loc) {
@@ -4841,11 +4843,10 @@ void ResolveIndexModuleWildcardGlobInHirMod(
     }
 }
 
-void ResolveIndexModuleWildcardSubmod(ASTCrate& crate, ASTModule& dstMod, const ASTModule& srcMod, const ASTVisibility& dstVis, bool fromPrelude, bool nested) {
+void ResolveIndexModuleWildcardSubmod(ASTCrate& crate, ASTModule& dstMod, const ASTModule& srcMod, const ASTVisibility& dstVis, bool fromPrelude, ::std::set<const ASTModule*>& recursionStack, bool nested) {
     Span sp;
     TRACE_FUNCTION_F(dstMod.path() << " <= " << srcMod.path());
-    static ::std::set<const ASTModule*> stack;
-    if (!stack.insert(&srcMod).second) {
+    if (!recursionStack.insert(&srcMod).second) {
         DEBUG("- Avoided recursion");
         return;
     }
@@ -4886,15 +4887,15 @@ void ResolveIndexModuleWildcardSubmod(ASTCrate& crate, ASTModule& dstMod, const 
                 if (e.name != "") {
                     continue;
                 }
-                ResolveIndexModuleWildcardUseStmt(crate, dstMod, e, dstVis, fromPrelude, /*nested=*/true);
+                ResolveIndexModuleWildcardUseStmt(crate, dstMod, e, dstVis, fromPrelude, recursionStack, /*nested=*/true);
             }
         }
     }
 
-    stack.erase(&srcMod);
+    recursionStack.erase(&srcMod);
 }
 
-void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const ASTUseItem::Ent& iData, const ASTVisibility& vis, bool fromPrelude, bool nested) {
+void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const ASTUseItem::Ent& iData, const ASTVisibility& vis, bool fromPrelude, ::std::set<const ASTModule*>& recursionStack, bool nested) {
     const auto& sp = iData.sp;
     const auto& b = iData.path.bindings.type;
 
@@ -4909,7 +4910,7 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
             const auto& hmod = *e->hir.mod;
             ResolveIndexModuleWildcardGlobInHirMod(sp, crate, dstMod, hmod, iData.path, vis, b.path, fromPrelude, nested);
         } else {
-            ResolveIndexModuleWildcardSubmod(crate, dstMod, *e->module_, vis, fromPrelude, nested);
+            ResolveIndexModuleWildcardSubmod(crate, dstMod, *e->module_, vis, fromPrelude, recursionStack, nested);
         }
     } else if (const auto* ep = b.binding.opt_Enum()) {
         const auto& e = *ep;
@@ -5009,7 +5010,7 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
 // - AST modules: (See Resolve_Index_Module_Wildcard__submod)
 //  - Clone index in (marked as publicity and weak)
 //  - Recurse into globs
-void ResolveIndexModuleWildcard(ASTCrate& crate, ASTModule& mod) {
+void ResolveIndexModuleWildcard(ASTCrate& crate, ASTModule& mod, ::std::set<const ASTModule*>& recursionStack) {
     TRACE_FUNCTION_F("mod = " << mod.path());
     for (const auto& i : mod.items) {
         if (!i->data.is_Use()) {
@@ -5019,7 +5020,7 @@ void ResolveIndexModuleWildcard(ASTCrate& crate, ASTModule& mod) {
             if (e.name != "") {
                 continue;
             }
-            ResolveIndexModuleWildcardUseStmt(crate, mod, e, i->vis, i->data.as_Use().isPrelude);
+            ResolveIndexModuleWildcardUseStmt(crate, mod, e, i->vis, i->data.as_Use().isPrelude, recursionStack);
         }
     }
 
@@ -5029,12 +5030,12 @@ void ResolveIndexModuleWildcard(ASTCrate& crate, ASTModule& mod) {
     // Handle child modules
     for (auto& i : mod.items) {
         if (auto* e = i->data.opt_Module()) {
-            ResolveIndexModuleWildcard(crate, *e);
+            ResolveIndexModuleWildcard(crate, *e, recursionStack);
         }
     }
     for (auto& mp : mod.anonMods()) {
         if (mp) {
-            ResolveIndexModuleWildcard(crate, *mp);
+            ResolveIndexModuleWildcard(crate, *mp, recursionStack);
         }
     }
 }
@@ -5325,7 +5326,8 @@ void ResolveIndex(ASTCrate& crate) {
     // - Index all explicitly named items
     ResolveIndexModuleBase(crate, crate.rootModule_);
     // - Index wildcard imports
-    ResolveIndexModuleWildcard(crate, crate.rootModule_);
+    ::std::set<const ASTModule*> wildcardRecursionStack;
+    ResolveIndexModuleWildcard(crate, crate.rootModule_, wildcardRecursionStack);
 
     // Macros marked with `#[macro_export]` actually live in the root
     ResolveIndexModuleExportedMacros(crate, Span(), crate.rootModule_);
@@ -5342,30 +5344,40 @@ enum class Lookup {
 };
 
 namespace {
-    const RcString rcstringCrateBuiltins = RcString::newInterned(CRATE_BUILTINS);
+    RcString crateBuiltinsName() {
+        return RcString::newInterned(CRATE_BUILTINS);
+    }
 
     struct ActiveUseResolution;
-    const ActiveUseResolution* activeUseResolution = nullptr;
+
+    struct UseResolutionContext {
+        const ActiveUseResolution* activeUse = nullptr;
+        ::std::vector<::std::pair<const ASTModule*, const char*>> moduleLookups;
+        ::std::vector<const ASTUseItem*> wildcardUses;
+        ::std::vector<::std::pair<const ASTModule*, RcString>> wildcardModules;
+    };
 
     struct ActiveUseResolution {
+        UseResolutionContext& context;
         const ASTPath* path;
         const ActiveUseResolution* parent;
 
-        explicit ActiveUseResolution(const ASTPath& path)
-            : path(&path)
-            , parent(activeUseResolution)
+        ActiveUseResolution(UseResolutionContext& context, const ASTPath& path)
+            : context(context)
+            , path(&path)
+            , parent(context.activeUse)
         {
-            activeUseResolution = this;
+            context.activeUse = this;
         }
 
         ~ActiveUseResolution() {
-            assert(activeUseResolution == this);
-            activeUseResolution = parent;
+            assert(context.activeUse == this);
+            context.activeUse = parent;
         }
     };
 
-    bool isUseResolutionActive(const ASTPath& path) {
-        for (auto* active = activeUseResolution; active; active = active->parent) {
+    bool isUseResolutionActive(const UseResolutionContext& context, const ASTPath& path) {
+        for (auto* active = context.activeUse; active; active = active->parent) {
             if (active->path == &path) {
                 return true;
             }
@@ -5374,19 +5386,20 @@ namespace {
     }
 }
 
-void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::span<const ASTModule*> parentModules = {});
-ASTPath::Bindings ResolveUseGetBinding(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTPath& path, ::std::span<const ASTModule*> parentModules, bool typesOnly = false, bool softFail = false);
+void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::span<const ASTModule*> parentModules = {});
+ASTPath::Bindings ResolveUseGetBinding(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTPath& path, ::std::span<const ASTModule*> parentModules, bool typesOnly = false, bool softFail = false);
 
-ASTPath::Bindings ResolveUseGetBindingMod(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTModule& mod, const RcString& desItemName, ::std::span<const ASTModule*> parentModules, bool typesOnly = false, bool requireVisible = false);
+ASTPath::Bindings ResolveUseGetBindingMod(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTModule& mod, const RcString& desItemName, ::std::span<const ASTModule*> parentModules, bool typesOnly = false, bool requireVisible = false);
 ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& ec, const HIRModule& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap = {});
 ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTPath& path, const ASTExternCrate& ec, unsigned int start);
 
 void ResolveUse(const WireBoard& wb, ASTCrate& crate) {
-    ResolveUseMod(*wb.settings, crate, crate.rootModule_, ASTPath("", {}));
+    UseResolutionContext resolveContext;
+    ResolveUseMod(resolveContext, *wb.settings, crate, crate.rootModule_, ASTPath("", {}));
 }
 
 // - Convert self::/super:: paths into non-canonical absolute forms
-ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path) {
+ASTPath ResolveUseAbsolutisePath(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path) {
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
             // Should never happen
@@ -5428,8 +5441,8 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
                 if (ct != CORETYPE_INVAL) {
                     DEBUG("Found builtin type for `use` - " << path);
                     // TODO: only if the item doesn't already exist?
-                    ASTPath rv{rcstringCrateBuiltins, path.nodes()};
-                    rv.bindings.type.set(ASTAbsolutePath(rcstringCrateBuiltins, {path.nodes().back().name()}), {});
+                    ASTPath rv{crateBuiltinsName(), path.nodes()};
+                    rv.bindings.type.set(ASTAbsolutePath(crateBuiltinsName(), {path.nodes().back().name()}), {});
                     return rv;
                 }
             }
@@ -5479,9 +5492,9 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
                     DEBUG("Module " << curMod->path());
                     const auto& node = e.nodes.front();
                     const auto nodeName = node.hygienicName();
-                    auto binding = ResolveUseGetBindingMod(span, settings, crate, sourceMod->path(), *curMod, nodeName, parentMods, /*types_only*/ e.nodes.size() > 1);
+                    auto binding = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceMod->path(), *curMod, nodeName, parentMods, /*types_only*/ e.nodes.size() > 1);
                     if (!binding.hasBinding() && nodeName != node.name()) {
-                        binding = ResolveUseGetBindingMod(span, settings, crate, sourceMod->path(), *curMod, node.name(), parentMods, /*types_only*/ e.nodes.size() > 1);
+                        binding = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceMod->path(), *curMod, node.name(), parentMods, /*types_only*/ e.nodes.size() > 1);
                     }
                     if (binding.hasBinding()) {
                         break;
@@ -5517,7 +5530,7 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
                 if (superCount > 0) {
                     ::std::vector<ASTPathNode> nodes(path.nodes().begin() + superCount, path.nodes().end());
                     auto inner = ASTPath::newSuper(superCount, mv$(nodes));
-                    return ResolveUseAbsolutisePath(span, settings, crate, basePath, mv$(inner));
+                    return ResolveUseAbsolutisePath(resolveContext, span, settings, crate, basePath, mv$(inner));
                 }
             }
             // EVIL HACK: If the current module is an anon module, refer to the parent
@@ -5576,7 +5589,7 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
     UNREACHABLE();
 }
 
-void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::span<const ASTModule*> parentModules) {
+void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::span<const ASTModule*> parentModules) {
     TRACE_FUNCTION_F("path = " << path);
 
     for (auto& useStmt : mod.items) {
@@ -5589,7 +5602,7 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
         for (auto& useEnt : useStmtData.entries) {
             TRACE_FUNCTION_F(useEnt);
 
-            useEnt.path = ResolveUseAbsolutisePath(span, settings, crate, path, useEnt.path);
+            useEnt.path = ResolveUseAbsolutisePath(resolveContext, span, settings, crate, path, useEnt.path);
             if (!useEnt.path.cls.is_Absolute()) {
                 BUG(span, "Use path is not absolute after absolutisation");
             }
@@ -5599,8 +5612,8 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
             // - values ("value namespace")
             // - macros ("macro namespace")
             // TODO: Have Resolve_Use_GetBinding return the actual path
-            ActiveUseResolution activeUse(useEnt.path);
-            useEnt.path.bindings = ResolveUseGetBinding(span, settings, crate, mod.path(), useEnt.path, parentModules);
+            ActiveUseResolution activeUse(resolveContext, useEnt.path);
+            useEnt.path.bindings = ResolveUseGetBinding(resolveContext, span, settings, crate, mod.path(), useEnt.path, parentModules);
             if (!useEnt.path.bindings.hasBinding()) {
                 ERROR(span, E0000, "Unable to resolve `use` target " << useEnt.path);
             }
@@ -5642,11 +5655,13 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
     struct NV: public ASTNodeVisitorDef {
         const Settings& settings;
         const ASTCrate& crate;
+        UseResolutionContext& resolveContext;
         ::std::vector<const ASTModule*> parentModules;
 
-        NV(const Settings& settings, const ASTCrate& crate, const ASTModule& curModule, ::std::span<const ASTModule*> parentModules)
+        NV(UseResolutionContext& resolveContext, const Settings& settings, const ASTCrate& crate, const ASTModule& curModule, ::std::span<const ASTModule*> parentModules)
             : settings(settings)
             , crate(crate)
+            , resolveContext(resolveContext)
             , parentModules(parentModules.begin(), parentModules.end())
         {
             this->parentModules.push_back(&curModule);
@@ -5654,7 +5669,7 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
 
         void visit(ASTExprNodeBlock& node) override {
             if (node.localMod) {
-                ResolveUseMod(this->settings, this->crate, *node.localMod, node.localMod->path(), this->parentModules);
+                ResolveUseMod(this->resolveContext, this->settings, this->crate, *node.localMod, node.localMod->path(), this->parentModules);
 
                 parentModules.push_back(&*node.localMod);
             }
@@ -5663,7 +5678,7 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
                 parentModules.pop_back();
             }
         }
-    } exprIter(settings, crate, mod, parentModules);
+    } exprIter(resolveContext, settings, crate, mod, parentModules);
 
     // TODO: Check that all code blocks are covered by these
     // - NOTE: Handle anon modules by iterating code (allowing correct item mappings)
@@ -5674,7 +5689,7 @@ default:
             break;
             case ASTItem::TAG_Module: {
                 auto& e = i.data.as_Module();
-                ResolveUseMod(settings, crate, e, path + i.name);
+                ResolveUseMod(resolveContext, settings, crate, e, path + i.name);
                 break;
             }
             case ASTItem::TAG_Impl: {
@@ -5766,6 +5781,7 @@ default:
 }
 
 ASTPath::Bindings ResolveUseGetBindingMod(
+    UseResolutionContext& resolveContext,
     const Span& span,
     const Settings& settings,
     const ASTCrate& crate,
@@ -5779,14 +5795,13 @@ ASTPath::Bindings ResolveUseGetBindingMod(
     ASTPath::Bindings rv;
     TRACE_FUNCTION_F(mod.path() << ", des_item_name=" << desItemName);
 
-    static ::std::vector<std::pair<const ASTModule*, const char*>> sRecurseStack;
     auto recurseEnt = std::make_pair(&mod, desItemName.c_str());
     // EVIL: Allow a single recursion before returning empty
-    if (std::count(sRecurseStack.begin(), sRecurseStack.end(), recurseEnt) > 1) {
+    if (std::count(resolveContext.moduleLookups.begin(), resolveContext.moduleLookups.end(), recurseEnt) > 1) {
         DEBUG("Recursion detected, returning empty bindings");
         return rv;
     }
-    auto _ = pushAndPopAtEnd(sRecurseStack, recurseEnt);
+    auto _ = pushAndPopAtEnd(resolveContext.moduleLookups, recurseEnt);
 
     // TODO: Catch and prevent recursion?
     // If the desired item is an anon module (starts with #) then parse and index
@@ -6020,9 +6035,9 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                 }
                 if (!impE.path.bindings.hasBinding()) {
                     DEBUG(" > Needs resolve p=" << &impE.path);
-                    if (!isUseResolutionActive(impE.path)) {
-                        ActiveUseResolution activeUse(impE.path);
-                        rv.mergeFrom(ResolveUseGetBinding(sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(sp2, settings, crate, mod.path(), impE.path), parentModules));
+                    if (!isUseResolutionActive(resolveContext, impE.path)) {
+                        ActiveUseResolution activeUse(resolveContext, impE.path);
+                        rv.mergeFrom(ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path), parentModules));
                     } else {
                         DEBUG("Recursion on path " << &impE.path << " " << impE.path);
                     }
@@ -6067,10 +6082,10 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                 if (bindings->type.is_Unbound()) {
                     DEBUG("Temp resolving wildcard " << impE.path);
                     // Handle possibility of recursion
-                    static ::std::vector<const ASTUseItem*> resolveStackPtrs;
+                    auto& resolveStackPtrs = resolveContext.wildcardUses;
                     if (::std::find(resolveStackPtrs.begin(), resolveStackPtrs.end(), &impData) == resolveStackPtrs.end()) {
                         resolveStackPtrs.push_back(&impData);
-                        bindings_ = ResolveUseGetBinding(sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(sp2, settings, crate, mod.path(), impE.path), parentModules, /*type_only=*/true, /*soft_fail=*/true);
+                        bindings_ = ResolveUseGetBinding(resolveContext, sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(resolveContext, sp2, settings, crate, mod.path(), impE.path), parentModules, /*type_only=*/true, /*soft_fail=*/true);
                         if (bindings_.type.is_Unbound()) {
                             DEBUG("Recursion detected, skipping " << impE.path);
                             resolveStackPtrs.pop_back();
@@ -6101,11 +6116,11 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                             // in-flight search for a *different* name doesn't block this one
                             // (libc resolves `crate::linux` through `new::*` while a search
                             // inside `new` is still on the stack).
-                            static ::std::vector<::std::pair<const ASTModule*, RcString>> sUseGlobModStack;
+                            auto& sUseGlobModStack = resolveContext.wildcardModules;
                             auto ent = ::std::make_pair(&*e.module_, desItemName);
                             if (::std::find(sUseGlobModStack.begin(), sUseGlobModStack.end(), ent) == sUseGlobModStack.end()) {
                                 sUseGlobModStack.push_back(ent);
-                                rv.mergeFrom(ResolveUseGetBindingMod(span, settings, crate, mod.path(), *e.module_, desItemName, {}, /*types_only=*/false, /*require_visible=*/true));
+                                rv.mergeFrom(ResolveUseGetBindingMod(resolveContext, span, settings, crate, mod.path(), *e.module_, desItemName, {}, /*types_only=*/false, /*require_visible=*/true));
                                 sUseGlobModStack.pop_back();
                             } else {
                                 DEBUG("Recursion prevented of " << e.module_->path());
@@ -6198,7 +6213,7 @@ break;
 
     if (mod.path().nodes.size() > 0 && mod.path().nodes.back().c_str()[0] == '#') {
         ASSERT_BUG(span, parentModules.size() > 0, "Anon module with no parent modules - " << mod.path());
-        return ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *parentModules.back(), desItemName, parentModules.subspan(0, parentModules.size() - 1));
+        return ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceModPath, *parentModules.back(), desItemName, parentModules.subspan(0, parentModules.size() - 1));
     } else {
         //if( allow == Lookup::Any )
         return ASTPath::Bindings();
@@ -6428,7 +6443,7 @@ default:
             if (itemPtr->is_Import()) {
                 const auto& e = itemPtr->as_Import();
                 ap = ASTAbsolutePath(e.path.crateName(), e.path.componentsVec());
-                if (e.path.crateName() == rcstringCrateBuiltins) {
+                if (e.path.crateName() == crateBuiltinsName()) {
                     auto t = coretypeFromstring(e.path.components().front().c_str());
                     rv.type.set(ap, ASTPathBindingType::make_Primitive(t));
                 } else {
@@ -6572,8 +6587,8 @@ default:
             DEBUG("E : Macro " << nodes.back().name() << " = " << itemPtr->tagStr());
 
             if (const auto* imp = itemPtr->opt_Import()) {
-                if (imp->path.crateName() == rcstringCrateBuiltins) {
-                    rv.macro.set(ASTAbsolutePath(rcstringCrateBuiltins, {nodes.back().name()}), ASTPathBindingMacro::make_MacroRules({nullptr}));
+                if (imp->path.crateName() == crateBuiltinsName()) {
+                    rv.macro.set(ASTAbsolutePath(crateBuiltinsName(), {nodes.back().name()}), ASTPathBindingMacro::make_MacroRules({nullptr}));
                     return rv;
                 }
                 ASSERT_BUG(span, crate.externCrates.count(imp->path.crateName()) > 0, "Unable to find crate for " << imp->path);
@@ -6588,7 +6603,7 @@ default:
                 switch ((*itemPtr).tag()) {
                     case HIRMacroItem::TAG_Import: {
                         auto& e = (*itemPtr).as_Import();
-                        if (e.path.crateName() == rcstringCrateBuiltins)
+                        if (e.path.crateName() == crateBuiltinsName())
                             ;
                         else {
                             BUG(span, "Recursive import in " << path << " - " << it->second->ent.as_Import().path << " -> " << e.path);
@@ -6631,6 +6646,7 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
 }
 
 ASTPath::Bindings ResolveUseGetBinding(
+    UseResolutionContext& resolveContext,
     const Span& span,
     const Settings& settings,
     const ASTCrate& crate,
@@ -6647,13 +6663,13 @@ ASTPath::Bindings ResolveUseGetBinding(
     if (path.cls.is_Absolute() && (path.cls.as_Absolute().crate != "" && path.cls.as_Absolute().crate != crate.crateNameReal)) {
         const auto& pathAbs = path.cls.as_Absolute();
         // Builtin macro imports
-        if (pathAbs.crate == rcstringCrateBuiltins) {
+        if (pathAbs.crate == crateBuiltinsName()) {
             ASTPath::Bindings rv;
             ASSERT_BUG(span, !pathAbs.nodes.empty(), "");
             if (coretypeFromstring(path.nodes()[0].name().c_str()) != CORETYPE_INVAL) {
-                rv.type.set(ASTAbsolutePath(rcstringCrateBuiltins, {pathAbs.nodes.back().name()}), ASTPathBindingType::make_TypeAlias({nullptr}));
+                rv.type.set(ASTAbsolutePath(crateBuiltinsName(), {pathAbs.nodes.back().name()}), ASTPathBindingType::make_TypeAlias({nullptr}));
             } else {
-                rv.macro.set(ASTAbsolutePath(rcstringCrateBuiltins, {pathAbs.nodes.back().name()}), ASTPathBindingMacro::make_MacroRules({nullptr}));
+                rv.macro.set(ASTAbsolutePath(crateBuiltinsName(), {pathAbs.nodes.back().name()}), ASTPathBindingMacro::make_MacroRules({nullptr}));
             }
             return rv;
         }
@@ -6680,9 +6696,9 @@ ASTPath::Bindings ResolveUseGetBinding(
         assert(mod);
         const auto& node = nodes.at(i);
         const auto nodeName = node.hygienicName();
-        auto b = ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, nodeName, innerParentModules, /*types_only=*/true);
+        auto b = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceModPath, *mod, nodeName, innerParentModules, /*types_only=*/true);
         if (!b.hasBinding() && nodeName != node.name()) {
-            b = ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, node.name(), innerParentModules, /*types_only=*/true);
+            b = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceModPath, *mod, node.name(), innerParentModules, /*types_only=*/true);
         }
         switch (b.type.binding.tag()) {
 default:
@@ -6862,9 +6878,9 @@ default:
     assert(mod);
     const auto& node = nodes.back();
     const auto nodeName = node.hygienicName();
-    auto binding = ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, nodeName, parentModules, typesOnly);
+    auto binding = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceModPath, *mod, nodeName, parentModules, typesOnly);
     if (!binding.hasBinding() && nodeName != node.name()) {
-        binding = ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, node.name(), parentModules, typesOnly);
+        binding = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceModPath, *mod, node.name(), parentModules, typesOnly);
     }
     return binding;
 }
