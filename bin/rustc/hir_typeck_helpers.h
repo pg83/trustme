@@ -613,10 +613,6 @@ public:
     void addDefiningFcnOrigin(const HIRPath& origin);
     bool isDefiningFcnOrigin(const HIRPath& origin) const;
 
-    /// While set, a method probe must answer from what is known: type checking
-    /// has stabilised, so waiting for the receiver would wait forever.
-    mutable bool methodProbeMustDecide = false;
-
     bool isOpaqueAliasDefiningScope(const HIRTypeDataErasedTypeAliasInner& alias) const;
 
     const HIRGenericPath* currentTraitPath() const {
@@ -833,6 +829,7 @@ public:
         unsigned int typeIvarCount,
         const HIRTypeData* topTy,
         const RcString& methodName,
+        bool mustDecide,
         /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities
     ) const;
     /// Locate the named field by applying auto-dereferencing.

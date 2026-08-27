@@ -10477,6 +10477,7 @@ default: {
             unsigned int typeIvarCount,
             const HIRTypeData* topTy,
             const RcString& methodName,
+            bool mustDecide,
             /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities
         ) const {
             {
@@ -10602,7 +10603,7 @@ default: {
                         // the eventual type may expose an inherent method at a
                         // later autoderef level. Wait until inference advances;
                         // the fallback pass must answer from what remains.
-                        if (undecided && !this->methodProbeMustDecide) {
+                        if (undecided && !mustDecide) {
                             possibilities.clear();
                             return ~0u;
                         }

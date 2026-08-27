@@ -1101,16 +1101,14 @@ default: {
             ::std::vector<::std::pair<TraitResolution::AutoderefBorrow, HIRPath>> possibleMethods;
             // Once type checking has stabilised there is nothing left to wait
             // for, so the probe answers from what is known.
-            this->context.resolve.methodProbeMustDecide = this->isFallback;
-            unsigned int derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.method, possibleMethods);
+            unsigned int derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.method, this->isFallback, possibleMethods);
             if ((derefCount == ~0u || possibleMethods.empty()) && node.method != node.fallbackMethod) {
                 possibleMethods.clear();
-                derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.fallbackMethod, possibleMethods);
+                derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.fallbackMethod, this->isFallback, possibleMethods);
                 if (derefCount != ~0u && !possibleMethods.empty()) {
                     node.method = node.fallbackMethod;
                 }
             }
-            this->context.resolve.methodProbeMustDecide = false;
         tryAgain:
             if (derefCount != ~0u) {
                 // HACK: In fallback mode, remove inherent impls from bounded ivars
@@ -8849,10 +8847,10 @@ namespace {
             }
 
             ::std::vector<::std::pair<TraitResolution::AutoderefBorrow, HIRPath>> possibleMethods;
-            unsigned int derefCount = context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, t, node.method, possibleMethods);
+            unsigned int derefCount = context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, t, node.method, false, possibleMethods);
             if ((derefCount == ~0u || possibleMethods.empty()) && node.method != node.fallbackMethod) {
                 possibleMethods.clear();
-                derefCount = context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, t, node.fallbackMethod, possibleMethods);
+                derefCount = context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, t, node.fallbackMethod, false, possibleMethods);
             }
             // TODO: Detect the above hitting an ivar, and use that instead of this hacky check of if it's `_` or `&_`
             if (!(t->is_Infer() || ((*t).is_Borrow() && ((*t).as_Borrow().inner->is_Infer()))) && possibleMethods.empty()) {
