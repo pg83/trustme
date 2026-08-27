@@ -2,28 +2,19 @@
  * Debugging helpers
  */
 #include "common_debug.h"
-#include <set>
 #include <iostream>
-#include <mutex>
 #include <cstring> // strr
 
-static int giIndentLevel = 0;
-static const char* gsDebugPhase = "";
-static bool gbDebugPhaseEnabled = false;
-static bool gbEnableHeaders = false;
-static ::std::set<::std::string> gmDisabledDebug;
-static ::std::mutex gDebugLock;
-
-void DebugProcessEnable(const char* e) {
+void CommonDebugContext::processEnable(const char* e) {
     if (*e) {
-        gbEnableHeaders = true;
+        enableHeaders_ = true;
     }
     while (*e) {
         const char* colon = ::std::strchr(e, ':');
         size_t len = colon ? colon - e : ::std::strlen(e);
 
         if (len > 0) {
-            DebugEnablePhase(::std::string(e, len).c_str());
+            enablePhase(::std::string(e, len).c_str());
         }
 
         if (colon) {
@@ -34,75 +25,75 @@ void DebugProcessEnable(const char* e) {
     }
 }
 
-void DebugSetPhase(const char* phaseName) {
-    gsDebugPhase = phaseName;
-    gbDebugPhaseEnabled = gmDisabledDebug.find(gsDebugPhase) == gmDisabledDebug.end();
-    if (gbEnableHeaders) {
+void CommonDebugContext::setPhase(const char* phaseName) {
+    phase_ = phaseName;
+    phaseEnabled_ = disabledPhases_.find(phase_) == disabledPhases_.end();
+    if (enableHeaders_) {
         ::std::cout << phaseName << ": BEGIN" << ::std::endl;
     }
 }
 
-bool DebugIsEnabled() {
-    return gbDebugPhaseEnabled;
+bool CommonDebugContext::isEnabled() const {
+    return phaseEnabled_;
 }
 
-void DebugDisablePhase(const char* phaseName) {
-    gmDisabledDebug.insert(::std::string(phaseName));
+void CommonDebugContext::disablePhase(const char* phaseName) {
+    disabledPhases_.insert(::std::string(phaseName));
 }
 
-void DebugEnablePhase(const char* phaseName) {
-    auto it = gmDisabledDebug.find(phaseName);
-    if (it != gmDisabledDebug.end()) {
-        gmDisabledDebug.erase(it);
+void CommonDebugContext::enablePhase(const char* phaseName) {
+    auto it = disabledPhases_.find(phaseName);
+    if (it != disabledPhases_.end()) {
+        disabledPhases_.erase(it);
     } else {
         ::std::cerr << "Unknown debug phase: " << phaseName << ::std::endl;
     }
 }
 
-void DebugPrintCb(DebugStreamCallback& cb) {
-    if (!DebugIsEnabled()) {
+void CommonDebugContext::print(DebugStreamCallback& cb) {
+    if (!isEnabled()) {
         return;
     }
-    ::std::unique_lock<::std::mutex> _lh{gDebugLock};
+    ::std::unique_lock<::std::mutex> lock{lock_};
 
-    ::std::cout << gsDebugPhase << "- ";
-    for (auto i = giIndentLevel; i--;) {
+    ::std::cout << phase_ << "- ";
+    for (auto i = indentLevel_; i--;) {
         ::std::cout << " ";
     }
     cb.write(::std::cout);
     ::std::cout << ::std::endl;
 }
 
-void DebugEnterScopeCb(const char* name, DebugStreamCallback& cb) {
-    if (!DebugIsEnabled()) {
+void CommonDebugContext::enterScope(const char* name, DebugStreamCallback& cb) {
+    if (!isEnabled()) {
         return;
     }
-    ::std::unique_lock<::std::mutex> _lh{gDebugLock};
+    ::std::unique_lock<::std::mutex> lock{lock_};
 
-    ::std::cout << gsDebugPhase << "- ";
-    for (auto i = giIndentLevel; i--;) {
+    ::std::cout << phase_ << "- ";
+    for (auto i = indentLevel_; i--;) {
         ::std::cout << " ";
     }
     ::std::cout << ">>> " << name << "(";
     cb.write(::std::cout);
     ::std::cout << ")" << ::std::endl;
-    giIndentLevel++;
+    indentLevel_++;
 }
 
-void DebugLeaveScope(const char* name) {
-    if (!DebugIsEnabled()) {
+void CommonDebugContext::leaveScope(const char* name) {
+    if (!isEnabled()) {
         return;
     }
-    ::std::unique_lock<::std::mutex> _lh{gDebugLock};
+    ::std::unique_lock<::std::mutex> lock{lock_};
 
-    ::std::cout << gsDebugPhase << "- ";
-    giIndentLevel--;
-    for (auto i = giIndentLevel; i--;) {
+    ::std::cout << phase_ << "- ";
+    indentLevel_--;
+    for (auto i = indentLevel_; i--;) {
         ::std::cout << " ";
     }
     ::std::cout << "<<< " << name << ::std::endl;
 }
 
 DebugFunctionScope::~DebugFunctionScope() {
-    DebugLeaveScope(name);
+    context.leaveScope(name);
 }

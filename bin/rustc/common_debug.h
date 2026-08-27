@@ -6,6 +6,8 @@
 
 #include <vector>
 #include <sstream>
+#include <set>
+#include <mutex>
 
 struct DebugStreamCallback {
     virtual void write(::std::ostream& os) = 0;
@@ -25,25 +27,35 @@ struct DebugStreamCb final: DebugStreamCallback {
     }
 };
 
-extern void DebugSetPhase(const char* phaseName);
-extern void DebugProcessEnable(const char* enableString);
-extern void DebugDisablePhase(const char* phaseName);
-extern void DebugEnablePhase(const char* phaseName);
-extern bool DebugIsEnabled();
-extern void DebugEnterScopeCb(const char* name, DebugStreamCallback& cb);
-extern void DebugLeaveScope(const char* name);
-extern void DebugPrintCb(DebugStreamCallback& cb);
+class CommonDebugContext {
+    int indentLevel_ = 0;
+    const char* phase_ = "";
+    bool phaseEnabled_ = false;
+    bool enableHeaders_ = false;
+    ::std::set<::std::string> disabledPhases_;
+    ::std::mutex lock_;
+
+public:
+    void setPhase(const char* phaseName);
+    void processEnable(const char* enableString);
+    void disablePhase(const char* phaseName);
+    void enablePhase(const char* phaseName);
+    bool isEnabled() const;
+    void enterScope(const char* name, DebugStreamCallback& cb);
+    void leaveScope(const char* name);
+    void print(DebugStreamCallback& cb);
+};
 
 template <typename F>
-void DebugEnterScope(const char* name, F f) {
+void DebugEnterScope(CommonDebugContext& context, const char* name, F f) {
     DebugStreamCb<F> cb(f);
-    DebugEnterScopeCb(name, cb);
+    context.enterScope(name, cb);
 }
 
 template <typename F>
-void DebugPrint(F f) {
+void DebugPrint(CommonDebugContext& context, F f) {
     DebugStreamCb<F> cb(f);
-    DebugPrintCb(cb);
+    context.print(cb);
 }
 
 #if defined(NOLOG)
@@ -57,13 +69,13 @@ void DebugPrint(F f) {
     #define DEBUG(fmt)                             \
         do {                                       \
             const char* _DEBUG_fcn = __FUNCTION__; \
-            DebugPrint([&](auto& os) {            \
+            DebugPrint(debugContext, [&](auto& os) { \
                 os << _DEBUG_fcn << ": " << fmt;   \
             });                                    \
         } while (0)
     #define TRACE_FUNCTION_F(fmt)               \
         DebugFunctionScope traceFunctionHdr { \
-            __FUNCTION__, [&](auto& os) {       \
+            debugContext, __FUNCTION__, [&](auto& os) { \
                 os << fmt;                      \
             }                                   \
         }
@@ -89,13 +101,15 @@ namespace {
 }
 
 struct DebugFunctionScope {
+    CommonDebugContext& context;
     const char* name;
 
     template <typename F>
-    DebugFunctionScope(const char* name, F f)
-        : name(name)
+    DebugFunctionScope(CommonDebugContext& context, const char* name, F f)
+        : context(context)
+        , name(name)
     {
-        DebugEnterScope(name, f);
+        DebugEnterScope(context, name, f);
     }
 
     ~DebugFunctionScope();

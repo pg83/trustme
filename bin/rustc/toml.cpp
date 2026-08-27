@@ -5,11 +5,11 @@
 
 #include <sstream>
 #include <cstdio>
+#define NOLOG // Disable logging
 #include "common_debug.h"
 #include <cassert>
 #include <string>
 #include <iostream>
-#define NOLOG // Disable logging
 
 /// Representation of a syntatic token in a TOML file
 struct TomlToken {
