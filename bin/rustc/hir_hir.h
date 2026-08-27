@@ -40,24 +40,30 @@ class HIRItemPath;
 struct WireBoard;
 
 class HIRPublicity {
-    static ::std::shared_ptr<HIRSimplePath> nonePath;
+    enum class Kind {
+        Global,
+        None,
+        Restricted,
+    };
+
+    Kind kind;
     ::std::shared_ptr<HIRSimplePath> visPath;
 
-    HIRPublicity(::std::shared_ptr<HIRSimplePath> p);
+    HIRPublicity(Kind kind, ::std::shared_ptr<HIRSimplePath> p);
 
 public:
     static HIRPublicity newGlobal() {
-        return HIRPublicity({});
+        return HIRPublicity(Kind::Global, {});
     }
 
     static HIRPublicity newNone() {
-        return HIRPublicity(nonePath);
+        return HIRPublicity(Kind::None, {});
     }
 
     static HIRPublicity newPriv(HIRSimplePath p);
 
     bool isGlobal() const {
-        return !visPath;
+        return kind == Kind::Global;
     }
 
     bool isVisible(const HIRSimplePath& p) const;
@@ -645,11 +651,13 @@ public:
 
     HIRSimplePath srcModule;
 
-    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes) const;
+    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 
     bool matchesType(const HIRTypeData* tr) const {
         return matchesType(tr, HIRResolvePlaceholdersNop());
     }
+
+    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes) const;
 };
 
 class HIRTraitImpl {
@@ -675,11 +683,13 @@ public:
 
     //const TraitImpl*    m_parent_spec_impl;
 
-    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes) const;
+    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 
     bool matchesType(const HIRTypeData* tr) const {
         return matchesType(tr, HIRResolvePlaceholdersNop());
     }
+
+    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes) const;
 
     bool moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& x) const;
     // headOnly: only unify the impl heads (with binding consistency /
@@ -696,11 +706,19 @@ public:
 
     HIRSimplePath srcModule;
 
-    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes) const;
+    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes, class HIRImplMatcherScratch& scratch) const;
 
     bool matchesType(const HIRTypeData* tr) const {
         return matchesType(tr, HIRResolvePlaceholdersNop());
     }
+
+    bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes) const;
+};
+
+class HIRImplMatcherScratch {
+public:
+    stl::Vector<HIRTypeRef> buffers[8];
+    unsigned depth = 0;
 };
 
 class HIRExternCrate {
@@ -791,6 +809,11 @@ public:
     // Synthetic compiler item. Its signature uses this crate's interned
     // types, so it must not live in process-global storage.
     mutable HIRValueItem intrinsicOffsetof;
+    // Query-local reusable storage belongs to the crate whose impl index is
+    // being searched. Recursive queries use separate depth slots.
+    mutable HIRImplMatcherScratch implMatcherScratch;
+    mutable HIRFunction::argsT emptyMirArgs;
+    HIRSimplePath emptyLangItemPath;
     RcString crateName;
     /// The crate's name as the user wrote it. An executable's `crateName` is the
     /// placeholder `bin#`, which `type_name` must not show.
