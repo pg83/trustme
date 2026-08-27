@@ -102,9 +102,12 @@ public:
 
     HIRSimplePath parent() const;
 
-    const RcString& crateName() const;
+    RcString crateName() const;
 
     ::std::span<const RcString> components() const {
+        if (!p) {
+            return {};
+        }
         const auto& m = p->members;
         return m.empty() ? std::span<const RcString>() : std::span<const RcString>(m.begin() + 1, m.end());
     }
@@ -134,6 +137,12 @@ public:
     Ordering ord(const HIRSimplePath& x) const {
         if (p == x.p) {
             return OrdEqual;
+        }
+        if (!p) {
+            return OrdLess;
+        }
+        if (!x.p) {
+            return OrdGreater;
         }
         return ::ord(p->members, x.p->members);
     }

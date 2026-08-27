@@ -172,11 +172,6 @@ namespace {
         return in;
     }
 
-    const HIRSimplePathData* emptyPathData() {
-        static const HIRSimplePathData empty{0, 0, ThinVector<RcString>()};
-        return &empty;
-    }
-
     const HIRSimplePathData* findPath(u64 h1, u64 h2) {
         if (auto* head = interner().table.find(h1)) {
             for (auto* n = *head; n; n = n->next) {
@@ -203,7 +198,7 @@ namespace {
 
     const HIRSimplePathData* internMembers(ThinVector<RcString> members) {
         if (members.empty()) {
-            return emptyPathData();
+            return nullptr;
         }
         u64 h1 = 0, h2 = 0;
         for (size_t i = 0; i < members.size(); i++) {
@@ -219,6 +214,9 @@ namespace {
 }
 
 HIRSimplePath HIRSimplePath::parent() const {
+    if (!p) {
+        return *this;
+    }
     const auto& m = p->members;
     if (m.size() > 1) {
         auto ch = contentHash(m.back());
@@ -235,10 +233,10 @@ HIRSimplePath HIRSimplePath::parent() const {
 }
 
 HIRSimplePath HIRSimplePath::operator+(const RcString& s) const {
-    const auto& m = p->members;
-    if (m.empty()) {
+    if (!p) {
         return HIRSimplePath(internMembers(ThinVector<RcString>({RcString(), s})));
     }
+    const auto& m = p->members;
     auto ch = contentHash(s);
     auto h1 = p->hash1 ^ key1(ch, m.size());
     auto h2 = p->hash2 ^ key2(ch, m.size());
@@ -259,13 +257,16 @@ void HIRSimplePath::operator+=(const RcString& s) {
 }
 
 RcString HIRSimplePath::popComponent() {
+    if (!p) {
+        return RcString();
+    }
     const auto& m = p->members;
     if (m.size() <= 1) {
         return RcString();
     }
     auto rv = m.back();
     if (m.size() == 2 && m[0] == RcString()) {
-        p = emptyPathData();
+        p = nullptr;
         return rv;
     }
     auto ch = contentHash(rv);
@@ -281,11 +282,17 @@ RcString HIRSimplePath::popComponent() {
 }
 
 void HIRSimplePath::updateCrateName(RcString v) {
+    if (!p) {
+        if (v != RcString()) {
+            p = internMembers(ThinVector<RcString>({std::move(v)}));
+        }
+        return;
+    }
     const auto& m = p->members;
     if (m.empty()) {
         p = internMembers(ThinVector<RcString>({std::move(v)}));
     } else if (v.c_str()[0] == '\0' && m.size() == 1) {
-        p = emptyPathData();
+        p = nullptr;
     } else {
         auto chOld = contentHash(m[0]);
         auto chNew = contentHash(v);
@@ -319,11 +326,14 @@ void HIRSimplePath::updateLastComponent(RcString v) {
 }
 
 bool HIRSimplePath::startsWith(const HIRSimplePath& x, bool skipLast /*=false*/) const {
-    const auto& m = p->members;
-    const auto& xm = x.p->members;
-    if (xm.empty()) {
+    if (!x.p) {
         return crateName() == RcString();
     }
+    if (!p) {
+        return skipLast && x.p->members.size() == 1;
+    }
+    const auto& m = p->members;
+    const auto& xm = x.p->members;
     // This path can't start with `x` if it's shorter than `x`
     if (m.size() < xm.size() - (skipLast ? 1 : 0)) {
         return false;
@@ -805,7 +815,7 @@ HIRSimplePath::HIRSimplePath(ThinVector<RcString> members)
 }
 
 HIRSimplePath::HIRSimplePath()
-    : p(emptyPathData())
+    : p(nullptr)
 {
 }
 
@@ -827,7 +837,7 @@ HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<RcString> components)
 HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<const RcString> components) {
     // NOTE: Ensure that it's impossible for the crate name to be empty with only one value in `members`, simplifies comparison logic
     if (crate.c_str()[0] == '\0' && components.empty()) {
-        p = emptyPathData();
+        p = nullptr;
         return;
     }
     auto ch = contentHash(crate);
@@ -856,9 +866,8 @@ HIRSimplePath::HIRSimplePath(RcString crate, ::std::initializer_list<RcString> c
 {
 }
 
-const RcString& HIRSimplePath::crateName() const {
-    static RcString empty;
-    return p->members.empty() ? empty : p->members.front();
+RcString HIRSimplePath::crateName() const {
+    return p ? p->members.front() : RcString();
 }
 
 ::std::vector<RcString> HIRSimplePath::componentsVec() const {
