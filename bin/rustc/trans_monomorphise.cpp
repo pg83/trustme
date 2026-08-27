@@ -547,7 +547,7 @@ namespace {
 }
 
 MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const TransParams& params, const MIRFunctionPointer& tpl) {
-    static Span sp;
+    Span sp;
     TRACE_FUNCTION;
     assert(tpl);
 

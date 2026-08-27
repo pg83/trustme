@@ -4013,7 +4013,7 @@ namespace {
         }
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
-            static Span sp;
+            Span sp;
             ::visitType(sp, resolve_, ty);
             return ty;
         }
@@ -4062,7 +4062,7 @@ namespace {
         }
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
-            static Span sp;
+            Span sp;
             ::visitType(sp, resolve_, ty);
             return ty;
         }
@@ -6714,7 +6714,7 @@ namespace {
         }
 
         void visitTrait(HIRItemPath p, HIRTrait& tr) override {
-            static Span sp;
+            Span sp;
             TRACE_FUNCTION_F(p);
 
             StaticTraitResolve resolve{wb};
@@ -6784,6 +6784,7 @@ namespace {
 
             struct VtableConstruct {
                 HIRTypeInterner& types;
+                const Span& sp;
                 const VtableOuterVisitor* outer;
                 const StaticTraitResolve* resolvePtr;
                 HIRTrait* traitPtr;
@@ -6919,7 +6920,7 @@ namespace {
                 }
             };
 
-            VtableConstruct vtc{crate.types, this, &resolve, &tr, {}};
+            VtableConstruct vtc{crate.types, sp, this, &resolve, &tr, {}};
             // - Drop glue pointer
             HIRTypeDataFunctionPointer ft;
             ft.isUnsafe = false;
@@ -6985,7 +6986,7 @@ namespace {
         }
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
-            static Span sp;
+            Span sp;
             TRACE_FUNCTION_F("impl " << traitPath << " for " << impl.type);
 
             HIRVisitor::visitTraitImpl(traitPath, impl);
@@ -7003,7 +7004,7 @@ namespace {
         }
 
         void visitStruct(HIRItemPath ip, HIRStruct& str) {
-            static Span sp;
+            Span sp;
             auto p = std::strchr(ip.name, '#');
             if (p && std::strcmp(p, "#vtable") == 0) {
                 auto traitPath = ip.parent->getSimplePath();

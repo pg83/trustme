@@ -138,7 +138,7 @@ namespace {
         };
 
         ModTraitsGuard pushModTraits(const HIRModule& mod) {
-            static Span sp;
+            Span sp;
             DEBUG("");
             auto rv = ModTraitsGuard{this, mv$(this->traits)};
             for (const auto& traitPath : mod.traits) {
@@ -249,14 +249,14 @@ namespace {
 
     public:
         void visitPathParams(HIRPathParams& pp) override {
-            static Span _sp;
+            Span _sp;
             const Span& sp = _sp;
 
             HIRVisitor::visitPathParams(pp);
         }
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
-            static Span _sp;
+            Span _sp;
             const Span& sp = _sp;
 
             assert(ty);
@@ -409,7 +409,7 @@ namespace {
         }
 
         void visitGenericPath(HIRGenericPath& p, PathContext pc) override {
-            static Span sp;
+            Span sp;
             TRACE_FUNCTION_F("p = " << p);
             const auto& params = getParamsForItem(sp, crate, p.path, pc);
             auto& args = p.params;
@@ -782,7 +782,7 @@ namespace {
         }
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
-            static Span sp;
+            Span sp;
             TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.type);
             auto _ = resolve_.setImplGenerics(impl.type, impl.params);
             selfTypes.push_back(impl.type);

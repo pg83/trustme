@@ -40,12 +40,11 @@ HIRExprStatePtr HIRExprStatePtr::clone(stl::ObjPool* pool) const {
     return rv;
 }
 
-const Span& HIRExprPtr::span() const {
-    static Span staticSp;
+Span HIRExprPtr::span() const {
     if (*this) {
         return (*this)->span();
     }
-    return staticSp;
+    return {};
 }
 
 const MIRFunction* HIRExprPtr::getMirOpt() const {

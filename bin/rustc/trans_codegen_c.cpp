@@ -250,7 +250,7 @@ namespace {
     };
 
     class CodeGeneratorC: public CodeGenerator {
-        static Span sp;
+        Span sp;
 
         const HIRCrate& crate;
         const WireBoard& wb_;
@@ -10851,7 +10851,6 @@ default:
         }
     };
 
-    Span CodeGeneratorC::sp;
 }
 
 ::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile) {

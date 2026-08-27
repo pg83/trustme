@@ -268,7 +268,7 @@ namespace {
 }
 
 void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* cratePtr, TransList list, const ::std::string& hirFile) {
-    static Span sp;
+    Span sp;
 
     ::std::unique_ptr<CodeGenerator> codegen;
     if (opt.mode == "monomir") {

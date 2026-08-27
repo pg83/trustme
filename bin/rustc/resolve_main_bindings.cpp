@@ -575,7 +575,7 @@ namespace {
                 if (mp.crate != "") {
                     HIRSimplePath visPath{mp.crate, mp.ents};
 
-                    static Span sp;
+                    Span sp;
                     // External crate path
                     ASSERT_BUG(sp, crate.externCrates.count(mp.crate), "Crate not loaded for " << mp);
                     const auto& extCrate = crate.externCrates.at(mp.crate);
@@ -4236,7 +4236,7 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
     }
 
     // - Run through the indexed items and fix up those paths
-    static Span sp;
+    Span sp;
     DEBUG("Imports (mod = " << mod.path() << ")");
     for (auto& i : mod.namespaceItems) {
         if (i.second.isImport) {
@@ -4842,7 +4842,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
 }
 
 void ResolveIndexModuleWildcardSubmod(ASTCrate& crate, ASTModule& dstMod, const ASTModule& srcMod, const ASTVisibility& dstVis, bool fromPrelude, bool nested) {
-    static Span sp;
+    Span sp;
     TRACE_FUNCTION_F(dstMod.path() << " <= " << srcMod.path());
     static ::std::set<const ASTModule*> stack;
     if (!stack.insert(&srcMod).second) {

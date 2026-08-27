@@ -338,7 +338,7 @@ break;
             TraitObject,
         };
 
-        static Span sp;
+        Span sp;
 
         const HIRCrate& crate;
         ::StaticTraitResolve resolve_;
@@ -1504,7 +1504,6 @@ break;
         }
     };
 
-    Span CodeGeneratorMonoMir::sp;
 }
 
 ::std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile) {

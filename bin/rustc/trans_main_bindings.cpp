@@ -600,7 +600,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
         transList.autoFunctions.reserve(transList.autoFunctions.size() + transList.traitObjectMethods.size());
         for (const auto& path : transList.traitObjectMethods) {
             DEBUG(path);
-            static Span sp;
+            Span sp;
             const auto& pe = path.data.as_UfcsKnown();
             const auto& traitPath = pe.trait;
             const auto& name = pe.item;
@@ -1710,7 +1710,7 @@ MIREnumCachePtr::~MIREnumCachePtr() {
 
 /// Enumerate trans items starting from `::main` (binary crate)
 TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate) {
-    static Span sp;
+    Span sp;
 
     EnumState state{wb};
 
@@ -1997,7 +1997,7 @@ namespace {
     }
 
     void TransEnumeratePublicTraitImpl(EnumState& state, StaticTraitResolve& resolve, const HIRSimplePath& traitPath, /*const*/ HIRTraitImpl& impl) {
-        static Span sp;
+        Span sp;
         const auto& implTy = impl.type;
         TRACE_FUNCTION_F("Impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << implTy);
 
@@ -2103,7 +2103,7 @@ namespace {
 
 /// Enumerate trans items for all public non-generic items (library crate)
 TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
-    static Span sp;
+    Span sp;
     EnumState state{wb};
 
     TransEnumeratePublicMod(state, crate.rootModule, HIRSimplePath(crate.crateName, {}), true);
@@ -2340,7 +2340,7 @@ default:
         newList.functions.insert(std::make_pair(HIRPath(type, rcstringDropGlue), nullptr));
     }
     for (const auto& vtp : newList.vtables) {
-        static Span sp;
+        Span sp;
         const auto& traitPath = vtp.first.data.as_UfcsKnown().trait;
         const auto& type = vtp.first.data.as_UfcsKnown().type;
 
@@ -2647,7 +2647,7 @@ namespace {
         }
 
         void visitStruct(const HIRTypeData* selfType, const HIRGenericPath& path, const HIRStruct& item) {
-            static Span sp;
+            Span sp;
             HIRTypeRef tmp;
             size_t fieldCount = 0;
             MonomorphStatePtr ms(crate.types, selfType, &path.params, nullptr);
@@ -2682,7 +2682,7 @@ namespace {
         }
 
         void visitUnion(const HIRTypeData* selfType, const HIRGenericPath& path, const HIRUnion& item) {
-            static Span sp;
+            Span sp;
             HIRTypeRef tmp;
             MonomorphStatePtr ms(crate.types, selfType, &path.params, nullptr);
             auto monomorph = [&](const auto& x) {
@@ -2694,7 +2694,7 @@ namespace {
         }
 
         void visitEnum(const HIRTypeData* selfType, const HIRGenericPath& path, const HIREnum& item) {
-            static Span sp;
+            Span sp;
             HIRTypeRef tmp;
             MonomorphStatePtr ms(crate.types, selfType, &path.params, nullptr);
             auto monomorph = [&](const auto& x) {
@@ -2860,7 +2860,7 @@ default:
                     }
                     case HIRTypeData::TAG_TraitObject: {
                         auto& te = (*ty).as_TraitObject();
-                        static Span sp;
+                        Span sp;
 
                         // If the data trait is empty, then no vtable to visit
                         if (!te.trait.path.path.components().empty()) {
@@ -3148,7 +3148,7 @@ default:
 // Enumerate types required for the enumerated items
 void TransEnumerateTypes(EnumState& state) {
     TRACE_FUNCTION;
-    static Span sp;
+    Span sp;
     TypeVisitor tv{state.resolve.board(), state.rv, state.origList};
 
     // Taking `<dyn Trait>::method` as a function item creates a dispatch
@@ -4079,7 +4079,7 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
 }
 
 void TransEnumerateFillFromVTable(EnumState& state, HIRPath vtablePath, const TransParams& pp) {
-    static Span sp;
+    Span sp;
     const auto& type = vtablePath.data.as_UfcsKnown().type;
     const auto& traitPath = vtablePath.data.as_UfcsKnown().trait;
     if (traitPath == HIRSimplePath()) {

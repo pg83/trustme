@@ -191,7 +191,7 @@ namespace {
         }
 
         void visitTraitPath(HIRTraitPath& p) override {
-            static Span sp;
+            Span sp;
             p.traitPtr = &crate.getTraitByPath(sp, p.path.path);
 
             HIRVisitor::visitTraitPath(p);
@@ -272,7 +272,7 @@ default:
         }
 
         void visitPattern(HIRPattern& pat) override {
-            static Span _sp = Span();
+            Span _sp = Span();
             const Span& sp = _sp;
 
             HIRVisitor::visitPattern(pat);
@@ -322,7 +322,7 @@ default:
         }
 
         void visitParams(HIRGenericParams& params) override {
-            static Span sp;
+            Span sp;
             for (auto& bound : params.bounds) {
                 if (auto* be = bound.opt_TraitBound()) {
                     {
@@ -346,7 +346,7 @@ default:
         }
 
         void visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) override {
-            static Span sp;
+            Span sp;
             HIRVisitor::visitAssociatedtype(p, item);
             HIRTypeRef ty = crate.types.path(p.getFullPath(), {});
             for (auto& bound : item.traitBounds) {
@@ -379,7 +379,7 @@ default:
         }
 
         [[nodiscard]] HIRTypeRef visitTypeInner(HIRTypeRef ty, bool doBind = true) {
-            static Span sp;
+            Span sp;
             // Nodes this pass rewrites are handled below; every other
             // carrier kind still needs its embedded values to reach the
             // visitConstgeneric hook (which records generic bindings).
@@ -1015,19 +1015,21 @@ default:
         }
 
         void visitTrait(HIRItemPath ip, HIRTrait& tr) override {
-            static Span sp;
+            Span sp;
             TRACE_FUNCTION_F(ip);
             const auto tySelf = crate.types.self();
 
             // Enumerate supertraits and save for later stages
             struct Enumerate {
                 HIRTypeInterner& types;
+                const Span& sp;
                 HIRTypeRef tySelf;
                 ::std::vector<HIRTraitPath> supertraits;
                 ::std::vector<const HIRTraitPath*> tpStack;
 
-                Enumerate(HIRTypeInterner& types, HIRTypeRef tySelf)
+                Enumerate(HIRTypeInterner& types, const Span& sp, HIRTypeRef tySelf)
                     : types(types)
+                    , sp(sp)
                     , tySelf(tySelf)
                 {
                 }
@@ -1144,7 +1146,7 @@ default:
             auto thisPath = ip.getSimplePath();
             thisPath.updateCrateName(crate.crateName);
 
-            Enumerate e{crate.types, tySelf};
+            Enumerate e{crate.types, sp, tySelf};
             for (const auto& pt : tr.parentTraits) {
                 e.enumSupertraitsIn(*pt.traitPtr, pt.clone());
             }
@@ -1245,7 +1247,7 @@ default:
         }
 
         [[nodiscard]] HIRTypeRef visitTypeInner(HIRTypeRef ty, bool doBind = true) {
-            static Span sp;
+            Span sp;
 
             // Only NamedFunction nodes are rewritten here; everything else
             // is plain recursion.
@@ -1601,7 +1603,7 @@ HIRTypeRef ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, cons
 }
 
 HIRTypeRef ConvertHIRExpandAliasesGetExpansion(const HIRCrate& crate, const HIRPath& path, bool isExpr) {
-    static Span sp;
+    Span sp;
     switch (path.data.tag()) {
         case HIRPath::Data::TAG_Generic: {
             auto& e = path.data.as_Generic();
@@ -1804,7 +1806,7 @@ public:
     }
 
     [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
-        static Span sp;
+        Span sp;
 
         const auto* alias = typeAlias(sp, ty);
         if (alias) {
@@ -1902,7 +1904,7 @@ public:
     }
 
     void visitTraitPath(HIRTraitPath& tp) override {
-        static Span sp;
+        Span sp;
         // 1. Make sure that the trait path isn't pointing at an alias (should have been handled by the caller, which can expand to multiple items)
         ASSERT_BUG(sp, crate.getTypeitemByPath(sp, tp.path.path).is_Trait(), "Bad trait path - " << tp.path << " : " << crate.getTypeitemByPath(sp, tp.path.path).tagStr());
         // 2. Handle AtyBounds
@@ -2074,7 +2076,7 @@ public:
     }
 
     void visitPattern(HIRPattern& pat) override {
-        static Span sp;
+        Span sp;
 
         HIRVisitor::visitPattern(pat);
 
@@ -2116,7 +2118,7 @@ default:
     }
 
     void visitParams(HIRGenericParams& params) override {
-        static Span sp;
+        Span sp;
         for (size_t i = 0; i < params.bounds.size();) {
             auto* bound = params.bounds[i].opt_TraitBound();
             if (!bound || !crate.getTypeitemByPath(sp, bound->trait.path.path).is_TraitAlias()) {
@@ -2236,7 +2238,7 @@ default:
     }
 
     void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
-        static Span sp;
+        Span sp;
         implType = impl.type;
         HIRVisitor::visitTraitImpl(traitPath, impl);
         implType = nullptr;
@@ -2360,7 +2362,7 @@ public:
     }
 
     void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
-        static Span sp;
+        Span sp;
         implType = impl.type;
         HIRVisitor::visitTraitImpl(traitPath, impl);
         implType = nullptr;
@@ -2704,7 +2706,7 @@ namespace {
                 } else if (te->binding.is_Struct()) {
                     const auto& paramsTpl = te->path.data.as_Generic().params;
                     if (params && monomorphisePathparamsNeeded(paramsTpl)) {
-                        static Span sp;
+                        Span sp;
                         auto monomorphCb = MonomorphStatePtr(crate.types, nullptr, params, nullptr);
                         auto paramsMono = monomorphCb.monomorphPathParams(sp, paramsTpl, false);
                         return getStructDstType(*te->binding.as_Struct(), paramsDef, &paramsMono);
@@ -2750,7 +2752,7 @@ namespace {
         }
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
-            static Span sp;
+            Span sp;
 
             auto implGenerics = resolve_.setImplGenerics(impl.type, impl.params);
             HIRVisitor::visitTraitImpl(traitPath, impl);
@@ -2961,7 +2963,7 @@ namespace {
         }
 
         void visitStruct(HIRItemPath ip, HIRStruct& str) override {
-            static Span sp;
+            Span sp;
 
             auto& structMarkings = str.structMarkings;
             if (structMarkings.coerceUnsizedIndex == ~0u) {
@@ -3109,7 +3111,7 @@ public:
     };
 
     ModTraitsGuard pushModTraits(HIRSimplePath path, const HIRModule& mod) {
-        static Span sp;
+        Span sp;
         DEBUG("");
         ModTraitsGuard rv{*this, mv$(this->traits)};
         for (const auto& traitPath : mod.traits) {
@@ -3457,7 +3459,7 @@ public:
     }
 
     bool locateTraitItemInBounds(HIRVisitor::PathContext pc, const HIRTypeData* tr, const HIRGenericParams& params, HIRPath::Data& pd) {
-        static Span sp;
+        Span sp;
         for (const auto& b : params.bounds) {
             if (const auto* e = b.opt_TraitBound()) {
                 DEBUG("- " << e->type << " : " << e->trait.path);
@@ -3518,7 +3520,7 @@ public:
     bool locateInTraitAndSet(HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd) {
         TRACE_FUNCTION_F(traitPath);
         // TODO: Get the span from caller
-        static Span _sp;
+        Span _sp;
         const auto& sp = _sp;
         if (locateItemInTrait(pc, trait, pd)) {
             pd = getUfcsKnown(pc, mv$(pd.as_UfcsUnknown()), traitPath.clone(), trait);
@@ -3700,7 +3702,7 @@ public:
     }
 
     bool resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathContext pc, HIRPath::Data& pd) {
-        static Span sp;
+        Span sp;
         auto& e = pd.as_UfcsUnknown();
         const bool collapseToSubtrait = crate.featureEnabled("supertrait_item_shadowing");
         ::std::vector<::std::pair<HIRSimplePath, HIRPath::Data>> candidates;
@@ -3771,7 +3773,7 @@ public:
 
     [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
         // TODO: Add a span parameter.
-        static Span sp;
+        Span sp;
 
         const bool definesContainedOpaque = inExpr && definingOpaqueAliasCount_ > 0
             && ty->is_Path() && ty->as_Path().path.data.is_UfcsKnown()
@@ -3859,7 +3861,7 @@ public:
     }
 
     void visitPath(HIRPath& p, HIRVisitor::PathContext pc) override {
-        static Span sp;
+        Span sp;
 
         if (auto* pe = p.data.opt_UfcsKnown()) {
             // If the trait has missing type argumenst, replace them with the defaults
@@ -4047,7 +4049,7 @@ public:
     }
 
     void visitPattern(HIRPattern& pat) override {
-        static Span _sp = Span();
+        Span _sp = Span();
         const Span& sp = _sp;
 
         HIRVisitor::visitPattern(pat);

@@ -9647,7 +9647,7 @@ default:
 
     /// Check IVar possibilities, from both coercion/unsizing (which have well-encoded rules) and from trait impls
     bool checkIvarPoss(Context& context, const IvarBoundIndex& boundIndex, unsigned int i, Context::IVarPossible& ivarEnt, IvarPossFallbackType fallbackTy = IvarPossFallbackType::None) {
-        static Span _span;
+        Span _span;
         const auto& sp = _span;
         const bool honourDisable = (fallbackTy != IvarPossFallbackType::IgnoreWeakDisable);
 

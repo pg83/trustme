@@ -129,7 +129,7 @@ public:
         node.reset(p);
     }
 
-    const Span& span() const;
+    Span span() const;
 
     HIRExprNode& operator*() {
         return *node;

@@ -1162,7 +1162,7 @@ namespace {
 
 namespace {
     void addBoundFromTrait(HIRTypeInterner& types, ::std::vector<HIRGenericBound>& rv, const HIRTypeData* type, const HIRTraitPath& curTrait, bool isTrivial) {
-        static Span sp;
+        Span sp;
         assert(curTrait.traitPtr);
         const auto& tr = *curTrait.traitPtr;
         auto monomorphCb = MonomorphStatePtr(types, type, &curTrait.path.params, nullptr);
@@ -1262,7 +1262,7 @@ namespace {
 }
 
 bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& other) const {
-    static const Span _sp;
+    const Span _sp;
     const Span& sp = _sp;
     TRACE_FUNCTION;
 
@@ -1499,7 +1499,7 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
         }
 
         static bool typesOverlap(const HIRTypeData* a, const HIRTypeData* b) {
-            static Span sp;
+            Span sp;
             if (a == b) {
                 return true;
             }
@@ -1730,7 +1730,7 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
 
         static bool checkBounds(const HIRCrate& crate, const HIRTraitImpl& id, const Monomorphiser& ms, const HIRTraitImpl& gSrc) {
             TRACE_FUNCTION;
-            static Span sp;
+            Span sp;
             for (const auto& tb : id.params.bounds) {
                 DEBUG(tb);
                 if (tb.is_TraitBound()) {

@@ -5211,7 +5211,7 @@ namespace {
         }
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
-            static Span sp;
+            Span sp;
             TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.type);
 
             auto mp = HIRItemPath(impl.srcModule);
@@ -5236,7 +5236,7 @@ namespace {
         }
 
         void visitTypeImpl(HIRTypeImpl& impl) override {
-            static Span sp;
+            Span sp;
             TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " " << impl.type);
 
             auto mp = HIRItemPath(impl.srcModule);
@@ -5299,7 +5299,7 @@ namespace {
         }
 
         void visitPathParams(HIRPathParams& p) override {
-            static Span sp;
+            Span sp;
             for (auto& v : p.values) {
                 if (v.is_Unevaluated()) {
                     if (!getParams) {
@@ -5337,7 +5337,7 @@ namespace {
         }
 
         void visitParams(HIRGenericParams& params) override {
-            static Span sp;
+            Span sp;
             for (auto& v : params.values) {
                 evalulateConstGeneric(sp, v.type, v.defaultValue);
             }
@@ -5698,7 +5698,7 @@ namespace {
         }
 
         void visitEnum(HIRItemPath p, HIREnum& item) override {
-            static Span sp;
+            Span sp;
             assert(!implParams);
             implParams = &item.params;
 

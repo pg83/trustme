@@ -2780,7 +2780,7 @@ HIRTraitAlias AST2HIR::LowerHIRTraitAlias(const Span& sp, HIRItemPath p, const A
 }
 
 HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRTypeData* realSelfType) {
-    static Span sp;
+    Span sp;
 
     TRACE_FUNCTION_F(p);
 

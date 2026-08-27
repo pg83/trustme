@@ -14,7 +14,7 @@ void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* 
 }
 
 void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
-    static Span sp;
+    Span sp;
     ASSERT_BUG(sp, ip.parent, "prepare_from_path with too-short path - " << ip);
 
     struct H {
@@ -28,7 +28,7 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
             }
         }
 
-        static void addTraitsFromMod(TypeckModuleState& ms, const HIRModule& mod) {
+        static void addTraitsFromMod(TypeckModuleState& ms, const HIRModule& mod, const Span& sp) {
             // In-scope traits.
             ms.traits.clear();
             for (const auto& tp : mod.traits) {
@@ -67,7 +67,7 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
     } else {
         // Namespace path
         const auto& mod = H::getModForIp(crate, *ip.parent);
-        H::addTraitsFromMod(*this, mod);
+        H::addTraitsFromMod(*this, mod, sp);
         const auto& item = mod.valueItems.at(ip.name)->ent;
         implGenerics = nullptr;
             switch (item.tag()) {

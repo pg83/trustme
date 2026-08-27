@@ -1187,7 +1187,7 @@ void HMTypeInferrence::addIvarsParams(HIRPathParams& params) {
 }
 
 void HMTypeInferrence::addIvarsTraitPath(HIRTraitPath& path) {
-    static Span sp;
+    Span sp;
     auto originalParams = path.path.params.clone();
     addIvarsParams(path.path.params);
 

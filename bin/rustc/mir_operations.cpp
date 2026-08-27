@@ -23,7 +23,7 @@
 
 namespace {
     HIRTypeRef getMetadataType(const MIRTypeResolve& state, const HIRTypeData* unsizedTy) {
-        static Span sp;
+        Span sp;
         auto& types = state.crate.types;
         if (const auto* tep = unsizedTy->opt_TraitObject()) {
             const auto& traitPath = tep->trait;
@@ -1845,7 +1845,7 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn);
 /// - Simplifies the call graph (by removing chained gotos)
 /// - Sorts blocks into a rough flow order
 void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
-    static Span sp;
+    Span sp;
     TRACE_FUNCTION_F(path);
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
     MIRTypeResolve state {
@@ -1873,7 +1873,7 @@ void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, 
 ///
 /// Returns true if any optimisation was performed
 bool MIROptimiseInline(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType, const TransList& list, unsigned optLevel) {
-    static Span sp;
+    Span sp;
     bool rv = false;
     TRACE_FUNCTION_FR(path, rv);
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
@@ -1894,7 +1894,7 @@ bool MIROptimiseInline(const StaticTraitResolve& resolve, const HIRItemPath& pat
 }
 
 void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType, unsigned optLevel, bool doInline /*=true*/, bool validate /*=true*/) {
-    static Span sp;
+    Span sp;
     assert(optLevel > 0);
     TRACE_FUNCTION_F(path);
     auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });

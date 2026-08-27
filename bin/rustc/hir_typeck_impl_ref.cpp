@@ -218,7 +218,7 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
     if (!name[0]) {
         return HIRTypeRef();
     }
-    static Span sp;
+    Span sp;
     switch (this->data.tag()) {
         case ImplRefData::TAG_TraitImpl: {
             auto& e = this->data.as_TraitImpl();
