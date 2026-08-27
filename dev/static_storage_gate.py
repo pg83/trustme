@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail while compiler object files contain static or thread-local objects."""
+"""Fail while compiler object files contain static-storage state."""
 
 import collections
 import re
@@ -9,6 +9,7 @@ import sys
 
 STORAGE_TYPES = frozenset("bBcCdDgGrRsSuVv")
 MAX_STORAGE_OBJECTS = 0
+MAX_WRITABLE_BYTES = 0
 
 # nm also exposes data emitted by the C++ ABI and the compiler itself.  None of
 # these names denotes an object declared by the trustme sources.
@@ -23,38 +24,44 @@ IGNORED_NAMES = frozenset((
 # These source-level objects are immutable POD lookup data.  They have no
 # constructors, destructors, caches, registration side effects, or mutable
 # state; keeping one shared copy is their intended representation.
-ALLOWED_IMMUTABLE_NAMES = frozenset((
+ALLOWED_IMMUTABLE = frozenset((
     # Generated Unicode normalization tables.
-    "_ZN12_GLOBAL__N_19COMBININGE",
-    "_ZN12_GLOBAL__N_114DECOMPOSITIONSE",
-    "_ZN12_GLOBAL__N_112COMPOSITIONSE",
+    ("unicode_nfc.cpp.o", "_ZN12_GLOBAL__N_19COMBININGE", "r"),
+    ("unicode_nfc.cpp.o", "_ZN12_GLOBAL__N_114DECOMPOSITIONSE", "r"),
+    ("unicode_nfc.cpp.o", "_ZN12_GLOBAL__N_112COMPOSITIONSE", "r"),
     # Embedded source emitted by the C backend.
-    "_ZL17CODEGEN_C_PRELUDE",
+    ("trans_codegen_c.cpp.o", "_ZL17CODEGEN_C_PRELUDE", "r"),
     # Parser and core-type lookup tables.
-    "_ZL9CORETYPES",
-    "_ZL8TOKENMAP",
-    "_ZL11RWORDS_2015",
-    "_ZL11RWORDS_2018",
+    ("ast_types.cpp.o", "_ZL9CORETYPES", "d"),
+    ("parse_lex.cpp.o", "_ZL8TOKENMAP", "d"),
+    ("parse_lex.cpp.o", "_ZL11RWORDS_2015", "d"),
+    ("parse_lex.cpp.o", "_ZL11RWORDS_2018", "d"),
     # Allocator ABI metadata.
-    "ALLOCATOR_METHODS",
-    "_ZL28ALLOCATOR_METHODS_ARGS_alloc",
-    "_ZL30ALLOCATOR_METHODS_ARGS_dealloc",
-    "_ZL30ALLOCATOR_METHODS_ARGS_realloc",
-    "_ZL35ALLOCATOR_METHODS_ARGS_alloc_zeroed",
-    "GLOBAL_ALLOCATOR_LANG_ITEM",
+    ("trans_allocator.cpp.o", "ALLOCATOR_METHODS", "D"),
+    ("trans_allocator.cpp.o", "_ZL28ALLOCATOR_METHODS_ARGS_alloc", "r"),
+    ("trans_allocator.cpp.o", "_ZL30ALLOCATOR_METHODS_ARGS_dealloc", "r"),
+    ("trans_allocator.cpp.o", "_ZL30ALLOCATOR_METHODS_ARGS_realloc", "r"),
+    ("trans_allocator.cpp.o", "_ZL35ALLOCATOR_METHODS_ARGS_alloc_zeroed", "r"),
+    ("trans_allocator.cpp.o", "GLOBAL_ALLOCATOR_LANG_ITEM", "R"),
     # Fixed lookup tables local to their consumers.
-    ("_ZZN12_GLOBAL__N_119x86ReservedRegisterERKNSt3__112basic_stringIcNS0_"
-     "11char_traitsIcEENS0_9allocatorIcEEEEE8reserved"),
-    ("_ZZN12_GLOBAL__N_120canonicalX86RegisterERKNSt3__112basic_stringIcNS0_"
-     "11char_traitsIcEENS0_9allocatorIcEEEEbE7aliases"),
-    ("_ZZN12_GLOBAL__N_123TypeRestrictiveOrdering14getOrderingPtrERK4SpanRK7"
-     "ContextPK11HIRTypeDataS9_RbbE11tagOrdering"),
-    ("_ZZNK22NextTraitGoalEvaluator20literalClassCanMatchERK13HIRSimplePathRK"
-     "13HIRPathParams13HIRInferClassE8intPrims"),
-    ("_ZZNK22NextTraitGoalEvaluator20literalClassCanMatchERK13HIRSimplePathRK"
-     "13HIRPathParams13HIRInferClassE10floatPrims"),
-    "_ZZN7Mangler7fmtNameEPKcE3HEX",
-    "_ZZN12_GLOBAL__N_112mangleFinishERN3stl13StringBuilderEE3HEX",
+    ("synext_macro.cpp.o",
+     "_ZZN12_GLOBAL__N_119x86ReservedRegisterERKNSt3__112basic_stringIcNS0_"
+     "11char_traitsIcEENS0_9allocatorIcEEEEE8reserved", "d"),
+    ("synext_macro.cpp.o",
+     "_ZZN12_GLOBAL__N_120canonicalX86RegisterERKNSt3__112basic_stringIcNS0_"
+     "11char_traitsIcEENS0_9allocatorIcEEEEbE7aliases", "d"),
+    ("hir_typeck_expr_cs.cpp.o",
+     "_ZZN12_GLOBAL__N_123TypeRestrictiveOrdering14getOrderingPtrERK4SpanRK7"
+     "ContextPK11HIRTypeDataS9_RbbE11tagOrdering", "r"),
+    ("hir_typeck_helpers.cpp.o",
+     "_ZZNK22NextTraitGoalEvaluator20literalClassCanMatchERK13HIRSimplePathRK"
+     "13HIRPathParams13HIRInferClassE8intPrims", "V"),
+    ("hir_typeck_helpers.cpp.o",
+     "_ZZNK22NextTraitGoalEvaluator20literalClassCanMatchERK13HIRSimplePathRK"
+     "13HIRPathParams13HIRInferClassE10floatPrims", "V"),
+    ("trans_mangling.cpp.o", "_ZZN7Mangler7fmtNameEPKcE3HEX", "V"),
+    ("trans_mangling.cpp.o",
+     "_ZZN12_GLOBAL__N_112mangleFinishERN3stl13StringBuilderEE3HEX", "r"),
 ))
 READELF_MEMBER = re.compile(r"^File: .+\(([^()]*)\)$")
 
@@ -99,13 +106,13 @@ def storage_symbols(archive):
     for line in output.splitlines():
         location, separator, rest = line.partition(": ")
         fields = rest.split()
-        if not separator or len(fields) < 3:
+        if not separator or len(fields) < 4:
             continue
         name, kind = fields[0], fields[1]
         if (kind not in STORAGE_TYPES or name in IGNORED_NAMES
                 or name.startswith(IGNORED_PREFIXES)):
             continue
-        symbols.append((object_name(location), name))
+        symbols.append((object_name(location), name, kind, int(fields[3], 16)))
     return symbols
 
 
@@ -116,27 +123,50 @@ def main():
     tls = tls_names(archive)
     all_symbols = storage_symbols(archive)
     allowed = [symbol for symbol in all_symbols
-               if symbol[1] in ALLOWED_IMMUTABLE_NAMES]
-    symbols = [symbol for symbol in all_symbols
-               if symbol[1] not in ALLOWED_IMMUTABLE_NAMES]
-    static = [symbol for symbol in symbols if symbol not in tls]
-    thread = [symbol for symbol in symbols if symbol in tls]
+               if symbol[:3] in ALLOWED_IMMUTABLE
+               and symbol[:2] not in tls]
+    symbols = [symbol for symbol in all_symbols if symbol not in allowed]
+    static = [symbol for symbol in symbols if symbol[:2] not in tls]
+    thread = [symbol for symbol in symbols if symbol[:2] in tls]
+    # r/R are read-only data.  Ambiguous weak/unique symbols are counted as
+    # writable unless explicitly admitted above, so packing state into one
+    # aggregate cannot make the byte metric smaller.
+    writable_bytes = sum(symbol[3] for symbol in symbols
+                         if symbol[:2] in tls or symbol[2] not in "rR")
 
-    counts = collections.defaultdict(lambda: [0, 0])
-    for location, _ in static:
+    observed_allowed = {symbol[:3] for symbol in allowed}
+    missing_allowed = ALLOWED_IMMUTABLE - observed_allowed
+    duplicate_allowed = len(allowed) != len(observed_allowed)
+
+    counts = collections.defaultdict(lambda: [0, 0, 0])
+    for location, _, kind, size in static:
         counts[location][0] += 1
-    for location, _ in thread:
+        if kind not in "rR":
+            counts[location][2] += size
+    for location, _, _, size in thread:
         counts[location][1] += 1
+        counts[location][2] += size
 
     print(f"static_storage_gate: static={len(static)}, "
-          f"thread_local={len(thread)}, total={len(symbols)} "
-          f"allowed_immutable={len(allowed)} (maximum: {MAX_STORAGE_OBJECTS})")
-    for location, (ordinary, per_thread) in sorted(
-        counts.items(), key=lambda item: (-sum(item[1]), item[0])
+          f"thread_local={len(thread)}, total={len(symbols)}, "
+          f"writable_bytes={writable_bytes}, allowed_immutable={len(allowed)} "
+          f"(maximum: objects={MAX_STORAGE_OBJECTS}, "
+          f"writable_bytes={MAX_WRITABLE_BYTES})")
+    for location, (ordinary, per_thread, byte_count) in sorted(
+        counts.items(), key=lambda item: (-(item[1][0] + item[1][1]), item[0])
     ):
-        print(f"  {location}: static={ordinary}, thread_local={per_thread}")
+        print(f"  {location}: static={ordinary}, thread_local={per_thread}, "
+              f"writable_bytes={byte_count}")
 
-    if len(symbols) > MAX_STORAGE_OBJECTS:
+    for location, name, kind in sorted(missing_allowed):
+        print(f"static_storage_gate: stale immutable exception: "
+              f"{location}: {kind} {name}", file=sys.stderr)
+    if duplicate_allowed:
+        print("static_storage_gate: duplicate immutable exception symbol", file=sys.stderr)
+
+    if (len(symbols) > MAX_STORAGE_OBJECTS
+            or writable_bytes > MAX_WRITABLE_BYTES
+            or missing_allowed or duplicate_allowed):
         return 1
     with open(stamp, "w"):
         pass
