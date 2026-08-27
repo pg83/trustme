@@ -19,6 +19,7 @@ struct ImplRef {
 
     ImplRef(HIRPathParams implParams, const HIRTrait& traitRef, const HIRSimplePath& trait, const HIRTraitImpl& impl);
 
+    /// Borrowed response; null args or assoc denote an empty set.
     ImplRef(const HIRTypeData* type, const HIRPathParams* args, const HIRTraitPath::assocListT* assoc, HIRBoundConstness constness = HIRBoundConstness::Never);
 
     ImplRef(HIRTypeRef type, HIRPathParams args, HIRTraitPath::assocListT assoc, HIRBoundConstness constness = HIRBoundConstness::Never);

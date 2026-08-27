@@ -12,6 +12,9 @@
 class HIRTypeData;
 using HIRTypeRef = const HIRTypeData*;
 class HIRTypeInterner;
+namespace stl {
+    class ObjPool;
+}
 
 // Interned types are ordered by the interner-assigned uid (creation order):
 // deterministic across runs and allocation-layout changes. The ordering
@@ -62,12 +65,30 @@ class HIRResolvePlaceholdersNop: public HIRResolvePlaceholders {
 using tCbResolveType = const HIRResolvePlaceholders&;
 
 class HIRMatchGenerics {
+protected:
+    /// Select this only when matchVal consumes its argument before returning.
+    struct BorrowMatchedValues {};
+
+    explicit HIRMatchGenerics(BorrowMatchedValues)
+        : retainedValuePool(nullptr)
+    {
+    }
+
+    /// Values retained by matchVal are frozen in this compilation-lifetime pool.
+    explicit HIRMatchGenerics(stl::ObjPool& retainedValuePool)
+        : retainedValuePool(&retainedValuePool)
+    {
+    }
+
 public:
     HIRCompare cmpPath(const Span& sp, const HIRPath& tyL, const HIRPath& tyR, tCbResolveType resolveCb);
     virtual HIRCompare cmpType(const Span& sp, const HIRTypeData* tyL, const HIRTypeData* tyR, tCbResolveType resolveCb);
 
     virtual HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) = 0;
     virtual HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) = 0;
+
+private:
+    stl::ObjPool* retainedValuePool;
 };
 
 enum class HIRInferClass {

@@ -2315,9 +2315,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
         }
 
         bool TraitResolution::findTraitImplsMagicCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* ty, TraitImplCallback& callback) const {
-            HIRPathParams nullParams;
-            HIRTraitPath::assocListT nullAssoc;
-
             const auto langCoerceUnsized = this->crate.getLangItemPathOpt("coerce_unsized");
             const auto langFnPtr = this->crate.getLangItemPathOpt("fn_ptr_trait");
             const auto langTuple = this->crate.getLangItemPathOpt("tuple_trait");
@@ -2328,7 +2325,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             if (trait == langSized()) {
                 auto cmp = typeIsSized(sp, type);
                 if (cmp != HIRCompare::Unequal) {
-                    return callback.visit(ImplRef(type, &nullParams, &nullAssoc), cmp);
+                    return callback.visit(ImplRef(type, nullptr, nullptr), cmp);
                 } else {
                     return false;
                 }
@@ -2337,7 +2334,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             if (trait == langCopy()) {
                 auto cmp = this->typeIsCopy(sp, type);
                 if (cmp != HIRCompare::Unequal) {
-                    auto impl = ImplRef(type, &nullParams, &nullAssoc);
+                    auto impl = ImplRef(type, nullptr, nullptr);
                     if (cmp == HIRCompare::Fuzzy) {
                         impl.markAmbiguousIdentity();
                     }
@@ -2378,14 +2375,14 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
 
             if (!langFnPtr.components().empty() && trait == langFnPtr) {
                 if (type->is_Function()) {
-                    return callback.visit(ImplRef(type, &nullParams, &nullAssoc), HIRCompare::Equal);
+                    return callback.visit(ImplRef(type, nullptr, nullptr), HIRCompare::Equal);
                 }
             }
 
             if (trait == langClone() && (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || ((*type).is_Path() && ((*type).as_Path().isClosure())))) {
                 auto cmp = this->typeIsClone(sp, type);
                 if (cmp != HIRCompare::Unequal) {
-                    return callback.visit(ImplRef(type, &nullParams, &nullAssoc), cmp);
+                    return callback.visit(ImplRef(type, nullptr, nullptr), cmp);
                 } else {
                     return false;
                 }
@@ -2909,9 +2906,6 @@ default:
             bool searchCrate /*=true*/,
             bool searchBounds /*=true*/
         ) const {
-            HIRPathParams nullParams;
-            HIRTraitPath::assocListT nullAssoc;
-
             const auto& type = this->ivars.getType(ty);
 
             if (magicTraitImpls) {
@@ -2943,7 +2937,7 @@ default:
                 if (trait == mt.path) {
                     auto cmp = comparePp(sp, mt.params, params);
                     if (cmp != HIRCompare::Unequal) {
-                        return callback.visit(ImplRef(type, &mt.params, &nullAssoc), cmp);
+                        return callback.visit(ImplRef(type, &mt.params, nullptr), cmp);
                     }
                 }
             }
@@ -3032,7 +3026,7 @@ default:
             auto& e = (*type).as_Generic();
             if ((e.binding >> 8) == 2) {
                 // TODO: This is probably going to break something in the future.
-                return callback.visit(ImplRef(type, &nullParams, &nullAssoc), HIRCompare::Fuzzy);
+                return callback.visit(ImplRef(type, nullptr, nullptr), HIRCompare::Fuzzy);
             }
             break;
         }
@@ -3091,7 +3085,7 @@ default:
                                     return true;
                                 }
                             } else {
-                                if (callback.visit(ImplRef(type, &bound.path.params, &nullAssoc, bound.constness), cmp)) {
+                                if (callback.visit(ImplRef(type, &bound.path.params, nullptr, bound.constness), cmp)) {
                                     return true;
                                 }
                             }
@@ -3993,7 +3987,11 @@ default:
                     ASSERT_BUG(span(), impl->traitPtr && impl->traitPath && impl->impl, "Cannot monomorphise an invalid trait impl response");
                     result = ImplRef(monomorph.monomorphPathParams(span(), impl->implParams, true), *impl->traitPtr, *impl->traitPath, *impl->impl);
                 } else if (const auto* bounded = source.data.opt_BoundedPtr()) {
-                    result = ImplRef(monomorph.monomorphType(span(), bounded->type, true), monomorph.monomorphPathParams(span(), *bounded->traitArgs, true), monomorphAssociated(bounded->assoc));
+                    HIRPathParams params;
+                    if (bounded->traitArgs) {
+                        params = monomorph.monomorphPathParams(span(), *bounded->traitArgs, true);
+                    }
+                    result = ImplRef(monomorph.monomorphType(span(), bounded->type, true), ::std::move(params), monomorphAssociated(bounded->assoc));
                 } else {
                     const auto& owned = source.data.as_Bounded();
                     result = ImplRef(monomorph.monomorphType(span(), owned.type, true), monomorph.monomorphPathParams(span(), owned.traitArgs, true), monomorphAssociated(&owned.assoc));
@@ -4145,20 +4143,25 @@ default:
                 return true;
             }
 
-            static const HIRTraitPath::assocListT& boundedAssociated(const ImplRef& impl) {
+            static const HIRTraitPath::assocListT* boundedAssociated(const ImplRef& impl) {
                 if (const auto* bounded = impl.data.opt_BoundedPtr()) {
-                    return *bounded->assoc;
+                    return bounded->assoc;
                 }
-                return impl.data.as_Bounded().assoc;
+                return &impl.data.as_Bounded().assoc;
             }
 
-            static bool associatedResponsesEqual(const HIRTraitPath::assocListT& left, const HIRTraitPath::assocListT& right) {
-                if (left.size() != right.size()) {
+            static bool associatedResponsesEqual(const HIRTraitPath::assocListT* left, const HIRTraitPath::assocListT* right) {
+                const auto leftSize = left ? left->size() : 0;
+                const auto rightSize = right ? right->size() : 0;
+                if (leftSize != rightSize) {
                     return false;
                 }
-                auto li = left.begin();
-                auto ri = right.begin();
-                for (; li != left.end(); ++li, ++ri) {
+                if (leftSize == 0) {
+                    return true;
+                }
+                auto li = left->begin();
+                auto ri = right->begin();
+                for (; li != left->end(); ++li, ++ri) {
                     if (li->first != ri->first || li->second.ord(ri->second) != OrdEqual) {
                         return false;
                     }
@@ -4204,9 +4207,11 @@ default:
                 if (typeIsNonGlobal(candidate.impl.getImplType(crate.types)) || paramsAreNonGlobal(candidate.impl.getTraitParams(crate.types))) {
                     return true;
                 }
-                for (const auto& associated : boundedAssociated(candidate.impl)) {
-                    if (paramsAreNonGlobal(associated.second.sourceTrait.params) || paramsAreNonGlobal(associated.second.atyParams) || typeIsNonGlobal(associated.second.type)) {
-                        return true;
+                if (const auto* associatedTypes = boundedAssociated(candidate.impl)) {
+                    for (const auto& associated : *associatedTypes) {
+                        if (paramsAreNonGlobal(associated.second.sourceTrait.params) || paramsAreNonGlobal(associated.second.atyParams) || typeIsNonGlobal(associated.second.type)) {
+                            return true;
+                        }
                     }
                 }
                 return false;
@@ -4360,7 +4365,8 @@ default:
                 bool changed = false;
 
                 BindCandidateParams(const Span& span, HIRTypeInterner& types, HIRPathParams& params)
-                    : span_(span)
+                    : HIRMatchGenerics(types.objectPool())
+                    , span_(span)
                     , types(types)
                     , params_(params)
                 {
@@ -5205,8 +5211,10 @@ default:
                 auto params = impl.getTraitParams(crate.types);
                 HIRTraitPath::assocListT associated;
                 if (const auto* bounded = impl.data.opt_BoundedPtr()) {
-                    for (const auto& entry : *bounded->assoc) {
-                        associated.insert({entry.first, entry.second.clone()});
+                    if (bounded->assoc) {
+                        for (const auto& entry : *bounded->assoc) {
+                            associated.insert({entry.first, entry.second.clone()});
+                        }
                     }
                 } else if (const auto* bounded = impl.data.opt_Bounded()) {
                     for (const auto& entry : bounded->assoc) {
@@ -5768,10 +5776,9 @@ default:
                     return visitResponse(::std::move(response), cached->responseCertainty, responseCandidate);
                 };
                 if (findActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr)) {
-                    const HIRTraitPath::assocListT noAssociated;
                     const bool coinductive = crate.getTraitByPath(span(), trait).isCoinductive;
                     cycleHits_++;
-                    return callback.visit(ImplRef(resolvedType, &goalParams, &noAssociated), coinductive ? HIRCompare::Equal : HIRCompare::Fuzzy);
+                    return callback.visit(ImplRef(resolvedType, &goalParams, nullptr), coinductive ? HIRCompare::Equal : HIRCompare::Fuzzy);
                 }
                 auto* rootGoal = pushActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr);
 
@@ -7505,7 +7512,8 @@ default:
                     stl::IntMap<HIRConstGeneric> hrtbValues;
 
                     HrtbBoundMatcher(Span sp, HIRTypeInterner& types)
-                        : Monomorphiser(types)
+                        : HIRMatchGenerics(types.objectPool())
+                        , Monomorphiser(types)
                         , sp(sp)
                         , scratchPool(stl::ObjPool::fromMemory())
                         , hrtbTypes(scratchPool.mutPtr())
@@ -7777,8 +7785,6 @@ default:
         bool TraitResolution::findTraitImplsCrateCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* paramsPtr, const HIRTypeData* type, TraitImplCallback& callback) const {
             // TODO: Have a global cache of impls that don't reference either generics or ivars
 
-            HIRTraitPath::assocListT nullAssoc;
-
             CanonicalizeTraitGoal canonicalizer(crate.types);
             const auto canonicalType = canonicalizer.monomorphType(sp, type, true);
             HIRPathParams canonicalParams;
@@ -7795,7 +7801,7 @@ default:
                 // rustc treats an inductive recursive trait predicate as
                 // ambiguous, while productive recursive traits are proven.
                 const auto cmp = crate.getTraitByPath(sp, trait).isCoinductive ? HIRCompare::Equal : HIRCompare::Fuzzy;
-                return callback.visit(ImplRef(type, paramsPtr, &nullAssoc), cmp);
+                return callback.visit(ImplRef(type, paramsPtr, nullptr), cmp);
             }
 
             // rustc's legacy solver has a second cycle check for fresh input
@@ -7836,7 +7842,7 @@ default:
                         continue;
                     }
 
-                    return callback.visit(ImplRef(type, paramsPtr, &nullAssoc), HIRCompare::Fuzzy);
+                    return callback.visit(ImplRef(type, paramsPtr, nullptr), HIRCompare::Fuzzy);
                 }
             }
 
@@ -7850,7 +7856,7 @@ default:
                 // NOTE: Expected behavior is for Ivars to return false
                 // TODO: Should they return Compare::Fuzzy instead?
                 if (type->is_Infer()) {
-                    return callback.visit(ImplRef(type, paramsPtr, &nullAssoc), HIRCompare::Fuzzy);
+                    return callback.visit(ImplRef(type, paramsPtr, nullptr), HIRCompare::Fuzzy);
                 }
 
                 const HIRTraitMarkings* markings = nullptr;
@@ -7868,7 +7874,7 @@ default:
                         if (!it->second.conditions.empty()) {
                             TODO(sp, "Conditional auto trait impl");
                         } else if (it->second.isImpled) {
-                            return callback.visit(ImplRef(type, paramsPtr, &nullAssoc), HIRCompare::Equal);
+                            return callback.visit(ImplRef(type, paramsPtr, nullptr), HIRCompare::Equal);
                         } else {
                             return false;
                         }
@@ -7935,7 +7941,7 @@ default:
                         ASSERT_BUG(sp, cmp == HIRCompare::Equal, "Auto trait with no params returned a fuzzy match from destructure - " << trait << " for " << type);
                         markings->autoImpls.insert(::std::make_pair(trait, HIRTraitMarkings::AutoMarking{{}, true}));
                     }
-                    return callback.visit(ImplRef(type, paramsPtr, &nullAssoc), cmp);
+                    return callback.visit(ImplRef(type, paramsPtr, nullptr), cmp);
                 } else {
                     if (markings) {
                         markings->autoImpls.insert(::std::make_pair(trait, HIRTraitMarkings::AutoMarking{{}, false}));
@@ -8143,8 +8149,9 @@ default:
                 HIRPathParams& outImplParams;
 
             public:
-                GetParams(Span sp, HIRPathParams& outImplParams)
-                    : sp(sp)
+                GetParams(Span sp, stl::ObjPool& valuePool, HIRPathParams& outImplParams)
+                    : HIRMatchGenerics(valuePool)
+                    , sp(sp)
                     , outImplParams(outImplParams)
                 {
                 }
@@ -8228,7 +8235,7 @@ default:
                 }
             };
 
-            GetParams getParams{sp, outImplParams};
+            GetParams getParams{sp, *crate.pool, outImplParams};
 
             outImplParams.types.resize(implParamsDef.types.size());
             outImplParams.values.resize(implParamsDef.values.size());
@@ -8334,7 +8341,8 @@ default:
                 HIRPathParams& placeholders;
 
                 Matcher(HIRTypeInterner& types, Span sp, const HIRPathParams& implParams, RcString placeholderName, HIRPathParams& placeholders)
-                    : Monomorphiser(types)
+                    : HIRMatchGenerics(types.objectPool())
+                    , Monomorphiser(types)
                     , sp(sp)
                     , implParams(implParams)
                     , placeholderName(placeholderName)
@@ -9778,6 +9786,11 @@ default: {
                     {
                         struct GetSelf: public HIRMatchGenerics {
                             ::std::optional<HIRTypeRef> detectedSelfTy;
+
+                            GetSelf()
+                                : HIRMatchGenerics(BorrowMatchedValues{})
+                            {
+                            }
 
                             HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override {
                                 if (g.isSelf()) {

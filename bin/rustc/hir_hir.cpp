@@ -844,7 +844,8 @@ namespace {
 
     public:
         ImplMatcher(stl::Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics)
-            : implTypes(buf)
+            : HIRMatchGenerics(BorrowMatchedValues{})
+            , implTypes(buf)
         {
             implTypes.clear();
             implTypes.zero(implGenerics.types.size());
@@ -1390,7 +1391,8 @@ namespace {
         ::std::vector<::std::optional<HIRConstGeneric>> implVals;
 
         explicit ImplTyMatcher(HIRTypeInterner& types)
-            : Monomorphiser(types)
+            : HIRMatchGenerics(types.objectPool())
+            , Monomorphiser(types)
         {
         }
 

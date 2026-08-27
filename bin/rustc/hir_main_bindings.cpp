@@ -2795,6 +2795,11 @@ break;
     }
 
     void serialiseSimplepath(const HIRSimplePath& path) {
+        if (!path.p) {
+            auto _ = out.openObject(typeid(ThinVector<RcString>).name());
+            out.writeCount(0);
+            return;
+        }
         serialiseVec(path.p->members);
     }
 

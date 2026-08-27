@@ -857,6 +857,11 @@ namespace {
                         ::std::map<RcString, const HIRTypeData*> mapping;
                         ::std::map<unsigned int, const HIRTypeData*> rpitMapping;
 
+                        MCB()
+                            : HIRMatchGenerics(BorrowMatchedValues{})
+                        {
+                        }
+
                         HIRCompare cmpType(const Span& sp, const HIRTypeData* tyL, const HIRTypeData* tyR, tCbResolveType resolveCb) override {
                             if (const auto* erased = tyL->opt_ErasedType(); erased && erased->inner.is_Fcn()) {
                                 const auto index = erased->inner.as_Fcn().index;

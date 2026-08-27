@@ -2812,13 +2812,11 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                             if (!lE.size.is_Unevaluated()) {
                                 assert(lE.size.is_Known());
                                 assert(rE.size.is_Unevaluated());
-                                auto known = EncodedLiteral::makeUsize(lE.size.as_Known());
-                                this->equateValues(sp, &known, rE.size.as_Unevaluated());
+                                this->equateValues(sp, freezeEncodedLiteral(*crate.pool, EncodedLiteral::makeUsize(lE.size.as_Known())), rE.size.as_Unevaluated());
                             } else if (!rE.size.is_Unevaluated()) {
                                 assert(lE.size.is_Unevaluated());
                                 assert(rE.size.is_Known());
-                                auto known = EncodedLiteral::makeUsize(rE.size.as_Known());
-                                this->equateValues(sp, lE.size.as_Unevaluated(), &known);
+                                this->equateValues(sp, lE.size.as_Unevaluated(), freezeEncodedLiteral(*crate.pool, EncodedLiteral::makeUsize(rE.size.as_Known())));
                             } else {
                                 this->equateValues(sp, lE.size.as_Unevaluated(), rE.size.as_Unevaluated());
                             }
@@ -6064,7 +6062,8 @@ namespace {
 
                 public:
                     explicit ProjectionMatcher(const Context& context)
-                        : context(context)
+                        : HIRMatchGenerics(BorrowMatchedValues{})
+                        , context(context)
                     {
                     }
 
@@ -8033,7 +8032,8 @@ default:
                         mutable ::std::map<HIRGenericRef, HIRConstGeneric> values;
 
                         Matcher(Context& context)
-                            : Monomorphiser(context.crate.types)
+                            : HIRMatchGenerics(BorrowMatchedValues{})
+                            , Monomorphiser(context.crate.types)
                             , context(context)
                         {
                         }
@@ -10996,8 +10996,9 @@ class OwnedImplMatcher: public HIRMatchGenerics {
     HIRPathParams& implParams;
 
 public:
-    OwnedImplMatcher(HIRPathParams& implParams)
-        : implParams(implParams)
+    OwnedImplMatcher(HIRTypeInterner& types, HIRPathParams& implParams)
+        : HIRMatchGenerics(types.objectPool())
+        , implParams(implParams)
     {
     }
 
@@ -11031,7 +11032,7 @@ bool inherentImplMatchesReceiver(
     }
     implParams.values.resize(impl.params.values.size());
 
-    OwnedImplMatcher matcher(implParams);
+    OwnedImplMatcher matcher(context.crate.types, implParams);
     const auto match = impl.type->matchTestGenericsFuzz(
         sp, receiver, context.ivars.callbackResolveInfer(), matcher);
     if (match != HIRCompare::Fuzzy) {
@@ -11417,7 +11418,7 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
             implParams.types.push_back(context.crate.types.infer());
         }
         implParams.values.resize(implPtr->params.values.size());
-        OwnedImplMatcher matcher(implParams);
+        OwnedImplMatcher matcher(context.crate.types, implParams);
 
         auto cmp = implPtr->type->matchTestGenericsFuzz(sp, lookupType, context.ivars.callbackResolveInfer(), matcher);
         if (cmp == HIRCompare::Fuzzy) {
@@ -13315,7 +13316,7 @@ public:
                             implParams.types.push_back(this->context.crate.types.infer());
                         }
                         implParams.values.resize(implPtr->params.values.size());
-                        OwnedImplMatcher matcher(implParams);
+                        OwnedImplMatcher matcher(context.crate.types, implParams);
                         // NOTE: Could be fuzzy.
                         bool r = implPtr->type->matchTestGenerics(sp, lookupType, this->context.ivars.callbackResolveInfer(), matcher);
                         for (auto& ty : implParams.types) {
@@ -13766,7 +13767,8 @@ namespace {
 
     public:
         explicit RpitOriginMonomorph(HIRTypeInterner& types)
-            : Monomorphiser(types)
+            : HIRMatchGenerics(types.objectPool())
+            , Monomorphiser(types)
         {
         }
 

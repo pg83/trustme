@@ -3,6 +3,19 @@
 #include "hir_hir.h"
 #include "hir_typeck_static.h" // for monomorphise_type_with
 
+namespace {
+    bool pathParamsEqual(const HIRPathParams* left, const HIRPathParams* right) {
+        if (!left || !right) {
+            return (!left || !left->hasParams()) && (!right || !right->hasParams());
+        }
+        return *left == *right;
+    }
+
+    size_t associatedSize(const HIRTraitPath::assocListT* associated) {
+        return associated ? associated->size() : 0;
+    }
+}
+
 bool ImplRef::moreSpecificThan(HIRTypeInterner& types, const ImplRef& other) const {
     switch (this->data.tag()) {
         case Data::TAG_TraitImpl: {
@@ -24,7 +37,7 @@ bool ImplRef::moreSpecificThan(HIRTypeInterner& types, const ImplRef& other) con
         }
         case Data::TAG_BoundedPtr: {
             auto& te = this->data.as_BoundedPtr();
-            if (!other.data.is_BoundedPtr()) return false; const auto& oe = other.data.as_BoundedPtr(); assert(te.type == oe.type); assert(*te.traitArgs == *oe.traitArgs); if (te.assoc->size() > oe.assoc->size()) return true; return false;
+            if (!other.data.is_BoundedPtr()) return false; const auto& oe = other.data.as_BoundedPtr(); assert(te.type == oe.type); assert(pathParamsEqual(te.traitArgs, oe.traitArgs)); if (associatedSize(te.assoc) > associatedSize(oe.assoc)) return true; return false;
             break;
         }
         case Data::TAG_Bounded: {
@@ -52,7 +65,7 @@ bool ImplRef::overlapsWith(const HIRCrate& crate, const ImplRef& other) const {
             auto& oe = other.data.as_BoundedPtr();
             // TODO: Bounded and BoundedPtr are compatible
             if (te.type != oe.type) return false;
-            if (*te.traitArgs != *oe.traitArgs) return false;
+            if (!pathParamsEqual(te.traitArgs, oe.traitArgs)) return false;
             // Don't check associated types
             return true;
         }
@@ -173,7 +186,7 @@ HIRPathParams ImplRef::getTraitParams(HIRTypeInterner& types) const {
         }
         case ImplRefData::TAG_BoundedPtr: {
             auto& e = this->data.as_BoundedPtr();
-            return e.traitArgs->clone();
+            return e.traitArgs ? e.traitArgs->clone() : HIRPathParams();
         }
         case ImplRefData::TAG_Bounded: {
             auto& e = this->data.as_Bounded();
@@ -198,7 +211,7 @@ HIRTypeRef ImplRef::getTraitTyParam(HIRTypeInterner& types, unsigned int idx) co
         }
         case ImplRefData::TAG_BoundedPtr: {
             auto& e = this->data.as_BoundedPtr();
-            if (idx >= e.traitArgs->types.size()) {
+            if (!e.traitArgs || idx >= e.traitArgs->types.size()) {
                 return HIRTypeRef();
             }
             return e.traitArgs->types.at(idx);
@@ -237,6 +250,9 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
         }
         case ImplRefData::TAG_BoundedPtr: {
             auto& e = this->data.as_BoundedPtr();
+            if (!e.assoc) {
+                return HIRTypeRef();
+            }
             auto it = e.assoc->find(name);
             if (it == e.assoc->end()) {
                 return HIRTypeRef();
@@ -303,9 +319,15 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
         case ImplRefData::TAG_BoundedPtr: {
             auto& e = x.data.as_BoundedPtr();
             assert(e.type);
-            assert(e.traitArgs);
-            assert(e.assoc);
-            os << "bound (ptr) " << e.type << " : ?" << *e.traitArgs << " + {" << *e.assoc << "}";
+            os << "bound (ptr) " << e.type << " : ?";
+            if (e.traitArgs) {
+                os << *e.traitArgs;
+            }
+            os << " + {";
+            if (e.assoc) {
+                os << *e.assoc;
+            }
+            os << "}";
             break;
         }
         case ImplRefData::TAG_Bounded: {

@@ -214,6 +214,10 @@ class HIRTypeInterner {
 public:
     HIRTypeInterner(stl::ObjPool& pool, u32& id);
 
+    stl::ObjPool& objectPool() const {
+        return pool;
+    }
+
     HIRTypeRef intern(HIRTypeData data);
     HIRTypeRef infer(unsigned int idx = ~0u, HIRInferClass tyClass = HIRInferClass::None);
     unsigned newAliasInputInfer();
