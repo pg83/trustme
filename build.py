@@ -220,6 +220,17 @@ else:
         ldflags=["-lz", "-flto=thin"],
     )
 
+    # The production compiler uses ThinLTO, which can hide static storage by
+    # internalising or deleting symbols.  Build the same translation units as
+    # a plain archive so the zero-storage unit gate can inspect every object.
+    rustc_storage_objects = library(
+        srcs=[*[compiler_source(source) for source in SRC], *tu_compiler_srcs],
+        name="rustc_storage_objects",
+        output="$(B)/tst/unit/rustc_storage_objects.a",
+        deps=[platform_libstd, codegen_c_prelude, unicode_nfc_tables],
+        cxxflags=["-fno-lto"],
+    )
+
 # Reference vectors for the float128 unit tests are produced by a generator
 # node, not checked in.
 FLOAT128_VECTORS = "$(B)/gen/float128_ut_vectors.inc"
@@ -825,6 +836,25 @@ rustc_ut_run = command(
     color="green",
 )
 unit_tests.append(rustc_ut_run)
+if not system_rustc_mode:
+    unit_tests.append(command(
+        name="unit_static_storage",
+        inputs=[
+            "$(S)/dev/static_storage_gate.py",
+            "$(B)/tst/unit/rustc_storage_objects.a",
+            *TIMEOUT_INPUT,
+        ],
+        outputs=["$(B)/tst/unit/static_storage.stamp"],
+        cmd=[
+            *TEST_TIMEOUT,
+            "python3", "$(S)/dev/static_storage_gate.py",
+            "$(B)/tst/unit/rustc_storage_objects.a",
+            "$(B)/tst/unit/static_storage.stamp",
+        ],
+        deps=[rustc_storage_objects],
+        descr="UT",
+        color="green",
+    ))
 unit_tests.append(command(
     name="unit_node_cast",
     inputs=[
