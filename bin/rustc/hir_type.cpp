@@ -9,6 +9,20 @@
 #include <cstdint>
 #include <cassert>
 
+namespace {
+    class TypeFmtStream final : public ::std::ostream {
+    public:
+        ::std::vector<const HIRTypeData*> recurseStack;
+
+        explicit TypeFmtStream(::std::ostream& output)
+            : ::std::ostream(output.rdbuf())
+        {
+            copyfmt(output);
+            clear(output.rdstate());
+        }
+    };
+}
+
 Ordering ord(const HIRTypeData* l, const HIRTypeData* r) {
     if (l == r) {
         return OrdEqual;
@@ -325,17 +339,23 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
 }
 
 void HIRTypeData::fmt(::std::ostream& os) const {
-    thread_local static std::vector<const HIRTypeData*> sRecurseStack;
-    for (const auto* p : sRecurseStack) {
+    auto* context = dynamic_cast<TypeFmtStream*>(&os);
+    if (!context) {
+        TypeFmtStream fmtStream(os);
+        fmt(fmtStream);
+        return;
+    }
+
+    for (const auto* p : context->recurseStack) {
         if (p == this) {
             os << "RECURSE";
             return;
         }
     }
 
-    sRecurseStack.push_back(this);
+    context->recurseStack.push_back(this);
     STD_DEFER {
-        sRecurseStack.pop_back();
+        context->recurseStack.pop_back();
     };
 
     switch ((*this).tag()) {
