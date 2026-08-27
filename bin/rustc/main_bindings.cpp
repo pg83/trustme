@@ -1131,9 +1131,9 @@ static void printRustcVersion(bool verbose) {
         return;
     }
     ::std::cout << "binary: rustc" << ::std::endl;
-    ::std::cout << "commit-hash: " << gsVersionGitHash << ::std::endl;
+    ::std::cout << "commit-hash: " << VersionGetGitHash() << ::std::endl;
     ::std::cout << "commit-date: UNKNOWN" << ::std::endl;
-    ::std::cout << "build-date: " << gsVersionBuildTime << ::std::endl;
+    ::std::cout << "build-date: " << VersionGetBuildTime() << ::std::endl;
     ::std::cout << "host: UNKNOWN" << ::std::endl;
     ::std::cout << "release: " << rustcTarget << ".100" << ::std::endl;
 }
