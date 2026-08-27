@@ -5618,7 +5618,7 @@ void Context::requireSized(const Span& sp, const HIRTypeData* ty_) {
                 break;
             }
             case HIRTypePathBinding::TAG_ExternType: {
-                static HIRGenericParams emptyParams; paramsDef = &emptyParams;
+                paramsDef = &emptyGenericParams;
                 break;
             }
             case HIRTypePathBinding::TAG_Enum: {

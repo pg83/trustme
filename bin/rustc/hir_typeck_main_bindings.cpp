@@ -11,7 +11,7 @@
 
 namespace {
 
-    const HIRGenericParams& getParamsForItem(const Span& sp, const HIRCrate& crate, const HIRSimplePath& path, HIRVisitor::PathContext pc) {
+    const HIRGenericParams& getParamsForItem(const Span& sp, const HIRCrate& crate, const HIRSimplePath& path, HIRVisitor::PathContext pc, const HIRGenericParams& emptyParams) {
         // Support for enum variants
         if (path.components().size() > 1) {
             const auto& pitem = crate.getTypeitemByPath(sp, path, false, true);
@@ -43,11 +43,11 @@ namespace {
                     }
                     case HIRValueItem::TAG_StructConstructor: {
                         auto& e = item.as_StructConstructor();
-                        return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE);
+                        return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE, emptyParams);
                     }
                     case HIRValueItem::TAG_StructConstant: {
                         auto& e = item.as_StructConstant();
-                        return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE);
+                        return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE, emptyParams);
                     }
                 }
             } break;
@@ -70,7 +70,7 @@ namespace {
                         break;
                     }
                     case HIRTypeItem::TAG_ExternType: {
-                        static HIRGenericParams emptyParams; return emptyParams;
+                        return emptyParams;
                         break;
                     }
                     case HIRTypeItem::TAG_Module: {
@@ -102,6 +102,7 @@ namespace {
     class Visitor: public HIRVisitor {
         HIRCrate& crate;
         StaticTraitResolve resolve_;
+        HIRGenericParams emptyParams;
 
         const HIRTrait* currentTrait = nullptr;
         const HIRItemPath* currentTraitPath_ = nullptr;
@@ -411,7 +412,7 @@ namespace {
         void visitGenericPath(HIRGenericPath& p, PathContext pc) override {
             Span sp;
             TRACE_FUNCTION_F("p = " << p);
-            const auto& params = getParamsForItem(sp, crate, p.path, pc);
+            const auto& params = getParamsForItem(sp, crate, p.path, pc, emptyParams);
             auto& args = p.params;
 
             checkParameters(sp, p.path, pc, params, args);

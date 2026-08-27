@@ -194,13 +194,11 @@ TraitResolveCommon::TraitResolveCommon(const WireBoard& wb)
 }
 
 const HIRGenericParams& TraitResolveCommon::implGenerics() const {
-    static HIRGenericParams empty;
-    return implGenerics_ ? *implGenerics_ : empty;
+    return implGenerics_ ? *implGenerics_ : emptyGenerics_;
 }
 
 const HIRGenericParams& TraitResolveCommon::itemGenerics() const {
-    static HIRGenericParams empty;
-    return itemGenerics_ ? *itemGenerics_ : empty;
+    return itemGenerics_ ? *itemGenerics_ : emptyGenerics_;
 }
 
 /// Iterate over in-scope bounds (function then type)

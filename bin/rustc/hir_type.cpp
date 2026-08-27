@@ -1512,6 +1512,10 @@ HIRTypeRef HIRTypeInterner::infer(unsigned int idx, HIRInferClass tyClass) {
     return intern(HIRTypeData::make_Infer({idx, tyClass}));
 }
 
+unsigned HIRTypeInterner::newAliasInputInfer() {
+    return nextAliasInputInfer--;
+}
+
 HIRTypeRef HIRTypeInterner::primitive(HIRCoreType ct) {
     return intern(HIRTypeData::make_Primitive(ct));
 }

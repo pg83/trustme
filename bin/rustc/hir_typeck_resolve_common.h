@@ -178,6 +178,7 @@ struct TraitResolveCommon {
 
     const HIRGenericParams* implGenerics_;
     const HIRGenericParams* itemGenerics_;
+    HIRGenericParams emptyGenerics_;
 
     struct CachedEquality {
         HIRTypeRef ty;

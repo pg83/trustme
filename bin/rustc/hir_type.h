@@ -210,12 +210,14 @@ class HIRTypeInterner {
     stl::ObjPool& pool;
     ::std::unordered_multimap<size_t, HIRTypeRef> nodes;
     u32 nextUid = 0;
+    unsigned nextAliasInputInfer = ~1u;
 
 public:
     explicit HIRTypeInterner(stl::ObjPool& pool);
 
     HIRTypeRef intern(HIRTypeData data);
     HIRTypeRef infer(unsigned int idx = ~0u, HIRInferClass tyClass = HIRInferClass::None);
+    unsigned newAliasInputInfer();
     HIRTypeRef primitive(HIRCoreType ct);
     HIRTypeRef generic(RcString name, unsigned int slot);
     HIRTypeRef self();

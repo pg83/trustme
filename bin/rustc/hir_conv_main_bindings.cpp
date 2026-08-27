@@ -152,6 +152,7 @@ namespace {
             const HIRModule* ptr;
             const HIRItemPath* path;
         } curModule;
+        HIRItemPath rootPath{""};
 
         unsigned inExpr;
         bool inImplTraitBinding = false;
@@ -169,7 +170,6 @@ namespace {
             , ms(wb)
             , inExpr(0)
         {
-            static HIRItemPath rootPath("");
             curModule.ptr = &crate.rootModule;
             curModule.path = &rootPath;
         }
@@ -1537,10 +1537,10 @@ void ConvertHIRBind(const WireBoard& wb, HIRCrate& crate) {
 HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, const HIRGenericPath& path, bool isExpr) {
     auto pp = path.params.clone();
 
-    static unsigned nextAliasInputInfer = ~1u;
     auto newAliasInputInfer = [&]() {
-        ASSERT_BUG(sp, isAliasInputInfer(nextAliasInputInfer), "exhausted alias inference placeholder range");
-        return nextAliasInputInfer--;
+        const auto index = types.newAliasInputInfer();
+        ASSERT_BUG(sp, isAliasInputInfer(index), "exhausted alias inference placeholder range");
+        return index;
     };
 
     // Empty list, fill with ivars
@@ -3555,7 +3555,6 @@ public:
         };
 
         // Search supertraits (recursively)
-        static HIRGenericParams emptyGp;
         for (const auto& pt : trait.parentTraits) {
             const auto& parTraitPath = monomorphGpIfNeeded(pt.path);
             DEBUG("- Check " << parTraitPath);

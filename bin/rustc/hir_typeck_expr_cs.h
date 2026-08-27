@@ -132,6 +132,7 @@ struct Context: TraitTypeConstraintCallback {
 
     // Keep track of if an ivar is used in a context where it has to be Sized
     // - If it is, then we can discount any unsized possibilities
+    HIRGenericParams emptyGenericParams;
     ::std::vector<bool> ivarsSized;
     ::std::vector<IVarPossible> possibleIvarVals;
     ::std::vector<Associated::CapturedIvarPossible>* possibleIvarSink = nullptr;
