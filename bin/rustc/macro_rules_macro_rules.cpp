@@ -552,7 +552,7 @@ public:
 
     MacroExpander(const MacroExpander& x) = delete;
 
-    MacroExpander(stl::ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
+    MacroExpander(HygieneContext& hygieneContext, stl::ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
         : TokenStream(ParseState())
         , pool(pool)
         , logIndex(sNextLogIndex++)
@@ -565,7 +565,8 @@ public:
         , sourceEdition(sourceEdition)
         , isMacroItem(isMacroItem)
         , transparent(transparent)
-        , hygiene_(Ident::Hygiene::newScopeChained(pool, parentHygiene, definitionId, isMacroItem))
+        , hygiene_(Ident::Hygiene::newScopeChained(
+              hygieneContext, pool, parentHygiene, definitionId, isMacroItem))
         , lastHygiene(hygiene_)
     {
     }
@@ -713,7 +714,10 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
     // Run through the expansion counting the number of times each fragment is used
     MacroInvokeRulesCountSubstUses(boundTts, rule.contents);
 
-    TokenStream* retPtr = new MacroExpander(*crate.hirPool, name, sp, crate.edition, rules.isMacroItem, rules.transparent, rules.definitionId, rules.hygiene, rule.contents, mv$(boundTts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
+    TokenStream* retPtr = new MacroExpander(*wb.hygiene, *crate.hirPool, name, sp,
+        crate.edition, rules.isMacroItem, rules.transparent, rules.definitionId,
+        rules.hygiene, rule.contents, mv$(boundTts),
+        rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
 
     return ::std::unique_ptr<TokenStream>(retPtr);
 }
@@ -3478,7 +3482,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
 
         void emitFromString(const ::std::string& s) {
             ::std::istringstream iss{s};
-            Lexer lex{*wb.pool, iss, ASTEdition::Rust2021, {}};
+            Lexer lex{*wb.hygiene, *wb.pool, iss, ASTEdition::Rust2021, {}};
             for (;;) {
                 auto tok = lex.getToken();
                 if (tok == TOK_EOF) {

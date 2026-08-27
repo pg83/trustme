@@ -19,8 +19,9 @@
 //#define TRACE_CHARS
 //#define TRACE_RAW_TOKENS
 
-Lexer::Lexer(stl::ObjPool& pool, const ::std::string& filename, ASTEdition edition, ParseState ps)
+Lexer::Lexer(HygieneContext& hygieneContext, stl::ObjPool& pool, const ::std::string& filename, ASTEdition edition, ParseState ps)
     : TokenStream(ps)
+    , hygieneContext(hygieneContext)
     , path_(filename.c_str())
     , line(1)
     , lineOfs(0)
@@ -32,7 +33,7 @@ Lexer::Lexer(stl::ObjPool& pool, const ::std::string& filename, ASTEdition editi
     , initialFrontmatterPrecededByWhitespace(false)
     , replayCharOffset(0)
     , edition(edition)
-    , hygiene_(Ident::Hygiene::newScope(pool))
+    , hygiene_(Ident::Hygiene::newScope(hygieneContext, pool))
 {
     if (istreamFp) {
         if (!istreamFp->is_open()) {
@@ -53,8 +54,9 @@ Lexer::Lexer(stl::ObjPool& pool, const ::std::string& filename, ASTEdition editi
     }
 }
 
-Lexer::Lexer(stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, ParseState ps)
+Lexer::Lexer(HygieneContext& hygieneContext, stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, ParseState ps)
     : TokenStream(ps)
+    , hygieneContext(hygieneContext)
     , path_("-")
     , line(1)
     , lineOfs(0)
@@ -66,7 +68,7 @@ Lexer::Lexer(stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, P
     , initialFrontmatterPrecededByWhitespace(false)
     , replayCharOffset(0)
     , edition(edition)
-    , hygiene_(Ident::Hygiene::newScope(pool))
+    , hygiene_(Ident::Hygiene::newScope(hygieneContext, pool))
 {
 }
 
@@ -1792,7 +1794,7 @@ Codepoint::Codepoint(u32 v)
 }
 
 void Lexer::pushHygine() {
-    hygiene_ = Ident::Hygiene::newScopeChained(typePool(), hygiene_);
+    hygiene_ = Ident::Hygiene::newScopeChained(hygieneContext, typePool(), hygiene_);
     DEBUG(">> " << hygiene_);
 }
 

@@ -8,6 +8,7 @@ struct ASTCrate;
 class HIRCrate;
 class HIRTypeInterner;
 class HIRInherentCache;
+class HygieneContext;
 class LangItems;
 struct Settings;
 struct TargetSpec;
@@ -31,6 +32,8 @@ struct WireBoard {
     stl::ObjPool* astPool = nullptr;
     // The one type interner; created right after the pool, before parsing.
     HIRTypeInterner* types = nullptr;
+    // Monotonic lexical/macro scope identity for this compiler invocation.
+    HygieneContext* hygiene = nullptr;
 
     // Compilation settings: command-line configuration plus the few values
     // the pipeline derives once (crate names, cfg state). See settings.h.

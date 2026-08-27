@@ -48,6 +48,7 @@ extern Token LexFindReservedWord(const ::std::string& s, ASTEdition edition);
 typedef Codepoint uchar;
 
 class Lexer: public TokenStream {
+    HygieneContext& hygieneContext;
     RcString path_;
     unsigned int line;
     unsigned int lineOfs;
@@ -67,8 +68,8 @@ class Lexer: public TokenStream {
     Ident::Hygiene hygiene_;
 
 public:
-    Lexer(stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, ParseState ps);
-    Lexer(stl::ObjPool& pool, const ::std::string& filename, ASTEdition edition, ParseState ps);
+    Lexer(HygieneContext& hygieneContext, stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, ParseState ps);
+    Lexer(HygieneContext& hygieneContext, stl::ObjPool& pool, const ::std::string& filename, ASTEdition edition, ParseState ps);
 
     Position getPosition() const override;
     Ident::Hygiene realGetHygiene() const override;

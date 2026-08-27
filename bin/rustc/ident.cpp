@@ -5,8 +5,6 @@
 
 #include <std/mem/obj_pool.h>
 
-unsigned int Ident::Hygiene::gNextScope = 0;
-
 namespace {
     constexpr unsigned int ITEM_OPAQUE = 1u << 31;
 
@@ -16,21 +14,22 @@ namespace {
 }
 
 bool Ident::Hygiene::isVisible(const Hygiene& srcH) const {
-    const auto& self = get();
-    const auto& src = srcH.get();
-    if (self.contexts.size() > src.contexts.size()) {
+    const auto selfSize = inner ? inner->contexts.size() : 0;
+    const auto srcSize = srcH.inner ? srcH.inner->contexts.size() : 0;
+    if (selfSize > srcSize) {
         return false;
     }
-    for (size_t i = 0; i < self.contexts.size(); i++) {
-        if (self.contexts[i] != src.contexts[i] || self.macroDefinitions[i] != src.macroDefinitions[i]) {
+    for (size_t i = 0; i < selfSize; i++) {
+        if (inner->contexts[i] != srcH.inner->contexts[i]
+                || inner->macroDefinitions[i] != srcH.inner->macroDefinitions[i]) {
             return false;
         }
     }
     // Ordinary lexical scopes extend visibility. A macro invocation is a
     // semi-opaque rib: it must be removed at its definition boundary before
     // bindings outside that definition become visible.
-    for (size_t i = self.contexts.size(); i < src.contexts.size(); i++) {
-        if (src.macroDefinitions[i] != 0) {
+    for (size_t i = selfSize; i < srcSize; i++) {
+        if (srcH.inner->macroDefinitions[i] != 0) {
             return false;
         }
     }
@@ -38,7 +37,10 @@ bool Ident::Hygiene::isVisible(const Hygiene& srcH) const {
 }
 
 RcString Ident::Hygiene::applyToItemName(const RcString& name) const {
-    const auto& h = get();
+    if (!inner) {
+        return name;
+    }
+    const auto& h = *inner;
     bool hasOpaqueContext = false;
     for (const auto definition : h.macroDefinitions) {
         hasOpaqueContext |= (definition & ITEM_OPAQUE) != 0;
@@ -63,23 +65,24 @@ RcString Ident::Hygiene::applyToItemName(const RcString& name) const {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const Ident::Hygiene& x) {
-    const auto& h = x.get();
     os << "/*[";
-    for (size_t i = 0; i < h.contexts.size(); i++) {
-        if (i != 0) {
-            os << ", ";
-        }
-        os << h.contexts[i];
-        if (h.macroDefinitions[i] != 0) {
-            os << "@" << macroDefinitionId(h.macroDefinitions[i]);
-            if ((h.macroDefinitions[i] & ITEM_OPAQUE) != 0) {
-                os << "#item";
+    if (x.inner) {
+        for (size_t i = 0; i < x.inner->contexts.size(); i++) {
+            if (i != 0) {
+                os << ", ";
+            }
+            os << x.inner->contexts[i];
+            if (x.inner->macroDefinitions[i] != 0) {
+                os << "@" << macroDefinitionId(x.inner->macroDefinitions[i]);
+                if ((x.inner->macroDefinitions[i] & ITEM_OPAQUE) != 0) {
+                    os << "#item";
+                }
             }
         }
     }
     os << "]";
-    if (h.searchModule) {
-        os << " " << *h.searchModule;
+    if (x.inner && x.inner->searchModule) {
+        os << " " << *x.inner->searchModule;
     }
     os << "*/";
     return os;
@@ -93,42 +96,39 @@ std::ostream& operator<<(std::ostream& os, const Ident::ModPath& x) {
     return os;
 }
 
-const Ident::Hygiene::Inner& Ident::Hygiene::get() const {
-    static const Inner sEmpty;
-    return inner ? *inner : sEmpty;
-}
-
 Ident::Hygiene::Inner Ident::Hygiene::clone() const {
-    return get();
+    return inner ? *inner : Inner{};
 }
 
 const Ident::Hygiene::Inner* Ident::Hygiene::store(stl::ObjPool& pool, Inner v) {
     return pool.make<Inner>(::std::move(v));
 }
 
-Ident::Hygiene Ident::Hygiene::newScope(stl::ObjPool& pool) {
+Ident::Hygiene Ident::Hygiene::newScope(HygieneContext& context, stl::ObjPool& pool) {
     Inner v;
-    v.contexts.push_back(++gNextScope);
+    v.contexts.push_back(context.newScopeId());
     v.macroDefinitions.push_back(0);
     return Hygiene(store(pool, ::std::move(v)));
 }
 
-Ident::Hygiene Ident::Hygiene::newScopeChained(stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition, bool itemOpaque) {
-    const auto& p = parent.get();
+Ident::Hygiene Ident::Hygiene::newScopeChained(HygieneContext& context, stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition, bool itemOpaque) {
     Inner v;
-    v.searchModule = p.searchModule;
-    v.contexts.reserve(p.contexts.size() + 1);
-    v.macroDefinitions.reserve(p.macroDefinitions.size() + 1);
-    v.contexts = p.contexts;
-    v.macroDefinitions = p.macroDefinitions;
-    v.contexts.push_back(++gNextScope);
+    if (parent.inner) {
+        v.searchModule = parent.inner->searchModule;
+        v.contexts = parent.inner->contexts;
+        v.macroDefinitions = parent.inner->macroDefinitions;
+    }
+    v.contexts.reserve(v.contexts.size() + 1);
+    v.macroDefinitions.reserve(v.macroDefinitions.size() + 1);
+    v.contexts.push_back(context.newScopeId());
     assert((macroDefinition & ITEM_OPAQUE) == 0);
     v.macroDefinitions.push_back(macroDefinition | (itemOpaque ? ITEM_OPAQUE : 0));
     return Hygiene(store(pool, ::std::move(v)));
 }
 
 Ident::Hygiene Ident::Hygiene::withTailScope(stl::ObjPool& pool, const Hygiene& scope, bool inheritModPath) const {
-    const auto& s = scope.get();
+    assert(scope.inner);
+    const auto& s = *scope.inner;
     assert(!s.contexts.empty());
     assert(s.contexts.size() == s.macroDefinitions.size());
     Inner v = clone();
@@ -141,7 +141,8 @@ Ident::Hygiene Ident::Hygiene::withTailScope(stl::ObjPool& pool, const Hygiene& 
 }
 
 Ident::Hygiene Ident::Hygiene::getParent(stl::ObjPool& pool) const {
-    const auto& c = get();
+    assert(inner);
+    const auto& c = *inner;
     Inner v;
     v.contexts.insert(v.contexts.begin(), c.contexts.begin(), c.contexts.end() - 1);
     v.macroDefinitions.insert(v.macroDefinitions.begin(), c.macroDefinitions.begin(), c.macroDefinitions.end() - 1);
@@ -149,7 +150,10 @@ Ident::Hygiene Ident::Hygiene::getParent(stl::ObjPool& pool) const {
 }
 
 bool Ident::Hygiene::leaveMacroDefinition(stl::ObjPool& pool, unsigned int definition, const Hygiene& tokenContext, const Hygiene& definitionContext) {
-    const auto& c = get();
+    if (!inner) {
+        return false;
+    }
+    const auto& c = *inner;
     assert(c.contexts.size() == c.macroDefinitions.size());
     if (c.macroDefinitions.empty() || macroDefinitionId(c.macroDefinitions.back()) != definition) {
         return false;
@@ -179,8 +183,14 @@ Ordering Ident::Hygiene::ord(const Hygiene& x) const {
     if (inner == x.inner) {
         return OrdEqual;
     }
-    const auto& a = get();
-    const auto& b = x.get();
+    if (!inner) {
+        return x.inner->contexts.empty() && x.inner->macroDefinitions.empty() ? OrdEqual : OrdLess;
+    }
+    if (!x.inner) {
+        return inner->contexts.empty() && inner->macroDefinitions.empty() ? OrdEqual : OrdGreater;
+    }
+    const auto& a = *inner;
+    const auto& b = *x.inner;
     ORD(a.contexts, b.contexts);
     ORD(a.macroDefinitions, b.macroDefinitions); /*ORD(*m_inner->search_module, *x->search_module);*/
     return OrdEqual;

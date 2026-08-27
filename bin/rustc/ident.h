@@ -9,6 +9,15 @@ namespace stl {
     class ObjPool;
 }
 
+class HygieneContext {
+    unsigned nextScope = 0;
+
+public:
+    unsigned newScopeId() {
+        return ++nextScope;
+    }
+};
+
 struct Ident {
     // TODO: Use AST::AbsolutePath instead
     struct ModPath {
@@ -20,8 +29,6 @@ struct Ident {
     // TODO: make this a reference-counted pointer instead (so it's cheaper to copy)
     // - Presents challenges with setting the module path, and how this is used in macros.
     class Hygiene {
-        static unsigned gNextScope;
-
     public:
         // Immutable once built: every mutating operation clones the node into
         // the pool and re-points, so a Hygiene value is just a pointer and
@@ -43,8 +50,6 @@ struct Ident {
         {
         }
 
-        // Read-only view that works for the empty (null) hygiene too.
-        const Inner& get() const;
         // Copy of the current contents, for a mutation to modify and re-intern.
         Inner clone() const;
         static const Inner* store(stl::ObjPool& pool, Inner v);
@@ -56,9 +61,9 @@ struct Ident {
         Hygiene(Hygiene&& x) = default;
         Hygiene& operator=(Hygiene&& x) = default;
 
-        static Hygiene newScope(stl::ObjPool& pool);
+        static Hygiene newScope(HygieneContext& context, stl::ObjPool& pool);
 
-        static Hygiene newScopeChained(stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition = 0, bool itemOpaque = false);
+        static Hygiene newScopeChained(HygieneContext& context, stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition = 0, bool itemOpaque = false);
 
         Hygiene withTailScope(stl::ObjPool& pool, const Hygiene& scope, bool inheritModPath = false) const;
 

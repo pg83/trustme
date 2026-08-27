@@ -1183,7 +1183,7 @@ class CExpanderAssert: public ExpandProcMacro {
         ASSERT_BUG(sp, n, "No expression returned");
 
         ::std::vector<TokenTree> toks;
-        const auto expansionHygiene = Ident::Hygiene::newScope(*wb.pool);
+        const auto expansionHygiene = Ident::Hygiene::newScope(*wb.hygiene, *wb.pool);
 
         bool closeOuterBlock = false;
 
@@ -2161,7 +2161,7 @@ namespace {
         toks.push_back(mv$(t4));
     }
 
-    ::std::unique_ptr<TokenStream> expandFormatArgs(const Span& sp, const ASTCrate& crate, TTStream& lex, bool addNewline) {
+    ::std::unique_ptr<TokenStream> expandFormatArgs(const Span& sp, const WireBoard& wb, const ASTCrate& crate, TTStream& lex, bool addNewline) {
         Token tok;
 
         auto formatStringNode = ParseExprVal(lex);
@@ -2502,7 +2502,8 @@ namespace {
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(), Ident::Hygiene::newScope(*crate.hirPool), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(),
+            Ident::Hygiene::newScope(*wb.hygiene, *crate.hirPool), mv$(toks))));
     }
 }
 
@@ -2514,7 +2515,7 @@ class CFormatArgsExpander: public ExpandProcMacro {
         lex.parseState().wb = &wb;
         lex.parseState().module = &mod;
 
-        return expandFormatArgs(sp, crate, lex, /*add_newline=*/false);
+        return expandFormatArgs(sp, wb, crate, lex, /*add_newline=*/false);
     }
 };
 
@@ -2526,7 +2527,7 @@ class CConstFormatArgsExpander: public ExpandProcMacro {
         lex.parseState().wb = &wb;
         lex.parseState().module = &mod;
 
-        return expandFormatArgs(sp, crate, lex, /*add_newline=*/false);
+        return expandFormatArgs(sp, wb, crate, lex, /*add_newline=*/false);
     }
 };
 
@@ -2538,7 +2539,7 @@ class CFormatArgsNlExpander: public ExpandProcMacro {
         lex.parseState().wb = &wb;
         lex.parseState().module = &mod;
 
-        return expandFormatArgs(sp, crate, lex, /*add_newline=*/true);
+        return expandFormatArgs(sp, wb, crate, lex, /*add_newline=*/true);
     }
 };
 
@@ -2608,7 +2609,7 @@ class CIncludeExpander: public ExpandProcMacro {
         ParseState ps;
         ps.module = &mod;
         DEBUG("Edition = " << crate.edition);
-        return box$(Lexer(*crate.hirPool, filePath, crate.edition, ps));
+        return box$(Lexer(*wb.hygiene, *crate.hirPool, filePath, crate.edition, ps));
     }
 };
 
@@ -2633,7 +2634,8 @@ class CIncludeBytesExpander: public ExpandProcMacro {
 
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_BYTESTRING, mv$(ss.str()), {}));
-        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(*wb.pool), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015,
+            Ident::Hygiene::newScope(*wb.hygiene, *wb.pool), mv$(toks))));
     }
 };
 
@@ -2658,7 +2660,8 @@ class CIncludeStrExpander: public ExpandProcMacro {
 
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_STRING, mv$(ss.str()), {}));
-        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(*wb.pool), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015,
+            Ident::Hygiene::newScope(*wb.hygiene, *wb.pool), mv$(toks))));
     }
 };
 
@@ -2700,7 +2703,8 @@ class CExpanderPanic: public ExpandProcMacro {
         }
         toks.push_back(Token(TOK_PAREN_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(edition, Ident::Hygiene::newScope(*wb.pool), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(edition,
+            Ident::Hygiene::newScope(*wb.hygiene, *wb.pool), mv$(toks))));
     }
 };
 
@@ -2735,7 +2739,8 @@ class CExpanderUnreachable: public ExpandProcMacro {
         }
         toks.push_back(Token(TOK_PAREN_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(edition, Ident::Hygiene::newScope(*wb.pool), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(edition,
+            Ident::Hygiene::newScope(*wb.hygiene, *wb.pool), mv$(toks))));
     }
 };
 

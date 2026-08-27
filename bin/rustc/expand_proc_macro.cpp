@@ -1561,7 +1561,7 @@ default:
 
         void parseString(const ::std::string& s) {
             ::std::istringstream iss{s};
-            Lexer l{*wb.pool, iss, ASTEdition::Rust2021, {}};
+            Lexer l{*wb.hygiene, *wb.pool, iss, ASTEdition::Rust2021, {}};
             for (;;) {
                 auto t = l.getToken();
                 if (t == TOK_EOF) {
@@ -2444,7 +2444,8 @@ Token ProcMacroInv::realGetToken_() {
         case TokenClass::RawLiteral: {
             auto text = this->recvBytes();
             ::std::istringstream input(text + " ");
-            Lexer lexer(this->typePool(), input, edition, this->parseState());
+            Lexer lexer(*this->parseState().wb->hygiene, this->typePool(), input,
+                edition, this->parseState());
             auto token = lexer.getToken();
             ASSERT_BUG(this->parentSpan, token != TOK_EOF, "Empty raw literal from child process");
             ASSERT_BUG(this->parentSpan, lexer.getToken() == TOK_EOF,
