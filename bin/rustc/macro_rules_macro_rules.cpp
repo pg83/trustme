@@ -121,6 +121,7 @@ private:
 
 class MacroPatternStream {
     const ::std::vector<SimplePatEnt>& simpleEnts;
+    SimplePatEnt endEnt;
     size_t curPos_;
 
     bool lastWasCond;
@@ -143,6 +144,7 @@ class MacroPatternStream {
 public:
     MacroPatternStream(const ::std::vector<SimplePatEnt>& ents, const ::std::vector<bool>* conditionReplay = nullptr)
         : simpleEnts(ents)
+        , endEnt(SimplePatEnt::make_End({}))
         , curPos_(0)
         , lastWasCond(false)
         , conditionReplay(conditionReplay)
@@ -383,8 +385,7 @@ const SimplePatEnt& MacroPatternStream::next() {
         lastWasCond = false;
         // End of list? return End entry
         if (curPos_ == simpleEnts.size()) {
-            static SimplePatEnt END = SimplePatEnt::make_End({});
-            return END;
+            return endEnt;
         }
         const auto& curEnt = simpleEnts[curPos_];
         // If replaying, and this is a conditional
@@ -731,6 +732,7 @@ namespace {
         ::std::vector<size_t> offsets;
         size_t activeOffset;
 
+        Token eofToken;
         Token fakedNext;
         size_t consumeCount;
 
@@ -738,6 +740,7 @@ namespace {
         TokenStreamRO(const TokenTree& tt)
             : tt(tt)
             , activeOffset(0)
+            , eofToken(TOK_EOF)
             , consumeCount(0)
         {
             assert(!tt.isToken());
@@ -766,8 +769,6 @@ namespace {
         }
 
         const Token& nextTok() const {
-            static Token eofToken = TOK_EOF;
-
             if (fakedNext.type() != TOK_NULL) {
                 return fakedNext;
             }
@@ -4051,16 +4052,16 @@ namespace {
 
     struct ExpTok {
         MacroPatEnt::Type ty;
-        const Token* tok;
+        Token tok;
 
-        ExpTok(MacroPatEnt::Type ty, const Token* tok)
+        ExpTok(MacroPatEnt::Type ty, const Token& tok)
             : ty(ty)
             , tok(tok)
         {
         }
 
         bool operator==(const ExpTok& t) const {
-            return this->ty == t.ty && (this->ty != MacroPatEnt::PAT_TOKEN || *this->tok == *t.tok);
+            return this->ty == t.ty && (this->ty != MacroPatEnt::PAT_TOKEN || this->tok == t.tok);
         }
 
         bool operator!=(const ExpTok& t) const {
@@ -4068,12 +4069,12 @@ namespace {
         }
 
         bool operator==(eTokenType tt) const {
-            return this->ty == MacroPatEnt::PAT_TOKEN && *this->tok == tt;
+            return this->ty == MacroPatEnt::PAT_TOKEN && this->tok == tt;
         }
     };
 
     ::std::ostream& operator<<(::std::ostream& os, const ExpTok& t) {
-        os << "ExpTok(" << t.ty << " " << *t.tok << ")";
+        os << "ExpTok(" << t.ty << " " << t.tok << ")";
         return os;
     }
 
@@ -4127,7 +4128,7 @@ namespace {
                             if (ent.tok != TOK_NULL) {
                                 // If indirect is non-zero, decrement without doing anything
                                 if (indirectOfs < indirectPath.size()) {
-                                    if (indirectPath[indirectOfs] != ExpTok(MacroPatEnt::PAT_TOKEN, &ent.tok)) {
+                                    if (indirectPath[indirectOfs] != ExpTok(MacroPatEnt::PAT_TOKEN, ent.tok)) {
                                         return PatternHeadRv::InvalidPath;
                                     }
                                     indirectOfs++;
@@ -4138,7 +4139,7 @@ namespace {
                                         macroPatternGetHeadSetInner(rv, ent.subpats, 0, indirectPath, indirectOfs + ent.subpats.size());
                                     }
                                 } else {
-                                    rv.push_back(ExpTok(MacroPatEnt::PAT_TOKEN, &ent.tok));
+                                    rv.push_back(ExpTok(MacroPatEnt::PAT_TOKEN, ent.tok));
                                     // Don't close the set yet, could be skipped
                                 }
                             } else {
@@ -4154,13 +4155,13 @@ namespace {
                 default:
                     if (indirectOfs < indirectPath.size()) {
                         DEBUG("IP" << indirectOfs << " " << indirectPath[indirectOfs]);
-                        if (indirectPath[indirectOfs] != ExpTok(ent.type, &ent.tok)) {
+                        if (indirectPath[indirectOfs] != ExpTok(ent.type, ent.tok)) {
                             return PatternHeadRv::InvalidPath;
                         }
                         indirectOfs++;
                     } else {
                         DEBUG("Found");
-                        rv.push_back(ExpTok(ent.type, &ent.tok));
+                        rv.push_back(ExpTok(ent.type, ent.tok));
                         return PatternHeadRv::Closed;
                     }
                     break;
@@ -4177,10 +4178,9 @@ namespace {
         if (macroPatternGetHeadSetInner(rv, pattern, directPos, indirectPath, 0) != PatternHeadRv::Closed) {
             //if(rv.empty())
             if (!::std::any_of(rv.begin(), rv.end(), [](const ExpTok& e) {
-                return e.ty == MacroPatEnt::PAT_TOKEN && *e.tok == TOK_EOF;
+                return e.ty == MacroPatEnt::PAT_TOKEN && e.tok == TOK_EOF;
             })) {
-                static Token tokEof = TOK_EOF;
-                rv.push_back(ExpTok(MacroPatEnt::PAT_TOKEN, &tokEof));
+                rv.push_back(ExpTok(MacroPatEnt::PAT_TOKEN, Token(TOK_EOF)));
             }
         }
         return rv;
@@ -4221,10 +4221,10 @@ namespace {
                     std::vector<std::vector<SimplePatIfCheck>> repeatConds;
 
                     for (const auto& ee : entryPats1) {
-                        entryConds.push_back(::makeVec1<SimplePatIfCheck>({ee.ty, *ee.tok}));
+                        entryConds.push_back(::makeVec1<SimplePatIfCheck>({ee.ty, ee.tok}));
                     }
                     for (const auto& ee : skipPats1) {
-                        skipConds.push_back(::makeVec1<SimplePatIfCheck>({ee.ty, *ee.tok}));
+                        skipConds.push_back(::makeVec1<SimplePatIfCheck>({ee.ty, ee.tok}));
                     }
 
                     // - Duplicates need special handling (build up a subseqent set)
@@ -4248,7 +4248,7 @@ namespace {
 
                                 std::vector<ExpTok> path;
                                 for (auto it = eIt->begin(); it != eIt->end(); ++it) {
-                                    path.push_back(ExpTok(it->ty, &it->tok));
+                                    path.push_back(ExpTok(it->ty, it->tok));
                                 }
                                 auto entryPats2 = macroPatternGetHeadSet(ent.subpats, 0, path);
                                 assert(entryPats2.size() > 0);
@@ -4264,19 +4264,19 @@ namespace {
                                 // Update the current element for both of them, and add new elements to the end of each list
                                 {
                                     auto e2It = entryPats2.begin();
-                                    eIt->push_back({e2It->ty, *e2It->tok});
+                                    eIt->push_back({e2It->ty, e2It->tok});
                                     for (++e2It; e2It != entryPats2.end(); ++e2It) {
                                         eIt = entryConds.insert(eIt, *eIt);
-                                        eIt->back() = SimplePatIfCheck{e2It->ty, *e2It->tok};
+                                        eIt->back() = SimplePatIfCheck{e2It->ty, e2It->tok};
                                     }
                                 }
 
                                 {
                                     auto s2It = skipPats2.begin();
-                                    sIt->push_back({s2It->ty, *s2It->tok});
+                                    sIt->push_back({s2It->ty, s2It->tok});
                                     for (++s2It; s2It != skipPats2.end(); ++s2It) {
                                         sIt = skipConds.insert(sIt, *sIt);
-                                        sIt->back() = SimplePatIfCheck{s2It->ty, *s2It->tok};
+                                        sIt->back() = SimplePatIfCheck{s2It->ty, s2It->tok};
                                     }
                                 }
                             }
