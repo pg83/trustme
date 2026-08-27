@@ -490,7 +490,6 @@ ASTModule& ASTModule::operator=(ASTModule&&) = default;
 
 ::std::shared_ptr<ASTModule> ASTModule::addAnon() {
     auto rv = ::std::shared_ptr<ASTModule>(new ASTModule(myPath + RcString::newInterned(FMT("#" << anonModules.size()))));
-    DEBUG("New anon " << rv->myPath);
     rv->fileInfo = fileInfo;
 
     anonModules.push_back(rv);
@@ -500,11 +499,6 @@ ASTModule& ASTModule::operator=(ASTModule&&) = default;
 
 void ASTModule::addItem(ASTNamed<ASTItem> namedItem) {
     items.push_back(box$(namedItem));
-    const auto& i = items.back();
-    if (i->name == "") {
-    } else {
-        DEBUG(myPath << "::" << i->name << " = " << i->data.tagStr() << ", attrs = " << i->attrs);
-    }
 }
 
 void ASTModule::addItem(Span sp, ASTVisibility vis, RcString name, ASTItem it, ASTAttributeList attrs) {

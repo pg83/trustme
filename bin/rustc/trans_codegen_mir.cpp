@@ -433,7 +433,6 @@ break;
         }
 
         void emitType(const HIRTypeData* ty) override {
-            TRACE_FUNCTION_F(ty);
             MIRFunction emptyFcn;
             auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << "type " << ty; });
             MIRTypeResolve topMirRes {
@@ -540,7 +539,6 @@ break;
 
             auto dropGluePath = HIRPath(crate.types.path(p.clone(), &item), "#drop_glue");
 
-            TRACE_FUNCTION_F(p);
             HIRTypeRef ty = crate.types.path(p.clone(), &item);
 
             struct H {
@@ -591,7 +589,6 @@ break;
         }
 
         void emitConstructorEnum(const Span& sp, const HIRGenericPath& varPath, const HIREnum& item, size_t varIdx) override {
-            TRACE_FUNCTION_F(varPath);
 
             HIRTypeRef tmp;
             MonomorphStatePtr ms(crate.types, nullptr, &varPath.params, nullptr);
@@ -629,7 +626,6 @@ break;
         }
 
         void emitConstructorStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override {
-            TRACE_FUNCTION_F(p);
             HIRTypeRef tmp;
             MonomorphStatePtr ms(crate.types, nullptr, &p.params, nullptr);
             auto monomorph = [&](const auto& x) {
@@ -668,7 +664,6 @@ break;
             };
             mirRes = &topMirRes;
 
-            TRACE_FUNCTION_F(p);
             HIRTypeRef ty = crate.types.path(p.clone(), &item);
 
             bool hasDropGlue = resolve_.typeNeedsDropGlue(sp, ty);
@@ -695,7 +690,6 @@ break;
             };
             mirRes = &topMirRes;
 
-            TRACE_FUNCTION_F(p);
             HIRTypeRef ty = crate.types.path(p.clone(), &item);
 
             // Generate the drop glue (and determine if there is any)
@@ -821,7 +815,6 @@ break;
             };
             mirRes = &topMirRes;
 
-            TRACE_FUNCTION_F(p);
 
             auto type = params.monomorph(resolve_, item.type);
 
@@ -853,7 +846,6 @@ break;
                 sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
-            TRACE_FUNCTION_F(p);
 
             // If the function is a C external, emit as such
             if (item.linkage.name != "") {
@@ -875,7 +867,6 @@ break;
         }
 
         void emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code, bool hasPrototype) override {
-            TRACE_FUNCTION_F(p);
 
             MIRTypeResolve::argsT argTypes;
             for (const auto& ent : item.args) {
@@ -907,7 +898,6 @@ break;
             of << " {\n";
             // - Locals
             for (unsigned int i = 0; i < code->locals.size(); i++) {
-                DEBUG("var" << i << " : " << code->locals[i]);
                 of << "\tlet var" << i << ": " << fmt(code->locals[i]) << ";\n";
             }
             for (unsigned int i = 0; i < code->dropFlags.size(); i++) {
@@ -915,14 +905,12 @@ break;
             }
 
             for (unsigned int i = 0; i < code->blocks.size(); i++) {
-                TRACE_FUNCTION_F(p << " bb" << i);
 
                 of << "\t" << i << ": {\n";
 
                 for (const auto& stmt : code->blocks[i].statements) {
                     of << "\t\t";
                     localMirRes.setCurStmt(i, (&stmt - &code->blocks[i].statements.front()));
-                    DEBUG(stmt);
                     switch (stmt.tag()) {
                             break;
                             case MIRStatement::TAG_Assign: {
@@ -1236,7 +1224,6 @@ break;
 
                 localMirRes.setCurStmtTerm(i);
                 const auto& term = code->blocks[i].terminator;
-                DEBUG("- " << term);
                 of << "\t\t";
                 switch (term.tag()) {
                         break;

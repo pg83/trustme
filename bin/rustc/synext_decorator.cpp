@@ -382,7 +382,6 @@ class CHandlerRustcLayoutScalarValidRangeStart: public ExpandDecorator {
 
             s->markings.scalarValidStartSet = true;
             s->markings.scalarValidStart = np->value;
-            DEBUG(path << " #[rustc_layout_scalar_valid_range_start]: " << std::hex << s->markings.scalarValidStart);
         } else {
             TODO(sp, "#[rustc_layout_scalar_valid_range_start] on " << i.tagStr());
         }
@@ -408,7 +407,6 @@ class CHandlerRustcLayoutScalarValidRangeEnd: public ExpandDecorator {
             lex.getTokenCheck(TOK_EOF);
             s->markings.scalarValidEndSet = true;
             s->markings.scalarValidEnd = np->value;
-            DEBUG(path << " #[rustc_layout_scalar_valid_range_end]: " << std::hex << s->markings.scalarValidEnd);
         } else {
             TODO(sp, "#[rustc_layout_scalar_valid_range_end] on " << i.tagStr());
         }
@@ -670,7 +668,6 @@ class CHandlerUnsafe: public ExpandDecorator {
             auto ident = lex.getTokenCheck(TOK_IDENT).ident().name;
 
             if (ident == "no_mangle") {
-                DEBUG("#[unsafe(no_mangle)] " << name);
                 if (auto* e = i.opt_Function()) {
                     e->markings.linkName = name.c_str();
                 } else if (auto* e = i.opt_Static()) {
@@ -682,7 +679,6 @@ class CHandlerUnsafe: public ExpandDecorator {
                 lex.getTokenCheck(TOK_EQUAL);
                 auto s = lex.getTokenCheck(TOK_STRING).str();
 
-                DEBUG("#[unsafe(export_name)] " << name << " as `" << s << "`");
                 // The last name given wins, as it does in rustc: `#[unsafe(no_mangle)]`
                 // alongside this one is a lint, not an error.
                 if (auto* e = i.opt_Function()) {
@@ -696,7 +692,6 @@ class CHandlerUnsafe: public ExpandDecorator {
                 lex.getTokenCheck(TOK_EQUAL);
                 auto s = lex.getTokenCheck(TOK_STRING).str();
 
-                DEBUG("#[unsafe(link_section)] " << name << " in `" << s);
                 if (auto* e = i.opt_Function()) {
                     e->markings.linkSection = s;
                 } else if (auto* e = i.opt_Static()) {
@@ -3198,7 +3193,6 @@ default:
                         break;
                         case MacroRef::TAG_ExternalProcMacro: {
                             auto& pm = macImport.ref.as_ExternalProcMacro();
-                            DEBUG("proc_macro " << pm->path);
                             macPath.push_back(pm->path.crateName());
                             macPath.insert(macPath.end(), pm->path.components().begin(), pm->path.components().end());
                             break;
@@ -3249,7 +3243,6 @@ static void deriveItem(const DeriveRegistry& registry, const Span& sp,
     }
     const bool isConstDerive = attr.name() == "derive_const";
 
-    DEBUG("path = " << path);
 
     auto type = makeType(*crate.pool, sp, path, item.params());
 
@@ -3270,7 +3263,6 @@ static void deriveItem(const DeriveRegistry& registry, const Span& sp,
 
     ::std::vector<ASTPath> missingHandlers;
     for (const auto& traitPath : deriveItems) {
-        DEBUG("- " << traitPath);
 
         if (isCoercePointee(traitPath)) {
             deriveCoercePointee(sp, opts, mod, item.params(), type, item);
@@ -3305,7 +3297,6 @@ static void deriveItem(const DeriveRegistry& registry, const Span& sp,
             continue;
         }
 
-        DEBUG("> No handler for " << traitPath);
         missingHandlers.push_back(traitPath);
     }
 
@@ -3443,7 +3434,6 @@ void handleSave(const Span& sp, ASTCrate& crate, const std::string& name, const 
             ERROR(sp, E0000, "Duplicate definition of language item '" << name << "' - " << otherPath << " and " << path);
         }
     } else {
-        DEBUG("Bind '" << name << "' to " << path);
     }
 }
 

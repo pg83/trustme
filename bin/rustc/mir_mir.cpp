@@ -1236,7 +1236,6 @@ const Monomorphiser& MIRCloner::monomorphiser() const {
 }
 
 HIRTypeRef MIRCloner::monomorph(const HIRTypeData* ty) const {
-    TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorphType(sp, ty);
     if (auto* r = resolve()) {
         r->expandAssociatedTypes(sp, rv);
@@ -1245,7 +1244,6 @@ HIRTypeRef MIRCloner::monomorph(const HIRTypeData* ty) const {
 }
 
 HIRGenericPath MIRCloner::monomorph(const HIRGenericPath& ty) const {
-    TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorphGenericpath(sp, ty, false);
     if (const auto* r = resolve()) {
         r->evaluatePathParams(sp, rv.params);
@@ -1257,7 +1255,6 @@ HIRGenericPath MIRCloner::monomorph(const HIRGenericPath& ty) const {
 }
 
 HIRPath MIRCloner::monomorph(const HIRPath& ty) const {
-    TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorphPath(sp, ty, false);
     if (const auto* r = resolve()) {
         switch (rv.data.tag()) {
@@ -1288,7 +1285,6 @@ HIRPath MIRCloner::monomorph(const HIRPath& ty) const {
 }
 
 HIRPathParams MIRCloner::monomorph(const HIRPathParams& ty) const {
-    TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorphPathParams(sp, ty, false);
     if (const auto* r = resolve()) {
         r->evaluatePathParams(sp, rv);

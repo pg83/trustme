@@ -251,7 +251,6 @@ public:
     void sendDone() {
         this->sendU8(static_cast<u8>(TokenClass::EndOfStream));
         dumpFileOut.flush();
-        DEBUG("Input tokens sent");
     }
 
     void sendSymbol(const char* val) {
@@ -448,7 +447,6 @@ private:
 };
 
 ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath) {
-    TRACE_FUNCTION_F(macPath);
     // 1. Locate macro in HIR list
     const auto& crateName = macPath.front();
     ASSERT_BUG(sp, crate.externCrates.count(crateName), "Crate not loaded for macro: [" << macPath << "]");
@@ -1029,7 +1027,8 @@ default:
         }
 
         void visitTypeAsText(const ASTType* ty) {
-            ::std::stringstream ss; ss << ty << " "; DEBUG("STRING: " << ss.str());
+            ::std::stringstream ss;
+            ss << ty << " ";
             parseString(ss.str());
         }
 
@@ -1552,13 +1551,11 @@ default:
         }
 
         void visitNode(const ASTExprNode& e) {
-            DEBUG("NODE: " << e);
             // TODO: Dump to a string, then re-parse into a TT and then send that TT
             // - Avoids needing to repeat logic
             ::std::stringstream ss;
             DumpASTNode(ss, e);
             ss << " ";
-            DEBUG("STRING: " << ss.str());
 
             parseString(ss.str());
         }
@@ -1600,7 +1597,6 @@ default:
                 }
             }
             if (this->skipDeriveAttrs && a.name().isTrivial() && (a.name().asTrivial() == "derive" || a.name().asTrivial() == "derive_const")) {
-                DEBUG("Skip " << a << " (derive input)");
                 return;
             }
             auto isLocal = (a.name().isTrivial() && pmi.attrIsUsed(a.name().asTrivial()));
@@ -1608,13 +1604,10 @@ default:
                 if (isLocal) {
                     a.markInert();
                 }
-                DEBUG("Send " << a);
                 pmi.sendSymbol("#");
                 pmi.sendSymbol("[");
                 this->visitMetaItem(a);
                 pmi.sendSymbol("]");
-            } else {
-                DEBUG("Skip " << a << " (" << pmi.procMacroDesc.attributes << ")");
             }
         }
 
@@ -2055,7 +2048,6 @@ template <typename F>
 // --- Derive inputs
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](Visitor& v) {
-        DEBUG("derive on struct");
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitStruct(itemName, vis, i);
@@ -2064,7 +2056,6 @@ template <typename F>
 
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTEnum& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](Visitor& v) {
-        DEBUG("derive on enum");
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitEnum(itemName, vis, i);
@@ -2073,7 +2064,6 @@ template <typename F>
 
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTUnion& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](Visitor& v) {
-        DEBUG("derive on union");
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitUnion(itemName, vis, i);
@@ -2107,11 +2097,8 @@ ProcMacroInv::ProcMacroInv(ProcMacroContext& context, const Span& sp, ASTEdition
         // TODO: Dump both input and output, AND (optionally) dump each invocation
         std::string namePrefix;
         namePrefix = FMT(getenv("TRUSTME_DUMP_PROCMACRO") << "-" << context.newDumpIndex());
-        DEBUG("Dumping to " << namePrefix);
         dumpFileOut.open(FMT(namePrefix << "-out.bin"), ::std::ios::out | ::std::ios::binary);
         dumpFileRes.open(FMT(namePrefix << "-res.bin"), ::std::ios::out | ::std::ios::binary);
-    } else {
-        DEBUG("Set TRUSTME_DUMP_PROCMACRO=procmacro_dump to dump to `procmacro_dump-NNN-{out,res}.bin`");
     }
     int stdinPipes[2];
     if (pipe(stdinPipes) != 0) {
@@ -2134,7 +2121,6 @@ ProcMacroInv::ProcMacroInv(ProcMacroContext& context, const Span& sp, ASTEdition
     posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[1]);
 
     char* argv[3] = {const_cast<char*>(executable), const_cast<char*>(procMacroDesc.name.c_str()), nullptr};
-    DEBUG(argv[0] << " " << argv[1]);
     //char*   envp[] = { nullptr };
     int rv = posix_spawn(&this->handles.childPid, executable, &file_actions, nullptr, argv, environ);
     if (rv != 0) {
@@ -2158,12 +2144,10 @@ ProcMacroInv::Handles::Handles(Handles&& x)
     x.childPid = 0;
     x.childStdin = -1;
     x.childStdout = -1;
-    DEBUG("");
 }
 
 ProcMacroInv::~ProcMacroInv() {
     if (this->handles.childPid != 0) {
-        DEBUG("Waiting for child " << this->handles.childPid << " to terminate");
         int status;
         waitpid(this->handles.childPid, &status, 0);
         close(this->handles.childStdout);
@@ -2175,14 +2159,11 @@ bool ProcMacroInv::checkGood() {
     char v;
     int rv = read(this->handles.childStdout, &v, 1);
     if (rv == 0) {
-        DEBUG("Unexpected EOF from child");
         return false;
     }
     if (rv < 0) {
-        DEBUG("Error reading from child, rv=" << rv << " " << strerror(errno));
         return false;
     }
-    DEBUG("Child started, value = " << (int)v);
     if (v != 0) {
         return false;
     }
@@ -2296,7 +2277,6 @@ Position ProcMacroInv::getPosition() const {
 
 Token ProcMacroInv::realGetToken() {
     auto rv = this->realGetToken_();
-    DEBUG("ProcMacroInv: " << rv);
     return rv;
 }
 

@@ -65,11 +65,6 @@ struct MIRPathCb final: MIRPathCallback {
         });                                                            \
         UNREACHABLE();                                                      \
     } while (0)
-#define MIR_DEBUG(state, ...)                                    \
-    do {                                                         \
-        DEBUG(FMT_CB(_ss, (state).fmtPos(_ss);) << __VA_ARGS__); \
-    } while (0)
-
 class MIRTypeResolve {
 public:
     typedef ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> argsT;

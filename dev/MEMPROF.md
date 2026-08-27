@@ -125,7 +125,7 @@ Leaders:
 | 268 | ~0 | `hir_from_ast.cpp:2473` | pool chunk growth behind `_add_mod_val_item` |
 | 247 | 0.1 | `mir_from_hir.cpp:9516` | `MIRFunction::blocks` growth in `newBbUnlinked` |
 | >1200 | — | `mir_operations.cpp` (many) | fresh per-pass vectors in the `MIROptimise*` family |
-| 185 | 1.4+ | `rc_string.cpp:64` + `debug.cpp:181` | DEBUG formatting allocating in release even when discarded |
+| 185 | 1.4+ | `rc_string.cpp:64` + retired logger | formatting allocated in release even when discarded |
 
 One third of everything (1.25 GB / 29.7M) flows through
 `ThinVector::reserveInit` — mostly the same call sites as above.

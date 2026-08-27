@@ -2,11 +2,10 @@
  * A very basic (and probably incomplete) streaming TOML parser
  */
 #include "toml.h"
+#include "common.h"
 
 #include <sstream>
 #include <cstdio>
-#define NOLOG // Disable logging
-#include "common_debug.h"
 #include <cassert>
 #include <string>
 #include <iostream>
@@ -140,7 +139,7 @@ TomlKeyValue TomlFile::getNextValue() {
                 }
                 for (;;) {
                     if (!(t.type == TomlToken::Type::Ident || t.type == TomlToken::Type::String)) {
-                        throw ::std::runtime_error(::format(lexer_, ": Unexpected token in block name - ", t));
+                        throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token in block name - " << t));
                     }
                     currentBlock.push_back(t.asString());
 
@@ -151,20 +150,19 @@ TomlKeyValue TomlFile::getNextValue() {
                     t = lexer_.getToken();
                 }
                 if (isArray) {
-                    currentBlock.push_back(::format(arrayCounts[currentBlock.back()]++));
+                    currentBlock.push_back(FMT(arrayCounts[currentBlock.back()]++));
                     if (t.type != TomlToken::Type::SquareClose) {
-                        throw ::std::runtime_error(::format(lexer_, ": Unexpected token after array name - ", t));
+                        throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token after array name - " << t));
                     }
                     t = lexer_.getToken();
                 }
                 if (t.type != TomlToken::Type::SquareClose) {
-                    throw ::std::runtime_error(::format(lexer_, ": Unexpected token in block header - ", t));
+                    throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token in block header - " << t));
                 }
                 t = lexer_.getToken();
                 if (t.type != TomlToken::Type::Newline) {
-                    throw ::std::runtime_error(::format(lexer_, ": Unexpected token after block block - ", t));
+                    throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token after block block - " << t));
                 }
-                DEBUG("Start block " << currentBlock);
                 // Recurse!
                 return getNextValue();
             }
@@ -175,7 +173,7 @@ TomlKeyValue TomlFile::getNextValue() {
         // Expect a string or an identifier
         if (t.type == TomlToken::Type::Eof) {
             // EOF isn't allowed here
-            throw ::std::runtime_error(::format(lexer_, ": Unexpected EOF in composite"));
+            throw ::std::runtime_error(FMT(lexer_ << ": Unexpected EOF in composite"));
         }
     }
     std::vector<std::string> keyName;
@@ -185,7 +183,7 @@ TomlKeyValue TomlFile::getNextValue() {
             case TomlToken::Type::Ident:
                 break;
             default:
-                throw ::std::runtime_error(::format(lexer_, ": Unexpected token for key - ", t));
+                throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token for key - " << t));
         }
         keyName.push_back(t.asString());
         t = lexer_.getToken();
@@ -194,7 +192,7 @@ TomlKeyValue TomlFile::getNextValue() {
         }
 
         if (t.type != TomlToken::Type::Dot) {
-            throw ::std::runtime_error(::format(lexer_, ": Unexpected token after key - ", t));
+            throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token after key - " << t));
         }
         t = lexer_.getToken();
     }
@@ -235,7 +233,7 @@ TomlKeyValue TomlFile::getNextValue() {
                         if (t.data == "true" || t.data == "false") {
                             rv.value.subValues.push_back(TomlValue{t.data == "true"});
                         } else {
-                            throw ::std::runtime_error(::format(lexer_, ": Unexpected identifier in array value position - ", t));
+                            throw ::std::runtime_error(FMT(lexer_ << ": Unexpected identifier in array value position - " << t));
                         }
                         break;
                     // Nested array or inline table. This parser's value model is flat
@@ -249,7 +247,7 @@ TomlKeyValue TomlFile::getNextValue() {
                         this->skipCompositeValue();
                         break;
                     default:
-                        throw ::std::runtime_error(::format(lexer_, ": Unexpected token in array value position - ", t));
+                        throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token in array value position - " << t));
                 }
 
                 t = lexer_.getToken();
@@ -261,7 +259,7 @@ TomlKeyValue TomlFile::getNextValue() {
                 t = lexer_.getToken();
             }
             if (t.type != TomlToken::Type::SquareClose) {
-                throw ::std::runtime_error(::format(lexer_, ": Unexpected token after array - ", t));
+                throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token after array - " << t));
             }
             if (skippedNested) {
                 ::std::string key;
@@ -277,7 +275,6 @@ TomlKeyValue TomlFile::getNextValue() {
         }
         case TomlToken::Type::BraceOpen:
             currentComposite.push_back(std::move(keyName));
-            DEBUG("Enter composite block " << currentBlock << ", " << currentComposite);
             // Recurse to restart parse
             return getNextValue();
         case TomlToken::Type::Integer:
@@ -293,26 +290,25 @@ TomlKeyValue TomlFile::getNextValue() {
 
                 rv.value = TomlValue{false};
             } else {
-                throw ::std::runtime_error(::format(lexer_, ": Unexpected identifier in value position - ", t));
+                throw ::std::runtime_error(FMT(lexer_ << ": Unexpected identifier in value position - " << t));
             }
             break;
         default:
-            throw ::std::runtime_error(::format(lexer_, ": Unexpected token in value position - ", t));
+            throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token in value position - " << t));
     }
 
     t = lexer_.getToken();
     while (!currentComposite.empty() && t.type == TomlToken::Type::BraceClose) {
-        DEBUG("Leave composite block " << currentBlock << ", " << currentComposite);
         currentComposite.pop_back();
         t = lexer_.getToken();
     }
     if (currentComposite.empty()) {
         if (t.type != TomlToken::Type::Newline && t.type != TomlToken::Type::Eof) {
-            throw ::std::runtime_error(::format(lexer_, ": Unexpected token in TOML file after entry - ", t));
+            throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token in TOML file after entry - " << t));
         }
     } else {
         if (t.type != TomlToken::Type::Comma) {
-            throw ::std::runtime_error(::format(lexer_, ": Unexpected token in TOML file after composite entry - ", t));
+            throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token in TOML file after composite entry - " << t));
         }
     }
     return rv;
@@ -327,7 +323,7 @@ void TomlFile::skipCompositeValue() {
         auto t = lexer_.getToken();
         switch (t.type) {
             case TomlToken::Type::Eof:
-                throw ::std::runtime_error(::format(lexer_, ": Unexpected EOF in nested array/table value"));
+                throw ::std::runtime_error(FMT(lexer_ << ": Unexpected EOF in nested array/table value"));
             case TomlToken::Type::SquareOpen:
             case TomlToken::Type::BraceOpen:
                 depth++;
@@ -441,7 +437,7 @@ namespace {
                 break;
             }
             default:
-                throw ::std::runtime_error(format("toml.cpp handle_escape: TODO: Escape sequences in strings - `", (char)c, "`"));
+                throw ::std::runtime_error(FMT("toml.cpp handle_escape: TODO: Escape sequences in strings - `" << (char)c << "`"));
         }
     }
 }
@@ -663,7 +659,7 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                 }
                 return TomlToken{Type::Ident, str};
             } else {
-                throw ::std::runtime_error(::format("?:", line, ": Unexpected character '", (char)c, "' in file"));
+                throw ::std::runtime_error(FMT("?:" << line << ": Unexpected character '" << (char)c << "' in file"));
             }
     }
 }

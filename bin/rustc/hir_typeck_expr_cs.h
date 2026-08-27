@@ -161,8 +161,6 @@ struct Context: TraitTypeConstraintCallback {
 
     Context(const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& modPath, const HIRGenericPath* currentTrait, const HIRTraitImpl* currentTraitImpl);
 
-    void dump() const;
-
     bool takeChanged() {
         return ivars.takeChanged();
     }

@@ -42,7 +42,6 @@ void HIRVisitor::visitCrate(HIRCrate& crate) {
 }
 
 void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
-    TRACE_FUNCTION_FR(p, p);
     for (auto& named : mod.modItems) {
         const auto& name = named.first;
         auto& item = named.second->ent;
@@ -52,47 +51,39 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
             }
             case HIRTypeItem::TAG_Module: {
                 auto& e = item.as_Module();
-                TRACE_FUNCTION_F("mod " << name);
                 this->visitModule(p + name, e);
                 break;
             }
             case HIRTypeItem::TAG_TypeAlias: {
                 auto& e = item.as_TypeAlias();
-                TRACE_FUNCTION_F("type " << name);
                 this->visitTypeAlias(p + name, e);
                 break;
             }
             case HIRTypeItem::TAG_TraitAlias: {
                 auto& e = item.as_TraitAlias();
-                TRACE_FUNCTION_F("trait (alias) " << name);
                 this->visitTraitAlias(p + name, e);
                 break;
             }
             case HIRTypeItem::TAG_ExternType: {
-                TRACE_FUNCTION_F("extern type " << name);
                 break;
             }
             case HIRTypeItem::TAG_Enum: {
                 auto& e = item.as_Enum();
-                TRACE_FUNCTION_F("enum " << name);
                 this->visitEnum(p + name, e);
                 break;
             }
             case HIRTypeItem::TAG_Struct: {
                 auto& e = item.as_Struct();
-                TRACE_FUNCTION_F("struct " << name);
                 this->visitStruct(p + name, e);
                 break;
             }
             case HIRTypeItem::TAG_Union: {
                 auto& e = item.as_Union();
-                TRACE_FUNCTION_F("union " << name);
                 this->visitUnion(p + name, e);
                 break;
             }
             case HIRTypeItem::TAG_Trait: {
                 auto& e = item.as_Trait();
-                TRACE_FUNCTION_F("trait " << name);
                 this->visitTrait(p + name, e);
                 break;
             }
@@ -108,13 +99,11 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
             }
             case HIRValueItem::TAG_Constant: {
                 auto& e = *item.as_Constant();
-                DEBUG("const " << name);
                 this->visitConstant(p + name, e);
                 break;
             }
             case HIRValueItem::TAG_Static: {
                 auto& e = *item.as_Static();
-                DEBUG("static " << name);
                 this->visitStatic(p + name, e);
                 break;
             }
@@ -124,7 +113,6 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
             }
             case HIRValueItem::TAG_Function: {
                 auto& e = *item.as_Function();
-                DEBUG("fn " << name);
                 this->visitFunction(p + name, e);
                 break;
             }
@@ -158,7 +146,6 @@ void HIRVisitor::visitGlobalAssembly(HIRGlobalAssembly& item) {
 
 void HIRVisitor::visitTypeImpl(HIRTypeImpl& impl) {
     HIRItemPath p{impl.type};
-    TRACE_FUNCTION_F("impl.m_type=" << impl.type);
     if (resolve_) {
         resolve_->setImplGenericsRaw(MetadataType::Unknown, impl.params);
     }
@@ -166,15 +153,12 @@ void HIRVisitor::visitTypeImpl(HIRTypeImpl& impl) {
     updateType(impl.type);
 
     for (auto& method : impl.methods) {
-        DEBUG("method " << method.first);
         this->visitFunction(p + method.first, method.second.data);
     }
     for (auto& ent : impl.constants) {
-        DEBUG("const " << ent.first);
         this->visitConstant(p + ent.first, ent.second.data);
     }
     for (auto& ent : impl.types) {
-        DEBUG("type " << ent.first);
         this->visitInherentType(p + ent.first, ent.second.data);
     }
     if (resolve_) {
@@ -183,7 +167,6 @@ void HIRVisitor::visitTypeImpl(HIRTypeImpl& impl) {
 }
 
 void HIRVisitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) {
-    TRACE_FUNCTION_F(p);
     if (resolve_) {
         resolve_->setItemGenericsRaw(item.params);
     }
@@ -196,7 +179,6 @@ void HIRVisitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) {
 
 void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) {
     HIRItemPath p(impl.type, traitPath, impl.traitArgs);
-    TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.type);
     if (resolve_) {
         resolve_->setImplGenericsRaw(MetadataType::Unknown, impl.params);
     }
@@ -210,19 +192,15 @@ void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& im
     updateType(impl.type);
 
     for (auto& ent : impl.methods) {
-        DEBUG("method " << ent.first);
         this->visitFunction(p + ent.first, ent.second.data);
     }
     for (auto& ent : impl.constants) {
-        DEBUG("const " << ent.first);
         this->visitConstant(p + ent.first, ent.second.data);
     }
     for (auto& ent : impl.statics) {
-        DEBUG("static " << ent.first);
         this->visitStatic(p + ent.first, ent.second.data);
     }
     for (auto& ent : impl.types) {
-        TRACE_FUNCTION_F("type " << ent.first << " = " << ent.second.data);
         updateType(ent.second.data);
     }
     if (resolve_) {
@@ -278,7 +256,6 @@ void HIRVisitor::visitTrait(HIRItemPath p, HIRTrait& item) {
     auto traitPp = item.params.makeNopParams(typeInterner(), 0);
     const HIRTypeRef tySelf = typeInterner().self();
     HIRItemPath traitIp(tySelf, traitSp, traitPp);
-    TRACE_FUNCTION;
 
     this->visitParams(item.params);
     for (auto& par : item.parentTraits) {
@@ -289,7 +266,6 @@ void HIRVisitor::visitTrait(HIRItemPath p, HIRTrait& item) {
     }
     for (auto& i : item.types) {
         auto itemPath = HIRItemPath(traitIp, i.first.c_str());
-        DEBUG("type " << i.first);
         this->visitAssociatedtype(itemPath, i.second);
     }
     for (auto& i : item.values) {
@@ -298,17 +274,17 @@ void HIRVisitor::visitTrait(HIRItemPath p, HIRTrait& item) {
             //(None, ),
             case HIRTraitValueItem::TAG_Constant: {
                 auto& e = i.second.as_Constant();
-                DEBUG("constant " << i.first); this->visitConstant(itemPath, e);
+                 this->visitConstant(itemPath, e);
                 break;
             }
             case HIRTraitValueItem::TAG_Static: {
                 auto& e = i.second.as_Static();
-                DEBUG("static " << i.first); this->visitStatic(itemPath, e);
+                 this->visitStatic(itemPath, e);
                 break;
             }
             case HIRTraitValueItem::TAG_Function: {
                 auto& e = i.second.as_Function();
-                DEBUG("method " << i.first); this->visitFunction(itemPath, e);
+                 this->visitFunction(itemPath, e);
                 break;
             }
         }
@@ -378,7 +354,6 @@ void HIRVisitor::visitEnum(HIRItemPath p, HIREnum& item) {
 }
 
 void HIRVisitor::visitUnion(HIRItemPath p, HIRUnion& item) {
-    TRACE_FUNCTION_F(p);
     if (resolve_) {
         resolve_->setImplGenericsRaw(MetadataType::Unknown, item.params);
     }
@@ -393,7 +368,6 @@ void HIRVisitor::visitUnion(HIRItemPath p, HIRUnion& item) {
 }
 
 void HIRVisitor::visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) {
-    TRACE_FUNCTION_F(p);
     for (auto& bound : item.traitBounds) {
         this->visitTraitPath(bound);
     }
@@ -401,7 +375,6 @@ void HIRVisitor::visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) {
 }
 
 void HIRVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
-    TRACE_FUNCTION_F(p);
     if (resolve_) {
         resolve_->setItemGenericsRaw(item.params);
     }
@@ -421,7 +394,6 @@ void HIRVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
 }
 
 void HIRVisitor::visitStatic(HIRItemPath p, HIRStatic& item) {
-    TRACE_FUNCTION_F(p);
     if (resolve_) {
         resolve_->setItemGenericsRaw(item.params);
     }
@@ -433,7 +405,6 @@ void HIRVisitor::visitStatic(HIRItemPath p, HIRStatic& item) {
 }
 
 void HIRVisitor::visitConstant(HIRItemPath p, HIRConstant& item) {
-    TRACE_FUNCTION_F(p);
     if (resolve_) {
         resolve_->setItemGenericsRaw(item.params);
     }
@@ -446,7 +417,6 @@ void HIRVisitor::visitConstant(HIRItemPath p, HIRConstant& item) {
 }
 
 void HIRVisitor::visitParams(HIRGenericParams& params) {
-    TRACE_FUNCTION_F(params.fmtArgs() << params.fmtBounds());
     for (auto& tps : params.types) {
         updateType(tps.defaultValue);
     }

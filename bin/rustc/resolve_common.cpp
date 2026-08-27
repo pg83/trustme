@@ -56,7 +56,6 @@ namespace {
         /// Obtain a reference to the specified module
         /// </summary>
         ResolveModuleRef getModule(const ASTPath& basePath, const ASTPath& path, bool ignoreLast, ASTAbsolutePath* outPath, bool ignoreHygiene = false) {
-            TRACE_FUNCTION_F(path << " in " << basePath << (ignoreLast ? " (ignore last)" : ""));
             const auto& baseNodes = basePath.nodes();
             switch (path.cls.tag()) {
                 case ASTPathClass::TAG_Invalid: {
@@ -76,7 +75,6 @@ namespace {
                 }
                 case ASTPathClass::TAG_Relative: {
                     auto& e = path.cls.as_Relative();
-                    DEBUG("Relative " << path);
                     ASSERT_BUG(sp, !e.nodes.empty(), "");
                     if (!ignoreHygiene && e.hygiene.hasModPath()) {
                         const auto& mp = e.hygiene.modPath();
@@ -107,19 +105,12 @@ namespace {
                         // HACK: If the target path is a crate name, then return `ImplicitPrelude` instead of the current module
                         if (crate.edition >= ASTEdition::Rust2018) {
                             const auto& name = e.nodes.back().name();
-                            DEBUG("Trying implicit externs for " << name);
-                            DEBUG(FmtLambda([&](std::ostream& os) {
-                                for (const auto& v : settings.implicitCrates) {
-                                    os << " " << v.first;
-                                }
-                            }));
                             auto ecIt = settings.implicitCrates.find(name);
                             if (ecIt != settings.implicitCrates.end()) {
                                 return ResolveModuleRef::make_ImplicitPrelude({});
                             }
                         }
 
-                        DEBUG("Ignore last");
                         const auto& currentMod = this->getModByTruePath(baseNodes, baseNodes.size());
                         if (outPath) {
                             *outPath = currentMod.path();
@@ -177,14 +168,12 @@ default: {
                             auto& iEntPtr = realMod.as_Hir();
                             ASSERT_BUG(sp, !iEntPtr->is_Import(), "");
                             if (iEntPtr->is_Enum()) {
-                                DEBUG("Enum");
                                 return ResolveModuleRef();
                             }
                             if (iEntPtr->is_Trait()) {
                                 // A trait is not a module, but an associated item
                                 // of one can be imported; the caller looks the
                                 // name up in the trait itself.
-                                DEBUG("Trait");
                                 return ResolveModuleRef();
                             }
 
@@ -196,7 +185,6 @@ default: {
                         }
                         case ResolveItemRefType::TAG_None: {
                             // Not found in this module, keep searching
-                            DEBUG("Keep searching (" << i << "/" << baseNodes.size() << ")");
                             break;
                         }
                     }
@@ -206,12 +194,6 @@ default: {
 
                     // If not found, look for an implicit crate allowed in this edition.
                     if (crate.edition >= ASTEdition::Rust2018 || name == "core" || name == "std") {
-                        DEBUG("Trying implicit externs for " << name);
-                        DEBUG(FmtLambda([&](std::ostream& os) {
-                            for (const auto& v : settings.implicitCrates) {
-                                os << " " << v.first;
-                            }
-                        }));
                         auto ecIt = settings.implicitCrates.find(name);
                         if (ecIt != settings.implicitCrates.end()) {
                             if (ecIt->second == "") {
@@ -220,7 +202,6 @@ default: {
                             } else {
                                 ASSERT_BUG(sp, crate.externCrates.count(ecIt->second), "Crate \"" << ecIt->second << "\" not loaded (for \"" << ecIt->first << "\")");
                                 const auto& ec = crate.externCrates.at(ecIt->second);
-                                DEBUG("Implicitly imported crate");
                                 if (outPath) {
                                     *outPath = ASTAbsolutePath(ecIt->second, {});
                                 }
@@ -228,11 +209,9 @@ default: {
                             }
                         }
                     }
-                    DEBUG("Not found");
                     return ResolveModuleRef();
                 }
                 case ASTPathClass::TAG_Self: {
-                    DEBUG("Self " << path);
                     // Look up within the non-anon module
                     size_t i = 0;
                     while (i < baseNodes.size() && baseNodes[baseNodes.size() - i - 1].name().c_str()[0] == '#') {
@@ -242,7 +221,6 @@ default: {
                     return getModuleAst(startMod, path, 0, ignoreLast, outPath);
                 }
                 case ASTPathClass::TAG_Super: {
-                    DEBUG("Super " << path);
                     // Pop current non-anon module, then look up in anon modules
                     size_t i = 0;
                     while (i < baseNodes.size() && baseNodes[baseNodes.size() - i - 1].name().c_str()[0] == '#') {
@@ -255,9 +233,7 @@ default: {
                 }
                 case ASTPathClass::TAG_Absolute: {
                     auto& e = path.cls.as_Absolute();
-                    DEBUG("Absolute " << path);
                     if (e.crate == "" || e.crate == crate.crateNameReal) {
-                        DEBUG("Current crate");
                         return getModuleAst(crate.rootModule_, path, 0, ignoreLast, outPath);
                     }
                     // 2018 `::cratename::` paths
@@ -275,7 +251,6 @@ default: {
                         }
                         auto ecIt2 = crate.externCrates.find(ecIt->second);
                         if (ecIt2 == crate.externCrates.end()) {
-                            DEBUG("Crate " << ecIt->second << " not found");
                             return ResolveModuleRef();
                         }
                         if (outPath) {
@@ -286,7 +261,6 @@ default: {
                         // HIR lookup (different)
                         auto ecIt = crate.externCrates.find(e.crate);
                         if (ecIt == crate.externCrates.end()) {
-                            DEBUG("Crate " << e.crate << " not found");
                             return ResolveModuleRef();
                         }
                         if (outPath) {
@@ -328,7 +302,6 @@ default: {
         }
 
         ResolveModuleRef getModuleAst(const ASTModule& startMod, const ASTPath& path, size_t startOffset, bool ignoreLast, ASTAbsolutePath* outPath) {
-            TRACE_FUNCTION_F("start_offset=" << startOffset << ", ignore_last=" << ignoreLast);
             const ASTModule* mod = &startMod;
             ASSERT_BUG(Span(), path.nodes().size() >= (ignoreLast ? 1 : 0), "" << path);
 
@@ -337,13 +310,11 @@ default: {
 
                 auto res = findItem(*mod, name, ResolveNamespace::Namespace, outPath);
                 if (res.is_None()) {
-                    DEBUG("Unable to find " << name << " in module " << mod->path() << " for " << path);
                     return ResolveModuleRef();
                 }
                 const auto& r = res.as_Namespace();
                 switch (r.tag()) {
                     case ResolveItemRefType::TAG_None: {
-                        DEBUG("Not found (Namespace::None)");
                         return ResolveModuleRef();
                     }
                     case ResolveItemRefType::TAG_Ast: {
@@ -361,7 +332,6 @@ default: {
                                 return getModuleHir(crate.externCrates.at(i->name).hir->rootModule, path, idx + 1, ignoreLast, outPath);
                             }
                         } else {
-                            DEBUG("Found " << e->tagStr() << ", not module");
                             return ResolveModuleRef();
                         }
                         break;
@@ -376,7 +346,6 @@ default: {
                         if (const auto* i = e->opt_Module()) {
                             return getModuleHir(*i, path, idx + 1, ignoreLast, outPath);
                         } else {
-                            DEBUG("Found HIR " << e->tagStr() << ", not module");
                             return ResolveModuleRef();
                         }
                         break;
@@ -398,7 +367,6 @@ default: {
         }
 
         ResolveModuleRef getModuleHir(const HIRModule& startMod, const ASTPath& path, size_t startOffset, bool ignoreLast, ASTAbsolutePath* outPath) {
-            TRACE_FUNCTION_F("path=" << path << ", start_offset=" << startOffset << ", ignore_last=" << ignoreLast);
             const HIRModule* mod = &startMod;
             ASSERT_BUG(Span(), path.nodes().size() >= (ignoreLast ? 1 : 0), "" << path);
             for (size_t i = startOffset; i < path.nodes().size() - (ignoreLast ? 1 : 0); i++) {
@@ -406,7 +374,6 @@ default: {
                 // Find the module for this node
                 auto it = mod->modItems.find(name);
                 if (it == mod->modItems.end() || !it->second->publicity.isGlobal()) {
-                    DEBUG(name << " Not Found");
                     return ResolveModuleRef();
                 }
                 const auto* ti = &it->second->ent;
@@ -428,7 +395,6 @@ default: {
                 }
                 switch ((*ti).tag()) {
 default:
-                    DEBUG(name << " Not Module, instead " << ti->tagStr());
                     return ResolveModuleRef();
                     case HIRTypeItem::TAG_Module: {
                         auto& m = (*ti).as_Module();
@@ -504,7 +470,6 @@ default:
         ResolveItemRef findItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr)
         //ResolveModuleRef get_source_module_for_name(const AST::Module& mod, const RcString& name, ResolveNamespace ns, ::AST::AbsolutePath* out_path=nullptr)
         {
-            TRACE_FUNCTION_F("Looking for " << name << " in " << mod.path() << " (ns=" << ns << ")");
             if (mod.indexPopulated) {
                 TODO(sp, "Look up in index");
             }
@@ -514,7 +479,6 @@ default:
             auto guardEnt = ::std::make_pair(&mod, name);
             bool visitUse = true;
             if (std::count(antirecurseStack.begin(), antirecurseStack.end(), guardEnt) > 0) {
-                DEBUG("Recursion detected, not looking at `use` statements in " << mod.path());
                 visitUse = false;
             }
 
@@ -525,9 +489,7 @@ default:
 
             if (ns == ResolveNamespace::Macro) {
                 for (const auto& i : mod.macros()) {
-                    DEBUG("> MACRO " << i.name);
                     if (i.name == name) {
-                        DEBUG("Found in ast (macro)");
                         if (outPath) {
                             outPath->nodes.push_back(name);
                         }
@@ -541,7 +503,6 @@ default:
                     }
                     if (mac.name == name) {
                         // TODO: What about macro re-exports a builtin?
-                        DEBUG("Found in ast (macro import) - " << mac.path);
                         if (outPath) {
                             *outPath = mac.path;
                         }
@@ -585,7 +546,6 @@ default:
                     if (outPath) {
                         outPath->nodes.push_back(name);
                     }
-                    DEBUG("Found in ast (" << i->data.tagStr() << ")");
                     switch (ns) {
                         case ResolveNamespace::Macro:
                             if (const auto* mac = i->data.opt_Macro()) {
@@ -599,7 +559,6 @@ default:
                                 }
                                 return ResolveItemRefMacro(&**mac);
                             }
-                            DEBUG("- Ignoring macro");
                             break;
                         case ResolveNamespace::Namespace:
                             return ResolveItemRefType(&i->data);
@@ -614,7 +573,6 @@ default:
                     }
                     for (const auto& e : useStmt->entries) {
                         if (e.name == name) {
-                            DEBUG("Use " << e.name << " := " << e.path);
 
                             if (e.path.cls.is_Absolute() && e.path.cls.as_Absolute().crate == CRATE_BUILTINS) {
                                 const auto& pe = e.path.cls.as_Absolute();
@@ -658,7 +616,6 @@ default:
 
                             const auto& itemName = e.path.nodes().back().name();
                             auto tgtMod = this->getModule(mod.path(), e.path, true, outPath);
-                            DEBUG(tgtMod.tagStr());
 
                             switch (tgtMod.tag()) {
                                 case ResolveModuleRef::TAG_Ast: {
@@ -666,7 +623,6 @@ default:
                                     // NOTE: Recursion
                                     auto rv = this->findItem(*modPtr, itemName, ns, outPath);
                                     if (!rv.is_None()) {
-                                        DEBUG("Found in AST use");
                                         return rv;
                                     }
                                     break;
@@ -677,7 +633,6 @@ default:
                                     // - What if it's an alias? (not critical)
                                     auto rv = this->findItemHir(*modPtr, itemName, ns, outPath);
                                     if (!rv.is_None()) {
-                                        DEBUG("Found in HIR use");
                                         return rv;
                                     }
                                     break;
@@ -712,7 +667,6 @@ default:
                     }
                     for (const auto& e : useStmt->entries) {
                         if (e.name == "") {
-                            DEBUG("Glob use " << e.path);
 
                             // - Outer recurse
                             //  > Get the module for this path
@@ -720,7 +674,6 @@ default:
                             switch (srcMod.tag()) {
                                 case ResolveModuleRef::TAG_None: {
                                     auto& _ = srcMod.as_None();
-                                    DEBUG("Unable to find " << e.path);
                                     break;
                                 }
                                 case ResolveModuleRef::TAG_ImplicitPrelude: {
@@ -731,7 +684,6 @@ default:
                                     auto& sm = srcMod.as_Ast();
                                     auto rv = findItem(*sm, name, ns, outPath);
                                     if (!rv.is_None()) {
-                                        DEBUG("Found in AST glob");
                                         return rv;
                                     }
                                     // Fall through, keep searching
@@ -741,7 +693,6 @@ default:
                                     auto& sm = srcMod.as_Hir();
                                     auto rv = this->findItemHir(*sm, name, ns, outPath);
                                     if (!rv.is_None()) {
-                                        DEBUG("Found HIR glob");
                                         return rv;
                                     }
                                     // Not found, fall through
@@ -753,7 +704,6 @@ default:
                 }
             }
             if (mod.isAnon()) {
-                DEBUG("Recurse to parent");
                 const ASTModule* m = &crate.rootModule_;
                 for (size_t i = 0; i < mod.path().nodes.size() - 1; i++) {
                     auto& tgtName = mod.path().nodes[i];
@@ -766,14 +716,12 @@ default:
                 }
                 return findItem(*m, name, ns, outPath);
             }
-            DEBUG("Not found");
             return ResolveItemRef::make_None({});
         }
 
         /// Locate the named item in HIR (resolving `Import` references too)
         ResolveItemRef findItemHir(const HIRModule& mod, const RcString& itemName, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr, const HIRSimplePath* visPathP = nullptr) {
             const auto& visPath = visPathP ? *visPathP : HIRSimplePath();
-            TRACE_FUNCTION_F(itemName);
             if (outPath) {
                 ASSERT_BUG(sp, outPath->crate != "", "Crate not filled");
             }
@@ -794,7 +742,6 @@ default:
                 case ResolveNamespace::Namespace: {
                     auto it = mod.modItems.find(itemName);
                     if (it != mod.modItems.end() && it->second->publicity.isVisible(visPath)) {
-                        DEBUG("Found `" << itemName << "` in HIR namespace");
                         const HIRTypeItem* ti;
                         if (const auto* p = it->second->ent.opt_Import()) {
                             if (outPath) {
@@ -818,7 +765,6 @@ default:
                 case ResolveNamespace::Value: {
                     auto it = mod.valueItems.find(itemName);
                     if (it != mod.valueItems.end() && it->second->publicity.isVisible(visPath)) {
-                        DEBUG("Found `" << itemName << "` in HIR value");
                         const HIRValueItem* vi;
                         if (const auto* p = it->second->ent.opt_Import()) {
                             if (outPath) {
@@ -838,11 +784,8 @@ default:
                 case ResolveNamespace::Macro: {
                     auto it = mod.macroItems.find(itemName);
                     if (it == mod.macroItems.end()) {
-                        DEBUG("Did not find `" << itemName << "` in HIR macro");
                     } else if (!it->second->publicity.isVisible(visPath)) {
-                        DEBUG("Found `" << itemName << "` in HIR macro - but not public, ignoring");
                     } else {
-                        DEBUG("Found `" << itemName << "` in HIR macro");
                         const HIRMacroItem* mi;
                         if (const auto* p = it->second->ent.opt_Import()) {
                             if (outPath) {
@@ -858,7 +801,6 @@ default:
                                     //    TODO(sp, "Resolve HIR import to decorator");
                                     //    //return ResolveItemRef_Macro(pm);
                                     //}
-                                    DEBUG("Import of builtins: Not found");
                                     return {};
                                 }
                             };
@@ -921,7 +863,6 @@ ResolveModuleRef ResolveLookupGetModule(const Span& sp, const Settings& settings
 }
 
 ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, ASTAbsolutePath* outPath) {
-    TRACE_FUNCTION_F("path=" << path << " in " << basePath);
     ResolveState rs(span, settings, crate);
 
     const auto& itemName = path.nodes().back().name();
@@ -947,7 +888,6 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
             if (path.cls.is_Relative() && path.cls.as_Relative().hygiene.hasModPath()) {
                 const auto& inP = path.cls.as_Relative().hygiene.modPath();
                 tmpP = HIRSimplePath(inP.crate, inP.ents);
-                DEBUG("vis_path=" << tmpP);
                 visPath = &tmpP;
             }
             auto rv = rs.findItemHir(*modPtr, itemName, ResolveNamespace::Macro, outPath, visPath);
@@ -972,7 +912,6 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
 /// Returns the source module for the specified name
 // NOTE: Name resolution
 ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, const ASTPath& path, ResolveNamespace ns, ASTAbsolutePath* outPath) {
-    TRACE_FUNCTION_F("path=" << path << " in " << basePath);
     ResolveState rs(sp, settings, crate);
 
     auto mod = rs.getModule(basePath, path, true, outPath);

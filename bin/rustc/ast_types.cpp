@@ -122,7 +122,6 @@ const char* coretypeName(const eCoreType ct) {
         case CORETYPE_F128:
             return "f128";
     }
-    DEBUG("Unknown core type?! " << ct);
     return "NFI";
 }
 

@@ -1070,10 +1070,9 @@ NODE(
 NODE(ASTExprNodeMacroDefinition, { os << "/* macro definition #" << definitionId << " */"; }, { return NEWNODE(ASTExprNodeMacroDefinition, definitionId, tokenHygiene, definitionHygiene); })
 
 #define NV(type, actions)                                                 \
-    void ASTNodeVisitorDef::visit(type& node) { /*DEBUG("DEF - "#type);*/ \
+    void ASTNodeVisitorDef::visit(type& node) { \
         actions                                                           \
     }
-//  void NodeVisitorDef::visit(const type& node) { DEBUG("DEF - "#type" (const)"); actions }
 
 NV(ASTExprNodeBlock, {
     for (auto& child : node.nodes) {
@@ -1129,55 +1128,40 @@ NV(ASTExprNodeLetBinding, {
     visit(node.elseNode);
 })
 NV(ASTExprNodeAssign, {
-    INDENT();
     visit(node.slot);
     visit(node.value);
-    UNINDENT();
 })
 NV(ASTExprNodeCallPath, {
-    INDENT();
     for (auto& arg : node.args) {
         visit(arg);
     }
-    UNINDENT();
 })
 NV(ASTExprNodeCallMethod, {
-    INDENT();
     visit(node.val);
     for (auto& arg : node.args) {
         visit(arg);
     }
-    UNINDENT();
 })
 NV(ASTExprNodeCallObject, {
-    INDENT();
     visit(node.val);
     for (auto& arg : node.args) {
         visit(arg);
     }
-    UNINDENT();
 })
 NV(ASTExprNodeLoop, {
-    INDENT();
     visit(node.code);
-    UNINDENT();
 })
 NV(ASTExprNodeFor, {
-    INDENT();
     visit(node.value);
     visit(node.code);
-    UNINDENT();
 })
 NV(ASTExprNodeWhile, {
-    INDENT();
     for (auto& c : node.conditions) {
         visit(c.value);
     }
     visit(node.code);
-    UNINDENT();
 })
 NV(ASTExprNodeMatch, {
-    INDENT();
     visit(node.val);
     for (auto& arm : node.arms) {
         for (auto& c : arm.guard) {
@@ -1185,10 +1169,8 @@ NV(ASTExprNodeMatch, {
         }
         visit(arm.code);
     }
-    UNINDENT();
 })
 NV(ASTExprNodeIf, {
-    INDENT();
     for (auto& a : node.arms) {
         for (auto& c : a.conditions) {
             visit(c.value);
@@ -1196,7 +1178,6 @@ NV(ASTExprNodeIf, {
         visit(a.body);
     }
     visit(node.elseNode);
-    UNINDENT();
 })
 
 NV(ASTExprNodeWildcardPattern, { (void)node; })
@@ -1553,7 +1534,6 @@ void ASTNodeVisitor::visit(ASTExprNodeP& cnode) {
 
 void ASTNodeVisitorDef::visit(ASTExprNodeP& cnode) {
     if (cnode.isValid()) {
-        TRACE_FUNCTION_F(cnode.typeName());
         cnode->visit(*this);
     }
 }

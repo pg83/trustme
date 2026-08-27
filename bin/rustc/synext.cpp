@@ -17,7 +17,6 @@ class CMacroRulesExpander: public ExpandProcMacro {
     }
 
     ::std::unique_ptr<TokenStream> expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) override {
-        DEBUG("Parsing macro_rules! " << ident);
         ParseState parseState;
         parseState.wb = &wb;
         parseState.crate = &crate;
@@ -25,7 +24,6 @@ class CMacroRulesExpander: public ExpandProcMacro {
         TTStream lex(sp, parseState, tt);
         auto mac = ParseMacroRules(lex);
         mac->definitionSpan = sp;
-        DEBUG("macro_rules! " << mod.path() + ident << " " << &*mac);
         mod.addMacro(false, ident, mv$(mac));
 
         return ::std::unique_ptr<TokenStream>(new TTStreamO(sp, ParseState(), TokenTree()));
@@ -42,7 +40,6 @@ class CMacroUseHandler: public ExpandDecorator {
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        TRACE_FUNCTION_F("[CMacroUseHandler] path=" << path);
 
         std::vector<RcString> filter;
         if (mi.data().size() > 0) {
@@ -111,23 +108,19 @@ class CMacroUseHandler: public ExpandDecorator {
         } else if (const auto* ecItem = i.opt_Crate()) {
             const auto& ec = crate.externCrates.at(ecItem->name);
 
-            DEBUG(ec.hir->exportedMacroNames.size() << " exported macros");
             for (const auto& name : ec.hir->exportedMacroNames) {
                 if (!filterValid(name)) {
-                    DEBUG("Skip " << name);
                     continue;
                 }
                 ASSERT_BUG(sp, ec.hir->rootModule.macroItems.count(name) == 1, "Macro `" << name << "` missing from crate " << ec.name);
                 const auto* e = &*ec.hir->rootModule.macroItems.at(name);
                 if (!e->publicity.isGlobal()) {
-                    DEBUG("Not public: " << name);
                     continue;
                 }
 
                 ASTAbsolutePath path{ecItem->name, {name}};
                 if (const auto* imp = e->ent.opt_Import()) {
                     if (imp->path.crateName() == CRATE_BUILTINS) {
-                        DEBUG("Importing builtin (skip): " << name);
                         continue;
                     }
                     ASSERT_BUG(sp, crate.externCrates.count(imp->path.crateName()), "Crate `" << imp->path.crateName() << "` not loaded");
@@ -137,7 +130,6 @@ class CMacroUseHandler: public ExpandDecorator {
                     e = &*mod.macroItems.at(imp->path.components().back());
                     if (const auto& imp2 = e->ent.opt_Import()) {
                         if (imp2->path.crateName() == CRATE_BUILTINS) {
-                            DEBUG("Importing builtin (skip): " << name);
                             continue;
                         } else {
                             ASSERT_BUG(sp, !e->ent.is_Import(), "Recursive import - " << imp->path << " pointed to " << imp2->path);
@@ -166,7 +158,6 @@ class CMacroUseHandler: public ExpandDecorator {
                 if(!exists(name, mr))
                 {
                     auto mi = ASTModule::MacroImport{false, name, std::move(path), std::move(mr)};
-                    DEBUG("Import macro " << mi.path);
                     mod.macroImports.push_back(mv$(mi));
                 }
             }
@@ -176,11 +167,9 @@ class CMacroUseHandler: public ExpandDecorator {
                 if (!filterValid(mr.name)) {
                     continue;
                 }
-                DEBUG("Imported " << mr.name);
                 if (!exists(mr.name, &*mr.data)) {
                     auto path = submod.path();
                     path.nodes.push_back(mr.name);
-                    DEBUG(mod.path() << ": Import macro " << path);
                     mod.macroImports.push_back(ASTModule::MacroImport{false, mr.name, path, &*mr.data});
                 }
             }
@@ -188,7 +177,6 @@ class CMacroUseHandler: public ExpandDecorator {
                 if (!filterValid(mri.name)) {
                     continue;
                 }
-                DEBUG(mod.path() << ": Imported " << mri.name << " (propagate) = " << mri.path);
                 if (!exists(mri.name, mri.ref)) {
                     mod.macroImports.push_back(mri.clone());
                 }
@@ -258,7 +246,6 @@ namespace {
 
         // Leave an alias here, so existing references are valid.
         mod.macroImports.push_back(ASTModule::MacroImport{false, name, ASTAbsolutePath("", {name}), &*e.data});
-        DEBUG(mod.path() << ": macro_use Import " << mod.macroImports.back().name << " = " << mod.macroImports.back().path);
 
         if (localInnerMacros) {
             for (auto& rule : e.data->rules) {
@@ -267,7 +254,6 @@ namespace {
         }
 
         e.data->exported = true;
-        DEBUG("- Export macro " << name << "!");
         crate.rootModule_.macros().push_back(mv$(e));
     }
 }
@@ -313,7 +299,6 @@ class CMacroExportHandler: public ExpandDecorator {
             if (i.as_Macro()) {
                 i.as_Macro()->exported = true;
                 ASSERT_BUG(sp, path.nodes.size() == 1, "");
-                DEBUG("- Export macro (item) " << name << "!");
             }
         } else {
             ERROR(sp, E0000, "Use of #[macro_export] on non-macro - " << i.tagStr());
@@ -368,7 +353,6 @@ class CBuiltinMacroHandler: public ExpandDecorator {
         ui.entries.push_back(ASTUseItem::Ent{});
         ui.entries.back().name = name;
         ui.entries.back().path = ASTPath(RcString::newInterned(CRATE_BUILTINS), {name});
-        DEBUG("Convert macro_rules tagged #[rustc_builtin_macro] with use - " << name);
         i = ASTItem::make_Use(mv$(ui));
     }
 };

@@ -548,7 +548,6 @@ namespace {
 
 MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const TransParams& params, const MIRFunctionPointer& tpl) {
     Span sp;
-    TRACE_FUNCTION;
     assert(tpl);
 
     if (const auto* marker = asyncDropPollMarker(tpl)) {
@@ -564,9 +563,7 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
     // 1. Monomorphise locals and temporaries
     output.locals.reserve(tpl->locals.size());
     for (const auto& var : tpl->locals) {
-        DEBUG("- _" << output.locals.size() << " (" << var << ")");
         output.locals.push_back(params.monomorph(resolve, var));
-        DEBUG(" = " << output.locals.back());
     }
     output.dropFlags = tpl->dropFlags;
 
@@ -576,7 +573,6 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
     for (const auto& block : tpl->blocks) {
         ::std::vector<MIRStatement> statements;
 
-        TRACE_FUNCTION_F("bb" << output.blocks.size());
         statements.reserve(block.statements.size());
         for (const auto& stmt : block.statements) {
             switch (stmt.tag()) {
@@ -674,7 +670,6 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             const auto& path = ent.first;
             const auto& pp = ent.second->pp;
             const auto& c = *ent.second->ptr;
-            TRACE_FUNCTION_FR("CONSTANT " << path, "CONSTANT " << path);
             auto ty = pp.monomorph(resolve, c.type);
             auto eval = HIREvaluator{pp.sp, wb, nvs};
             eval.resolve.setBothGenericsRaw(pp.gdefImpl, &c.params);
@@ -698,7 +693,6 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             const auto& path = ent.first;
             const auto& pp = ent.second->pp;
             const auto& s = *ent.second->ptr;
-            TRACE_FUNCTION_FR("STATIC " << path, "STATIC " << path);
             auto ty = pp.monomorph(resolve, s.type);
             auto eval = HIREvaluator{pp.sp, wb, nvs};
             eval.resolve.setBothGenericsRaw(pp.gdefImpl, &s.params);
@@ -760,7 +754,6 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             if (monomorphNeeded) {
                 const auto& path = fcnEnt.first;
                 const auto& pp = transFcn->pp;
-                TRACE_FUNCTION_FR("FUNCTION " << path, "FUNCTION " << path);
                 ASSERT_BUG(Span(), fcn.code.mir, "No code for " << path);
 
                 // TODO: Get the item params too
@@ -792,7 +785,6 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
                 generatedFunctions.pushBack(transFcn);
                 resolve.clearBothGenerics();
             } else {
-                DEBUG("Non-generic: FUNCTION " << fcnEnt.first);
                 // TransAutoImpls may have generated concrete MIR before this
                 // fixed point started.  Enumerate it again: the initial walk
                 // only saw the function path, not the generated body.

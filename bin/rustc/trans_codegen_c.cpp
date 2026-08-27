@@ -772,7 +772,6 @@ namespace {
                             if (isDylib(crate2.second)) {
                                 for (const auto& subcrate : crate2.second.data->extCrates) {
                                     if (subcrate.second.path == extCrate.path) {
-                                        DEBUG(crateName << " referenced by dylib " << crate2.first);
                                         isInDylib = true;
                                     }
                                 }
@@ -790,10 +789,8 @@ namespace {
                         if (extCrate.data->langItems.count("trustme-panic_runtime")) {
                             // Check if this is the requested panic crate
                             if (strncmp(crateName.c_str(), opt.panicCrate.c_str(), opt.panicCrate.size()) != 0) {
-                                DEBUG("Ignore not-selected panic crate: " << crateName);
                                 continue;
                             } else {
-                                DEBUG("Keep panic crate: " << crateName);
                             }
                         }
 
@@ -1197,7 +1194,6 @@ namespace {
         }
 
         void emitTypeProto(const HIRTypeData* ty) override {
-            TRACE_FUNCTION_F(ty);
             switch ((*ty).tag()) {
 default:
                 // No prototype required
@@ -1372,7 +1368,6 @@ default:
                 const auto offset = repr->fields[fld].offset;
                 size_t s = 0, a;
                 TargetGetSizeAndAlignOf(sp, resolve_, ty, s, a);
-                DEBUG("@" << offset << ": " << ty << " " << s << "," << a);
 
                 // Check offset/alignment
                 if (s == SIZE_MAX) {
@@ -1390,7 +1385,6 @@ default:
                         }
                     }
                     a = packingMaxAlign > 0 ? std::min<size_t>(packingMaxAlign, fieldAlign) : fieldAlign;
-                    DEBUG("a = " << a);
                     while (curOfs % a != 0) {
                         curOfs++;
                     }
@@ -1455,7 +1449,6 @@ default:
             };
             mirRes = &topMirRes;
 
-            TRACE_FUNCTION_F(ty);
             switch ((*ty).tag()) {
 default:
                 // Nothing to emit
@@ -1541,7 +1534,6 @@ default:
             mirRes = &topMirRes;
             // TODO: repr(transparent) and repr(align(foo))
 
-            TRACE_FUNCTION_F(p);
             auto itemTy = crate.types.path(p.clone(), HIRTypePathBinding::make_Struct(&item));
             const auto* repr = TargetGetTypeRepr(sp, resolve_, itemTy);
             MIR_ASSERT(*mirRes, repr, "No repr for struct " << p);
@@ -1565,7 +1557,6 @@ default:
             };
             mirRes = &topMirRes;
 
-            TRACE_FUNCTION_F(p);
             auto itemTy = crate.types.path(p.clone(), HIRTypePathBinding::make_Union(&item));
             const auto* repr = TargetGetTypeRepr(sp, resolve_, itemTy);
             MIR_ASSERT(*mirRes, repr != nullptr, "No repr for union " << itemTy);
@@ -1663,7 +1654,6 @@ default:
             };
             mirRes = &topMirRes;
 
-            TRACE_FUNCTION_F(p);
             auto itemTy = crate.types.path(p.clone(), HIRTypePathBinding::make_Enum(&item));
             const auto* repr = TargetGetTypeRepr(sp, resolve_, itemTy);
 
@@ -1720,14 +1710,12 @@ default:
             else if (unionFields.size() > 0) {
                 if (unionFields.size() == repr->fields.size()) {
                     // Embedded tag
-                    DEBUG("Untagged, nonzero or other");
                 } else {
                     // Leading & external tag: repr(C)
                     assert(unionFields.size() + 1 == repr->fields.size());
                     assert(isEnumTag(repr, repr->fields.size() - 1));
 
                     assert(repr->fields.back().offset == 0);
-                    DEBUG("Tag present at offset " << repr->fields.back().offset << " - " << repr->fields.back().ty);
 
                     of << "\t";
                     emitCtype(repr->fields.back().ty, FMT_CB(os, os << "TAG"));
@@ -1801,7 +1789,6 @@ default:
         }
 
         void emitConstructorEnum(const Span& sp, const HIRGenericPath& path, const HIREnum& item, size_t varIdx) override {
-            TRACE_FUNCTION_F(path << " var_idx=" << varIdx);
 
             auto p = path.clone();
             p.path.popComponent();
@@ -1858,7 +1845,6 @@ default:
         }
 
         void emitConstructorStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override {
-            TRACE_FUNCTION_F(p);
             HIRTypeRef tmp;
             MonomorphStatePtr ms(crate.types, nullptr, &p.params, nullptr);
             auto monomorph = [&](const auto& x) {
@@ -1942,7 +1928,6 @@ default:
                 sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
-            TRACE_FUNCTION_F(p);
             auto type = params.monomorph(resolve_, item.type);
 
             // LLVM supports prepending a symbol name with \1 to prevent further mangling.
@@ -1992,7 +1977,6 @@ default:
             };
             mirRes = &topMirRes;
 
-            TRACE_FUNCTION_F(p);
             auto type = params.monomorph(resolve_, item.type);
             // Two promoted borrows of the same value are the same value: rustc
             // gives them one address, and library code compares those
@@ -2109,7 +2093,6 @@ default:
             };
             mirRes = &topMirRes;
 
-            TRACE_FUNCTION_F(p);
 
             auto type = params.monomorph(resolve_, item.type);
             const bool isZero = isZeroLiteral(type, encoded, params);
@@ -2162,8 +2145,6 @@ default:
             } else {
                 of << "{ .raw = {";
                 if (isPacked) {
-                    DEBUG("encoded.bytes = `" << FMT_CB(ss, for (auto& b : encoded.bytes) ss << std::setw(2) << std::setfill('0') << std::hex << unsigned(b) << (int(&b - encoded.bytes.data()) % 8 == 7 ? " " : "");) << "`");
-                    DEBUG("encoded.relocations = " << encoded.relocations);
                     auto relocIt = encoded.relocations.begin();
                     auto ptrSize = TargetGetPointerBits() / 8;
                     for (size_t i = 0; i < encoded.bytes.size(); i += ptrSize) {
@@ -2312,7 +2293,6 @@ default:
                 sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
-            TRACE_FUNCTION_F(p);
             const bool tracksCaller = crate.functionTracksCaller(sp, p, item);
             if (tracksCaller) {
                 trackedFunctions.insert(p.clone());
@@ -2973,7 +2953,6 @@ default:
             };
             mirRes = &topMirRes;
 
-            TRACE_FUNCTION_F(p);
             emitFunctionLinkageAlias(p, item);
             emitFunctionDefinitionPrefix(item, isExternDef);
             emitFunctionHeader(p, item, params);
@@ -2988,7 +2967,6 @@ default:
         }
 
         void emitFunctionCode(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef, const MIRFunctionPointer& code, bool hasPrototype) override {
-            TRACE_FUNCTION_F(p);
 
             const bool tracksCaller = crate.functionTracksCaller(sp, p, item);
             if (tracksCaller) {
@@ -3124,7 +3102,6 @@ default:
                 if (this->typeIsBadZst(code->locals[i])) {
                     continue;
                 }
-                DEBUG("var" << i << " : " << code->locals[i]);
                 size_t localSize = 0;
                 size_t localAlignment = 0;
                 if (TargetGetSizeAndAlignOf(sp, resolve_, code->locals[i], localSize, localAlignment)
@@ -4114,7 +4091,6 @@ default:
         }
 
         void emitStatement(const MIRTypeResolve& localMirRes, const MIRStatement& stmt, unsigned indentLevel = 1) {
-            DEBUG(stmt);
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
             switch (stmt.tag()) {
                 case MIRStatement::TAG_ScopeEnd:
@@ -4161,7 +4137,6 @@ default:
                     break;
                 case MIRStatement::TAG_Assign: {
                     const auto& e = stmt.as_Assign();
-                    DEBUG("- " << e.dst << " = " << e.src);
 
                     HIRTypeRef tmp;
                     const auto& ty = localMirRes.getLvalueType(tmp, e.dst);
@@ -5927,7 +5902,6 @@ default:
                     fmtLines.push_back(FMT(FMT_CB(os, v.fmt(os))));
                     fmtLines.back().erase(fmtLines.back().begin());
                     fmtLines.back().pop_back();
-                    DEBUG(fmtLines.back());
                 }
 
                 for (const auto& p : params) {
@@ -8967,9 +8941,7 @@ default:
                         MIR_ASSERT(*self.mirRes, tyRepr, "No repr for " << ty);
                         size_t sizeSlot = tyRepr->size;
                         const auto& ity = tyRepr->fields[0].ty;
-                        DEBUG("SimdInfo Type: " << ity);
                         const auto& tyVal = ity->is_Primitive() ? ity : tyRepr->fields[0].ty->as_Array().inner;
-                        DEBUG("ty_val = " << tyVal);
                         size_t sizeVal = 0;
                         MIR_ASSERT(*self.mirRes, TargetGetSizeOf(self.sp, self.resolve_, tyVal, sizeVal), tyVal);
 

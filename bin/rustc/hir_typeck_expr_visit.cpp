@@ -142,7 +142,6 @@ namespace {
         }
 
         void visitTypeImpl(HIRTypeImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << impl.type);
             auto _ = this->ms.setImplGenerics(impl.params);
 
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
@@ -152,7 +151,6 @@ namespace {
         }
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << traitPath << impl.traitArgs << " for " << impl.type);
             auto traitGpath = HIRGenericPath(traitPath, impl.traitArgs.clone());
             auto _0 = this->ms.setCurrentTraitImpl(impl);
             auto _1 = this->ms.setCurrentTrait(traitGpath);
@@ -167,7 +165,6 @@ namespace {
         }
 
         void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << traitPath << " for " << impl.type << " { }");
             auto _ = this->ms.setImplGenerics(impl.params);
 
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
@@ -181,7 +178,6 @@ namespace {
                 auto data = ty->cloneData();
                 auto& e = data.as_Array();
                 e.inner = this->visitType(e.inner);
-                DEBUG("Array size " << ty);
                 tArgs tmp;
                 if (auto* se = e.size.opt_Unevaluated()) {
                     if (se->is_Unevaluated()) {
@@ -217,16 +213,13 @@ namespace {
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
             auto _ = this->ms.setItemGenerics(item.params);
             if (item.code) {
-                DEBUG("Function code " << p);
                 TypecheckCode(ms, item.args, item.traitReturnType.value_or(item.returnType), item.code);
             } else {
-                DEBUG("Function code " << p << " (none)");
             }
         }
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override {
             if (item.value) {
-                DEBUG("Static value " << p);
                 tArgs tmp;
                 TypecheckCode(ms, tmp, item.type, item.value);
             }
@@ -235,7 +228,6 @@ namespace {
         void visitConstant(HIRItemPath p, HIRConstant& item) override {
             auto _ = this->ms.setItemGenerics(item.params);
             if (item.value) {
-                DEBUG("Const value " << p);
                 tArgs tmp;
                 TypecheckCode(ms, tmp, item.type, item.value);
             }
@@ -248,7 +240,6 @@ namespace {
                 auto enumType = HIREnum::getReprType(item.tagRepr);
 
                 for (auto& var : e->variants) {
-                    DEBUG("Enum value " << p << " - " << var.name);
                     if (var.expr) {
                         tArgs tmp;
                         TypecheckCode(ms, tmp, ms.crate.types.primitive(enumType), var.expr);
@@ -301,17 +292,14 @@ TypeckModuleState::NullOnDrop<const HIRGenericParams> TypeckModuleState::setItem
 void TypeckModuleState::pushTraits(HIRItemPath p, const HIRModule& mod) {
     auto sp = Span();
     modPaths.push_back(p.getSimplePath());
-    DEBUG("Module has " << mod.traits.size() << " in-scope traits");
     // - Push a NULL entry to prevent parent module import lists being searched
     traits.push_back(::std::make_pair(nullptr, nullptr));
     for (const auto& traitPath : mod.traits) {
-        DEBUG("Push " << traitPath);
         traits.push_back(::std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
     }
 }
 
 void TypeckModuleState::popTraits(const HIRModule& mod) {
-    DEBUG("Module has " << mod.traits.size() << " in-scope traits");
     for (unsigned int i = 0; i < mod.traits.size(); i++) {
         traits.pop_back();
     }

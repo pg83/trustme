@@ -253,7 +253,6 @@ namespace {
     bool checkCfgInner1(const CfgState& cfg, const RcString& name, TokenStream& lex);
 
     bool checkCfgInner(const CfgState& cfg, TokenStream& lex) {
-        TRACE_FUNCTION;
         if (lex.lookahead(0) == TOK_INTERPOLATED_META) {
             auto meta = std::move(lex.getTokenCheck(TOK_INTERPOLATED_META).fragMeta());
             auto ilex = TTStream(meta.span(), ParseState(), meta.data());
@@ -290,7 +289,6 @@ namespace {
                 // Equality
                 auto its = cfg.values.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
-                    DEBUG(name << ": '" << it->second << "' == '" << val << "'");
                     if (it->second == val) {
                         return true;
                     }
@@ -301,7 +299,6 @@ namespace {
 
                 auto it2 = cfg.valueFcns.find(name.c_str());
                 if (it2 != cfg.valueFcns.end()) {
-                    DEBUG(name << ": ('" << val << "')?");
                     return it2->second->matches(val);
                 }
 
@@ -461,7 +458,6 @@ std::vector<ASTAttribute> checkCfgAttr(const Settings& settings, const ASTAttrib
 
 class CCfgExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        DEBUG("cfg!() - " << tt);
         auto lex = TTStream(sp, ParseState(), tt);
         const auto& cfg = *wb.settings->cfg;
         bool rv = checkCfgInner(cfg, lex);
@@ -473,7 +469,6 @@ class CCfgExpander: public ExpandProcMacro {
 
 class CCfgSelectExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        DEBUG("cfg_select!() - " << tt);
         auto lex = TTStream(sp, ParseState(), tt);
         for (;;) {
             const auto& cfg = *wb.settings->cfg;
@@ -496,81 +491,62 @@ class CCfgHandler: public ExpandDecorator {
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        DEBUG("#[cfg] crate - " << mi);
         // Ignore, as #[cfg] on a crate is handled in expand/mod.cpp
-        if (checkCfg(*wb.settings, sp, mi)) {
-        } else {
+        if (!checkCfg(*wb.settings, sp, mi)) {
             // Remove all items (can't remove the module)
             crate.rootModule_.items.clear();
         }
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        TRACE_FUNCTION_FR("#[cfg] item - " << mi, (i.is_None() ? "Deleted" : ""));
-        if (checkCfg(*wb.settings, sp, mi)) {
-            // Leave
-        } else {
+        if (!checkCfg(*wb.settings, sp, mi)) {
             i = ASTItem::make_None({});
         }
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        TRACE_FUNCTION_FR("#[cfg] item - " << mi, (i.is_None() ? "Deleted" : ""));
-        if (checkCfg(*wb.settings, sp, mi)) {
-            // Leave
-        } else {
+        if (!checkCfg(*wb.settings, sp, mi)) {
             i = ASTItem::make_None({});
         }
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
-        TRACE_FUNCTION_FR("#[cfg] item - " << mi, (i.is_None() ? "Deleted" : ""));
-        if (checkCfg(*wb.settings, sp, mi)) {
-            // Leave
-        } else {
+        if (!checkCfg(*wb.settings, sp, mi)) {
             i = ASTItem::make_None({});
         }
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override {
-        DEBUG("#[cfg] expr - " << mi);
-        if (checkCfg(*wb.settings, sp, mi)) {
-            // Leave
-        } else {
+        if (!checkCfg(*wb.settings, sp, mi)) {
             expr.reset();
         }
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override {
-        DEBUG("#[cfg] struct item - " << mi);
         if (!checkCfg(*wb.settings, sp, mi)) {
             si.name = RcString();
         }
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& i) const override {
-        DEBUG("#[cfg] tuple item - " << mi);
         if (!checkCfg(*wb.settings, sp, mi)) {
             i.type = ::mkType(*crate.pool, sp);
         }
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& i) const override {
-        DEBUG("#[cfg] enum variant - " << mi);
         if (!checkCfg(*wb.settings, sp, mi)) {
             i.name = RcString();
         }
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& i) const override {
-        DEBUG("#[cfg] match arm - " << mi);
         if (!checkCfg(*wb.settings, sp, mi)) {
             i.patterns.clear();
         }
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& i) const override {
-        DEBUG("#[cfg] struct lit - " << mi);
         if (!checkCfg(*wb.settings, sp, mi)) {
             i.value.reset();
         }

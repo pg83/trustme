@@ -147,11 +147,9 @@ default:
             ASSERT_BUG(sp, te.path.data.is_Generic(), "Receiver path not a generic path - " << curTy);
             const auto& gp = te.path.data.as_Generic();
             if (gp.params.types.empty()) {
-                DEBUG("m_concrete[" << gp.path << "] += impl" << impl.params.fmtArgs() << " " << impl.type);
                 concrete[gp.path].push_back(&impl);
                 return;
             }
-            DEBUG("m_path[" << gp.path << "] += " << gp.params.types.at(0) << " impl" << impl.params.fmtArgs() << " " << impl.type);
             path[gp.path].insert(sp, gp.params.types.at(0), impl);
             break;
         }
@@ -160,7 +158,6 @@ default:
 
 void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct, tCbResolveType tyRes, Callback& cb) const {
     const auto& curTy = tyRes.getType(sp, curTyAct);
-    TRACE_FUNCTION_F("[Inner] " << curTy);
     byvalue.iterate(curTy, cb);
 
     const Inner* inner = nullptr;
@@ -225,11 +222,7 @@ default:
 
     if(inner) {
         assert(innerTy);
-        DEBUG("inner_ty = " << innerTy);
         inner->find(sp, innerTy, tyRes, cb);
-    }
-    else {
-        DEBUG("no wrapper");
     }
 }
 
@@ -237,11 +230,6 @@ void InherentCacheImpl::insertAll(const Span& sp, const HIRTypeImpl& impl, const
     for (const auto& m : impl.methods) {
         const auto& name = m.first;
         const auto& fcn = m.second.data;
-        if (fcn.receiverType) {
-            DEBUG(name << " " << *fcn.receiverType);
-        } else {
-            DEBUG(name);
-        }
 
         struct H {
             static Inner& g(std::unique_ptr<Inner>& slot) {
@@ -280,7 +268,6 @@ void InherentCacheImpl::insertAll(const Span& sp, const HIRTypeImpl& impl, const
 }
 
 void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, Callback& cb) const {
-    TRACE_FUNCTION_F(name << ", " << ty);
     // Callback that ensures that a potential impl fully matches the required receiver type
     struct FilterCallback final: Callback {
         const Span& sp;
@@ -299,7 +286,6 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
         }
 
         void visit(const HIRTypeData* roughSelfTy, const HIRTypeImpl& impl) override {
-            DEBUG("- " << roughSelfTy);
             const HIRFunction& fcn = impl.methods.at(name).data;
             struct GetSelf: public HIRMatchGenerics {
                 ::std::optional<HIRTypeRef> detectedSelfTy;

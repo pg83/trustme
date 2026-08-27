@@ -12,7 +12,6 @@
 #include "parse_lex.h"
 #include "expand_cfg.h"
 #include "wire_board.h"
-#include "debug_inner.h"
 #include "memory_dump.h"
 #include "parse_common.h" // For edition checks
 #include "trans_target.h"
@@ -267,77 +266,6 @@ struct ProgramParams {
     void showHelp() const;
 };
 
-template <typename Rv, typename Fcn>
-Rv CompilePhase(const char* name, Fcn f) {
-    DebugTimedPhase timedPhase(name);
-    return f();
-}
-
-template <typename Fcn>
-void CompilePhaseV(const char* name, Fcn f) {
-    DebugTimedPhase timedPhase(name);
-    f();
-}
-
-void initDebugList() {
-    debugInitPhases(
-        "TRUSTME_DEBUG",
-        {"Target Load",
-         "Parse",
-         "LoadCrates",
-         "Expand",
-         "Dump Expanded",
-         "Implicit Crates",
-
-         "Resolve Use",
-         "Resolve Index",
-         "Resolve Absolute",
-
-         "HIR Lower",
-
-         "Resolve Type Aliases",
-         "Resolve Bind",
-         "Index Inherent Methods",
-         "Resolve UFCS Outer",
-         "Resolve UFCS paths",
-         "Resolve HIR Self Type",
-         "Resolve HIR Markings",
-         "Sort Impls",
-         "Constant Evaluate",
-
-         "Typecheck Outer",
-         "Typecheck Expressions",
-
-         "Lint",
-
-         "Expand HIR Annotate",
-         "Expand HIR Static Borrow Mark",
-         "Expand HIR Closures",
-         "Expand HIR Static Borrow",
-         "Expand HIR Calls",
-         "Expand HIR VTables",
-         "Expand HIR Reborrows",
-         "Expand HIR ErasedType",
-
-         "Dump HIR",
-         "Lower MIR",
-         "Dump MIR",
-         "Constant Evaluate Full",
-         "MIR Cleanup",
-         "MIR Optimise",
-
-         "HIR Serialise",
-         "Trans Enumerate",
-         "Trans Auto Impls",
-         "Trans Monomorph",
-         "MIR Optimise Inline",
-         "MIR Cleanup 2",
-         "MIR Optimise Inline PostSave",
-         "Trans Enumerate Cleanup",
-         "Trans Codegen"}
-    );
-}
-
 /// main!
 namespace {
     /// The crate name rustc derives from the input file when none is given: the
@@ -364,7 +292,6 @@ namespace {
 }
 
 static int compile(int argc, char* argv[]) {
-    initDebugList();
 #if TRUSTME_SANITIZER_BUILD
     // Keep teardown out of production, but make sanitizer builds destroy every
     // pooled object so ASan/LSan can distinguish real leaks from arena lifetime.
@@ -397,7 +324,7 @@ static int compile(int argc, char* argv[]) {
     wb.inherentMethods = HIRInherentCache::create(*pool);
 
     // Set up cfg values
-    CompilePhaseV("Setup", [&]() {
+    {
         CfgSetValue(*wb.settings, "rust_compiler", "trustme");
         CfgSetValue(*wb.settings, "panic", params.codegen.panicType);
         if (params.debugAssertionsEnabled()) {
@@ -416,11 +343,10 @@ static int compile(int argc, char* argv[]) {
         CfgSetValueCb(*wb.settings, "feature", [&params](const ::std::string& s) {
             return params.features.count(s) != 0;
         });
-    });
-    CompilePhaseV("Target Load", [&]() {
+    }
+    {
         TargetSetCfg(wb, params.target);
-    });
-
+    }
     if (params.printCfgs) {
         CfgDump(*wb.settings, std::cout);
         return 0;
@@ -460,9 +386,9 @@ static int compile(int argc, char* argv[]) {
 
     {
         // Parse the crate into AST
-        ASTCrate* cratePtr = CompilePhase<ASTCrate*>("Parse", [&]() {
+        ASTCrate* cratePtr = [&]() {
             return ParseCrate(wb, wb.astPool, params.infile, params.edition);
-        });
+        }();
         ASTCrate& crate = *cratePtr;
         wb.astCrate = cratePtr;
         crate.testHarness = params.testHarness;
@@ -474,7 +400,7 @@ static int compile(int argc, char* argv[]) {
         memoryDump(memoryDumpSequence, "Parsed");
 
         // Load external crates.
-        CompilePhaseV("LoadCrates", [&]() {
+        {
             for (const auto& ld : params.crateSearchDirs) {
                 wb.settings->crateLoadDirs.push_back(ld);
             }
@@ -483,8 +409,7 @@ static int compile(int argc, char* argv[]) {
                 auto testCrateName = RcString::newInterned("test");
                 wb.settings->implicitCrates.insert(std::make_pair(testCrateName, crate.loadExternCrate(*wb.settings, Span(), testCrateName)));
             }
-        });
-
+        }
         {
             // Extract the crate type and name from the crate attributes
             auto crateType = params.crateType;
@@ -506,19 +431,18 @@ static int compile(int argc, char* argv[]) {
         }
 
         // Iterate all items in the AST, applying syntax extensions
-        CompilePhaseV("Expand", [&]() {
+        {
             Expand(wb, crate);
 
             if (params.testHarness) {
                 ExpandTestHarness(crate);
             }
-        });
+        }
         // Once `cfg` has removed what it removes, the lint attributes that are
         // left have to agree with each other.
-        CompilePhaseV("Lint Forbid", [&]() {
+        {
             LintCheckForbid(wb, crate);
-        });
-
+        }
         // Extract the crate type and name from the crate attributes
         auto crateType = params.crateType;
         if (crateType == ASTCrate::Type::Unknown) {
@@ -561,13 +485,12 @@ static int compile(int argc, char* argv[]) {
                     params.outfile = FMT(params.outputDir << crate.crateNameSet << ".o");
                     break;
             }
-            DEBUG("params.outfile = " << params.outfile);
         }
 
         if (params.debug.dumpAst) {
-            CompilePhaseV("Dump Expanded", [&]() {
+            {
                 DumpRust(FMT(params.outfile << "_1_ast.rs").c_str(), crate);
-            });
+            }
         }
 
         if (params.lastStage == ProgramParams::STAGE_EXPAND) {
@@ -576,7 +499,7 @@ static int compile(int argc, char* argv[]) {
         memoryDump(memoryDumpSequence, "Expanded");
 
         // Allocator and panic strategies
-        CompilePhaseV("Implicit Crates", [&]() {
+        {
             if (crate.crateType == ASTCrate::Type::Executable || params.testHarness || crate.crateType == ASTCrate::Type::ProcMacro) {
                 bool allocatorCrateLoaded = false;
                 RcString allocCrateName;
@@ -584,11 +507,6 @@ static int compile(int argc, char* argv[]) {
                 RcString panicCrateName;
                 bool panicRuntimeNeeded = false;
                 for (const auto& ec : crate.externCrates) {
-                    ::std::ostringstream ss;
-                    for (const auto& e : ec.second.hir->langItems) {
-                        ss << e << ",";
-                    }
-                    DEBUG("Looking at lang items from " << ec.first << " : " << ss.str());
                     if (ec.second.hir->langItems.count("trustme-allocator")) {
                         if (allocatorCrateLoaded) {
                             ERROR(Span(), E0000, "Multiple allocator crates loaded - " << allocCrateName << " and " << ec.first);
@@ -624,8 +542,7 @@ static int compile(int argc, char* argv[]) {
                     crate.langItems.insert(::std::make_pair(::std::string("trustme-main"), ASTAbsolutePath("", {"main"})));
                 }
             }
-        });
-
+        }
         /// Emit the dependency files
         if (params.emitDepfile != "") {
             // - Iterate all loaded files for modules
@@ -645,7 +562,6 @@ static int compile(int argc, char* argv[]) {
                     }
                 }
             };
-
             PathEnumerator pe;
             pe.visitModule(crate.rootModule_);
 
@@ -668,21 +584,21 @@ static int compile(int argc, char* argv[]) {
         // Resolve names to be absolute names (include references to the relevant struct/global/function)
         // - This does name checking on types and free functions.
         // - Resolves all identifiers/paths to references
-        CompilePhaseV("Resolve Use", [&]() {
+        {
             ResolveUse(wb, crate); // - Absolutise and resolve use statements
-        });
-        CompilePhaseV("Resolve Index", [&]() {
+        }
+        {
             ResolveIndex(crate); // - Build up a per-module index of avalable names (faster and simpler later resolve)
-        });
-        CompilePhaseV("Resolve Absolute", [&]() {
+        }
+        {
             ResolveAbsolutise(wb, crate); // - Convert all paths to Absolute or UFCS, and resolve variables
-        });
+        }
         memoryDump(memoryDumpSequence, "Resolved");
 
         if (params.debug.dumpAst) {
-            CompilePhaseV("Temp output - Resolved", [&]() {
+            {
                 DumpRust(FMT(params.outfile << "_1_ast.rs").c_str(), crate);
-            });
+            }
         }
 
         if (params.lastStage == ProgramParams::STAGE_RESOLVE) {
@@ -693,76 +609,75 @@ static int compile(int argc, char* argv[]) {
         // HIR Section
         // --------------------------------------
         // Construct the HIR beside the AST in the compilation object pool.
-        HIRCrate* hirCrate = CompilePhase<HIRCrate*>("HIR Lower", [&]() {
+        HIRCrate* hirCrate = [&]() {
             return LowerHIRFromAST(wb, pool, crate);
-        });
+        }();
         wb.crate = hirCrate;
         wb.langItems = LangItems::create(*pool, *hirCrate);
         memoryDump(memoryDumpSequence, "HIR Gen");
 
         // The AST is dead from here on: drop it physically.
-        CompilePhaseV("AST Drop", [&]() {
+        {
             wb.astCrate = nullptr;
             wb.astPool = nullptr;
 #if !TRUSTME_SANITIZER_BUILD
             delete astPool;
 #endif
             astPool = nullptr;
-        });
+        }
         memoryDump(memoryDumpSequence, "AST Dropped");
         if (params.debug.dumpHir) {
-            CompilePhaseV("Dump HIR", [&]() {
+            {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hirCrate);
-            });
+            }
         }
         memoryDump(memoryDumpSequence, "HIR");
 
         // Replace type aliases (`type`) into the actual type
         // - Does simple replacements
         // - Done before bind so type alises can be used in patterns?
-        CompilePhaseV("Resolve Type Aliases", [&]() {
+        {
             ConvertHIRExpandAliases(*hirCrate);
-        });
-        CompilePhaseV("Validate Receivers", [&]() {
+        }
+        {
             ConvertHIRValidateReceivers(wb, *hirCrate);
-        });
+        }
         // Set up bindings and other useful information.
-        CompilePhaseV("Resolve Bind", [&]() {
+        {
             ConvertHIRBind(wb, *hirCrate);
-        });
-
+        }
         // A method call resolved in an outer scope still has to find an
         // inherent method, so the index of them comes first.
-        CompilePhaseV("Index Inherent Methods", [&]() {
+        {
             ConvertHIRIndexInherentMethods(wb, *hirCrate);
-        });
+        }
         // Determine what trait to use for <T>::Foo in outer scope
         // - Also inserts defaults in trait impls
-        CompilePhaseV("Resolve UFCS Outer", [&]() {
+        {
             ConvertHIRResolveUFCSOuter(wb, *hirCrate);
-        });
+        }
         // Expand `Self` into the true type
         // - TODO: Move this later on, but that requires fixing some of the resolve logic around trait impl lookup
-        CompilePhaseV("Resolve HIR Self Type", [&]() {
+        {
             ConvertHIRExpandAliasesSelf(*hirCrate);
-        });
+        }
         // Enumerate marker impls on types and other useful metadata
-        CompilePhaseV("Resolve HIR Markings", [&]() {
+        {
             ConvertHIRMarkings(wb, *hirCrate);
-        });
-        CompilePhaseV("Sort Impls", [&]() {
+        }
+        {
             ConvertHIRResolveUFCSSortImpls(wb, *hirCrate);
-        });
+        }
         // Determine what trait to use for <T>::Foo (and does some associated type expansion)
-        CompilePhaseV("Resolve UFCS paths", [&]() {
+        {
             ConvertHIRResolveUFCS(wb, *hirCrate);
-        });
+        }
         if (params.debug.dumpHir) {
-            CompilePhaseV("Dump HIR", [&]() {
+            {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hirCrate);
-            });
+            }
         }
         // TODO: Expand vtables here?
         // - Some parts of constant evaluate require it
@@ -771,16 +686,15 @@ static int compile(int argc, char* argv[]) {
             return 0;
         }
 
-        CompilePhaseV("Constant Evaluate", [&]() {
+        {
             ConvertHIRConstantEvaluate(wb, *hirCrate);
-        });
-
+        }
         if (params.debug.dumpHir) {
             // DUMP after initial consteval
-            CompilePhaseV("Dump HIR", [&]() {
+            {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hirCrate);
-            });
+            }
         }
 
         // === Type checking ===
@@ -788,57 +702,56 @@ static int compile(int argc, char* argv[]) {
 
         // Check outer items first (types of constants/functions/statics/impls/...)
         // - Doesn't do any expressions except those in types
-        CompilePhaseV("Typecheck Outer", [&]() {
+        {
             TypecheckModuleLevel(wb, *hirCrate);
-        });
+        }
         // Check the rest of the expressions (including function bodies)
-        CompilePhaseV("Typecheck Expressions", [&]() {
+        {
             TypecheckExpressions(wb, *hirCrate);
-        });
+        }
         // Lints that need resolved types, but must see the code as written.
-        CompilePhaseV("Lint", [&]() {
+        {
             LintUnusedMustUse(wb, *hirCrate);
             LintUnsafeCode(wb, *hirCrate);
-        });
-
+        }
         // === HIR Expansion ===
         // Annotate how each node's result is used
-        CompilePhaseV("Expand HIR Annotate", [&]() {
+        {
             HIRExpandAnnotateUsage(wb, *hirCrate);
-        });
-        CompilePhaseV("Expand HIR Static Borrow Mark", [&]() {
+        }
+        {
             HIRExpandStaticBorrowConstantsMark(wb, *hirCrate);
-        });
+        }
         // - Now that all types are known, closures can be desugared
-        CompilePhaseV("Expand HIR Closures", [&]() {
+        {
             HIRExpandClosures(wb, *hirCrate);
-        });
-        CompilePhaseV("Expand HIR Static Borrow", [&]() {
+        }
+        {
             HIRExpandStaticBorrowConstants(wb, *hirCrate);
-        });
+        }
         // - Construct VTables for all traits and impls.
         //  TODO: How early can this be done?
         //  > Requires consteval completed for types to be fully valid?
         //  TODO: Would prefer to have this done before consteval, as consteval might reference a vtable
-        CompilePhaseV("Expand HIR VTables", [&]() {
+        {
             HIRExpandVTables(wb, *hirCrate);
-        });
+        }
         // - And calls can be turned into UFCS
-        CompilePhaseV("Expand HIR Calls", [&]() {
+        {
             HIRExpandUfcsEverything(wb, *hirCrate);
-        });
-        CompilePhaseV("Expand HIR Reborrows", [&]() {
+        }
+        {
             HIRExpandReborrows(wb, *hirCrate);
-        });
-        CompilePhaseV("Expand HIR ErasedType", [&]() {
+        }
+        {
             HIRExpandErasedType(wb, *hirCrate);
-        });
+        }
         if (params.debug.dumpHir) {
             // DUMP after typecheck (before validation)
-            CompilePhaseV("Dump HIR", [&]() {
+            {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hirCrate);
-            });
+            }
         }
         if (params.lastStage == ProgramParams::STAGE_TYPECK) {
             return 0;
@@ -846,16 +759,15 @@ static int compile(int argc, char* argv[]) {
         memoryDump(memoryDumpSequence, "Typecheck");
 
         // Lower expressions into MIR
-        CompilePhaseV("Lower MIR", [&]() {
+        {
             HIRGenerateMIR(wb, *hirCrate);
-        });
-
+        }
         if (params.debug.dumpMir) {
             // DUMP after generation
-            CompilePhaseV("Dump MIR", [&]() {
+            {
                 ::std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
                 MIRDump(os, *hirCrate);
-            });
+            }
         }
         memoryDump(memoryDumpSequence, "MIR Gen");
 
@@ -863,20 +775,19 @@ static int compile(int argc, char* argv[]) {
         // performed after MIR_Cleanup has actually changed the crate.
 
         // - Expand constants in HIR and virtualise calls
-        CompilePhaseV("MIR Cleanup", [&]() {
+        {
             MIRCleanupCrate(wb, *hirCrate);
-        });
+        }
         // Optimise the MIR
-        CompilePhaseV("MIR Optimise", [&]() {
+        {
             MIROptimiseCrate(wb, *hirCrate, mirOptLevel, enableMirInlining);
-        });
-
+        }
         if (params.debug.dumpMir) {
             // DUMP: After optimisation
-            CompilePhaseV("Dump MIR", [&]() {
+            {
                 ::std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
                 MIRDump(os, *hirCrate);
-            });
+            }
         }
         if (params.lastStage == ProgramParams::STAGE_MIR) {
             return 0;
@@ -943,19 +854,18 @@ static int compile(int argc, char* argv[]) {
         // TODO: For 1.29 executables/dylibs, add oom/panic shims
         if (crateType == ASTCrate::Type::ProcMacro) {
             // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `trustme-main`)
-            CompilePhaseV("HIR Serialise", [&]() {
+            {
                 HIRCrate crateForSer(pool, *wb.types);
                 crateForSer.crateName = hirCrate->crateName;
                 crateForSer.edition = hirCrate->edition;
                 for (const auto& i : hirCrate->rootModule.macroItems) {
-                    DEBUG(i.first << ": " << i.second->ent.tagStr());
                     if (const auto* e = i.second->ent.opt_ProcMacro()) {
                         crateForSer.rootModule.macroItems.insert(std::make_pair(i.first, crateForSer.pool->make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{i.second->publicity, *e})));
                     }
                 }
                 crateForSer.exportedMacroNames = hirCrate->exportedMacroNames;
                 HIRSerialise(params.outfile + ".rlib", crateForSer);
-            });
+            }
         }
 
         // `--emit=metadata` stops here: the crate has been analysed, and what
@@ -971,7 +881,7 @@ static int compile(int argc, char* argv[]) {
         }
 
         // Enumerate items to be passed to codegen
-        TransList items = CompilePhase<TransList>("Trans Enumerate", [&]() {
+        TransList items = [&]() {
             switch (crateType) {
                 case ASTCrate::Type::Unknown:
                     ::std::cerr << "BUG? Unknown crate type" << ::std::endl;
@@ -986,26 +896,24 @@ static int compile(int argc, char* argv[]) {
                     return TransEnumerateMain(wb, *hirCrate);
             }
             throw ::std::runtime_error("Invalid crate_type value");
-        });
+        }();
         // - Generate automatic impls (mainly Clone for 1.29)
-        CompilePhaseV("Trans Auto Impls", [&]() {
+        {
             // TODO: Drop glue generation?
             TransAutoImpls(wb, *hirCrate, items);
-        });
+        }
         // - Generate monomorphised versions of all functions
-        CompilePhaseV("Trans Monomorph", [&]() {
+        {
             TransMonomorphiseList(wb, *hirCrate, items, mirOptLevel);
-        });
+        }
         // - Do post-monomorph inlining
-        CompilePhaseV("MIR Optimise Inline", [&]() {
+        {
             MIROptimiseCrateInlining(wb, *hirCrate, items, false, mirOptLevel, enableMirInlining);
-        });
-
+        }
         // - Expand constants in HIR (using ones that were monomorphised above)
-        CompilePhaseV("MIR Cleanup 2", [&]() {
+        {
             MIRCleanupCrate(wb, *hirCrate);
-        });
-
+        }
         memoryDump(memoryDumpSequence, "Trans");
 
         std::string hirFile;
@@ -1013,58 +921,57 @@ static int compile(int argc, char* argv[]) {
             case ASTCrate::Type::RustLib:
                 // Save a loadable HIR dump
                 hirFile = params.outfile;
-                CompilePhaseV("HIR Serialise", [&]() {
+                {
                     HIRSerialise(hirFile, *hirCrate);
-                });
+                }
                 break;
             case ASTCrate::Type::RustDylib:
                 // Save a loadable HIR dump
                 hirFile = params.outfile + ".rlib";
-                CompilePhaseV("HIR Serialise", [&]() {
+                {
                     HIRSerialise(hirFile, *hirCrate);
-                });
+                }
                 break;
             default:
                 break;
         }
 
         // - Do post-monomorph inlining
-        CompilePhaseV("MIR Optimise Inline PostSave", [&]() {
+        {
             MIROptimiseCrateInlining(wb, *hirCrate, items, true, mirOptLevel, enableMirInlining);
-        });
+        }
         // - Clean up ununused functions
-        CompilePhaseV("Trans Enumerate Cleanup", [&]() {
+        {
             TransEnumerateCleanup(wb, *hirCrate, items);
-        });
-
+        }
         switch (crateType) {
             case ASTCrate::Type::Unknown:
                 UNREACHABLE();
             case ASTCrate::Type::RustLib:
                 // Generate a linkable .o
-                CompilePhaseV("Trans Codegen", [&]() {
+                {
                     TransCodegen(wb, params.outfile, CodegenOutput::StaticLibrary, transOpt, hirCrate, std::move(items), hirFile);
-                });
+                }
                 break;
             case ASTCrate::Type::RustDylib:
             case ASTCrate::Type::CDylib:
                 // Generate a shared library
-                CompilePhaseV("Trans Codegen", [&]() {
+                {
                     TransCodegen(wb, params.outfile, CodegenOutput::DynamicLibrary, transOpt, hirCrate, std::move(items), hirFile);
-                });
+                }
                 break;
             case ASTCrate::Type::ProcMacro: {
                 // Needs: An executable (the actual macro handler), metadata (for `extern crate foo;`)
                 // - Metadata was done before enumerate
-                CompilePhaseV("Trans Codegen", [&]() {
+                {
                     TransCodegen(wb, params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), hirFile);
-                });
+                }
                 break;
             }
             case ASTCrate::Type::Executable:
-                CompilePhaseV("Trans Codegen", [&]() {
+                {
                     TransCodegen(wb, params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), "");
-                });
+                }
                 break;
         }
     }

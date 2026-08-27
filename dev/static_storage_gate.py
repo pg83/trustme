@@ -63,6 +63,13 @@ ALLOWED_IMMUTABLE = frozenset((
     ("trans_mangling.cpp.o",
      "_ZZN12_GLOBAL__N_112mangleFinishERN3stl13StringBuilderEE3HEX", "r"),
 ))
+
+# Temporary migration exceptions. These are mutable and must disappear once
+# their factories are threaded from the root compilation context.
+ALLOWED_MUTABLE = frozenset((
+    ("hir_path.cpp.o", "_ZZN12_GLOBAL__N_18internerEvE2in", "b"),
+    ("rc_string.cpp.o", "_ZZN12_GLOBAL__N_18internerEvE2in", "b"),
+))
 READELF_MEMBER = re.compile(r"^File: .+\(([^()]*)\)$")
 
 
@@ -122,9 +129,14 @@ def main():
     archive, stamp = sys.argv[1:]
     tls = tls_names(archive)
     all_symbols = storage_symbols(archive)
+    allowed_names = ALLOWED_IMMUTABLE | ALLOWED_MUTABLE
     allowed = [symbol for symbol in all_symbols
-               if symbol[:3] in ALLOWED_IMMUTABLE
+               if symbol[:3] in allowed_names
                and symbol[:2] not in tls]
+    allowed_immutable_count = sum(
+        symbol[:3] in ALLOWED_IMMUTABLE for symbol in allowed)
+    allowed_mutable_count = sum(
+        symbol[:3] in ALLOWED_MUTABLE for symbol in allowed)
     symbols = [symbol for symbol in all_symbols if symbol not in allowed]
     static = [symbol for symbol in symbols if symbol[:2] not in tls]
     thread = [symbol for symbol in symbols if symbol[:2] in tls]
@@ -135,7 +147,7 @@ def main():
                          if symbol[:2] in tls or symbol[2] not in "rR")
 
     observed_allowed = {symbol[:3] for symbol in allowed}
-    missing_allowed = ALLOWED_IMMUTABLE - observed_allowed
+    missing_allowed = allowed_names - observed_allowed
     duplicate_allowed = len(allowed) != len(observed_allowed)
 
     counts = collections.defaultdict(lambda: [0, 0, 0])
@@ -149,7 +161,9 @@ def main():
 
     print(f"static_storage_gate: static={len(static)}, "
           f"thread_local={len(thread)}, total={len(symbols)}, "
-          f"writable_bytes={writable_bytes}, allowed_immutable={len(allowed)} "
+          f"writable_bytes={writable_bytes}, "
+          f"allowed_immutable={allowed_immutable_count}, "
+          f"allowed_mutable={allowed_mutable_count} "
           f"(maximum: objects={MAX_STORAGE_OBJECTS}, "
           f"writable_bytes={MAX_WRITABLE_BYTES})")
     for location, (ordinary, per_thread, byte_count) in sorted(

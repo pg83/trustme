@@ -5,10 +5,6 @@
 #include "wire_board.h" // typePool() reads the pool off the board
 #include "parse_parseerror.h"
 
-const bool DEBUG_PRINT_TOKENS = false;
-//#define DEBUG_PRINT_TOKENS  debug_enabled("Lexer Tokens")
-#define FULL_TRACE
-
 TokenStream::TokenStream(ParseState ps)
     : cacheValid(false)
     , parseState_(ps)
@@ -40,9 +36,6 @@ Token TokenStream::innerGetToken() {
 
 Token TokenStream::getToken() {
     if (cacheValid) {
-#ifdef FULL_TRACE
-        DEBUG("<= " << cache << " (cache)");
-#endif
         cacheValid = false;
         return mv$(cache);
     } else if (lookahead_.size()) {
@@ -50,23 +43,11 @@ Token TokenStream::getToken() {
         edition = lookahead_.front().edition;
         hygiene_ = lookahead_.front().hygiene;
         lookahead_.erase(lookahead_.begin());
-#ifdef FULL_TRACE
-        DEBUG("<= " << ret << " (lookahead)");
-#endif
-        if (DEBUG_PRINT_TOKENS) {
-            ::std::cout << "getToken[" << typeid(*this).name() << "] - " << ret.getPos() << "-" << ret << ::std::endl;
-        }
         return ret;
     } else {
         Token ret = this->innerGetToken();
         edition = this->realGetEdition();
         hygiene_ = this->realGetHygiene();
-#ifdef FULL_TRACE
-        DEBUG("<= " << ret << " (new)");
-#endif
-        if (DEBUG_PRINT_TOKENS) {
-            ::std::cout << "getToken[" << typeid(*this).name() << "] - " << ret.getPos() << "-" << ret << ::std::endl;
-        }
         return ret;
     }
 }
@@ -81,12 +62,8 @@ Token TokenStream::getTokenCheck(eTokenType exp) {
 
 void TokenStream::putback(Token tok) {
     if (cacheValid) {
-        DEBUG("" << getPosition() << " - Double putback: " << tok << " but " << cache);
         compileErrorBugCheck("Double putback");
     } else {
-#ifdef FULL_TRACE
-        DEBUG(">>> " << tok);
-#endif
         cacheValid = true;
         cache = mv$(tok);
     }
@@ -107,13 +84,11 @@ eTokenType TokenStream::lookahead(unsigned int i) {
     }
 
     while (i >= lookahead_.size()) {
-        DEBUG("lookahead - read #" << lookahead_.size());
         auto tok = this->innerGetToken();
         auto hygiene = this->realGetHygiene();
         lookahead_.push_back({mv$(tok), this->realGetEdition(), mv$(hygiene)});
     }
 
-    DEBUG("lookahead(" << i << ") = " << lookahead_[i].tok);
     return lookahead_[i].tok.type();
 }
 
@@ -212,7 +187,6 @@ SavedParseState::SavedParseState(TokenStream& lex, ParseState state)
 }
 
 SavedParseState::~SavedParseState() {
-    DEBUG("Restoring " << state);
     lex.parseState() = state;
 }
 

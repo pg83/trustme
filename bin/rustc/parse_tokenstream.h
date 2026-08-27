@@ -1,7 +1,6 @@
 #pragma once
 
 #include "span.h"
-#include "debug.h"
 #include "ident.h"
 #include "ast_edition.h"
 #include "parse_token.h"

@@ -356,14 +356,12 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
                 continue;
             }
             const auto& function = *node->function;
-            DEBUG("FUNCTION PROTO " << *function.path);
             const auto& fcn = *function.ptr;
             const bool isExtern = !static_cast<bool>(fcn.code);
             codegen->emitFunctionProto(*function.path, fcn, function.pp, isExtern);
         }
     } else {
         for (const auto& ent : list.functions) {
-            DEBUG("FUNCTION " << ent.first);
             assert(ent.second->ptr);
             const auto& fcn = *ent.second->ptr;
             // Extern if there isn't any HIR
@@ -394,10 +392,6 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
         assert(ent.second->ptr);
         const auto& stat = *ent.second->ptr;
 
-        DEBUG(
-            "STATIC proto " << ent.first << ": "
-                            << "(m_value_generated=" << stat.valueGenerated << " && !m_no_emit_value=" << stat.noEmitValue << ") || is_generic=" << stat.params.isGeneric()
-        );
         if ((stat.valueGenerated && !stat.noEmitValue) || stat.params.isGeneric()) {
             codegen->emitStaticProto(ent.first, stat, ent.second->pp);
         } else {
@@ -406,7 +400,6 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
     }
     auto emitStaticDefinitions = [&]() {
         for (const auto& ent : list.statics) {
-            DEBUG("STATIC " << ent.first);
             assert(ent.second->ptr);
             const auto& stat = *ent.second->ptr;
 
@@ -426,8 +419,6 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
         const auto& path = *function.path;
         const auto& fcn = *function.ptr;
         const auto& pp = function.pp;
-        TRACE_FUNCTION_F(path);
-        DEBUG("FUNCTION CODE " << path);
         // `is_extern` is set if there's no HIR (i.e. this function is from an external crate)
         bool isExtern = !static_cast<bool>(fcn.code);
         // If this is a provided trait method, it needs to be monomorphised too.

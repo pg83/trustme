@@ -1,6 +1,5 @@
 #include "ident.h"
 #include <iostream>
-#include "debug.h"
 #include "common.h" // vector print
 
 #include <std/mem/obj_pool.h>

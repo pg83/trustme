@@ -10,15 +10,26 @@
 #include <cassert>
 
 namespace {
+    struct TypeFmtRecursionNode {
+        const HIRTypeData* type;
+        const TypeFmtRecursionNode* next;
+    };
+
     class TypeFmtStream final : public ::std::ostream {
     public:
-        ::std::vector<const HIRTypeData*> recurseStack;
+        const TypeFmtRecursionNode* recurseStack = nullptr;
 
         explicit TypeFmtStream(::std::ostream& output)
             : ::std::ostream(output.rdbuf())
         {
             copyfmt(output);
             clear(output.rdstate());
+            pword(0) = this;
+        }
+
+        static TypeFmtStream* from(::std::ostream& output) {
+            // This stream is private to HIR formatting, so slot zero is ours.
+            return output.pword(0) == &output ? static_cast<TypeFmtStream*>(&output) : nullptr;
         }
     };
 }
@@ -339,23 +350,24 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
 }
 
 void HIRTypeData::fmt(::std::ostream& os) const {
-    auto* context = dynamic_cast<TypeFmtStream*>(&os);
+    auto* context = TypeFmtStream::from(os);
     if (!context) {
         TypeFmtStream fmtStream(os);
         fmt(fmtStream);
         return;
     }
 
-    for (const auto* p : context->recurseStack) {
-        if (p == this) {
+    for (auto* node = context->recurseStack; node; node = node->next) {
+        if (node->type == this) {
             os << "RECURSE";
             return;
         }
     }
 
-    context->recurseStack.push_back(this);
+    const TypeFmtRecursionNode recursionNode{this, context->recurseStack};
+    context->recurseStack = &recursionNode;
     STD_DEFER {
-        context->recurseStack.pop_back();
+        context->recurseStack = recursionNode.next;
     };
 
     switch ((*this).tag()) {
@@ -1995,7 +2007,6 @@ HIRCompare HIRMatchGenerics::cmpPath(const Span& sp, const HIRPath& pathL, const
             }
         }
     }
-    DEBUG("rv = " << rv);
     return rv;
 }
 
@@ -2005,7 +2016,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
     }
     const auto& v = (tyL->is_Infer() ? resolvePlaceholder.getType(sp, tyL) : tyL);
     const auto& x = (tyR->is_Infer() || tyR->is_Generic() ? resolvePlaceholder.getType(sp, tyR) : tyR);
-    TRACE_FUNCTION_F(tyL << ", " << tyR << " -- " << v << ", " << x);
     // Resolving an inference variable can expose the generic that the caller
     // must match.  Treat it exactly like a generic supplied directly as the
     // left operand instead of falling through to the unreachable structural
@@ -2043,7 +2053,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                         case HIRCoreType::Usize:
                             return HIRCompare::Fuzzy;
                         default:
-                            DEBUG("- Fuzz fail");
                             return HIRCompare::Unequal;
                     }
                 }
@@ -2057,7 +2066,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                         case HIRCoreType::F128:
                             return HIRCompare::Fuzzy;
                         default:
-                            DEBUG("- Fuzz fail");
                             return HIRCompare::Unequal;
                     }
                 }
@@ -2092,7 +2100,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                         case HIRCoreType::Usize:
                             return HIRCompare::Fuzzy;
                         default:
-                            DEBUG("- Fuzz fail");
                             return HIRCompare::Unequal;
                     }
                 }
@@ -2106,7 +2113,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                         case HIRCoreType::F128:
                             return HIRCompare::Fuzzy;
                         default:
-                            DEBUG("- Fuzz fail");
                             return HIRCompare::Unequal;
                     }
                 }
@@ -2127,7 +2133,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         return vAlias->params.matchTestGenericsFuzz(sp, xAlias->params, resolvePlaceholder, *this);
     }
     if (vAlias || xAlias) {
-        DEBUG("- Fuzzy match due to opaque alias - " << v << " = " << x);
         return HIRCompare::Fuzzy;
     }
 
@@ -2138,24 +2143,19 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         // HACK: If the path is Opaque, return a fuzzy match.
         // - This works around an impl selection bug.
         if (v->is_Path() && v->as_Path().binding.is_Opaque()) {
-            DEBUG("- Fuzzy match due to opaque - " << v << " = " << x);
             return HIRCompare::Fuzzy;
         }
         // HACK: If RHS is unbound, fuzz it
         if (x->is_Path() && x->as_Path().binding.is_Unbound()) {
-            DEBUG("- Fuzzy match due to unbound - " << v << " = " << x);
             return HIRCompare::Fuzzy;
         }
         if (v->is_Path() && v->as_Path().binding.is_Unbound()) {
-            DEBUG("- Fuzzy match due to unbound - " << v << " = " << x);
             return HIRCompare::Fuzzy;
         }
         // HACK: If the RHS is a placeholder generic, allow it.
         if (x->is_Generic() && (x->as_Generic().binding >> 8) == 2) {
-            DEBUG("- Fuzzy match due to placeholder - " << v << " = " << x);
             return HIRCompare::Fuzzy;
         }
-        DEBUG("- Tag mismatch " << v << " and " << x);
         return HIRCompare::Unequal;
     }
     switch ((*v).tag()) {
@@ -2200,7 +2200,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                     rv = HIRCompare::Fuzzy;
                 }
                 if (te.binding.is_Opaque()) {
-                    DEBUG("- Fuzzy match due to opaque");
                     return HIRCompare::Fuzzy;
                 }
             }

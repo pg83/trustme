@@ -6,7 +6,7 @@ They cover the compiler tree. `bin/cargo` is Go and follows
 with its own copies of both files.
 
 - **Macro prefix.** None reserved. The compiler keeps its inherited unprefixed
-  diagnostic macros (`ASSERT`, `BUG`, `TODO`, `DEBUG`, ...).
+  diagnostic macros (`ASSERT`, `BUG`, `TODO`, ...).
 - **Namespace.** The compiler is a program: no project namespace. Code keeps
   the module namespaces inherited from upstream (`AST`, `HIR`, `MIR`, ...).
 - **Formatter.** `./dev/style.py` formats every tracked C++ source except

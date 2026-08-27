@@ -407,7 +407,6 @@ HIRConstGeneric HIRConstGeneric::clone() const {
 }
 
 bool HIRPublicity::isVisible(const HIRSimplePath& p) const {
-    DEBUG(*this << " " << p);
     switch (kind) {
         case Kind::Global:
             return true;
@@ -1145,7 +1144,6 @@ namespace {
             auto a = typeOrdSpecific(context, sp, le[i], re[i]);
             if (a != ::OrdEqual) {
                 if (rv != ::OrdEqual && a != rv) {
-                    DEBUG("Inconsistent ordering between type lists - i=" << i << " [" << le << "] vs [" << re << "]");
                     context.mixed = true;
                     return ::OrdEqual;
                 }
@@ -1162,7 +1160,6 @@ namespace {
             auto a = typeOrdSpecific(context, sp, le[i], re[i]);
             if (a != ::OrdEqual) {
                 if (rv != ::OrdEqual && a != rv) {
-                    DEBUG("Inconsistent ordering between type lists - i=" << i << " [" << le << "] vs [" << re << "]");
                     context.mixed = true;
                     return ::OrdEqual;
                 }
@@ -1277,7 +1274,6 @@ namespace {
 bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& other) const {
     const Span _sp;
     const Span& sp = _sp;
-    TRACE_FUNCTION;
     TypeOrdContext ordContext;
 
     // >> https://github.com/rust-lang/rfcs/blob/master/text/1210-impl-specialization.md#defining-the-precedence-rules
@@ -1292,7 +1288,6 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
             return false;
         }
         if (ord != ::OrdEqual) {
-            DEBUG("- Trait arguments " << (ord == ::OrdLess ? "less" : "more") << " specific");
             return ord == ::OrdGreater;
         }
 
@@ -1301,7 +1296,6 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
             return false;
         }
         if (ord != ::OrdEqual) {
-            DEBUG("- Type " << this->type << " " << (ord == ::OrdLess ? "less" : "more") << " specific than " << other.type);
             return ord == ::OrdGreater;
         }
     }
@@ -1330,12 +1324,9 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     auto boundsT = flattenBounds(types, params.bounds);
     auto boundsO = flattenBounds(types, other.params.bounds);
 
-    DEBUG("bounds_t = " << boundsT);
-    DEBUG("bounds_o = " << boundsO);
 
     // If there are less bounds in this impl, it can't be more specific.
     if (boundsT.size() < boundsO.size()) {
-        DEBUG("Bound count");
         return false;
     }
 
@@ -1382,15 +1373,12 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
             ++itT;
         } else {
             //++ it_o;
-            DEBUG(*itT << " ?= " << *itO << " : " << cmp);
             return false;
         }
     }
     if (itT != boundsT.end()) {
-        DEBUG("Remaining local bounds - " << *itT);
         return true;
     } else {
-        DEBUG("Out of local bounds, equal or less specific");
         return !isEqual;
     }
 }
@@ -1409,7 +1397,6 @@ namespace {
         HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override {
             assert(g.binding < implTys.size());
             if (implTys.at(g.binding)) {
-                DEBUG("Compare " << ty << " and " << *implTys.at(g.binding));
                 return (ty == *implTys.at(g.binding) ? HIRCompare::Equal : HIRCompare::Unequal);
             } else {
                 implTys.at(g.binding) = ty;
@@ -1420,7 +1407,6 @@ namespace {
         HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
             assert(g.binding < implVals.size());
             if (implVals.at(g.binding)) {
-                DEBUG("Compare " << sz << " and " << *implVals.at(g.binding));
                 return (sz == *implVals.at(g.binding) ? HIRCompare::Equal : HIRCompare::Unequal);
             } else {
                 implVals.at(g.binding) = sz.clone();
@@ -1432,7 +1418,6 @@ namespace {
             ASSERT_BUG(sp, g.group() == 0, "");
             ASSERT_BUG(sp, g.idx() < implTys.size(), "");
             if (!implTys[g.idx()]) {
-                DEBUG("get_type - not populated, " << g);
                 return types.generic(RcString(FMT("placeholder_" << &implTys << "_" << g.idx())), HIRGenericRef(RcString(), GENERICPlaceholder, g.idx()).binding);
             }
             return *implTys[g.idx()];
@@ -1507,7 +1492,6 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                     break;
                 }
             }
-            DEBUG("TODO: Path - " << a << " and " << b);
             return false;
         }
 
@@ -1671,7 +1655,6 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
         return false;
     }
 
-    DEBUG("TODO: Handle potential overlap (when not exactly equal)");
     Span sp;
 
     // Mixed ordering between the heads means neither is a specialisation
@@ -1691,28 +1674,22 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
     ImplTyMatcher matcher(crate.types);
     matcher.reinit(this->params);
     if (!this->type->matchTestGenerics(sp, other.type, cbIdent, matcher)) {
-        DEBUG("- Type mismatch, try other ordering");
         isReversed = true;
         matcher.reinit(other.params);
         if (!other.type->matchTestGenerics(sp, this->type, cbIdent, matcher)) {
-            DEBUG("- Type mismatch in both orderings");
             return false;
         }
         if (other.traitArgs.matchTestGenericsFuzz(sp, this->traitArgs, cbIdent, matcher) != HIRCompare::Equal) {
-            DEBUG("- Params mismatch");
             return false;
         }
         // Matched with second ordering
     } else if (this->traitArgs.matchTestGenericsFuzz(sp, other.traitArgs, cbIdent, matcher) != HIRCompare::Equal) {
-        DEBUG("- Param mismatch, try other ordering");
         isReversed = true;
         matcher.reinit(other.params);
         if (!other.type->matchTestGenerics(sp, this->type, cbIdent, matcher)) {
-            DEBUG("- Type mismatch in alt ordering");
             return false;
         }
         if (other.traitArgs.matchTestGenericsFuzz(sp, this->traitArgs, cbIdent, matcher) != HIRCompare::Equal) {
-            DEBUG("- Params mismatch in alt ordering");
             return false;
         }
         // Matched with second ordering
@@ -1742,10 +1719,8 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
         }
 
         static bool checkBounds(const HIRCrate& crate, const HIRTraitImpl& id, const Monomorphiser& ms, const HIRTraitImpl& gSrc) {
-            TRACE_FUNCTION;
             Span sp;
             for (const auto& tb : id.params.bounds) {
-                DEBUG(tb);
                 if (tb.is_TraitBound()) {
                     HIRTypeRef tmpTy;
                     HIRTraitPath tmpTp;
@@ -1768,7 +1743,6 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                             }
                         }
                         if (!found) {
-                            DEBUG("No matching bound for " << ty << " : " << trait << " in source bounds - " << gSrc.params.fmtBounds());
                             return false;
                         }
                     } else if (((*ty).is_Path() && ((*ty).as_Path().binding.is_Opaque()))) {
@@ -1777,7 +1751,6 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                         // Search the crate for an impl
                         auto cbIdent = HIRResolvePlaceholdersNop();
                         bool rv = crate.findTraitImpls(trait.path.path, ty, cbIdent, [&](const HIRTraitImpl& ti) -> bool {
-                            DEBUG("impl" << ti.params.fmtArgs() << " " << trait.path.path << ti.traitArgs << " for " << ti.type << ti.params.fmtBounds());
 
                             ImplTyMatcher matcher(crate.types);
                             matcher.reinit(ti.params);
@@ -1798,9 +1771,7 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                             }
                             // 4. Check ATY bounds on the trait path
                             for (const auto& atyb : trait.typeBounds) {
-                                if (ti.types.count(atyb.first) == 0) {
-                                    DEBUG("Associated type '" << atyb.first << "' not in trait impl, assuming good");
-                                } else {
+                                if (ti.types.count(atyb.first) != 0) {
                                     const auto& aty = ti.types.at(atyb.first);
                                     if (!aty.data->matchTestGenerics(sp, atyb.second.type, cbIdent, matcher)) {
                                         return false;
@@ -1829,12 +1800,10 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
 
     // The two impls could overlap, pending on trait bounds
     if (isReversed) {
-        DEBUG("(reversed) impl params " << FMT_CB(os, matcher.fmt(os);));
         // Check bounds on `other` using these params
         // TODO: Take a callback that does the checks. Or somehow return a "maybe overlaps" result?
         return H2::checkBounds(crate, other, matcher, *this);
     } else {
-        DEBUG("impl params " << FMT_CB(os, matcher.fmt(os);));
         // Check bounds on `*this`
         return H2::checkBounds(crate, *this, matcher, other);
     }
@@ -1866,7 +1835,6 @@ namespace {
             }
             // - If the type is an ivar, search all types
             if (type->is_Infer() && !type->as_Infer().isLit()) {
-                DEBUG("Search all lists");
                 for (const auto& list : it->second.named) {
                     if (findImplsList(list.second, type, tyRes, crate.implMatcherScratch, callback)) {
                         return true;
@@ -1897,7 +1865,6 @@ bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRTypeData* t
             }
             // - If the type is an ivar, search all types
             if (type->is_Infer() && !type->as_Infer().isLit()) {
-                DEBUG("Search all lists");
                 for (const auto& list : it->second.named) {
                     if (findImplsList(list.second, type, tyRes, implMatcherScratch, callback)) {
                         return true;
@@ -2033,7 +2000,6 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
         return &*ep.mir;
     } else {
         if (!ep.mir) {
-            TRACE_FUNCTION_F(ip);
             ASSERT_BUG(Span(), ep.state, "No ExprState for " << ip);
 
             auto& epMut = const_cast<HIRExprPtr&>(ep);
@@ -2068,8 +2034,6 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
                 }
                 ep.state->stage = HIRExprState::Stage::TypecheckRequest;
 
-                // TODO: Set debug/timing stage
-                // - Can store that on the Expr, OR get it from the item path
                 TypeckModuleState ms{wb};
                 //ms.prepare_from_path( ip );   // <- Ideally would use this, but it's a lot of code for one usage
                 ms.implGenerics = ep.state->implGenerics;
@@ -2143,7 +2107,6 @@ HIRTypeRef HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, const 
 unsigned HIRTrait::getVtableValueIndex(const HIRGenericPath& traitPath, const RcString& name) const {
     auto its = this->valueIndexes.equal_range(name);
     for (auto it = its.first; it != its.second; ++it) {
-        DEBUG(traitPath << " :: " << name << " - " << it->second.second);
         if (it->second.second.path == traitPath.path) {
             // TODO: Match generics using match_test_generics comparing to the trait args
             assert(it->second.first > 0);
@@ -2290,7 +2253,6 @@ U128 EncodedLiteralSlice::readUint(size_t size /*=0*/) const {
             v |= U128(base.bytes[ofs + i]) << bit;
         }
     }
-    DEBUG("(" << size << ") = " << v);
     return v;
 }
 
@@ -2303,7 +2265,6 @@ S128 EncodedLiteralSlice::readSint(size_t size /*=0*/) const {
         // Sign extend
         v |= U128(UINT64_MAX, UINT64_MAX) << (8 * size);
     }
-    DEBUG("(" << size << ") = " << v);
     return S128(v);
 }
 

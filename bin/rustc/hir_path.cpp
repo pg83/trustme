@@ -558,7 +558,6 @@ HIRCompare HIRPathParams::compareWithPlaceholders(const Span& sp, const HIRPathP
 
 HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathParams& x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& match) const {
     auto rv = HIRCompare::Equal;
-    TRACE_FUNCTION_F("(PathParams) " << *this << " with " << x);
 
     if (this->types.size() != x.types.size()) {
         return HIRCompare::Unequal;

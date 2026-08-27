@@ -1348,9 +1348,7 @@ class CConcatExpander: public ExpandProcMacro {
             }
 
             auto v = ParseExpr0(lex);
-            DEBUG("concat - v=" << *v);
             ExpandBareExpr(wb, crate, mod, v);
-            DEBUG("concat[pe] - v=" << *v);
             // TODO: Visitor instead
             if (auto* vp = cast<ASTExprNodeString>(v.get())) {
                 rv += vp->value;
@@ -2169,7 +2167,6 @@ namespace {
             if ((lex.lookahead(0) == TOK_IDENT || Token::typeIsRword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
                 GET_TOK(tok, lex);
                 auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
-                DEBUG("Named `" << name << "`");
 
                 GET_CHECK_TOK(tok, lex, TOK_EQUAL);
 
@@ -2183,7 +2180,6 @@ namespace {
             }
             // - Free parameters
             else {
-                DEBUG("Free");
                 auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
                 freeArgs.push_back(mv$(exprTt));
             }
@@ -2218,11 +2214,9 @@ namespace {
         bool isSimple = true;
         for (unsigned int i = 0; i < fragments.size(); i++) {
             if (fragments[i].argIndex != i) {
-                DEBUG(i << "Ordering mismach");
                 isSimple = false;
             }
             if (fragments[i].args != FmtArgs{}) {
-                DEBUG(i << " Args changed - " << fragments[i].args << " != " << FmtArgs{});
                 isSimple = false;
             }
         }
@@ -2542,7 +2536,6 @@ namespace {
     }
 
     ::std::string getPathRelativeTo(const ::std::string& basePath, ::std::string path) {
-        DEBUG(basePath << ", " << path);
         // Absolute
         if (path[0] == '/') {
             return path;
@@ -2556,7 +2549,6 @@ namespace {
             if (slash == ::std::string::npos) {
                 return path;
             } else {
-                DEBUG("> slash = " << slash);
                 slash += 1;
                 ::std::string rv;
                 rv.reserve(slash + path.size());
@@ -2583,7 +2575,6 @@ class CIncludeExpander: public ExpandProcMacro {
 
         ParseState ps;
         ps.module = &mod;
-        DEBUG("Edition = " << crate.edition);
         return box$(Lexer(*wb.hygiene, *crate.hirPool, filePath, crate.edition, ps));
     }
 };
@@ -2783,7 +2774,6 @@ class CExpander: public ExpandProcMacro {
             if (!rv.empty() && tokensNeedSpace(prev, tok.type())) {
                 rv += " ";
             }
-            DEBUG(" += " << tok);
             rv += tok.toStr();
             prev = tok.type();
         }

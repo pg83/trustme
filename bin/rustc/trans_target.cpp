@@ -112,7 +112,6 @@ namespace {
         for (auto keyVal : tomlFile) {
             // Assertion: The way toml works, there has to be at least two entries in every path.
             assert(keyVal.path.size() > 1);
-            DEBUG(keyVal.path << " = " << keyVal.value);
 
             auto checkPathLength = [&](const TomlKeyValue& kv, unsigned len) {
                 if (kv.path.size() != len) {
@@ -641,7 +640,6 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u128;
                     return true;
                 case HIRCoreType::Str:
-                    DEBUG("sizeof on a `str` - unsized");
                     outSize = SIZE_MAX;
                     outAlign = 1;
                     return true;
@@ -654,14 +652,12 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 return false;
             }
             if (te.binding.is_ExternType()) {
-                DEBUG("sizeof on extern type - unsized");
                 outAlign = 0;
                 outSize = SIZE_MAX;
                 return true;
             }
             const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
             if (!repr) {
-                DEBUG("Cannot get type repr for " << ty);
                 return false;
             }
             outSize = repr->size;
@@ -670,13 +666,11 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         case HIRTypeData::TAG_Generic: {
             // Unknown - return false
-            DEBUG("No repr for Generic - " << ty);
             return false;
         }
         case HIRTypeData::TAG_TraitObject: {
             outAlign = 0;
             outSize = SIZE_MAX;
-            DEBUG("sizeof on a trait object - unsized");
             return true;
         }
         case HIRTypeData::TAG_ErasedType: {
@@ -696,7 +690,6 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 return false;
             }
             if (!te.size.is_Known()) {
-                DEBUG("Size unknown - " << ty);
                 return false;
             }
             if (te.size.as_Known() == 0 || outSize == 0) {
@@ -715,13 +708,11 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 return false;
             }
             outSize = SIZE_MAX;
-            DEBUG("sizeof on a slice - unsized");
             return true;
         }
         case HIRTypeData::TAG_Tuple: {
             const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
             if (!repr) {
-                DEBUG("Cannot get type repr for " << ty);
                 return false;
             }
             outSize = repr->size;
@@ -834,7 +825,6 @@ namespace {
     bool makeFieldEnt(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, HIRTypeRef ty, Ent& out) {
         size_t size, align;
         if (!TargetGetSizeAndAlignOf(sp, resolve, ty, size, align)) {
-            DEBUG("Can't get size/align of " << ty);
             return false;
         }
         out = Ent{idx, size, align, HIRTypeRef(), false};
@@ -863,7 +853,6 @@ namespace {
                     if (!makeFieldEnt(sp, resolve, idx, monomorph(e.ent), ent)) {
                         return false;
                     }
-                    DEBUG("#" << idx << ": " << ent);
                     idx++;
                     ents.push_back(mv$(ent));
                 }
@@ -877,7 +866,6 @@ namespace {
                     if (!makeFieldEnt(sp, resolve, idx, monomorph(e.ty), ent)) {
                         return false;
                     }
-                    DEBUG("#" << idx << " " << e.name << ": " << ent);
                     idx++;
                     ents.push_back(mv$(ent));
                 }
@@ -1262,7 +1250,6 @@ namespace {
                 fields[e.field].offset = curOfs;
                 fields[e.field].ty = e.ty;
             }
-            DEBUG("#" << e.field << " @" << curOfs << "+" << e.size << " : " << e.ty);
             if (e.size == SIZE_MAX) {
                 // Ensure that this is the last item
                 ASSERT_BUG(sp, &e == &ents.back(), "Unsized item isn't the last item in " << ty);
@@ -1290,13 +1277,11 @@ namespace {
         rv.align = maxAlign;
         rv.size = curOfs;
         rv.fields = ::std::move(fields);
-        DEBUG(ty << ": size = " << rv.size << ", align = " << rv.align);
         return box$(rv);
     }
 
     // Returns NULL when the repr can't be determined
     ::std::unique_ptr<TypeRepr> makeTypeReprStruct(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
-        TRACE_FUNCTION_F(ty);
         ::std::vector<Ent> ents;
         StructSorting sorting;
         unsigned forcedAlignment = 0;
@@ -1331,7 +1316,6 @@ namespace {
                 sorting = StructSorting::None;
             }
         } else if (const auto* te = ty->opt_Tuple()) {
-            DEBUG("Tuple " << ty);
             unsigned int idx = 0;
             for (const auto& t : *te) {
                 Ent ent;
@@ -1539,7 +1523,6 @@ namespace {
                     }
                     // 1.39 marks these with #[rustc_nonnull_optimization_guaranteed] instead
                     if (str->structMarkings.isNonzero) {
-                        DEBUG(ty << " tagged NonZero");
                         outPath.subFields.push_back(0);
                         outPath.size = r->size;
                         if ((r->fields[0].ty->is_Pointer() || r->fields[0].ty->is_Borrow()) && outPath.size > TargetGetPointerBits() / 8) {
@@ -1635,7 +1618,6 @@ namespace {
     /// <param name="requiredCount">Number of discriminants that must fit in the niche</param>
     /// <param name="nicheStart">First scalar value reserved for the outer enum</param>
     bool getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t minOffset, size_t maxOffset, size_t requiredCount, TypeRepr::FieldPath& outPath, size_t& nicheStart) {
-        TRACE_FUNCTION_F(ty << " min_offset=" << minOffset << " max_offset=" << maxOffset << " required_count=" << requiredCount);
         switch (ty->tag()) {
             break;
             case HIRTypeData::TAG_Tuple: {
@@ -1647,7 +1629,6 @@ namespace {
                 for (size_t i = 0; i < r->fields.size(); i++) {
                     const auto& f = r->fields[i];
                     auto size = getSizeOrZero(sp, resolve, f.ty);
-                    DEBUG(i << ": " << f.offset << " + " << size);
                     if (f.offset >= maxOffset) {
                         continue;
                     } else if (f.offset + size > minOffset) {
@@ -1722,7 +1703,6 @@ namespace {
                     for (size_t i = 0; i < r->fields.size(); i++) {
                         const auto& f = r->fields[i];
                         auto size = getSizeOrZero(sp, resolve, f.ty);
-                        DEBUG(i << ": " << f.offset << " + " << size);
                         if (f.offset >= maxOffset) {
                             continue;
                         } else if (f.offset + size > minOffset) {
@@ -1811,7 +1791,6 @@ namespace {
                         }
                         // Check that the offset of this tag field is >= min_offset
                         auto ofs = getOffset(sp, resolve, r, ve.field);
-                        DEBUG("Linear - Tag offset: " << ofs);
                         if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t)) {
                             const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
                             const size_t validEnd = ve.offset + ve.numVariants - 1;
@@ -1830,7 +1809,6 @@ namespace {
                     case TypeReprVariantMode::TAG_Values: {
                         auto& ve = r->variants.as_Values();
                         auto ofs = getOffset(sp, resolve, r, ve.field);
-                        DEBUG("Values - Tag offset: " << ofs);
                         if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t) && !ve.values.empty()) {
                             const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
                             std::vector<size_t> values;
@@ -1867,7 +1845,6 @@ namespace {
                         return false;
                     }
                     case TypeReprVariantMode::TAG_NonZero: {
-                        DEBUG("Non-zero enum, can't niche");
                         return false;
                     }
                 }
@@ -1956,7 +1933,6 @@ namespace {
     }
 
     ::std::unique_ptr<TypeRepr> makeTypeReprEnum(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
-        TRACE_FUNCTION_F(ty);
         const auto& te = ty->as_Path();
         const auto& enm = *te.binding.as_Enum();
 
@@ -1984,7 +1960,6 @@ namespace {
                             auto t = monomorph(var.type);
                             size_t size, align;
                             if (!TargetGetSizeAndAlignOf(sp, resolve, t, size, align)) {
-                                DEBUG("Generic type in enum - " << t);
                                 return nullptr;
                             }
                             if (size == SIZE_MAX) {
@@ -1996,7 +1971,6 @@ namespace {
 
                             ASSERT_BUG(sp, !var.discriminantExpr, "TODO: Handle explicit discriminants with repr(C) data");
                         }
-                        DEBUG("max_size = " << maxSize << ", max_align = " << maxAlign);
 
                         auto tagTy = enm.tagRepr == HIREnum::Repr::Auto ? HIRCoreType::U32 : enm.getReprType(enm.tagRepr);
                         rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(tagTy)});
@@ -2023,7 +1997,6 @@ namespace {
                             auto t = monomorph(e[0].type);
                             const auto* innerRepr = TargetGetTypeRepr(sp, resolve, t);
                             if (!innerRepr) {
-                                DEBUG("Generic type in enum - " << t);
                                 return nullptr;
                             }
                             rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
@@ -2035,7 +2008,6 @@ namespace {
                         }
                         // Just leave it as None
                     } else {
-                        TRACE_FUNCTION_F("repr(Rust)");
 
                         // repr(Rust) - allows interesting optimisations
                         struct Variant {
@@ -2056,15 +2028,12 @@ namespace {
                             auto variantType = monomorph(var.type);
                             auto forcedAlignment = variantType->is_Path() && variantType->as_Path().binding.is_Struct() ? variantType->as_Path().binding.as_Struct()->forcedAlignment : 0;
                             variants.push_back({mv$(variantType), {}, forcedAlignment});
-                            TRACE_FUNCTION_F("Variant #" << (&var - e.data()));
                             if (var.type == resolve.hirCrate().types.unit()) {
                                 continue;
                             }
                             if (!structEnumerateFields(sp, resolve, variants.back().type, variants.back().ents)) {
-                                DEBUG("Generic type in enum - " << variants.back().type);
                                 return nullptr;
                             }
-                            DEBUG(variants.back().type << ": " << variants.back().ents);
                         }
 
                         if (enm.tagRepr == HIREnum::Repr::Auto) {
@@ -2078,21 +2047,18 @@ namespace {
                                         sizes[i] += ent.size;
                                     }
                                 }
-                                DEBUG("sizes = {" << sizes[0] << "," << sizes[1] << "}");
                                 auto minSize = ::std::min(sizes[0], sizes[1]);
                                 auto maxSize = ::std::max(sizes[0], sizes[1]);
                                 // If one is zero and one is non-zero
                                 if (minSize == 0 && maxSize > 0) {
                                     // Check for a non-zero path in any of those
                                     unsigned nzVar = (sizes[0] == 0 ? 1 : 0);
-                                    DEBUG("Variant #" << nzVar << " is populated, checking for NonZero");
                                     for (size_t i = 0; i < variants[nzVar].ents.size(); i++) {
                                         TypeRepr::FieldPath nzPath;
                                         if (getNonzeroPath(sp, resolve, variants[nzVar].ents[i].ty, nzPath)) {
                                             nzPath.subFields.push_back(i);
                                             nzPath.index = nzVar;
                                             ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
-                                            DEBUG("nz_path = " << nzPath.subFields);
 
                                             size_t size0, size1;
                                             size_t align0, align1;
@@ -2146,7 +2112,6 @@ namespace {
                                         minOffset = std::max(minOffset, varSize);
                                     }
                                 }
-                                DEBUG("Niche optimisation: max_var_size=" << maxVarSize << " n_match=" << nMatch << " biggest_var=" << biggestVar << " min_offset=" << minOffset);
 
                                 if (nMatch == 1) {
                                     const size_t nicheVariantStart = biggestVar == 0 ? 1 : 0;
@@ -2168,7 +2133,6 @@ namespace {
                                             nzPath.subFields.push_back(i);
                                             nzPath.index = biggestVar;
                                             ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
-                                            DEBUG("Niche optimisation (trailing): value offset=" << nicheStart << " path=" << nzPath << " (@" << nicheOffset << ")");
 
                                             assert(rv.variants.is_None());
                                             rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nzPath), nicheStart, e.size()});
@@ -2187,7 +2151,6 @@ namespace {
                                                 nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
                                                 if (nicheOffset != 0) {
                                                     // - For now, only accept zero offsets
-                                                    DEBUG("Ignore niche not at the start of the struture");
                                                     continue;
                                                 }
                                                 ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
@@ -2195,7 +2158,6 @@ namespace {
                                                 nzPath.subFields.push_back(i);
                                                 nzPath.index = biggestVar;
                                                 ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
-                                                DEBUG("Niche optimisation (leading): linear offset=" << nicheStart << " path=" << nzPath << " @byte " << nicheOffset);
 
                                                 nicheBeforeData = true;
                                                 nonNicheOffset = nzPath.size;
@@ -2322,7 +2284,6 @@ namespace {
                                             sz++;
                                         }
                                         if (sz != rv.size || finalAlign != rv.align) {
-                                            DEBUG("Capping ABI: " << ty << " " << rv.size << "/" << rv.align << " -> " << sz << "/" << finalAlign << " (union of the final variants)");
                                             rv.size = sz;
                                             rv.align = finalAlign;
                                         }
@@ -2359,7 +2320,6 @@ namespace {
                                     BUG(sp, "Reached auto tag type logic with zero/one-sized enum");
                                 } else if (e.size() <= 255) {
                                     tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U8);
-                                    DEBUG("u8 data tag");
                                 } else if (e.size() <= UINT16_MAX) {
                                     tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U16);
                                 } else {
@@ -2414,7 +2374,6 @@ namespace {
                                 for (const auto& v : e) {
                                     vals.push_back(v.discriminantValue);
                                 }
-                                DEBUG("vals = " << vals);
                                 rv.variants = TypeRepr::VariantMode::make_Values({{e.size(), tagSize, {}}, ::std::move(vals)});
                             } else {
                                 rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
@@ -2484,7 +2443,6 @@ namespace {
                         for (const auto& v : e.variants) {
                             vals.push_back(v.val);
                         }
-                        DEBUG("vals = " << vals);
                         rv.variants = TypeRepr::VariantMode::make_Values({{0, static_cast<u8>(rv.size), {}}, ::std::move(vals)});
                     }
 
@@ -2505,22 +2463,18 @@ namespace {
 
         switch (rv.variants.tag()) {
             case TypeReprVariantMode::TAG_None: {
-                DEBUG("rv.variants = None");
                 break;
             }
             case TypeReprVariantMode::TAG_Linear: {
                 auto& e = rv.variants.as_Linear();
-                DEBUG("rv.variants = Linear {" << " field=" << e.field << " value " << e.offset << "+" << e.numVariants << " }");
                 break;
             }
             case TypeReprVariantMode::TAG_Values: {
                 auto& e = rv.variants.as_Values();
-                DEBUG("rv.variants = Values {" << " field=" << e.field << " values " << e.values << " }");
                 break;
             }
             case TypeReprVariantMode::TAG_NonZero: {
                 auto& e = rv.variants.as_NonZero();
-                DEBUG("rv.variants = NonZero {" << " field=" << e.field << " zero_variant=" << e.zeroVariant << " }");
                 break;
             }
         }
@@ -2552,7 +2506,6 @@ namespace {
             size_t size, align;
             if (!TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, size, align)) {
                 // Generic? - Not good.
-                DEBUG("Generic type encounterd after monomorphise in union - " << rv.fields.back().ty);
                 return nullptr;
             }
             if (size == SIZE_MAX) {
@@ -2620,7 +2573,6 @@ namespace {
 
     ::std::unique_ptr<TypeRepr> makeTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         ::std::unique_ptr<TypeRepr> rv;
-        TRACE_FUNCTION_FR(ty, ty << " " << FMT_CB(ss, if (rv) { ss << "size=" << rv->size << ", align=" << rv->align; } else { ss << "NONE"; }));
         rv = make_type_repr_(sp, resolve, ty);
         return rv;
     }
@@ -2636,14 +2588,12 @@ namespace {
             auto ires = cache.unencoded.emplace(ty, mv$(repr));
             ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
             cache.exact.emplace(ty, reprPtr);
-            DEBUG("Set temporary repr for " << ty);
             return;
         }
         auto symbol = FMT(TransMangle(resolve.board(), ty));
         auto ires = cache.encoded.emplace(mv$(symbol), TargetLayoutContext::CachedTypeRepr{ty, mv$(repr)});
         ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
         cache.exact.emplace(ty, ires.first->second.repr.get());
-        DEBUG("Set repr for " << ty);
     }
 }
 
@@ -2696,7 +2646,6 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
         auto ires = cache.unencoded.emplace(ty, mv$(repr));
         ASSERT_BUG(sp, ires.second, "Type representation was created recursively for " << ty);
         cache.exact.emplace(ty, rv);
-        DEBUG("Created temporary repr for " << ty);
         return rv;
     }
 
@@ -2714,7 +2663,6 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     auto ires = cache.encoded.emplace(mv$(symbol), TargetLayoutContext::CachedTypeRepr{ty, mv$(repr)});
     ASSERT_BUG(sp, ires.second, "Type representation was created recursively for " << ty);
     cache.exact.emplace(ty, rv);
-    DEBUG("Created repr for " << ty);
     return rv;
 }
 
@@ -2805,10 +2753,8 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
             varIdx = ve.decodeTag(v);
             if (ve.isNiche(varIdx)) {
                 subHasTag = false;
-                DEBUG("VariantMode::Linear - Niche #" << varIdx);
             } else {
                 subHasTag = true;
-                DEBUG("VariantMode::Linear - Other #" << varIdx);
             }
             break;
         }
@@ -2823,7 +2769,6 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
             });
             ASSERT_BUG(sp, it != ve.values.end(), "Invalid enum tag: " << v);
             varIdx = it - ve.values.begin();
-            DEBUG("VariantMode::Values - #" << varIdx);
             break;
         }
         case TypeReprVariantMode::TAG_NonZero: {
@@ -2838,7 +2783,6 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
             }
 
             varIdx = (isNonzero ? 1 - ve.zeroVariant : ve.zeroVariant);
-            DEBUG("VariantMode::NonZero - #" << varIdx);
             break;
         }
     }

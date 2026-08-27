@@ -9,6 +9,7 @@
 #include <cassert>
 #include <sstream>
 #include <memory>
+#include <utility>
 
 #define FMT(ss) (static_cast<::std::ostringstream&&>(::std::ostringstream() << ss).str())
 // Project-wide shorthand retained for the pervasive move idiom.
@@ -16,8 +17,43 @@
 #define box$(...) ::makeUniquePtr(::std::move(__VA_ARGS__))
 #define rcNew$(...) ::makeSharedPtr(::std::move(__VA_ARGS__))
 
-#include "debug.h"
 #include "compile_error.h"
+
+struct RepeatLitStr {
+    const char* s;
+    int n;
+
+    friend ::std::ostream& operator<<(::std::ostream& os, const RepeatLitStr& r) {
+        for (int i = 0; i < r.n; i++) {
+            os << r.s;
+        }
+        return os;
+    }
+};
+
+template <typename F>
+struct FmtLambda {
+    F f;
+
+    explicit FmtLambda(F f)
+        : f(f)
+    {
+    }
+
+    void operator()(::std::ostream& os) const {
+        f(os);
+    }
+
+    friend ::std::ostream& operator<<(::std::ostream& os, const FmtLambda& x) {
+        x(os);
+        return os;
+    }
+};
+
+#define FMT_CB(os, ...)         \
+    ::FmtLambda([&](auto& os) { \
+        __VA_ARGS__;            \
+    })
 
 template <typename Y, typename X>
 Y* cast(X* x) noexcept {
@@ -480,7 +516,6 @@ public:
     }
 
     ~NullOnDrop() {
-        DEBUG("NULL " << &ptr);
         ptr = nullptr;
     }
 };

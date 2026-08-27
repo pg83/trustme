@@ -136,8 +136,6 @@ public:
     void compactIvars();
     bool applyDefault(unsigned int index);
 
-    void dump() const;
-
     void printType(::std::ostream& os, const HIRTypeData* tr, LList<const HIRTypeData*> stack = {}) const;
     void printGenericpath(::std::ostream& os, const HIRGenericPath& pps, LList<const HIRTypeData*> stack) const;
     void printPathparams(::std::ostream& os, const HIRPathParams& pps, LList<const HIRTypeData*> stack = {}) const;

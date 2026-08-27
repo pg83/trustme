@@ -140,10 +140,8 @@ namespace {
 
         ModTraitsGuard pushModTraits(const HIRModule& mod) {
             Span sp;
-            DEBUG("");
             auto rv = ModTraitsGuard{this, mv$(this->traits)};
             for (const auto& traitPath : mod.traits) {
-                DEBUG("- " << traitPath);
                 traits.push_back(::std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
             }
             return rv;
@@ -178,7 +176,6 @@ namespace {
 
                 // Replace and expand
                 paramVals.types.push_back(ms.monomorphType(sp, tyDef.defaultValue));
-                DEBUG("Add missing param (using default): " << paramVals.types.back());
             }
 
             if (paramVals.types.size() != paramDef.types.size()) {
@@ -192,7 +189,6 @@ namespace {
                     //if( param_def.m_types[i].m_default == ::HIR::mkType() )
                     // TODO: Monomorphise?
                     paramVals.types[i] = ms.monomorphType(sp, paramDef.types[i].defaultValue);
-                    DEBUG("Update `_` param (using default): " << paramDef.types[i].defaultValue << " -> " << paramVals.types[i]);
                 }
             }
 
@@ -241,7 +237,6 @@ namespace {
                     case HIRGenericBound::TAG_TypeEquality: {
                         auto& e = bound.as_TypeEquality();
                         // TODO: Check that two types are equal in this case
-                        DEBUG("TODO: Check equality bound " << e.type << " == " << e.otherType);
                         break;
                     }
                 }
@@ -398,11 +393,11 @@ namespace {
                         break;
                     }
                     case HIRPath::Data::TAG_UfcsInherent: {
-                        TRACE_FUNCTION_FR("UfcsInherent - " << ty, ty); resolve_.expandAssociatedTypes(sp, ty);
+                         resolve_.expandAssociatedTypes(sp, ty);
                         break;
                     }
                     case HIRPath::Data::TAG_UfcsKnown: {
-                        TRACE_FUNCTION_FR("UfcsKnown - " << ty, ty); resolve_.expandAssociatedTypes(sp, ty);
+                         resolve_.expandAssociatedTypes(sp, ty);
                         break;
                     }
                 }
@@ -411,12 +406,10 @@ namespace {
 
         void visitGenericPath(HIRGenericPath& p, PathContext pc) override {
             Span sp;
-            TRACE_FUNCTION_F("p = " << p);
             const auto& params = getParamsForItem(sp, crate, p.path, pc, emptyParams);
             auto& args = p.params;
 
             checkParameters(sp, p.path, pc, params, args);
-            DEBUG("p = " << p);
 
             HIRVisitor::visitGenericPath(p, pc);
         }
@@ -426,8 +419,8 @@ namespace {
             for (const auto& b : params.bounds) {
                 if (b.is_TraitBound()) {
                     auto& e = b.as_TraitBound();
-                    DEBUG("- " << e.type << " : " << e.trait.path); if (e.type == tr) {
-                        DEBUG(" - Match");
+                     if (e.type == tr) {
+
                         if (locateInTraitAndSet(sp, pc, e.trait.path, this->crate.getTraitByPath(sp, e.trait.path.path), pd)) {
                             return true;
                         }
@@ -481,10 +474,8 @@ namespace {
             auto& e = pd.as_UfcsUnknown();
             const auto& type = e.type;
             return this->crate.findTraitImpls(traitPath.path, type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
-                DEBUG("FOUND impl" << impl.params.fmtArgs() << " " << traitPath.path << impl.traitArgs << " for " << impl.type);
                 // TODO: Check bounds
                 for (const auto& bound : impl.params.bounds) {
-                    DEBUG("- TODO: Bound " << bound);
                     return false;
                 }
                 pd = getUfcsKnown(mv$(e), makeGenericPath(traitPath.path, trait), trait);
@@ -496,8 +487,6 @@ namespace {
             auto& e = pd.as_UfcsUnknown();
             if (this->locateItemInTrait(pc, trait, pd)) {
                 return this->setFromImpl(traitPath, trait, pd);
-            } else {
-                DEBUG("- Item " << e.item << " not in trait " << traitPath.path);
             }
 
             // Search supertraits (recursively)
@@ -530,7 +519,6 @@ namespace {
         }
 
         void visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathContext pc) {
-            TRACE_FUNCTION_FR("UfcsUnknown - p=" << p, p);
             auto& e = p.data.as_UfcsUnknown();
 
             e.type = this->visitType(e.type);
@@ -559,7 +547,6 @@ namespace {
             } else {
                 // 1. Search for applicable inherent methods (COMES FIRST!)
                 if (this->crate.findTypeImpls(e.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
-                    DEBUG("- matched inherent impl " << e.type);
                     // Search for item in this block
                     switch (pc) {
                         case HIRVisitor::PathContext::VALUE:
@@ -581,7 +568,6 @@ namespace {
                 })) {
                     auto newData = HIRPath::Data::make_UfcsInherent({mv$(e.type), mv$(e.item), mv$(e.params)});
                     p.data = mv$(newData);
-                    DEBUG("- Resolved, replace with " << p);
                     return;
                 }
                 // 2. Search all impls of in-scope traits for this method on this type
@@ -601,7 +587,6 @@ namespace {
                             }
                             break;
                     }
-                    DEBUG("- Trying trait " << *traitInfo.first);
 
                     auto traitPath = HIRGenericPath(*traitInfo.first);
                     for (unsigned int i = 0; i < trait.params.types.size(); i++) {
@@ -653,7 +638,6 @@ namespace {
         }
 
         void visitParams(HIRGenericParams& params) override {
-            TRACE_FUNCTION_F(params.fmtArgs());
             for (auto& tps : params.types) {
                 tps.defaultValue = this->visitType(tps.defaultValue);
             }
@@ -764,7 +748,6 @@ namespace {
         }
 
         void visitTypeImpl(HIRTypeImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << impl.type);
             auto _ = resolve_.setImplGenerics(impl.type, impl.params);
             selfTypes.push_back(impl.type);
 
@@ -784,7 +767,6 @@ namespace {
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
             Span sp;
-            TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.type);
             auto _ = resolve_.setImplGenerics(impl.type, impl.params);
             selfTypes.push_back(impl.type);
 
@@ -981,7 +963,6 @@ namespace {
                     // Counter-ref: rustc-1.54.0
                     // Update AFTER the checks
                     // HACK: Clone the expected type, so the lifetimes match.
-                    DEBUG("Updating < " << impl.type << " as " << traitPath << impl.traitArgs << " >::" << e.first);
                     if (!matchCb.rpitMapping.empty()) {
                         implFcn.traitReturnType = expRetTy1;
                         for (const auto& mapping : matchCb.rpitMapping) {
@@ -991,19 +972,9 @@ namespace {
                     }
                     implFcn.returnType = expRetTy;
                     for (size_t i = 0; i < std::min(implFcn.args.size(), traitFcn.args.size()); i++) {
-                        DEBUG("ARG" << i << "> " << traitFcn.args[i].second);
                         implFcn.args[i].second = resolve_.monomorphExpand(sp, traitFcn.args[i].second, ms);
                     }
-                    DEBUG("Updated < " << impl.type << " as " << traitPath << impl.traitArgs << " >::" << e.first);
 
-                    DEBUG(FMT_CB(os, {
-                        os << "fn " << e.first << implFcn.params.fmtArgs() << "(";
-                        for (const auto& a : implFcn.args) {
-                            os << a.first << ": " << a.second << ", ";
-                        }
-                        os << ")";
-                        os << implFcn.params.fmtBounds();
-                    }));
                 }
                 for (const auto& e : impl.constants) {
                     const auto& vi = trait.values.at(e.first);
@@ -1035,7 +1006,6 @@ namespace {
         }
 
         void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << traitPath << " for " << impl.type << " { }");
             auto _ = resolve_.setImplGenerics(impl.type, impl.params);
             selfTypes.push_back(impl.type);
 
@@ -1055,7 +1025,6 @@ namespace {
         }
 
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
-            TRACE_FUNCTION_F(p);
 
             if (resolve_.hirCrate().getLangItemPathOpt("sized").components().empty()) {
                 ERROR(Span(), E0000, "requires `sized` lang_item");
@@ -1074,7 +1043,6 @@ namespace {
             curParams = &item.params;
             curParamsLevel = 1;
             for (auto& arg : item.args) {
-                TRACE_FUNCTION_F("ARG " << arg);
                 arg.second = visitType(arg.second);
             }
             curParams = nullptr;
@@ -1083,7 +1051,6 @@ namespace {
             fcnPath = &p;
             fcnErasedCount = 0;
             {
-                TRACE_FUNCTION_F("RET " << item.returnType);
                 item.returnType = visitType(item.returnType);
             }
             fcnPath = nullptr;
