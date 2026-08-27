@@ -30,7 +30,7 @@ enum class AllocatorKind {
 };
 
 extern const AllocatorMethod ALLOCATOR_METHODS[];
-extern const size_t NUM_ALLOCATOR_METHODS;
+inline constexpr size_t NUM_ALLOCATOR_METHODS = 4;
 
 extern const char GLOBAL_ALLOCATOR_LANG_ITEM[];
 HIRSimplePath TransAllocatorTraitPath(const HIRCrate& crate);

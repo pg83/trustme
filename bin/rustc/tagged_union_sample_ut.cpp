@@ -124,14 +124,14 @@ STD_TEST_SUITE(TaggedUnionValue) {
 }
 
 STD_TEST_SUITE(TaggedUnionIncomplete) {
-    STD_TEST(emptyVariantsShareASingleton) {
+    STD_TEST(emptyVariantsLiveInTheirUnion) {
         SampleTree a;
         SampleTree b;
         STD_INSIST(a.is_Nil() && b.is_Nil());
-        // Empty variants are never allocated: both values expose the same
-        // shared static instance.
-        STD_INSIST(&a.as_Nil() == &b.as_Nil());
-        STD_INSIST(a.opt_Nil() == &b.as_Nil());
+        // Empty variants are never allocated, but their accessor reference is
+        // backed by the containing value instead of process-global storage.
+        STD_INSIST(&a.as_Nil() != &b.as_Nil());
+        STD_INSIST(a.opt_Nil() == &a.as_Nil());
     }
 
     STD_TEST(recursionThroughTheOwningStruct) {

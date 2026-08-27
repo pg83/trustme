@@ -4025,10 +4025,10 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
         // collide with the crate it is built from; the type name is the name
         // the crate was written under.
         ::std::string display(crate.crateNameSet);
-        static const ::std::string testSuffix = "$test";
-        if (display.size() > testSuffix.size()
-            && display.compare(display.size() - testSuffix.size(), testSuffix.size(), testSuffix) == 0) {
-            display.resize(display.size() - testSuffix.size());
+        constexpr size_t testSuffixLength = sizeof("$test") - 1;
+        if (display.size() > testSuffixLength
+            && display.compare(display.size() - testSuffixLength, testSuffixLength, "$test") == 0) {
+            display.resize(display.size() - testSuffixLength);
         }
         rv.crateNameDisplay = RcString::newInterned(display);
     }

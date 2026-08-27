@@ -29,7 +29,8 @@ all payloads, which requires every payload type to be complete at the point
 single owning `void*` and heap-allocates the payload, so payload types only
 need to be *declared* before the include — this is what recursive unions
 use, and it makes moves a pointer swap.  Empty variants of such a union are
-not allocated at all: they share one static instance per variant.
+not allocated at all: each union value embeds a no-unique-address empty
+payload used by the reference-returning accessor surface.
 
 The generated member surface matches the historical TAGGED_UNION macros
 (`TAG_X`, `is_X`, `as_X`, `opt_X`, `make_X`, `unwrap_X`, `tag()`,
@@ -181,13 +182,9 @@ def payload_store(union, variant):
     """The expression naming the live payload inside method bodies."""
     if union.allow_incomplete:
         if variant.is_empty:
-            return singleton_name(union, variant)
+            return f"empty_{variant.tag}_"
         return f"*static_cast<{variant.data_name}*>(ptr_)"
     return f"data_.{variant.tag}"
-
-
-def singleton_name(union, variant):
-    return f"empty{union.name}{variant.tag}"
 
 
 def extra_field_inits(union):
@@ -227,6 +224,9 @@ def emit_header_union(out, union):
     out.line("Tag tag_;")
     if union.allow_incomplete:
         out.line("void* ptr_;")
+        for variant in union.variants:
+            if variant.is_empty:
+                out.line(f"[[no_unique_address]] {variant.data_name} empty_{variant.tag}_;")
     else:
         out.open("union DataUnion {")
         for variant in union.variants:
@@ -352,11 +352,6 @@ def emit_cpp_union(out, union):
     default = next(v for v in union.variants if v.tag == union.default)
 
     if union.allow_incomplete:
-        for variant in union.variants:
-            if variant.is_empty:
-                out.open("namespace {")
-                out.line(f"{name}::{variant.data_name} {singleton_name(union, variant)};")
-                out.close()
         default_ptr = ("nullptr" if default.is_empty
                        else f"new {default.data_name}()")
         out.line(f"{name}::{name}()")
