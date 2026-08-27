@@ -327,7 +327,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
 void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f) {
     // Reduce load on derive etc by visiting `cfg` first.
     for (auto& a : attrs.items) {
-        static const RcString rcstringCfg = RcString::newInterned("cfg");
+        const RcString rcstringCfg = RcString::newInterned("cfg");
         if (!a.isInert() && a.name() == rcstringCfg) {
             ExpandAttr(es, a.span(), a, stage, f);
         }
@@ -340,7 +340,7 @@ void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage
 void ExpandAttrsCfgAttr(const Settings& settings, ASTAttributeList& attrs) {
     for (auto it = attrs.items.begin(); it != attrs.items.end();) {
         auto& a = *it;
-        static const RcString rcstringCfgAttr = RcString::newInterned("cfg_attr");
+        const RcString rcstringCfgAttr = RcString::newInterned("cfg_attr");
         if (a.name() == rcstringCfgAttr) {
             auto newAttrs = checkCfgAttr(settings, a);
             it = attrs.items.erase(it);
@@ -1725,10 +1725,10 @@ struct CExpandExpr: public ASTNodeVisitor {
         this->visitNodelete(node, node.value);
         this->visitNodelete(node, node.code);
 
-        static const RcString rcstringIntoIter = RcString::newInterned("into_iter");
-        static const RcString rcstringIntoAsyncIter = RcString::newInterned("into_async_iter");
-        static const RcString rcstringNext = RcString::newInterned("next");
-        static const RcString rcstringIt = RcString::newInterned("it");
+        const RcString rcstringIntoIter = RcString::newInterned("into_iter");
+        const RcString rcstringIntoAsyncIter = RcString::newInterned("into_async_iter");
+        const RcString rcstringNext = RcString::newInterned("next");
+        const RcString rcstringIt = RcString::newInterned("it");
         // Hygiene outlives the AST (idents in HIR patterns and macro_rules
         // keep pointing at it), so it lives in the persistent pool.
         const auto iteratorHygiene = Ident::Hygiene::newScope(
@@ -2056,9 +2056,9 @@ default:
         if (this->inAssignLhs) {
             return;
         }
-        static const RcString rcstringStart = RcString::newInterned("start");
-        static const RcString rcstringEnd = RcString::newInterned("end");
-        static const RcString rcstringNewRange = RcString::newInterned("new_range");
+        const RcString rcstringStart = RcString::newInterned("start");
+        const RcString rcstringEnd = RcString::newInterned("end");
+        const RcString rcstringNewRange = RcString::newInterned("new_range");
         const bool newRange = crate.features.count(rcstringNewRange) != 0;
         switch (node.type) {
             case ASTExprNodeBinOp::RANGE: {
@@ -2143,8 +2143,8 @@ default:
             // TODO: Find a way of creating bindings during HIR lower instead (so lang items are available)
 
             auto pathTry = getPath(coreCrate, "ops", "Try");
-            static const RcString rcstringV = RcString::newInterned("v");
-            static const RcString rcstringR = RcString::newInterned("r");
+            const RcString rcstringV = RcString::newInterned("v");
+            const RcString rcstringR = RcString::newInterned("r");
             // TryV2
             {
                 auto pathTryBranch = ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathTry, {ASTPathNode(RcString::newInterned("branch"))});
