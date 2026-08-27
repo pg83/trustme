@@ -2916,11 +2916,13 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                             if (!lE.size.is_Unevaluated()) {
                                 assert(lE.size.is_Known());
                                 assert(rE.size.is_Unevaluated());
-                                this->equateValues(sp, freezeEncodedLiteral(EncodedLiteral::makeUsize(lE.size.as_Known())), rE.size.as_Unevaluated());
+                                auto known = EncodedLiteral::makeUsize(lE.size.as_Known());
+                                this->equateValues(sp, &known, rE.size.as_Unevaluated());
                             } else if (!rE.size.is_Unevaluated()) {
                                 assert(lE.size.is_Unevaluated());
                                 assert(rE.size.is_Known());
-                                this->equateValues(sp, lE.size.as_Unevaluated(), freezeEncodedLiteral(EncodedLiteral::makeUsize(rE.size.as_Known())));
+                                auto known = EncodedLiteral::makeUsize(rE.size.as_Known());
+                                this->equateValues(sp, lE.size.as_Unevaluated(), &known);
                             } else {
                                 this->equateValues(sp, lE.size.as_Unevaluated(), rE.size.as_Unevaluated());
                             }

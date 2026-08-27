@@ -13,6 +13,9 @@ struct EncodedLiteral;
 class Monomorphiser;
 class HirSerialiser;
 class HirDeserialiser;
+namespace stl {
+    class ObjPool;
+}
 
 enum class HIRBoundConstness : u8 {
     Never,
@@ -20,10 +23,9 @@ enum class HIRBoundConstness : u8 {
     Maybe,
 };
 
-/// Freeze an evaluated literal: the storage moves into a process-wide pool
-/// for the rest of the compile and is shared immutably (as a plain
-/// non-owning pointer) from then on.
-extern const EncodedLiteral* freezeEncodedLiteral(EncodedLiteral e);
+/// Freeze an evaluated literal in storage whose lifetime is owned by the
+/// caller. The returned immutable pointer must not outlive that pool.
+extern const EncodedLiteral* freezeEncodedLiteral(stl::ObjPool& pool, EncodedLiteral e);
 struct HIRConstGenericUnevaluated;
 /// An inference placeholder for a const generic
 struct HIRInferData {

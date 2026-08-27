@@ -802,11 +802,8 @@ bool HIRPath::operator==(const HIRPath& x) const {
     return this->ord(x) == ::OrdEqual;
 }
 
-// Evaluated literals are immutable and shared; their storage lives here
-// until process exit.
-const EncodedLiteral* freezeEncodedLiteral(EncodedLiteral e) {
-    static stl::ObjPool::Ref pool = stl::ObjPool::fromMemory();
-    return pool.mutPtr()->make<EncodedLiteral>(mv$(e));
+const EncodedLiteral* freezeEncodedLiteral(stl::ObjPool& pool, EncodedLiteral e) {
+    return pool.make<EncodedLiteral>(mv$(e));
 }
 
 HIRSimplePath::HIRSimplePath(ThinVector<RcString> members)

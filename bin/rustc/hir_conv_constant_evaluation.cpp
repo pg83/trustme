@@ -5324,7 +5324,7 @@ namespace {
                 if (!predicted && !wb.ctfe->capsOracle()) {
                     return;
                 }
-                v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *v.as_Unevaluated())));
+                v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(*wb.pool, evaluateConstgeneric(sp, wb, crate, ty, *v.as_Unevaluated())));
                 if (!predicted) {
                     fprintf(stderr, "PREDICATE MISS [evalulateConstGeneric]\n");
                 }
@@ -5620,7 +5620,7 @@ namespace {
                         if (!predicted && !wb.ctfe->capsOracle()) {
                             return;
                         }
-                        value = freezeEncodedLiteral(evaluateConstgeneric(Span(), wb, crate, e.inner, **unevaluated));
+                        value = freezeEncodedLiteral(*wb.pool, evaluateConstgeneric(Span(), wb, crate, e.inner, **unevaluated));
                     }
                 };
                 for (auto& range : e.pattern.alternatives) {
@@ -6117,7 +6117,7 @@ void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb,
         if (!predicted) {
             fprintf(stderr, "PREDICATE ATTEMPT [ConvertConstGeneric4]\n");
         }
-        cg = freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, *cge));
+        cg = freezeEncodedLiteral(*wb.pool, evaluateConstgeneric(sp, wb, crate, ty, *cge));
         if (!predicted) {
             fprintf(stderr, "PREDICATE MISS [ConvertConstGeneric4]\n");
         }
@@ -6179,7 +6179,7 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
                 if (!predicted && !wb.ctfe->capsOracle()) {
                     continue;
                 }
-                v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(evaluateConstgeneric(sp, wb, crate, ty, ue)));
+                v = HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(*wb.pool, evaluateConstgeneric(sp, wb, crate, ty, ue)));
                 if (!predicted) {
                     fprintf(stderr, "PREDICATE MISS [MethodParams]\n");
                 }
