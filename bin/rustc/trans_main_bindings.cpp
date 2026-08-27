@@ -48,12 +48,6 @@ namespace {
         }
     };
 
-    const RcString rcstringCloneLower = RcString::newInterned("clone");
-    const RcString rcstringCloneFromLower = RcString::newInterned("clone_from");
-    const RcString rcstringSourceLower = RcString::newInterned("source");
-    const RcString rcstringDrop = RcString::newInterned("drop");
-    const RcString rcstringSelfLower = RcString::newInterned("self");
-    const RcString rcstringDropGlue = RcString::newInterned("#drop_glue");
 }
 
 namespace {
@@ -94,7 +88,7 @@ namespace {
             HIRPathParams pp;
             const auto callBlock = static_cast<MIRBasicBlockId>(mirFcn.blocks.size() - 1);
             const auto retBlock = static_cast<MIRBasicBlockId>(mirFcn.blocks.size());
-            bb.terminator = MIRTerminator::make_Call({retBlock, MIRUnwindAction::make_Continue({}), resLv.clone(), MIRCallTarget(HIRPath(subty, langClone, rcstringCloneLower, std::move(pp))), ::makeVec1<MIRParam>(::std::move(borrowLv))});
+            bb.terminator = MIRTerminator::make_Call({retBlock, MIRUnwindAction::make_Continue({}), resLv.clone(), MIRCallTarget(HIRPath(subty, langClone, "clone", std::move(pp))), ::makeVec1<MIRParam>(::std::move(borrowLv))});
             cleanup.calls.push_back(callBlock);
             cleanup.values.push_back(::std::make_pair(resLv.clone(), dropFlag));
 
@@ -222,7 +216,7 @@ default:
     HIRFunction fcn{
         HIRFunction::Receiver::BorrowShared,
         HIRGenericParams{},
-        /*m_args=*/::makeVec1(::std::make_pair(HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, rcstringSelfLower, 0), HIRPattern::Data::make_Any({})), state.crate.types.borrow(HIRBorrowType::Shared, ty))),
+        /*m_args=*/::makeVec1(::std::make_pair(HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, "self", 0), HIRPattern::Data::make_Any({})), state.crate.types.borrow(HIRBorrowType::Shared, ty))),
         /*m_return=*/ty,
         HIRExprPtr{}
     };
@@ -231,7 +225,7 @@ default:
     // Impl
     HIRTraitImpl impl;
     impl.type = ty;
-    impl.methods.insert(::std::make_pair(rcstringCloneLower, HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fcn)}));
+    impl.methods.insert(::std::make_pair(RcString("clone"), HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fcn)}));
 
     // `clone_from` is the trait's own default body -- clone the source, drop
     // what the destination held, and move the clone in. A generated impl is
@@ -254,7 +248,7 @@ default:
                 1,
                 MIRUnwindAction::make_Continue({}),
                 cloned.clone(),
-                MIRCallTarget(HIRPath(ty, langClone, rcstringCloneLower, HIRPathParams())),
+                MIRCallTarget(HIRPath(ty, langClone, "clone", HIRPathParams())),
                 ::makeVec1<MIRParam>(MIRLValue::newArgument(1)),
             });
             fromMir.blocks.push_back(mv$(call));
@@ -270,11 +264,11 @@ default:
         }
 
         auto fromArgs = ::makeVec1(::std::make_pair(
-            HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, rcstringSelfLower, 0), HIRPattern::Data::make_Any({})),
+            HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, "self", 0), HIRPattern::Data::make_Any({})),
             state.crate.types.borrow(HIRBorrowType::Unique, ty)
         ));
         fromArgs.push_back(::std::make_pair(
-            HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, rcstringSourceLower, 1), HIRPattern::Data::make_Any({})),
+            HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, "source", 1), HIRPattern::Data::make_Any({})),
             state.crate.types.borrow(HIRBorrowType::Shared, ty)
         ));
         HIRFunction fromFcn{
@@ -285,7 +279,7 @@ default:
             HIRExprPtr{}
         };
         fromFcn.code.mir = generatedBody(mv$(fromMir));
-        impl.methods.insert(::std::make_pair(rcstringCloneFromLower, HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fromFcn)}));
+        impl.methods.insert(::std::make_pair(RcString("clone_from"), HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fromFcn)}));
     }
 
     // Add impl to the crate
@@ -431,7 +425,7 @@ namespace {
                     retBlock,
                     MIRUnwindAction::make_Continue({}),
                     MIRLValue::newReturn(),
-                    HIRPath(ty, state.resolve.langDrop(), rcstringDrop),
+                    HIRPath(ty, state.resolve.langDrop(), "drop"),
                     makeVec1<MIRParam>(mv$(borrowLv)),
                 })
             );
@@ -539,9 +533,9 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 ASSERT_BUG(Span(), m != impl.methods.end(), "Generated Clone for " << ty << " has no `" << method << "`");
                 e->ptr = &m->second.data;
             };
-            bind(rcstringCloneLower);
+            bind("clone");
             if (transList.autoCloneFromImpls.count(ty)) {
-                bind(rcstringCloneFromLower);
+                bind("clone_from");
             }
         }
         transList.autoCloneImpls.clear();
@@ -564,7 +558,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             HIRFunction fcn{
                 HIRFunction::Receiver::Value,
                 HIRGenericParams{},
-                /*m_args=*/::makeVec1(::std::make_pair(HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, rcstringSelfLower, 0), HIRPattern::Data::make_Any({})), ty)),
+                /*m_args=*/::makeVec1(::std::make_pair(HIRPattern(HIRPatternBinding(false, HIRPatternBinding::Type::Move, "self", 0), HIRPattern::Data::make_Any({})), ty)),
                 /*m_return=*/std::move(outTy),
                 HIRExprPtr{}
             };
@@ -865,7 +859,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             };
             // Drop glue
             transList.dropGlue.insert(type);
-            pushPtr(HIRPath(type, rcstringDropGlue));
+            pushPtr(HIRPath(type, "#drop_glue"));
             // Size & align
             {
                 size_t size, align;
@@ -938,7 +932,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             };
             // Drop glue
             transList.dropGlue.insert(type);
-            pushPtr(HIRPath(type, rcstringDropGlue));
+            pushPtr(HIRPath(type, "#drop_glue"));
             // Size & align
             {
                 size_t size, align;
@@ -1077,7 +1071,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
         for (const auto& ty : transList.dropGlue) {
             Span sp;
-            auto path = HIRPath(ty, rcstringDropGlue);
+            auto path = HIRPath(ty, "#drop_glue");
 
             HIRFunction fcn;
             fcn.returnType = crate.types.unit();
@@ -1321,9 +1315,9 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                             }
                         }
                         if( hasDrop ) {
-                                if (auto* e = transList.addFunction(crate.types, HIRPath(ty, state.resolve.langDrop(), rcstringDrop))) {
+                                if (auto* e = transList.addFunction(crate.types, HIRPath(ty, state.resolve.langDrop(), "drop"))) {
                                     MonomorphState params(crate.types);
-                                    auto p = HIRPath(ty, state.resolve.langDrop(), rcstringDrop);
+                                    auto p = HIRPath(ty, state.resolve.langDrop(), "drop");
                                     const HIRGenericParams* implParamsDef = nullptr;
                                     auto fcnE = state.resolve.getValue(sp, p, /*out*/ params, /*signature_only=*/false, &implParamsDef);
                                     ASSERT_BUG(sp, fcnE.is_Function(), "Drop didn't point to a function! " << fcnE.tagStr() << " " << p);
@@ -1375,7 +1369,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     afterCleanupCall,
                     MIRUnwindAction::make_Terminate({}),
                     MIRLValue::newReturn(),
-                    HIRPath(ty, state.resolve.langDrop(), rcstringDrop),
+                    HIRPath(ty, state.resolve.langDrop(), "drop"),
                     makeVec1<MIRParam>(mv$(cleanupBorrow)),
                 });
                 builder.mir.blocks.push_back(mv$(cleanupCallBlock));
@@ -1529,7 +1523,6 @@ default:
         }
     };
 
-    const RcString enumerateRcstringDrop = RcString::newInterned("drop");
 }
 
 TransList TransEnumerateCommonPost(EnumState& state);
@@ -2335,16 +2328,15 @@ default:
 
     // Add stub entries to `new_list` for vtables and destructors, items that would be created by stages after enumerate
     // - VTables
-    static RcString rcstringDropGlue = RcString::newInterned("#drop_glue");
     for (const auto* type : newList.dropGlue) {
-        newList.functions.insert(std::make_pair(HIRPath(type, rcstringDropGlue), nullptr));
+        newList.functions.insert(std::make_pair(HIRPath(type, "#drop_glue"), nullptr));
     }
     for (const auto& vtp : newList.vtables) {
         Span sp;
         const auto& traitPath = vtp.first.data.as_UfcsKnown().trait;
         const auto& type = vtp.first.data.as_UfcsKnown().type;
 
-        HIRPath dropGlueFn(type, rcstringDropGlue);
+        HIRPath dropGlueFn(type, "#drop_glue");
         DEBUG("++ " << dropGlueFn);
         newList.functions.insert(std::make_pair(std::move(dropGlueFn), nullptr));
 
@@ -2402,23 +2394,23 @@ default:
             continue;
         }
 
-        HIRPath dropGlueFn(ty.first, rcstringDropGlue);
+        HIRPath dropGlueFn(ty.first, "#drop_glue");
         DEBUG("++ " << dropGlueFn);
         newList.functions.insert(std::make_pair(std::move(dropGlueFn), nullptr));
 
         if (ty.first->is_Path() && ty.first->as_Path().binding.getTraitMarkings()->hasDropImpl) {
-            auto fcnPath = HIRPath(ty.first, state.resolve.langDrop(), enumerateRcstringDrop);
+            auto fcnPath = HIRPath(ty.first, state.resolve.langDrop(), "drop");
             DEBUG("++ " << fcnPath);
             newList.functions.insert(std::make_pair(std::move(fcnPath), nullptr));
         }
     }
     for (const auto& ty : newList.autoCloneImpls) {
-        HIRPath fnPath(ty, crate.getLangItemPath(Span(), "clone"), rcstringCloneLower);
+        HIRPath fnPath(ty, crate.getLangItemPath(Span(), "clone"), "clone");
         DEBUG("++ " << fnPath);
         newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
     }
     for (const auto& ty : newList.autoCloneFromImpls) {
-        HIRPath fnPath(ty, crate.getLangItemPath(Span(), "clone"), rcstringCloneFromLower);
+        HIRPath fnPath(ty, crate.getLangItemPath(Span(), "clone"), "clone_from");
         DEBUG("++ " << fnPath);
         newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
     }
@@ -2428,8 +2420,7 @@ default:
     }
     for (const auto& ty : newList.autoFnptrImpls) {
         // - <fn(...) as FnPtr>::addr
-        static RcString rcstringItem = RcString::newInterned("addr");
-        HIRPath fnPath(ty, crate.getLangItemPath(Span(), "fn_ptr_trait"), rcstringItem);
+        HIRPath fnPath(ty, crate.getLangItemPath(Span(), "fn_ptr_trait"), "addr");
         DEBUG("++ " << fnPath);
         newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
     }
@@ -3292,7 +3283,7 @@ void TransEnumerateTypes(EnumState& state) {
                 // If the type has a drop impl, and it's either defined in this crate or has params (and thus was monomorphised)
                 if (markingsPtr->hasDropImpl && (gp.path.crateName() == state.crate.crateName || gp.params.hasParams())) {
                     // Add the Drop impl to the codegen list
-                    TransEnumerateFillFromPathMono(state, HIRPath(ty, state.crate.getLangItemPath(sp, "drop"), enumerateRcstringDrop, HIRPathParams()));
+                    TransEnumerateFillFromPathMono(state, HIRPath(ty, state.crate.getLangItemPath(sp, "drop"), "drop", HIRPathParams()));
                     constructorsAdded = true;
                 }
             }

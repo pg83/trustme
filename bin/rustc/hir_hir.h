@@ -828,7 +828,6 @@ public:
         listT generic;
 
         const listT* getListForType(const HIRTypeData* ty) const {
-            static listT empty;
             if (const auto* p = ty->getSortPath()) {
                 auto it = named.find(*p);
                 if (it != named.end()) {
