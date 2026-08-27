@@ -42,14 +42,19 @@ public:
     {
     }
 
-    template <typename T>
-    void addDecorator(const char* name) {
-        addDecorator(name, pool->make<T>());
+    template <typename T, typename... A>
+    void addDecorator(const char* name, A&&... args) {
+        addDecorator(name, pool->make<T>(stl::forward<A>(args)...));
     }
 
-    template <typename T>
-    void addMacro(const char* name) {
-        addMacro(name, pool->make<T>());
+    template <typename T, typename... A>
+    void addMacro(const char* name, A&&... args) {
+        addMacro(name, pool->make<T>(stl::forward<A>(args)...));
+    }
+
+    template <typename T, typename... A>
+    T* make(A&&... args) {
+        return pool->make<T>(stl::forward<A>(args)...);
     }
 
     ExpandProcMacro* findMacro(const RcString& name) const;
