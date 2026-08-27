@@ -9370,7 +9370,10 @@ default:
         const auto& sp = _span;
         const bool honourDisable = (fallbackTy != IvarPossFallbackType::IgnoreWeakDisable);
 
-        const auto& tyL = context.ivars.getType(i);
+        // Solver probes append temporary ivars and may reallocate the table.
+        // Keep the interned type pointer, not a reference into the table's
+        // HIRTypeRef slot, across the bound checks below.
+        const auto* tyL = context.ivars.getType(i);
         const auto& boundRefs = boundIndex[i];
 
         if (!((*tyL).is_Infer() && ((*tyL).as_Infer().index == i))) {

@@ -43,7 +43,10 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto sizeBefore = table.ivars.size();
 
         auto snap = table.snapshot();
+        const auto generationBeforeTemporary = table.mutationGeneration;
         const auto c = table.newIvar();
+        const auto temporaryGeneration = table.mutationGeneration;
+        STD_INSIST(temporaryGeneration != generationBeforeTemporary);
         // Alias b to a, then bind a through a fresh probe variable chain.
         table.setIvarTo(a, types.infer(b));
         table.setIvarTo(c, types.primitive(HIRCoreType::I32));
@@ -55,6 +58,10 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(!table.ivars.at(b).isAlias());
         STD_INSIST(table.getType(a)->is_Infer());
         STD_INSIST(table.getType(b)->is_Infer());
+
+        const auto reused = table.newIvar();
+        STD_INSIST(reused == c);
+        STD_INSIST(table.mutationGeneration != temporaryGeneration);
     }
 
     STD_TEST(testRollbackRestoresLiteralClassUpgrade) {
@@ -245,6 +252,60 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto genericU = types.generic(RcString::newInterned("U"), 1);
         STD_INSIST(unifier.unify(genericT, genericU) == Unifier::Outcome::Mismatch);
         STD_INSIST(unifier.pending().length() == 2);
+    }
+
+    STD_TEST(testUnifyBindsExistentialToCanonicalInput) {
+        auto pool = stl::ObjPool::fromMemory();
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
+        HMTypeInferrence table(types);
+        Span sp;
+
+        const auto existential = table.newIvar();
+        const auto canonical = types.infer(HIR_INFER_SOLVER_CANONICAL_MIN);
+        Unifier unifier(sp, table);
+
+        STD_INSIST(unifier.unify(types.infer(existential), canonical) == Unifier::Outcome::Unified);
+        STD_INSIST(table.getType(types.infer(existential)) == canonical);
+        STD_INSIST(unifier.pending().length() == 0);
+    }
+
+    STD_TEST(testCanonicalLiteralSlotRejectsStructuralType) {
+        auto pool = stl::ObjPool::fromMemory();
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
+        HMTypeInferrence table(types);
+        Span sp;
+
+        const auto canonicalInteger = types.infer(HIR_INFER_SOLVER_CANONICAL_MIN, HIRInferClass::Integer);
+        Unifier unifier(sp, table);
+
+        STD_INSIST(unifier.unify(canonicalInteger, types.borrow(HIRBorrowType::Shared, types.primitive(HIRCoreType::Usize))) == Unifier::Outcome::Mismatch);
+        STD_INSIST(unifier.pending().length() == 0);
+        STD_INSIST(unifier.unify(canonicalInteger, types.diverge()) == Unifier::Outcome::Mismatch);
+        STD_INSIST(unifier.pending().length() == 0);
+        STD_INSIST(unifier.unify(canonicalInteger, types.primitive(HIRCoreType::Usize)) == Unifier::Outcome::Unified);
+        STD_INSIST(unifier.pending().length() == 1);
+    }
+
+    STD_TEST(testUnifyArrayBindsConstLength) {
+        auto pool = stl::ObjPool::fromMemory();
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
+        HMTypeInferrence table(types);
+        Span sp;
+
+        const auto length = table.newIvarVal();
+        const auto element = types.primitive(HIRCoreType::U8);
+        const auto genericArray = types.array(element, HIRConstGeneric::make_Infer({length}));
+        const auto knownArray = types.array(element, 2);
+        Unifier unifier(sp, table);
+
+        STD_INSIST(unifier.unify(genericArray, knownArray) == Unifier::Outcome::Unified);
+        const auto& resolved = table.getValue(HIRConstGeneric::make_Infer({length}));
+        STD_INSIST(resolved.is_Evaluated());
+        STD_INSIST(resolved.as_Evaluated()->readUsize(0) == 2);
+        STD_INSIST(unifier.pendingValues().empty());
     }
 
     STD_TEST(testRollbackRestoresChangedFlag) {

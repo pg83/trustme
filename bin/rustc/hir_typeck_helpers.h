@@ -270,6 +270,8 @@ private:
 /// canonical variable on either side -- is collected on the session as
 /// data, never dropped: the caller turns it into goals or reports
 /// ambiguity carrying it.
+class TraitResolution;
+
 class Unifier {
 public:
     enum class Outcome : u8 {
@@ -291,7 +293,7 @@ public:
         HIRConstGeneric right;
     };
 
-    Unifier(const Span& sp, HMTypeInferrence& table);
+    Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve = nullptr);
 
     Outcome unify(const HIRTypeData* left, const HIRTypeData* right);
     Outcome unifyValues(const HIRConstGeneric& left, const HIRConstGeneric& right);
@@ -308,11 +310,18 @@ private:
     Outcome unifyResolved(const HIRTypeData* left, const HIRTypeData* right);
     Outcome unifyParams(const HIRPathParams& left, const HIRPathParams& right);
     Outcome unifyValuesResolved(const HIRConstGeneric& left, const HIRConstGeneric& right);
+    bool valueContainsLiveIvar(const HIRConstGeneric& value, unsigned rootIndex) const;
+    bool paramsContainLiveValueIvar(const HIRPathParams& params, unsigned rootIndex) const;
+    bool pathContainsLiveValueIvar(const HIRPath& path, unsigned rootIndex) const;
+    bool traitPathContainsLiveValueIvar(const HIRTraitPath& path, unsigned rootIndex) const;
+    bool typeContainsLiveValueIvar(const HIRTypeData* type, unsigned rootIndex) const;
+    bool opaqueCanReveal(const HIRTypeData* type) const;
     Outcome defer(const HIRTypeData* left, const HIRTypeData* right);
 
     // Reserved for the diagnostics the goal-emission callers will need.
     [[maybe_unused]] const Span& sp_;
     HMTypeInferrence& table_;
+    const TraitResolution* resolve_;
     stl::Vector<PendingEquality> pending_;
     ThinVector<PendingValueEquality> pendingValues_;
 };

@@ -1180,6 +1180,10 @@ void HMTypeInferrence::addIvarsTraitPath(HIRTraitPath& path) {
 unsigned int HMTypeInferrence::newIvar(HIRInferClass ic /* = HIR::InferClass::None*/) {
     auto rv = ivars.size();
     ivars.emplace_back(types.infer(rv, ic));
+    // A cache built while this slot exists must not survive a rollback that
+    // removes it.  The monotonic counter ensures that reusing the same table
+    // index later cannot make that cache look current again.
+    mutationGeneration = ++generationCounter;
     return rv;
 }
 
@@ -1190,6 +1194,7 @@ HIRTypeRef HMTypeInferrence::newIvarTr(HIRInferClass ic /* = HIR::InferClass::No
 unsigned int HMTypeInferrence::newIvarVal() {
     values.push_back(IVarValue());
     values.back().val->as_Infer().index = values.size() - 1;
+    mutationGeneration = ++generationCounter;
     return values.size() - 1;
 }
 
@@ -1297,7 +1302,7 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
     auto& rootIvar = ivars.at(rootIndex);
 
     // If the left type was '_', alias the right to it
-    if (const auto* lE = type->opt_Infer()) {
+    if (const auto* lE = type->opt_Infer(); lE && !isAliasInputInfer(lE->index)) {
         assert(lE->index != slot);
         if (lE->tyClass != HIRInferClass::None) {
             switch ((*rootIvar.type).tag()) {
@@ -1857,14 +1862,35 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     const auto* primitive = table.getType(pattern->inner)->opt_Primitive();
                     return primitive && typeClassPrimitiveCompatible(tyClass, *primitive);
                 }
-                return type->is_Diverge();
+                return false;
             }
         }
 
-        Unifier::Unifier(const Span& sp, HMTypeInferrence& table)
+        Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve)
             : sp_(sp)
             , table_(table)
+            , resolve_(resolve)
         {
+        }
+
+        bool Unifier::opaqueCanReveal(const HIRTypeData* type) const {
+            const auto* erased = type->opt_ErasedType();
+            if (!erased) {
+                return false;
+            }
+            if (erased->inner.is_Known()) {
+                return true;
+            }
+            if (!resolve_) {
+                return false;
+            }
+            if (const auto* alias = erased->inner.opt_Alias()) {
+                return resolve_->isOpaqueAliasDefiningScope(*alias->inner);
+            }
+            if (const auto* function = erased->inner.opt_Fcn()) {
+                return resolve_->isDefiningFcnOrigin(function->origin);
+            }
+            return false;
         }
 
         Unifier::Outcome Unifier::defer(const HIRTypeData* left, const HIRTypeData* right) {
@@ -1912,6 +1938,12 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             if (left == right) {
                 return Outcome::Unified;
             }
+            // Canonicalization can rebuild the same rigid projection with a
+            // different interned node. It is still an exact equality; only a
+            // genuinely different rigid alias must remain deferred.
+            if (left->equalsIgnoringRegions(right)) {
+                return Outcome::Unified;
+            }
 
             const bool leftLive = inferIsLive(left);
             const bool rightLive = inferIsLive(right);
@@ -1927,8 +1959,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             if (leftLive || rightLive) {
                 const auto* infer = leftLive ? left : right;
                 const auto* other = leftLive ? right : left;
-                if (other->is_Infer() || typeIsRigidUnknown(other)) {
-                    return this->defer(left, right);
+                if (const auto* rigidInfer = other->opt_Infer()) {
+                    if (rigidInfer->index == ~0u || infer->as_Infer().tyClass != HIRInferClass::None) {
+                        return this->defer(left, right);
+                    }
                 }
                 if (!literalClassAccepts(table_, infer->as_Infer().tyClass, other)) {
                     return Outcome::Mismatch;
@@ -1942,7 +1976,23 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             }
             if (left->is_Infer() || right->is_Infer()) {
                 // Rigid unknowns: canonical variables, alias inputs, or a
-                // still-unassigned wildcard.
+                // still-unassigned wildcard.  A canonical literal slot is
+                // unknown only within its literal class: `_/*i*/` can match
+                // `usize`, but cannot make `&usize` a viable impl head.
+                auto rigidInferAccepts = [&](const HIRTypeData* inferType, const HIRTypeData* other) {
+                    const auto tyClass = inferType->as_Infer().tyClass;
+                    if (tyClass == HIRInferClass::None) {
+                        return true;
+                    }
+                    if (const auto* otherInfer = other->opt_Infer()) {
+                        return otherInfer->tyClass == HIRInferClass::None || otherInfer->tyClass == tyClass;
+                    }
+                    return literalClassAccepts(table_, tyClass, other);
+                };
+                if ((left->is_Infer() && !rigidInferAccepts(left, right))
+                    || (right->is_Infer() && !rigidInferAccepts(right, left))) {
+                    return Outcome::Mismatch;
+                }
                 return this->defer(left, right);
             }
             if (typeIsRigidUnknown(left) || typeIsRigidUnknown(right)) {
@@ -1951,6 +2001,15 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
 
             if (left->tag() != right->tag()) {
                 if ((left->is_Generic() && left->as_Generic().isPlaceholder()) || (right->is_Generic() && right->as_Generic().isPlaceholder())) {
+                    return this->defer(left, right);
+                }
+                if (const auto* erased = left->opt_ErasedType(); erased && erased->inner.is_Known()) {
+                    return this->unifyResolved(erased->inner.as_Known(), right);
+                }
+                if (const auto* erased = right->opt_ErasedType(); erased && erased->inner.is_Known()) {
+                    return this->unifyResolved(left, erased->inner.as_Known());
+                }
+                if (this->opaqueCanReveal(left) || this->opaqueCanReveal(right)) {
                     return this->defer(left, right);
                 }
                 return Outcome::Mismatch;
@@ -2011,14 +2070,21 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     if (!(le.size != re.size)) {
                         return inner;
                     }
-                    const auto* leftSize = le.size.opt_Unevaluated();
-                    const auto* rightSize = re.size.opt_Unevaluated();
-                    if (leftSize && rightSize) {
-                        return this->unifyValuesResolved(*leftSize, *rightSize) == Outcome::Mismatch ? Outcome::Mismatch : inner;
+                    if (le.size.is_Known() && re.size.is_Known()) {
+                        return Outcome::Mismatch;
                     }
-                    // One side is a known length, the other an unevaluated
-                    // expression: defer the whole array equality.
-                    return this->defer(left, right);
+                    auto knownValue = [&](u64 value) {
+                        return HIRConstGeneric::make_Evaluated(freezeEncodedLiteral(table_.types.objectPool(), EncodedLiteral::makeUsize(value)));
+                    };
+                    if (le.size.is_Known()) {
+                        auto value = knownValue(le.size.as_Known());
+                        return this->unifyValuesResolved(value, re.size.as_Unevaluated()) == Outcome::Mismatch ? Outcome::Mismatch : inner;
+                    }
+                    if (re.size.is_Known()) {
+                        auto value = knownValue(re.size.as_Known());
+                        return this->unifyValuesResolved(le.size.as_Unevaluated(), value) == Outcome::Mismatch ? Outcome::Mismatch : inner;
+                    }
+                    return this->unifyValuesResolved(le.size.as_Unevaluated(), re.size.as_Unevaluated()) == Outcome::Mismatch ? Outcome::Mismatch : inner;
                 }
                 case HIRTypeData::TAG_Pattern: {
                     const auto& le = left->as_Pattern();
@@ -2081,8 +2147,32 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return this->unifyParams(le.trait.path.params, re.trait.path.params);
                 }
                 case HIRTypeData::TAG_ErasedType: {
-                    // Interned nominal identity was checked above.
-                    return Outcome::Mismatch;
+                    const auto& le = left->as_ErasedType();
+                    const auto& re = right->as_ErasedType();
+                    if (le.inner.tag() != re.inner.tag()) {
+                        return this->defer(left, right);
+                    }
+                    switch (le.inner.tag()) {
+                        case TypeDataErasedTypeInner::TAG_Alias: {
+                            const auto& li = le.inner.as_Alias();
+                            const auto& ri = re.inner.as_Alias();
+                            if (li.inner->path != ri.inner->path) {
+                                return Outcome::Mismatch;
+                            }
+                            return this->unifyParams(li.params, ri.params);
+                        }
+                        case TypeDataErasedTypeInner::TAG_Known:
+                            return this->unifyResolved(le.inner.as_Known(), re.inner.as_Known());
+                        case TypeDataErasedTypeInner::TAG_Fcn: {
+                            const auto& li = le.inner.as_Fcn();
+                            const auto& ri = re.inner.as_Fcn();
+                            if (li.index != ri.index) {
+                                return Outcome::Mismatch;
+                            }
+                            return li.origin.equalsIgnoringRegions(ri.origin) ? Outcome::Unified : this->defer(left, right);
+                        }
+                    }
+                    UNREACHABLE();
                 }
             }
             UNREACHABLE();
@@ -2103,6 +2193,140 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 }
             }
             return Outcome::Unified;
+        }
+
+        bool Unifier::paramsContainLiveValueIvar(const HIRPathParams& params, unsigned rootIndex) const {
+            for (const auto& type : params.types) {
+                if (this->typeContainsLiveValueIvar(type, rootIndex)) {
+                    return true;
+                }
+            }
+            for (const auto& value : params.values) {
+                if (this->valueContainsLiveIvar(value, rootIndex)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        bool Unifier::pathContainsLiveValueIvar(const HIRPath& path, unsigned rootIndex) const {
+            switch (path.data.tag()) {
+                case HIRPathData::TAG_Generic:
+                    return this->paramsContainLiveValueIvar(path.data.as_Generic().params, rootIndex);
+                case HIRPathData::TAG_UfcsKnown: {
+                    const auto& data = path.data.as_UfcsKnown();
+                    return this->typeContainsLiveValueIvar(data.type, rootIndex)
+                        || this->paramsContainLiveValueIvar(data.trait.params, rootIndex)
+                        || this->paramsContainLiveValueIvar(data.params, rootIndex);
+                }
+                case HIRPathData::TAG_UfcsInherent: {
+                    const auto& data = path.data.as_UfcsInherent();
+                    return this->typeContainsLiveValueIvar(data.type, rootIndex)
+                        || this->paramsContainLiveValueIvar(data.params, rootIndex)
+                        || this->paramsContainLiveValueIvar(data.implParams, rootIndex);
+                }
+                case HIRPathData::TAG_UfcsUnknown: {
+                    const auto& data = path.data.as_UfcsUnknown();
+                    return this->typeContainsLiveValueIvar(data.type, rootIndex)
+                        || this->paramsContainLiveValueIvar(data.params, rootIndex);
+                }
+            }
+            UNREACHABLE();
+        }
+
+        bool Unifier::traitPathContainsLiveValueIvar(const HIRTraitPath& path, unsigned rootIndex) const {
+            if (this->paramsContainLiveValueIvar(path.path.params, rootIndex)) {
+                return true;
+            }
+            for (const auto& bound : path.typeBounds) {
+                if (this->paramsContainLiveValueIvar(bound.second.sourceTrait.params, rootIndex)
+                    || this->paramsContainLiveValueIvar(bound.second.atyParams, rootIndex)
+                    || this->typeContainsLiveValueIvar(bound.second.type, rootIndex)) {
+                    return true;
+                }
+            }
+            for (const auto& bound : path.traitBounds) {
+                if (this->paramsContainLiveValueIvar(bound.second.sourceTrait.params, rootIndex)
+                    || this->paramsContainLiveValueIvar(bound.second.atyParams, rootIndex)) {
+                    return true;
+                }
+                for (const auto& trait : bound.second.traits) {
+                    if (this->traitPathContainsLiveValueIvar(trait, rootIndex)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        bool Unifier::typeContainsLiveValueIvar(const HIRTypeData* type, unsigned rootIndex) const {
+            return visitTyWith(table_.getType(type), [&](const HIRTypeData* inner) {
+                if (const auto* path = inner->opt_Path()) {
+                    return this->pathContainsLiveValueIvar(path->path, rootIndex);
+                }
+                if (const auto* object = inner->opt_TraitObject()) {
+                    if (this->traitPathContainsLiveValueIvar(object->trait, rootIndex)) {
+                        return true;
+                    }
+                    for (const auto& marker : object->markers) {
+                        if (this->paramsContainLiveValueIvar(marker.params, rootIndex)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                if (const auto* erased = inner->opt_ErasedType()) {
+                    for (const auto& trait : erased->traits) {
+                        if (this->traitPathContainsLiveValueIvar(trait, rootIndex)) {
+                            return true;
+                        }
+                    }
+                    if (this->paramsContainLiveValueIvar(erased->use, rootIndex)) {
+                        return true;
+                    }
+                    switch (erased->inner.tag()) {
+                        case TypeDataErasedTypeInner::TAG_Fcn:
+                            return this->pathContainsLiveValueIvar(erased->inner.as_Fcn().origin, rootIndex);
+                        case TypeDataErasedTypeInner::TAG_Known:
+                            return this->typeContainsLiveValueIvar(erased->inner.as_Known(), rootIndex);
+                        case TypeDataErasedTypeInner::TAG_Alias:
+                            return this->paramsContainLiveValueIvar(erased->inner.as_Alias().params, rootIndex);
+                    }
+                    UNREACHABLE();
+                }
+                if (const auto* array = inner->opt_Array()) {
+                    return array->size.is_Unevaluated()
+                        && this->valueContainsLiveIvar(array->size.as_Unevaluated(), rootIndex);
+                }
+                if (const auto* pattern = inner->opt_Pattern()) {
+                    for (const auto& range : pattern->pattern.alternatives) {
+                        if ((range.hasStart && this->valueContainsLiveIvar(range.start, rootIndex))
+                            || (range.hasEnd && this->valueContainsLiveIvar(range.end, rootIndex))) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                if (const auto* function = inner->opt_NamedFunction()) {
+                    return this->pathContainsLiveValueIvar(function->path, rootIndex);
+                }
+                return false;
+            });
+        }
+
+        bool Unifier::valueContainsLiveIvar(const HIRConstGeneric& value, unsigned rootIndex) const {
+            const auto& resolved = table_.getValue(value);
+            if (const auto* infer = resolved.opt_Infer()) {
+                return infer->index != ~0u && !isAliasInputInfer(infer->index) && infer->index == rootIndex;
+            }
+            const auto* unevaluated = resolved.opt_Unevaluated();
+            if (!unevaluated) {
+                return false;
+            }
+            const auto& data = **unevaluated;
+            return (data.selfType && this->typeContainsLiveValueIvar(data.selfType, rootIndex))
+                || this->paramsContainLiveValueIvar(data.paramsImpl, rootIndex)
+                || this->paramsContainLiveValueIvar(data.paramsItem, rootIndex);
         }
 
         Unifier::Outcome Unifier::unifyValuesResolved(const HIRConstGeneric& leftRaw, const HIRConstGeneric& rightRaw) {
@@ -2132,7 +2356,11 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             }
             if (leftLive || rightLive) {
                 const auto& other = leftLive ? right : left;
-                if (other.is_Evaluated() || (other.is_Generic() && !other.as_Generic().isPlaceholder())) {
+                const auto* rigidInfer = other.opt_Infer();
+                if (other.is_Evaluated()
+                    || (other.is_Generic() && !other.as_Generic().isPlaceholder())
+                    || (rigidInfer && rigidInfer->index != ~0u && isAliasInputInfer(rigidInfer->index))
+                    || (other.is_Unevaluated() && !this->valueContainsLiveIvar(other, leftLive ? *leftLive : *rightLive))) {
                     table_.setIvarValTo(leftLive ? *leftLive : *rightLive, other.clone());
                     return Outcome::Unified;
                 }
@@ -3169,6 +3397,11 @@ default:
                 HIRPathParams markerImplParams;
                 bool autoBuiltin;
                 CandidateSource source;
+                // The head stayed fuzzy because a rigid projection/deferred
+                // const must normalize, rather than because caller inference
+                // can be guided. Such a candidate cannot shadow a proven
+                // specialization fallback yet.
+                bool headNormalizationAmbiguity;
                 bool ambiguityBeyondHead = false;
                 // Ambiguity from the candidate's own predicates (nested
                 // bounds, implicit Sized, type equalities, the structural
@@ -3186,7 +3419,7 @@ default:
                 // the value from this chain (rustc's specialization graph).
                 const Candidate* specializationItemSource = nullptr;
 
-                Candidate(ImplRef impl, HIRCompare headMatch, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source)
+                Candidate(ImplRef impl, HIRCompare headMatch, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool headNormalizationAmbiguity = false)
                     : impl(::std::move(impl))
                     , headMatch(headMatch)
                     , certainty(Certainty::Ambiguous)
@@ -3194,6 +3427,7 @@ default:
                     , markerImplParams(::std::move(markerImplParams))
                     , autoBuiltin(autoBuiltin)
                     , source(source)
+                    , headNormalizationAmbiguity(headNormalizationAmbiguity)
                 {
                 }
 
@@ -4220,7 +4454,7 @@ default:
                 return false;
             }
 
-            void pushCandidate(size_t frameIndex, ImplRef impl, HIRCompare match, const HIRMarkerImpl* markerImpl = nullptr, HIRPathParams markerImplParams = {}, bool autoBuiltin = false, CandidateSource source = CandidateSource::Other) {
+            void pushCandidate(size_t frameIndex, ImplRef impl, HIRCompare match, const HIRMarkerImpl* markerImpl = nullptr, HIRPathParams markerImplParams = {}, bool autoBuiltin = false, CandidateSource source = CandidateSource::Other, bool headNormalizationAmbiguity = false) {
                 if (match == HIRCompare::Unequal) {
                     return;
                 }
@@ -4230,10 +4464,129 @@ default:
                     const bool same = markerImpl ? sameSource && candidates[i]->markerImplParams == markerImplParams : sameSource && isSameImpl(candidates[i]->impl, impl);
                     if (same) {
                         candidates[i]->headMatch &= match;
+                        candidates[i]->headNormalizationAmbiguity |= headNormalizationAmbiguity;
                         return;
                     }
                 }
-                candidates.push_back(candidateNodes.make(::std::move(impl), match, markerImpl, ::std::move(markerImplParams), autoBuiltin, source));
+                candidates.push_back(candidateNodes.make(::std::move(impl), match, markerImpl, ::std::move(markerImplParams), autoBuiltin, source, headNormalizationAmbiguity));
+            }
+
+            HIRCompare unifyImplHead(
+                const HIRGenericParams& implParamsDef,
+                const HIRPathParams& implTraitArgs,
+                const HIRTypeData* implType,
+                const HIRPathParams& goalParams,
+                const HIRTypeData* goalType,
+                HIRPathParams& outputParams,
+                bool& headNormalizationAmbiguity
+            ) {
+                const auto snapshot = resolve_.ivars.snapshot();
+                STD_DEFER {
+                    resolve_.ivars.rollbackTo(snapshot);
+                };
+
+                auto inferenceParams = resolve_.makeFreshImplParams(implParamsDef);
+                auto monomorph = MonomorphStatePtr(crate.types, nullptr, &inferenceParams, nullptr);
+                const auto candidateType = monomorph.monomorphType(span(), implType, true);
+
+                Unifier unifier(span(), resolve_.ivars, &resolve_);
+                if (unifier.unify(candidateType, goalType) == Unifier::Outcome::Mismatch) {
+                    return HIRCompare::Unequal;
+                }
+                // Self commonly fixes every impl const parameter.  Rebuild
+                // the trait arguments only after those bindings exist so a
+                // concrete expression such as min(2, 3) is evaluated before
+                // it is related to the goal.
+                auto resolvedInferenceParams = inferenceParams.clone();
+                for (auto& type : resolvedInferenceParams.types) {
+                    type = resolve_.ivars.getType(type);
+                }
+                for (auto& value : resolvedInferenceParams.values) {
+                    const auto& resolved = resolve_.ivars.getValue(value);
+                    if (resolved != value) {
+                        value = resolved.clone();
+                    }
+                }
+                auto resolvedMonomorph = MonomorphStatePtr(crate.types, nullptr, &resolvedInferenceParams, nullptr);
+                resolvedMonomorph.setConstevalState(resolve_.board(), HIRItemPath(""));
+                const auto candidateParams = resolvedMonomorph.monomorphPathParams(span(), implTraitArgs, true);
+                if (candidateParams.types.size() != goalParams.types.size() || candidateParams.values.size() != goalParams.values.size()) {
+                    return HIRCompare::Unequal;
+                }
+                for (size_t i = 0; i < candidateParams.types.size(); i++) {
+                    if (unifier.unify(candidateParams.types[i], goalParams.types[i]) == Unifier::Outcome::Mismatch) {
+                        return HIRCompare::Unequal;
+                    }
+                }
+                for (size_t i = 0; i < candidateParams.values.size(); i++) {
+                    if (unifier.unifyValues(candidateParams.values[i], goalParams.values[i]) == Unifier::Outcome::Mismatch) {
+                        return HIRCompare::Unequal;
+                    }
+                }
+
+                // Candidate storage outlives this inference snapshot.  Resolve
+                // every bound existential now and represent the still-free
+                // ones with the solver's stable candidate placeholders; no
+                // inference-table index is allowed to escape the rollback.
+                class MaterializeCandidate final: public MonomorphiserNop {
+                    const HMTypeInferrence& table;
+                    const HIRPathParams& inferenceParams;
+                    const RcString placeholderName;
+
+                public:
+                    MaterializeCandidate(HIRTypeInterner& types, const HMTypeInferrence& table, const HIRPathParams& inferenceParams, const HIRGenericParams& implParamsDef)
+                        : MonomorphiserNop(types)
+                        , table(table)
+                        , inferenceParams(inferenceParams)
+                        , placeholderName(RcString::newInterned(FMT("impl_?_" << &implParamsDef)))
+                    {
+                    }
+
+                    HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
+                        if (const auto* infer = type->opt_Infer()) {
+                            for (size_t i = 0; i < inferenceParams.types.size(); i++) {
+                                const auto* parameter = inferenceParams.types[i]->opt_Infer();
+                                if (!parameter || parameter->index != infer->index) {
+                                    continue;
+                                }
+                                const auto* resolved = table.getType(type);
+                                if (resolved == type) {
+                                    ASSERT_BUG(sp, i < 256, "Too many candidate type parameters");
+                                    return types.generic(placeholderName, GENERICPlaceholder * 256 + static_cast<unsigned>(i));
+                                }
+                                return this->monomorphType(sp, resolved, allowInfer);
+                            }
+                            return type;
+                        }
+                        return Monomorphiser::monomorphType(sp, type, allowInfer);
+                    }
+
+                    HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override {
+                        if (const auto* infer = value.opt_Infer()) {
+                            for (size_t i = 0; i < inferenceParams.values.size(); i++) {
+                                const auto* parameter = inferenceParams.values[i].opt_Infer();
+                                if (!parameter || parameter->index != infer->index) {
+                                    continue;
+                                }
+                                const auto& resolved = table.getValue(value);
+                                if (resolved == value) {
+                                    ASSERT_BUG(sp, i < 256, "Too many candidate value parameters");
+                                    return HIRGenericRef(placeholderName, GENERICPlaceholder * 256 + static_cast<unsigned>(i));
+                                }
+                                return this->monomorphConstgeneric(sp, resolved, allowInfer);
+                            }
+                        }
+                        return Monomorphiser::monomorphConstgeneric(sp, value, allowInfer);
+                    }
+                };
+
+                MaterializeCandidate materialize(crate.types, resolve_.ivars, inferenceParams, implParamsDef);
+                outputParams = materialize.monomorphPathParams(span(), inferenceParams, true);
+                headNormalizationAmbiguity = !unifier.pendingValues().empty();
+                for (const auto& equality : unifier.pending()) {
+                    headNormalizationAmbiguity |= resolve_.hasAssociatedType(equality.left) || resolve_.hasAssociatedType(equality.right);
+                }
+                return unifier.pending().length() == 0 && unifier.pendingValues().empty() ? HIRCompare::Equal : HIRCompare::Fuzzy;
             }
 
             void assembleCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) {
@@ -4272,9 +4625,10 @@ default:
                     // Those nested goals belong exclusively to evaluate_candidate.
                     crate.findTraitImpls(trait, resolvedType, resolve_.ivars.callbackResolveInfer(), [&](const HIRTraitImpl& impl) {
                         HIRPathParams implParams;
-                        const auto match = resolve_.fticCheckParams(span(), trait, &params, resolvedType, impl.params, impl.traitArgs, impl.type, implParams, false);
+                        bool headNormalizationAmbiguity = false;
+                        const auto match = this->unifyImplHead(impl.params, impl.traitArgs, impl.type, params, resolvedType, implParams, headNormalizationAmbiguity);
                         if (match != HIRCompare::Unequal) {
-                            pushCandidate(frameIndex, ImplRef(::std::move(implParams), traitDef, trait, impl), match, nullptr, {}, false, CandidateSource::TraitImpl);
+                            pushCandidate(frameIndex, ImplRef(::std::move(implParams), traitDef, trait, impl), match, nullptr, {}, false, CandidateSource::TraitImpl, headNormalizationAmbiguity);
                         }
                         return false;
                     });
@@ -4284,12 +4638,13 @@ default:
                     // here; their bounds are nested goals evaluated below.
                     crate.findAutoTraitImpls(trait, resolvedType, resolve_.ivars.callbackResolveInfer(), [&](const HIRMarkerImpl& impl) {
                         HIRPathParams implParams;
-                        const auto match = resolve_.fticCheckParams(span(), trait, &params, resolvedType, impl.params, impl.traitArgs, impl.type, implParams, false);
+                        bool headNormalizationAmbiguity = false;
+                        const auto match = this->unifyImplHead(impl.params, impl.traitArgs, impl.type, params, resolvedType, implParams, headNormalizationAmbiguity);
                         if (match != HIRCompare::Unequal) {
                             auto monomorph = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr);
                             auto responseType = monomorph.monomorphType(span(), impl.type, false);
                             auto responseParams = monomorph.monomorphPathParams(span(), impl.traitArgs, false);
-                            pushCandidate(frameIndex, ImplRef(::std::move(responseType), ::std::move(responseParams), HIRTraitPath::assocListT()), match, &impl, ::std::move(implParams), false, CandidateSource::TraitImpl);
+                            pushCandidate(frameIndex, ImplRef(::std::move(responseType), ::std::move(responseParams), HIRTraitPath::assocListT()), match, &impl, ::std::move(implParams), false, CandidateSource::TraitImpl, headNormalizationAmbiguity);
                         }
                         return false;
                     });
@@ -4522,7 +4877,7 @@ default:
                 // proving the equality needed a binding, then restore the
                 // exact input state in every case.
                 const auto snapshot = resolve_.ivars.snapshot();
-                Unifier unifier(span(), resolve_.ivars);
+                Unifier unifier(span(), resolve_.ivars, &resolve_);
                 const auto outcome = unifier.unify(left, right);
                 const bool boundInference = resolve_.ivars.mutationGeneration != snapshot.generation;
                 resolve_.ivars.rollbackTo(snapshot);
@@ -4727,7 +5082,7 @@ default:
 
             Certainty evaluateCandidate(size_t frameIndex, size_t candidateIndex, const HIRSimplePath& trait, const HIRTraitPath::assocListT* associated) {
                 auto* candidate = frames[frameIndex]->candidates[candidateIndex];
-                candidate->ambiguityBeyondHead = false;
+                candidate->ambiguityBeyondHead = candidate->headNormalizationAmbiguity;
                 candidate->nestedAmbiguity = false;
                 if (associated) {
                     bindCandidatePlaceholders(*candidate, candidate->impl.getImplType(crate.types), *associated, true);
@@ -6656,9 +7011,14 @@ default:
                         // Cache the result of this to avoid needing to do the full resolution too often.
                         // - This avoids VERY slow typechecking in 1.90's librustc_target
                         const auto cacheKey = input->uid;
-                        auto* cached = eatCache.find(cacheKey);
+                        // A probe is rolled back as a unit, but normalization
+                        // can manufacture an output containing one of its
+                        // temporary ivars even when the input projection is
+                        // concrete.  Such an output must never cross the
+                        // transaction through this resolver-lifetime cache.
+                        auto* cached = ivars.probing() ? nullptr : eatCache.find(cacheKey);
                         if (cached && cached->generation == eatCacheGeneration
-                            && (!(input->flags & (HIRTypeData::HAS_TYPE_INFER | HIRTypeData::HAS_DEFERRED_CONST)) || cached->ivarGeneration == ivars.mutationGeneration)) {
+                            && (!((input->flags | cached->type->flags) & (HIRTypeData::HAS_TYPE_INFER | HIRTypeData::HAS_DEFERRED_CONST)) || cached->ivarGeneration == ivars.mutationGeneration)) {
                             if (input != cached->type) {
                                 this->expandAssociatedTypesInplace(sp, cached->type, stack);
                             }
@@ -6666,7 +7026,7 @@ default:
                         } else {
                             this->expandAssociatedTypesInplaceUfcsKnown(sp, input, stack);
                             if (input->is_Path() && (input->as_Path().binding.is_Unbound() || input->as_Path().binding.is_Opaque())) {
-                            } else {
+                            } else if (!ivars.probing()) {
                                 eatCache.insert(cacheKey, EatCacheEntry{eatCacheGeneration, ivars.mutationGeneration, input});
                             }
                         }
