@@ -107,6 +107,21 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(table.getValue(v2).as_Infer().index == v2);
     }
 
+    STD_TEST(testUnifyingValueWithItselfIsNoop) {
+        auto pool = stl::ObjPool::fromMemory();
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
+        HMTypeInferrence table(types);
+
+        const auto value = table.newIvarVal();
+        const auto generation = table.mutationGeneration;
+        table.ivarValUnify(value, value);
+
+        STD_INSIST(!table.values.at(value).isAlias());
+        STD_INSIST(table.getValue(value).as_Infer().index == value);
+        STD_INSIST(table.mutationGeneration == generation);
+    }
+
     STD_TEST(testCommitKeepsBindings) {
         auto pool = stl::ObjPool::fromMemory();
         u32 id = 0;

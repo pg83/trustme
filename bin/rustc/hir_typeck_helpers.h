@@ -37,7 +37,9 @@ struct SolverImpl {
 };
 
 struct SolverSlotValues {
+    ThinVector<HIRTypeRef> typeInputs;
     ThinVector<HIRTypeRef> types;
+    ThinVector<HIRConstGeneric> valueInputs;
     ThinVector<HIRConstGeneric> values;
 };
 
@@ -46,9 +48,17 @@ struct SolverObligation {
     HIRTraitPath trait;
 };
 
+struct SolverTypeEquality {
+    HIRTypeRef left;
+    HIRTypeRef right;
+};
+
 struct SolverCandidateResponse {
     const SolverImpl* impl = nullptr;
     SolverCertainty certainty = SolverCertainty::Ambiguous;
+    SolverSlotValues slots;
+    ThinVector<SolverObligation> obligations;
+    ThinVector<SolverTypeEquality> equalities;
 };
 
 /// A self-contained solver answer.  Slot values are positional with respect
@@ -59,6 +69,7 @@ struct SolverResponse {
     SolverCertainty certainty = SolverCertainty::NoSolution;
     SolverSlotValues slots;
     ThinVector<SolverObligation> obligations;
+    ThinVector<SolverTypeEquality> equalities;
     const SolverImpl* impl = nullptr;
     bool hasImpl = false;
     ThinVector<SolverCandidateResponse> candidates;
@@ -403,11 +414,6 @@ struct TraitGoalQuery {
     bool exportAmbiguousCandidates = false;
 };
 
-struct TraitTypeConstraintCallback {
-    virtual void constrain(const Span& sp, const HIRTypeData* receiver, const HIRTypeData* implType) = 0;
-    virtual void registerSolverObligation(const Span& sp, HIRTypeRef type, HIRTraitPath trait) = 0;
-};
-
 struct TraitBoundCallback {
     virtual bool visit(HIRCompare cmp, const HIRTypeData* type, const HIRGenericPath& traitPath, const TraitResolveCommon::CachedBound& info) = 0;
 };
@@ -446,6 +452,24 @@ struct TraitPathCb final: TraitPathCallback {
 
 struct TraitImplCallback {
     virtual bool visit(ImplRef impl, HIRCompare cmp) = 0;
+};
+
+struct SolverResponseCallback {
+    virtual bool visit(SolverResponse response) = 0;
+};
+
+template <typename F>
+struct SolverResponseCb final: SolverResponseCallback {
+    F f;
+
+    explicit SolverResponseCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(SolverResponse response) override {
+        return f(::std::move(response));
+    }
 };
 
 template <typename F>
@@ -533,10 +557,6 @@ private:
     // snapshot that is rolled back afterwards; a dedicated evaluator keeps
     // the probe's goal bookkeeping out of any active evaluation session.
     mutable NextTraitGoalEvaluator* coherenceEvaluator = nullptr;
-    // Mutable so a coherence probe can detach it for its own duration:
-    // constraint callbacks fired under a rolled-back snapshot would leak
-    // probe-internal types into the type-checking context.
-    mutable TraitTypeConstraintCallback* typeConstraint = nullptr;
     // Bumped when the defining-opaque registrations change: they alter what
     // containsDefiningOpaque answers, so cached goals must not outlive them.
     mutable u64 solverEnvGeneration = 0;
@@ -565,10 +585,6 @@ public:
 
     bool isOpaqueAliasDefiningScope(const HIRTypeDataErasedTypeAliasInner& alias) const;
 
-    void setTypeConstraint(TraitTypeConstraintCallback* constraint) {
-        typeConstraint = constraint;
-    }
-
     const HIRGenericPath* currentTraitPath() const {
         return currentTraitPath_;
     }
@@ -591,16 +607,16 @@ public:
         return ivars.pathparamsContainIvars(params, false);
     }
 
-    void compactIvars(HMTypeInferrence& ivars);
+    void compactIvars(HMTypeInferrence& ivars, SolverResponseCallback* effects = nullptr);
 
     bool hasAssociatedType(const HIRTypeData* ty) const;
 
     /// Expand any located associated types in the input, operating in-place and returning the result
-    HIRTypeRef expandAssociatedTypes(const Span& sp, HIRTypeRef input) const;
+    HIRTypeRef expandAssociatedTypes(const Span& sp, HIRTypeRef input, SolverResponseCallback* effects = nullptr) const;
 
-    const HIRTypeData* expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp) const;
+    const HIRTypeData* expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp, SolverResponseCallback* effects = nullptr) const;
 
-    void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const;
+    void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params, SolverResponseCallback* effects = nullptr) const;
 
     bool iterateBoundsTraitsCb(const Span& sp, const HIRTypeData* type, const HIRSimplePath& trait, TraitBoundCallback& cb) const;
     bool iterateBoundsTraitsCb(const Span& sp, const HIRTypeData* type, TraitBoundCallback& cb) const;
@@ -661,6 +677,17 @@ public:
     bool findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, const TraitGoalQuery& query = {}) const {
         TraitImplCb<F> cb(f);
         return findTraitImplsNextCb(sp, trait, params, type, cb, query);
+    }
+
+    /// Return the complete next-solver answer.  Slot constraints and nested
+    /// obligations are data in the response; this is the API new consumers
+    /// use instead of observing inference effects through callbacks.
+    bool solveTraitGoalCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, SolverResponseCallback& callback, const TraitGoalQuery& query = {}) const;
+
+    template <typename F>
+    bool solveTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, const TraitGoalQuery& query = {}) const {
+        SolverResponseCb<F> cb(f);
+        return solveTraitGoalCb(sp, trait, params, type, cb, query);
     }
 
     /// Whether two concrete impl candidates may apply to one canonical goal.
@@ -738,7 +765,8 @@ private:
         const HIRTypeData* implTy,
         /*Out->*/ HIRPathParams& outImplParams,
         bool evaluateBounds = true,
-        bool commitDefiningOpaque = false
+        bool commitDefiningOpaque = false,
+        SolverResponse* effects = nullptr
     ) const;
 
 public:
@@ -826,7 +854,7 @@ public:
     const HIRTypeData* typeIsOwnedBox(const Span& sp, const HIRTypeData* ty) const;
 
 private:
-    void expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack) const;
-    bool expandAssociatedTypesInplaceUfcsInherent(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack) const;
-    void expandAssociatedTypesInplaceUfcsKnown(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack) const;
+    void expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack, SolverResponseCallback* effects = nullptr) const;
+    bool expandAssociatedTypesInplaceUfcsInherent(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack, SolverResponseCallback* effects = nullptr) const;
+    void expandAssociatedTypesInplaceUfcsKnown(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack, SolverResponseCallback* effects = nullptr) const;
 };

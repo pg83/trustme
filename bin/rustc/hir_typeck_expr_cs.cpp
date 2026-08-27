@@ -549,7 +549,7 @@ default:
                         }
                         case HIRTypeData::TAG_NamedFunction: {
                             auto& f = (*srcTy).as_NamedFunction();
-                            auto ft = context.resolve.expandAssociatedTypes(sp, context.crate.types.function(f.decay(context.crate.types, sp)));
+                            auto ft = context.expandAssociatedTypes(sp, context.crate.types.function(f.decay(context.crate.types, sp)));
                             const auto& sE = ft->as_Function();
                             // Check that the ABI and unsafety is correct
                             if (sE.abi != e.abi || (sE.isUnsafe && sE.isUnsafe != e.isUnsafe) || sE.argTypes.size() != e.argTypes.size()) {
@@ -845,7 +845,7 @@ default: {
             // Iterator obligations select their input types.  Normalise what
             // is currently known, but don't diagnose the still-dependent
             // projection as a non-callable concrete type.
-            node.value->resType = this->context.resolve.expandAssociatedTypes(node.span(), node.value->resType);
+            node.value->resType = this->context.expandAssociatedTypes(node.span(), node.value->resType);
             const auto& tyO = this->context.getType(node.value->resType);
 
             this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::Bound);
@@ -897,7 +897,7 @@ default: {
                     const auto* e = ty->opt_Function();
                     if (!e) {
                         tmpFt = context.crate.types.function(ty->as_NamedFunction().decay(context.crate.types, node.span()));
-                        tmpFt = this->context.resolve.expandAssociatedTypes(node.span(), tmpFt);
+                        tmpFt = this->context.expandAssociatedTypes(node.span(), tmpFt);
                         e = &tmpFt->as_Function();
                     }
                     for (const auto& arg : e->argTypes) {
@@ -1926,7 +1926,7 @@ default:
     private:
         void checkTypeResolvedTop(const Span& sp, HIRTypeRef& ty) const {
             checkTypeResolved(sp, ty, ty);
-            ty = this->context.resolve.expandAssociatedTypes(sp, mv$(ty));
+            ty = this->context.expandAssociatedTypes(sp, mv$(ty));
         }
 
         void checkTypeResolvedConstgeneric(const Span& sp, HIRConstGeneric& v, const HIRTypeData* topType) const {
@@ -1952,17 +1952,17 @@ default:
             switch (path.data.tag()) {
                 case HIRPath::Data::TAG_Generic: {
                     auto& pe = path.data.as_Generic();
-                    for (auto& ty : pe.params.types) ty = this->context.resolve.expandAssociatedTypes(sp, mv$(ty));
+                    for (auto& ty : pe.params.types) ty = this->context.expandAssociatedTypes(sp, mv$(ty));
                     break;
                 }
                 case HIRPath::Data::TAG_UfcsInherent: {
                     auto& pe = path.data.as_UfcsInherent();
-                    pe.type = this->context.resolve.expandAssociatedTypes(sp, mv$(pe.type)); for (auto& ty : pe.params.types) ty = this->context.resolve.expandAssociatedTypes(sp, mv$(ty)); for (auto& ty : pe.implParams.types) ty = this->context.resolve.expandAssociatedTypes(sp, mv$(ty));
+                    pe.type = this->context.expandAssociatedTypes(sp, mv$(pe.type)); for (auto& ty : pe.params.types) ty = this->context.expandAssociatedTypes(sp, mv$(ty)); for (auto& ty : pe.implParams.types) ty = this->context.expandAssociatedTypes(sp, mv$(ty));
                     break;
                 }
                 case HIRPath::Data::TAG_UfcsKnown: {
                     auto& pe = path.data.as_UfcsKnown();
-                    pe.type = this->context.resolve.expandAssociatedTypes(sp, mv$(pe.type)); for (auto& ty : pe.params.types) ty = this->context.resolve.expandAssociatedTypes(sp, mv$(ty)); for (auto& ty : pe.trait.params.types) ty = this->context.resolve.expandAssociatedTypes(sp, mv$(ty));
+                    pe.type = this->context.expandAssociatedTypes(sp, mv$(pe.type)); for (auto& ty : pe.params.types) ty = this->context.expandAssociatedTypes(sp, mv$(ty)); for (auto& ty : pe.trait.params.types) ty = this->context.expandAssociatedTypes(sp, mv$(ty));
                     break;
                 }
                 case HIRPath::Data::TAG_UfcsUnknown: {
@@ -2309,8 +2309,8 @@ void Context::equateTypes(const Span& sp, const HIRTypeData* li, const HIRTypeDa
 
     HIRTypeRef lTmp;
     HIRTypeRef rTmp;
-    const auto& lT = this->resolve.expandAssociatedTypes(sp, this->ivars.getType(li), lTmp);
-    const auto& rT = this->resolve.expandAssociatedTypes(sp, this->ivars.getType(ri), rTmp);
+    const auto& lT = this->expandAssociatedTypes(sp, this->ivars.getType(li), lTmp);
+    const auto& rT = this->expandAssociatedTypes(sp, this->ivars.getType(ri), rTmp);
 
     // Strip HRLs, just in case
 
@@ -2334,8 +2334,8 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
     // Check if the type contains a replacable associated type
     HIRTypeRef lTmp;
     HIRTypeRef rTmp;
-    const auto& lT = this->resolve.expandAssociatedTypes(sp, this->ivars.getType(li), lTmp);
-    const auto& rT = this->resolve.expandAssociatedTypes(sp, this->ivars.getType(ri), rTmp);
+    const auto& lT = this->expandAssociatedTypes(sp, this->ivars.getType(li), lTmp);
+    const auto& rT = this->expandAssociatedTypes(sp, this->ivars.getType(ri), rTmp);
     if (lT == rT || lT->equalsIgnoringRegions(rT)) {
         return;
     }
@@ -3515,7 +3515,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
             }
 
             bool revisit(Context& context, bool isFallbackMode) override {
-                outerTy = context.resolve.expandAssociatedTypes(sp, mv$(outerTy));
+                outerTy = context.expandAssociatedTypes(sp, mv$(outerTy));
                 return this->revisitInnerReal(context, pattern, outerTy, outerMode, isFallbackMode);
             }
 
@@ -3914,7 +3914,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
 
             bool revisitInnerReal(Context& context, HIRPattern& pattern, const HIRTypeData* type, HIRPatternBinding::Type bindingMode, bool isFallback) const {
                 HIRTypeRef normalizedType;
-                type = context.resolve.expandAssociatedTypes(sp, context.getType(type), normalizedType);
+                type = context.expandAssociatedTypes(sp, context.getType(type), normalizedType);
 
                 // Binding applies to the raw input type (not after dereferencing)
                 for (auto& pb : pattern.bindings) {
@@ -4370,7 +4370,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         auto ms = MonomorphStatePtr(context.crate.types, nullptr, &e.path.data.as_Generic().params, nullptr);
                         HIRTypeRef tmp;
                         auto maybeMonomorph = [&](const HIRTypeData* fieldType) -> const HIRTypeData* {
-                            return (monomorphiseTypeNeeded(fieldType) ? (tmp = context.resolve.expandAssociatedTypes(sp, ms.monomorphType(sp, fieldType))) : fieldType);
+                            return (monomorphiseTypeNeeded(fieldType) ? (tmp = context.expandAssociatedTypes(sp, ms.monomorphType(sp, fieldType))) : fieldType);
                         };
 
                         e.totalSize = sd.size();
@@ -4404,7 +4404,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             auto ms = MonomorphStatePtr(context.crate.types, nullptr, &e.path.data.as_Generic().params, nullptr);
                             HIRTypeRef tmp;
                             auto maybeMonomorph = [&](const HIRTypeData* fieldType) -> const HIRTypeData* {
-                                return (monomorphiseTypeNeeded(fieldType) ? (tmp = context.resolve.expandAssociatedTypes(sp, ms.monomorphType(sp, fieldType))) : fieldType);
+                                return (monomorphiseTypeNeeded(fieldType) ? (tmp = context.expandAssociatedTypes(sp, ms.monomorphType(sp, fieldType))) : fieldType);
                             };
 
                             rv = true;
@@ -5431,10 +5431,12 @@ void Context::selectWellFormed(const Span& sp, const HIRTypeData* type) {
         if (!projection) {
             return false;
         }
-        resolve.findTraitImplsNext(sp, projection->trait.path, projection->trait.params, projection->type, [&](ImplRef impl, HIRCompare certainty) {
-            if (certainty != HIRCompare::Equal || impl.isAmbiguousIdentity()) {
+        resolve.solveTraitGoal(sp, projection->trait.path, projection->trait.params, projection->type, [&](SolverResponse response) {
+            if (response.certainty != SolverCertainty::Proven || !response.hasImpl || !response.impl || response.impl->ambiguousIdentity) {
                 return false;
             }
+            applySolverResponse(sp, response);
+            auto impl = response.impl->legacy();
             equateTypes(sp, projection->type, impl.getImplType(crate.types));
             auto responseParams = impl.getTraitParams(crate.types);
             ASSERT_BUG(sp, projection->trait.params.types.size() == responseParams.types.size(), "WF response type parameter count mismatch");
@@ -5531,7 +5533,7 @@ void Context::requireSized(const Span& sp, const HIRTypeData* ty_) {
                         }
                         const auto& params = e->path.data.as_Generic().params;
                         auto tailTy = MonomorphStatePtr(crate.types, ty, &params, nullptr).monomorphType(sp, tailTpl);
-                        tailTy = resolve.expandAssociatedTypes(sp, mv$(tailTy));
+                        tailTy = this->expandAssociatedTypes(sp, mv$(tailTy));
                         if (sized != HIRCompare::Equal) {
                             this->requireSized(sp, tailTy);
                         }
@@ -6422,8 +6424,8 @@ default:
                                                     tailTpl = sbe->data.as_Named().at(sm.unsizedField).ty;
                                                     break;
                                             }
-                                            srcTail = context.resolve.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, src, &pSrc, nullptr).monomorphType(sp, tailTpl));
-                                            dstTail = context.resolve.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, dst, &pDst, nullptr).monomorphType(sp, tailTpl));
+                                            srcTail = context.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, src, &pSrc, nullptr).monomorphType(sp, tailTpl));
+                                            dstTail = context.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, dst, &pDst, nullptr).monomorphType(sp, tailTpl));
                                             isrc = srcTail;
                                             idst = dstTail;
                                         }
@@ -6445,8 +6447,8 @@ default:
                                                         }
                                                     } else {
                                                         auto equateField = [&](const HIRTypeData* fieldTpl) {
-                                                            auto srcField = context.resolve.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, src, &pSrc, nullptr).monomorphType(sp, fieldTpl));
-                                                            auto dstField = context.resolve.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, dst, &pDst, nullptr).monomorphType(sp, fieldTpl));
+                                                            auto srcField = context.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, src, &pSrc, nullptr).monomorphType(sp, fieldTpl));
+                                                            auto dstField = context.expandAssociatedTypes(sp, MonomorphStatePtr(context.crate.types, dst, &pDst, nullptr).monomorphType(sp, fieldTpl));
                                                             contextMut->equateTypes(sp, dstField, srcField);
                                                         };
                                                         switch (sbe->data.tag()) {
@@ -6656,11 +6658,11 @@ default:
                 // where-clause is bivariant.
                 HIRCompare fieldsCmp = HIRCompare::Equal;
                 auto relateField = [&](const HIRTypeData* fieldTpl) {
-                    auto srcField = context.resolve.expandAssociatedTypes(
+                    auto srcField = context.expandAssociatedTypes(
                         sp,
                         MonomorphStatePtr(context.crate.types, src, &ppSrc, nullptr).monomorphType(sp, fieldTpl)
                     );
-                    auto dstField = context.resolve.expandAssociatedTypes(
+                    auto dstField = context.expandAssociatedTypes(
                         sp,
                         MonomorphStatePtr(context.crate.types, dst, &ppDst, nullptr).monomorphType(sp, fieldTpl)
                     );
@@ -7177,7 +7179,7 @@ default:
             }
         } else if (const auto* se = src->opt_NamedFunction()) {
             if (const auto* de = dst->opt_Function()) {
-                auto ft = context.resolve.expandAssociatedTypes(sp, context.crate.types.function(se->decay(context.crate.types, sp)));
+                auto ft = context.expandAssociatedTypes(sp, context.crate.types.function(se->decay(context.crate.types, sp)));
                 const auto* se = &ft->as_Function();
 
                 // ABI must match
@@ -7296,76 +7298,6 @@ default:
         UNREACHABLE();
     }
 
-    void addImplBounds(Context& context, const Span& sp, const ImplRef& implRef, bool onlyWithIvars = false) {
-        const auto* ep = implRef.data.opt_TraitImpl();
-        if (!ep) {
-            return;
-        }
-
-        const auto& e = *ep;
-        assert(e.impl);
-        for (const auto& bound : e.impl->params.bounds) {
-        switch (bound.tag()) {
-default:
-            break;
-            case HIRGenericBound::TAG_TraitBound: {
-                auto& be = bound.as_TraitBound();
-                auto ms = implRef.getCbMonomorphTraitimpl(context.crate.types, sp, {});
-                auto bTyMono = ms.monomorphType(sp, be.type);
-                auto bTpMono = ms.monomorphTraitpath(sp, be.trait, true);
-                if (onlyWithIvars) {
-                    // The next solver proved this bound while building the
-                    // response, but a proof through a builtin candidate can
-                    // carry inference effects the certainty-only path drops
-                    // (a closure's parameter types from `F: FnMut(char)`).
-                    // Re-export exactly the bounds that still mention live
-                    // inference variables; a fully rigid bound is settled.
-                    // A closure/generator NodeType hides its signature ivars
-                    // from typeContainsIvars; an Fn-trait bound on one is
-                    // exactly the signature-seeding case.
-                    auto needsExport = [&](const HIRTypeData* ty) {
-                        return context.ivars.typeContainsIvars(ty, false) || visitTyWith(ty, [&](const HIRTypeData* inner) {
-                            if (inner->is_NodeType()) {
-                                return true;
-                            }
-                            // A bound mentioning an opaque this body defines
-                            // is a defining use: solving it inside the goal
-                            // machinery proves it but never records the
-                            // hidden type.  Re-export it so the constraint
-                            // loop's associated-equality commit reaches
-                            // equateErasedAlias.
-                            if (const auto* erased = inner->opt_ErasedType()) {
-                                if (const auto* alias = erased->inner.opt_Alias()) {
-                                    return context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
-                                }
-                            }
-                            return false;
-                        });
-                    };
-                    bool hasIvars = needsExport(bTyMono);
-                    for (const auto& ty : bTpMono.path.params.types) {
-                        hasIvars |= needsExport(ty);
-                    }
-                    for (const auto& aty : bTpMono.typeBounds) {
-                        hasIvars |= needsExport(aty.second.type);
-                    }
-                    if (!hasIvars) {
-                        break;
-                    }
-                }
-                if (bTpMono.typeBounds.size() > 0) {
-                    for (const auto& atyBound : bTpMono.typeBounds) {
-                        context.equateTypesAssoc(sp, atyBound.second.type, bTpMono.path.path, bTpMono.path.params.clone(), bTyMono, atyBound.first.c_str(), atyBound.second.atyParams, false);
-                    }
-                } else {
-                    context.addTraitBound(sp, bTyMono, bTpMono.path.path, bTpMono.path.params.clone());
-                }
-                break;
-            }
-        }
-        }
-    }
-
     enum class AssociatedCheckResult {
         Complete,
         Retry,
@@ -7429,7 +7361,7 @@ default:
         for (auto& ty : v.params.types) {
             auto revealed = context.revealOpaqueTypes(ty);
             if (revealed != ty) {
-                ty = context.resolve.expandAssociatedTypes(sp, mv$(revealed));
+                ty = context.expandAssociatedTypes(sp, mv$(revealed));
             }
         }
 
@@ -7489,9 +7421,9 @@ default:
             if (context.ivars.typeContainsIvars(implTy, /*only_unbound=*/true) || context.ivars.pathparamsContainIvars(implParams, /*only_unbound=*/true)) {
                 return false;
             }
-            implTy = context.resolve.expandAssociatedTypes(sp, mv$(implTy));
+            implTy = context.expandAssociatedTypes(sp, mv$(implTy));
             for (auto& ty : implParams.types) {
-                ty = context.resolve.expandAssociatedTypes(sp, mv$(ty));
+                ty = context.expandAssociatedTypes(sp, mv$(ty));
             }
 
             const bool hasBuiltinInputs = implParams.types.size() == 0 ? primitiveOperatorHasBuiltin(v.operatorKind, implTy) : implParams.types.size() == 1 && primitiveOperatorHasBuiltin(v.operatorKind, implTy, implParams.types.front());
@@ -7509,7 +7441,7 @@ default:
             if (context.ivars.typeContainsIvars(output, /*only_unbound=*/true)) {
                 return false;
             }
-            output = context.resolve.expandAssociatedTypes(sp, mv$(output));
+            output = context.expandAssociatedTypes(sp, mv$(output));
 
             auto builtinOutput = implTy;
             if (v.operatorKind == TypeckPrimitiveOperator::Deref) {
@@ -7746,9 +7678,13 @@ default:
             HIRTypeRef implTy;
             HIRPathParams params;
             ImplRef implRef;
+            HIRTypeRef outputType;
+            SolverCandidateResponse response;
+            bool hasResponse = false;
         };
 
         ::std::vector<Possibility> possibleImpls;
+        size_t lastPossibilityIndex = ~size_t(0);
         bool sawAmbiguousIdentity = false;
         {
             const HIRTraitImpl* specialisableImpl = nullptr;
@@ -7772,18 +7708,13 @@ default:
                 for (unsigned int i = 0; i < v.params.values.size(); i++) {
                     context.equateValues(sp, v.params.values[i], implParams.values[i]);
                 }
-                // The next solver has already evaluated the selected impl's
-                // where-clauses while building this response.  Re-exporting
-                // all of them into the legacy constraint loop evaluates the
-                // same proof a second time and turns a coinductive fixed
-                // point into an endless new rule -- but a bound still holding
-                // live inference variables carries constraints the
-                // certainty-only nested evaluation dropped (a closure's
-                // parameter types from `F: FnMut(char) -> bool`), so those
-                // are re-exported.
-                addImplBounds(context, sp, impl, /*onlyWithIvars=*/true);
+                // Nested goals and their inference effects are carried by the
+                // typed solver response and committed after this callback
+                // accepts the candidate.
             };
             auto candidateCallback = [&](ImplRef impl, HIRCompare cmp) {
+                lastPossibilityIndex = ~size_t(0);
+                HIRTypeRef candidateOutputType;
                 if (impl.isAmbiguousIdentity()) {
                     ASSERT_BUG(sp, cmp == HIRCompare::Fuzzy, "Definite solver response marked as ambiguous identity");
                     sawAmbiguousIdentity = true;
@@ -7801,7 +7732,7 @@ default:
                     if (outTyO == HIRTypeRef()) {
                         outTyO = context.crate.types.path(HIRPath(v.implTy, HIRGenericPath(v.trait, v.params.clone()), v.name, v.atyPp.clone()), {});
                     }
-                    outTyO = context.resolve.expandAssociatedTypes(sp, mv$(outTyO));
+                    outTyO = context.expandAssociatedTypes(sp, mv$(outTyO));
                     outTyO = context.revealOpaqueTypes(outTyO);
 
                     // TODO: if this is an unbound UfcsUnknown, treat as a fuzzy match.
@@ -7839,7 +7770,7 @@ default:
                         return false;
                     }
                     // if solid or fuzzy, leave as-is
-                    outputType = mv$(outTyO);
+                    candidateOutputType = mv$(outTyO);
                 }
                 if (cmp == HIRCompare::Equal) {
                     // NOTE: Sometimes equal can be returned when it's not 100% equal (TODO)
@@ -7847,6 +7778,9 @@ default:
                     if (selectSpecialisableFallback) {
                         if (!traitImpl || traitImpl->impl != specialisableImpl) {
                             return false;
+                        }
+                        if (v.name != "") {
+                            outputType = candidateOutputType;
                         }
                         selectExactImpl(impl);
                         return true;
@@ -7863,6 +7797,9 @@ default:
                         }
                         return false;
                     }
+                    if (v.name != "") {
+                        outputType = candidateOutputType;
+                    }
                     selectExactImpl(impl);
                     return true;
                 } else {
@@ -7871,13 +7808,14 @@ default:
                     auto implTy = impl.getImplType(context.crate.types);
                     auto implParams = impl.getTraitParams(context.crate.types);
 
-                    implTy = context.resolve.expandAssociatedTypes(sp, std::move(implTy));
+                    implTy = context.expandAssociatedTypes(sp, std::move(implTy));
                     for (auto& t : implParams.types) {
-                        t = context.resolve.expandAssociatedTypes(sp, mv$(t));
+                        t = context.expandAssociatedTypes(sp, mv$(t));
                     }
 
                     if (possibleImpls.empty()) {
                         possibleImpls.push_back({std::move(implTy), std::move(implParams), std::move(impl)});
+                        lastPossibilityIndex = 0;
                     }
                     // If there is an existing impl, determine if this is part of the same specialisation tree
                     // - If more specific, replace. If less, ignore.
@@ -7905,6 +7843,7 @@ default:
                                 auto t2 = v.name == "" ? HIRTypeRef() : impl.getType(context.crate.types, v.name.c_str(), v.atyPp);
                                 if (v.name == "" || t1 == t2 || t2 == HIRTypeRef()) {
                                     wasUsed = true;
+                                    lastPossibilityIndex = static_cast<size_t>(&possibleImpl - possibleImpls.data());
                                     count -= 1;
                                     break;
                                 } else if (t1 == HIRTypeRef()) {
@@ -7913,6 +7852,7 @@ default:
                                     possibleImpl.params = ::std::move(implParams);
                                     possibleImpl.implRef = ::std::move(impl);
                                     wasUsed = true;
+                                    lastPossibilityIndex = static_cast<size_t>(&possibleImpl - possibleImpls.data());
                                     count -= 1;
                                     break;
                                 } else {
@@ -7921,7 +7861,12 @@ default:
                         }
                         if (!wasUsed) {
                             possibleImpls.push_back({::std::move(implTy), ::std::move(implParams), ::std::move(impl)});
+                            lastPossibilityIndex = possibleImpls.size() - 1;
                         }
+                    }
+
+                    if (lastPossibilityIndex != ~size_t(0) && v.name != "" && !possibleImpls.at(lastPossibilityIndex).hasResponse) {
+                        possibleImpls.at(lastPossibilityIndex).outputType = candidateOutputType;
                     }
 
                     return false;
@@ -7938,7 +7883,46 @@ default:
                 .assocParams = v.name == "" ? nullptr : &v.atyPp,
                 .exportAmbiguousCandidates = true,
             };
-            bool found = context.resolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, goalQuery);
+            const auto consumeResponse = [&](SolverResponse response) {
+                const auto commitEffects = [&]() {
+                    context.applySolverResponse(sp, response);
+                };
+                const auto saveCandidateEffects = [&](SolverCandidateResponse candidate) {
+                    if (lastPossibilityIndex == ~size_t(0)) {
+                        return;
+                    }
+                    auto& possibility = possibleImpls.at(lastPossibilityIndex);
+                    if (!possibility.hasResponse) {
+                        possibility.response = ::std::move(candidate);
+                        possibility.hasResponse = true;
+                    }
+                };
+                for (auto& candidate : response.candidates) {
+                    ASSERT_BUG(sp, candidate.impl, "solver candidate response has no implementation");
+                    if (candidateCallback(candidate.impl->legacy(), candidate.certainty == SolverCertainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy)) {
+                        context.applySolverResponse(sp, candidate);
+                        return true;
+                    }
+                    saveCandidateEffects(::std::move(candidate));
+                }
+                if (!response.hasImpl) {
+                    return false;
+                }
+                ASSERT_BUG(sp, response.impl, "solver response has no implementation");
+                if (!candidateCallback(response.impl->legacy(), response.certainty == SolverCertainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy)) {
+                    SolverCandidateResponse candidate;
+                    candidate.impl = response.impl;
+                    candidate.certainty = response.certainty;
+                    candidate.slots = ::std::move(response.slots);
+                    candidate.obligations = ::std::move(response.obligations);
+                    candidate.equalities = ::std::move(response.equalities);
+                    saveCandidateEffects(::std::move(candidate));
+                    return false;
+                }
+                commitEffects();
+                return true;
+            };
+            bool found = context.resolve.solveTraitGoal(sp, v.trait, v.params, v.implTy, consumeResponse, goalQuery);
             if (!found && specialisableImpl) {
                 // An applicability predicate on a more-specific impl can be
                 // resolved by later inference.  Do not select the default
@@ -7958,7 +7942,7 @@ default:
                     // exporting mode re-visits the specialisable default with
                     // its Equal head, and the callback now commits it.
                     selectSpecialisableFallback = true;
-                    found = context.resolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, goalQuery);
+                    found = context.resolve.solveTraitGoal(sp, v.trait, v.params, v.implTy, consumeResponse, goalQuery);
                     ASSERT_BUG(sp, found, "Selected specialisable impl disappeared during repeated lookup");
                 }
             }
@@ -8098,6 +8082,20 @@ default:
                     for (size_t i = 0; i < possibleParams.types.size(); i++) {
                         m.cmpType(sp, v.params.types[i], possibleParams.types[i], context.ivars.callbackResolveInfer());
                     }
+                    ASSERT_BUG(sp, possibleImpls.at(0).hasResponse, "selected fuzzy solver candidate has no typed response");
+                    const auto& response = possibleImpls.at(0).response;
+                    for (size_t i = 0; i < response.slots.types.size(); i++) {
+                        context.equateTypes(sp, m.monomorphType(sp, response.slots.typeInputs[i], true), m.monomorphType(sp, response.slots.types[i], true));
+                    }
+                    for (size_t i = 0; i < response.slots.values.size(); i++) {
+                        context.equateValues(sp, m.monomorphConstgeneric(sp, response.slots.valueInputs[i], true), m.monomorphConstgeneric(sp, response.slots.values[i], true));
+                    }
+                    for (const auto& equality : response.equalities) {
+                        context.equateTypes(sp, m.monomorphType(sp, equality.left, true), m.monomorphType(sp, equality.right, true));
+                    }
+                    for (const auto& obligation : response.obligations) {
+                        context.registerSolverObligation(sp, m.monomorphType(sp, obligation.type, true), m.monomorphTraitpath(sp, obligation.trait, true));
+                    }
                     return AssociatedCheckResult::Retry;
                 }
                 const auto& implTy = context.ivars.getType(v.implTy);
@@ -8107,6 +8105,12 @@ default:
                 if (((*implTy).is_Infer() && ((*implTy).as_Infer().isLit() == false))) {
                     return AssociatedCheckResult::Ambiguous;
                 }
+                if (v.name != "") {
+                    ASSERT_BUG(sp, possibleImpls.at(0).outputType, "selected fuzzy solver candidate has no associated output");
+                    outputType = possibleImpls.at(0).outputType;
+                }
+                ASSERT_BUG(sp, possibleImpls.at(0).hasResponse, "selected fuzzy solver candidate has no typed response");
+                context.applySolverResponse(sp, possibleImpls.at(0).response);
                 assert(possibleImplTy != HIRTypeRef());
                 // A tentative impl placeholder is not a commitment; equating
                 // it would leak `impl_?_*` into the inference table (matches
@@ -8126,7 +8130,7 @@ default:
                 // Only one possible impl. Resolve its inputs before the output:
                 // an associated type can depend on an ivar fixed by the selected impl.
                 if (v.name != "") {
-                    outputType = context.resolve.expandAssociatedTypes(sp, mv$(*outputType));
+                    outputType = context.expandAssociatedTypes(sp, mv$(*outputType));
 
                     // A magic trait response can be the identity projection
                     // while its input is still a numeric literal ivar.  That
@@ -8156,12 +8160,6 @@ default:
                     }
                     context.equateTypes(sp, v.leftTy, *outputType);
                 }
-                // - Obtain the bounds required for this impl and add those as trait bounds to check/equate
-                // A fuzzy next-solver response has not proved the selected
-                // impl's predicates.  Keep them in the constraint loop just
-                // like the legacy selector; only the Equal response above
-                // may consume its nested goals completely.
-                addImplBounds(context, sp, bestImpl);
                 return AssociatedCheckResult::Complete;
             } else {
                 // Multiple possible impls, don't know yet
@@ -8204,6 +8202,78 @@ void Context::registerSolverObligation(const Span& sp, HIRTypeRef type, HIRTrait
     for (auto& associated : trait.typeBounds) {
         equateTypesAssoc(sp, associated.second.type, trait.path.path, trait.path.params.clone(), type, associated.first.c_str(), associated.second.atyParams, false);
     }
+}
+
+void Context::applySolverResponse(const Span& sp, const SolverResponse& response) {
+    if (response.hasImpl && response.impl && response.impl->ambiguousIdentity) {
+        return;
+    }
+    ASSERT_BUG(sp, response.slots.typeInputs.size() == response.slots.types.size(), "solver type slot response is malformed");
+    ASSERT_BUG(sp, response.slots.valueInputs.size() == response.slots.values.size(), "solver value slot response is malformed");
+    for (size_t i = 0; i < response.slots.types.size(); i++) {
+        equateTypes(sp, response.slots.typeInputs[i], response.slots.types[i]);
+    }
+    for (size_t i = 0; i < response.slots.values.size(); i++) {
+        equateValues(sp, response.slots.valueInputs[i], response.slots.values[i]);
+    }
+    for (const auto& equality : response.equalities) {
+        equateTypes(sp, equality.left, equality.right);
+    }
+    for (const auto& obligation : response.obligations) {
+        registerSolverObligation(sp, obligation.type, obligation.trait.clone());
+    }
+}
+
+void Context::applySolverResponse(const Span& sp, const SolverCandidateResponse& response) {
+    ASSERT_BUG(sp, response.slots.typeInputs.size() == response.slots.types.size(), "solver candidate type slot response is malformed");
+    ASSERT_BUG(sp, response.slots.valueInputs.size() == response.slots.values.size(), "solver candidate value slot response is malformed");
+    for (size_t i = 0; i < response.slots.types.size(); i++) {
+        equateTypes(sp, response.slots.typeInputs[i], response.slots.types[i]);
+    }
+    for (size_t i = 0; i < response.slots.values.size(); i++) {
+        equateValues(sp, response.slots.valueInputs[i], response.slots.values[i]);
+    }
+    for (const auto& equality : response.equalities) {
+        equateTypes(sp, equality.left, equality.right);
+    }
+    for (const auto& obligation : response.obligations) {
+        registerSolverObligation(sp, obligation.type, obligation.trait.clone());
+    }
+}
+
+HIRTypeRef Context::expandAssociatedTypes(const Span& sp, HIRTypeRef input) const {
+    auto& context = const_cast<Context&>(*this);
+    auto effects = makeCallable<SolverResponseCb>([&](SolverResponse response) {
+        context.applySolverResponse(sp, response);
+        return false;
+    });
+    return resolve.expandAssociatedTypes(sp, ::std::move(input), &effects);
+}
+
+const HIRTypeData* Context::expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp) const {
+    auto& context = const_cast<Context&>(*this);
+    auto effects = makeCallable<SolverResponseCb>([&](SolverResponse response) {
+        context.applySolverResponse(sp, response);
+        return false;
+    });
+    return resolve.expandAssociatedTypes(sp, input, tmp, &effects);
+}
+
+void Context::expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const {
+    auto& context = const_cast<Context&>(*this);
+    auto effects = makeCallable<SolverResponseCb>([&](SolverResponse response) {
+        context.applySolverResponse(sp, response);
+        return false;
+    });
+    resolve.expandAssociatedTypesParams(sp, params, &effects);
+}
+
+void Context::compactIvars() {
+    auto effects = makeCallable<SolverResponseCb>([&](SolverResponse response) {
+        applySolverResponse(Span(), response);
+        return false;
+    });
+    resolve.compactIvars(ivars, &effects);
 }
 
 // check_ivar_poss (and helpers)
@@ -8649,8 +8719,8 @@ namespace {
             if (!usedTy) {
                 continue;
             }
-            tL = context.resolve.expandAssociatedTypes(sp, mv$(tL));
-            tR = context.resolve.expandAssociatedTypes(sp, mv$(tR));
+            tL = context.expandAssociatedTypes(sp, mv$(tL));
+            tR = context.expandAssociatedTypes(sp, mv$(tR));
 
             switch (checkCoerceTys(context, sp, tL, tR, nullptr, bound->rightNodePtr)) {
                 case CoerceResult::Fail:
@@ -8711,7 +8781,7 @@ namespace {
                 continue;
             }
             // - Run EAT on t and p
-            t = context.resolve.expandAssociatedTypes(sp, mv$(t));
+            t = context.expandAssociatedTypes(sp, mv$(t));
             // TODO: Run EAT on `p`?
 
             // Search for any trait impl that could match this,
@@ -10430,8 +10500,8 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                 auto ent = mv$(context.linkCoerce[i]);
                 const auto& span = (*ent->rightNodePtr)->span();
                 auto& srcTy = (*ent->rightNodePtr)->resType;
-                srcTy = context.resolve.expandAssociatedTypes(span, mv$(srcTy)); // TODO: This was commented, why?
-                ent->leftTy = context.resolve.expandAssociatedTypes(span, mv$(ent->leftTy));
+                srcTy = context.expandAssociatedTypes(span, mv$(srcTy)); // TODO: This was commented, why?
+                ent->leftTy = context.expandAssociatedTypes(span, mv$(ent->leftTy));
                 if (checkCoerce(context, *ent)) {
 
                     context.linkCoerce.erase(context.linkCoerce.begin() + i);
@@ -10476,14 +10546,14 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                 }
 
                 for (auto& ty : rule.params.types) {
-                    ty = context.resolve.expandAssociatedTypes(rule.span, mv$(ty));
+                    ty = context.expandAssociatedTypes(rule.span, mv$(ty));
                 }
                 if (rule.name != "") {
-                    rule.leftTy = context.resolve.expandAssociatedTypes(rule.span, mv$(rule.leftTy));
+                    rule.leftTy = context.expandAssociatedTypes(rule.span, mv$(rule.leftTy));
                     // HACK: If the left type is `!`, remove the type bound
                     //}
                 }
-                rule.implTy = context.resolve.expandAssociatedTypes(rule.span, mv$(rule.implTy));
+                rule.implTy = context.expandAssociatedTypes(rule.span, mv$(rule.implTy));
 
                 ::std::vector<Context::Associated::CapturedIvarPossible> capturedPossibilities;
                 AssociatedCheckResult result;
@@ -10713,7 +10783,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
 
                 const auto& sp = (*ent->rightNodePtr)->span();
                 auto& srcTy = (*ent->rightNodePtr)->resType;
-                ent->leftTy = context.resolve.expandAssociatedTypes(sp, mv$(ent->leftTy));
+                ent->leftTy = context.expandAssociatedTypes(sp, mv$(ent->leftTy));
 
                 context.equateTypes(sp, ent->leftTy, srcTy);
             }
@@ -10741,7 +10811,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
         }
 
         count++;
-        context.resolve.compactIvars(context.ivars);
+        context.compactIvars();
     }
     if (count == MAX_ITERATIONS) {
         if (!context.hasRules()) {
@@ -11162,8 +11232,8 @@ void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams
                 }
                 case HIRGenericBound::TAG_TypeEquality: {
                     auto& be = bound.as_TypeEquality();
-                    auto realTypeLeft = context.resolve.expandAssociatedTypes(sp, ms.monomorphType(sp, be.type));
-                    auto realTypeRight = context.resolve.expandAssociatedTypes(sp, ms.monomorphType(sp, be.otherType));
+                    auto realTypeLeft = context.expandAssociatedTypes(sp, ms.monomorphType(sp, be.type));
+                    auto realTypeRight = context.expandAssociatedTypes(sp, ms.monomorphType(sp, be.otherType));
                     context.equateTypes(sp, realTypeLeft, realTypeRight);
                     break;
                 }
@@ -11383,7 +11453,7 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
     auto& e = path.data.as_UfcsInherent();
     context.selectWellFormed(sp, e.type);
     auto lookupType = context.revealOpaqueTypes(e.type);
-    lookupType = context.resolve.expandAssociatedTypes(sp, mv$(lookupType));
+    lookupType = context.expandAssociatedTypes(sp, mv$(lookupType));
     e.type = lookupType;
 
     const HIRTypeImpl* implPtr = nullptr;
@@ -11482,6 +11552,48 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
 // IVar generation visitor
 // Iterates the HIR expression tree and adds ivars to all types
 // -----------------------------------------------------------------------
+class ExprVisitorTagStaleIvars: public HIRExprVisitorDef {
+    class Mapper final: public MonomorphiserNop {
+        mutable stl::Vector<::std::pair<unsigned, unsigned>> valueIndexes_;
+
+        unsigned taggedIndex(stl::Vector<::std::pair<unsigned, unsigned>>& indexes, unsigned original) const {
+            for (const auto& entry : indexes) {
+                if (entry.first == original) {
+                    return entry.second;
+                }
+            }
+            const auto tagged = types.newAliasInputInfer();
+            indexes.pushBack({original, tagged});
+            return tagged;
+        }
+
+    public:
+        using MonomorphiserNop::MonomorphiserNop;
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override {
+            if (const auto* infer = value.opt_Infer(); infer && infer->index != ~0u && !isAliasInputInfer(infer->index)) {
+                return HIRConstGeneric::make_Infer({taggedIndex(valueIndexes_, infer->index)});
+            }
+            return MonomorphiserNop::monomorphConstgeneric(sp, value, allowInfer);
+        }
+    } mapper_;
+
+public:
+    explicit ExprVisitorTagStaleIvars(HIRTypeInterner& types)
+        : HIRExprVisitorDef(types)
+        , mapper_(types)
+    {
+    }
+
+    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override {
+        return mapper_.monomorphType(Span(), type, true);
+    }
+
+    void visitPathParams(HIRPathParams& params) override {
+        params = mapper_.monomorphPathParams(Span(), params, true);
+    }
+};
+
 class ExprVisitorAddIvars: public HIRExprVisitorDef {
     Context& context;
 
@@ -12640,7 +12752,7 @@ public:
         }
 
         if (node.realPath == HIRGenericPath()) {
-            auto t = this->context.resolve.expandAssociatedTypes(sp, mv$(node.type));
+            auto t = this->context.expandAssociatedTypes(sp, mv$(node.type));
             node.type = HIRTypeRef();
             if (node.isStruct) {
                 ASSERT_BUG(sp, ((*t).is_Path() && ((*t).as_Path().path.data.is_Generic())), "Struct literal with non-Generic path - " << t);
@@ -13261,7 +13373,7 @@ public:
                     auto& e = node.path.data.as_UfcsInherent();
                     this->context.selectWellFormed(sp, e.type);
                     auto lookupType = this->context.revealOpaqueTypes(e.type);
-                    lookupType = this->context.resolve.expandAssociatedTypes(sp, mv$(lookupType));
+                    lookupType = this->context.expandAssociatedTypes(sp, mv$(lookupType));
                     e.type = lookupType;
                     // TODO: Share code with visit_call_populate_cache
 
@@ -13472,9 +13584,7 @@ private:
     }
 
     void visitGenericPath(const Span& sp, HIRGenericPath& gp) {
-        for (auto& ty : gp.params.types) {
-            this->context.addIvars(ty);
-        }
+        this->context.ivars.addIvarsParams(gp.params);
     }
 
     void visitPath(const Span& sp, HIRPath& path) {
@@ -13486,7 +13596,9 @@ private:
             }
             case HIRPath::Data::TAG_UfcsKnown: {
                 auto& e = path.data.as_UfcsKnown();
-                this->context.addIvars(e.type); this->visitGenericPath(sp, e.trait); for (auto& ty : e.params.types) this->context.addIvars(ty);
+                this->context.addIvars(e.type);
+                this->visitGenericPath(sp, e.trait);
+                this->context.ivars.addIvarsParams(e.params);
                 break;
             }
             case HIRPath::Data::TAG_UfcsUnknown: {
@@ -13495,7 +13607,9 @@ private:
             }
             case HIRPath::Data::TAG_UfcsInherent: {
                 auto& e = path.data.as_UfcsInherent();
-                this->context.addIvars(e.type); for (auto& ty : e.params.types) this->context.addIvars(ty);
+                this->context.addIvars(e.type);
+                this->context.ivars.addIvarsParams(e.params);
+                this->context.ivars.addIvarsParams(e.implParams);
                 break;
             }
         }
@@ -13549,6 +13663,12 @@ private:
 void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr, HIRExprNodeP& rootPtr) {
 
     const Span& sp = rootPtr->span();
+
+    // Earlier HIR resolution can leave const-inference indexes allocated by
+    // its temporary table in paths inside the expression. This body starts
+    // with a fresh value table, so preserve their within-body identity under
+    // the tagged input range before allocating any new slots.
+    ExprVisitorTagStaleIvars(context.crate.types).visitNodePtr(rootPtr);
 
     for (auto& arg : args) {
         context.handlePattern(Span(), arg.first, arg.second);
@@ -13760,7 +13880,6 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
             });
         }
     }
-    resolve.setTypeConstraint(this);
 }
 
 namespace {

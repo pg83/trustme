@@ -13,7 +13,7 @@
 #include <unordered_map>
 
 // PLAN: Build up a set of conditions that are easier to solve
-struct Context: TraitTypeConstraintCallback {
+struct Context {
     class Revisitor {
     public:
         virtual ~Revisitor() = default;
@@ -179,10 +179,13 @@ struct Context: TraitTypeConstraintCallback {
     void equateTypes(const Span& sp, const HIRTypeData* l, const HIRTypeData* r);
     void equateTypesInner(const Span& sp, const HIRTypeData* l, const HIRTypeData* r);
 
-    void constrain(const Span& sp, const HIRTypeData* receiver, const HIRTypeData* implType) override {
-        equateTypesInner(sp, receiver, implType);
-    }
-    void registerSolverObligation(const Span& sp, HIRTypeRef type, HIRTraitPath trait) override;
+    void applySolverResponse(const Span& sp, const SolverResponse& response);
+    void applySolverResponse(const Span& sp, const SolverCandidateResponse& response);
+    void registerSolverObligation(const Span& sp, HIRTypeRef type, HIRTraitPath trait);
+    HIRTypeRef expandAssociatedTypes(const Span& sp, HIRTypeRef input) const;
+    const HIRTypeData* expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp) const;
+    void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const;
+    void compactIvars();
     // - Equate two types, allowing inferrence
     void equateTypesCoerce(const Span& sp, const HIRTypeData* l, HIRExprNodeP& nodePtr);
     void recordCoercionHint(const HIRTypeData* type, HIRExprNodeP& nodePtr);
