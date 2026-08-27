@@ -1832,8 +1832,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 return infer && infer->index != ~0u && !isAliasInputInfer(infer->index);
             }
 
-            /// An unresolved projection or opaque may still normalise to
-            /// anything: it can neither prove nor refute an equality here.
+            /// An unresolved projection may still normalise to anything: it
+            /// can neither prove nor refute an equality here.  Erased opaque
+            /// types are nominal and rigid outside their defining scope; the
+            /// defining-scope caller handles reveal before invoking Unifier.
             bool typeIsRigidUnknown(const HIRTypeData* type) {
                 if (const auto* path = type->opt_Path()) {
                     if (!path->path.data.is_Generic()) {
@@ -1841,7 +1843,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     }
                     return path->binding.is_Unbound() || path->binding.is_Opaque();
                 }
-                return type->is_ErasedType();
+                return false;
             }
 
             bool literalClassAccepts(const HMTypeInferrence& table, HIRInferClass tyClass, const HIRTypeData* type) {
@@ -2079,7 +2081,8 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return this->unifyParams(le.trait.path.params, re.trait.path.params);
                 }
                 case HIRTypeData::TAG_ErasedType: {
-                    UNREACHABLE();
+                    // Interned nominal identity was checked above.
+                    return Outcome::Mismatch;
                 }
             }
             UNREACHABLE();
@@ -4508,6 +4511,31 @@ default:
                 return binder.changed;
             }
 
+            Certainty unifyProbe(const HIRTypeData* left, const HIRTypeData* right) {
+                if (left == right) {
+                    return Certainty::Proven;
+                }
+
+                // Candidate evaluation must be a pure probe until a typed
+                // response can carry its bindings back to the caller.  Run
+                // the real unifier on the inference table, observe whether
+                // proving the equality needed a binding, then restore the
+                // exact input state in every case.
+                const auto snapshot = resolve_.ivars.snapshot();
+                Unifier unifier(span(), resolve_.ivars);
+                const auto outcome = unifier.unify(left, right);
+                const bool boundInference = resolve_.ivars.mutationGeneration != snapshot.generation;
+                resolve_.ivars.rollbackTo(snapshot);
+
+                if (outcome == Unifier::Outcome::Mismatch) {
+                    return Certainty::NoSolution;
+                }
+                if (boundInference || unifier.pending().length() != 0 || !unifier.pendingValues().empty()) {
+                    return Certainty::Ambiguous;
+                }
+                return Certainty::Proven;
+            }
+
             Certainty matchAssociatedTypes(const HIRSimplePath& trait, const ImplRef& impl, const HIRTraitPath::assocListT* associated) {
                 if (!associated || associated->empty()) {
                     return Certainty::Proven;
@@ -4553,8 +4581,8 @@ default:
                     if (containsDefiningOpaque(output) || containsDefiningOpaque(aty.type)) {
                         continue;
                     }
-                    auto cmp = output == aty.type ? HIRCompare::Equal : resolve_.compareTy(span(), output, aty.type);
-                    if (cmp != HIRCompare::Equal && !aliasRelateActive_ && (resolve_.hasAssociatedType(output) || resolve_.hasAssociatedType(aty.type))) {
+                    auto relation = this->unifyProbe(output, aty.type);
+                    if (relation != Certainty::Proven && !aliasRelateActive_ && (resolve_.hasAssociatedType(output) || resolve_.hasAssociatedType(aty.type))) {
                         aliasRelateActive_ = true;
                         STD_DEFER {
                             aliasRelateActive_ = false;
@@ -4570,10 +4598,10 @@ default:
                         const auto normalizedOutput = resolve_.expandAssociatedTypes(span(), output);
                         const auto normalizedRequired = resolve_.expandAssociatedTypes(span(), aty.type);
                         if (normalizedOutput != output || normalizedRequired != aty.type) {
-                            cmp = normalizedOutput == normalizedRequired ? HIRCompare::Equal : resolve_.compareTy(span(), normalizedOutput, normalizedRequired);
+                            relation = this->unifyProbe(normalizedOutput, normalizedRequired);
                         }
                     }
-                    if (cmp == HIRCompare::Unequal) {
+                    if (relation == Certainty::NoSolution) {
                         // `!` coerces into any requirement: a diverging
                         // closure's Output does not reject the candidate, the
                         // caller's coercion machinery settles it (rustc seeds
@@ -4584,7 +4612,7 @@ default:
                         }
                         return Certainty::NoSolution;
                     }
-                    if (cmp == HIRCompare::Fuzzy) {
+                    if (relation == Certainty::Ambiguous) {
                         result = Certainty::Ambiguous;
                     }
                 }
@@ -4860,11 +4888,11 @@ default:
                             left = ms.monomorphType(span(), equality->type);
                             right = ms.monomorphType(span(), equality->otherType);
                         }
-                        const auto cmp = resolve_.compareTy(span(), left, right);
-                        if (cmp == HIRCompare::Unequal) {
+                        const auto relation = this->unifyProbe(left, right);
+                        if (relation == Certainty::NoSolution) {
                             return Certainty::NoSolution;
                         }
-                        if (cmp == HIRCompare::Fuzzy) {
+                        if (relation == Certainty::Ambiguous) {
                             candidate->ambiguityBeyondHead = true;
                             candidate->nestedAmbiguity = true;
                             result = Certainty::Ambiguous;
