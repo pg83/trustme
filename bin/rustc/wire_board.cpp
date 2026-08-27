@@ -3,6 +3,7 @@
 #include "ident.h"
 #include "hir_expand_main_bindings.h"
 #include "macro_rules_macro_rules.h"
+#include "mir_operations.h"
 #include "parse_context.h"
 #include "proc_macro_context.h"
 #include "trans_target.h"
@@ -19,5 +20,6 @@ WireBoard::WireBoard(stl::ObjPool* pool)
     , parser(pool->make<ParseContext>())
     , procMacros(pool->make<ProcMacroContext>())
     , targetLayouts(TargetCreateLayoutContext(*pool))
+    , mirOperations(MIRCreateOperationsContext(*pool))
 {
 }

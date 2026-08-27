@@ -12,7 +12,6 @@ extern void HIRGenerateMIR(const WireBoard& wb, HIRCrate& crate);
 extern void MIRDump(::std::ostream& sink, const HIRCrate& crate);
 
 extern void MIRCleanupCrate(const WireBoard& wb, HIRCrate& crate);
-extern void MIRCleanupSetPostMonomorph();
 extern void MIROptimiseCrate(const WireBoard& wb, HIRCrate& crate, unsigned optLevel, bool enableInlining);
 extern void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransList& list, bool postSave, unsigned optLevel, bool enableInlining);
 

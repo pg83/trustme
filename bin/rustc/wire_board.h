@@ -19,6 +19,7 @@ class LangItems;
 struct Settings;
 struct TargetSpec;
 class TargetLayoutContext;
+class MirOperationsContext;
 struct NextSolverCrateCache;
 
 // The wiring board: main creates one as the first object of the root pool
@@ -57,6 +58,7 @@ struct WireBoard {
     // See trans_target.h.
     const TargetSpec* target = nullptr;
     TargetLayoutContext* targetLayouts = nullptr;
+    MirOperationsContext* mirOperations = nullptr;
 
     // Filled by the Parse phase; stays valid through Expand/Resolve and is
     // dropped conceptually once HIR Lower is done (the pointer survives but

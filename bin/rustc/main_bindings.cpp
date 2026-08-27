@@ -1003,7 +1003,6 @@ static int compile(int argc, char* argv[]) {
 
         // - Expand constants in HIR (using ones that were monomorphised above)
         CompilePhaseV("MIR Cleanup 2", [&]() {
-            MIRCleanupSetPostMonomorph();
             MIRCleanupCrate(wb, *hirCrate);
         });
 

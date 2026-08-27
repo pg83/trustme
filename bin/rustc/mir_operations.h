@@ -3,6 +3,13 @@
 #include "hir_item_path.h"
 #include "hir_typeck_static.h"
 
+namespace stl {
+    class ObjPool;
+}
+
+class MirOperationsContext;
+MirOperationsContext* MIRCreateOperationsContext(stl::ObjPool& pool);
+
 // Check that the MIR is well-formed
 // -
 // Perform needed changes to the generated MIR (virtualisation, Unsize/CoerceUnsize, ...)

@@ -14,12 +14,33 @@
 #include "mir_main_bindings.h"
 #include "mir_visit_crate_mir.h"
 
+#include <std/alg/defer.h>
+
 #include <cmath>
 #include <limits>
 #include <iomanip>
 #include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
+
+class MirOperationsContext {
+public:
+    const RcString vtableName = RcString::newInterned("vtable#");
+    ::std::vector<bool> visitedBlocks;
+    ::std::vector<MIRBasicBlockId> pendingBlocks;
+    ::std::vector<::std::vector<unsigned>> blockPredecessors;
+    bool visitingBlocks = false;
+};
+
+MirOperationsContext* MIRCreateOperationsContext(stl::ObjPool& pool) {
+    return pool.make<MirOperationsContext>();
+}
+
+namespace {
+    MirOperationsContext& operationsContext(const MIRTypeResolve& state) {
+        return *state.resolve.board().mirOperations;
+    }
+}
 
 namespace {
     HIRTypeRef getMetadataType(const MIRTypeResolve& state, const HIRTypeData* unsizedTy) {
@@ -92,11 +113,6 @@ namespace {
 //}
 
 // --------------------------------------------------------------------
-
-namespace {
-    /// @brief Used to tell the constant replacement code that replacements should be available
-    bool gIsPostMonomorph = false;
-}
 
 class MirMutator {
     MIRFunction& fcn;
@@ -197,11 +213,6 @@ const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const H
                     it = hirConst.monomorphCache.find(path);
                 }
                 if (it == hirConst.monomorphCache.end()) {
-                    // Emit a bug if the cache is empty? (or if this is in the post-monomorph pass)
-                    if (gIsPostMonomorph && !monomorphisePathNeeded(path)) {
-                        // NOTE: Dead code can trigger this :(
-                        // - There's a check in hir/serialise.cpp that makes sure that this doesn't reach the saved MIR
-                    }
                     DEBUG("Generic, but no cached monomorphisation: " << hirConst.monomorphCache.size() << " entries");
                     return nullptr;
                 }
@@ -231,8 +242,6 @@ const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const H
 }
 
 namespace {
-    const RcString rcstringVtable = RcString::newInterned("vtable#");
-
     bool typeAcceptsAllBitPatterns(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         if (const auto* primitive = ty->opt_Primitive()) {
             return *primitive != HIRCoreType::Bool && *primitive != HIRCoreType::Char && *primitive != HIRCoreType::Str;
@@ -255,8 +264,8 @@ namespace {
         return false;
     }
 
-    MIRConstant createVtable(HIRTypeRef ty, const HIRTraitPath& trait) {
-        auto vtablePath = HIRPath(mv$(ty), trait.path.clone(), rcstringVtable);
+    MIRConstant createVtable(HIRTypeRef ty, const HIRTraitPath& trait, const RcString& vtableName) {
+        auto vtablePath = HIRPath(mv$(ty), trait.path.clone(), vtableName);
         return MIRConstant::make_ItemAddr(box$(vtablePath));
     }
 }
@@ -649,7 +658,7 @@ default:
                             MIR_TODO(state, "Hidden vtable");
                         }
 
-                        auto vtableVal = MIRParam(createVtable(srcTy, tep->trait));
+                        auto vtableVal = MIRParam(createVtable(srcTy, tep->trait, operationsContext(state).vtableName));
 
                         return MIRRValue::make_MakeDst({MIRParam(mv$(ptrVal)), mv$(vtableVal)});
                         break;
@@ -938,7 +947,7 @@ default:
                 }
             } else {
                 MIR_ASSERT(state, state.resolve.typeIsSized(state.sp, srcTy), "Attempting to get vtable for unsized type - " << srcTy);
-                outMetaVal = createVtable(srcTy, de.trait);
+                outMetaVal = createVtable(srcTy, de.trait, operationsContext(state).vtableName);
             }
             return true;
         }
@@ -1807,10 +1816,6 @@ void MIRCleanupCrate(const WireBoard& wb, HIRCrate& crate) {
     ov.visitCrate(crate);
 }
 
-void MIRCleanupSetPostMonomorph() {
-    gIsPostMonomorph = true;
-}
-
 #define DUMP_BEFORE_ALL 1
 #define DUMP_BEFORE_CONSTPROPAGATE 0
 #define DUMP_AFTER_PASS 1
@@ -2633,11 +2638,14 @@ default:
     void visitBlocksMut(MIRTypeResolve& state, MIRFunction& fcn, const MIRBlockCallback& cb) {
         // Reused scratch: this walk runs once per optimisation pass per
         // function, the buffers alone were ~1.5M allocations on libcore.
-        static ::std::vector<bool> visited;
-        static ::std::vector<MIRBasicBlockId> toVisit;
-        static bool inUse = false;
-        ASSERT_BUG(Span(), !inUse, "visitBlocksMut re-entered");
-        inUse = true;
+        auto& context = operationsContext(state);
+        auto& visited = context.visitedBlocks;
+        auto& toVisit = context.pendingBlocks;
+        ASSERT_BUG(Span(), !context.visitingBlocks, "visitBlocksMut re-entered");
+        context.visitingBlocks = true;
+        STD_DEFER {
+            context.visitingBlocks = false;
+        };
         visited.assign(fcn.blocks.size(), false);
         toVisit.clear();
         toVisit.push_back(0);
@@ -2670,7 +2678,6 @@ default:
             } queueUnvisited{visited, toVisit};
             visitTerminatorTarget(block.terminator, queueUnvisited);
         }
-        inUse = false;
     }
 
     void visitBlocks(MIRTypeResolve& state, const MIRFunction& fcn, const MIRBlockConstCallback& cb) {
@@ -3605,12 +3612,7 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
         }
     };
 
-    // Reused across calls (the compiler is single-threaded): the pass runs
-    // per function per iteration, and a fresh vector here was one of the top
-    // allocation sites of the whole compile.
-    static ::std::vector<LocalUsage> usageInfo;
-    usageInfo.clear();
-    usageInfo.resize(fcn.locals.size());
+    ::std::vector<LocalUsage> usageInfo(fcn.locals.size());
 
     // 1. Enumrate usage
     {
@@ -3939,12 +3941,7 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     };
 
-    // Reused across calls, like in SingleSetAndUse above. Entries are reset
-    // in place so the per-local dropLocs vectors keep their capacity.
-    static ::std::vector<LocalUsage> usageInfo;
-    if (usageInfo.size() < fcn.locals.size()) {
-        usageInfo.resize(fcn.locals.size());
-    }
+    ::std::vector<LocalUsage> usageInfo(fcn.locals.size());
     for (size_t i = 0; i < fcn.locals.size(); i++) {
         auto& u = usageInfo[i];
         u.nWrite = 0;
@@ -5068,10 +5065,8 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
         size_t hash;
         unsigned int bbIdx;
     };
-    // Reused across calls; sort-and-group replaces the old per-node-allocating
-    // hash map of buckets.
-    static ThinVector<HashedBlock> hashedBlocks;
-    static ThinVector<unsigned int> groupReps;
+    ThinVector<HashedBlock> hashedBlocks;
+    ThinVector<unsigned int> groupReps;
     for (;;) {
         replacements.clear();
         hashedBlocks.clear();
@@ -7908,7 +7903,7 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
     // call return values, never terminator targets, so this stays valid.
     // Reused scratch (~70MB of churn on libcore): inner vectors keep their
     // capacity across calls, only [0, nBlocks) is meaningful this call.
-    static ::std::vector<::std::vector<unsigned>> blockPreds;
+    auto& blockPreds = operationsContext(state).blockPredecessors;
     if (blockPreds.size() < fcn.blocks.size()) {
         blockPreds.resize(fcn.blocks.size());
     }
