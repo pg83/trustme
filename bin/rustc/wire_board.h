@@ -14,6 +14,7 @@ class ExpandRegistry;
 class MacroDefinitionContext;
 class MacroLogContext;
 class ParseContext;
+class ProcMacroContext;
 class LangItems;
 struct Settings;
 struct TargetSpec;
@@ -44,6 +45,7 @@ struct WireBoard {
     MacroDefinitionContext* macroDefinitions = nullptr;
     MacroLogContext* macroLog = nullptr;
     ParseContext* parser = nullptr;
+    ProcMacroContext* procMacros = nullptr;
 
     // Compilation settings: command-line configuration plus the few values
     // the pipeline derives once (crate names, cfg state). See settings.h.

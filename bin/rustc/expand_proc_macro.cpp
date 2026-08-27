@@ -11,6 +11,7 @@
 #include "parse_lex.h"
 #include "expand_cfg.h"
 #include "wire_board.h"
+#include "proc_macro_context.h"
 #include "main_bindings.h"
 #include "parse_ttstream.h"
 
@@ -238,7 +239,7 @@ struct ProcMacroInv: public TokenStream {
     size_t pendingSymbolOffset = 0;
 
 public:
-    ProcMacroInv(const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
+    ProcMacroInv(ProcMacroContext& context, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
     ProcMacroInv(const ProcMacroInv&) = delete;
     ProcMacroInv(ProcMacroInv&&) = default;
     ProcMacroInv& operator=(const ProcMacroInv&) = delete;
@@ -481,7 +482,7 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCr
         : extCrate.filename.c_str();
 
     // 3. Create ProcMacroInv
-    auto rv = ProcMacroInv(sp, extCrate.hir->edition, procMacroExeName, *pmp);
+    auto rv = ProcMacroInv(*wb.procMacros, sp, extCrate.hir->edition, procMacroExeName, *pmp);
     rv.parseState().crate = &crate;
     rv.parseState().wb = &wb;
 
@@ -2095,7 +2096,7 @@ template <typename F>
     });
 }
 
-ProcMacroInv::ProcMacroInv(const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc)
+ProcMacroInv::ProcMacroInv(ProcMacroContext& context, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc)
     : TokenStream(ParseState())
     , parentSpan(sp)
     , thisSpan(Span(parentSpan, procMacroDesc.path.crateName(), procMacroDesc.name))
@@ -2104,13 +2105,11 @@ ProcMacroInv::ProcMacroInv(const Span& sp, ASTEdition edition, const char* execu
 {
     if (getenv("TRUSTME_DUMP_PROCMACRO") && getenv("TRUSTME_DUMP_PROCMACRO")[0]) {
         // TODO: Dump both input and output, AND (optionally) dump each invocation
-        static unsigned int dumpCount = 0;
         std::string namePrefix;
-        namePrefix = FMT(getenv("TRUSTME_DUMP_PROCMACRO") << "-" << dumpCount);
+        namePrefix = FMT(getenv("TRUSTME_DUMP_PROCMACRO") << "-" << context.newDumpIndex());
         DEBUG("Dumping to " << namePrefix);
         dumpFileOut.open(FMT(namePrefix << "-out.bin"), ::std::ios::out | ::std::ios::binary);
         dumpFileRes.open(FMT(namePrefix << "-res.bin"), ::std::ios::out | ::std::ios::binary);
-        dumpCount++;
     } else {
         DEBUG("Set TRUSTME_DUMP_PROCMACRO=procmacro_dump to dump to `procmacro_dump-NNN-{out,res}.bin`");
     }

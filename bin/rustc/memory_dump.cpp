@@ -10,10 +10,9 @@
     #include <zlib.h>
 #endif
 
-void memoryDump(const char* phase) {
+void memoryDump(unsigned& sequence, const char* phase) {
     if (getenv("TRUSTME_DUMPMEM")) {
-        static unsigned sCount;
-        auto idx = sCount++;
+        auto idx = sequence++;
         char filename[256];
         sprintf(filename, "trustme-%i-%s.dmp", idx, phase);
 #if defined(__linux__) && defined(__x86_64__)

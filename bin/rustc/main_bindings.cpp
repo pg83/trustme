@@ -374,6 +374,7 @@ static int compile(int argc, char* argv[]) {
     auto* pool = stl::ObjPool::fromMemoryRaw();
 #endif
     WireBoard& wb = *pool->make<WireBoard>(pool);
+    unsigned memoryDumpSequence = 0;
     wb.types = pool->make<HIRTypeInterner>(*pool);
     wb.settings = pool->make<Settings>(pool);
     wb.settings->cfg = CfgCreateState(*pool);
@@ -470,7 +471,7 @@ static int compile(int argc, char* argv[]) {
         if (params.lastStage == ProgramParams::STAGE_PARSE) {
             return 0;
         }
-        memoryDump("Parsed");
+        memoryDump(memoryDumpSequence, "Parsed");
 
         // Load external crates.
         CompilePhaseV("LoadCrates", [&]() {
@@ -572,7 +573,7 @@ static int compile(int argc, char* argv[]) {
         if (params.lastStage == ProgramParams::STAGE_EXPAND) {
             return 0;
         }
-        memoryDump("Expanded");
+        memoryDump(memoryDumpSequence, "Expanded");
 
         // Allocator and panic strategies
         CompilePhaseV("Implicit Crates", [&]() {
@@ -676,7 +677,7 @@ static int compile(int argc, char* argv[]) {
         CompilePhaseV("Resolve Absolute", [&]() {
             ResolveAbsolutise(wb, crate); // - Convert all paths to Absolute or UFCS, and resolve variables
         });
-        memoryDump("Resolved");
+        memoryDump(memoryDumpSequence, "Resolved");
 
         if (params.debug.dumpAst) {
             CompilePhaseV("Temp output - Resolved", [&]() {
@@ -697,7 +698,7 @@ static int compile(int argc, char* argv[]) {
         });
         wb.crate = hirCrate;
         wb.langItems = LangItems::create(*pool, *hirCrate);
-        memoryDump("HIR Gen");
+        memoryDump(memoryDumpSequence, "HIR Gen");
 
         // The AST is dead from here on: drop it physically.
         CompilePhaseV("AST Drop", [&]() {
@@ -708,14 +709,14 @@ static int compile(int argc, char* argv[]) {
 #endif
             astPool = nullptr;
         });
-        memoryDump("AST Dropped");
+        memoryDump(memoryDumpSequence, "AST Dropped");
         if (params.debug.dumpHir) {
             CompilePhaseV("Dump HIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hirCrate);
             });
         }
-        memoryDump("HIR");
+        memoryDump(memoryDumpSequence, "HIR");
 
         // Replace type aliases (`type`) into the actual type
         // - Does simple replacements
@@ -842,7 +843,7 @@ static int compile(int argc, char* argv[]) {
         if (params.lastStage == ProgramParams::STAGE_TYPECK) {
             return 0;
         }
-        memoryDump("Typecheck");
+        memoryDump(memoryDumpSequence, "Typecheck");
 
         // Lower expressions into MIR
         CompilePhaseV("Lower MIR", [&]() {
@@ -856,7 +857,7 @@ static int compile(int argc, char* argv[]) {
                 MIRDump(os, *hirCrate);
             });
         }
-        memoryDump("MIR Gen");
+        memoryDump(memoryDumpSequence, "MIR Gen");
 
         // LowerMIR validates every function before returning. The next validation is
         // performed after MIR_Cleanup has actually changed the crate.
@@ -880,7 +881,7 @@ static int compile(int argc, char* argv[]) {
         if (params.lastStage == ProgramParams::STAGE_MIR) {
             return 0;
         }
-        memoryDump("MIR Opt");
+        memoryDump(memoryDumpSequence, "MIR Opt");
 
         // TODO: Pass to mark items that are..
         // - Signature Exportable (public)
@@ -1006,7 +1007,7 @@ static int compile(int argc, char* argv[]) {
             MIRCleanupCrate(wb, *hirCrate);
         });
 
-        memoryDump("Trans");
+        memoryDump(memoryDumpSequence, "Trans");
 
         std::string hirFile;
         switch (crateType) {
