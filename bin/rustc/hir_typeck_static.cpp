@@ -14,8 +14,6 @@
 #include <algorithm>
 
 namespace {
-    const HIRGenericParams emptyParams;
-
     bool specializationLookupNeedsResolution(const HIRTypeData* type, const HIRPathParams& params) {
         auto typeNeedsResolution = [](const HIRTypeData* inner) {
             return inner->hasTypeInfer() || inner->needsMonomorphisation() || inner->mayHaveAssociatedType();
@@ -118,8 +116,8 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
         }
     }
 
-    static HIRPathParams nullParams;
-    static HIRTraitPath::assocListT nullAssoc;
+    const HIRPathParams nullParams;
+    const HIRTraitPath::assocListT nullAssoc;
 
     if (!dontHandoffToSpecialised) {
         if (traitPath == langCopy()) {
@@ -161,26 +159,21 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
                 }
             } else {
             }
-            static HIRTraitPath::assocListT assocU8;
-            static HIRTraitPath::assocListT assocU32;
-            if (assocU8.empty()) {
-                assocU8.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{langDiscriminantKind(), {}, crate.types.primitive(HIRCoreType::U8)}));
-                assocU32.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{langDiscriminantKind(), {}, crate.types.primitive(HIRCoreType::U32)}));
-            }
+            HIRTraitPath::assocListT assocU8;
+            HIRTraitPath::assocListT assocU32;
+            assocU8.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{langDiscriminantKind(), {}, crate.types.primitive(HIRCoreType::U8)}));
+            assocU32.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{langDiscriminantKind(), {}, crate.types.primitive(HIRCoreType::U32)}));
             if ((type->is_NodeType() && (type->as_NodeType().is_Generator() || type->as_NodeType().is_Async()))
                 || (type->is_Path() && (type->as_Path().isGenerator() || type->as_Path().isFuture()))) {
                 return foundCb.visit(ImplRef(type, traitParams, &assocU32), false);
             }
             return foundCb.visit(ImplRef(type, traitParams, &assocU8), false);
         } else if (traitPath == langPointee()) {
-            static HIRTraitPath::assocListT assocUnit;
-            static HIRTraitPath::assocListT assocSlice;
-            static RcString nameMetadata;
-            if (assocUnit.empty()) {
-                nameMetadata = RcString::newInterned("Metadata");
-                assocUnit.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{langPointee(), {}, crate.types.unit()}));
-                assocSlice.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{langPointee(), {}, crate.types.primitive(HIRCoreType::Usize)}));
-            }
+            HIRTraitPath::assocListT assocUnit;
+            HIRTraitPath::assocListT assocSlice;
+            const auto nameMetadata = RcString::newInterned("Metadata");
+            assocUnit.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{langPointee(), {}, crate.types.unit()}));
+            assocSlice.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{langPointee(), {}, crate.types.primitive(HIRCoreType::Usize)}));
 
             // Generics (or opaque ATYs)
             if (type->is_Generic() || (type->is_Path() && type->as_Path().binding.is_Opaque())) {
@@ -838,11 +831,11 @@ default:
     if( isMarker )
     {
         struct H {
-            static bool findImplAutoTraitCheck(const StaticTraitResolve& self, const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, const HIRMarkerImpl& impl, bool& outRv) {
+            static bool findImplAutoTraitCheck(const StaticTraitResolve& self, const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, const HIRMarkerImpl& impl, const HIRTraitPath::assocListT& emptyAssoc, bool& outRv) {
                 DEBUG("- Auto " << (impl.isPositive ? "Pos" : "Neg") << " impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.type << " " << impl.params.fmtBounds());
                 if (impl.isPositive) {
                     return self.findImplCheckCrateRaw(sp, traitPath, traitParams, type, impl.params, impl.traitArgs, impl.type, [&](auto implParams, auto cmp) -> bool {
-                        outRv = foundCb.visit(ImplRef(type, traitParams, &nullAssoc), cmp == HIRCompare::Fuzzy);
+                        outRv = foundCb.visit(ImplRef(type, traitParams, &emptyAssoc), cmp == HIRCompare::Fuzzy);
                         return outRv;
                     });
                 } else {
@@ -857,7 +850,7 @@ default:
         // Positive/negative impls
         bool rv = false;
         ret = this->crate.findAutoTraitImpls(traitPath, type, cbIdent, [&](const auto& impl) -> bool {
-            return H::findImplAutoTraitCheck(*this, sp, traitPath, traitParams, type, foundCb, impl, rv);
+            return H::findImplAutoTraitCheck(*this, sp, traitPath, traitParams, type, foundCb, impl, nullAssoc, rv);
         });
         if (ret) {
             return rv;
@@ -2178,7 +2171,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTy
     const HIRGenericParams* implParamsDef = nullptr;
     HIRPathParams implParams;
     HIRCompare bestMatch = HIRCompare::Unequal;
-    static const HIRPathParams noTraitParams;
+    const HIRPathParams noTraitParams;
 
     crate.findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
         const auto itemIt = impl.types.find(pe.item);
@@ -2228,20 +2221,12 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         input = crate.types.intern(data.cloneData());
     };
 
-    static unsigned sRecursionLevel;
-
-    struct RecurseEntry {
-        HIRTypeRef ty;
-        unsigned level;
-    };
-
-    static std::vector<RecurseEntry> sRecursionStack;
     {
         bool hitSameLevelLoop = false;
-        for (const auto& ent : sRecursionStack) {
+        for (const auto& ent : eatRecursionStack) {
             DEBUG(ent.ty << " " << ent.level);
             if (ent.ty == input) {
-                if (ent.level == sRecursionLevel) {
+                if (ent.level == eatRecursionLevel) {
                     hitSameLevelLoop = true;
                 } else {
                     BUG(sp, "Loop in EAT");
@@ -2251,8 +2236,8 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         if (hitSameLevelLoop) {
             DEBUG("Loop in EAT at same level");
             ::std::vector<const HIRTypeData*> ents;
-            for (const auto& ent : sRecursionStack) {
-                if (ent.level == sRecursionLevel) {
+            for (const auto& ent : eatRecursionStack) {
+                if (ent.level == eatRecursionLevel) {
                     ents.push_back(ent.ty);
                 }
             }
@@ -2270,12 +2255,12 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         }
     }
 
-    sRecursionStack.push_back(RecurseEntry{crate.types.path(HIRPath(e2.type, e2.trait.clone(), e2.item), {}), sRecursionLevel});
+    eatRecursionStack.pushBack(EatRecurseEntry{crate.types.path(HIRPath(e2.type, e2.trait.clone(), e2.item), {}), eatRecursionLevel});
     STD_DEFER {
-        sRecursionStack.pop_back();
+        eatRecursionStack.popBack();
     };
 
-    sRecursionLevel += 1;
+    eatRecursionLevel += 1;
     e2.type = this->expandAssociatedTypesInner(sp, e2.type);
     for (auto& arg : e2.trait.params.types) {
         arg = this->expandAssociatedTypesInner(sp, arg);
@@ -2289,7 +2274,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         const auto& traitDef = crate.getTraitByPath(sp, e2.trait.path);
         ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &traitDef.params, e2.trait.params);
     }
-    sRecursionLevel -= 1;
+    eatRecursionLevel -= 1;
     publish();
 
     DEBUG("Locating associated type for " << e.path);

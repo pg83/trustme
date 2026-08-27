@@ -149,6 +149,12 @@ class StaticTraitResolve: public TraitResolveCommon {
     mutable ::std::map<ImplCheckKey, ThinVector<ImplCheckEntry>> cachedImplChecks;
     mutable ::std::vector<::std::tuple<const HIRSimplePath*, const HIRPathParams*, const HIRTypeData*>> findImplStack;
     mutable bool normalizingBoundType = false;
+    struct EatRecurseEntry {
+        HIRTypeRef ty;
+        unsigned level;
+    };
+    mutable unsigned eatRecursionLevel = 0;
+    mutable stl::Vector<EatRecurseEntry> eatRecursionStack;
     /// Set at construction; never changes over the resolver's lifetime.
     OpaqueReveal reveal_ = OpaqueReveal::UserFacing;
     // Owned by the crate ObjPool and reused across all fully-static goals.
