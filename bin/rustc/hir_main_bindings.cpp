@@ -51,14 +51,8 @@ namespace {
 
 namespace {
     bool desDebugEnabled() {
-        static unsigned enabled = 0;
-        if (enabled == 0) {
-            enabled = (getenv("TRUSTME_DEBUG_DESERIALISE") ? 2 : 1);
-        }
-        return enabled > 1;
+        return getenv("TRUSTME_DEBUG_DESERIALISE") != nullptr;
     }
-
-    HIRPublicity gVisPrivate = HIRPublicity::newNone();
 }
 
 //namespace {
@@ -72,6 +66,7 @@ class HirDeserialiser {
     HIRSerialiseReader& in;
     HIRTypeInterner& typeInterner;
     MacroDefinitionContext& macroDefinitions;
+    HIRPublicity privateVisibility = HIRPublicity::newNone();
 
 public:
     stl::ObjPool& pool;
@@ -263,7 +258,7 @@ public:
     }
 
     HIRPublicity deserialisePub() {
-        return (in.readBool() ? HIRPublicity::newGlobal() : gVisPrivate);
+        return (in.readBool() ? HIRPublicity::newGlobal() : privateVisibility);
     }
 
     template <typename T>
@@ -1643,7 +1638,7 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     // NOTE: This MUST be the first item
     this->crateName = in.readIstring();
     assert(this->crateName != "" && "Empty crate name loaded from metadata");
-    gVisPrivate = HIRPublicity::newPriv(HIRSimplePath(this->crateName));
+    privateVisibility = HIRPublicity::newPriv(HIRSimplePath(this->crateName));
     rv.crateName = this->crateName;
     rv.edition = static_cast<ASTEdition>(in.readTag());
     rv.rootModule = deserialiseModule();
