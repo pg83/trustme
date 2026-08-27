@@ -405,6 +405,11 @@ struct TraitGoalQuery {
     const char* assocName = nullptr;
     const HIRTypeData* assocType = nullptr;
     const HIRPathParams* assocParams = nullptr;
+    /// Ask specialization for the impl that provides this value item
+    /// (method, associated constant, or associated static).  This is not an
+    /// associated-type constraint: it changes response identity to the
+    /// nearest provider in the selected specialization chain.
+    const char* valueName = nullptr;
     /// Evaluate even when the inputs still hold unassigned inference
     /// variables.
     bool allowInferInputs = false;
@@ -412,6 +417,18 @@ struct TraitGoalQuery {
     /// head (Equal only for a definite head with proven own predicates)
     /// before the identity response.
     bool exportAmbiguousCandidates = false;
+};
+
+/// A projection-equality goal.  `output` is represented by a fresh canonical
+/// solver slot; the selected value and every inference effect travel back in
+/// the typed response instead of being recovered by a second impl lookup.
+struct NormalizesTo {
+    HIRTypeRef projection;
+};
+
+struct NormalizesToResponse {
+    SolverResponse effects;
+    HIRTypeRef output;
 };
 
 struct TraitBoundCallback {
@@ -458,6 +475,10 @@ struct SolverResponseCallback {
     virtual bool visit(SolverResponse response) = 0;
 };
 
+struct NormalizesToCallback {
+    virtual bool visit(NormalizesToResponse response) = 0;
+};
+
 template <typename F>
 struct SolverResponseCb final: SolverResponseCallback {
     F f;
@@ -468,6 +489,20 @@ struct SolverResponseCb final: SolverResponseCallback {
     }
 
     bool visit(SolverResponse response) override {
+        return f(::std::move(response));
+    }
+};
+
+template <typename F>
+struct NormalizesToCb final: NormalizesToCallback {
+    F f;
+
+    explicit NormalizesToCb(F f)
+        : f(f)
+    {
+    }
+
+    bool visit(NormalizesToResponse response) override {
         return f(::std::move(response));
     }
 };
@@ -548,7 +583,6 @@ private:
     mutable stl::IntMap<EatCacheEntry> eatCache;
     mutable u64 eatCacheGeneration = 0;
     friend class NextTraitGoalEvaluator;
-    mutable stl::Vector<HIRTypeRef> eatActiveStack;
     mutable bool normalizingBoundType = false;
     // Owned by the crate ObjPool.  TraitResolution only keeps a stable
     // pointer into the compiler-lifetime arena.
@@ -688,6 +722,14 @@ public:
     bool solveTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, const TraitGoalQuery& query = {}) const {
         SolverResponseCb<F> cb(f);
         return solveTraitGoalCb(sp, trait, params, type, cb, query);
+    }
+
+    bool solveNormalizesToCb(const Span& sp, const NormalizesTo& goal, NormalizesToCallback& callback) const;
+
+    template <typename F>
+    bool solveNormalizesTo(const Span& sp, const NormalizesTo& goal, F f) const {
+        NormalizesToCb<F> cb(f);
+        return solveNormalizesToCb(sp, goal, cb);
     }
 
     /// Whether two concrete impl candidates may apply to one canonical goal.
@@ -854,7 +896,7 @@ public:
     const HIRTypeData* typeIsOwnedBox(const Span& sp, const HIRTypeData* ty) const;
 
 private:
-    void expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack, SolverResponseCallback* effects = nullptr) const;
-    bool expandAssociatedTypesInplaceUfcsInherent(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack, SolverResponseCallback* effects = nullptr) const;
-    void expandAssociatedTypesInplaceUfcsKnown(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack, SolverResponseCallback* effects = nullptr) const;
+    void expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& input, SolverResponseCallback* effects = nullptr) const;
+    bool expandAssociatedTypesInplaceUfcsInherent(const Span& sp, HIRTypeRef& input, SolverResponseCallback* effects = nullptr) const;
+    void expandAssociatedTypesInplaceUfcsKnown(const Span& sp, HIRTypeRef& input, SolverResponseCallback* effects = nullptr) const;
 };

@@ -680,6 +680,9 @@ public:
 
     HIRSimplePath srcModule;
     bool isConst = false;
+    // A rustc_reservation_impl participates in coherence, but is not a real
+    // implementation during ordinary trait selection.
+    bool isReservation = false;
 
     //const TraitImpl*    m_parent_spec_impl;
 

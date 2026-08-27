@@ -1270,6 +1270,21 @@ namespace {
         }
         return true;
     }
+
+    bool mappedImplicitSizedImplied(const HIRTraitImpl& child, const HIRTraitImpl& parent, const ImplMatcher& parentMatcher) {
+        for (size_t i = 0; i < parent.params.types.size(); i++) {
+            if (!parent.params.types[i].isSized) {
+                continue;
+            }
+            const auto mapped = parentMatcher.mappedType(i);
+            if (const auto* generic = mapped ? mapped->opt_Generic() : nullptr; generic && generic->group() == 0) {
+                if (generic->idx() >= child.params.types.size() || !child.params.types[generic->idx()].isSized) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 }
 
 bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& other) const {
@@ -1316,8 +1331,20 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     const bool childMatchesParent = matchImplHead(sp, *this, other, childMatcher);
 
     if (parentMatchesChild != childMatchesParent) {
-        return parentMatchesChild && mappedBoundsImplied(sp, types, *this, other, parentMatcher);
+        return parentMatchesChild
+            && mappedBoundsImplied(sp, types, *this, other, parentMatcher)
+            && mappedImplicitSizedImplied(*this, other, parentMatcher);
     }
+
+    // `T` carries an implicit `Sized` predicate while `T: ?Sized` does not.
+    // It is part of the specialization domain even though it is stored on the
+    // parameter declaration rather than in `params.bounds`.  Compare it after
+    // applying the same head mapping as explicit predicates, so permuted
+    // generic parameter lists retain the right relation.
+    if (!mappedImplicitSizedImplied(*this, other, parentMatcher)) {
+        return false;
+    }
+    const bool stricterImplicitSized = !mappedImplicitSizedImplied(other, *this, childMatcher);
 
     //}
     // 3. Compare bound set, if there is a rule in oe that is missing from te; return false
@@ -1378,6 +1405,8 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
         }
     }
     if (itT != boundsT.end()) {
+        return true;
+    } else if (isEqual && stricterImplicitSized) {
         return true;
     } else {
         return !isEqual;

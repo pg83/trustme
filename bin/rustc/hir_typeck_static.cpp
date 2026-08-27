@@ -70,6 +70,23 @@ public:
             return callback.visit(::std::move(impl), match != HIRCompare::Equal);
         }, {.assocName = ""});
     }
+
+    bool findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const char* valueName, StaticImplCallback& callback) {
+        resolve_.setGenericContext(implGenerics, itemGenerics);
+        return resolve_.findTraitImplsNext(sp, trait, params, type, [&](ImplRef impl, HIRCompare match) {
+            return callback.visit(::std::move(impl), match != HIRCompare::Equal);
+        }, {.valueName = valueName});
+    }
+
+    bool normalize(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* projection, HIRTypeRef& output) {
+        resolve_.setGenericContext(implGenerics, itemGenerics);
+        return resolve_.solveNormalizesTo(sp, NormalizesTo{projection}, [&](NormalizesToResponse response) {
+            if (response.output != HIRTypeRef() && response.output != projection) {
+                output = ::std::move(response.output);
+            }
+            return true;
+        });
+    }
 };
 
 namespace {
@@ -104,14 +121,14 @@ bool StaticTraitResolve::genericBoundsUnresolved(const HIRGenericParams* params)
     return false;
 }
 
-bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, bool dontHandoffToSpecialised, bool noGoalBridge) const {
+bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, bool dontHandoffToSpecialised) const {
     auto cbIdent = HIRResolvePlaceholdersNop();
 
     if (const auto* path = type->opt_Path(); path && path->path.data.is_UfcsKnown()) {
         HIRTypeRef normalizedType = type;
         this->expandAssociatedTypes(sp, normalizedType);
         if (normalizedType != type) {
-            return this->findImplCb(sp, traitPath, traitParams, normalizedType, foundCb, dontHandoffToSpecialised, noGoalBridge);
+            return this->findImplCb(sp, traitPath, traitParams, normalizedType, foundCb, dontHandoffToSpecialised);
         }
     }
 
@@ -295,7 +312,7 @@ bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPa
     // still hold those in unresolved UfcsUnknown form -- data the goal
     // machinery must not see. Once the bounds are resolved the bridge takes
     // every query.
-    if (!dontHandoffToSpecialised && !noGoalBridge
+    if (!dontHandoffToSpecialised
         && !genericBoundsUnresolved(implGenerics_) && !genericBoundsUnresolved(itemGenerics_)) {
         if (!nextSolver) {
             ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
@@ -2155,349 +2172,64 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTy
 namespace {}
 
 bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeRef& input, bool recurse /*=true*/) const {
+    ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsKnown(), input);
+
     auto data = input->cloneData();
-    auto& e = data.as_Path();
-    auto& e2 = e.path.data.as_UfcsKnown();
-    auto publish = [&]() {
-        input = crate.types.intern(data.cloneData());
-    };
+    auto& projection = data.as_Path().path.data.as_UfcsKnown();
+    projection.type = this->expandAssociatedTypesInner(sp, projection.type);
+    for (auto& argument : projection.params.types) {
+        argument = this->expandAssociatedTypesInner(sp, argument);
+    }
+    for (auto& argument : projection.trait.params.types) {
+        argument = this->expandAssociatedTypesInner(sp, argument);
+    }
+    const auto& trait = crate.getTraitByPath(sp, projection.trait.path);
+    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &trait.params, projection.trait.params);
+    input = crate.types.intern(::std::move(data));
 
+    // A projection whose root is still an inference variable is retryable.
+    // Marking it opaque would turn a temporary lack of information into a
+    // permanent static-resolution decision.
     {
-        bool hitSameLevelLoop = false;
-        for (const auto& ent : eatRecursionStack) {
-            if (ent.ty == input) {
-                if (ent.level == eatRecursionLevel) {
-                    hitSameLevelLoop = true;
-                } else {
-                    BUG(sp, "Loop in EAT");
-                }
-            }
-        }
-        if (hitSameLevelLoop) {
-            ::std::vector<const HIRTypeData*> ents;
-            for (const auto& ent : eatRecursionStack) {
-                if (ent.level == eatRecursionLevel) {
-                    ents.push_back(ent.ty);
-                }
-            }
-            if (ents.size() > 1) {
-                std::sort(ents.begin(), ents.end(), [](const HIRTypeData* a, const HIRTypeData* b) {
-                    return a < b;
-                });
-                input = ents[0];
-            }
-            auto opaqueData = input->cloneData();
-            opaqueData.as_Path().binding = HIRTypePathBinding::make_Opaque({});
-            input = crate.types.intern(std::move(opaqueData));
-            return false;
-        }
-    }
-
-    eatRecursionStack.pushBack(EatRecurseEntry{crate.types.path(HIRPath(e2.type, e2.trait.clone(), e2.item), {}), eatRecursionLevel});
-    STD_DEFER {
-        eatRecursionStack.popBack();
-    };
-
-    eatRecursionLevel += 1;
-    e2.type = this->expandAssociatedTypesInner(sp, e2.type);
-    for (auto& arg : e2.trait.params.types) {
-        arg = this->expandAssociatedTypesInner(sp, arg);
-    }
-    // An unevaluated const argument whose environment is concrete after
-    // monomorphisation must fold before impl selection: the goal machinery
-    // compares it only fuzzily, so `Foo<{N + 1}>` with N substituted would
-    // otherwise never pick between `Foo<0>` and `Foo<3>` (the typecheck-side
-    // expansion performs the same fold).
-    {
-        const auto& traitDef = crate.getTraitByPath(sp, e2.trait.path);
-        ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &traitDef.params, e2.trait.params);
-    }
-    eatRecursionLevel -= 1;
-    publish();
-
-
-    {
-        const auto* t = &e2.type;
-        while ((*t)->is_Path() && (*t)->as_Path().path.data.is_UfcsKnown()) {
-            t = &(*t)->as_Path().path.data.as_UfcsKnown().type;
-        }
-        if ((*t)->is_Infer()) {
-            return false;
-        }
-    }
-
-    auto expandAsyncCallableAssociated = [&](const HIRTypeData* futureType) {
-        if (e2.item == "CallOnceFuture" || e2.item == "CallRefFuture") {
-            input = futureType;
-            return true;
-        }
-        if (e2.item != "Output") {
-            ERROR(sp, E0000, "No associated type " << e2.item << " for trait " << e2.trait);
-        }
-
-        bool found = false;
-        this->findImpl(sp, langFuture(), nullptr, futureType, [&](ImplRef impl, bool) {
-            auto output = impl.getType(crate.types, "Output", {});
-            if (output == HIRTypeRef()) {
-                return false;
-            }
-            input = mv$(output);
-            found = true;
-            return true;
-        });
-        return found;
-    };
-
-    switch ((*e2.type).tag()) {
-default:
-        // Nothing special
-        break;
-        case HIRTypeData::TAG_Infer: {
-            return false;
-        }
-        case HIRTypeData::TAG_NodeType: {
-            auto& te = (*e2.type).as_NodeType();
-            switch (te.tag()) {
-                case HIRTypeDataNodeType::TAG_Closure: {
-                    auto& nodeP = te.as_Closure();
-                    if (e2.trait.path == langAsyncFn() || e2.trait.path == langAsyncFnMut() || e2.trait.path == langAsyncFnOnce()) {
-                        if (expandAsyncCallableAssociated(nodeP->returnType)) {
-                            return true;
-                        }
-                    }
-                    if (e2.trait.path == langFn() || e2.trait.path == langFnMut() || e2.trait.path == langFnOnce()) {
-                        if (e2.item == "Output") {
-                            input = nodeP->returnType;
-                            return true;
-                        } else {
-                            ERROR(sp, E0000, "No associated type " << e2.item << " for trait " << e2.trait);
-                        }
-                    }
-                    break;
-                }
-                case HIRTypeDataNodeType::TAG_Generator: {
-                    break;
-                }
-                case HIRTypeDataNodeType::TAG_Async: {
-                    break;
-                }
-            }
-            break;
-        }
-        case HIRTypeData::TAG_TraitObject: {
-            //    if( e2.trait.m_params == data_trait.m_params )
-            //    {
-            //            // TODO: Mark as opaque and return.
-            //            // - Why opaque? It's not bounded, don't even bother
-            //            TODO(sp, "Handle unconstrained associate type " << e2.item << " from " << e2.type);
-            //        }
-            //    }
-            //}
-            break;
-        }
-    }
-
-    // 1. Bounds
-    bool rv = false;
-    bool assumeOpaque = true;
-    if(!rv)
-    {
-        if (replaceEqualities(input)) {
-            rv = true;
-            assumeOpaque = false;
-        }
-    }
-    if(!rv)
-    {
-        for (const auto& bound : traitBounds) {
-            const auto& beType = bound.first.first;
-            const auto& beTrait = bound.first.second;
-
-            // 1. Check if the type matches
-            //  - TODO: This should be a fuzzier match?
-            if (beType != e2.type && !beType->equalsIgnoringRegions(e2.type)) {
-                continue;
-            }
-            // 2. Check if the trait (or any supertrait) includes e2.trait
-            if (beTrait.equalsIgnoringRegions(e2.trait)) {
-                auto it = bound.second.assoc.find(e2.item);
-                // 1. Check if the bounds include the desired item
-                if (it == bound.second.assoc.end()) {
-                    // If not, assume it's opaque and return as such
-                    // TODO: What happens if there's two bounds that overlap? 'F: FnMut<()>, F: FnOnce<(), Output=Bar>'
-                } else {
-                    assumeOpaque = false;
-                    input = it->second.type;
-                    rv = true;
-                }
+        const HIRTypeData* root = input;
+        while (const auto* path = root->opt_Path()) {
+            const auto* known = path->path.data.opt_UfcsKnown();
+            if (!known) {
                 break;
             }
+            root = known->type;
+        }
+        if (root->is_Infer()) {
+            return false;
         }
     }
-    if( rv ) {
+
+    if (this->replaceEqualities(input)) {
         if (recurse) {
             input = this->expandAssociatedTypesInner(sp, input);
         }
         return true;
     }
 
-    // If the type of this UfcsKnown is ALSO a UfcsKnown - Check if it's bounded by this trait with equality
-    // Use bounds on other associated types too (if `e2.type` was resolved to a fixed associated type)
-    if(const auto* teInner = e2.type->opt_Path())
-    {
-        if (const auto* peInnerP = teInner->path.data.opt_UfcsKnown()) {
-            const auto& peInner = *peInnerP;
-            // TODO: Search for equality bounds on this associated type (e3) that match the entire type (e2)
-            // - Does simplification of complex associated types
-            const auto& traitPtr = this->crate.getTraitByPath(sp, peInner.trait.path);
-            const auto& assocTy = traitPtr.types.at(peInner.item);
-
-
-            // Resolve where Self=pe_inner.type (i.e. for the trait this inner UFCS is on)
-            auto cbPlaceholdersTrait = MonomorphStatePtr(crate.types, peInner.type, &peInner.trait.params, &peInner.params);
-            for (const auto& bound : assocTy.traitBounds) {
-                // Associated equalities on a trait bound carry the trait that
-                // actually declares the item. That can be a parent trait of
-                // `bound.m_path` (e.g. `Int<Unsigned = T>` where `Unsigned`
-                // is declared by `MinInt`), so matching the outer path loses
-                // exactly the equality we need.
-                auto it = bound.typeBounds.find(e2.item);
-                if (it != bound.typeBounds.end()) {
-                    auto sourceTrait = cbPlaceholdersTrait.monomorphGenericpath(sp, it->second.sourceTrait, false);
-                    auto atyParams = cbPlaceholdersTrait.monomorphPathParams(sp, it->second.atyParams, false);
-                    if (sourceTrait.equalsIgnoringRegions(e2.trait) && atyParams.equalsIgnoringRegions(e2.params)) {
-                        input = monomorphiseTypeNeeded(it->second.type) ? cbPlaceholdersTrait.monomorphType(sp, it->second.type) : it->second.type;
-                        if (recurse) {
-                            this->expandAssociatedTypes(sp, input);
-                        }
-                        return true;
-                    }
-                }
-
-                // Find trait in this trait.
-                auto boundParams = cbPlaceholdersTrait.monomorphPathParams(sp, bound.path.params, false);
-                const auto& boundTrait = crate.getTraitByPath(sp, bound.path.path);
-                bool replaced = this->findNamedTraitInTrait(sp, e2.trait.path, e2.trait.params, boundTrait, bound.path.path, boundParams, e2.type, [&](const auto& params, const auto& assoc) {
-                    auto it = assoc.find(e2.item);
-                    if (it != assoc.end()) {
-                        input = it->second.type;
-                        return true;
-                    }
-                    return false;
-                });
-                if (replaced) {
-                    if (recurse) {
-                        this->expandAssociatedTypes(sp, input);
-                    }
-                    return true;
-                }
-            }
-        }
+    if (!nextSolver) {
+        ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
+        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
     }
-
-    // 2. Crate-level impls
-
-    // - Search for the actual trait containing this associated type
-    HIRGenericPath  traitPath;
-    if( !this->traitContainsType(sp, e2.trait, this->crate.getTraitByPath(sp, e2.trait.path), e2.item.c_str(), traitPath) )
-        BUG(sp, "Cannot find associated type " << e2.item << " anywhere in trait " << e2.trait);
-
-    bool replacementHappened = true;
-    ::ImplRef  bestImpl;
-    auto cbFindImpl = [&](ImplRef impl, bool fuzzy) {
-        // If a fuzzy match was found, monomorphise and EAT the checked types and try again
-        // - A fuzzy can be caused by an opaque match.
-        // - TODO: Move this logic into `find_impl`
-        if (fuzzy) {
-            auto cbIdent = HIRResolvePlaceholdersNop();
-
-            auto implTy = impl.getImplType(crate.types);
-            this->expandAssociatedTypes(sp, implTy);
-            if (implTy != e2.type) {
-                return false;
-            }
-            auto pp = impl.getTraitParams(crate.types);
-            for (auto& ty : pp.types) {
-                this->expandAssociatedTypes(sp, ty);
-            }
-            if (pp.compareWithPlaceholders(sp, traitPath.params, cbIdent) == HIRCompare::Unequal) {
-                return false;
-            }
-        }
-
-        if (impl.typeIsSpecialisable(e2.item.c_str())) {
-            if (impl.moreSpecificThan(crate.types, bestImpl)) {
-                bestImpl = mv$(impl);
-            }
-            return false;
-        } else {
-            auto nt = impl.getType(crate.types, e2.item.c_str(), e2.params);
-            if (nt != HIRTypeRef()) {
-                if (input == nt) {
-                    replacementHappened = false;
-                    return true;
-                }
-                input = mv$(nt);
-                replacementHappened = true;
-            } else {
-                e.binding = HIRTypePathBinding::make_Opaque({});
-                publish();
-                replacementHappened = this->replaceEqualities(input);
-            }
-            return true;
-        }
-        };
-    rv = this->findImpl(sp, traitPath.path, traitPath.params, e2.type, cbFindImpl);
-    if (!rv && bestImpl.isValid()) {
-        // The goal bridge folds a specialisable default and the sibling impl
-        // that overrides it into ONE merged response, so the loop above only
-        // ever saw the default.  Only the legacy iteration shows every impl;
-        // re-run it to find the specialised value (mirrors getValue's
-        // two-pass search).
-        bestImpl = ImplRef();
-        rv = this->findImpl(sp, traitPath.path, &traitPath.params, e2.type, cbFindImpl, /*dontHandoffToSpecialised=*/false, /*noGoalBridge=*/true);
-    }
-    if( rv ) {
-        if (recurse) {
-            this->expandAssociatedTypes(sp, input);
-        }
-        return replacementHappened;
-    }
-    if( bestImpl.isValid() ) {
-        // A default associated type is the selected projection once the
-        // receiver is concrete and no more-specific impl matched. Generic or
-        // unresolved receivers must remain opaque until specialization can be
-        // decided.
-        if (!specializationLookupNeedsResolution(e2.type, traitPath.params)) {
-            auto nt = bestImpl.getType(crate.types, e2.item.c_str(), e2.params);
-            if (nt != HIRTypeRef()) {
-                input = mv$(nt);
-                if (recurse) {
-                    this->expandAssociatedTypes(sp, input);
-                }
-                return true;
-            }
-        }
-        e.binding = HIRTypePathBinding::make_Opaque({});
-        publish();
-        this->replaceEqualities(input);
-        return false;
-    }
-
-    if( assumeOpaque ) {
-        e.binding = HIRTypePathBinding::make_Opaque({});
-        publish();
-
-        bool rv = this->replaceEqualities(input);
+    HIRTypeRef output = nullptr;
+    nextSolver->normalize(sp, implGenerics_, itemGenerics_, input, output);
+    if (output != HIRTypeRef()) {
+        input = ::std::move(output);
         if (recurse) {
             input = this->expandAssociatedTypesInner(sp, input);
         }
-        return rv;
+        return true;
     }
 
-    ERROR(sp, E0000, "Cannot find an implementation of " << traitPath << " for " << e2.type);
+    auto opaque = input->cloneData();
+    opaque.as_Path().binding = HIRTypePathBinding::make_Opaque({});
+    input = crate.types.intern(::std::move(opaque));
+    return false;
 }
-
 bool StaticTraitResolve::replaceEqualities(HIRTypeRef& input) const {
     const Span sp;
     // - Check if there's an alias for this opaque name
@@ -4078,8 +3810,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 ImplRef bestImpl;
                 ValuePtr rv;
                 bool lookupNeedsResolution = specializationLookupNeedsResolution(pe.type, pe.trait.params);
-                auto searchImpls = [&](bool noGoalBridge) {
-                this->findImpl(sp, pe.trait.path, &pe.trait.params, pe.type, [&](auto impl, bool isFuzz) -> bool {
+                auto visitImpl = [&](auto impl, bool isFuzz) -> bool {
                     if (!impl.data.is_TraitImpl()) {
                         hasBoundedImpl = true;
                         return false;
@@ -4131,32 +3862,20 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                         // NOTE: There could be an overlapping and more-specific impl without `default` being involved
                         return false;
                     }
-                }, /*dontHandoffToSpecialised=*/false, noGoalBridge);
                 };
-                searchImpls(/*noGoalBridge=*/false);
-                if (bestImpl.isValid() && bestIsSpec) {
-                    // The bridge's merged response is ONE impl; a `default`
-                    // item found through it can still be specialised by an
-                    // overlapping impl the merge folded away (equal heads:
-                    // impl<T> Foo for T vs impl<T: Clone> Foo for T).  The
-                    // legacy iteration sees every impl and picks the most
-                    // specific provider itself.
-                    bestIsSpec = false;
-                    bestImpl = ImplRef();
-                    rv = ValuePtr();
-                    hasBoundedImpl = false;
-                    hasFuzzyImpl = false;
-                    searchImpls(/*noGoalBridge=*/true);
-                }
-                if (!bestImpl.isValid()) {
-                    // The goal bridge returns one merged response -- the most
-                    // specific impl.  When that impl omits the requested item
-                    // (`SizeHint for Empty` overrides only upper_bound), the
-                    // item is inherited from the impl it shadows: iterate
-                    // impls the legacy way to find the providing ancestor.
-                    hasBoundedImpl = false;
-                    hasFuzzyImpl = false;
-                    searchImpls(/*noGoalBridge=*/true);
+
+                if (!genericBoundsUnresolved(implGenerics_) && !genericBoundsUnresolved(itemGenerics_)) {
+                    if (!nextSolver) {
+                        ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
+                        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
+                    }
+                    StaticImplCb<decltype(visitImpl)> callback(visitImpl);
+                    nextSolver->findValue(sp, implGenerics_, itemGenerics_, pe.trait.path, pe.trait.params, pe.type, pe.item.c_str(), callback);
+                } else {
+                    // ResolveUFCSOuter can still hold UfcsUnknown in generic
+                    // bounds.  Its legacy walk is the early-pipeline source;
+                    // resolved item lookup uses the specialization query.
+                    this->findImpl(sp, pe.trait.path, &pe.trait.params, pe.type, visitImpl);
                 }
                 if (!bestImpl.isValid()) {
                     if (hasBoundedImpl || hasFuzzyImpl) {

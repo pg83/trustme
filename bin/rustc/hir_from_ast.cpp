@@ -3842,6 +3842,7 @@ default:
                     modPath
                 });
                 hirImpl->isConst = impl.def().isConst();
+                hirImpl->isReservation = i->attrs.has("rustc_reservation_impl");
                 hirCrate.traitImpls[mv$(traitName)].generic.push_back(mv$(hirImpl));
             } else if (impl.def().type()->data.is_None()) {
                 // Ignore - These are encoded in the 'is_marker' field of the trait

@@ -309,6 +309,7 @@ public:
         rv.traitArgs = deserialisePathparams();
         rv.type = deserialiseType();
         rv.isConst = in.readBool();
+        rv.isReservation = in.readBool();
 
         size_t methodCount = in.readCount();
         for (size_t i = 0; i < methodCount; i++) {
@@ -3031,6 +3032,7 @@ break;
         serialisePathparams(impl.traitArgs);
         serialiseType(impl.type);
         out.writeBool(impl.isConst);
+        out.writeBool(impl.isReservation);
 
         out.writeCount(impl.methods.size());
         for (const auto& v : impl.methods) {

@@ -191,6 +191,17 @@ namespace {
 
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override {
             if (ivarTable_ && ty->is_Infer()) {
+                const auto& infer = ty->as_Infer();
+                // Assembly already runs in this canonicalizer's space.  When
+                // the completed response is sealed and canonicalised for
+                // storage, its input slots must therefore pass through
+                // unchanged.  Treating one as an unowned response variable
+                // turns it into an existential placeholder and loses the
+                // identity of GAT/item parameters that do not occur in the
+                // impl head.
+                if (frozen_ && isSolverCanonicalInfer(infer.index) && originalIvar(infer.index)) {
+                    return ty;
+                }
                 const auto* resolved = ivarTable_->getType(ty);
                 if (const auto* infer = resolved->opt_Infer()) {
                     // Alias-input placeholders predate the inference table
@@ -233,6 +244,12 @@ namespace {
         HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override {
             if (ivarTable_) {
                 if (const auto* infer = val.opt_Infer(); infer && infer->index != ~0u) {
+                    // As for type slots above, a canonical value slot already
+                    // belonging to the sealed input is not a fresh response
+                    // existential.
+                    if (frozen_ && isSolverCanonicalInfer(infer->index) && originalValueIvar(infer->index)) {
+                        return val.clone();
+                    }
                     const auto& resolved = ivarTable_->getValue(val);
                     if (const auto* resolvedInfer = resolved.opt_Infer()) {
                         // Alias-input value placeholders stay rigid; a parent
@@ -5396,6 +5413,66 @@ default:
                 return unifier.pending().length() == 0 && unifier.pendingValues().empty() ? HIRCompare::Equal : HIRCompare::Fuzzy;
             }
 
+            void assembleAliasBoundCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) {
+                const auto* path = type->opt_Path();
+                const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
+                if (!projection) {
+                    return;
+                }
+
+                HIRGenericPath declaringTrait;
+                if (!resolve_.traitContainsType(span(), projection->trait, crate.getTraitByPath(span(), projection->trait.path), projection->item.c_str(), declaringTrait)) {
+                    BUG(span(), "Cannot find associated type " << projection->item << " anywhere in trait " << projection->trait);
+                }
+                const auto& declaration = crate.getTraitByPath(span(), declaringTrait.path).types.at(projection->item);
+                auto monomorph = MonomorphStatePtr(crate.types, projection->type, &declaringTrait.params, &projection->params);
+
+                auto emit = [&](HIRTraitPath response) {
+                    auto match = response.path.params.compareWithPlaceholders(span(), params, resolve_.ivars.callbackResolveInfer());
+                    if (match != HIRCompare::Unequal) {
+                        pushCandidate(
+                            frameIndex,
+                            ImplRef(type, ::std::move(response.path.params), ::std::move(response.typeBounds), response.constness),
+                            match,
+                            nullptr,
+                            {},
+                            false,
+                            CandidateSource::ParamEnv
+                        );
+                    }
+                };
+
+                for (const auto& declaredBound : declaration.traitBounds) {
+                    auto bound = monomorph.monomorphTraitpath(span(), declaredBound, false);
+                    if (bound.path.path == trait) {
+                        emit(::std::move(bound));
+                        continue;
+                    }
+
+                    const auto& boundDefinition = crate.getTraitByPath(span(), bound.path.path);
+                    resolve_.findNamedTraitInTrait(span(), trait, params, boundDefinition, bound.path.path, bound.path.params, type, [&](const HIRTraitPath& parent) {
+                        auto response = parent.clone();
+                        // An equality can be written through a subtrait even
+                        // though the item is declared by this parent trait:
+                        // `Int<Unsigned = Self>` carries a `MinInt::Unsigned`
+                        // equality.  The enumerated parent path contains the
+                        // inherited declaration but not those use-site
+                        // equalities, so project the matching entries onto the
+                        // candidate that will answer NormalizesTo.
+                        for (const auto& associated : bound.typeBounds) {
+                            if (associated.second.sourceTrait.path != trait
+                                || resolve_.comparePp(span(), associated.second.sourceTrait.params, response.path.params) == HIRCompare::Unequal) {
+                                continue;
+                            }
+                            response.typeBounds.erase(associated.first);
+                            response.typeBounds.insert({associated.first, associated.second.clone()});
+                        }
+                        emit(::std::move(response));
+                        return false;
+                    });
+                }
+            }
+
             void assembleCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type) {
                 // A rigid projection self only matches environment-class
                 // candidates: bounds on the associated type's declaration
@@ -5424,6 +5501,7 @@ default:
                 resolve_.findTraitImplsMagic(span(), trait, params, type, collect(CandidateSource::Builtin));
                 resolve_.findTraitImplsLegacy(span(), trait, params, type, collect(CandidateSource::Other), false, false, false);
                 resolve_.findTraitImplsBound(span(), trait, params, type, collect(CandidateSource::ParamEnv));
+                assembleAliasBoundCandidates(frameIndex, trait, params, type);
 
                 const auto& resolvedType = resolve_.resolveType(type);
                 const auto& traitDef = crate.getTraitByPath(span(), trait);
@@ -5431,6 +5509,12 @@ default:
                     // Assemble impl heads without evaluating their where-clauses.
                     // Those nested goals belong exclusively to evaluate_candidate.
                     crate.findTraitImpls(trait, resolvedType, resolve_.ivars.callbackResolveInfer(), [&](const HIRTraitImpl& impl) {
+                        // A reservation impl only reserves coherence space for a
+                        // possible future implementation. Outside coherence it
+                        // is not a candidate and must never provide an item.
+                        if (impl.isReservation) {
+                            return false;
+                        }
                         HIRPathParams implParams;
                         bool headNormalizationAmbiguity = false;
                         const auto match = this->unifyImplHead(impl.params, impl.traitArgs, impl.type, params, resolvedType, implParams, headNormalizationAmbiguity);
@@ -6097,6 +6181,45 @@ default:
                     }
                 }
 
+                auto monomorphTraitBound = [&](const auto& traitBound, HIRTypeRef& nestedType, HIRSimplePath& nestedTrait, HIRPathParams& nestedParams, HIRTraitPath::assocListT& nestedAssociated) {
+                    auto monomorphBound = [&](auto& ms) {
+                        auto boundType = ms.monomorphType(span(), traitBound.type);
+                        auto boundTrait = ms.monomorphTraitpath(span(), traitBound.trait, true);
+
+                        nestedType = ::std::move(boundType);
+                        nestedTrait = boundTrait.path.path;
+                        nestedParams = boundTrait.path.params.clone();
+                        for (const auto& aty : boundTrait.typeBounds) {
+                            nestedAssociated.insert({aty.first, aty.second.clone()});
+                        }
+                    };
+                    if (markerImpl) {
+                        auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
+                        monomorphBound(ms);
+                    } else {
+                        auto ms = candidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
+                        monomorphBound(ms);
+                    }
+                };
+
+                // Associated equalities are inference constraints for the
+                // candidate's own parameters, not ordinary ordered
+                // obligations.  Collect them from every nested predicate
+                // first, so `Extend<B>` does not stay ambiguous merely
+                // because a later `Iterator<Item = (B, A)>` is what fixes B.
+                for (const auto& bound : implParamsDef->bounds) {
+                    const auto* traitBound = bound.opt_TraitBound();
+                    if (!traitBound || traitBound->trait.typeBounds.empty()) {
+                        continue;
+                    }
+                    HIRTypeRef nestedType;
+                    HIRSimplePath nestedTrait;
+                    HIRPathParams nestedParams;
+                    HIRTraitPath::assocListT nestedAssociated;
+                    monomorphTraitBound(*traitBound, nestedType, nestedTrait, nestedParams, nestedAssociated);
+                    bindCandidatePlaceholders(*candidate, nestedType, nestedAssociated);
+                }
+
                 for (const auto& bound : implParamsDef->bounds) {
                     if (const auto* be = bound.opt_TraitBound()) {
                         HIRTypeRef nestedType;
@@ -6106,24 +6229,7 @@ default:
 
                         // Candidate and response storage is pool-backed, so nested
                         // goals cannot relocate this parent slot.
-                        auto monomorphBound = [&](auto& ms) {
-                            auto boundType = ms.monomorphType(span(), be->type);
-                            auto boundTrait = ms.monomorphTraitpath(span(), be->trait, true);
-
-                            nestedType = mv$(boundType);
-                            nestedTrait = boundTrait.path.path;
-                            nestedParams = boundTrait.path.params.clone();
-                            for (const auto& aty : boundTrait.typeBounds) {
-                                nestedAssociated.insert({aty.first, aty.second.clone()});
-                            }
-                        };
-                        if (markerImpl) {
-                            auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
-                            monomorphBound(ms);
-                        } else {
-                            auto ms = candidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
-                            monomorphBound(ms);
-                        }
+                        monomorphTraitBound(*be, nestedType, nestedTrait, nestedParams, nestedAssociated);
 
                         // An impl parameter may occur only in an associated-type
                         // equality of a nested goal.  Canonical solvers infer that
@@ -6132,13 +6238,7 @@ default:
                         // before evaluating the goal itself.
                         if (bindCandidatePlaceholders(*candidate, nestedType, nestedAssociated)) {
                             nestedAssociated.clear();
-                            if (markerImpl) {
-                                auto ms = MonomorphStatePtr(crate.types, nullptr, &candidate->markerImplParams, nullptr);
-                                monomorphBound(ms);
-                            } else {
-                                auto ms = candidate->impl.getCbMonomorphTraitimpl(crate.types, span(), {});
-                                monomorphBound(ms);
-                            }
+                            monomorphTraitBound(*be, nestedType, nestedTrait, nestedParams, nestedAssociated);
                         }
 
                         // The certainty-only table is the fast path for the vast
@@ -6458,22 +6558,12 @@ default:
                     if (impl.data.is_TraitImpl()) {
                         return Certainty::Ambiguous;
                     }
-                    if (!assocType) {
-                        // A bare ParamEnv trait predicate does not normalize its
-                        // associated type.  It only proves that the projection is
-                        // well-formed, so the normalizes-to response is ambiguous.
-                        return Certainty::Ambiguous;
-                    }
-                    // Synthesise the projection through the trait that DECLARES
-                    // the item (`Output` on an `FnMut` goal lives on `FnOnce`),
-                    // so normalisation can fold it through the elaborated
-                    // ParamEnv equality.
-                    auto sourceTrait = HIRGenericPath(trait, impl.getTraitParams(crate.types));
-                    HIRGenericPath declaringTrait;
-                    if (resolve_.traitContainsType(span(), sourceTrait, crate.getTraitByPath(span(), trait), assocName, declaringTrait)) {
-                        sourceTrait = ::std::move(declaringTrait);
-                    }
-                    output = makeAssociatedProjection(impl, ::std::move(sourceTrait), RcString::newInterned(assocName), params);
+                    // A bare ParamEnv trait predicate proves only that the
+                    // projection exists.  It cannot provide a NormalizesTo
+                    // value, even when the destination is an inference slot:
+                    // rebuilding the same projection with the bound's refined
+                    // inputs would leak those inputs as a fake normalization.
+                    return Certainty::Ambiguous;
                 }
                 if (!assocType) {
                     return Certainty::Proven;
@@ -6620,7 +6710,27 @@ default:
                 }
             }
 
-            bool responsesEqual(const ImplRef& left, const ImplRef& right, const char* assocName, const HIRPathParams* assocParams) const {
+            static bool implDefinesValue(const ImplRef& impl, const char* valueName) {
+                const auto* traitImpl = impl.data.opt_TraitImpl();
+                if (!traitImpl || !traitImpl->impl) {
+                    return false;
+                }
+                const auto name = RcString::newInterned(valueName);
+                return traitImpl->impl->constants.count(name)
+                    || traitImpl->impl->statics.count(name)
+                    || traitImpl->impl->methods.count(name);
+            }
+
+            static const Candidate* specializationValueSource(const Candidate* selected, const char* valueName) {
+                for (const Candidate* source = selected; source; source = source->specializationItemSource) {
+                    if (implDefinesValue(source->impl, valueName)) {
+                        return source;
+                    }
+                }
+                return nullptr;
+            }
+
+            bool responsesEqual(const ImplRef& left, const ImplRef& right, const char* assocName, const HIRPathParams* assocParams, const char* valueName) const {
                 auto typesEqualAfterNormalization = [&](const HIRTypeData* lhs, const HIRTypeData* rhs) {
                     if (lhs == HIRTypeRef() || rhs == HIRTypeRef()) {
                         return lhs == rhs;
@@ -6667,6 +6777,14 @@ default:
 
                 if (!typesEqualAfterNormalization(left.getImplType(crate.types), right.getImplType(crate.types)) || !paramsEqualAfterNormalization(left.getTraitParams(crate.types), right.getTraitParams(crate.types))) {
                     return false;
+                }
+                if (valueName) {
+                    const auto* leftImpl = left.data.opt_TraitImpl();
+                    const auto* rightImpl = right.data.opt_TraitImpl();
+                    if (leftImpl || rightImpl) {
+                        return leftImpl && rightImpl && leftImpl->impl == rightImpl->impl;
+                    }
+                    return true;
                 }
                 if (!assocName || !assocName[0]) {
                     return true;
@@ -6872,6 +6990,7 @@ default:
                 const char* assocName = query.assocName;
                 const HIRTypeData* assocType = query.assocType;
                 const HIRPathParams* assocParams = query.assocParams;
+                const char* valueName = query.valueName;
                 const bool allowInferInputs = query.allowInferInputs;
                 const bool exportAmbiguousCandidates = query.exportAmbiguousCandidates;
                 const bool outermost = span_ == nullptr;
@@ -7088,11 +7207,9 @@ default:
                         const HIRPathParams noParams;
                         const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noParams;
                         auto output = canonicalResponse.getType(crate.types, assocName, itemParams);
-                        if (output == HIRTypeRef()) {
-                            auto sourceTrait = HIRGenericPath(trait, canonicalResponse.getTraitParams(crate.types));
-                            output = makeAssociatedProjection(canonicalResponse.getImplType(crate.types), sourceTrait, RcString::newInterned(assocName), itemParams);
+                        if (output != HIRTypeRef()) {
+                            solverResponse.equalities.push_back(SolverTypeEquality{canonicalAssocType, canonicalizer.monomorphType(span(), output, true)});
                         }
-                        solverResponse.equalities.push_back(SolverTypeEquality{canonicalAssocType, canonicalizer.monomorphType(span(), output, true)});
                     }
                     if (distinctViable.length() != 0) {
                         for (size_t i = 0; i < distinctViable.length(); i++) {
@@ -7107,11 +7224,9 @@ default:
                                 const HIRPathParams noParams;
                                 const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noParams;
                                 auto output = candidateImpl.getType(crate.types, assocName, itemParams);
-                                if (output == HIRTypeRef()) {
-                                    auto sourceTrait = HIRGenericPath(trait, candidateImpl.getTraitParams(crate.types));
-                                    output = makeAssociatedProjection(candidateImpl.getImplType(crate.types), sourceTrait, RcString::newInterned(assocName), itemParams);
+                                if (output != HIRTypeRef()) {
+                                    candidateResponse.equalities.push_back(SolverTypeEquality{canonicalAssocType, canonicalizer.monomorphType(span(), output, true)});
                                 }
-                                candidateResponse.equalities.push_back(SolverTypeEquality{canonicalAssocType, canonicalizer.monomorphType(span(), output, true)});
                             }
                             candidateResponse.impl = ownSolverImpl(monomorphImplRef(candidateImpl, MonomorphiserNop(crate.types)));
                             solverResponse.candidates.push_back(::std::move(candidateResponse));
@@ -7183,7 +7298,7 @@ default:
                     }
                 }
                 HIRTraitPath::assocListT rootAssociated;
-                if (assocName && assocName[0] && candidateAssocType) {
+                if (assocName && assocName[0] && candidateAssocType && !typeHasUnknown(candidateAssocType)) {
                     const HIRPathParams noAssocParams;
                     // The requirement projects through the trait that DECLARES
                     // the item: `Output` on an `FnMut` goal is declared on
@@ -7370,7 +7485,7 @@ default:
                         // exactly the same way, merge their certainties instead;
                         // a proven route must not be discarded behind an
                         // ambiguous, cyclic route to the same response.
-                        if (responsesEqual(left, right, assocName, canonicalAssocParams)) {
+                        if (responsesEqual(left, right, assocName, canonicalAssocParams, valueName)) {
                             continue;
                         }
                         if (!left.data.is_TraitImpl() || !right.data.is_TraitImpl()) {
@@ -7411,7 +7526,7 @@ default:
 
                 bool oneResponse = true;
                 for (size_t i = 1; i < frame.viable.size(); i++) {
-                    if (!responsesEqual(frame.viable.front()->impl, frame.viable[i]->impl, assocName, canonicalAssocParams)) {
+                    if (!responsesEqual(frame.viable.front()->impl, frame.viable[i]->impl, assocName, canonicalAssocParams, valueName)) {
                         oneResponse = false;
                         break;
                     }
@@ -7475,7 +7590,18 @@ default:
                             }
                         }
                     }
-                    auto selectedResponse = monomorphImplRef(selected->impl, MonomorphiserNop(crate.types));
+                    const Candidate* responseSource = selected;
+                    if (valueName && selected->impl.data.is_TraitImpl()) {
+                        responseSource = specializationValueSource(selected, valueName);
+                        if (!responseSource) {
+                            // The selected specialization chain has no impl
+                            // body for this item.  The caller may still use a
+                            // trait-provided default, but there is no impl
+                            // provider to publish.
+                            return false;
+                        }
+                    }
+                    auto selectedResponse = monomorphImplRef(responseSource->impl, MonomorphiserNop(crate.types));
                     if (certainty != Certainty::Proven) {
                         return emitResponse(::std::move(selectedResponse), HIRCompare::Fuzzy, selected);
                     }
@@ -7552,6 +7678,79 @@ default:
                 });
                 return evaluateTyped(callSpan, trait, params, type, adapter, query);
             }
+
+            bool evaluateNormalizesTo(const Span& callSpan, const NormalizesTo& goal, NormalizesToCallback& callback, bool callerBoundary = false) {
+                const auto* path = goal.projection->opt_Path();
+                const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
+                ASSERT_BUG(callSpan, projection, "NormalizesTo goal is not an associated-type projection: " << goal.projection);
+
+                HIRGenericPath declaringTrait;
+                if (!resolve_.traitContainsType(callSpan, projection->trait, crate.getTraitByPath(callSpan, projection->trait.path), projection->item.c_str(), declaringTrait)) {
+                    BUG(callSpan, "Cannot find associated type " << projection->item << " anywhere in trait " << projection->trait);
+                }
+
+                // The destination is a real caller-side inference variable so
+                // canonicalisation records it as an ordinary response slot.
+                // It is never bound by the evaluator itself: consumers either
+                // apply the typed response or inspect the explicit equality.
+                const auto outputSlot = resolve_.ivars.newIvarTr();
+                auto adapter = makeCallable<SolverResponseCb>([&](SolverResponse response) {
+                    HIRTypeRef output = nullptr;
+                    ThinVector<SolverTypeEquality> retainedEqualities;
+                    for (auto& equality : response.equalities) {
+                        if (equality.left == outputSlot) {
+                            output = equality.right;
+                            continue;
+                        }
+                        if (equality.right == outputSlot) {
+                            output = equality.left;
+                            continue;
+                        }
+                        retainedEqualities.push_back(::std::move(equality));
+                    }
+                    // Unbound/Opaque is resolution state, not part of an
+                    // alias's semantic identity.  A solver response that only
+                    // changes those bindings is the original projection, not
+                    // a normalised output; publishing it makes the static
+                    // walker recurse forever while toggling child bindings.
+                    if (output && output->equalsIgnoringRegions(goal.projection)) {
+                        output = nullptr;
+                    }
+                    response.equalities = ::std::move(retainedEqualities);
+
+                    // The fresh destination belongs to the NormalizesTo
+                    // protocol, not to the consumer's inference state.  Keep
+                    // the selected value separately and strip the auxiliary
+                    // identity slot before applying the remaining effects;
+                    // otherwise Context::equateTypes would recursively try to
+                    // normalise the value while this goal is still active.
+                    SolverSlotValues retainedSlots;
+                    for (size_t i = 0; i < response.slots.typeInputs.size(); i++) {
+                        if (response.slots.typeInputs[i] == outputSlot) {
+                            continue;
+                        }
+                        retainedSlots.typeInputs.push_back(response.slots.typeInputs[i]);
+                        retainedSlots.types.push_back(response.slots.types[i]);
+                    }
+                    retainedSlots.valueInputs = ::std::move(response.slots.valueInputs);
+                    retainedSlots.values = ::std::move(response.slots.values);
+                    response.slots = ::std::move(retainedSlots);
+                    return callback.visit(NormalizesToResponse{::std::move(response), ::std::move(output)});
+                });
+                return evaluateTyped(
+                    callSpan,
+                    declaringTrait.path,
+                    declaringTrait.params,
+                    projection->type,
+                    adapter,
+                    TraitGoalQuery{
+                        .assocName = projection->item.c_str(),
+                        .assocType = outputSlot,
+                        .assocParams = &projection->params,
+                    },
+                    callerBoundary
+                );
+            }
         };
 
         TraitResolution::TraitResolution(HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait)
@@ -7575,7 +7774,6 @@ default:
             if (implGenerics_ == implParams && itemGenerics_ == itemParams) {
                 return;
             }
-            ASSERT_BUG(Span(), eatActiveStack.empty(), "changing trait environment during associated-type expansion");
             implGenerics_ = implParams;
             itemGenerics_ = itemParams;
             eatCacheGeneration++;
@@ -7702,6 +7900,14 @@ default:
             return nextSolver->evaluateTyped(sp, trait, params, type, callback, query, true);
         }
 
+        bool TraitResolution::solveNormalizesToCb(const Span& sp, const NormalizesTo& goal, NormalizesToCallback& callback) const {
+            if (!nextSolver) {
+                ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
+                nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*this, crate);
+            }
+            return nextSolver->evaluateNormalizesTo(sp, goal, callback, true);
+        }
+
         bool TraitResolution::findTraitImplsCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, bool magicTraitImpls) const {
             if (const auto* path = type->opt_Path()) {
                 if (const auto* projection = path->path.data.opt_UfcsKnown()) {
@@ -7729,7 +7935,13 @@ default:
             ASSERT_BUG(Span(), !ivars.probing(), "ivar compaction during an active inference snapshot");
             ivars.checkForLoops();
 
-            for (unsigned int i = 0; i < ivars.ivars.size(); i++) {
+            // Solver responses may append auxiliary output slots while a
+            // projection is normalised.  They did not exist at compaction
+            // entry and no pre-existing type can refer to them, so processing
+            // the growing tail would manufacture one new slot per visit and
+            // make this pass non-terminating.
+            const auto initialIvarCount = ivars.ivars.size();
+            for (unsigned int i = 0; i < initialIvarCount; i++) {
                 if (!ivars.ivars[i].isAlias()) {
                     auto type = ivars.ivars[i].type;
                     ivars.expandIvars(type);
@@ -7914,54 +8126,36 @@ default:
     BUG(Span(), "Fell off the end of has_associated_type - input=" << input);
         }
 
-        void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack, SolverResponseCallback* effects) const {
+        void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& input, SolverResponseCallback* effects) const {
             struct H {
-                static void expandAssociatedTypesParams(const Span& sp, const TraitResolution& res, HIRPathParams& params, LList<const HIRTypeData*> stack, SolverResponseCallback* effects) {
+                static void expandAssociatedTypesParams(const Span& sp, const TraitResolution& res, HIRPathParams& params, SolverResponseCallback* effects) {
                     for (auto& arg : params.types) {
-                        res.expandAssociatedTypesInplace(sp, arg, stack, effects);
+                        res.expandAssociatedTypesInplace(sp, arg, effects);
                     }
                 }
 
-                static void expandAssociatedTypesTp(const Span& sp, const TraitResolution& res, HIRTraitPath& input, LList<const HIRTypeData*> stack, SolverResponseCallback* effects) {
-                    expandAssociatedTypesParams(sp, res, input.path.params, stack, effects);
+                static void expandAssociatedTypesTp(const Span& sp, const TraitResolution& res, HIRTraitPath& input, SolverResponseCallback* effects) {
+                    expandAssociatedTypesParams(sp, res, input.path.params, effects);
                     for (auto& arg : input.typeBounds) {
-                        expandAssociatedTypesParams(sp, res, arg.second.sourceTrait.params, stack, effects);
-                        res.expandAssociatedTypesInplace(sp, arg.second.type, stack, effects);
+                        expandAssociatedTypesParams(sp, res, arg.second.sourceTrait.params, effects);
+                        res.expandAssociatedTypesInplace(sp, arg.second.type, effects);
                     }
                     for (auto& arg : input.traitBounds) {
-                        expandAssociatedTypesParams(sp, res, arg.second.sourceTrait.params, stack, effects);
+                        expandAssociatedTypesParams(sp, res, arg.second.sourceTrait.params, effects);
                         for (auto& t : arg.second.traits) {
-                            expandAssociatedTypesTp(sp, res, t, stack, effects);
+                            expandAssociatedTypesTp(sp, res, t, effects);
                         }
                     }
                 }
             };
 
-            // A pathological blanket (`F: FnOnce() -> T, T: AssociatedConstant`)
-            // grows the projection chain on every expansion attempt, so the
-            // identity-based cycle checks never fire.  Cap the recursion
-            // depth: an unexpanded projection is a valid rigid alias.
-            {
-                size_t depth = 0;
-                for (const auto* node = &stack; node->prev; node = node->prev) {
-                    depth++;
-                }
-                if (depth > 64) {
-                    return;
-                }
-            }
-            for (const auto& ty : eatActiveStack) {
-                if (input == ty) {
-                    return;
-                }
-            }
             auto data = input->cloneData();
     switch (data.tag()) {
         case HIRTypeData::TAG_Infer: {
             const auto* ty = this->ivars.getType(input);
             if (ty != input) {
                 input = ty;
-                expandAssociatedTypesInplace(sp, input, stack, effects);
+                expandAssociatedTypesInplace(sp, input, effects);
                 return;
             }
             break;
@@ -7978,44 +8172,27 @@ default:
                 case HIRPathData::TAG_Generic: {
                     auto& pe = e.path.data.as_Generic();
                     ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, e.binding.getGenerics(), pe.params);
-                    H::expandAssociatedTypesParams(sp, *this, pe.params, stack, effects);
+                    H::expandAssociatedTypesParams(sp, *this, pe.params, effects);
                     break;
                 }
                 case HIRPathData::TAG_UfcsInherent: {
                     auto& pe = e.path.data.as_UfcsInherent();
-                    expandAssociatedTypesInplace(sp, pe.type, stack, effects);
-                    H::expandAssociatedTypesParams(sp, *this, pe.params, stack, effects);
-                    H::expandAssociatedTypesParams(sp, *this, pe.implParams, stack, effects);
+                    expandAssociatedTypesInplace(sp, pe.type, effects);
+                    H::expandAssociatedTypesParams(sp, *this, pe.params, effects);
+                    H::expandAssociatedTypesParams(sp, *this, pe.implParams, effects);
                     input = crate.types.intern(mv$(data));
-                    if (this->expandAssociatedTypesInplaceUfcsInherent(sp, input, stack, effects)) {
-                        this->expandAssociatedTypesInplace(sp, input, stack, effects);
+                    if (this->expandAssociatedTypesInplaceUfcsInherent(sp, input, effects)) {
+                        this->expandAssociatedTypesInplace(sp, input, effects);
                     }
                     return;
                 }
                 case HIRPathData::TAG_UfcsKnown: {
                     auto& pe = e.path.data.as_UfcsKnown();
-                    // The identity check above cannot terminate a mutually
-                    // recursive expansion whose projection GROWS each round
-                    // (a `F: FnOnce() -> T, T: AssociatedConstant` blanket
-                    // via the goal machinery re-entering expansion).  Depth
-                    // caps it; an unexpanded projection is a valid alias.
-                    if (eatActiveStack.length() > 64) {
-                        return;
-                    }
-                    eatActiveStack.pushBack(input);
-                    STD_DEFER {
-                        eatActiveStack.popBack();
-                    };
-                    // State stack to avoid infinite recursion
-                    assert(!eatActiveStack.empty());
-                    auto& prevStack = stack;
-                    LList<const HIRTypeData*> stack(&prevStack, eatActiveStack.back());
-
-                    expandAssociatedTypesInplace(sp, pe.type, stack, effects);
-                    H::expandAssociatedTypesParams(sp, *this, pe.params, stack, effects);
+                    expandAssociatedTypesInplace(sp, pe.type, effects);
+                    H::expandAssociatedTypesParams(sp, *this, pe.params, effects);
                     const auto& traitDef = crate.getTraitByPath(sp, pe.trait.path);
                     ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &traitDef.params, pe.trait.params);
-                    H::expandAssociatedTypesParams(sp, *this, pe.trait.params, stack, effects);
+                    H::expandAssociatedTypesParams(sp, *this, pe.trait.params, effects);
                     input = crate.types.intern(mv$(data));
                     // Retry opaque projections too: equality bounds can be
                     // learned after an earlier normalisation attempt.
@@ -8023,7 +8200,7 @@ default:
                     const bool wasOpaque = input->as_Path().binding.is_Opaque();
                     if (wasUnbound || wasOpaque) {
                         if (wasOpaque) {
-                            this->expandAssociatedTypesInplaceUfcsKnown(sp, input, stack, effects);
+                            this->expandAssociatedTypesInplaceUfcsKnown(sp, input, effects);
                             return;
                         }
 
@@ -8039,11 +8216,11 @@ default:
                         if (cached && cached->generation == eatCacheGeneration
                             && (!((input->flags | cached->type->flags) & (HIRTypeData::HAS_TYPE_INFER | HIRTypeData::HAS_DEFERRED_CONST)) || cached->ivarGeneration == ivars.mutationGeneration)) {
                             if (input != cached->type) {
-                                this->expandAssociatedTypesInplace(sp, cached->type, stack, effects);
+                                this->expandAssociatedTypesInplace(sp, cached->type, effects);
                             }
                             input = cached->type;
                         } else {
-                            this->expandAssociatedTypesInplaceUfcsKnown(sp, input, stack, effects);
+                            this->expandAssociatedTypesInplaceUfcsKnown(sp, input, effects);
                             if (input->is_Path() && (input->as_Path().binding.is_Unbound() || input->as_Path().binding.is_Opaque())) {
                             } else if (!ivars.probing()) {
                                 eatCache.insert(cacheKey, EatCacheEntry{eatCacheGeneration, ivars.mutationGeneration, input});
@@ -8053,7 +8230,13 @@ default:
                     return;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
-                    BUG(sp, "Encountered UfcsUnknown");
+                    auto& pe = e.path.data.as_UfcsUnknown();
+                    // ResolveUFCS has not selected the declaring trait yet.
+                    // Its receiver and explicit item arguments are still
+                    // ordinary children of the type walker; the path itself
+                    // remains retryable until that later phase.
+                    expandAssociatedTypesInplace(sp, pe.type, effects);
+                    H::expandAssociatedTypesParams(sp, *this, pe.params, effects);
                     break;
                 }
             }
@@ -8065,9 +8248,9 @@ default:
         case HIRTypeData::TAG_TraitObject: {
             auto& e = data.as_TraitObject();
             // Recurse?
-            H::expandAssociatedTypesTp(sp, *this, e.trait, stack, effects);
+            H::expandAssociatedTypesTp(sp, *this, e.trait, effects);
             for (auto& m : e.markers) {
-                H::expandAssociatedTypesParams(sp, *this, m.params, stack, effects);
+                H::expandAssociatedTypesParams(sp, *this, m.params, effects);
             }
             break;
         }
@@ -8078,17 +8261,17 @@ default:
         case HIRTypeData::TAG_Array: {
             auto& e = data.as_Array();
             ConvertHIRConstantEvaluateArraySize(sp, this->wb, crate, visPath, e.size);
-            expandAssociatedTypesInplace(sp, e.inner, stack, effects);
+            expandAssociatedTypesInplace(sp, e.inner, effects);
             break;
         }
         case HIRTypeData::TAG_Slice: {
             auto& e = data.as_Slice();
-            expandAssociatedTypesInplace(sp, e.inner, stack, effects);
+            expandAssociatedTypesInplace(sp, e.inner, effects);
             break;
         }
         case HIRTypeData::TAG_Pattern: {
             auto& e = data.as_Pattern();
-            expandAssociatedTypesInplace(sp, e.inner, stack, effects);
+            expandAssociatedTypesInplace(sp, e.inner, effects);
             for (auto& range : e.pattern.alternatives) {
                 HIRConstGeneric* values[] = {range.hasStart ? &range.start : nullptr, range.hasEnd ? &range.end : nullptr};
                 for (auto* value : values) {
@@ -8100,18 +8283,18 @@ default:
         case HIRTypeData::TAG_Tuple: {
             auto& e = data.as_Tuple();
             for (auto& sub : e) {
-                expandAssociatedTypesInplace(sp, sub, stack, effects);
+                expandAssociatedTypesInplace(sp, sub, effects);
             }
             break;
         }
         case HIRTypeData::TAG_Borrow: {
             auto& e = data.as_Borrow();
-            expandAssociatedTypesInplace(sp, e.inner, stack, effects);
+            expandAssociatedTypesInplace(sp, e.inner, effects);
             break;
         }
         case HIRTypeData::TAG_Pointer: {
             auto& e = data.as_Pointer();
-            expandAssociatedTypesInplace(sp, e.inner, stack, effects);
+            expandAssociatedTypesInplace(sp, e.inner, effects);
             break;
         }
         case HIRTypeData::TAG_NamedFunction: {
@@ -8119,24 +8302,26 @@ default:
             switch (e.path.data.tag()) {
                 case HIRPathData::TAG_Generic: {
                     auto& pe = e.path.data.as_Generic();
-                    H::expandAssociatedTypesParams(sp, *this, pe.params, stack, effects);
+                    H::expandAssociatedTypesParams(sp, *this, pe.params, effects);
                     break;
                 }
                 case HIRPathData::TAG_UfcsInherent: {
                     auto& pe = e.path.data.as_UfcsInherent();
-                    expandAssociatedTypesInplace(sp, pe.type, stack, effects);
-                    H::expandAssociatedTypesParams(sp, *this, pe.params, stack, effects);
+                    expandAssociatedTypesInplace(sp, pe.type, effects);
+                    H::expandAssociatedTypesParams(sp, *this, pe.params, effects);
                     break;
                 }
                 case HIRPathData::TAG_UfcsKnown: {
                     auto& pe = e.path.data.as_UfcsKnown();
-                    expandAssociatedTypesInplace(sp, pe.type, stack, effects);
-                    H::expandAssociatedTypesParams(sp, *this, pe.params, stack, effects);
-                    H::expandAssociatedTypesParams(sp, *this, pe.trait.params, stack, effects);
+                    expandAssociatedTypesInplace(sp, pe.type, effects);
+                    H::expandAssociatedTypesParams(sp, *this, pe.params, effects);
+                    H::expandAssociatedTypesParams(sp, *this, pe.trait.params, effects);
                     break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
-                    BUG(sp, "Encountered UfcsUnknown");
+                    auto& pe = e.path.data.as_UfcsUnknown();
+                    expandAssociatedTypesInplace(sp, pe.type, effects);
+                    H::expandAssociatedTypesParams(sp, *this, pe.params, effects);
                     break;
                 }
             }
@@ -8146,9 +8331,9 @@ default:
         case HIRTypeData::TAG_Function: {
             auto& e = data.as_Function();
             for (auto& ty : e.argTypes) {
-                expandAssociatedTypesInplace(sp, ty, stack, effects);
+                expandAssociatedTypesInplace(sp, ty, effects);
             }
-            expandAssociatedTypesInplace(sp, e.rettype, stack, effects);
+            expandAssociatedTypesInplace(sp, e.rettype, effects);
             break;
         }
         case HIRTypeData::TAG_NodeType: {
@@ -8159,7 +8344,7 @@ default:
             input = crate.types.intern(mv$(data));
         }
 
-        bool TraitResolution::expandAssociatedTypesInplaceUfcsInherent(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack, SolverResponseCallback* effects) const {
+        bool TraitResolution::expandAssociatedTypesInplaceUfcsInherent(const Span& sp, HIRTypeRef& input, SolverResponseCallback* effects) const {
             ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsInherent(), input);
 
             const auto& pe = input->as_Path().path.data.as_UfcsInherent();
@@ -8211,645 +8396,34 @@ default:
             return true;
         }
 
-        void TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span& sp, HIRTypeRef& input, LList<const HIRTypeData*> stack, SolverResponseCallback* effects) const {
-            auto data = input->cloneData();
-            auto& builderE = data.as_Path();
-            auto& builderPe = builderE.path.data.as_UfcsKnown();
+        void TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span& sp, HIRTypeRef& input, SolverResponseCallback* effects) const {
+            ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsKnown(), input);
 
-            expandAssociatedTypesInplace(sp, builderPe.type, stack, effects);
-            for (auto& ty : builderPe.trait.params.types) {
-                expandAssociatedTypesInplace(sp, ty, stack, effects);
-            }
-            input = crate.types.intern(mv$(data));
-            const auto& e = input->as_Path();
-            const auto& pe = e.path.data.as_UfcsKnown();
-            auto markOpaque = [&]() {
-                auto opaqueData = input->cloneData();
-                opaqueData.as_Path().binding = HIRTypePathBinding::make_Opaque({});
-                input = crate.types.intern(mv$(opaqueData));
-            };
-
-            // Ignore unbounder infer literals
-            if (pe.type->is_Infer() && !pe.type->as_Infer().isLit()) {
-                return;
-            }
-            // ATYs of placeholders are kept as unknown
-            if (pe.type->is_Generic() && pe.type->as_Generic().isPlaceholder()) {
-                return;
-            }
-
-            // If there are impl params present, return early
-            // TODO: There is still information available for placeholders (if the impl block is available)
-            {
-                auto cb = [](const HIRTypeData* ty) {
-                    return !(ty->is_Generic() && ty->as_Generic().isPlaceholder());
-                };
-                bool hasImplPlaceholders = false;
-                if (!visitTyWith(pe.type, cb)) {
-                    hasImplPlaceholders = true;
-                }
-                for (const auto& ty : pe.trait.params.types) {
-                    if (!visitTyWith(ty, cb)) {
-                        hasImplPlaceholders = true;
-                    }
-                }
-                if (hasImplPlaceholders) {
-                    // TODO: Why opaque? Like ivars, these could resolve in the future.
-                    return;
-                }
-            }
-
-            // Search for the actual trait containing this associated type
-            HIRGenericPath traitPath;
-            if (!this->traitContainsType(sp, pe.trait, this->crate.getTraitByPath(sp, pe.trait.path), pe.item.c_str(), traitPath)) {
-                BUG(sp, "Cannot find associated type " << pe.item << " anywhere in trait " << pe.trait);
-            }
-
-            auto expandAsyncCallableAssociated = [&](const HIRTypeData* futureType) {
-                if (pe.item == "CallOnceFuture" || pe.item == "CallRefFuture") {
-                    input = futureType;
+            bool normalized = false;
+            this->solveNormalizesTo(sp, NormalizesTo{input}, [&](NormalizesToResponse response) {
+                if (response.output == HIRTypeRef() || response.output == input) {
                     return true;
                 }
-                if (pe.item != "Output") {
-                    ERROR(sp, E0000, "No associated type " << pe.item << " for trait " << pe.trait);
+                if (effects) {
+                    effects->visit(::std::move(response.effects));
                 }
-
-                bool found = false;
-                this->findTraitImpls(sp, langFuture(), {}, futureType, [&](ImplRef impl, HIRCompare) {
-                    auto output = impl.getType(crate.types, "Output", {});
-                    if (output == HIRTypeRef()) {
-                        return false;
-                    }
-                    input = mv$(output);
-                    found = true;
-                    return true;
-                });
-                return found;
-            };
-
-            // Special type-specific rules
-    switch ((*pe.type).tag()) {
-default:
-        // No special handling
-        break;
-        case HIRTypeData::TAG_NodeType: {
-            auto& te = (*pe.type).as_NodeType();
-            switch (te.tag()) {
-                case HIRTypeDataNodeType::TAG_Closure: {
-                    auto& nodeP = te.as_Closure();
-                    if (pe.trait.path == langAsyncFn() || pe.trait.path == langAsyncFnMut() || pe.trait.path == langAsyncFnOnce()) {
-                        if (expandAsyncCallableAssociated(nodeP->returnType)) {
-                            return;
-                        }
-                    }
-                    if (pe.trait.path == langFn() || pe.trait.path == langFnMut() || pe.trait.path == langFnOnce()) {
-                        if (pe.item == "Output") {
-                            input = nodeP->returnType;
-                            return;
-                        } else {
-                            ERROR(sp, E0000, "No associated type " << pe.item << " for trait " << pe.trait);
-                        }
-                    }
-                    // TODO: Fall through? Maybe there's a generic impl that could match.
-                    break;
-                }
-                case HIRTypeDataNodeType::TAG_Generator: {
-                    auto& nodeP = te.as_Generator();
-                    if (pe.trait.path == this->langGenerator()) {
-                        if (pe.item == "Return") {
-                            input = nodeP->returnType;
-                            return;
-                        } else if (pe.item == "Yield") {
-                            input = nodeP->yieldTy;
-                            return;
-                        } else {
-                            ERROR(sp, E0000, "No associated type " << pe.item << " for trait " << pe.trait);
-                        }
-                    }
-                    // Fall through for generic impls
-                    break;
-                }
-                case HIRTypeDataNodeType::TAG_Async: {
-                    // TODO: `Future` impl
-                    break;
-                }
-            }
-            break;
-        }
-        case HIRTypeData::TAG_Function: {
-            auto& te = (*pe.type).as_Function();
-            if (te.abi == ABI_RUST && !te.isUnsafe) {
-                if (pe.trait.path == langAsyncFn() || pe.trait.path == langAsyncFnMut() || pe.trait.path == langAsyncFnOnce()) {
-                    if (expandAsyncCallableAssociated(te.rettype)) {
-                        return;
-                    }
-                }
-                if (pe.trait.path == langFn() || pe.trait.path == langFnMut() || pe.trait.path == langFnOnce()) {
-                    if (pe.item == "Output") {
-                        input = te.rettype;
-                        return;
-                    } else {
-                        ERROR(sp, E0000, "No associated type " << pe.item << " for trait " << pe.trait);
-                    }
-                }
-            }
-            break;
-        }
-        case HIRTypeData::TAG_TraitObject: {
-            auto& te = (*pe.type).as_TraitObject();
-            const auto& dataTrait = te.trait.path;
-            if (pe.trait.path == dataTrait.path) {
-                auto cmp = HIRCompare::Equal;
-                if (pe.trait.params.types.size() != dataTrait.params.types.size()) {
-                    cmp = HIRCompare::Unequal;
-                } else {
-                    for (unsigned int i = 0; i < pe.trait.params.types.size(); i++) {
-                        const auto& l = pe.trait.params.types[i];
-                        const auto& r = dataTrait.params.types[i];
-                        cmp &= l->compareWithPlaceholders(sp, r, ivars.callbackResolveInfer());
-                    }
-                }
-                if (cmp != HIRCompare::Unequal) {
-                    auto it = te.trait.typeBounds.find(pe.item);
-                    if (it == te.trait.typeBounds.end()) {
-                        // TODO: Mark as opaque and return.
-                        // - Why opaque? It's not bounded, don't even bother
-                        TODO(sp, "Handle unconstrained associate type " << pe.item << " from " << pe.type);
-                    }
-
-                    auto hrlPps = HIRPathParams();
-                    input = it->second.type;
-                    return;
-                }
-            }
-
-            // - Check if the desired trait is a supertrait of this.
-            // NOTE: `params` (aka des_params) is not used (TODO)
-            bool isSupertrait = this->findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *te.trait.traitPtr, dataTrait.path, dataTrait.params, pe.type, [&](const HIRTraitPath& iTp) {
-                // The above is just the monomorphised params and associated set. Comparison is still needed.
-                auto cmp = this->comparePp(sp, iTp.path.params, pe.trait.params);
-                if (cmp != HIRCompare::Unequal) {
-                    // Search for bounded types in this TraitPath (from `find_named_trait_in_trait` and in the original input TraitPath `te.m_trait`)
-                    auto it = iTp.typeBounds.find(pe.item);
-                    if (it == iTp.typeBounds.end()) {
-                        // NOTE: (currently) there can only be one trait with this name, so if we found this trait and the item is present - good.
-                        it = te.trait.typeBounds.find(pe.item);
-                    }
-                    if (it != te.trait.typeBounds.end()) {
-                        // Remove HRLs (TODO: Match them? not really needed in this stage I think)
-                        auto hrlPps = HIRPathParams();
-                        input = it->second.type;
-                        return true;
-                    }
-                    return false;
-                }
-                return false;
+                input = ::std::move(response.output);
+                normalized = true;
+                return true;
             });
-            if (isSupertrait) {
+            if (normalized) {
+                this->expandAssociatedTypesInplace(sp, input, effects);
                 return;
             }
-            break;
-        }
-        case HIRTypeData::TAG_ErasedType: {
-            auto& te = (*pe.type).as_ErasedType();
-            for (const auto& trait : te.traits) {
-                const auto& traitGp = trait.path;
-                if (traitPath.path == traitGp.path) {
-                    auto cmp = HIRCompare::Equal;
-                    if (traitPath.params.types.size() != traitGp.params.types.size()) {
-                        cmp = HIRCompare::Unequal;
-                    } else {
-                        for (unsigned int i = 0; i < traitPath.params.types.size(); i++) {
-                            const auto& l = traitPath.params.types[i];
-                            const auto& r = traitGp.params.types[i];
-                            cmp &= l->compareWithPlaceholders(sp, r, ivars.callbackResolveInfer());
-                        }
-                    }
-                    if (cmp != HIRCompare::Unequal) {
-                        auto hrls = HIRPathParams();
-                        {
-                            auto it = trait.typeBounds.find(pe.item);
-                            if (it != trait.typeBounds.end()) {
-                                input = it->second.type;
-                                return;
-                            }
-                        }
-                        // Mark as opaque and return, and ensure that the bounds are added to the bounds cache
-                        markOpaque();
-                        {
-                            auto it = trait.traitBounds.find(pe.item);
-                            if (it != trait.traitBounds.end()) {
-                                for (const auto& bound : it->second.traits) {
-                                    const_cast<TraitResolution&>(*this).prepIndexesAddTraitBound(sp, input, bound.clone());
-                                }
-                            }
-                        }
-                        return;
-                    }
-                }
 
-                // - Check if the desired trait is a supertrait of this.
-                // NOTE: `params` (aka des_params) is not used (TODO)
-                bool isSupertrait = this->findNamedTraitInTrait(sp, traitPath.path, traitPath.params, *trait.traitPtr, traitGp.path, traitGp.params, pe.type, [&](const HIRTraitPath& iTp) {
-                    // The above is just the monomorphised params and associated set. Comparison is still needed.
-                    auto cmp = this->comparePp(sp, iTp.path.params, pe.trait.params);
-                    if (cmp != HIRCompare::Unequal) {
-                        auto it = iTp.typeBounds.find(pe.item);
-                        if (it == iTp.typeBounds.end()) {
-                            // NOTE: (currently) there can only be one trait with this name, so if we found this trait and the item is present - good.
-                            it = trait.typeBounds.find(pe.item);
-                        }
-                        if (it != trait.typeBounds.end()) {
-                            auto hrls = HIRPathParams();
-                            input = it->second.type;
-                            return true;
-                        }
-                        return false;
-                    }
-                    return false;
-                });
-                if (isSupertrait) {
-                    return;
-                }
-            }
-            break;
-        }
-    }
-
-    // 1. Bounds
-    bool rv = false;
-    bool foundBoundWithNoType = false;
-    enum class ResultType {
-        Opaque,
-        LeaveUnbound,
-        Recurse,
-    } resultType = ResultType::Opaque;
-
-    if(!rv)
-    {
-        auto it = typeEqualities.find(input);
-        if (it == typeEqualities.end()) {
-            it = ::std::find_if(typeEqualities.begin(), typeEqualities.end(), [&](const auto& entry) {
-                return entry.first->equalsIgnoringRegions(input);
-            });
-        }
-        if (it != typeEqualities.end()) {
-            resultType = ResultType::Recurse;
-            input = it->second.ty;
-            rv = true;
-        }
-    }
-    if(!rv)
-    {
-        rv = this->iterateBoundsTraits(sp, pe.type, traitPath.path, [&](HIRCompare cmp, const HIRTypeData* boundType, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
-            // 2. Check if the trait (or any supertrait) includes pe.trait
-            // TODO: If fuzzy, bail and leave unresolved?
-            cmp &= boundTrait.compareWithPlaceholders(sp, traitPath, this->ivars.callbackResolveInfer());
-            if (cmp == HIRCompare::Equal) {
-                auto it = boundInfo.assoc.find(pe.item);
-                // 1. Check if the bounds include the desired item
-                if (it == boundInfo.assoc.end()) {
-                    // If not, assume it's opaque and return as such
-                    // TODO: What happens if there's two bounds that overlap? 'F: FnMut<()>, F: FnOnce<(), Output=Bar>'
-
-                    // Flag so if no impl was found by the lower checks, it gets correctly set to Opaque (or left unbound)
-                    foundBoundWithNoType = true;
-                    if (cmp == HIRCompare::Fuzzy) {
-                        resultType = ResultType::LeaveUnbound;
-                    } else {
-                        resultType = ResultType::Opaque;
-                    }
-                    return false;
-                } else {
-                    resultType = ResultType::Recurse;
-                    input = it->second.type;
-                }
-                return true;
-            }
-
-            // - Didn't match
-            return false;
-        });
-    }
-
-    if( rv ) {
-        assert(resultType == ResultType::Recurse); // Nothing else can happen without `rv` being false
-        this->expandAssociatedTypesInplace(sp, input, stack, effects);
-        return;
-    }
-
-    // If the type of this UfcsKnown is ALSO a UfcsKnown - Check if it's bounded by this trait with equality
-    //  e.g. `<<Foo as Bar>::Baz as Trait2>::Type` may have an ATY bound `trait Bar { type Baz: Trait2<Type=...> }`
-    // Use bounds on other associated types too (if `pe.type` was resolved to a fixed associated type)
-    if(const auto* teInner = pe.type->opt_Path())
-    {
-        if (const auto* peInnerP = teInner->path.data.opt_UfcsKnown()) {
-            const auto& peInner = *peInnerP;
-            // TODO: Search for equality bounds on this associated type (pe_inner) that match the entire type (pe)
-            // - Does simplification of complex associated types
-            HIRGenericPath traitPath;
-            if (!this->traitContainsType(sp, peInner.trait, this->crate.getTraitByPath(sp, peInner.trait.path), peInner.item.c_str(), traitPath)) {
-                BUG(sp, "Cannot find associated type " << peInner.item << " anywhere in trait " << peInner.trait);
-            }
-            const auto& traitPtr = this->crate.getTraitByPath(sp, traitPath.path);
-            const auto& assocTy = traitPtr.types.at(peInner.item);
-
-            // Resolve where Self=pe_inner.type (i.e. for the trait this inner UFCS is on)
-            auto cbPlaceholdersTrait = MonomorphStatePtr(crate.types, peInner.type, &peInner.trait.params, &peInner.params);
-            for (const auto& bound : assocTy.traitBounds) {
-                auto it = bound.typeBounds.find(pe.item);
-                if (it != bound.typeBounds.end()) {
-                    auto sourceTrait = cbPlaceholdersTrait.monomorphGenericpath(sp, it->second.sourceTrait, false);
-                    auto atyParams = cbPlaceholdersTrait.monomorphPathParams(sp, it->second.atyParams, false);
-                    for (auto& t : sourceTrait.params.types) {
-                        expandAssociatedTypesInplace(sp, t, stack, effects);
-                    }
-                    for (auto& t : atyParams.types) {
-                        expandAssociatedTypesInplace(sp, t, stack, effects);
-                    }
-                    auto cmp = sourceTrait.compareWithPlaceholders(sp, pe.trait, ivars.callbackResolveInfer());
-                    cmp &= atyParams.compareWithPlaceholders(sp, pe.params, ivars.callbackResolveInfer());
-                    if (cmp == HIRCompare::Equal) {
-                        input = monomorphiseTypeNeeded(it->second.type) ? cbPlaceholdersTrait.monomorphType(sp, it->second.type) : it->second.type;
-                        this->expandAssociatedTypesInplace(sp, input, stack, effects);
-                        return;
-                    }
-                }
-
-                auto boundTp = cbPlaceholdersTrait.monomorphGenericpath(sp, bound.path, false);
-                for (auto& t : boundTp.params.types) {
-                    expandAssociatedTypesInplace(sp, t, stack, effects);
-                }
-
-                // TODO: Find trait in this trait.
-                const auto& boundTrait = crate.getTraitByPath(sp, boundTp.path);
-                bool replaced = this->findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, boundTrait, boundTp.path, boundTp.params, pe.type, [&](const HIRTraitPath& tp) {
-                    auto it = tp.typeBounds.find(pe.item);
-                    if (it != tp.typeBounds.end()) {
-                        input = it->second.type;
-                        return true;
-                    }
-                    return false;
-                });
-                if (replaced) {
-                    return;
-                }
-            }
-        }
-    }
-
-    // A projection whose self repeats the same (trait, item) frame several
-    // times is a self-similar chain a pathological blanket keeps growing
-    // (`F: FnOnce() -> T, T: AssociatedConstant`): every expansion attempt
-    // re-enters the goal machinery on a longer chain, which is exponential.
-    // Treat deep self-similar chains as rigid.
-    const auto selfSimilarChain = [&]() {
-        size_t repeats = 0;
-        for (const HIRTypeData* t = pe.type; ; ) {
-            const auto* path = t->opt_Path();
-            const auto* inner = path ? path->path.data.opt_UfcsKnown() : nullptr;
-            if (!inner) {
-                break;
-            }
-            if (inner->trait.path == pe.trait.path && inner->item == pe.item) {
-                repeats++;
-                if (repeats >= 2) {
-                    return true;
-                }
-            }
-            t = inner->type;
-        }
-        return false;
-    };
-    if (!selfSimilarChain()) {
-        bool normalized = false;
-        bool ambiguous = false;
-        this->solveTraitGoal(sp, traitPath.path, traitPath.params, pe.type, [&](SolverResponse response) {
-            if (!response.hasImpl || !response.impl || response.impl->ambiguousIdentity) {
-                ambiguous = true;
-                return true;
-            }
-            auto impl = response.impl->legacy();
-            auto candidateOutput = impl.getType(crate.types, pe.item.c_str(), pe.params);
-            if (candidateOutput == HIRTypeRef() || candidateOutput == input) {
-                ambiguous = true;
-                return true;
-            }
-            CorrelateSolverResponseSlots correlate(crate.types, response.slots);
-            candidateOutput = correlate.monomorphType(sp, candidateOutput, true);
-            input = ::std::move(candidateOutput);
-            normalized = true;
-            ambiguous = response.certainty != SolverCertainty::Proven;
-            if (effects) {
-                effects->visit(::std::move(response));
-            }
-            return true;
-        }, {.assocName = pe.item.c_str(), .assocParams = &pe.params});
-        if (normalized) {
-            this->expandAssociatedTypesInplace(sp, input, stack, effects);
-            return;
-        }
-        if (ambiguous) {
-            // A rigid unresolved projection is still a usable alias: method
-            // lookup and associated-type bounds must be allowed to inspect it.
-            // Only projections containing inference variables stay unbound,
-            // because those are obligations the constraint loop must retry.
+            // A projection over caller inference remains retryable.  A rigid
+            // unresolved projection is an opaque alias which can participate
+            // in later bounds and method lookup.
             if (!this->ivars.typeContainsIvars(input, false)) {
-                markOpaque();
+                auto data = input->cloneData();
+                data.as_Path().binding = HIRTypePathBinding::make_Opaque({});
+                input = crate.types.intern(::std::move(data));
             }
-            return;
-        }
-    }
-
-    if( this->findTraitImplsMagic(sp, traitPath.path, traitPath.params, pe.type, [&](auto impl, auto qual)->bool {
-        // If it's a fuzzy match, keep going (but count if a concrete hasn't been found)
-        if (qual == HIRCompare::Fuzzy) {
-        } else {
-            auto ty = impl.getType(crate.types, pe.item.c_str(), pe.params);
-            if (ty == HIRTypeRef()) {
-                markOpaque();
-            } else {
-                input = mv$(ty);
-            }
-        }
-        return true;
-        }) )
-    {
-        return;
-    }
-
-    if( this->findTraitImplsTypes(sp, traitPath.path, traitPath.params, pe.type, [&](auto impl, auto qual)->bool {
-        // If it's a fuzzy match, keep going (but count if a concrete hasn't been found)
-        if (qual == HIRCompare::Fuzzy) {
-        } else {
-            auto ty = impl.getType(crate.types, pe.item.c_str(), pe.params);
-            if (ty == HIRTypeRef()) {
-                markOpaque();
-            } else {
-                input = mv$(ty);
-            }
-        }
-        return true;
-        }) )
-    {
-        return;
-    }
-
-    // 2. Crate-level impls
-    bool    canFuzz = true;
-    unsigned int    count = 0;
-    bool isSpecialisable = false;
-    bool isBound = false;
-    ImplRef bestImpl;
-    auto cbFindImpl = [&](ImplRef impl, HIRCompare qual)->bool {
-        // If it's a fuzzy match, keep going (but count if a concrete hasn't been found)
-        if (qual == HIRCompare::Fuzzy) {
-            if (canFuzz) {
-                count += 1;
-                if (count == 1 && impl.getImplType(crate.types)->tag() == pe.type->tag()) {
-                    bestImpl = mv$(impl);
-                }
-            }
-            return false;
-        } else {
-            // If a fuzzy match could have been seen, ensure that best_impl is unsed
-            if (canFuzz) {
-                bestImpl = ImplRef();
-                canFuzz = false;
-            }
-
-            // If the type is specialisable
-            if (impl.typeIsSpecialisable(pe.item.c_str())) {
-                // Check if this is more specific
-                if (impl.moreSpecificThan(crate.types, bestImpl)) {
-                    isSpecialisable = true;
-                    bestImpl = mv$(impl);
-                }
-                return false;
-            } else {
-                auto ty = impl.getType(crate.types, pe.item.c_str(), pe.params);
-                if (ty == HIRTypeRef()) {
-                    if (isBound) {
-                        return false;
-                    } else {
-                        if (pe.item.compare(0, strlen(ATY_PREFIX_ERASED), ATY_PREFIX_ERASED) == 0) {
-                            markOpaque();
-                            return true;
-                        } else {
-                            ERROR(sp, E0000, "Couldn't find assocated type " << pe.item << " in impl of " << pe.trait << " for " << pe.type);
-                        }
-                    }
-                }
-
-                if (impl.hasMagicParams()) {
-                }
-
-                // TODO: What if there's multiple impls?
-                input = mv$(ty);
-                return true;
-            }
-        }
-        };
-
-    rv = this->findTraitImplsCrate(sp, traitPath.path, traitPath.params, pe.type, cbFindImpl);
-    if( !rv ) {
-        isBound = true;
-        rv = findTraitImplsBound(sp, traitPath.path, traitPath.params, pe.type, cbFindImpl);
-    }
-    if( !rv && bestImpl.isValid() ) {
-        if (canFuzz && count > 1) {
-            // Fuzzy match with multiple choices - can't know yet
-        } else if (isSpecialisable) {
-            if (!this->ivars.typeContainsIvars(input, false)) {
-                markOpaque();
-            } else {
-            }
-            return;
-        } else {
-            auto ty = bestImpl.getType(crate.types, pe.item.c_str(), pe.params);
-            if (ty == HIRTypeRef()) {
-                if (!this->ivars.typeContainsIvars(input, false)) {
-                    markOpaque();
-                } else {
-                }
-                return;
-            }
-
-            // Try again later?
-            if (bestImpl.hasMagicParams()) {
-                return;
-            }
-
-            if (canFuzz && count == 1 && effects) {
-                const auto* selected = bestImpl.data.opt_TraitImpl();
-                if (selected && selected->impl) {
-                    HIRPathParams committedParams;
-                    SolverResponse committedEffects;
-                    const auto committed = this->fticCheckParams(
-                        sp,
-                        traitPath.path,
-                        &traitPath.params,
-                        pe.type,
-                        selected->impl->params,
-                        selected->impl->traitArgs,
-                        selected->impl->type,
-                        committedParams,
-                        true,
-                        true,
-                        &committedEffects);
-                    if (committed == HIRCompare::Unequal) {
-                    }
-                    effects->visit(::std::move(committedEffects));
-                }
-            }
-
-            input = mv$(ty);
-            rv = true;
-        }
-    }
-    if( rv ) {
-        expandAssociatedTypesInplace(sp, input, stack, effects);
-        return;
-    }
-
-    if( foundBoundWithNoType )
-    {
-        switch (resultType) {
-            case ResultType::Opaque: {
-                markOpaque();
-
-                for (const auto& v : typeEqualities) {
-                }
-
-                auto a = typeEqualities.find(input);
-                if (a == typeEqualities.end()) {
-                    a = ::std::find_if(typeEqualities.begin(), typeEqualities.end(), [&](const auto& entry) {
-                        return entry.first->equalsIgnoringRegions(input);
-                    });
-                }
-                if (a != typeEqualities.end()) {
-                    input = a->second.ty;
-                }
-                this->expandAssociatedTypesInplace(sp, input, stack, effects);
-            } break;
-            case ResultType::Recurse:
-                assert(false);
-                break;
-            case ResultType::LeaveUnbound:
-                break;
-        }
-        return;
-    }
-
-    // If there are no ivars in this path, set its binding to Opaque
-    if( !this->ivars.typeContainsIvars(input, false) ) {
-        // TODO: If the type is a generic or an opaque associated, we can't know.
-        // - If the trait contains any of the above, it's unknowable
-        // - Otherwise, it's an error
-        markOpaque();
-    }
-    else {
-    }
         }
 
         // -------------------------------------------------------------------------------------------------------------------
@@ -9354,6 +8928,9 @@ default:
             }
 
             return this->crate.findTraitImpls(trait, type, this->ivars.callbackResolveInfer(), [&](const HIRTraitImpl& impl) {
+                if (impl.isReservation) {
+                    return false;
+                }
                 // Compare with `params`
                 HIRPathParams implParams;
                 auto match = this->fticCheckParams(sp, trait, paramsPtr, type, impl.params, impl.traitArgs, impl.type, implParams);
@@ -9890,10 +9467,10 @@ default:
                         if (cmp == HIRCompare::Fuzzy) {
                             // If the match was fuzzy, try again filling in with `cb_match`
                             auto iTy = impl.getImplType(crate.types);
-                            this->expandAssociatedTypesInplace(sp, iTy, {});
+                            this->expandAssociatedTypesInplace(sp, iTy);
                             auto iTp = impl.getTraitParams(crate.types);
                             for (auto& t : iTp.types) {
-                                this->expandAssociatedTypesInplace(sp, t, {});
+                                this->expandAssociatedTypesInplace(sp, t);
                             }
                             cmp &= realType->matchTestGenericsFuzz(sp, iTy, cbInfer, matcher);
                             cmp &= realTraitPath.params.matchTestGenericsFuzz(sp, iTp, cbInfer, matcher);
@@ -9909,7 +9486,7 @@ default:
                                 ty = tmp;
                             } else {
                                 // Expand after extraction, just to make sure.
-                                this->expandAssociatedTypesInplace(sp, tmp, {});
+                                this->expandAssociatedTypesInplace(sp, tmp);
                                 ty = this->ivars.getType(tmp);
                             }
                             // `ty` = Monomorphised actual type (< `be.type` as `be.trait` >::`assoc_bound.first`)
@@ -10854,7 +10431,7 @@ default: {
                     if (foundTarget == HIRTypeRef()) {
                         foundTarget = crate.types.path(HIRPath(ty, langDeref_, RcString::newInterned("Target")), HIRTypePathBinding::make_Opaque({}));
                     } else {
-                        this->expandAssociatedTypesInplace(sp, foundTarget, {});
+                        this->expandAssociatedTypesInplace(sp, foundTarget);
                     }
                     auto foundImplType = impl.getImplType(crate.types);
 
@@ -11981,7 +11558,7 @@ default: {
 
         /// Expand any located associated types in the input, operating in-place and returning the result
         HIRTypeRef TraitResolution::expandAssociatedTypes(const Span& sp, HIRTypeRef input, SolverResponseCallback* effects) const {
-            expandAssociatedTypesInplace(sp, input, LList<const HIRTypeData*>(), effects);
+            expandAssociatedTypesInplace(sp, input, effects);
             return input;
         }
 
