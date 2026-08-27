@@ -44,7 +44,9 @@ namespace {
 
     /// Scope state for generators
     struct CoroutineScope {
-        static const unsigned STACK_MARKER_LOOP;
+        enum : unsigned {
+            STACK_MARKER_LOOP = ~0u,
+        };
         CRNode node;
 
         // Note: Counts the total number of `yield`s encountered
@@ -1506,8 +1508,6 @@ namespace {
         }
     };
 
-    const unsigned CoroutineScope::STACK_MARKER_LOOP = ~0u;
-
     class AnnotateOuterVisitor: public HIRVisitor {
         StaticTraitResolve resolve_;
 
@@ -1590,15 +1590,6 @@ namespace {
         return HIRExprNodeP(en);
     }
 
-    const RcString rcstringSelf = RcString::newInterned("Self");
-    const RcString rcstringSelfLower = RcString::newInterned("self");
-    const RcString rcstringArg = RcString::newInterned("arg");
-    const RcString rcstringArgs = RcString::newInterned("args");
-    const RcString rcstringCallFree = RcString::newInterned("call_free");
-    const RcString rcstringCallOnce = RcString::newInterned("call_once");
-    const RcString rcstringCallMut = RcString::newInterned("call_mut");
-    const RcString rcstringCall = RcString::newInterned("call");
-    const RcString rcstringClone = RcString::newInterned("clone");
 }
 
 #define NEWNODE(TY, CLASS, ...) closureMkExprnodep(pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
@@ -1919,13 +1910,13 @@ namespace {
                     // Assume it's NoCapture
                 case HIRExprNodeClosure::Class::NoCapture:
                 case HIRExprNodeClosure::Class::Shared:
-                    self = NEWNODE(closureType, Deref, sp, NEWNODE(monomorphiser.typeInterner().borrow(HIRBorrowType::Shared, closureType), Variable, sp, rcstringSelfLower, 0));
+                    self = NEWNODE(closureType, Deref, sp, NEWNODE(monomorphiser.typeInterner().borrow(HIRBorrowType::Shared, closureType), Variable, sp, RcString("self"), 0));
                     break;
                 case HIRExprNodeClosure::Class::Mut:
-                    self = NEWNODE(closureType, Deref, sp, NEWNODE(monomorphiser.typeInterner().borrow(HIRBorrowType::Unique, closureType), Variable, sp, rcstringSelfLower, 0));
+                    self = NEWNODE(closureType, Deref, sp, NEWNODE(monomorphiser.typeInterner().borrow(HIRBorrowType::Unique, closureType), Variable, sp, RcString("self"), 0));
                     break;
                 case HIRExprNodeClosure::Class::Once:
-                    self = NEWNODE(closureType, Variable, sp, rcstringSelfLower, 0);
+                    self = NEWNODE(closureType, Variable, sp, RcString("self"), 0);
                     break;
             }
             return self;
@@ -2066,7 +2057,7 @@ namespace {
                 // - Get the new PathValue
                 const auto& str = *srcNode.objPtr;
                 auto closureType = crate.types.path(srcNode.objPath.clone(), &str);
-                auto fnPath = HIRPath(mv$(closureType), rcstringCallFree);
+                auto fnPath = HIRPath(mv$(closureType), RcString("call_free"));
                 fnPath.data.as_UfcsInherent().implParams = srcNode.objPath.params.clone();
 
                 const HIRFunction* fcnPtr = nullptr;
@@ -2159,26 +2150,26 @@ namespace {
             // NOTE: Fixup isn't needed, there's no self
             assert(code.bindings.size() > 0);
             code.bindings[0] = types.unit();
-            return HIRTypeImpl{std::move(params), std::move(closureType), makeMap1(rcstringCallFree, HIRTypeImpl::VisImplEnt<HIRFunction>{HIRPublicity::newGlobal(), false, HIRFunction(HIRFunction::Receiver::Free, HIRGenericParams{}, mv$(args), retTy, mv$(code))}), {}, {}, HIRSimplePath()};
+            return HIRTypeImpl{std::move(params), std::move(closureType), makeMap1(RcString("call_free"), HIRTypeImpl::VisImplEnt<HIRFunction>{HIRPublicity::newGlobal(), false, HIRFunction(HIRFunction::Receiver::Free, HIRGenericParams{}, mv$(args), retTy, mv$(code))}), {}, {}, HIRSimplePath()};
         }
 
         static HIRTraitImpl makeFnonce(HIRGenericParams params, HIRPathParams traitParams, HIRTypeRef closureType, ::std::pair<HIRPattern, HIRTypeRef> argsArgent, HIRTypeRef retTy, HIRExprPtr code) {
             auto tyOfSelf = closureType;
             fixFnParams(code, tyOfSelf, argsArgent.second);
-            return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(rcstringCallOnce, HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::Value, HIRGenericParams{}, makeVec2(::std::make_pair(HIRPattern{HIRPatternBinding{false, HIRPatternBinding::Type::Move, rcstringSelfLower, 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, {}, makeMap1(RcString::newInterned("Output"), HIRTraitImpl::ImplEnt<HIRTypeRef>{false, mv$(retTy)}), HIRSimplePath()};
+            return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(RcString("call_once"), HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::Value, HIRGenericParams{}, makeVec2(::std::make_pair(HIRPattern{HIRPatternBinding{false, HIRPatternBinding::Type::Move, RcString("self"), 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, {}, makeMap1(RcString::newInterned("Output"), HIRTraitImpl::ImplEnt<HIRTypeRef>{false, mv$(retTy)}), HIRSimplePath()};
         }
 
         static HIRTraitImpl makeFnmut(HIRTypeInterner& types, HIRGenericParams params, HIRPathParams traitParams, HIRTypeRef closureType, ::std::pair<HIRPattern, HIRTypeRef> argsArgent, HIRTypeRef retTy, HIRExprPtr code) {
             HIRGenericParams fcnParams;
             auto tyOfSelf = types.borrow(HIRBorrowType::Unique, closureType);
             fixFnParams(code, tyOfSelf, argsArgent.second);
-            return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(rcstringCallMut, HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::BorrowUnique, mv$(fcnParams), makeVec2(::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, rcstringSelfLower, 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, {}, {}, HIRSimplePath()};
+            return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(RcString("call_mut"), HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::BorrowUnique, mv$(fcnParams), makeVec2(::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, RcString("self"), 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, {}, {}, HIRSimplePath()};
         }
 
         static HIRTraitImpl makeFn(HIRTypeInterner& types, HIRGenericParams params, HIRPathParams traitParams, HIRTypeRef closureType, ::std::pair<HIRPattern, HIRTypeRef> argsArgent, HIRTypeRef retTy, HIRExprPtr code) {
             auto tyOfSelf = types.borrow(HIRBorrowType::Shared, closureType);
             fixFnParams(code, tyOfSelf, argsArgent.second);
-            return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(rcstringCall, HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::BorrowShared, HIRGenericParams{}, makeVec2(::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, rcstringSelfLower, 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, {}, {}, HIRSimplePath()};
+            return HIRTraitImpl{mv$(params), mv$(traitParams), mv$(closureType), makeMap1(RcString("call"), HIRTraitImpl::ImplEnt<HIRFunction>{false, HIRFunction{HIRFunction::Receiver::BorrowShared, HIRGenericParams{}, makeVec2(::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, RcString("self"), 0}, {}}, mv$(tyOfSelf)), mv$(argsArgent)), retTy, mv$(code)}}), {}, {}, {}, HIRSimplePath()};
         }
     };
 
@@ -2757,7 +2748,7 @@ namespace {
                         const auto& langClone = resolve_.hirCrate().getLangItemPath(sp, "clone");
                         auto borrowTy = resolve_.hirCrate().types.borrow(HIRBorrowType::Shared, capTy);
                         auto borrowNode = NEWNODE(borrowTy, Borrow, sp, HIRBorrowType::Shared, mv$(valNode));
-                        auto* cloneCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(capTy, HIRGenericPath(langClone), rcstringClone), makeVec1(mv$(borrowNode)));
+                        auto* cloneCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(capTy, HIRGenericPath(langClone), RcString("clone")), makeVec1(mv$(borrowNode)));
                         valNode = closureMkExprnodep(cloneCall, capTy);
                         cloneCall->cache.argTypes = makeVec2(mv$(borrowTy), capTy);
                     }
@@ -2888,17 +2879,17 @@ namespace {
                             dispatchNodeArgsCache.reserve(argsTupInner.size() + 1);
                             for (size_t i = 0; i < argsTupInner.size(); i++) {
                                 const auto& ty = argsTupInner[i];
-                                dispatchArgs.push_back(NEWNODE(ty, Field, sp, NEWNODE(argsTy, Variable, sp, rcstringArg, 1), RcString::newInterned(FMT(i))));
+                                dispatchArgs.push_back(NEWNODE(ty, Field, sp, NEWNODE(argsTy, Variable, sp, RcString("arg"), 1), RcString::newInterned(FMT(i))));
                                 dispatchNodeArgsCache.push_back(ty);
                             }
                             dispatchNodeArgsCache.push_back(retType);
-                            auto path = HIRPath(closureType, rcstringCallFree);
+                            auto path = HIRPath(closureType, RcString("call_free"));
                             path.data.as_UfcsInherent().implParams = closureType->as_Path().path.data.as_Generic().params.clone();
                             auto* dispatchCall = pool->make<HIRExprNodeCallPath>(sp, mv$(path), mv$(dispatchArgs));
                             HIRExprNodeP dispatchNode = closureMkExprnodep(dispatchCall, retType);
                             dispatchCall->cache.argTypes = mv$(dispatchNodeArgsCache);
 
-                            auto argsArg = ::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, rcstringArgs, 1}, {}}, argsTy);
+                            auto argsArg = ::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, RcString("args"), 1}, {}}, argsTy);
                             HIRTraitImpl fcn;
                             switch (c) {
                                 case HIRExprNodeClosure::Class::Once:
@@ -2944,19 +2935,19 @@ namespace {
 
                     // - FnOnce
                     {
-                        auto* dispatchCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(closureType, HIRGenericPath(langFn, traitParams.clone()), rcstringCall, HIRPathParams()), makeVec2(NEWNODE(methodSelfTy, Borrow, sp, HIRBorrowType::Shared, NEWNODE(closureType, Variable, sp, rcstringSelfLower, 0)), NEWNODE(argsTy, Variable, sp, rcstringArg, 1)));
+                        auto* dispatchCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(closureType, HIRGenericPath(langFn, traitParams.clone()), RcString("call"), HIRPathParams()), makeVec2(NEWNODE(methodSelfTy, Borrow, sp, HIRBorrowType::Shared, NEWNODE(closureType, Variable, sp, RcString("self"), 0)), NEWNODE(argsTy, Variable, sp, RcString("arg"), 1)));
                         auto dispatchNode = closureMkExprnodep(dispatchCall, retType);
                         dispatchCall->cache.argTypes = makeVec3(methodSelfTy, argsTy, retType);
-                        auto argsArg = ::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, rcstringArgs, 1}, {}}, argsTy);
+                        auto argsArg = ::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, RcString("args"), 1}, {}}, argsTy);
                         out.implsClosure.push_back(::std::make_pair(HIRExprNodeClosure::Class::Once, H::makeFnonce(params.clone(), traitParams.clone(), closureType, mv$(argsArg), retType, mv$(dispatchNode))));
                     }
                     // - FnMut
                     {
                         auto selfTy = resolve_.hirCrate().types.borrow(HIRBorrowType::Unique, closureType);
-                        auto* dispatchCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(closureType, HIRGenericPath(langFn, traitParams.clone()), rcstringCall, HIRPathParams()), makeVec2(NEWNODE(methodSelfTy, Borrow, sp, HIRBorrowType::Shared, NEWNODE(closureType, Deref, sp, NEWNODE(mv$(selfTy), Variable, sp, rcstringSelfLower, 0))), NEWNODE(argsTy, Variable, sp, rcstringArg, 1)));
+                        auto* dispatchCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(closureType, HIRGenericPath(langFn, traitParams.clone()), RcString("call"), HIRPathParams()), makeVec2(NEWNODE(methodSelfTy, Borrow, sp, HIRBorrowType::Shared, NEWNODE(closureType, Deref, sp, NEWNODE(mv$(selfTy), Variable, sp, RcString("self"), 0))), NEWNODE(argsTy, Variable, sp, RcString("arg"), 1)));
                         auto dispatchNode = closureMkExprnodep(dispatchCall, retType);
                         dispatchCall->cache.argTypes = makeVec3(methodSelfTy, argsTy, retType);
-                        auto argsArg = ::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, rcstringArgs, 1}, {}}, argsTy);
+                        auto argsArg = ::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, RcString("args"), 1}, {}}, argsTy);
                         out.implsClosure.push_back(::std::make_pair(HIRExprNodeClosure::Class::Mut, H::makeFnmut(resolve_.hirCrate().types, params.clone(), traitParams.clone(), closureType, mv$(argsArg), retType, mv$(dispatchNode))));
                     }
 
@@ -2970,10 +2961,10 @@ namespace {
 
                     // - FnOnce
                     {
-                        auto* dispatchCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(closureType, HIRGenericPath(langFnMut, traitParams.clone()), rcstringCallMut, HIRPathParams()), makeVec2(NEWNODE(methodSelfTy, Borrow, sp, HIRBorrowType::Unique, NEWNODE(closureType, Variable, sp, rcstringSelfLower, 0)), NEWNODE(argsTy, Variable, sp, rcstringArg, 1)));
+                        auto* dispatchCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(closureType, HIRGenericPath(langFnMut, traitParams.clone()), RcString("call_mut"), HIRPathParams()), makeVec2(NEWNODE(methodSelfTy, Borrow, sp, HIRBorrowType::Unique, NEWNODE(closureType, Variable, sp, RcString("self"), 0)), NEWNODE(argsTy, Variable, sp, RcString("arg"), 1)));
                         auto dispatchNode = closureMkExprnodep(dispatchCall, retType);
                         dispatchCall->cache.argTypes = makeVec3(methodSelfTy, argsTy, retType);
-                        auto argsArg = ::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, rcstringArgs, 1}, {}}, argsTy);
+                        auto argsArg = ::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, RcString("args"), 1}, {}}, argsTy);
                         out.implsClosure.push_back(::std::make_pair(HIRExprNodeClosure::Class::Once, H::makeFnonce(params.clone(), traitParams.clone(), closureType, mv$(argsArg), retType, mv$(dispatchNode))));
                     }
 
@@ -3161,7 +3152,7 @@ namespace {
                             const auto& langClone = resolve_.hirCrate().getLangItemPath(sp, "clone");
                             auto borrowTy = resolve_.hirCrate().types.borrow(HIRBorrowType::Shared, sourceCapTy);
                             auto borrowNode = NEWNODE(borrowTy, Borrow, sp, HIRBorrowType::Shared, std::move(rv.captureNodes.back()));
-                            auto* cloneCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(sourceCapTy, HIRGenericPath(langClone), rcstringClone), makeVec1(mv$(borrowNode)));
+                            auto* cloneCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(sourceCapTy, HIRGenericPath(langClone), RcString("clone")), makeVec1(mv$(borrowNode)));
                             cloneCall->cache.argTypes = makeVec2(mv$(borrowTy), sourceCapTy);
                             rv.captureNodes.back() = closureMkExprnodep(cloneCall, sourceCapTy);
                         }
@@ -3829,7 +3820,7 @@ namespace {
 
         void visitTrait(HIRItemPath p, HIRTrait& item) override {
             auto _ = this->resolve_.setImplGenerics(MetadataType::TraitObject, item.params);
-            HIRTypeRef self = resolve_.hirCrate().types.generic(rcstringSelf, 0xFFFF);
+            HIRTypeRef self = resolve_.hirCrate().types.generic(RcString("Self"), 0xFFFF);
             selfType = self;
             HIRVisitor::visitTrait(p, item);
             selfType = nullptr;
@@ -3878,11 +3869,9 @@ void HIRExpandClosuresExpr(const WireBoard& wb, const HIRCrate& crateRo, HIRType
 
     const HIRTypeData* selfType = nullptr; // TODO: Need to be able to get this?
 
-    static int closureCount = 0;
     OutState out;
     auto newType = makeCallable<ClosureTypeCb>([&](const char* prefix, const char* suffix, auto s) -> auto {
-        auto name = RcString::newInterned(FMT(prefix << "C_" << closureCount));
-        closureCount += 1;
+        auto name = RcString::newInterned(FMT(prefix << "C_" << wb.hirExpand->newClosureIndex()));
         auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{HIRPublicity::newNone(), HIRTypeItem(mv$(s))});
         auto* retPtr = &boxed->ent;
         crate.newTypes.push_back(::std::make_pair(name, boxed));
@@ -5694,8 +5683,6 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
     StaticTraitResolve resolve(wb);
     resolve.setBothGenericsRaw(exp.state->implGenerics, exp.state->itemGenerics);
 
-    static int staticCount = 0;
-
     const HIRTypeData* selfType = ip.getTopIp().ty;
     if (ip.getTopIp().wrapped) {
         const HIRPath& p = *ip.getTopIp().wrapped;
@@ -5713,7 +5700,7 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
     }
 
     auto callback = makeCallable<NewStaticCb>([&](Span sp, HIRTypeRef ty, HIRExprPtr valExpr, HIRGenericParams generics, bool isConst) -> HIRSimplePath {
-        auto name = RcString::newInterned(FMT("lifted#C_" << staticCount++));
+        auto name = RcString::newInterned(FMT("lifted#C_" << wb.hirExpand->newStaticIndex()));
 
         auto path = HIRSimplePath(crate.crateName, {name});
         auto newStatic = HIRStatic(
@@ -5729,15 +5716,16 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
 
         struct Nvs: HIREvaluator::Newval {
             const HIRCrate& crate;
+            HIRExpandContext& context;
 
-            Nvs(const HIRCrate& crate)
+            Nvs(const HIRCrate& crate, HIRExpandContext& context)
                 : crate(crate)
+                , context(context)
             {
             }
 
             HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override {
-                auto name = RcString::newInterned(FMT("lifted#C_" << staticCount));
-                staticCount++;
+                auto name = RcString::newInterned(FMT("lifted#C_" << context.newStaticIndex()));
                 auto path = HIRSimplePath() + name;
                 auto newStatic = HIRStatic(
                     HIRLinkage(),
@@ -5768,7 +5756,7 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
                 s.value.state->itemGenerics = &s.params;
                 return path;
             }
-        } nvs{crate};
+        } nvs{crate, *wb.hirExpand};
 
         if (!newStatic.params.isGeneric()) {
             newStatic.value.state->stage = HIRExprState::Stage::Sbc;
@@ -5888,7 +5876,7 @@ namespace {
 
             auto borrowType = crate.types.borrow(HIRBorrowType::Shared, type);
             auto borrowNode = NEWNODE(borrowType, Borrow, sp, HIRBorrowType::Shared, mv$(node.value));
-            auto* cloneCall = crate.pool->make<HIRExprNodeCallPath>(sp, HIRPath(type, HIRGenericPath(crate.getLangItemPath(sp, "clone")), rcstringClone), makeVec1(mv$(borrowNode)));
+            auto* cloneCall = crate.pool->make<HIRExprNodeCallPath>(sp, HIRPath(type, HIRGenericPath(crate.getLangItemPath(sp, "clone")), RcString("clone")), makeVec1(mv$(borrowNode)));
             replacement_ = ufcsMkExprnodep(cloneCall, node.resType);
             cloneCall->cache.argTypes = makeVec2(mv$(borrowType), node.resType);
         }

@@ -8,6 +8,7 @@ struct ASTCrate;
 class HIRCrate;
 class HIRTypeInterner;
 class HIRInherentCache;
+class HIRExpandContext;
 class HygieneContext;
 class ExpandRegistry;
 class MacroDefinitionContext;
@@ -35,6 +36,7 @@ struct WireBoard {
     stl::ObjPool* astPool = nullptr;
     // The one type interner; created right after the pool, before parsing.
     HIRTypeInterner* types = nullptr;
+    HIRExpandContext* hirExpand = nullptr;
     // Monotonic lexical/macro scope identity for this compiler invocation.
     HygieneContext* hygiene = nullptr;
     ExpandRegistry* expandRegistry = nullptr;
