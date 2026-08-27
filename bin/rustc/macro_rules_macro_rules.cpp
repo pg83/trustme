@@ -522,8 +522,6 @@ private:
 
 // ----------------------------------------------------------------
 class MacroExpander: public TokenStream {
-    // Used to track a specific invocation for debugging
-    static unsigned sNextLogIndex;
     unsigned logIndex;
 
     Span thisSpan;
@@ -552,10 +550,15 @@ public:
 
     MacroExpander(const MacroExpander& x) = delete;
 
-    MacroExpander(HygieneContext& hygieneContext, stl::ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
+    MacroExpander(MacroLogContext& logContext, HygieneContext& hygieneContext,
+        stl::ObjPool& pool, const RcString& macroName, const Span& sp,
+        ASTEdition edition, bool isMacroItem, bool transparent,
+        unsigned int definitionId, const Ident::Hygiene& parentHygiene,
+        const ::std::vector<MacroExpansionEnt>& contents,
+        ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
         : TokenStream(ParseState())
         , pool(pool)
-        , logIndex(sNextLogIndex++)
+        , logIndex(logContext.newLogIndex())
         , thisSpan(sp, crateName, macroName)
         , crateName(mv$(crateName))
         , invocationSpan(sp)
@@ -581,9 +584,6 @@ public:
     ASTEdition realGetEdition() const override;
     Token realGetToken() override;
 };
-
-unsigned MacroExpander::sNextLogIndex = 0;
-unsigned int MacroRules::gNextDefinitionId = 0;
 
 void MacroInitDefaults() {
 }
@@ -714,9 +714,9 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
     // Run through the expansion counting the number of times each fragment is used
     MacroInvokeRulesCountSubstUses(boundTts, rule.contents);
 
-    TokenStream* retPtr = new MacroExpander(*wb.hygiene, *crate.hirPool, name, sp,
-        crate.edition, rules.isMacroItem, rules.transparent, rules.definitionId,
-        rules.hygiene, rule.contents, mv$(boundTts),
+    TokenStream* retPtr = new MacroExpander(*wb.macroLog, *wb.hygiene,
+        *crate.hirPool, name, sp, crate.edition, rules.isMacroItem,
+        rules.transparent, rules.definitionId, rules.hygiene, rule.contents, mv$(boundTts),
         rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
 
     return ::std::unique_ptr<TokenStream>(retPtr);
@@ -3985,9 +3985,10 @@ MacroRulesArm ParseMacroRulesMakeArm(Span patSp, ::std::vector<MacroPatEnt> patt
 }
 
 namespace {
-    MacroRulesPtr makeMrPtr(const TokenStream& lex) {
+    MacroRulesPtr makeMrPtr(TokenStream& lex) {
         auto s = lex.pointSpan();
-        auto rv = MacroRulesPtr(new MacroRules(s->crateName(), lex.getEdition()));
+        auto rv = MacroRulesPtr(new MacroRules(*lex.parseState().wb->macroDefinitions,
+            s->crateName(), lex.getEdition()));
         rv->hygiene = lex.getHygiene();
         return rv;
     }
@@ -4525,8 +4526,8 @@ MacroRulesArm::MacroRulesArm(::std::vector<SimplePatEnt> pattern, ::std::vector<
 {
 }
 
-MacroRules::MacroRules(RcString sourceCrate, ASTEdition edition)
-    : definitionId(++gNextDefinitionId)
+MacroRules::MacroRules(MacroDefinitionContext& context, RcString sourceCrate, ASTEdition edition)
+    : definitionId(context.newDefinitionId())
     , sourceCrate(std::move(sourceCrate))
     , edition(edition)
 {

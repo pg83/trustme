@@ -71,14 +71,17 @@ class HirDeserialiser {
     ::std::vector<HIRTypeRef> types;
     HIRSerialiseReader& in;
     HIRTypeInterner& typeInterner;
+    MacroDefinitionContext& macroDefinitions;
 
 public:
     stl::ObjPool& pool;
 
-    HirDeserialiser(stl::ObjPool& pool, HIRSerialiseReader& in, HIRTypeInterner& typeInterner)
-        : pool(pool)
-        , in(in)
+    HirDeserialiser(MacroDefinitionContext& macroDefinitions, stl::ObjPool& pool,
+        HIRSerialiseReader& in, HIRTypeInterner& typeInterner)
+        : in(in)
         , typeInterner(typeInterner)
+        , macroDefinitions(macroDefinitions)
+        , pool(pool)
     {
     }
 
@@ -414,7 +417,7 @@ public:
     ::MacroRules deserialiseMacrorules() {
         auto crateName = in.readIstring();
         auto edition = static_cast<ASTEdition>(in.readTag());
-        ::MacroRules rv(crateName, edition);
+        ::MacroRules rv(macroDefinitions, crateName, edition);
         // NOTE: This is set after loading.
         rv.isMacroItem = in.readBool();
         rv.transparent = in.readBool();
@@ -1678,10 +1681,11 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
 
 //}
 
-HIRCrate* HIRDeserialise(stl::ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename) {
+HIRCrate* HIRDeserialise(MacroDefinitionContext& macroDefinitions,
+    stl::ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename) {
     {
         HIRSerialiseReader in{metadataFilename(filename)};
-        HirDeserialiser s{*pool, in, types};
+        HirDeserialiser s{macroDefinitions, *pool, in, types};
 
         auto* rv = pool->make<HIRCrate>(pool, types);
         s.deserialiseCrate(*rv);

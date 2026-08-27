@@ -15,6 +15,8 @@ namespace stl {
 }
 
 class ASTExternCrate;
+struct WireBoard;
+class MacroDefinitionContext;
 
 class ASTTestDesc {
 public:
@@ -49,6 +51,7 @@ public:
 
 class ASTCrate {
 public:
+    const WireBoard& wb;
     stl::ObjPool* pool;
     // Loaded extern-crate HIR outlives the AST, so it allocates from here.
     stl::ObjPool* hirPool;
@@ -104,7 +107,7 @@ public:
     RcString crateNameReal;        // user name '-' suffix
     ASTPath preludePath;
 
-    ASTCrate(stl::ObjPool* pool, stl::ObjPool* hirPool, HIRTypeInterner& types);
+    ASTCrate(const WireBoard& wb, stl::ObjPool* pool, stl::ObjPool* hirPool, HIRTypeInterner& types);
 
     const ASTModule& rootModule() const {
         return rootModule_;
@@ -138,7 +141,8 @@ public:
     bool isProcMacro = false;
     HIRCrate* hir = nullptr;
 
-    ASTExternCrate(stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name, const ::std::string& path);
+    ASTExternCrate(MacroDefinitionContext& macroDefinitions, stl::ObjPool* pool,
+        HIRTypeInterner& types, const RcString& name, const ::std::string& path);
 
     ASTExternCrate(ASTExternCrate&&) = default;
     ASTExternCrate& operator=(ASTExternCrate&&) = default;

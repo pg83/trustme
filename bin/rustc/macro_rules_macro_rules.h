@@ -1,5 +1,24 @@
-struct WireBoard;
 #pragma once
+
+struct WireBoard;
+
+class MacroDefinitionContext {
+    unsigned nextDefinition = 0;
+
+public:
+    unsigned newDefinitionId() {
+        return ++nextDefinition;
+    }
+};
+
+class MacroLogContext {
+    unsigned nextLog = 0;
+
+public:
+    unsigned newLogIndex() {
+        return nextLog++;
+    }
+};
 
 #include "common.h"
 #include "parse_lex.h"
@@ -17,20 +36,21 @@ class MacroExpansionEnt;
 
 extern ::std::ostream& operator<<(::std::ostream& os, const MacroExpansionEnt& x);
 extern void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpansionEnt>& contents);
-static const unsigned int NAMEDVALUE_VALMASK = ((1 << 30) - 1);
-static const unsigned int NAMEDVALUE_TY_MAGIC = 1 << 30;
-static const unsigned int NAMEDVALUE_MAGIC_CRATE = NAMEDVALUE_TY_MAGIC | 0;
-static const unsigned int NAMEDVALUE_MAGIC_INDEX = NAMEDVALUE_TY_MAGIC | 1;
-/// `${index(depth)}` and `${len(depth)}`, which name the loop `depth` levels
-/// out from the innermost active one. The depth is the low byte.
-static const unsigned int NAMEDVALUE_MAGIC_INDEX_AT = NAMEDVALUE_TY_MAGIC | 0x100;
-static const unsigned int NAMEDVALUE_MAGIC_LEN_AT = NAMEDVALUE_TY_MAGIC | 0x200;
-static const unsigned int NAMEDVALUE_MAGIC_DEPTHMASK = 0xFF;
-static const unsigned int NAMEDVALUE_TY_IGNORE = 2 << 30;
-static const unsigned int NAMEDVALUE_TY_COUNT = 3 << 30;
-/// `${count($x, depth)}` keeps the depth above the variable index.
-static const unsigned int NAMEDVALUE_COUNT_DEPTHSHIFT = 22;
-static const unsigned int NAMEDVALUE_COUNT_IDXMASK = (1u << NAMEDVALUE_COUNT_DEPTHSHIFT) - 1;
+enum : unsigned int {
+    NAMEDVALUE_VALMASK = (1 << 30) - 1,
+    NAMEDVALUE_TY_MAGIC = 1 << 30,
+    NAMEDVALUE_MAGIC_CRATE = NAMEDVALUE_TY_MAGIC | 0,
+    NAMEDVALUE_MAGIC_INDEX = NAMEDVALUE_TY_MAGIC | 1,
+    // `${index(depth)}` and `${len(depth)}` encode depth in the low byte.
+    NAMEDVALUE_MAGIC_INDEX_AT = NAMEDVALUE_TY_MAGIC | 0x100,
+    NAMEDVALUE_MAGIC_LEN_AT = NAMEDVALUE_TY_MAGIC | 0x200,
+    NAMEDVALUE_MAGIC_DEPTHMASK = 0xFF,
+    NAMEDVALUE_TY_IGNORE = 2u << 30,
+    NAMEDVALUE_TY_COUNT = 3u << 30,
+    // `${count($x, depth)}` keeps the depth above the variable index.
+    NAMEDVALUE_COUNT_DEPTHSHIFT = 22,
+    NAMEDVALUE_COUNT_IDXMASK = (1u << NAMEDVALUE_COUNT_DEPTHSHIFT) - 1,
+};
 
 /// Matching pattern entry
 struct MacroPatEnt {
@@ -130,8 +150,6 @@ struct MacroRulesArm {
 
 /// A sigle 'macro_rules!' block
 class MacroRules {
-    static unsigned int gNextDefinitionId;
-
 public:
     unsigned int definitionId;
 
@@ -162,7 +180,7 @@ public:
     /// Expansion rules
     ::std::vector<MacroRulesArm> rules;
 
-    MacroRules(RcString sourceCrate, ASTEdition edition);
+    MacroRules(MacroDefinitionContext& context, RcString sourceCrate, ASTEdition edition);
 
     virtual ~MacroRules();
     MacroRules(MacroRules&&) = default;

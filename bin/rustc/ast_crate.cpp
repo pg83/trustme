@@ -6,6 +6,7 @@
 #include "expand_cfg.h"
 #include "parse_parseerror.h"
 #include "hir_main_bindings.h" // HIR_Deserialise
+#include "wire_board.h"
 
 #include <fstream>
 #include <dirent.h>
@@ -50,8 +51,9 @@ namespace {
     }
 }
 
-ASTCrate::ASTCrate(stl::ObjPool* pool, stl::ObjPool* hirPool, HIRTypeInterner& types)
-    : pool(pool)
+ASTCrate::ASTCrate(const WireBoard& wb, stl::ObjPool* pool, stl::ObjPool* hirPool, HIRTypeInterner& types)
+    : wb(wb)
+    , pool(pool)
     , hirPool(hirPool)
     , types(types)
     , rootModule_(ASTAbsolutePath())
@@ -291,7 +293,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
     }
 
     // NOTE: Creating `ExternCrate` loads the crate from the specified path
-    auto ec = ASTExternCrate{hirPool, types, name, path};
+    auto ec = ASTExternCrate{*wb.macroDefinitions, hirPool, types, name, path};
     auto realName = ec.hir->crateName;
     assert(realName != "");
     if (expectedName != "" && realName != expectedName) {
@@ -355,13 +357,15 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
     return realName;
 }
 
-ASTExternCrate::ASTExternCrate(stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name, const ::std::string& path)
+ASTExternCrate::ASTExternCrate(MacroDefinitionContext& macroDefinitions,
+    stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name,
+    const ::std::string& path)
     : name(name)
     , shortName(name)
     , filename(path)
 {
     TRACE_FUNCTION_F("name=" << name << ", path='" << path << "'");
-    hir = HIRDeserialise(pool, types, path);
+    hir = HIRDeserialise(macroDefinitions, pool, types, path);
 
     hir->postLoadUpdate(name);
     this->name = hir->crateName;

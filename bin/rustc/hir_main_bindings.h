@@ -10,6 +10,7 @@ struct WireBoard;
 
 class HIRCrate;
 class HIRTypeInterner;
+class MacroDefinitionContext;
 
 namespace stl {
     class ObjPool;
@@ -19,5 +20,6 @@ extern void HIRDump(::std::ostream& sink, const HIRCrate& crate);
 extern HIRCrate* LowerHIRFromAST(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& crate);
 extern void HIRSerialise(const ::std::string& filename, const HIRCrate& crate);
 
-extern HIRCrate* HIRDeserialise(stl::ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename);
+extern HIRCrate* HIRDeserialise(MacroDefinitionContext& macroDefinitions,
+    stl::ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename);
 extern RcString HIRDeserialiseJustName(const ::std::string& filename);

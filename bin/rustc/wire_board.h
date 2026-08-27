@@ -9,6 +9,8 @@ class HIRCrate;
 class HIRTypeInterner;
 class HIRInherentCache;
 class HygieneContext;
+class MacroDefinitionContext;
+class MacroLogContext;
 class LangItems;
 struct Settings;
 struct TargetSpec;
@@ -34,6 +36,8 @@ struct WireBoard {
     HIRTypeInterner* types = nullptr;
     // Monotonic lexical/macro scope identity for this compiler invocation.
     HygieneContext* hygiene = nullptr;
+    MacroDefinitionContext* macroDefinitions = nullptr;
+    MacroLogContext* macroLog = nullptr;
 
     // Compilation settings: command-line configuration plus the few values
     // the pipeline derives once (crate names, cfg state). See settings.h.
