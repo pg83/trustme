@@ -1866,10 +1866,11 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             }
         }
 
-        Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve)
+        Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve, bool bindRigidValues)
             : sp_(sp)
             , table_(table)
             , resolve_(resolve)
+            , bindRigidValues_(bindRigidValues)
         {
         }
 
@@ -2357,7 +2358,8 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             if (leftLive || rightLive) {
                 const auto& other = leftLive ? right : left;
                 const auto* rigidInfer = other.opt_Infer();
-                if (other.is_Evaluated()
+                if ((bindRigidValues_ && (other.is_Generic() || rigidInfer))
+                    || other.is_Evaluated()
                     || (other.is_Generic() && !other.as_Generic().isPlaceholder())
                     || (rigidInfer && rigidInfer->index != ~0u && isAliasInputInfer(rigidInfer->index))
                     || (other.is_Unevaluated() && !this->valueContainsLiveIvar(other, leftLive ? *leftLive : *rightLive))) {
@@ -4490,7 +4492,12 @@ default:
                 const auto candidateType = monomorph.monomorphType(span(), implType, true);
 
                 Unifier unifier(span(), resolve_.ivars, &resolve_);
-                if (unifier.unify(candidateType, goalType) == Unifier::Outcome::Mismatch) {
+                // Put the longer-lived goal variables on the left.  Ivar
+                // union aliases the right root to the left root, so a
+                // coherence probe can materialize the temporary candidate
+                // parameters in terms of the first impl's variables before
+                // rolling its own snapshot back.
+                if (unifier.unify(goalType, candidateType) == Unifier::Outcome::Mismatch) {
                     return HIRCompare::Unequal;
                 }
                 // Self commonly fixes every impl const parameter.  Rebuild
@@ -4514,12 +4521,12 @@ default:
                     return HIRCompare::Unequal;
                 }
                 for (size_t i = 0; i < candidateParams.types.size(); i++) {
-                    if (unifier.unify(candidateParams.types[i], goalParams.types[i]) == Unifier::Outcome::Mismatch) {
+                    if (unifier.unify(goalParams.types[i], candidateParams.types[i]) == Unifier::Outcome::Mismatch) {
                         return HIRCompare::Unequal;
                     }
                 }
                 for (size_t i = 0; i < candidateParams.values.size(); i++) {
-                    if (unifier.unifyValues(candidateParams.values[i], goalParams.values[i]) == Unifier::Outcome::Mismatch) {
+                    if (unifier.unifyValues(goalParams.values[i], candidateParams.values[i]) == Unifier::Outcome::Mismatch) {
                         return HIRCompare::Unequal;
                     }
                 }
@@ -4663,104 +4670,241 @@ default:
                 return makeAssociatedProjection(impl.getImplType(crate.types), sourceTrait, name, associatedParams);
             }
 
-            // Binds a candidate's free parameters (match placeholders and
-            // non-literal inference wildcards occurring in its params) to the
-            // values a requirement matches them against, rewriting the params
-            // in place.  Shared by requirement binding and nested-response
-            // binding; both restore the saved params on mismatch.
-            class BindCandidateParams final: public HIRMatchGenerics {
-                const Span& span_;
-                HIRTypeInterner& types;
-                HIRPathParams& params_;
-                ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> bindings_;
+            struct CandidateTypeBinding {
+                HIRTypeRef stable;
+                HIRTypeRef probe;
+            };
 
-                bool isBindable(const HIRTypeData* type) const {
-                    if (const auto* generic = type->opt_Generic()) {
-                        return generic->group() == GENERICPlaceholder;
+            struct CandidateValueBinding {
+                RcString name;
+                unsigned stableIndex;
+                unsigned probeIndex;
+                bool isGeneric;
+            };
+
+            // Relate a candidate pattern to one or more response values as a
+            // single inference-table transaction.  Stable candidate
+            // placeholders are first instantiated as fresh ivars.  A
+            // successful relation is materialised back into stable params
+            // before every probe slot is rolled back; a mismatch leaves the
+            // candidate byte-for-byte unchanged.
+            template <typename Relate>
+            bool unifyCandidateParams(HIRPathParams& params, Relate relate) {
+                const auto original = params.clone();
+                const auto snapshot = resolve_.ivars.snapshot();
+                STD_DEFER {
+                    resolve_.ivars.rollbackTo(snapshot);
+                };
+
+                stl::Vector<CandidateTypeBinding> typeBindings;
+                stl::Vector<CandidateValueBinding> valueBindings;
+
+                const auto addTypeBinding = [&](const HIRTypeData* type) {
+                    const auto* generic = type->opt_Generic();
+                    const auto* infer = type->opt_Infer();
+                    if ((!generic || !generic->isPlaceholder()) && (!infer || infer->isLit())) {
+                        return;
                     }
-                    if (const auto* infer = type->opt_Infer()) {
-                        return !infer->isLit();
+                    for (const auto& binding : typeBindings) {
+                        if (binding.stable == type) {
+                            return;
+                        }
                     }
+                    typeBindings.pushBack(CandidateTypeBinding{type, resolve_.ivars.newIvarTr(infer ? infer->tyClass : HIRInferClass::None)});
+                };
+                for (const auto& type : params.types) {
+                    visitTyWith(type, [&](const HIRTypeData* inner) {
+                        addTypeBinding(inner);
+                        return false;
+                    });
+                }
+
+                const auto addValueBinding = [&](const HIRConstGeneric& value) {
+                    const auto* generic = value.opt_Generic();
+                    const auto* infer = value.opt_Infer();
+                    if ((!generic || !generic->isPlaceholder()) && !infer) {
+                        return;
+                    }
+                    const bool isGeneric = generic != nullptr;
+                    const auto name = isGeneric ? generic->name : RcString();
+                    const auto stableIndex = isGeneric ? generic->binding : infer->index;
+                    for (const auto& binding : valueBindings) {
+                        if (binding.isGeneric == isGeneric && binding.name == name && binding.stableIndex == stableIndex) {
+                            return;
+                        }
+                    }
+                    valueBindings.pushBack(CandidateValueBinding{name, stableIndex, resolve_.ivars.newIvarVal(), isGeneric});
+                };
+                for (const auto& value : params.values) {
+                    addValueBinding(value);
+                }
+
+                class InstantiateCandidate final: public MonomorphiserNop {
+                    const stl::Vector<CandidateTypeBinding>& typeBindings_;
+                    const stl::Vector<CandidateValueBinding>& valueBindings_;
+
+                public:
+                    InstantiateCandidate(HIRTypeInterner& types, const stl::Vector<CandidateTypeBinding>& typeBindings, const stl::Vector<CandidateValueBinding>& valueBindings)
+                        : MonomorphiserNop(types)
+                        , typeBindings_(typeBindings)
+                        , valueBindings_(valueBindings)
+                    {
+                    }
+
+                    HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
+                        for (const auto& binding : typeBindings_) {
+                            if (binding.stable == type) {
+                                return binding.probe;
+                            }
+                        }
+                        return MonomorphiserNop::monomorphType(sp, type, allowInfer);
+                    }
+
+                    HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override {
+                        for (const auto& binding : typeBindings_) {
+                            const auto* stable = binding.stable->opt_Generic();
+                            if (stable && *stable == generic) {
+                                return binding.probe;
+                            }
+                        }
+                        return MonomorphiserNop::getType(sp, generic);
+                    }
+
+                    HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override {
+                        const auto* generic = value.opt_Generic();
+                        const auto* infer = value.opt_Infer();
+                        for (const auto& binding : valueBindings_) {
+                            const bool matches = binding.isGeneric
+                                ? generic && generic->name == binding.name && generic->binding == binding.stableIndex
+                                : infer && infer->index == binding.stableIndex;
+                            if (matches) {
+                                return HIRConstGeneric::make_Infer({binding.probeIndex});
+                            }
+                        }
+                        return MonomorphiserNop::monomorphConstgeneric(sp, value, allowInfer);
+                    }
+
+                    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override {
+                        for (const auto& binding : valueBindings_) {
+                            if (binding.isGeneric && binding.name == generic.name && binding.stableIndex == generic.binding) {
+                                return HIRConstGeneric::make_Infer({binding.probeIndex});
+                            }
+                        }
+                        return MonomorphiserNop::getValue(sp, generic);
+                    }
+                };
+
+                InstantiateCandidate instantiate(crate.types, typeBindings, valueBindings);
+                const auto probeParams = instantiate.monomorphPathParams(span(), params, true);
+                Unifier unifier(span(), resolve_.ivars, &resolve_, true);
+
+                class Relations {
+                    const Span& span_;
+                    InstantiateCandidate& instantiate_;
+                    Unifier& unifier_;
+
+                public:
+                    bool failed = false;
+
+                    Relations(const Span& span, InstantiateCandidate& instantiate, Unifier& unifier)
+                        : span_(span)
+                        , instantiate_(instantiate)
+                        , unifier_(unifier)
+                    {
+                    }
+
+                    void mismatch() {
+                        failed = true;
+                    }
+
+                    void type(const HIRTypeData* candidate, const HIRTypeData* value) {
+                        if (failed) {
+                            return;
+                        }
+                        const auto pattern = instantiate_.monomorphType(span_, candidate, true);
+                        failed = unifier_.unify(value, pattern) == Unifier::Outcome::Mismatch;
+                    }
+
+                    void value(const HIRConstGeneric& candidate, const HIRConstGeneric& value) {
+                        if (failed) {
+                            return;
+                        }
+                        const auto pattern = instantiate_.monomorphConstgeneric(span_, candidate, true);
+                        failed = unifier_.unifyValues(value, pattern) == Unifier::Outcome::Mismatch;
+                    }
+
+                    void pathParams(const HIRPathParams& candidate, const HIRPathParams& value) {
+                        if (candidate.types.size() != value.types.size() || candidate.values.size() != value.values.size()) {
+                            failed = true;
+                            return;
+                        }
+                        for (size_t i = 0; i < candidate.types.size(); i++) {
+                            this->type(candidate.types[i], value.types[i]);
+                        }
+                        for (size_t i = 0; i < candidate.values.size(); i++) {
+                            this->value(candidate.values[i], value.values[i]);
+                        }
+                    }
+                };
+
+                Relations relations(span(), instantiate, unifier);
+                relate(relations);
+                if (relations.failed) {
                     return false;
                 }
 
-                ::std::optional<HIRCompare> bindType(const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) {
-                    for (const auto& binding : bindings_) {
-                        if (binding.first == pattern) {
-                            return binding.second->compareWithPlaceholders(span_, value, resolve);
-                        }
+                class MaterializeCandidate final: public MonomorphiserNop {
+                    const HMTypeInferrence& table_;
+                    const stl::Vector<CandidateTypeBinding>& typeBindings_;
+                    const stl::Vector<CandidateValueBinding>& valueBindings_;
+
+                public:
+                    MaterializeCandidate(HIRTypeInterner& types, const HMTypeInferrence& table, const stl::Vector<CandidateTypeBinding>& typeBindings, const stl::Vector<CandidateValueBinding>& valueBindings)
+                        : MonomorphiserNop(types)
+                        , table_(table)
+                        , typeBindings_(typeBindings)
+                        , valueBindings_(valueBindings)
+                    {
                     }
-                    if (!isBindable(pattern)) {
-                        return {};
-                    }
-                    bool isParameter = false;
-                    for (const auto& parameter : params_.types) {
-                        isParameter |= visitTyWith(parameter, [&](const HIRTypeData* inner) {
-                            return inner == pattern;
-                        });
-                    }
-                    if (!isParameter) {
-                        return {};
-                    }
-                    if (pattern == value) {
-                        return HIRCompare::Equal;
-                    }
-                    for (auto& parameter : params_.types) {
-                        parameter = cloneTyWith(types, span_, parameter, [&](const HIRTypeData* input, HIRTypeRef& output) {
-                            if (input != pattern) {
-                                return false;
+
+                    HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
+                        for (const auto& binding : typeBindings_) {
+                            if (binding.probe != type) {
+                                continue;
                             }
-                            output = value;
-                            return true;
-                        });
+                            const auto* resolved = table_.getType(type);
+                            return resolved == type ? binding.stable : this->monomorphType(sp, resolved, allowInfer);
+                        }
+                        return MonomorphiserNop::monomorphType(sp, type, allowInfer);
                     }
-                    bindings_.push_back({pattern, value});
-                    changed = true;
-                    return HIRCompare::Equal;
-                }
 
-            public:
-                bool changed = false;
-
-                BindCandidateParams(const Span& span, HIRTypeInterner& types, HIRPathParams& params)
-                    : HIRMatchGenerics(types.objectPool())
-                    , span_(span)
-                    , types(types)
-                    , params_(params)
-                {
-                }
-
-                HIRCompare cmpType(const Span& span, const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) override {
-                    if (auto result = bindType(pattern, value, resolve)) {
-                        return *result;
-                    }
-                    return HIRMatchGenerics::cmpType(span, pattern, value, resolve);
-                }
-
-                HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override {
-                    const auto pattern = types.generic(generic.name, generic.binding);
-                    if (auto result = bindType(pattern, type, resolve)) {
-                        return *result;
-                    }
-                    return pattern->compareWithPlaceholders(span_, type, resolve);
-                }
-
-                HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
-                    if (value.is_Generic() && value.as_Generic() == generic) {
-                        return HIRCompare::Equal;
-                    }
-                    if (generic.group() == GENERICPlaceholder) {
-                        for (auto& parameter : params_.values) {
-                            if (parameter.is_Generic() && parameter.as_Generic() == generic) {
-                                parameter = value.clone();
-                                changed = true;
-                                return HIRCompare::Equal;
+                    HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override {
+                        if (const auto* infer = value.opt_Infer()) {
+                            for (const auto& binding : valueBindings_) {
+                                if (binding.probeIndex != infer->index) {
+                                    continue;
+                                }
+                                const auto& resolved = table_.getValue(value);
+                                if (resolved == value) {
+                                    return binding.isGeneric
+                                        ? HIRConstGeneric(HIRGenericRef(binding.name, binding.stableIndex))
+                                        : HIRConstGeneric::make_Infer({binding.stableIndex});
+                                }
+                                return this->monomorphConstgeneric(sp, resolved, allowInfer);
                             }
                         }
+                        return MonomorphiserNop::monomorphConstgeneric(sp, value, allowInfer);
                     }
-                    return HIRCompare::Fuzzy;
+                };
+
+                MaterializeCandidate materialize(crate.types, resolve_.ivars, typeBindings, valueBindings);
+                auto output = materialize.monomorphPathParams(span(), probeParams, true);
+                const bool changed = output != original;
+                if (changed) {
+                    params = ::std::move(output);
                 }
-            };
+                return changed;
+            }
 
             bool bindCandidatePlaceholders(Candidate& candidate, const HIRTypeData* nestedType, const HIRTraitPath::assocListT& associated, bool useCandidateResponse = false) {
                 HIRPathParams* candidateParams = nullptr;
@@ -4773,10 +4917,8 @@ default:
                     return false;
                 }
 
-                BindCandidateParams binder{span(), crate.types, *candidateParams};
-
+                bool changed = false;
                 for (const auto& requirement : associated) {
-                    const auto saved = candidateParams->clone();
                     auto candidateOutput = useCandidateResponse ? candidate.impl.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams) : HIRTypeRef();
                     if (!useCandidateResponse) {
                         // An impl parameter can occur only in a nested projection
@@ -4813,19 +4955,20 @@ default:
                         // resolves its trait path.
                         candidateOutput = resolve_.expandAssociatedTypes(span(), ::std::move(candidateOutput));
                     }
-                    const auto match = (useCandidateResponse ? candidateOutput : requirement.second.type)->matchTestGenericsFuzz(span(), useCandidateResponse ? requirement.second.type : candidateOutput, resolve_.ivars.callbackResolveInfer(), binder);
-                    if (match == HIRCompare::Unequal) {
-                        *candidateParams = saved.clone();
-                    }
+                    const auto* candidatePattern = useCandidateResponse ? candidateOutput : requirement.second.type;
+                    const auto* responseValue = useCandidateResponse ? requirement.second.type : candidateOutput;
+                    changed |= this->unifyCandidateParams(*candidateParams, [&](auto& relations) {
+                        relations.type(candidatePattern, responseValue);
+                    });
                 }
 
-                if (binder.changed && candidate.markerImpl) {
+                if (changed && candidate.markerImpl) {
                     auto monomorph = MonomorphStatePtr(crate.types, nullptr, &candidate.markerImplParams, nullptr);
                     auto& response = candidate.impl.data.as_Bounded();
                     response.type = monomorph.monomorphType(span(), candidate.markerImpl->type, false);
                     response.traitArgs = monomorph.monomorphPathParams(span(), candidate.markerImpl->traitArgs, false);
                 }
-                return binder.changed;
+                return changed;
             }
 
             bool bindCandidateResponse(Candidate& candidate, const HIRTypeData* nestedType, const HIRPathParams& nestedParams, const HIRTraitPath::assocListT& nestedAssociated, const ImplRef& response) {
@@ -4839,31 +4982,26 @@ default:
                     return false;
                 }
 
-                BindCandidateParams binder{span(), crate.types, *candidateParams};
-
-                const auto saved = candidateParams->clone();
-                auto match = nestedType->matchTestGenericsFuzz(span(), response.getImplType(crate.types), resolve_.ivars.callbackResolveInfer(), binder);
-                match &= nestedParams.matchTestGenericsFuzz(span(), response.getTraitParams(crate.types), resolve_.ivars.callbackResolveInfer(), binder);
-                for (const auto& requirement : nestedAssociated) {
-                    auto output = response.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams);
-                    if (output == HIRTypeRef()) {
-                        match = HIRCompare::Unequal;
-                        break;
+                const bool changed = this->unifyCandidateParams(*candidateParams, [&](auto& relations) {
+                    relations.type(nestedType, response.getImplType(crate.types));
+                    relations.pathParams(nestedParams, response.getTraitParams(crate.types));
+                    for (const auto& requirement : nestedAssociated) {
+                        auto output = response.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams);
+                        if (output == HIRTypeRef()) {
+                            relations.mismatch();
+                            break;
+                        }
+                        relations.type(requirement.second.type, output);
                     }
-                    match &= requirement.second.type->matchTestGenericsFuzz(span(), output, resolve_.ivars.callbackResolveInfer(), binder);
-                }
-                if (match == HIRCompare::Unequal) {
-                    *candidateParams = saved.clone();
-                    return false;
-                }
+                });
 
-                if (binder.changed && candidate.markerImpl) {
+                if (changed && candidate.markerImpl) {
                     auto monomorph = MonomorphStatePtr(crate.types, nullptr, &candidate.markerImplParams, nullptr);
                     auto& bounded = candidate.impl.data.as_Bounded();
                     bounded.type = monomorph.monomorphType(span(), candidate.markerImpl->type, false);
                     bounded.traitArgs = monomorph.monomorphPathParams(span(), candidate.markerImpl->traitArgs, false);
                 }
-                return binder.changed;
+                return changed;
             }
 
             Certainty unifyProbe(const HIRTypeData* left, const HIRTypeData* right) {
@@ -5821,7 +5959,16 @@ default:
                 auto goalParams = leftMonomorph.monomorphPathParams(callSpan, left.traitArgs, true);
 
                 HIRPathParams rightParams;
-                const auto rightMatch = resolve_.fticCheckParams(callSpan, trait, &goalParams, goalType, right.params, right.traitArgs, right.type, rightParams, false);
+                bool rightHeadNormalizationAmbiguity = false;
+                const auto rightMatch = this->unifyImplHead(
+                    right.params,
+                    right.traitArgs,
+                    right.type,
+                    goalParams,
+                    goalType,
+                    rightParams,
+                    rightHeadNormalizationAmbiguity
+                );
                 if (rightMatch == HIRCompare::Unequal) {
                     return false;
                 }
@@ -5845,7 +5992,7 @@ default:
 
                 const auto& traitDef = crate.getTraitByPath(callSpan, trait);
                 pushCandidate(frameIndex, ImplRef(::std::move(leftParams), traitDef, trait, left), HIRCompare::Equal, nullptr, {}, false, CandidateSource::TraitImpl);
-                pushCandidate(frameIndex, ImplRef(::std::move(rightParams), traitDef, trait, right), rightMatch, nullptr, {}, false, CandidateSource::TraitImpl);
+                pushCandidate(frameIndex, ImplRef(::std::move(rightParams), traitDef, trait, right), rightMatch, nullptr, {}, false, CandidateSource::TraitImpl, rightHeadNormalizationAmbiguity);
 
                 const auto& candidates = frames[frameIndex]->candidates;
                 ASSERT_BUG(callSpan, candidates.size() == 2, "coherence probe lost an impl candidate");

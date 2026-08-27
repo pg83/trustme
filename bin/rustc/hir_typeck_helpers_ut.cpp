@@ -308,6 +308,28 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(unifier.pendingValues().empty());
     }
 
+    STD_TEST(testCandidateConstExistentialCapturesRigidPlaceholder) {
+        auto pool = stl::ObjPool::fromMemory();
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
+        HMTypeInferrence table(types);
+        Span sp;
+
+        const auto ordinarySlot = table.newIvarVal();
+        const auto candidateSlot = table.newIvarVal();
+        const auto placeholder = HIRConstGeneric(HIRGenericRef(RcString::newInterned("const_?_test"), GENERICPlaceholder << 8));
+
+        Unifier ordinary(sp, table);
+        STD_INSIST(ordinary.unifyValues(placeholder, HIRConstGeneric::make_Infer({ordinarySlot})) == Unifier::Outcome::Unified);
+        STD_INSIST(ordinary.pendingValues().size() == 1);
+        STD_INSIST(table.getValue(ordinarySlot).is_Infer());
+
+        Unifier candidate(sp, table, nullptr, true);
+        STD_INSIST(candidate.unifyValues(placeholder, HIRConstGeneric::make_Infer({candidateSlot})) == Unifier::Outcome::Unified);
+        STD_INSIST(candidate.pendingValues().empty());
+        STD_INSIST(table.getValue(candidateSlot) == placeholder);
+    }
+
     STD_TEST(testRollbackRestoresChangedFlag) {
         auto pool = stl::ObjPool::fromMemory();
         u32 id = 0;

@@ -293,7 +293,7 @@ public:
         HIRConstGeneric right;
     };
 
-    Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve = nullptr);
+    Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve = nullptr, bool bindRigidValues = false);
 
     Outcome unify(const HIRTypeData* left, const HIRTypeData* right);
     Outcome unifyValues(const HIRConstGeneric& left, const HIRConstGeneric& right);
@@ -322,6 +322,11 @@ private:
     [[maybe_unused]] const Span& sp_;
     HMTypeInferrence& table_;
     const TraitResolution* resolve_;
+    // Candidate impl parameters are existential variables.  While such a
+    // candidate is instantiated for a probe, a const ivar may legitimately
+    // capture the goal's rigid placeholder/canonical value.  Ordinary
+    // equality probes keep those relations pending instead.
+    bool bindRigidValues_;
     stl::Vector<PendingEquality> pending_;
     ThinVector<PendingValueEquality> pendingValues_;
 };
