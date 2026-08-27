@@ -12,20 +12,6 @@ class HIRTraitImpl;
 struct HIRPattern;
 class HIRItemPath;
 
-class HIRExpandContext {
-    unsigned nextClosure = 0;
-    unsigned nextStatic = 0;
-
-public:
-    unsigned newClosureIndex() {
-        return nextClosure++;
-    }
-
-    unsigned newStaticIndex() {
-        return nextStatic++;
-    }
-};
-
 extern void HIRExpandAnnotateUsage(const WireBoard& wb, HIRCrate& crate);
 extern void HIRExpandVTables(const WireBoard& wb, HIRCrate& crate);
 extern void HIRExpandClosures(const WireBoard& wb, HIRCrate& crate);

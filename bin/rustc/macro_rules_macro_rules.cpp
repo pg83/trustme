@@ -508,8 +508,6 @@ private:
 
 // ----------------------------------------------------------------
 class MacroExpander: public TokenStream {
-    unsigned logIndex;
-
     Span thisSpan;
     const RcString crateName;
     Span invocationSpan;
@@ -536,7 +534,7 @@ public:
 
     MacroExpander(const MacroExpander& x) = delete;
 
-    MacroExpander(MacroLogContext& logContext, HygieneContext& hygieneContext,
+    MacroExpander(u32& id,
         stl::ObjPool& pool, const RcString& macroName, const Span& sp,
         ASTEdition edition, bool isMacroItem, bool transparent,
         unsigned int definitionId, const Ident::Hygiene& parentHygiene,
@@ -544,7 +542,6 @@ public:
         ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
         : TokenStream(ParseState())
         , pool(pool)
-        , logIndex(logContext.newLogIndex())
         , thisSpan(sp, crateName, macroName)
         , crateName(mv$(crateName))
         , invocationSpan(sp)
@@ -555,7 +552,7 @@ public:
         , isMacroItem(isMacroItem)
         , transparent(transparent)
         , hygiene_(Ident::Hygiene::newScopeChained(
-              hygieneContext, pool, parentHygiene, definitionId, isMacroItem))
+              id, pool, parentHygiene, definitionId, isMacroItem))
         , lastHygiene(hygiene_)
     {
     }
@@ -692,7 +689,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
     // Run through the expansion counting the number of times each fragment is used
     MacroInvokeRulesCountSubstUses(boundTts, rule.contents);
 
-    TokenStream* retPtr = new MacroExpander(*wb.macroLog, *wb.hygiene,
+    TokenStream* retPtr = new MacroExpander(wb.id,
         *crate.hirPool, name, sp, crate.edition, rules.isMacroItem,
         rules.transparent, rules.definitionId, rules.hygiene, rule.contents, mv$(boundTts),
         rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
@@ -3409,7 +3406,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
 
         void emitFromString(const ::std::string& s) {
             ::std::istringstream iss{s};
-            Lexer lex{*wb.hygiene, *wb.pool, iss, ASTEdition::Rust2021, {}};
+            Lexer lex{wb.id, *wb.pool, iss, ASTEdition::Rust2021, {}};
             for (;;) {
                 auto tok = lex.getToken();
                 if (tok == TOK_EOF) {
@@ -3895,7 +3892,7 @@ MacroRulesArm ParseMacroRulesMakeArm(Span patSp, ::std::vector<MacroPatEnt> patt
 namespace {
     MacroRulesPtr makeMrPtr(TokenStream& lex) {
         auto s = lex.pointSpan();
-        auto rv = MacroRulesPtr(new MacroRules(*lex.parseState().wb->macroDefinitions,
+        auto rv = MacroRulesPtr(new MacroRules(lex.parseState().wb->id,
             s->crateName(), lex.getEdition()));
         rv->hygiene = lex.getHygiene();
         return rv;
@@ -4398,8 +4395,8 @@ MacroRulesArm::MacroRulesArm(::std::vector<SimplePatEnt> pattern, ::std::vector<
 {
 }
 
-MacroRules::MacroRules(MacroDefinitionContext& context, RcString sourceCrate, ASTEdition edition)
-    : definitionId(context.newDefinitionId())
+MacroRules::MacroRules(u32& id, RcString sourceCrate, ASTEdition edition)
+    : definitionId(++id)
     , sourceCrate(std::move(sourceCrate))
     , edition(edition)
 {

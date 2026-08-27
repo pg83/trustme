@@ -208,12 +208,11 @@ struct HIRTypeDataNamedFunction {
 
 class HIRTypeInterner {
     stl::ObjPool& pool;
+    u32& id;
     ::std::unordered_multimap<size_t, HIRTypeRef> nodes;
-    u32 nextUid = 0;
-    unsigned nextAliasInputInfer = ~1u;
 
 public:
-    explicit HIRTypeInterner(stl::ObjPool& pool);
+    HIRTypeInterner(stl::ObjPool& pool, u32& id);
 
     HIRTypeRef intern(HIRTypeData data);
     HIRTypeRef infer(unsigned int idx = ~0u, HIRInferClass tyClass = HIRInferClass::None);

@@ -9,15 +9,6 @@ namespace stl {
     class ObjPool;
 }
 
-class HygieneContext {
-    unsigned nextScope = 0;
-
-public:
-    unsigned newScopeId() {
-        return ++nextScope;
-    }
-};
-
 struct Ident {
     // TODO: Use AST::AbsolutePath instead
     struct ModPath {
@@ -61,9 +52,9 @@ struct Ident {
         Hygiene(Hygiene&& x) = default;
         Hygiene& operator=(Hygiene&& x) = default;
 
-        static Hygiene newScope(HygieneContext& context, stl::ObjPool& pool);
+        static Hygiene newScope(u32& id, stl::ObjPool& pool);
 
-        static Hygiene newScopeChained(HygieneContext& context, stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition = 0, bool itemOpaque = false);
+        static Hygiene newScopeChained(u32& id, stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition = 0, bool itemOpaque = false);
 
         Hygiene withTailScope(stl::ObjPool& pool, const Hygiene& scope, bool inheritModPath = false) const;
 

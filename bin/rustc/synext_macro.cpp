@@ -1176,7 +1176,7 @@ class CExpanderAssert: public ExpandProcMacro {
         ASSERT_BUG(sp, n, "No expression returned");
 
         ::std::vector<TokenTree> toks;
-        const auto expansionHygiene = Ident::Hygiene::newScope(*wb.hygiene, *wb.pool);
+        const auto expansionHygiene = Ident::Hygiene::newScope(wb.id, *wb.pool);
 
         bool closeOuterBlock = false;
 
@@ -2475,7 +2475,7 @@ namespace {
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(),
-            Ident::Hygiene::newScope(*wb.hygiene, *crate.hirPool), mv$(toks))));
+            Ident::Hygiene::newScope(wb.id, *crate.hirPool), mv$(toks))));
     }
 }
 
@@ -2575,7 +2575,7 @@ class CIncludeExpander: public ExpandProcMacro {
 
         ParseState ps;
         ps.module = &mod;
-        return box$(Lexer(*wb.hygiene, *crate.hirPool, filePath, crate.edition, ps));
+        return box$(Lexer(wb.id, *crate.hirPool, filePath, crate.edition, ps));
     }
 };
 
@@ -2601,7 +2601,7 @@ class CIncludeBytesExpander: public ExpandProcMacro {
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_BYTESTRING, mv$(ss.str()), {}));
         return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015,
-            Ident::Hygiene::newScope(*wb.hygiene, *wb.pool), mv$(toks))));
+            Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
     }
 };
 
@@ -2627,7 +2627,7 @@ class CIncludeStrExpander: public ExpandProcMacro {
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_STRING, mv$(ss.str()), {}));
         return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015,
-            Ident::Hygiene::newScope(*wb.hygiene, *wb.pool), mv$(toks))));
+            Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
     }
 };
 
@@ -2667,7 +2667,7 @@ class CExpanderPanic: public ExpandProcMacro {
         toks.push_back(Token(TOK_PAREN_CLOSE));
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(edition,
-            Ident::Hygiene::newScope(*wb.hygiene, *wb.pool), mv$(toks))));
+            Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
     }
 };
 
@@ -2703,7 +2703,7 @@ class CExpanderUnreachable: public ExpandProcMacro {
         toks.push_back(Token(TOK_PAREN_CLOSE));
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(edition,
-            Ident::Hygiene::newScope(*wb.hygiene, *wb.pool), mv$(toks))));
+            Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
     }
 };
 

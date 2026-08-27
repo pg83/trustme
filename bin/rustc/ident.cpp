@@ -103,14 +103,14 @@ const Ident::Hygiene::Inner* Ident::Hygiene::store(stl::ObjPool& pool, Inner v) 
     return pool.make<Inner>(::std::move(v));
 }
 
-Ident::Hygiene Ident::Hygiene::newScope(HygieneContext& context, stl::ObjPool& pool) {
+Ident::Hygiene Ident::Hygiene::newScope(u32& id, stl::ObjPool& pool) {
     Inner v;
-    v.contexts.push_back(context.newScopeId());
+    v.contexts.push_back(++id);
     v.macroDefinitions.push_back(0);
     return Hygiene(store(pool, ::std::move(v)));
 }
 
-Ident::Hygiene Ident::Hygiene::newScopeChained(HygieneContext& context, stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition, bool itemOpaque) {
+Ident::Hygiene Ident::Hygiene::newScopeChained(u32& id, stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition, bool itemOpaque) {
     Inner v;
     if (parent.inner) {
         v.searchModule = parent.inner->searchModule;
@@ -119,7 +119,7 @@ Ident::Hygiene Ident::Hygiene::newScopeChained(HygieneContext& context, stl::Obj
     }
     v.contexts.reserve(v.contexts.size() + 1);
     v.macroDefinitions.reserve(v.macroDefinitions.size() + 1);
-    v.contexts.push_back(context.newScopeId());
+    v.contexts.push_back(++id);
     assert((macroDefinition & ITEM_OPAQUE) == 0);
     v.macroDefinitions.push_back(macroDefinition | (itemOpaque ? ITEM_OPAQUE : 0));
     return Hygiene(store(pool, ::std::move(v)));

@@ -7,9 +7,9 @@
 
 int main() {
     auto pool = stl::ObjPool::fromMemory();
-    HygieneContext hygiene;
-    auto definitionContext = Ident::Hygiene::newScope(hygiene, *pool);
-    auto expansionContext = Ident::Hygiene::newScopeChained(hygiene, *pool, definitionContext);
+    u32 id = 0;
+    auto definitionContext = Ident::Hygiene::newScope(id, *pool);
+    auto expansionContext = Ident::Hygiene::newScopeChained(id, *pool, definitionContext);
 
     Ident definition(definitionContext, RcString::newInterned("name"));
     Ident expansion(expansionContext, RcString::newInterned("name"));

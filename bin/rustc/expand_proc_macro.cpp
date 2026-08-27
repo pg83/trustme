@@ -11,7 +11,6 @@
 #include "parse_lex.h"
 #include "expand_cfg.h"
 #include "wire_board.h"
-#include "proc_macro_context.h"
 #include "main_bindings.h"
 #include "parse_ttstream.h"
 
@@ -239,7 +238,7 @@ struct ProcMacroInv: public TokenStream {
     size_t pendingSymbolOffset = 0;
 
 public:
-    ProcMacroInv(ProcMacroContext& context, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
+    ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
     ProcMacroInv(const ProcMacroInv&) = delete;
     ProcMacroInv(ProcMacroInv&&) = default;
     ProcMacroInv& operator=(const ProcMacroInv&) = delete;
@@ -480,7 +479,7 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCr
         : extCrate.filename.c_str();
 
     // 3. Create ProcMacroInv
-    auto rv = ProcMacroInv(*wb.procMacros, sp, extCrate.hir->edition, procMacroExeName, *pmp);
+    auto rv = ProcMacroInv(wb.id, sp, extCrate.hir->edition, procMacroExeName, *pmp);
     rv.parseState().crate = &crate;
     rv.parseState().wb = &wb;
 
@@ -1562,7 +1561,7 @@ default:
 
         void parseString(const ::std::string& s) {
             ::std::istringstream iss{s};
-            Lexer l{*wb.hygiene, *wb.pool, iss, ASTEdition::Rust2021, {}};
+            Lexer l{wb.id, *wb.pool, iss, ASTEdition::Rust2021, {}};
             for (;;) {
                 auto t = l.getToken();
                 if (t == TOK_EOF) {
@@ -2086,7 +2085,7 @@ template <typename F>
     });
 }
 
-ProcMacroInv::ProcMacroInv(ProcMacroContext& context, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc)
+ProcMacroInv::ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc)
     : TokenStream(ParseState())
     , parentSpan(sp)
     , thisSpan(Span(parentSpan, procMacroDesc.path.crateName(), procMacroDesc.name))
@@ -2096,7 +2095,7 @@ ProcMacroInv::ProcMacroInv(ProcMacroContext& context, const Span& sp, ASTEdition
     if (getenv("TRUSTME_DUMP_PROCMACRO") && getenv("TRUSTME_DUMP_PROCMACRO")[0]) {
         // TODO: Dump both input and output, AND (optionally) dump each invocation
         std::string namePrefix;
-        namePrefix = FMT(getenv("TRUSTME_DUMP_PROCMACRO") << "-" << context.newDumpIndex());
+        namePrefix = FMT(getenv("TRUSTME_DUMP_PROCMACRO") << "-" << ++id);
         dumpFileOut.open(FMT(namePrefix << "-out.bin"), ::std::ios::out | ::std::ios::binary);
         dumpFileRes.open(FMT(namePrefix << "-res.bin"), ::std::ios::out | ::std::ios::binary);
     }
@@ -2426,7 +2425,7 @@ Token ProcMacroInv::realGetToken_() {
         case TokenClass::RawLiteral: {
             auto text = this->recvBytes();
             ::std::istringstream input(text + " ");
-            Lexer lexer(*this->parseState().wb->hygiene, this->typePool(), input,
+            Lexer lexer(this->parseState().wb->id, this->typePool(), input,
                 edition, this->parseState());
             auto token = lexer.getToken();
             ASSERT_BUG(this->parentSpan, token != TOK_EOF, "Empty raw literal from child process");

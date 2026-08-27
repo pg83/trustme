@@ -8,7 +8,8 @@ using namespace stl;
 STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testRollbackRestoresBinding) {
         auto pool = stl::ObjPool::fromMemory();
-        HIRTypeInterner types(*pool.mutPtr());
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto a = table.newIvar();
@@ -33,7 +34,8 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
     STD_TEST(testRollbackUndoesAliasAndTruncates) {
         auto pool = stl::ObjPool::fromMemory();
-        HIRTypeInterner types(*pool.mutPtr());
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto a = table.newIvar();
@@ -57,7 +59,8 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
     STD_TEST(testRollbackRestoresLiteralClassUpgrade) {
         auto pool = stl::ObjPool::fromMemory();
-        HIRTypeInterner types(*pool.mutPtr());
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto l = table.newIvar();
@@ -76,7 +79,8 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
     STD_TEST(testRollbackRestoresValueIvars) {
         auto pool = stl::ObjPool::fromMemory();
-        HIRTypeInterner types(*pool.mutPtr());
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto v1 = table.newIvarVal();
@@ -98,7 +102,8 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
     STD_TEST(testCommitKeepsBindings) {
         auto pool = stl::ObjPool::fromMemory();
-        HIRTypeInterner types(*pool.mutPtr());
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto a = table.newIvar();
@@ -124,7 +129,8 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
     STD_TEST(testNestedSnapshots) {
         auto pool = stl::ObjPool::fromMemory();
-        HIRTypeInterner types(*pool.mutPtr());
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto a = table.newIvar();
@@ -146,7 +152,8 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
     STD_TEST(testUnifyBindsAndUnifies) {
         auto pool = stl::ObjPool::fromMemory();
-        HIRTypeInterner types(*pool.mutPtr());
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -164,7 +171,8 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
     STD_TEST(testUnifyMismatchRollsBack) {
         auto pool = stl::ObjPool::fromMemory();
-        HIRTypeInterner types(*pool.mutPtr());
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -181,7 +189,8 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
     STD_TEST(testUnifyOccursCheck) {
         auto pool = stl::ObjPool::fromMemory();
-        HIRTypeInterner types(*pool.mutPtr());
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -195,7 +204,8 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
     STD_TEST(testUnifyLiteralClasses) {
         auto pool = stl::ObjPool::fromMemory();
-        HIRTypeInterner types(*pool.mutPtr());
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -211,7 +221,8 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
     STD_TEST(testUnifyDefersRigidUnknowns) {
         auto pool = stl::ObjPool::fromMemory();
-        HIRTypeInterner types(*pool.mutPtr());
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
@@ -238,7 +249,8 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
     STD_TEST(testRollbackRestoresChangedFlag) {
         auto pool = stl::ObjPool::fromMemory();
-        HIRTypeInterner types(*pool.mutPtr());
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
 
         const auto a = table.newIvar();

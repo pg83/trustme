@@ -283,7 +283,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
     }
 
     // NOTE: Creating `ExternCrate` loads the crate from the specified path
-    auto ec = ASTExternCrate{*wb.macroDefinitions, hirPool, types, name, path};
+    auto ec = ASTExternCrate{wb.id, hirPool, types, name, path};
     auto realName = ec.hir->crateName;
     assert(realName != "");
     if (expectedName != "" && realName != expectedName) {
@@ -344,14 +344,14 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
     return realName;
 }
 
-ASTExternCrate::ASTExternCrate(MacroDefinitionContext& macroDefinitions,
+ASTExternCrate::ASTExternCrate(u32& id,
     stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name,
     const ::std::string& path)
     : name(name)
     , shortName(name)
     , filename(path)
 {
-    hir = HIRDeserialise(macroDefinitions, pool, types, path);
+    hir = HIRDeserialise(id, pool, types, path);
 
     hir->postLoadUpdate(name);
     this->name = hir->crateName;

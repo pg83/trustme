@@ -1,5 +1,7 @@
 #pragma once
 
+#include <std/sys/types.h>
+
 namespace stl {
     class ObjPool;
 }
@@ -8,13 +10,7 @@ struct ASTCrate;
 class HIRCrate;
 class HIRTypeInterner;
 class HIRInherentCache;
-class HIRExpandContext;
-class HygieneContext;
 class ExpandRegistry;
-class MacroDefinitionContext;
-class MacroLogContext;
-class ParseContext;
-class ProcMacroContext;
 class LangItems;
 struct Settings;
 struct TargetSpec;
@@ -40,16 +36,12 @@ struct WireBoard {
     // (physically) right after HIR Lower, together with the AST itself;
     // null from then on.
     stl::ObjPool* astPool = nullptr;
+    // Shared invocation-wide identity. Consumers that only need uniqueness
+    // take the next value directly instead of owning one-counter components.
+    mutable u32 id = 0;
     // The one type interner; created right after the pool, before parsing.
     HIRTypeInterner* types = nullptr;
-    HIRExpandContext* hirExpand = nullptr;
-    // Monotonic lexical/macro scope identity for this compiler invocation.
-    HygieneContext* hygiene = nullptr;
     ExpandRegistry* expandRegistry = nullptr;
-    MacroDefinitionContext* macroDefinitions = nullptr;
-    MacroLogContext* macroLog = nullptr;
-    ParseContext* parser = nullptr;
-    ProcMacroContext* procMacros = nullptr;
 
     // Compilation settings: command-line configuration plus the few values
     // the pipeline derives once (crate names, cfg state). See settings.h.

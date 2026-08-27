@@ -2,24 +2,6 @@
 
 struct WireBoard;
 
-class MacroDefinitionContext {
-    unsigned nextDefinition = 0;
-
-public:
-    unsigned newDefinitionId() {
-        return ++nextDefinition;
-    }
-};
-
-class MacroLogContext {
-    unsigned nextLog = 0;
-
-public:
-    unsigned newLogIndex() {
-        return nextLog++;
-    }
-};
-
 #include "common.h"
 #include "parse_lex.h"
 #include "parse_tokentree.h"
@@ -180,7 +162,7 @@ public:
     /// Expansion rules
     ::std::vector<MacroRulesArm> rules;
 
-    MacroRules(MacroDefinitionContext& context, RcString sourceCrate, ASTEdition edition);
+    MacroRules(u32& id, RcString sourceCrate, ASTEdition edition);
 
     virtual ~MacroRules();
     MacroRules(MacroRules&&) = default;

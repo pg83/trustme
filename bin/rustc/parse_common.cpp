@@ -13,7 +13,6 @@
 #include "wire_board.h"
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"
-#include "parse_context.h"
 #include "macro_rules_macro_rules.h"
 #include "parse_interpolated_fragment.h"
 
@@ -4624,7 +4623,7 @@ RcString getOptionalIdent(TokenStream& lex, RcString* sourceName) {
     GET_TOK(tok, lex);
     if (tok.type() == TOK_UNDERSCORE) {
         ASSERT_BUG(lex.pointSpan(), lex.parseState().wb, "Parser has no WireBoard");
-        auto name = RcString::newInterned(FMT(" " << lex.parseState().wb->parser->newAnonymousItem()));
+        auto name = RcString::newInterned(FMT(" " << ++lex.parseState().wb->id));
         if (sourceName) {
             *sourceName = name;
         }
@@ -5606,7 +5605,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             // Can't find file
                             ERROR(lex.pointSpan(), E0000, "Can't find file for '" << name << "' in '" << modFileinfo.path << "'");
                         }
-                        Lexer subLex(*lex.parseState().wb->hygiene, lex.typePool(),
+                        Lexer subLex(lex.parseState().wb->id, lex.typePool(),
                             submod.fileInfo.path, lex.getEdition(), lex.parseState());
                         ParseModRoot(subLex, submod, metaItems);
                         GET_CHECK_TOK(tok, subLex, TOK_EOF);
@@ -5632,7 +5631,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             // Can't find file
                             ERROR(lex.pointSpan(), E0000, "Can't find file for '" << name << "' in '" << modFileinfo.path << "'");
                         }
-                        Lexer subLex(*lex.parseState().wb->hygiene, lex.typePool(),
+                        Lexer subLex(lex.parseState().wb->id, lex.typePool(),
                             submod.fileInfo.path, lex.getEdition(), lex.parseState());
                         ParseModRoot(subLex, submod, metaItems);
                         GET_CHECK_TOK(tok, subLex, TOK_EOF);
@@ -5705,7 +5704,7 @@ void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs) 
 ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, ::std::string mainfile, ASTEdition edition) {
     Token tok;
 
-    Lexer lex(*wb.hygiene, *wb.pool, mainfile, edition, ParseState());
+    Lexer lex(wb.id, *wb.pool, mainfile, edition, ParseState());
 
     size_t p = mainfile.find_last_of('/');
     p = (p == ::std::string::npos ? mainfile.find_last_of('\\') : p);

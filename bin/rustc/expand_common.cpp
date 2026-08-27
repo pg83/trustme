@@ -1692,7 +1692,7 @@ struct CExpandExpr: public ASTNodeVisitor {
         // Hygiene outlives the AST (idents in HIR patterns and macro_rules
         // keep pointing at it), so it lives in the persistent pool.
         const auto iteratorHygiene = Ident::Hygiene::newScope(
-            *parentExpandState.wb.hygiene, *parentExpandState.crate.hirPool);
+            parentExpandState.wb.id, *parentExpandState.crate.hirPool);
         auto coreCrate = crate.extCratenameCore;
         auto pathSome = getPath(coreCrate, "option", "Option", "Some");
         auto pathNone = getPath(coreCrate, "option", "Option", "None");

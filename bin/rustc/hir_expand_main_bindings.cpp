@@ -3770,7 +3770,7 @@ void HIRExpandClosuresExpr(const WireBoard& wb, const HIRCrate& crateRo, HIRType
 
     OutState out;
     auto newType = makeCallable<ClosureTypeCb>([&](const char* prefix, const char* suffix, auto s) -> auto {
-        auto name = RcString::newInterned(FMT(prefix << "C_" << wb.hirExpand->newClosureIndex()));
+        auto name = RcString::newInterned(FMT(prefix << "C_" << ++wb.id));
         auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{HIRPublicity::newNone(), HIRTypeItem(mv$(s))});
         auto* retPtr = &boxed->ent;
         crate.newTypes.push_back(::std::make_pair(name, boxed));
@@ -5502,7 +5502,7 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
         }
     }
     auto callback = makeCallable<NewStaticCb>([&](Span sp, HIRTypeRef ty, HIRExprPtr valExpr, HIRGenericParams generics, bool isConst) -> HIRSimplePath {
-        auto name = RcString::newInterned(FMT("lifted#C_" << wb.hirExpand->newStaticIndex()));
+        auto name = RcString::newInterned(FMT("lifted#C_" << ++wb.id));
 
         auto path = HIRSimplePath(crate.crateName, {name});
         auto newStatic = HIRStatic(
@@ -5518,16 +5518,16 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
 
         struct Nvs: HIREvaluator::Newval {
             const HIRCrate& crate;
-            HIRExpandContext& context;
+            u32& id;
 
-            Nvs(const HIRCrate& crate, HIRExpandContext& context)
+            Nvs(const HIRCrate& crate, u32& id)
                 : crate(crate)
-                , context(context)
+                , id(id)
             {
             }
 
             HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override {
-                auto name = RcString::newInterned(FMT("lifted#C_" << context.newStaticIndex()));
+                auto name = RcString::newInterned(FMT("lifted#C_" << ++id));
                 auto path = HIRSimplePath() + name;
                 auto newStatic = HIRStatic(
                     HIRLinkage(),
@@ -5557,7 +5557,7 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
                 s.value.state->itemGenerics = &s.params;
                 return path;
             }
-        } nvs{crate, *wb.hirExpand};
+        } nvs{crate, wb.id};
 
         if (!newStatic.params.isGeneric()) {
             newStatic.value.state->stage = HIRExprState::Stage::Sbc;

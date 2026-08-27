@@ -16,7 +16,6 @@ namespace stl {
 
 class ASTExternCrate;
 struct WireBoard;
-class MacroDefinitionContext;
 
 class ASTTestDesc {
 public:
@@ -141,7 +140,7 @@ public:
     bool isProcMacro = false;
     HIRCrate* hir = nullptr;
 
-    ASTExternCrate(MacroDefinitionContext& macroDefinitions, stl::ObjPool* pool,
+    ASTExternCrate(u32& id, stl::ObjPool* pool,
         HIRTypeInterner& types, const RcString& name, const ::std::string& path);
 
     ASTExternCrate(ASTExternCrate&&) = default;

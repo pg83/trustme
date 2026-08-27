@@ -1535,7 +1535,7 @@ HIRTypeRef HIRTypeInterner::intern(HIRTypeData data) {
         }
     }
     auto* node = pool.make<HIRTypeData>(mv$(data));
-    node->uid = ++nextUid;
+    node->uid = ++id;
     nodes.emplace(hash, node);
     return node;
 }
@@ -1545,7 +1545,7 @@ HIRTypeRef HIRTypeInterner::infer(unsigned int idx, HIRInferClass tyClass) {
 }
 
 unsigned HIRTypeInterner::newAliasInputInfer() {
-    return nextAliasInputInfer--;
+    return ~++id;
 }
 
 HIRTypeRef HIRTypeInterner::primitive(HIRCoreType ct) {
@@ -3010,8 +3010,9 @@ default:
     UNREACHABLE();
 }
 
-HIRTypeInterner::HIRTypeInterner(stl::ObjPool& pool)
+HIRTypeInterner::HIRTypeInterner(stl::ObjPool& pool, u32& id)
     : pool(pool)
+    , id(id)
 {
 }
 

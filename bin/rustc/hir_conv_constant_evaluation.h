@@ -57,7 +57,6 @@ struct HIREvaluator {
     stl::ObjPool::Ref valuePool;
     StaticTraitResolve resolve;
     Newval& nvs;
-    unsigned int evalIndex;
     unsigned int numFrames;
     bool requireConstCalls;
     // Note: Pointer is needed to maintain internal reference stability

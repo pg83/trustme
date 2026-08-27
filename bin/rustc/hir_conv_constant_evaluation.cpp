@@ -64,16 +64,11 @@ class CtfeContext {
         size_t idx;
     };
 
-    unsigned nextEvalIndex_ = 0;
     const bool capsOracle_ = getenv("TRUSTME_CAPS_ORACLE") != nullptr;
     const RcString vtableName_ = RcString::newInterned("vtable#");
     stl::Vector<ActiveDiscriminant> activeDiscriminants_;
 
 public:
-    unsigned newEvalIndex() {
-        return nextEvalIndex_++;
-    }
-
     bool capsOracle() const {
         return capsOracle_;
     }
@@ -6150,7 +6145,6 @@ HIREvaluator::HIREvaluator(const Span& sp, const WireBoard& wb, Newval& nvs)
     , valuePool(stl::ObjPool::fromMemory())
     , resolve(wb)
     , nvs(nvs)
-    , evalIndex(wb.ctfe->newEvalIndex())
     , numFrames(0)
     , requireConstCalls(false)
 {
