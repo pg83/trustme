@@ -18,6 +18,55 @@
 #include <algorithm>
 #include <unordered_map>
 
+SolverImpl SolverImpl::fromLegacy(ImplRef impl) {
+    SolverImpl result;
+    result.ambiguousIdentity = impl.isAmbiguousIdentity();
+    if (auto* traitImpl = impl.data.opt_TraitImpl()) {
+        ASSERT_BUG(Span(), traitImpl->traitPtr && traitImpl->impl, "invalid trait impl solver response");
+        result.implParams = ::std::move(traitImpl->implParams);
+        result.trait = traitImpl->traitPtr;
+        ASSERT_BUG(Span(), traitImpl->traitPath, "trait impl solver response has no trait path");
+        result.traitPath = *traitImpl->traitPath;
+        result.traitImpl = traitImpl->impl;
+    } else if (const auto* bounded = impl.data.opt_BoundedPtr()) {
+        result.type = bounded->type;
+        if (bounded->traitArgs) {
+            result.traitArgs = bounded->traitArgs->clone();
+        }
+        if (bounded->assoc) {
+            for (const auto& entry : *bounded->assoc) {
+                result.associated.insert({entry.first, entry.second.clone()});
+            }
+        }
+        result.constness = bounded->constness;
+    } else {
+        auto& owned = impl.data.as_Bounded();
+        result.type = ::std::move(owned.type);
+        result.traitArgs = ::std::move(owned.traitArgs);
+        result.associated = ::std::move(owned.assoc);
+        result.constness = owned.constness;
+    }
+    return result;
+}
+
+ImplRef SolverImpl::legacy() const {
+    ImplRef result;
+    if (traitImpl) {
+        ASSERT_BUG(Span(), trait, "trait impl solver response has no trait declaration");
+        result = ImplRef(implParams.clone(), *trait, traitPath, *traitImpl);
+    } else {
+        HIRTraitPath::assocListT assoc;
+        for (const auto& entry : associated) {
+            assoc.insert({entry.first, entry.second.clone()});
+        }
+        result = ImplRef(type, traitArgs.clone(), ::std::move(assoc), constness);
+    }
+    if (ambiguousIdentity) {
+        result.markAmbiguousIdentity();
+    }
+    return result;
+}
+
 namespace {
     // Give every fresh placeholder in one active trait goal the same stable
     // spelling.  This makes a recurrence through independently-instantiated
@@ -199,6 +248,24 @@ namespace {
 
         const stl::Vector<const HIRTypeData*>& ivarNodes() const {
             return ivarNodes_;
+        }
+
+        size_t typeSlotCount() const {
+            return ivarNodes_.length();
+        }
+
+        size_t valueSlotCount() const {
+            return valueIvarIndexes_.length();
+        }
+
+        HIRTypeRef canonicalTypeSlot(size_t slot) const {
+            ASSERT_BUG(Span(), slot < ivarNodes_.length(), "canonical type slot out of range");
+            return types.infer(HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(slot), ivarNodes_[slot]->as_Infer().tyClass);
+        }
+
+        HIRConstGeneric canonicalValueSlot(size_t slot) const {
+            ASSERT_BUG(Span(), slot < valueIvarIndexes_.length(), "canonical value slot out of range");
+            return HIRConstGeneric::make_Infer({HIR_INFER_SOLVER_CANONICAL_MIN + static_cast<unsigned>(slot)});
         }
     };
 
@@ -3367,11 +3434,7 @@ default:
         }
 
         class NextTraitGoalEvaluator {
-            enum class Certainty {
-                NoSolution,
-                Ambiguous,
-                Proven,
-            };
+            using Certainty = SolverCertainty;
 
             enum class CandidateSource {
                 Builtin,
@@ -3484,24 +3547,11 @@ default:
                 }
             };
 
-            /// One viable candidate head exported alongside an ambiguous
-            /// identity response, in canonical space.
-            struct ExportedCandidate {
-                ImplRef impl;
-                HIRCompare cmp;
-            };
-
             struct CachedGoal {
                 GoalKey goal;
                 Certainty certainty;
-                ImplRef response;
-                HIRCompare responseCertainty = HIRCompare::Fuzzy;
+                const SolverResponse* response = nullptr;
                 bool hasResponse = false;
-                // Captured when the ambiguity had distinct responses, so an
-                // exporting caller replays the candidate visits together
-                // with the identity instead of re-running the evaluation.
-                ThinVector<ExportedCandidate> exportedCandidates;
-                bool hasExportedCandidates = false;
                 // A fully rigid canonical goal (no inference variables in the
                 // key) evaluated without touching a goal cycle depends only on
                 // the resolver's ParamEnv: it stays valid for the resolver's
@@ -4241,6 +4291,214 @@ default:
                 return result;
             }
 
+            const SolverImpl* ownSolverImpl(ImplRef source) const {
+                ASSERT_BUG(span(), crate.pool, "solver response requires the crate object pool");
+                return crate.pool->make<SolverImpl>(SolverImpl::fromLegacy(::std::move(source)));
+            }
+
+            const SolverImpl* monomorphSolverImpl(const SolverImpl& source, const Monomorphiser& monomorph) const {
+                return ownSolverImpl(monomorphImplRef(source.legacy(), monomorph));
+            }
+
+            ImplRef monomorphSolverImplForLegacy(const SolverImpl& source, const Monomorphiser& monomorph) const {
+                if (source.traitImpl) {
+                    ASSERT_BUG(span(), source.trait, "trait impl solver response has no trait declaration");
+                    auto result = ImplRef(monomorph.monomorphPathParams(span(), source.implParams, true), *source.trait, source.traitPath, *source.traitImpl);
+                    if (source.ambiguousIdentity) {
+                        result.markAmbiguousIdentity();
+                    }
+                    return result;
+                }
+                HIRTraitPath::assocListT associated;
+                for (const auto& entry : source.associated) {
+                    associated.insert({entry.first, monomorph.monomorphTpAtyEqual(span(), entry.second, true)});
+                }
+                auto result = ImplRef(
+                    monomorph.monomorphType(span(), source.type, true),
+                    monomorph.monomorphPathParams(span(), source.traitArgs, true),
+                    ::std::move(associated),
+                    source.constness
+                );
+                if (source.ambiguousIdentity) {
+                    result.markAmbiguousIdentity();
+                }
+                return result;
+            }
+
+            SolverResponse monomorphSolverResponse(const SolverResponse& source, const Monomorphiser& monomorph, bool includeObligations = true, bool includeCandidates = true) const {
+                SolverResponse result;
+                result.certainty = source.certainty;
+                result.hasImpl = source.hasImpl;
+                if (source.hasImpl) {
+                    ASSERT_BUG(span(), source.impl, "solver response has no implementation");
+                    result.impl = monomorphSolverImpl(*source.impl, monomorph);
+                }
+                for (const auto& type : source.slots.types) {
+                    result.slots.types.push_back(monomorph.monomorphType(span(), type, true));
+                }
+                for (const auto& value : source.slots.values) {
+                    result.slots.values.push_back(monomorph.monomorphConstgeneric(span(), value, true));
+                }
+                if (includeObligations) {
+                    for (const auto& obligation : source.obligations) {
+                        result.obligations.push_back(SolverObligation{
+                            monomorph.monomorphType(span(), obligation.type, true),
+                            monomorph.monomorphTraitpath(span(), obligation.trait, true),
+                        });
+                    }
+                }
+                if (includeCandidates) {
+                    for (const auto& candidate : source.candidates) {
+                        result.candidates.push_back(SolverCandidateResponse{
+                            monomorphSolverImpl(*candidate.impl, monomorph),
+                            candidate.certainty,
+                        });
+                    }
+                }
+                return result;
+            }
+
+            SolverSlotValues extractSlotValues(const CanonicalGoal& goal, const ImplRef& response, const CanonicalizeTraitGoal& canonicalizer, Certainty certainty) const {
+                SolverSlotValues result;
+                if (canonicalizer.typeSlotCount() == 0 && canonicalizer.valueSlotCount() == 0) {
+                    return result;
+                }
+
+                // Slot extraction is a read-only derivation of the canonical
+                // answer.  Use a private table so fresh probe variables do not
+                // advance the caller table's mutation generation and evict the
+                // response we are about to cache.
+                HMTypeInferrence table(crate.types);
+
+                class InstantiateSlots final: public MonomorphiserNop {
+                    const CanonicalizeTraitGoal& canonicalizer_;
+
+                public:
+                    ThinVector<HIRTypeRef> types;
+                    ThinVector<HIRConstGeneric> values;
+
+                    InstantiateSlots(HIRTypeInterner& interner, HMTypeInferrence& table, const CanonicalizeTraitGoal& canonicalizer)
+                        : MonomorphiserNop(interner)
+                        , canonicalizer_(canonicalizer)
+                    {
+                        for (size_t i = 0; i < canonicalizer_.typeSlotCount(); i++) {
+                            types.push_back(table.newIvarTr(canonicalizer_.canonicalTypeSlot(i)->as_Infer().tyClass));
+                        }
+                        for (size_t i = 0; i < canonicalizer_.valueSlotCount(); i++) {
+                            values.push_back(HIRConstGeneric::make_Infer({table.newIvarVal()}));
+                        }
+                    }
+
+                    HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
+                        if (const auto* infer = type->opt_Infer(); infer && isSolverCanonicalInfer(infer->index)) {
+                            const size_t slot = infer->index - HIR_INFER_SOLVER_CANONICAL_MIN;
+                            if (slot < types.size()) {
+                                return types[slot];
+                            }
+                        }
+                        return MonomorphiserNop::monomorphType(sp, type, allowInfer);
+                    }
+
+                    HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override {
+                        if (const auto* infer = value.opt_Infer(); infer && isSolverCanonicalInfer(infer->index)) {
+                            const size_t slot = infer->index - HIR_INFER_SOLVER_CANONICAL_MIN;
+                            if (slot < values.size()) {
+                                return values[slot].clone();
+                            }
+                        }
+                        return MonomorphiserNop::monomorphConstgeneric(sp, value, allowInfer);
+                    }
+                } slots(crate.types, table, canonicalizer);
+
+                const auto responseType = response.getImplType(crate.types);
+                const auto responseParams = response.getTraitParams(crate.types);
+                if (goal.params.types.size() != responseParams.types.size() || goal.params.values.size() != responseParams.values.size()) {
+                    ASSERT_BUG(span(), certainty == Certainty::Ambiguous, "proven solver response has a different trait arity than its goal: goal=" << goal.params << " response=" << responseParams << " impl=" << response);
+                    for (size_t i = 0; i < canonicalizer.typeSlotCount(); i++) {
+                        result.types.push_back(canonicalizer.canonicalTypeSlot(i));
+                    }
+                    for (size_t i = 0; i < canonicalizer.valueSlotCount(); i++) {
+                        result.values.push_back(canonicalizer.canonicalValueSlot(i));
+                    }
+                    return result;
+                }
+
+                Unifier unifier(span(), table, nullptr, true);
+                auto unifyType = [&](const HIRTypeData* left, const HIRTypeData* right) {
+                    const auto instantiatedLeft = slots.monomorphType(span(), left, true);
+                    const auto instantiatedRight = slots.monomorphType(span(), right, true);
+                    ASSERT_BUG(span(), unifier.unify(instantiatedLeft, instantiatedRight) != Unifier::Outcome::Mismatch, "solver response does not unify with its canonical goal");
+                };
+                auto unifyValue = [&](const HIRConstGeneric& left, const HIRConstGeneric& right) {
+                    const auto instantiatedLeft = slots.monomorphConstgeneric(span(), left, true);
+                    const auto instantiatedRight = slots.monomorphConstgeneric(span(), right, true);
+                    ASSERT_BUG(span(), unifier.unifyValues(instantiatedLeft, instantiatedRight) != Unifier::Outcome::Mismatch, "solver const response does not unify with its canonical goal");
+                };
+
+                unifyType(goal.type, responseType);
+                for (size_t i = 0; i < goal.params.types.size(); i++) {
+                    unifyType(goal.params.types[i], responseParams.types[i]);
+                }
+                for (size_t i = 0; i < goal.params.values.size(); i++) {
+                    unifyValue(goal.params.values[i], responseParams.values[i]);
+                }
+
+                class MaterializeSlots final: public MonomorphiserNop {
+                    const HMTypeInferrence& table_;
+                    const CanonicalizeTraitGoal& canonicalizer_;
+                    const ThinVector<HIRTypeRef>& types_;
+                    const ThinVector<HIRConstGeneric>& values_;
+
+                public:
+                    MaterializeSlots(HIRTypeInterner& interner, const HMTypeInferrence& table, const CanonicalizeTraitGoal& canonicalizer, const ThinVector<HIRTypeRef>& types, const ThinVector<HIRConstGeneric>& values)
+                        : MonomorphiserNop(interner)
+                        , table_(table)
+                        , canonicalizer_(canonicalizer)
+                        , types_(types)
+                        , values_(values)
+                    {
+                    }
+
+                    HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
+                        if (const auto* infer = type->opt_Infer(); infer && infer->index < table_.ivars.size()) {
+                            const auto* resolved = table_.getType(type);
+                            if (resolved != type) {
+                                return this->monomorphType(sp, resolved, allowInfer);
+                            }
+                            for (size_t i = 0; i < types_.size(); i++) {
+                                if (types_[i]->as_Infer().index == infer->index) {
+                                    return canonicalizer_.canonicalTypeSlot(i);
+                                }
+                            }
+                        }
+                        return MonomorphiserNop::monomorphType(sp, type, allowInfer);
+                    }
+
+                    HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override {
+                        if (const auto* infer = value.opt_Infer(); infer && infer->index < table_.values.size()) {
+                            const auto& resolved = table_.getValue(value);
+                            if (resolved != value) {
+                                return this->monomorphConstgeneric(sp, resolved, allowInfer);
+                            }
+                            for (size_t i = 0; i < values_.size(); i++) {
+                                if (values_[i].as_Infer().index == infer->index) {
+                                    return canonicalizer_.canonicalValueSlot(i);
+                                }
+                            }
+                        }
+                        return MonomorphiserNop::monomorphConstgeneric(sp, value, allowInfer);
+                    }
+                } materialize(crate.types, table, canonicalizer, slots.types, slots.values);
+
+                for (const auto& type : slots.types) {
+                    result.types.push_back(materialize.monomorphType(span(), table.getType(type), true));
+                }
+                for (const auto& value : slots.values) {
+                    result.values.push_back(materialize.monomorphConstgeneric(span(), table.getValue(value), true));
+                }
+                return result;
+            }
+
             static bool goalMatches(const GoalKey& goal, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated) {
                 if (goal.trait != trait || goal.params != params || goal.type != type) {
                     return false;
@@ -4311,17 +4569,17 @@ default:
                 return certainty;
             }
 
-            CachedGoal* cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, ImplRef response, HIRCompare responseCertainty) {
+            CachedGoal* cacheResponse(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, const SolverResponse* response) {
+                ASSERT_BUG(span(), response, "cannot cache an empty solver response");
                 auto* cached = findCachedGoal(hash, trait, params, type, associated);
-                const auto certainty = responseCertainty == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous;
+                const auto certainty = response->certainty;
                 if (!cached) {
                     cached = cachedGoalNodes.make(hash, trait, params, type, associated, certainty);
                     goalCache.push_back(cached);
                     goalCacheIndex.emplace(hash, cached);
                 }
                 cached->certainty = certainty;
-                cached->response = ::std::move(response);
-                cached->responseCertainty = responseCertainty;
+                cached->response = response;
                 cached->hasResponse = true;
                 return cached;
             }
@@ -5468,7 +5726,7 @@ default:
                 const bool crateCacheable = !canonicalAssociated && crateCacheUsable() && goalIsConcrete(trait, canonical);
                 if (crateCacheable) {
                     if (const auto* global = crateCache().find(hash, trait, canonical.params, canonical.type)) {
-                        return static_cast<Certainty>(global->certainty);
+                        return global->certainty;
                     }
                 }
                 if (findActiveGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated)) {
@@ -5488,7 +5746,7 @@ default:
                 const bool rigidKey = canonicalGoalIsRigid(canonical);
                 auto cacheResult = [&](Certainty certainty) {
                     if (crateCacheable && rigidKey && cycleHits_ == cycleHitsBefore) {
-                        crateCache().insert(hash, trait, canonical.params.clone(), canonical.type, static_cast<unsigned>(certainty));
+                        crateCache().insert(hash, trait, canonical.params.clone(), canonical.type, certainty);
                     }
                     // Provisional results computed under a goal cycle depend on
                     // the cycle head and must not outlive this evaluation.
@@ -6135,11 +6393,8 @@ default:
                     canonicalAssocParams = &canonicalAssocParamsStorage;
                 }
                 const auto rootHash = goalHash(trait, canonical.params, canonical.type, nullptr);
-                auto visitResponse = [&](ImplRef response, HIRCompare certainty, const Candidate* responseCandidate = nullptr) {
+                auto visitRawResponse = [&](ImplRef response, HIRCompare certainty, const Candidate* responseCandidate) {
                     if (!outermost) {
-                        // A nested caller still lives inside its own canonical
-                        // space: strip only this level's canonical variables
-                        // and placeholder spellings.
                         if (canonicalizer.ivarNodes().length() != 0 || !canonicalizer.placeholderNames().empty()) {
                             DecanonicalizeSolverInfers mapper(crate.types, canonicalizer);
                             response = monomorphImplRef(response, mapper);
@@ -6167,7 +6422,6 @@ default:
                             }
                             resolve_.typeConstraint->constrain(span(), resolvedOriginal, callerValue);
                         };
-
                         const auto responseParams = response.getTraitParams(crate.types);
                         if (canonical.params.types.size() == responseParams.types.size()) {
                             for (size_t i = 0; i < canonical.params.types.size(); i++) {
@@ -6219,24 +6473,24 @@ default:
                 // an identity cached without them falls through to full
                 // evaluation (crate-cache entries never carry candidates).
                 if (cacheableResponse) {
-                    if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse && !(exportAmbiguousCandidates && cached->response.isAmbiguousIdentity() && !cached->hasExportedCandidates)) {
-                        if (exportAmbiguousCandidates && cached->hasExportedCandidates) {
-                            for (const auto& candidate : cached->exportedCandidates) {
+                    if (const auto* cached = findCachedGoal(rootHash, trait, canonical.params, canonical.type, nullptr); cached && cached->hasResponse && !(exportAmbiguousCandidates && cached->response->impl->ambiguousIdentity && cached->response->candidates.empty())) {
+                        if (exportAmbiguousCandidates) {
+                            for (const auto& candidate : cached->response->candidates) {
                                 InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
-                                if (callback.visit(monomorphImplRef(candidate.impl, instantiator), candidate.cmp)) {
+                                if (callback.visit(monomorphSolverImplForLegacy(*candidate.impl, instantiator), candidate.certainty == Certainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy)) {
                                     return true;
                                 }
                             }
                         }
                         InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
-                        auto response = monomorphImplRef(cached->response, instantiator);
-                        return visitResponse(::std::move(response), cached->responseCertainty);
+                        auto response = monomorphSolverImplForLegacy(*cached->response->impl, instantiator);
+                        return visitRawResponse(::std::move(response), cached->response->certainty == Certainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy, nullptr);
                     }
                     if (crateCacheableResponse) {
-                        if (const auto* global = crateCache().find(rootHash, trait, canonical.params, canonical.type); global && global->hasResponse && !(exportAmbiguousCandidates && global->response.isAmbiguousIdentity())) {
+                        if (const auto* global = crateCache().find(rootHash, trait, canonical.params, canonical.type); global && global->hasResponse && !(exportAmbiguousCandidates && global->response->impl->ambiguousIdentity)) {
                             InstantiateCanonicalTraitResponse instantiator(crate.types, canonicalizer.placeholderNames(), responseInstanceCounter++, &canonicalizer);
-                            auto response = monomorphImplRef(global->response, instantiator);
-                            return visitResponse(::std::move(response), global->responseCertainty);
+                            auto response = monomorphSolverImplForLegacy(*global->response->impl, instantiator);
+                            return visitRawResponse(::std::move(response), global->response->certainty == Certainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy, nullptr);
                         }
                     }
                 }
@@ -6248,7 +6502,7 @@ default:
                 stl::Vector<::std::pair<const Candidate*, HIRCompare>> distinctViable;
                 auto emitResponse = [&](ImplRef response, HIRCompare certainty, const Candidate* responseCandidate = nullptr) {
                     if (!cacheableResponse) {
-                        return visitResponse(::std::move(response), certainty, responseCandidate);
+                        return visitRawResponse(::std::move(response), certainty, responseCandidate);
                     }
                     // A response can hold live inference variables beyond the
                     // goal's slots (an environment bound pulled a caller
@@ -6262,48 +6516,40 @@ default:
                     canonicalizer.freeze();
                     auto canonicalResponse = monomorphImplRef(response, canonicalizer);
                     if (canonicalizer.sawForeignIvar()) {
-                        return visitResponse(::std::move(response), certainty, responseCandidate);
+                        return visitRawResponse(::std::move(response), certainty, responseCandidate);
                     }
+                    SolverResponse solverResponse;
+                    solverResponse.certainty = certainty == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous;
+                    solverResponse.slots = extractSlotValues(canonical, canonicalResponse, canonicalizer, solverResponse.certainty);
+                    solverResponse.impl = ownSolverImpl(monomorphImplRef(canonicalResponse, MonomorphiserNop(crate.types)));
+                    solverResponse.hasImpl = true;
                     if (crateCacheableResponse && rigidKey && cycleHits_ == cycleHitsBefore && !canonicalResponse.data.is_BoundedPtr()) {
-                        auto* global = crateCache().insert(rootHash, trait, canonical.params.clone(), canonical.type, static_cast<unsigned>(certainty == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous));
-                        global->response = monomorphImplRef(canonicalResponse, MonomorphiserNop(crate.types));
-                        global->responseCertainty = certainty;
+                        auto* global = crateCache().insert(rootHash, trait, canonical.params.clone(), canonical.type, solverResponse.certainty);
+                        SolverResponse globalResponse;
+                        globalResponse.certainty = solverResponse.certainty;
+                        globalResponse.impl = solverResponse.impl;
+                        globalResponse.hasImpl = true;
+                        global->response = crate.pool->make<SolverResponse>(::std::move(globalResponse));
                         global->hasResponse = true;
-                        // The response's trait-path pointer refers to the
-                        // CALLER's goal argument; repoint it at the entry's
-                        // own by-value copy before the caller's frame dies.
-                        if (auto* stored = global->response.data.opt_TraitImpl()) {
-                            stored->traitPath = &global->trait;
-                        }
                     }
-                    auto* cached = cacheResponse(rootHash, trait, canonical.params, canonical.type, nullptr, ::std::move(canonicalResponse), certainty);
+                    auto* storedResponse = crate.pool->make<SolverResponse>(::std::move(solverResponse));
+                    auto* cached = cacheResponse(rootHash, trait, canonical.params, canonical.type, nullptr, storedResponse);
                     cached->persistent = rigidKey && cycleHits_ == cycleHitsBefore;
-                    // Same trait-path lifetime fix as the crate cache: the
-                    // stored response must not point into the caller's frame.
-                    if (auto* stored = cached->response.data.opt_TraitImpl()) {
-                        stored->traitPath = &cached->goal.trait;
-                    }
                     if (distinctViable.length() != 0) {
-                        // A candidate can pull a live caller variable in the
-                        // same way a response can; the foreign-ivar report
-                        // covers the batch, and without it the entry simply
-                        // stays candidate-less (exporting replays then fall
-                        // through to full evaluation).
-                        ThinVector<ExportedCandidate> canonicalCandidates;
+                        ThinVector<ImplRef> canonicalCandidates;
                         for (size_t i = 0; i < distinctViable.length(); i++) {
-                            canonicalCandidates.push_back(ExportedCandidate{monomorphImplRef(distinctViable[i].first->impl, canonicalizer), distinctViable[i].second});
+                            canonicalCandidates.push_back(monomorphImplRef(distinctViable[i].first->impl, canonicalizer));
                         }
                         if (!canonicalizer.sawForeignIvar()) {
-                            cached->exportedCandidates = ::std::move(canonicalCandidates);
-                            cached->hasExportedCandidates = true;
-                            for (auto& candidate : cached->exportedCandidates) {
-                                if (auto* stored = candidate.impl.data.opt_TraitImpl()) {
-                                    stored->traitPath = &cached->goal.trait;
-                                }
+                            for (size_t i = 0; i < canonicalCandidates.size(); i++) {
+                                storedResponse->candidates.push_back(SolverCandidateResponse{
+                                    ownSolverImpl(::std::move(canonicalCandidates[i])),
+                                    distinctViable[i].second == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous,
+                                });
                             }
                         }
                     }
-                    return visitResponse(::std::move(response), cached->responseCertainty, responseCandidate);
+                    return visitRawResponse(::std::move(response), certainty, responseCandidate);
                 };
                 if (findActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr)) {
                     const bool coinductive = crate.getTraitByPath(span(), trait).isCoinductive;

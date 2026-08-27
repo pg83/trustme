@@ -4,11 +4,65 @@
 #include "hir_expr.h" // t_trait_list
 #include "hir_typeck_common.h"
 #include "hir_typeck_resolve_common.h"
+#include "thin_vector.h"
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 #include <std/sym/i_map.h>
 
 bool typeIsUnboundedInfer(const HIRTypeData* ty);
+
+enum class SolverCertainty : u8 {
+    NoSolution,
+    Ambiguous,
+    Proven,
+};
+
+/// Owning description of the implementation selected by the solver.  The
+/// only pointers are to crate-lifetime HIR declarations; all response-shaped
+/// data (path, parameters and associated values) belongs to this object.
+struct SolverImpl {
+    HIRPathParams implParams;
+    const HIRTrait* trait = nullptr;
+    HIRSimplePath traitPath;
+    const HIRTraitImpl* traitImpl = nullptr;
+
+    HIRTypeRef type;
+    HIRPathParams traitArgs;
+    HIRTraitPath::assocListT associated;
+    HIRBoundConstness constness = HIRBoundConstness::Never;
+    bool ambiguousIdentity = false;
+
+    static SolverImpl fromLegacy(ImplRef impl);
+    ImplRef legacy() const;
+};
+
+struct SolverSlotValues {
+    ThinVector<HIRTypeRef> types;
+    ThinVector<HIRConstGeneric> values;
+};
+
+struct SolverObligation {
+    HIRTypeRef type;
+    HIRTraitPath trait;
+};
+
+struct SolverCandidateResponse {
+    const SolverImpl* impl = nullptr;
+    SolverCertainty certainty = SolverCertainty::Ambiguous;
+};
+
+/// A self-contained solver answer.  Slot values are positional with respect
+/// to the canonical input goal and can therefore be replayed into any caller
+/// with the same key.  `ImplRef` is reconstructed only by the legacy callback
+/// adapter.
+struct SolverResponse {
+    SolverCertainty certainty = SolverCertainty::NoSolution;
+    SolverSlotValues slots;
+    ThinVector<SolverObligation> obligations;
+    const SolverImpl* impl = nullptr;
+    bool hasImpl = false;
+    ThinVector<SolverCandidateResponse> candidates;
+};
 
 // Crate-lifetime cache of solver answers for fully concrete goals (no
 // inference variables, no generics, no placeholders): those answers cannot
@@ -23,10 +77,9 @@ struct NextSolverCrateCache {
         HIRSimplePath trait;
         HIRPathParams params;
         const HIRTypeData* type = nullptr;
-        unsigned certainty = 0;
+        SolverCertainty certainty = SolverCertainty::NoSolution;
         bool hasResponse = false;
-        ImplRef response;
-        HIRCompare responseCertainty = HIRCompare::Unequal;
+        const SolverResponse* response = nullptr;
     };
 
     stl::ObjPool::Ref pool;
@@ -48,7 +101,7 @@ struct NextSolverCrateCache {
         return nullptr;
     }
 
-    Entry* insert(size_t hash, const HIRSimplePath& trait, HIRPathParams params, const HIRTypeData* type, unsigned certainty) {
+    Entry* insert(size_t hash, const HIRSimplePath& trait, HIRPathParams params, const HIRTypeData* type, SolverCertainty certainty) {
         auto* entry = pool.mutPtr()->make<Entry>();
         entry->hash = hash;
         entry->trait = trait;
