@@ -1237,8 +1237,6 @@ namespace {
 
         // Common code used by both `ExprNodeReturn` and the final return of a GeneratorWrapper
         void coroutineReturn(const Span& sp, const HIRTypeData* valueTy) {
-            static RcString rcstringComplete = RcString::newInterned("Complete");
-            static RcString rcstringReady = RcString::newInterned("Ready"); // TODO: This is a lang item
             if (generatorState.isAsyncGen) {
                 // An `async gen` body ends the sequence: `Poll::Ready(None)`.
                 // Its own value is unit, and is dropped here.
@@ -1247,7 +1245,7 @@ namespace {
                 builder.pushStmtAssign(sp, generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), GeneratorState::RETURNED, {}}));
                 return;
             }
-            const auto& variantName = generatorState.isFuture ? rcstringReady : rcstringComplete;
+            const auto variantName = RcString::newInterned(generatorState.isFuture ? "Ready" : "Complete"); // TODO: Ready is a lang item
             // TODO: Handle difference between generators and futures (different return/yield types)
             const auto& te = builder.valType(sp, MIRLValue::newReturn())->as_Path();
             HIRGenericPath enmPath = te.path.data.as_Generic().clone();
@@ -4381,6 +4379,7 @@ struct PatternRulesetBuilder {
     unsigned rootIndex = 0;
     unsigned nextRootStorage = 1;
     unsigned* nextRootIndex;
+    HIRPattern emptyPattern;
 
     PatternRulesetBuilder(const StaticTraitResolve& resolve, unsigned* sharedNextRootIndex = nullptr, WildcardType* parentWildcardTypes = nullptr)
         : resolve(resolve)
@@ -5835,7 +5834,6 @@ namespace {
 }
 
 void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, const HIRTypeData* topTy) {
-    static HIRPattern emptyPattern;
     TRACE_FUNCTION_F("pat=" << pat << ", ty=" << topTy << ",   m_field_path=[" << fieldPath << "]");
 
     HIRTypeRef revealedTopTy = topTy;
@@ -6231,7 +6229,7 @@ default:
                             if (i < pe.leading.size()) {
                                 builder.appendFrom(sp, pe.leading[i], maybeMonomorph.map(fld.ent));
                             } else if (i < trailingStart) {
-                                builder.appendFrom(sp, emptyPattern, maybeMonomorph.map(fld.ent));
+                                builder.appendFrom(sp, builder.emptyPattern, maybeMonomorph.map(fld.ent));
                             } else {
                                 builder.appendFrom(sp, pe.trailing[i - trailingStart], maybeMonomorph.map(fld.ent));
                             }
@@ -6248,7 +6246,7 @@ default:
                                 return x.first == fld.name;
                             });
                             if (it == pe.subPatterns.end()) {
-                                builder.appendFrom(sp, emptyPattern, styMono);
+                                builder.appendFrom(sp, builder.emptyPattern, styMono);
                             } else {
                                 builder.appendFrom(sp, it->second, styMono);
                             }
@@ -9802,9 +9800,8 @@ MirBuilder::SaveCodeProto MirBuilder::codeSaveStart() {
     TRACE_FUNCTION;
     // Push to the stack
     // Create a new block and link in
-    static size_t sNextIndex;
     SaveCodeProto rv;
-    rv.index = sNextIndex++;
+    rv.index = nextCodeSaveIndex++;
     codeSaveStack.push_back(CodeSaveStackEnt{rv.index, {}});
     // If currently in a block, then go into a new one
     if (blockActive()) {

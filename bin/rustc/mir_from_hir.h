@@ -332,6 +332,7 @@ private:
     };
 
     std::vector<CodeSaveStackEnt> codeSaveStack;
+    size_t nextCodeSaveIndex = 0;
 
 public:
     void setCurBlock(unsigned int newBlock);
