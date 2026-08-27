@@ -1,4 +1,7 @@
 struct Settings;
+namespace stl {
+    class ObjPool;
+}
 #pragma once
 
 #include "hir_type.h"
@@ -53,7 +56,9 @@ struct TargetSpec {
 };
 
 struct TypeReprFieldPath {
-    static constexpr size_t ARRAY_ELEMENT = static_cast<size_t>(-1);
+    enum : size_t {
+        ARRAY_ELEMENT = static_cast<size_t>(-1),
+    };
 
     size_t index;
     size_t size;
@@ -140,6 +145,8 @@ struct TypeRepr {
 std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x);
 
 struct WireBoard;
+class TargetLayoutContext;
+extern TargetLayoutContext* TargetCreateLayoutContext(stl::ObjPool& pool);
 extern const TargetSpec& TargetGetCurSpec(const WireBoard& wb);
 extern void TargetSetCfg(WireBoard& wb, const ::std::string& targetName);
 extern void TargetExportCurSpec(const WireBoard& wb, const ::std::string& filename);
@@ -160,7 +167,6 @@ extern bool TargetCapsMemberAlignment();
 extern bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty);
 
 /// This function is for the MIR Optimisation tool, which has to be able to read and use existing layouts
-extern void TargetForceTypeRepr(const Span& sp, const HIRTypeData* ty, TypeRepr repr);
 extern const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty);
 
 extern bool TargetTypesAreTransmutable(

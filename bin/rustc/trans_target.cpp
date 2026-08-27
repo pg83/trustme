@@ -21,51 +21,88 @@
 #include <algorithm>
 #include <unordered_map>
 
-const TargetArch ARCH_X86_64 = {
-    "x86_64",
-    64,
-    false,
-    TargetArch::Atomics(/*atomic(u8)=*/true, /*atomic(u16)=*/true, /*atomic(u32)=*/true, true, true),
-    TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)
-    //TargetArch::Alignments(2, 4, 8, 8, 4, 8, 8) // TODO: Alignment of u128 is 8 with rustc, but gcc uses 16
-};
-const TargetArch ARCH_X32 = {
-    "x86_64",
-    32,
-    false,
-    ARCH_X86_64.atomics,
-    TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4) // x86_64 w/4-byte ptr
-};
-const TargetArch ARCH_X86 = {
-    "x86",
-    32,
-    false,
-    // i586+ baseline: 8/16/32-bit atomics via LOCK prefix, 64-bit via cmpxchg8b
-    {/*atomic(u8)=*/true, /*u16=*/true, /*u32=*/true, /*u64=*/true, /*ptr=*/true},
-    TargetArch::Alignments(2, 4, /*u64*/ 4, /*u128*/ 4, 4, 4, /*ptr*/ 4) // u128 has the same alignment as u64, which is u32's alignment. And f64 is 4 byte aligned
-};
-const TargetArch ARCH_ARM64 = {"aarch64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
-const TargetArch ARCH_ARM32 = {
-    "arm",
-    32,
-    false,
-    {/*atomic(u8)=*/true, false, true, false, true},
-    TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4) // Note, all types are natively aligned (but i128 will be emulated)
-};
-const TargetArch ARCH_M68K = {"m68k", 32, true, {/*atomic(u8)=*/true, false, true, false, true}, TargetArch::Alignments(2, 2, 2, 2, 2, 2, 2)};
-const TargetArch ARCH_POWERPC64 = {"powerpc64", 64, true, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
-const TargetArch ARCH_POWERPC64LE = {"powerpc64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
-const TargetArch ARCH_POWERPC = {
-    "powerpc",
-    32,
-    true,
-    // 8-byte atomics are lock-based via libatomic here, but still available: cfg'ing out AtomicU64 breaks libstd.
-    {/*atomic(u8)=*/true, true, true, true, true},
-    TargetArch::Alignments(2, 4, 8, 8, 4, 8, 4)
-};
-const TargetArch ARCH_RISCV64 = {"riscv64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
+namespace {
+    TargetArch archX86_64() {
+        return {
+            "x86_64",
+            64,
+            false,
+            TargetArch::Atomics(/*atomic(u8)=*/true, /*atomic(u16)=*/true, /*atomic(u32)=*/true, true, true),
+            TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)
+            //TargetArch::Alignments(2, 4, 8, 8, 4, 8, 8) // TODO: Alignment of u128 is 8 with rustc, but gcc uses 16
+        };
+    }
+    TargetArch archX32() {
+        return {
+            "x86_64",
+            32,
+            false,
+            archX86_64().atomics,
+            TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4) // x86_64 w/4-byte ptr
+        };
+    }
+    TargetArch archX86() {
+        return {
+            "x86",
+            32,
+            false,
+            // i586+ baseline: 8/16/32-bit atomics via LOCK prefix, 64-bit via cmpxchg8b
+            {/*atomic(u8)=*/true, /*u16=*/true, /*u32=*/true, /*u64=*/true, /*ptr=*/true},
+            TargetArch::Alignments(2, 4, /*u64*/ 4, /*u128*/ 4, 4, 4, /*ptr*/ 4) // u128 has the same alignment as u64, which is u32's alignment. And f64 is 4 byte aligned
+        };
+    }
+    TargetArch archArm64() {
+        return {"aarch64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
+    }
+    TargetArch archArm32() {
+        return {
+            "arm",
+            32,
+            false,
+            {/*atomic(u8)=*/true, false, true, false, true},
+            TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4) // Note, all types are natively aligned (but i128 will be emulated)
+        };
+    }
+    TargetArch archM68k() {
+        return {"m68k", 32, true, {/*atomic(u8)=*/true, false, true, false, true}, TargetArch::Alignments(2, 2, 2, 2, 2, 2, 2)};
+    }
+    TargetArch archPowerpc64() {
+        return {"powerpc64", 64, true, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
+    }
+    TargetArch archPowerpc64le() {
+        return {"powerpc64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
+    }
+    TargetArch archPowerpc() {
+        return {
+            "powerpc",
+            32,
+            true,
+            // 8-byte atomics are lock-based via libatomic here, but still available: cfg'ing out AtomicU64 breaks libstd.
+            {/*atomic(u8)=*/true, true, true, true, true},
+            TargetArch::Alignments(2, 4, 8, 8, 4, 8, 4)
+        };
+    }
+    TargetArch archRiscv64() {
+        return {"riscv64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
+    }
+}
 
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
+
+struct TargetLayoutContext {
+    struct CachedTypeRepr {
+        HIRTypeRef canonical;
+        ::std::unique_ptr<TypeRepr> repr;
+    };
+
+    ::std::unordered_map<::std::string, CachedTypeRepr> encoded;
+    ::std::unordered_map<HIRTypeRef, ::std::unique_ptr<TypeRepr>> unencoded;
+    ::std::unordered_map<HIRTypeRef, const TypeRepr*> exact;
+};
+
+TargetLayoutContext* TargetCreateLayoutContext(stl::ObjPool& pool) {
+    return pool.make<TargetLayoutContext>();
+}
 
 namespace {
     TargetSpec loadSpecFromFile(const ::std::string& filename) {
@@ -107,24 +144,24 @@ namespace {
                         rv.envName = keyVal.value.asString();
                     } else if (keyVal.path[1] == "arch") {
                         checkPathLength(keyVal, 2);
-                        if (keyVal.value.asString() == ARCH_ARM32.name) {
-                            rv.arch = ARCH_ARM32;
-                        } else if (keyVal.value.asString() == ARCH_ARM64.name) {
-                            rv.arch = ARCH_ARM64;
-                        } else if (keyVal.value.asString() == ARCH_X86.name) {
-                            rv.arch = ARCH_X86;
-                        } else if (keyVal.value.asString() == ARCH_X86_64.name) {
-                            rv.arch = ARCH_X86_64;
-                        } else if (keyVal.value.asString() == ARCH_M68K.name) {
-                            rv.arch = ARCH_M68K;
-                        } else if (keyVal.value.asString() == ARCH_POWERPC.name) {
-                            rv.arch = ARCH_POWERPC;
-                        } else if (keyVal.value.asString() == ARCH_POWERPC64.name) {
-                            rv.arch = ARCH_POWERPC64;
-                        } else if (keyVal.value.asString() == ARCH_POWERPC64LE.name) {
-                            rv.arch = ARCH_POWERPC64LE;
-                        } else if (keyVal.value.asString() == ARCH_RISCV64.name) {
-                            rv.arch = ARCH_RISCV64;
+                        if (keyVal.value.asString() == archArm32().name) {
+                            rv.arch = archArm32();
+                        } else if (keyVal.value.asString() == archArm64().name) {
+                            rv.arch = archArm64();
+                        } else if (keyVal.value.asString() == archX86().name) {
+                            rv.arch = archX86();
+                        } else if (keyVal.value.asString() == archX86_64().name) {
+                            rv.arch = archX86_64();
+                        } else if (keyVal.value.asString() == archM68k().name) {
+                            rv.arch = archM68k();
+                        } else if (keyVal.value.asString() == archPowerpc().name) {
+                            rv.arch = archPowerpc();
+                        } else if (keyVal.value.asString() == archPowerpc64().name) {
+                            rv.arch = archPowerpc64();
+                        } else if (keyVal.value.asString() == archPowerpc64le().name) {
+                            rv.arch = archPowerpc64le();
+                        } else if (keyVal.value.asString() == archRiscv64().name) {
+                            rv.arch = archRiscv64();
                         } else {
                             // Error.
                             ::std::cerr << "ERROR: Unknown architecture name '" << keyVal.value.asString() << "' in " << filename << ::std::endl;
@@ -308,71 +345,71 @@ namespace {
         if (targetName.find('/') != ::std::string::npos) {
             return loadSpecFromFile(targetName);
         } else if (targetName == "i586-linux-gnu" || targetName == "i586-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {true, "i586-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_X86};
+            return TargetSpec{"unix", "linux", "gnu", {true, "i586-linux-gnu", BACKEND_C_OPTS_GNU}, archX86()};
         } else if (targetName == "x86_64-linux-gnu" || targetName == "x86_64-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {true /*false*/, "x86_64-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
+            return TargetSpec{"unix", "linux", "gnu", {true /*false*/, "x86_64-linux-gnu", BACKEND_C_OPTS_GNU}, archX86_64()};
         } else if (targetName == "x86_64-linux-musl" || targetName == "x86_64-unknown-linux-musl") {
-            return TargetSpec{"unix", "linux", "musl", {true /*false*/, "x86_64-linux-musl", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
+            return TargetSpec{"unix", "linux", "musl", {true /*false*/, "x86_64-linux-musl", BACKEND_C_OPTS_GNU}, archX86_64()};
         } else if (targetName == "x86_64-unknown-linux-gnux32") {
-            return TargetSpec{"unix", "linux", "gnu", {true, "x86_64-unknown-linux-gnux32", BACKEND_C_OPTS_GNU}, ARCH_X32};
+            return TargetSpec{"unix", "linux", "gnu", {true, "x86_64-unknown-linux-gnux32", BACKEND_C_OPTS_GNU}, archX32()};
         } else if (targetName == "arm-linux-gnu" || targetName == "arm-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {true, "arm-elf-eabi", BACKEND_C_OPTS_GNU}, ARCH_ARM32};
+            return TargetSpec{"unix", "linux", "gnu", {true, "arm-elf-eabi", BACKEND_C_OPTS_GNU}, archArm32()};
         } else if (targetName == "aarch64-linux-gnu" || targetName == "aarch64-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {false, "aarch64-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_ARM64};
+            return TargetSpec{"unix", "linux", "gnu", {false, "aarch64-linux-gnu", BACKEND_C_OPTS_GNU}, archArm64()};
         } else if (targetName == "m68k-linux-gnu" || targetName == "m68k-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {true, "m68k-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_M68K};
+            return TargetSpec{"unix", "linux", "gnu", {true, "m68k-linux-gnu", BACKEND_C_OPTS_GNU}, archM68k()};
         } else if (targetName == "powerpc64-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {false, "powerpc64-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_POWERPC64};
+            return TargetSpec{"unix", "linux", "gnu", {false, "powerpc64-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, archPowerpc64()};
         } else if (targetName == "powerpc64le-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {false, "powerpc64le-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_POWERPC64LE};
+            return TargetSpec{"unix", "linux", "gnu", {false, "powerpc64le-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, archPowerpc64le()};
         } else if (targetName == "riscv64-unknown-linux-gnu") {
-            return TargetSpec{"unix", "linux", "gnu", {false, "riscv64-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_RISCV64};
+            return TargetSpec{"unix", "linux", "gnu", {false, "riscv64-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, archRiscv64()};
         } else if (targetName == "riscv64-unknown-linux-musl") {
-            return TargetSpec{"unix", "linux", "musl", {false, "riscv64-unknown-linux-musl", BACKEND_C_OPTS_GNU}, ARCH_RISCV64};
+            return TargetSpec{"unix", "linux", "musl", {false, "riscv64-unknown-linux-musl", BACKEND_C_OPTS_GNU}, archRiscv64()};
         } else if (targetName == "i686-unknown-freebsd") {
-            return TargetSpec{"unix", "freebsd", "gnu", {true, "i686-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_X86};
+            return TargetSpec{"unix", "freebsd", "gnu", {true, "i686-unknown-freebsd", BACKEND_C_OPTS_GNU}, archX86()};
         } else if (targetName == "x86_64-unknown-freebsd") {
-            return TargetSpec{"unix", "freebsd", "gnu", {false, "x86_64-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
+            return TargetSpec{"unix", "freebsd", "gnu", {false, "x86_64-unknown-freebsd", BACKEND_C_OPTS_GNU}, archX86_64()};
         } else if (targetName == "arm-unknown-freebsd") {
-            return TargetSpec{"unix", "freebsd", "gnu", {true, "arm-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_ARM32};
+            return TargetSpec{"unix", "freebsd", "gnu", {true, "arm-unknown-freebsd", BACKEND_C_OPTS_GNU}, archArm32()};
         } else if (targetName == "aarch64-unknown-freebsd") {
-            return TargetSpec{"unix", "freebsd", "gnu", {false, "aarch64-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_ARM64};
+            return TargetSpec{"unix", "freebsd", "gnu", {false, "aarch64-unknown-freebsd", BACKEND_C_OPTS_GNU}, archArm64()};
         } else if (targetName == "x86_64-unknown-netbsd") {
-            return TargetSpec{"unix", "netbsd", "gnu", {false, "x86_64-unknown-netbsd", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
+            return TargetSpec{"unix", "netbsd", "gnu", {false, "x86_64-unknown-netbsd", BACKEND_C_OPTS_GNU}, archX86_64()};
         } else if (targetName == "i686-unknown-openbsd") {
-            return TargetSpec{"unix", "openbsd", "gnu", {true, "i686-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_X86};
+            return TargetSpec{"unix", "openbsd", "gnu", {true, "i686-unknown-openbsd", BACKEND_C_OPTS_GNU}, archX86()};
         } else if (targetName == "x86_64-unknown-openbsd") {
-            return TargetSpec{"unix", "openbsd", "gnu", {false, "x86_64-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
+            return TargetSpec{"unix", "openbsd", "gnu", {false, "x86_64-unknown-openbsd", BACKEND_C_OPTS_GNU}, archX86_64()};
         } else if (targetName == "arm-unknown-openbsd") {
-            return TargetSpec{"unix", "openbsd", "gnu", {true, "arm-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_ARM32};
+            return TargetSpec{"unix", "openbsd", "gnu", {true, "arm-unknown-openbsd", BACKEND_C_OPTS_GNU}, archArm32()};
         } else if (targetName == "aarch64-unknown-openbsd") {
-            return TargetSpec{"unix", "openbsd", "gnu", {false, "aarch64-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_ARM64};
+            return TargetSpec{"unix", "openbsd", "gnu", {false, "aarch64-unknown-openbsd", BACKEND_C_OPTS_GNU}, archArm64()};
         } else if (targetName == "x86_64-unknown-dragonfly") {
-            return TargetSpec{"unix", "dragonfly", "gnu", {false, "x86_64-unknown-dragonfly", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
+            return TargetSpec{"unix", "dragonfly", "gnu", {false, "x86_64-unknown-dragonfly", BACKEND_C_OPTS_GNU}, archX86_64()};
         }
         // `*-apple-darwin` has an empty target_env (as in rustc); "gnu" selects glibc-only code on a platform with no glibc.
         else if (targetName == "i686-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
             // The first 32bit Intel Mac was Core Solo aka yonah. It allows to use `-march=yonah` like Rust.
-            return TargetSpec{"unix", "macos", "", {false, "x86_64-apple-darwin", {"-march=yonah"}, {}}, ARCH_X86_64};
+            return TargetSpec{"unix", "macos", "", {false, "x86_64-apple-darwin", {"-march=yonah"}, {}}, archX86_64()};
         } else if (targetName == "x86_64-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
             // The first 64bit Intel Mac was Core Duo. It allows to use `-march=core2` like Rust.
-            return TargetSpec{"unix", "macos", "", {false, "x86_64-apple-darwin", {"-march=core2"}, {}}, ARCH_X86_64};
+            return TargetSpec{"unix", "macos", "", {false, "x86_64-apple-darwin", {"-march=core2"}, {}}, archX86_64()};
         } else if (targetName == "aarch64-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
-            return TargetSpec{"unix", "macos", "", {false, "aarch64-apple-darwin", {}, {}}, ARCH_ARM64};
+            return TargetSpec{"unix", "macos", "", {false, "aarch64-apple-darwin", {}, {}}, archArm64()};
         } else if (targetName == "powerpc-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
-            // NOTE: 32-bit PowerPC needs libatomic for the 8-byte atomics (see ARCH_POWERPC)
-            return TargetSpec{"unix", "macos", "", {true, "powerpc-apple-darwin", {}, {}, {"-l", "atomic"}}, ARCH_POWERPC};
+            // NOTE: 32-bit PowerPC needs libatomic for the 8-byte atomics (see archPowerpc())
+            return TargetSpec{"unix", "macos", "", {true, "powerpc-apple-darwin", {}, {}, {"-l", "atomic"}}, archPowerpc()};
         } else if (targetName == "powerpc64-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
-            return TargetSpec{"unix", "macos", "", {false, "powerpc64-apple-darwin", {}, {}}, ARCH_POWERPC64};
+            return TargetSpec{"unix", "macos", "", {false, "powerpc64-apple-darwin", {}, {}}, archPowerpc64()};
         } else if (targetName == "arm-unknown-haiku") {
-            return TargetSpec{"unix", "haiku", "gnu", {true, "arm-unknown-haiku", {}, {}}, ARCH_ARM32};
+            return TargetSpec{"unix", "haiku", "gnu", {true, "arm-unknown-haiku", {}, {}}, archArm32()};
         } else if (targetName == "x86_64-unknown-haiku") {
-            return TargetSpec{"unix", "haiku", "gnu", {false, "x86_64-unknown-haiku", {}, {}}, ARCH_X86_64};
+            return TargetSpec{"unix", "haiku", "gnu", {false, "x86_64-unknown-haiku", {}, {}}, archX86_64()};
         } else {
             ::std::cerr << "Unknown target name '" << targetName << "'" << ::std::endl;
             abort();
@@ -778,7 +815,7 @@ bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const H
 }
 
 namespace {
-    void setTypeRepr(const Span& sp, const HIRTypeData* ty, ::std::unique_ptr<TypeRepr> repr);
+    void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, ::std::unique_ptr<TypeRepr> repr);
 
     struct Ent {
         unsigned int field;
@@ -2263,7 +2300,7 @@ namespace {
                                             }
                                             finalSize = std::max(finalSize, reprs[i]->size);
                                             finalAlign = std::max(finalAlign, reprs[i]->align);
-                                            setTypeRepr(sp, variants[i].type, std::move(reprs[i]));
+                                            setTypeRepr(resolve, sp, variants[i].type, std::move(reprs[i]));
                                         } else {
                                             // Note: unit type (any empty type) doesn't need the tag added
                                             // NOTE: Unit type should already have a repr, but make sure
@@ -2357,7 +2394,7 @@ namespace {
                                     auto repr = makeTypeReprStructInner(sp, varTy, ents, StructSorting::None, variants[varI].forcedAlignment, 0);
                                     maxSize = std::max(maxSize, repr->size);
                                     maxAlign = std::max(maxAlign, repr->align);
-                                    setTypeRepr(sp, varTy, std::move(repr));
+                                    setTypeRepr(resolve, sp, varTy, std::move(repr));
                                 }
 
                                 // - Push the field
@@ -2588,41 +2625,26 @@ namespace {
         return rv;
     }
 
-    struct CachedTypeRepr {
-        HIRTypeRef canonical;
-        ::std::unique_ptr<TypeRepr> repr;
-    };
-
-    // Layout is a codegen property: regions are erased before rustc asks its
-    // layout engine too. Keep one representation per emitted type, with an
-    // exact-pointer alias so repeated queries stay O(1).
-    static ::std::unordered_map<::std::string, CachedTypeRepr> sCache;
-    static ::std::unordered_map<HIRTypeRef, ::std::unique_ptr<TypeRepr>> sUnencodedCache;
-    static ::std::unordered_map<HIRTypeRef, const TypeRepr*> sCacheExact;
-
     bool hasAbiIdentity(HIRTypeRef ty) {
         return !monomorphiseTypeNeeded(ty) && !ty->is_Infer() && !ty->is_ErasedType() && !ty->is_NodeType();
     }
 
-    void setTypeRepr(const Span& sp, const HIRTypeData* ty, ::std::unique_ptr<TypeRepr> repr) {
+    void setTypeRepr(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* ty, ::std::unique_ptr<TypeRepr> repr) {
+        auto& cache = *resolve.board().targetLayouts;
         if (!hasAbiIdentity(ty)) {
             const auto* reprPtr = repr.get();
-            auto ires = sUnencodedCache.emplace(ty, mv$(repr));
+            auto ires = cache.unencoded.emplace(ty, mv$(repr));
             ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
-            sCacheExact.emplace(ty, reprPtr);
+            cache.exact.emplace(ty, reprPtr);
             DEBUG("Set temporary repr for " << ty);
             return;
         }
         auto symbol = FMT(TransMangle(ty));
-        auto ires = sCache.emplace(mv$(symbol), CachedTypeRepr{ty, mv$(repr)});
+        auto ires = cache.encoded.emplace(mv$(symbol), TargetLayoutContext::CachedTypeRepr{ty, mv$(repr)});
         ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
-        sCacheExact.emplace(ty, ires.first->second.repr.get());
+        cache.exact.emplace(ty, ires.first->second.repr.get());
         DEBUG("Set repr for " << ty);
     }
-}
-
-void TargetForceTypeRepr(const Span& sp, const HIRTypeData* ty, TypeRepr repr) {
-    setTypeRepr(sp, ty, box$(repr));
 }
 
 bool TargetCapsMemberAlignment() {
@@ -2649,8 +2671,9 @@ bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolv
 }
 
 const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
-    auto exact = sCacheExact.find(ty);
-    if (exact != sCacheExact.end()) {
+    auto& cache = *resolve.board().targetLayouts;
+    auto exact = cache.exact.find(ty);
+    if (exact != cache.exact.end()) {
         return exact->second;
     }
 
@@ -2662,7 +2685,7 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
         resolve.revealOpaqueTypes(sp, revealed);
         if (revealed != ty) {
             const auto* repr = TargetGetTypeRepr(sp, resolve, revealed);
-            sCacheExact.emplace(ty, repr);
+            cache.exact.emplace(ty, repr);
             return repr;
         }
     }
@@ -2670,27 +2693,27 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     if (!hasAbiIdentity(ty)) {
         auto repr = makeTypeRepr(sp, resolve, ty);
         const auto* rv = repr.get();
-        auto ires = sUnencodedCache.emplace(ty, mv$(repr));
+        auto ires = cache.unencoded.emplace(ty, mv$(repr));
         ASSERT_BUG(sp, ires.second, "Type representation was created recursively for " << ty);
-        sCacheExact.emplace(ty, rv);
+        cache.exact.emplace(ty, rv);
         DEBUG("Created temporary repr for " << ty);
         return rv;
     }
 
     auto symbol = FMT(TransMangle(ty));
-    auto existing = sCache.find(symbol);
-    if (existing != sCache.end()) {
+    auto existing = cache.encoded.find(symbol);
+    if (existing != cache.encoded.end()) {
         ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equalsIgnoringRegions(ty), "Distinct types have the same mangled name: " << existing->second.canonical << " and " << ty);
         const auto* repr = existing->second.repr.get();
-        sCacheExact.emplace(ty, repr);
+        cache.exact.emplace(ty, repr);
         return repr;
     }
 
     auto repr = makeTypeRepr(sp, resolve, ty);
     const auto* rv = repr.get();
-    auto ires = sCache.emplace(mv$(symbol), CachedTypeRepr{ty, mv$(repr)});
+    auto ires = cache.encoded.emplace(mv$(symbol), TargetLayoutContext::CachedTypeRepr{ty, mv$(repr)});
     ASSERT_BUG(sp, ires.second, "Type representation was created recursively for " << ty);
-    sCacheExact.emplace(ty, rv);
+    cache.exact.emplace(ty, rv);
     DEBUG("Created repr for " << ty);
     return rv;
 }
