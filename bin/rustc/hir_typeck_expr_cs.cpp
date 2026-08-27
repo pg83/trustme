@@ -1691,6 +1691,9 @@ default:
             for (auto& arg : node.args) {
                 this->checkTypeResolvedTop(node.span(), arg.second);
             }
+            if (const auto* expected = context.closureReturnExpectation(&node)) {
+                node.returnType = expected;
+            }
             this->checkTypeResolvedTop(node.span(), node.returnType);
             HIRExprVisitorDef::visit(node);
         }
@@ -7759,10 +7762,9 @@ default:
                         && context.getType(outTyO)->is_Diverge()
                         && !expectedOutput->is_Diverge()
                         && !context.ivars.typeContainsIvars(expectedOutput)) {
-                        const_cast<HIRExprNodeClosure*>(*closure)->returnType = expectedOutput;
+                        context.registerClosureReturnObligation(sp, *closure, expectedOutput);
                         outTyO = expectedOutput;
                         cmp2 = HIRCompare::Equal;
-                        context.ivars.markChange();
                     }
                     if (cmp2 == HIRCompare::Unequal && !definingOpaqueOutput) {
                         return false;
@@ -8200,6 +8202,27 @@ void Context::registerSolverObligation(const Span& sp, HIRTypeRef type, HIRTrait
     for (auto& associated : trait.typeBounds) {
         equateTypesAssoc(sp, associated.second.type, trait.path.path, trait.path.params.clone(), type, associated.first.c_str(), associated.second.atyParams, false);
     }
+}
+
+void Context::registerClosureReturnObligation(const Span& sp, const HIRExprNodeClosure* closure, HIRTypeRef expected) {
+    for (auto& obligation : closureReturnObligations) {
+        if (obligation.closure != closure) {
+            continue;
+        }
+        equateTypes(sp, obligation.expected, expected);
+        return;
+    }
+    closureReturnObligations.pushBack(ClosureReturnObligation{closure, ::std::move(expected)});
+    ivars.markChange();
+}
+
+const HIRTypeData* Context::closureReturnExpectation(const HIRExprNodeClosure* closure) const {
+    for (const auto& obligation : closureReturnObligations) {
+        if (obligation.closure == closure) {
+            return getType(obligation.expected);
+        }
+    }
+    return nullptr;
 }
 
 void Context::applySolverResponse(const Span& sp, const SolverResponse& response) {

@@ -130,6 +130,12 @@ struct Context {
     /// Callback-based revisits (e.g. for slice patterns handling slices/arrays)
     ::std::vector<::std::unique_ptr<Revisitor>> advRevisits;
 
+    struct ClosureReturnObligation {
+        const HIRExprNodeClosure* closure;
+        HIRTypeRef expected;
+    };
+    stl::Vector<ClosureReturnObligation> closureReturnObligations;
+
     // Keep track of if an ivar is used in a context where it has to be Sized
     // - If it is, then we can discount any unsized possibilities
     HIRGenericParams emptyGenericParams;
@@ -182,6 +188,8 @@ struct Context {
     void applySolverResponse(const Span& sp, const SolverResponse& response);
     void applySolverResponse(const Span& sp, const SolverCandidateResponse& response);
     void registerSolverObligation(const Span& sp, HIRTypeRef type, HIRTraitPath trait);
+    void registerClosureReturnObligation(const Span& sp, const HIRExprNodeClosure* closure, HIRTypeRef expected);
+    const HIRTypeData* closureReturnExpectation(const HIRExprNodeClosure* closure) const;
     HIRTypeRef expandAssociatedTypes(const Span& sp, HIRTypeRef input) const;
     const HIRTypeData* expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp) const;
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const;
