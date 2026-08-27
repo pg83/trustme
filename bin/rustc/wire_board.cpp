@@ -8,6 +8,7 @@
 #include "parse_context.h"
 #include "proc_macro_context.h"
 #include "trans_target.h"
+#include "trans_mangling.h"
 
 #include <std/mem/obj_pool.h>
 
@@ -23,5 +24,6 @@ WireBoard::WireBoard(stl::ObjPool* pool)
     , targetLayouts(TargetCreateLayoutContext(*pool))
     , mirOperations(MIRCreateOperationsContext(*pool))
     , ctfe(CtfeCreateContext(*pool))
+    , mangling(TransCreateManglingContext(*pool))
 {
 }

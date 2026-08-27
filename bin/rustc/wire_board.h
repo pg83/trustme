@@ -21,6 +21,7 @@ struct TargetSpec;
 class TargetLayoutContext;
 class MirOperationsContext;
 class CtfeContext;
+class ManglingContext;
 struct NextSolverCrateCache;
 
 // The wiring board: main creates one as the first object of the root pool
@@ -61,6 +62,7 @@ struct WireBoard {
     TargetLayoutContext* targetLayouts = nullptr;
     MirOperationsContext* mirOperations = nullptr;
     CtfeContext* ctfe = nullptr;
+    ManglingContext* mangling = nullptr;
 
     // Filled by the Parse phase; stays valid through Expand/Resolve and is
     // dropped conceptually once HIR Lower is done (the pointer survives but

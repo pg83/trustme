@@ -3,6 +3,7 @@
 #include "debug.h"
 #include "hir_hir.h" // ABI_RUST
 #include "hir_type.h"
+#include "wire_board.h"
 
 #include <std/str/builder.h>
 #include <std/str/fmt.h>
@@ -19,23 +20,25 @@
 #define XXH_INLINE_ALL
 #include <xxhash.h>
 
-namespace {
-    // Every symbol is formatted into one process-wide reused buffer: mangling
-    // used to be the top allocation-count site (stringstream churn per
-    // symbol); steady-state this allocates nothing.
-    stl::StringBuilder& mangleBuffer() {
-        static stl::StringBuilder sb;
-        return sb;
-    }
+class ManglingContext {
+public:
+    stl::StringBuilder buffer;
+    stl::Vector<RcString> names;
+    stl::IntMap<RcString> ordinaryTypeCache;
+    stl::IntMap<RcString> typeIdCache;
 
-    // Back-reference name store for the symbol being mangled. Shared storage,
-    // reused across symbols; every Mangler instance sees only its own window
-    // so sibling manglers of one symbol stay independent (matching the old
-    // per-instance cache byte for byte).
-    stl::Vector<RcString>& mangleNames() {
-        static stl::Vector<RcString> names;
-        return names;
+    explicit ManglingContext(stl::ObjPool& pool)
+        : ordinaryTypeCache(&pool)
+        , typeIdCache(&pool)
+    {
     }
+};
+
+ManglingContext* TransCreateManglingContext(stl::ObjPool& pool) {
+    return pool.make<ManglingContext>(pool);
+}
+
+namespace {
 
     stl::StringBuilder& operator<<(stl::StringBuilder& sb, char c) {
         sb.append(&c, 1);
@@ -64,7 +67,7 @@ enum class LifetimeIdentityMode {
 
 class Mangler {
     stl::StringBuilder& os;
-    stl::Vector<RcString>& names = mangleNames();
+    stl::Vector<RcString>& names;
     const size_t nameWindowStart = names.length();
     const LifetimeIdentityMode lifetimeIdentityMode;
 
@@ -73,8 +76,9 @@ class Mangler {
     }
 
 public:
-    Mangler(stl::StringBuilder& os, LifetimeIdentityMode lifetimeIdentityMode = LifetimeIdentityMode::Erased)
-        : os(os)
+    Mangler(ManglingContext& context, LifetimeIdentityMode lifetimeIdentityMode = LifetimeIdentityMode::Erased)
+        : os(context.buffer)
+        , names(context.names)
         , lifetimeIdentityMode(lifetimeIdentityMode)
     {
     }
@@ -534,11 +538,10 @@ case HIRTypeData::TAG_Infer:
 };
 
 namespace {
-    stl::StringBuilder& mangleBegin() {
-        auto& sb = mangleBuffer();
-        sb.reset();
-        mangleNames().clear();
-        return sb;
+    stl::StringBuilder& mangleBegin(ManglingContext& context) {
+        context.buffer.reset();
+        context.names.clear();
+        return context.buffer;
     }
 
     RcString mangleFinish(stl::StringBuilder& sb) {
@@ -555,68 +558,68 @@ namespace {
     }
 }
 
-RcString TransMangle(const HIRSimplePath& p) {
-    auto& sb = mangleBegin();
+RcString TransMangle(const WireBoard& wb, const HIRSimplePath& p) {
+    auto& context = *wb.mangling;
+    auto& sb = mangleBegin(context);
     sb << "ZRG";
-    Mangler(sb).fmtSimplePath(p);
-    Mangler(sb).fmtPathParams({});
+    Mangler(context).fmtSimplePath(p);
+    Mangler(context).fmtPathParams({});
     return mangleFinish(sb);
 }
 
-RcString TransMangle(const HIRGenericPath& p) {
-    auto& sb = mangleBegin();
+RcString TransMangle(const WireBoard& wb, const HIRGenericPath& p) {
+    auto& context = *wb.mangling;
+    auto& sb = mangleBegin(context);
     sb << "ZRG";
-    Mangler(sb).fmtGenericPath(p);
+    Mangler(context).fmtGenericPath(p);
     return mangleFinish(sb);
 }
 
-RcString TransMangle(const HIRPath& p) {
-    auto& sb = mangleBegin();
+RcString TransMangle(const WireBoard& wb, const HIRPath& p) {
+    auto& context = *wb.mangling;
+    auto& sb = mangleBegin(context);
     sb << "ZR";
-    Mangler(sb).fmtPath(p);
+    Mangler(context).fmtPath(p);
     return mangleFinish(sb);
 }
 
-RcString TransMangleValue(const HIRGenericPath& p) {
-    auto& sb = mangleBegin();
+RcString TransMangleValue(const WireBoard& wb, const HIRGenericPath& p) {
+    auto& context = *wb.mangling;
+    auto& sb = mangleBegin(context);
     sb << "ZRG";
-    Mangler(sb, LifetimeIdentityMode::Closed).fmtGenericPath(p);
+    Mangler(context, LifetimeIdentityMode::Closed).fmtGenericPath(p);
     return mangleFinish(sb);
 }
 
-RcString TransMangleValue(const HIRSimplePath& p) {
-    return TransMangleValue(HIRGenericPath(p));
+RcString TransMangleValue(const WireBoard& wb, const HIRSimplePath& p) {
+    return TransMangleValue(wb, HIRGenericPath(p));
 }
 
-RcString TransMangleValue(const HIRPath& p) {
-    auto& sb = mangleBegin();
+RcString TransMangleValue(const WireBoard& wb, const HIRPath& p) {
+    auto& context = *wb.mangling;
+    auto& sb = mangleBegin(context);
     sb << "ZR";
-    Mangler(sb, LifetimeIdentityMode::Closed).fmtPath(p);
+    Mangler(context, LifetimeIdentityMode::Closed).fmtPath(p);
     return mangleFinish(sb);
 }
 
 namespace {
-    RcString transMangleType(const HIRTypeData* v, bool includeLifetimeIdentity) {
-        // Types are interned: one spelling per node, cached for the process
-        // lifetime (symbols for the same type are requested many times).
-        static stl::ObjPool::Ref cachePool = stl::ObjPool::fromMemory();
-        static stl::IntMap<RcString> ordinaryCache{cachePool.mutPtr()};
-        static stl::IntMap<RcString> typeIdCache{cachePool.mutPtr()};
-        auto& cache = includeLifetimeIdentity ? typeIdCache : ordinaryCache;
+    RcString transMangleType(ManglingContext& context, const HIRTypeData* v, bool includeLifetimeIdentity) {
+        auto& cache = includeLifetimeIdentity ? context.typeIdCache : context.ordinaryTypeCache;
         if (const auto* hit = cache.find(reinterpret_cast<uintptr_t>(v))) {
             return *hit;
         }
-        auto& sb = mangleBegin();
+        auto& sb = mangleBegin(context);
         sb << "ZRT";
-        Mangler(sb, includeLifetimeIdentity ? LifetimeIdentityMode::All : LifetimeIdentityMode::Erased).fmtType(v);
+        Mangler(context, includeLifetimeIdentity ? LifetimeIdentityMode::All : LifetimeIdentityMode::Erased).fmtType(v);
         return *cache.insert(reinterpret_cast<uintptr_t>(v), mangleFinish(sb));
     }
 }
 
-RcString TransMangle(const HIRTypeData* v) {
-    return transMangleType(v, false);
+RcString TransMangle(const WireBoard& wb, const HIRTypeData* v) {
+    return transMangleType(*wb.mangling, v, false);
 }
 
-RcString TransMangleTypeId(const HIRTypeData* v) {
-    return transMangleType(v, true);
+RcString TransMangleTypeId(const WireBoard& wb, const HIRTypeData* v) {
+    return transMangleType(*wb.mangling, v, true);
 }

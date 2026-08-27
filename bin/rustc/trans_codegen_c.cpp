@@ -256,6 +256,20 @@ namespace {
         const WireBoard& wb_;
         ::StaticTraitResolve resolve_;
 
+        template <typename T>
+        RcString TransMangle(const T& value) const {
+            return ::TransMangle(wb_, value);
+        }
+
+        template <typename T>
+        RcString TransMangleValue(const T& value) const {
+            return ::TransMangleValue(wb_, value);
+        }
+
+        RcString TransMangleTypeId(const HIRTypeData* type) const {
+            return ::TransMangleTypeId(wb_, type);
+        }
+
         ::std::string outfilePath;
         ::std::string outfilePathC;
 

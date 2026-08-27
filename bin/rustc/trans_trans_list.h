@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 class StaticTraitResolve;
+struct WireBoard;
 
 class HIRCrate;
 class HIRFunction;
@@ -87,6 +88,7 @@ struct TransListConst {
 };
 
 class TransList {
+    const WireBoard* wb_ = nullptr;
     // Keep the emitted value identity alongside the exact-path maps. C layout
     // names erase regions, but addressable functions and statics do not: their
     // bodies can observe a type through TypeId.
@@ -103,6 +105,10 @@ class TransList {
 
 public:
     TransList() = default;
+    explicit TransList(const WireBoard& wb)
+        : wb_(&wb)
+    {
+    }
     TransList(TransList&&) = default;
     TransList(const TransList&) = delete;
     TransList& operator=(TransList&&) = default;

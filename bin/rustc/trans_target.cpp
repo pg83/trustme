@@ -2639,7 +2639,7 @@ namespace {
             DEBUG("Set temporary repr for " << ty);
             return;
         }
-        auto symbol = FMT(TransMangle(ty));
+        auto symbol = FMT(TransMangle(resolve.board(), ty));
         auto ires = cache.encoded.emplace(mv$(symbol), TargetLayoutContext::CachedTypeRepr{ty, mv$(repr)});
         ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
         cache.exact.emplace(ty, ires.first->second.repr.get());
@@ -2700,7 +2700,7 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
         return rv;
     }
 
-    auto symbol = FMT(TransMangle(ty));
+    auto symbol = FMT(TransMangle(resolve.board(), ty));
     auto existing = cache.encoded.find(symbol);
     if (existing != cache.encoded.end()) {
         ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equalsIgnoringRegions(ty), "Distinct types have the same mangled name: " << existing->second.canonical << " and " << ty);

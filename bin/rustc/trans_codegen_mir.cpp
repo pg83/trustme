@@ -20,29 +20,31 @@ namespace {
 
     template <typename T>
     struct Fmt {
+        const WireBoard& wb;
         const T& e;
 
-        Fmt(const T& e)
-            : e(e)
+        Fmt(const WireBoard& wb, const T& e)
+            : wb(wb)
+            , e(e)
         {
         }
     };
 
     template <typename T>
-    Fmt<T> fmt(const T& v) {
-        return Fmt<T>(v);
+    Fmt<T> fmt(const WireBoard& wb, const T& v) {
+        return Fmt<T>(wb, v);
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<HIRPath>& x) {
-        return os << TransMangle(x.e);
+        return os << TransMangle(x.wb, x.e);
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<HIRGenericPath>& x) {
-        return os << TransMangle(x.e);
+        return os << TransMangle(x.wb, x.e);
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<HIRSimplePath>& x) {
-        return os << TransMangle(x.e);
+        return os << TransMangle(x.wb, x.e);
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<HIRTypeRef>& x) {
@@ -64,7 +66,7 @@ namespace {
                 }
                 case HIRTypeData::TAG_Path: {
                     auto& te = tuMatch.as_Path();
-                    os << TransMangle(te.path);
+                    os << TransMangle(x.wb, te.path);
                     break;
                 }
                 case HIRTypeData::TAG_Generic: {
@@ -74,7 +76,7 @@ namespace {
                 case HIRTypeData::TAG_TraitObject: {
                     auto& te = tuMatch.as_TraitObject();
                     auto path = te.trait.path.clone();
-                    os << "dyn " << TransMangle(path);
+                    os << "dyn " << TransMangle(x.wb, path);
                     break;
                 }
                 case HIRTypeData::TAG_ErasedType: {
@@ -83,17 +85,17 @@ namespace {
                 }
                 case HIRTypeData::TAG_Array: {
                     auto& te = tuMatch.as_Array();
-                    os << "[" << fmt(te.inner) << "; " << te.size << "]";
+                    os << "[" << fmt(x.wb, te.inner) << "; " << te.size << "]";
                     break;
                 }
                 case HIRTypeData::TAG_Slice: {
                     auto& te = tuMatch.as_Slice();
-                    os << "[" << fmt(te.inner) << "]";
+                    os << "[" << fmt(x.wb, te.inner) << "]";
                     break;
                 }
                 case HIRTypeData::TAG_Pattern: {
                     auto& te = tuMatch.as_Pattern();
-                    os << fmt(te.inner);
+                    os << fmt(x.wb, te.inner);
                     break;
                 }
                 case HIRTypeData::TAG_Tuple: {
@@ -101,7 +103,7 @@ namespace {
                     if (te.empty()) {
                         os << "()";
                     } else {
-                        os << TransMangle(x.e);
+                        os << TransMangle(x.wb, x.e);
                     }
                     break;
                 }
@@ -118,7 +120,7 @@ namespace {
                             os << "&move ";
                             break;
                     }
-                    os << fmt(te.inner);
+                    os << fmt(x.wb, te.inner);
                     break;
                 }
                 case HIRTypeData::TAG_Pointer: {
@@ -134,12 +136,12 @@ namespace {
                             os << "*move ";
                             break;
                     }
-                    os << fmt(te.inner);
+                    os << fmt(x.wb, te.inner);
                     break;
                 }
                 case HIRTypeData::TAG_NamedFunction: {
                     auto& te = tuMatch.as_NamedFunction();
-                    os << "fn " << TransMangle(te.path);
+                    os << "fn " << TransMangle(x.wb, te.path);
                     break;
                 }
                 case HIRTypeData::TAG_Function: {
@@ -152,9 +154,9 @@ namespace {
                     }
                     os << "fn(";
                     for (const auto& t : e.argTypes) {
-                        os << fmt(t) << ", ";
+                        os << fmt(x.wb, t) << ", ";
                     }
-                    os << ") -> " << fmt(e.rettype);
+                    os << ") -> " << fmt(x.wb, e.rettype);
                     break;
                 }
 break;
@@ -189,7 +191,7 @@ break;
             }
             case MIRLValue::Storage::TAG_Static: {
                 decltype(x.e.root.as_Static()) e = x.e.root.as_Static();
-                os << fmt(e);
+                os << fmt(x.wb, e);
                 break;
             }
         }
@@ -218,7 +220,7 @@ break;
                     break;
                     case MIRLValue::Wrapper::TAG_Index: {
                         decltype(w.as_Index()) e = w.as_Index();
-                        os << "[" << fmt(MIRLValue::newLocal(e)) << "]";
+                        os << "[" << fmt(x.wb, MIRLValue::newLocal(e)) << "]";
 
                     }
                     break;
@@ -275,7 +277,7 @@ break;
                 break;
                 case MIRConstant::TAG_ItemAddr: {
                     auto& v = e.as_ItemAddr();
-                    os << "ADDROF " << fmt(*v);
+                    os << "ADDROF " << fmt(x.wb, *v);
                     if (v.offset != U128(0)) {
                         os << " + " << v.offset;
                     }
@@ -300,7 +302,7 @@ break;
                 break;
                 case MIRParam::TAG_LValue: {
                     auto& e = x.e.as_LValue();
-                    os << fmt(e);
+                    os << fmt(x.wb, e);
                 }
                 break;
                 break;
@@ -317,14 +319,14 @@ break;
                             os << "move ";
                             break;
                     }
-                    os << fmt(e.val);
+                    os << fmt(x.wb, e.val);
 
                 }
                 break;
                 break;
                 case MIRParam::TAG_Constant: {
                     auto& e = x.e.as_Constant();
-                    os << fmt(e);
+                    os << fmt(x.wb, e);
                 }
                 break;
         }
@@ -341,7 +343,18 @@ break;
         Span sp;
 
         const HIRCrate& crate;
+        const WireBoard& wb_;
         ::StaticTraitResolve resolve_;
+
+        template <typename T>
+        Fmt<T> fmt(const T& value) const {
+            return ::fmt(wb_, value);
+        }
+
+        template <typename T>
+        RcString TransMangle(const T& value) const {
+            return ::TransMangle(wb_, value);
+        }
 
         ::std::string outfilePath;
         ::std::ofstream of;
@@ -350,6 +363,7 @@ break;
     public:
         CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile)
             : crate(crate)
+            , wb_(wb)
             , resolve_(wb, OpaqueReveal::All)
             , outfilePath(outfile)
             , of(outfilePath + ".mir")

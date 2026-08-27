@@ -4,7 +4,8 @@
 #include "hir_typeck_static.h" // StaticTraitResolve
 
 TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
-    auto symbol = FMT(TransMangleValue(p));
+    assert(wb_);
+    auto symbol = FMT(TransMangleValue(*wb_, p));
     auto existing = functionSymbols.find(symbol);
     if (existing != functionSymbols.end()) {
         ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p), "Distinct function paths have the same mangled name: " << existing->second << " and " << p);
@@ -29,7 +30,8 @@ const TransListFunction* TransList::findFunction(const HIRPath& p) const {
         return exact->second.get();
     }
 
-    const auto symbol = FMT(TransMangleValue(p));
+    assert(wb_);
+    const auto symbol = FMT(TransMangleValue(*wb_, p));
     auto canonical = functionSymbols.find(symbol);
     if (canonical == functionSymbols.end()) {
         return nullptr;
@@ -45,7 +47,8 @@ TransListFunction* TransList::findFunction(const HIRPath& p) {
 }
 
 bool TransList::hasType(HIRTypeRef type, bool shallow) const {
-    const auto symbol = FMT(TransMangle(type));
+    assert(wb_);
+    const auto symbol = FMT(TransMangle(*wb_, type));
     const auto existing = typeSymbols.find(symbol);
     if (existing == typeSymbols.end()) {
         return false;
@@ -55,7 +58,8 @@ bool TransList::hasType(HIRTypeRef type, bool shallow) const {
 }
 
 bool TransList::addType(HIRTypeRef type, bool shallow) {
-    auto symbol = FMT(TransMangle(type));
+    assert(wb_);
+    auto symbol = FMT(TransMangle(*wb_, type));
     auto existing = typeSymbols.find(symbol);
     if (existing == typeSymbols.end()) {
         typeSymbols.emplace(mv$(symbol), TypeEmissionState{type, shallow, !shallow});
@@ -78,7 +82,8 @@ void TransList::clearTypes() {
 }
 
 TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
-    auto symbol = FMT(TransMangleValue(p));
+    assert(wb_);
+    auto symbol = FMT(TransMangleValue(*wb_, p));
     auto existing = staticSymbols.find(symbol);
     if (existing != staticSymbols.end()) {
         ASSERT_BUG(Span(), existing->second.equalsIgnoringRegions(p), "Distinct static paths have the same mangled name: " << existing->second << " and " << p);

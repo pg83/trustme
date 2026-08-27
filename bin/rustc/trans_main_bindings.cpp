@@ -1478,7 +1478,7 @@ default:
         EnumState(const WireBoard& wb)
             : crate(*wb.crate)
             , resolve(wb, OpaqueReveal::All)
-            , rv()
+            , rv(wb)
             , origList(nullptr)
         {
             enumerateLinkFunctions();
@@ -1486,7 +1486,7 @@ default:
 
         void enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp) {
             if (auto* e = rv.addFunction(crate.types, mv$(p))) {
-                auto name = FMT(TransMangleValue(*e->path));
+                auto name = FMT(TransMangleValue(resolve.board(), *e->path));
                 auto inserted = emittedFunctions.insert(name).second;
                 ASSERT_BUG(Span(), inserted, "Duplicated mangled name - " << *e->path);
                 fcnsToTypeVisit.push_back(e);
@@ -2217,16 +2217,16 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
 
 namespace {
     template <typename T>
-    void removeMissing(std::map<HIRPath, T>& target, const std::map<HIRPath, T>& tpl) {
+    void removeMissing(const WireBoard& wb, std::map<HIRPath, T>& target, const std::map<HIRPath, T>& tpl) {
         ::std::unordered_map<::std::string, const HIRPath*> requiredSymbols;
         for (const auto& entry : tpl) {
-            auto symbol = FMT(TransMangleValue(entry.first));
+            auto symbol = FMT(TransMangleValue(wb, entry.first));
             auto inserted = requiredSymbols.emplace(mv$(symbol), &entry.first);
             ASSERT_BUG(Span(), inserted.second || inserted.first->second->equalsIgnoringRegions(entry.first), "Distinct paths have the same mangled name: " << *inserted.first->second << " and " << entry.first);
         }
 
         for (auto itIn = target.begin(); itIn != target.end();) {
-            const auto symbol = FMT(TransMangleValue(itIn->first));
+            const auto symbol = FMT(TransMangleValue(wb, itIn->first));
             const auto required = requiredSymbols.find(symbol);
             if (required == requiredSymbols.end()) {
                 DEBUG("Remove " << itIn->first);
@@ -2444,8 +2444,8 @@ default:
     // optimisation made unreachable must go too: its wrapper would name a type
     // this list no longer carries.
     list.constructors = mv$(newList.constructors);
-    removeMissing(list.functions, newList.functions);
-    removeMissing(list.statics, newList.statics);
+    removeMissing(wb, list.functions, newList.functions);
+    removeMissing(wb, list.statics, newList.statics);
 }
 
 /// Common post-processing
