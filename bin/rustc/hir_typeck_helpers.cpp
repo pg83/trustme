@@ -19,9 +19,6 @@
 #include <unordered_map>
 
 namespace {
-    // TODO: De-duplicate this with `static.cpp`
-    const HIRGenericParams emptyParams;
-
     // Give every fresh placeholder in one active trait goal the same stable
     // spelling.  This makes a recurrence through independently-instantiated
     // blanket impls visible to the solver without changing the goal's actual
@@ -488,8 +485,7 @@ void HMTypeInferrence::checkForLoops() {
         }
     };
 
-    // Reused across the ~one-per-ivar checks; capacity persists.
-    static stl::Vector<unsigned int> indexes;
+    stl::Vector<unsigned int> indexes;
     unsigned int i = 0;
     for (const auto& v : ivars) {
         if (!v.isAlias() && !v.type->is_Infer()) {
@@ -2377,8 +2373,8 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
         }
 
         bool TraitResolution::findTraitImplsMagicCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* ty, TraitImplCallback& callback) const {
-            static HIRPathParams nullParams;
-            static HIRTraitPath::assocListT nullAssoc;
+            HIRPathParams nullParams;
+            HIRTraitPath::assocListT nullAssoc;
 
             const auto langCoerceUnsized = this->crate.getLangItemPathOpt("coerce_unsized");
             const auto langFnPtr = this->crate.getLangItemPathOpt("fn_ptr_trait");
@@ -2456,7 +2452,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
 
             // - `DiscriminantKind`
             if (!langDiscriminantKind().components().empty() && trait == langDiscriminantKind()) {
-                static auto nameDiscriminant = RcString::newInterned("Discriminant");
+                const auto nameDiscriminant = RcString::newInterned("Discriminant");
                 // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
 
                 if (type->is_Infer() || (type->is_Path() && type->as_Path().binding.is_Unbound())) {
@@ -2484,7 +2480,7 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 }
             }
             if (!langPointee().components().empty() && trait == langPointee()) {
-                static auto nameMetadata = RcString::newInterned("Metadata");
+                const auto nameMetadata = RcString::newInterned("Metadata");
                 // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
 
                 HIRTypeRef metaTy = crate.types.infer();
@@ -2814,8 +2810,8 @@ default:
                 case HIRTypeDataNodeType::TAG_Generator: {
                     auto& nodeP = e.as_Generator();
                     if (trait == langGenerator()) {
-                        static const RcString rcstringYield = RcString::newInterned("Yield");
-                        static const RcString rcstringReturn = RcString::newInterned("Return");
+                        const RcString rcstringYield = RcString::newInterned("Yield");
+                        const RcString rcstringReturn = RcString::newInterned("Return");
                         HIRTraitPath::assocListT assoc;
                         assoc.insert(::std::make_pair(rcstringYield, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->yieldTy}));
                         assoc.insert(::std::make_pair(rcstringReturn, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->returnType}));
@@ -2830,13 +2826,13 @@ default:
                     if (nodeP->isAsyncGen) {
                         // An `async gen` block is an AsyncIterator, not a Future.
                         if (trait == langAsyncIterator()) {
-                            static const RcString rcstringItem = RcString::newInterned("Item");
+                            const RcString rcstringItem = RcString::newInterned("Item");
                             HIRTraitPath::assocListT assoc;
                             assoc.insert(::std::make_pair(rcstringItem, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->yieldTy}));
                             return callback.visit(ImplRef(type, {}, mv$(assoc)), HIRCompare::Equal);
                         }
                     } else if (trait == langFuture()) {
-                        static const RcString rcstringOutput = RcString::newInterned("Output");
+                        const RcString rcstringOutput = RcString::newInterned("Output");
                         HIRTraitPath::assocListT assoc;
                         assoc.insert(::std::make_pair(rcstringOutput, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->returnType}));
                         return callback.visit(ImplRef(type, {}, mv$(assoc)), HIRCompare::Equal);
@@ -2986,8 +2982,8 @@ default:
             bool searchCrate /*=true*/,
             bool searchBounds /*=true*/
         ) const {
-            static HIRPathParams nullParams;
-            static HIRTraitPath::assocListT nullAssoc;
+            HIRPathParams nullParams;
+            HIRTraitPath::assocListT nullAssoc;
 
             const auto& type = this->ivars.getType(ty);
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
@@ -5212,7 +5208,7 @@ default:
                 if (!assocName || !assocName[0]) {
                     return Certainty::Proven;
                 }
-                const static HIRPathParams noParams;
+                const HIRPathParams noParams;
                 const auto& params = assocParams ? *assocParams : noParams;
                 if (!impl.data.is_TraitImpl() && params.hasParams()) {
                     return Certainty::Ambiguous;
@@ -5286,7 +5282,7 @@ default:
                 if (!assocName || !assocName[0] || impl.data.is_TraitImpl()) {
                     return impl;
                 }
-                const static HIRPathParams noParams;
+                const HIRPathParams noParams;
                 const auto& itemParams = assocParams ? *assocParams : noParams;
                 if (impl.getType(crate.types, assocName, itemParams) != HIRTypeRef()) {
                     return impl;
@@ -5369,7 +5365,7 @@ default:
                 if (!assocName || !assocName[0]) {
                     return true;
                 }
-                const static HIRPathParams noParams;
+                const HIRPathParams noParams;
                 const auto& params = assocParams ? *assocParams : noParams;
                 if ((!left.data.is_TraitImpl() || !right.data.is_TraitImpl()) && params.hasParams()) {
                     return false;
@@ -5863,7 +5859,7 @@ default:
                     return visitResponse(::std::move(response), cached->responseCertainty, responseCandidate);
                 };
                 if (findActiveGoal(rootHash, trait, canonical.params, canonical.type, nullptr)) {
-                    static const HIRTraitPath::assocListT noAssociated;
+                    const HIRTraitPath::assocListT noAssociated;
                     const bool coinductive = crate.getTraitByPath(span(), trait).isCoinductive;
                     cycleHits_++;
                     DEBUG("evaluate exit: active-goal cycle");
@@ -5918,7 +5914,7 @@ default:
                 }
                 HIRTraitPath::assocListT rootAssociated;
                 if (assocName && assocName[0] && candidateAssocType) {
-                    const static HIRPathParams noAssocParams;
+                    const HIRPathParams noAssocParams;
                     // The requirement projects through the trait that DECLARES
                     // the item: `Output` on an `FnMut` goal is declared on
                     // `FnOnce`, and only the declaring trait's projection folds
@@ -6166,7 +6162,7 @@ default:
                     // predicate variant of the same where-clause cannot
                     // answer the normalizes-to part.
                     if (assocName && assocName[0]) {
-                        const static HIRPathParams noItemParams;
+                        const HIRPathParams noItemParams;
                         const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noItemParams;
                         for (auto* candidate : frame.viable) {
                             if (candidate->certainty == selected->certainty && candidate->impl.getType(crate.types, assocName, itemParams) != HIRTypeRef()) {
@@ -6184,7 +6180,7 @@ default:
                     // `default` value stays rigid here.  The trait goal itself
                     // must be proven -- only the missing item downgraded it.
                     if (assocName && assocName[0] && selected->impl.data.is_TraitImpl() && selected->traitCertainty == Certainty::Proven) {
-                        const static HIRPathParams noParams;
+                        const HIRPathParams noParams;
                         const auto& itemParams = canonicalAssocParams ? *canonicalAssocParams : noParams;
                         if (selected->impl.getType(crate.types, assocName, itemParams) == HIRTypeRef()) {
                             for (const Candidate* source = selected->specializationItemSource; source; source = source->specializationItemSource) {
@@ -6863,7 +6859,7 @@ default:
             const HIRTypeImpl* selectedImpl = nullptr;
             HIRPathParams implParams;
             HIRCompare bestMatch = HIRCompare::Unequal;
-            static const HIRPathParams noTraitParams;
+            const HIRPathParams noTraitParams;
 
             crate.findTypeImpls(pe.type, ivars.callbackResolveInfer(), [&](const auto& impl) {
                 const auto itemIt = impl.types.find(pe.item);
@@ -7939,7 +7935,7 @@ default:
         bool TraitResolution::findTraitImplsCrateCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* paramsPtr, const HIRTypeData* type, TraitImplCallback& callback) const {
             // TODO: Have a global cache of impls that don't reference either generics or ivars
 
-            static HIRTraitPath::assocListT nullAssoc;
+            HIRTraitPath::assocListT nullAssoc;
             TRACE_FUNCTION_F(trait << FMT_CB(ss, if (paramsPtr) { ss << *paramsPtr; } else { ss << "<?>"; }) << " for " << type);
 
             CanonicalizeTraitGoal canonicalizer(crate.types);
