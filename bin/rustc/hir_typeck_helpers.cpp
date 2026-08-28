@@ -2308,6 +2308,12 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                         return this->defer(left, right);
                     }
                 }
+                if (infer->as_Infer().tyClass != HIRInferClass::None && typeIsRigidUnknown(other)) {
+                    // A projection may normalise to a primitive in this
+                    // literal class.  Defer the alias relation first; the
+                    // normalised output is checked against the class later.
+                    return this->defer(left, right);
+                }
                 if (!literalClassAccepts(table_, infer->as_Infer().tyClass, other)) {
                     return Outcome::Mismatch;
                 }
@@ -2319,6 +2325,10 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 return Outcome::Proven;
             }
             if (left->is_Infer() || right->is_Infer()) {
+                if ((left->is_Infer() && typeIsRigidUnknown(right))
+                    || (right->is_Infer() && typeIsRigidUnknown(left))) {
+                    return this->defer(left, right);
+                }
                 // Rigid unknowns: canonical variables, alias inputs, or a
                 // still-unassigned wildcard.  A canonical literal slot is
                 // unknown only within its literal class: `_/*i*/` can match
@@ -3773,6 +3783,13 @@ default:
                 // Declared alias bounds needed by a deferred head relation.
                 // Ambiguous ones are exported as ordinary solver obligations.
                 ThinVector<SolverObligation> headObligations;
+                // Effects returned by nested relation goals while evaluating
+                // this candidate.  They are candidate-local: publishing them
+                // before selection would let an unselected projection guide
+                // caller inference.
+                ThinVector<SolverTypeEquality> relationEqualities;
+                ThinVector<SolverValueEquality> relationValueEqualities;
+                ThinVector<SolverObligation> relationObligations;
                 stl::Vector<const HIRGenericBound*> normalizationNestedGoals;
                 bool discarded = false;
                 // The certainty of the trait goal alone, before the root
@@ -3891,10 +3908,6 @@ default:
             size_t frameDepth = 0;
             stl::ObjList<GoalKey> activeGoalNodes;
             stl::ObjList<CachedGoal> cachedGoalNodes;
-            // Guards the AliasRelate normalisation retry: EAT re-enters
-            // candidate evaluation, so an unguarded retry recurses without
-            // bound on coinductive cycles.
-            mutable bool aliasRelateActive_ = false;
             ::std::vector<GoalKey*> goalStack;
             ::std::vector<CachedGoal*> goalCache;
             ::std::unordered_multimap<size_t, GoalKey*> activeGoalIndex;
@@ -6069,10 +6082,139 @@ default:
                 return Certainty::Proven;
             }
 
+            void appendRelationEffects(Candidate& candidate, SolverResponse response) {
+                for (size_t i = 0; i < response.slots.typeInputs.size(); i++) {
+                    if (response.slots.typeInputs[i] != response.slots.types[i]) {
+                        candidate.relationEqualities.push_back(SolverTypeEquality{
+                            response.slots.typeInputs[i],
+                            response.slots.types[i],
+                        });
+                    }
+                }
+                for (size_t i = 0; i < response.slots.valueInputs.size(); i++) {
+                    if (response.slots.valueInputs[i] != response.slots.values[i]) {
+                        candidate.relationValueEqualities.push_back(SolverValueEquality{
+                            response.slots.valueInputs[i].clone(),
+                            response.slots.values[i].clone(),
+                        });
+                    }
+                }
+                for (auto& equality : response.equalities) {
+                    candidate.relationEqualities.push_back(::std::move(equality));
+                }
+                for (auto& equality : response.valueEqualities) {
+                    candidate.relationValueEqualities.push_back(::std::move(equality));
+                }
+                for (auto& obligation : response.obligations) {
+                    candidate.relationObligations.push_back(::std::move(obligation));
+                }
+            }
+
+            Certainty relateTypes(Candidate& candidate, const HIRTypeData* left, const HIRTypeData* right) {
+                if (left == right) {
+                    return Certainty::Proven;
+                }
+
+                const auto snapshot = resolve_.ivars.snapshot();
+                Unifier unifier(span(), resolve_.ivars, &resolve_);
+                const auto outcome = unifier.unify(left, right);
+                ThinVector<SolverTypeEquality> pending;
+                ThinVector<SolverValueEquality> pendingValues;
+                if (outcome != Unifier::Outcome::Mismatch) {
+                    for (const auto& equality : unifier.pending()) {
+                        pending.push_back(SolverTypeEquality{equality.left, equality.right});
+                    }
+                    for (const auto& equality : unifier.pendingValues()) {
+                        pendingValues.push_back(SolverValueEquality{equality.left.clone(), equality.right.clone()});
+                    }
+                }
+                resolve_.ivars.rollbackTo(snapshot);
+
+                if (outcome == Unifier::Outcome::Mismatch) {
+                    return Certainty::NoSolution;
+                }
+
+                // The transaction above proved this relation, including any
+                // caller-ivar bindings.  Preserve it as response data before
+                // rollback; only the selected candidate may apply it.
+                candidate.relationEqualities.push_back(SolverTypeEquality{left, right});
+                if (outcome == Unifier::Outcome::Proven) {
+                    return Certainty::Proven;
+                }
+
+                Certainty result = pendingValues.empty() ? Certainty::Proven : Certainty::Ambiguous;
+                for (const auto& equality : pending) {
+                    const auto isSolverExistential = [](const HIRTypeData* type) {
+                        const auto* infer = type->opt_Infer();
+                        return infer && isSolverCanonicalInfer(infer->index);
+                    };
+                    if (isSolverExistential(equality.left) || isSolverExistential(equality.right)) {
+                        // Canonical slots are the existential inputs/outputs
+                        // of this solver query.  Equating one with a selected
+                        // candidate value is a proven response effect, not
+                        // structural uncertainty.  Ordinary placeholders and
+                        // alias-input infer nodes remain rigid and therefore
+                        // ambiguous here.
+                        continue;
+                    }
+                    struct ProjectionRelation {
+                        bool isProjection;
+                        Certainty certainty;
+                    };
+                    auto relateProjection = [&](const HIRTypeData* alias, const HIRTypeData* other) -> ProjectionRelation {
+                        const auto* path = alias->opt_Path();
+                        const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
+                        if (!projection) {
+                            return {false, Certainty::Ambiguous};
+                        }
+
+                        bool sawResponse = false;
+                        bool sawOutput = false;
+                        Certainty nestedResult = Certainty::Ambiguous;
+                        auto callback = makeCallable<NormalizesToCb>([&](NormalizesToResponse response) {
+                            sawResponse = true;
+                            const auto nestedCertainty = response.effects.certainty;
+                            appendRelationEffects(candidate, ::std::move(response.effects));
+                            if (response.output != HIRTypeRef()) {
+                                sawOutput = true;
+                                nestedResult = this->relateTypes(candidate, response.output, other);
+                                if (nestedResult == Certainty::Proven && nestedCertainty == Certainty::Ambiguous) {
+                                    nestedResult = Certainty::Ambiguous;
+                                }
+                            }
+                            return true;
+                        });
+                        evaluateNormalizesTo(span(), NormalizesTo{alias}, callback, false);
+                        if (!sawResponse) {
+                            nestedResult = Certainty::NoSolution;
+                        } else if (!sawOutput) {
+                            nestedResult = Certainty::Ambiguous;
+                        }
+                        return {true, nestedResult};
+                    };
+
+                    auto nested = relateProjection(equality.left, equality.right);
+                    if (!nested.isProjection) {
+                        nested = relateProjection(equality.right, equality.left);
+                    }
+                    if (!nested.isProjection) {
+                        result = Certainty::Ambiguous;
+                        continue;
+                    }
+                    if (nested.certainty == Certainty::NoSolution) {
+                        return Certainty::NoSolution;
+                    }
+                    if (nested.certainty == Certainty::Ambiguous) {
+                        result = Certainty::Ambiguous;
+                    }
+                }
+                return result;
+            }
+
             Certainty evaluateHeadEquality(Candidate& candidate, const SolverTypeEquality& equality) {
                 const auto normalizedLeft = normalizeGoalInput(equality.left);
                 const auto normalizedRight = normalizeGoalInput(equality.right);
-                const auto relation = this->unifyProbe(normalizedLeft, normalizedRight);
+                const auto relation = this->relateTypes(candidate, normalizedLeft, normalizedRight);
                 if (relation == Certainty::Proven) {
                     return relation;
                 }
@@ -6117,11 +6259,12 @@ default:
                 return Certainty::Ambiguous;
             }
 
-            Certainty matchAssociatedTypes(const HIRSimplePath& trait, const ImplRef& impl, const HIRTraitPath::assocListT* associated) {
+            Certainty matchAssociatedTypes(const HIRSimplePath& trait, Candidate& candidate, const HIRTraitPath::assocListT* associated) {
                 if (!associated || associated->empty()) {
                     return Certainty::Proven;
                 }
 
+                const auto& impl = candidate.impl;
                 Certainty result = Certainty::Proven;
                 for (const auto& requirement : *associated) {
                     const auto& aty = requirement.second;
@@ -6162,26 +6305,7 @@ default:
                     if (containsDefiningOpaque(output) || containsDefiningOpaque(aty.type)) {
                         continue;
                     }
-                    auto relation = this->unifyProbe(output, aty.type);
-                    if (relation != Certainty::Proven && !aliasRelateActive_ && (resolve_.hasAssociatedType(output) || resolve_.hasAssociatedType(aty.type))) {
-                        aliasRelateActive_ = true;
-                        STD_DEFER {
-                            aliasRelateActive_ = false;
-                        };
-                        // AliasRelate: an unnormalised projection on either side
-                        // is neither an inference wildcard nor a structural
-                        // mismatch.  Normalise both sides in the current env and
-                        // re-relate: a ParamEnv value of `<Ret as II>::Item`
-                        // against a required `&T` becomes definitive, and a
-                        // synthesised `<C as FnMut<()>>::Output` folds through
-                        // the elaborated FnOnce equality instead of failing
-                        // structurally against a rigid parameter.
-                        const auto normalizedOutput = resolve_.expandAssociatedTypes(span(), output);
-                        const auto normalizedRequired = resolve_.expandAssociatedTypes(span(), aty.type);
-                        if (normalizedOutput != output || normalizedRequired != aty.type) {
-                            relation = this->unifyProbe(normalizedOutput, normalizedRequired);
-                        }
-                    }
+                    const auto relation = this->relateTypes(candidate, output, aty.type);
                     if (relation == Certainty::NoSolution) {
                         // `!` coerces into any requirement: a diverging
                         // closure's Output does not reject the candidate, the
@@ -6311,6 +6435,9 @@ default:
                 candidate->ambiguityBeyondHead = candidate->headNormalizationAmbiguity;
                 candidate->nestedAmbiguity = false;
                 candidate->headObligations.clear();
+                candidate->relationEqualities.clear();
+                candidate->relationValueEqualities.clear();
+                candidate->relationObligations.clear();
                 if (associated) {
                     if (bindCandidatePlaceholders(*candidate, candidate->impl.getImplType(crate.types), *associated, true) == CandidateBindingResult::Mismatch) {
                         return Certainty::NoSolution;
@@ -6362,7 +6489,7 @@ default:
                     }
                 }
 
-                const auto assocResult = matchAssociatedTypes(trait, candidate->impl, associated);
+                const auto assocResult = matchAssociatedTypes(trait, *candidate, associated);
                 if (assocResult == Certainty::NoSolution) {
                     return Certainty::NoSolution;
                 }
@@ -6784,10 +6911,11 @@ default:
                 });
             }
 
-            Certainty matchRootAssociated(const HIRSimplePath& trait, const ImplRef& impl, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams) const {
+            Certainty matchRootAssociated(const HIRSimplePath& trait, Candidate& candidate, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams) {
                 if (!assocName || !assocName[0]) {
                     return Certainty::Proven;
                 }
+                const auto& impl = candidate.impl;
                 const HIRPathParams noParams;
                 const auto& params = assocParams ? *assocParams : noParams;
                 if (!impl.data.is_TraitImpl() && params.hasParams()) {
@@ -6814,21 +6942,8 @@ default:
                 if (containsDefiningOpaque(output) || containsDefiningOpaque(assocType)) {
                     return Certainty::Proven;
                 }
-                auto cmp = resolve_.compareTy(span(), assocType, output);
-                if (cmp != HIRCompare::Equal && !aliasRelateActive_ && (resolve_.hasAssociatedType(output) || resolve_.hasAssociatedType(assocType))) {
-                    aliasRelateActive_ = true;
-                    STD_DEFER {
-                        aliasRelateActive_ = false;
-                    };
-                    // AliasRelate: normalise both sides before treating an
-                    // unnormalised projection as a mismatch or a wildcard.
-                    const auto normalizedOutput = resolve_.expandAssociatedTypes(span(), output);
-                    const auto normalizedRequired = resolve_.expandAssociatedTypes(span(), assocType);
-                    if (normalizedOutput != output || normalizedRequired != assocType) {
-                        cmp = normalizedRequired == normalizedOutput ? HIRCompare::Equal : resolve_.compareTy(span(), normalizedRequired, normalizedOutput);
-                    }
-                }
-                if (cmp == HIRCompare::Unequal) {
+                const auto relation = this->relateTypes(candidate, assocType, output);
+                if (relation == Certainty::NoSolution) {
                     // `!` coerces into any requirement: a diverging closure's
                     // Output does not reject the candidate, the caller's
                     // coercion machinery settles it (rustc seeds the closure
@@ -6838,14 +6953,7 @@ default:
                     }
                     return Certainty::NoSolution;
                 }
-                // A normalizes-to goal with a caller inference variable has a
-                // proven response plus an equality constraint. The caller applies
-                // that constraint from the returned ImplRef; the unassigned
-                // destination alone must not turn a unique response into `Maybe`.
-                if (cmp == HIRCompare::Fuzzy && resolve_.typeContainsIvars(assocType) && !resolve_.typeContainsIvars(output) && !typeHasCandidatePlaceholder(output)) {
-                    return Certainty::Proven;
-                }
-                return cmp == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous;
+                return relation;
             }
 
             ImplRef materializeRootAssociated(ImplRef impl, const HIRSimplePath& trait, const char* assocName, const HIRPathParams* assocParams) const {
@@ -6897,6 +7005,9 @@ default:
                     obligations.push_back(SolverObligation{::std::move(type), ::std::move(trait)});
                 };
                 for (const auto& obligation : candidate->headObligations) {
+                    append(obligation.type, obligation.trait.clone());
+                }
+                for (const auto& obligation : candidate->relationObligations) {
                     append(obligation.type, obligation.trait.clone());
                 }
 
@@ -7692,6 +7803,18 @@ default:
                                 canonicalizer.monomorphConstgeneric(span(), equality.right, true),
                             });
                         }
+                        for (const auto& equality : responseCandidate->relationEqualities) {
+                            solverResponse.equalities.push_back(SolverTypeEquality{
+                                canonicalizer.monomorphType(span(), equality.left, true),
+                                canonicalizer.monomorphType(span(), equality.right, true),
+                            });
+                        }
+                        for (const auto& equality : responseCandidate->relationValueEqualities) {
+                            solverResponse.valueEqualities.push_back(SolverValueEquality{
+                                canonicalizer.monomorphConstgeneric(span(), equality.left, true),
+                                canonicalizer.monomorphConstgeneric(span(), equality.right, true),
+                            });
+                        }
                         for (const auto& equality : responseCandidate->coercionEqualities) {
                             solverResponse.equalities.push_back(SolverTypeEquality{
                                 canonicalizer.monomorphType(span(), equality.left, true),
@@ -7851,7 +7974,7 @@ default:
                     auto* candidate = frame.candidates[i];
                     candidate->traitCertainty = certainty;
                     if (!candidate->isNegative()) {
-                        const auto assocCertainty = matchRootAssociated(trait, candidate->impl, assocName, candidateAssocType, canonicalAssocParams);
+                        const auto assocCertainty = matchRootAssociated(trait, *candidate, assocName, candidateAssocType, canonicalAssocParams);
                         if (assocCertainty == Certainty::NoSolution) {
                             certainty = Certainty::NoSolution;
                         } else if (assocCertainty == Certainty::Ambiguous && certainty == Certainty::Proven) {

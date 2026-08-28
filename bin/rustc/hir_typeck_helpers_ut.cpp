@@ -303,6 +303,34 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(unifier.pending().length() == 1);
     }
 
+    STD_TEST(testLiteralSlotDefersProjectionBeforeClassCheck) {
+        auto pool = stl::ObjPool::fromMemory();
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
+        HMTypeInferrence table(types);
+        Span sp;
+
+        const auto projection = types.path(
+            HIRPath(
+                types.primitive(HIRCoreType::U8),
+                HIRGenericPath(),
+                RcString::newInterned("Output")
+            ),
+            HIRTypePathBinding::make_Opaque({})
+        );
+
+        const auto canonicalInteger = types.infer(HIR_INFER_SOLVER_CANONICAL_MIN, HIRInferClass::Integer);
+        Unifier canonical(sp, table);
+        STD_INSIST(canonical.unify(canonicalInteger, projection) == Unifier::Outcome::Ambiguous);
+        STD_INSIST(canonical.pending().length() == 1);
+
+        const auto liveInteger = table.newIvarTr(HIRInferClass::Integer);
+        Unifier live(sp, table);
+        STD_INSIST(live.unify(liveInteger, projection) == Unifier::Outcome::Ambiguous);
+        STD_INSIST(live.pending().length() == 1);
+        STD_INSIST(table.getType(liveInteger) == liveInteger);
+    }
+
     STD_TEST(testUnifyArrayBindsConstLength) {
         auto pool = stl::ObjPool::fromMemory();
         u32 id = 0;
