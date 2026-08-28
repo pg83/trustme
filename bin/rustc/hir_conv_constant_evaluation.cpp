@@ -1,5 +1,7 @@
 #include "hir_conv_constant_evaluation.h"
 
+using namespace stl;
+
 namespace {
     /// The largest value an unsigned `repr` can hold, or nothing when the tag
     /// is signed or not a fixed-width integer.
@@ -66,7 +68,7 @@ class CtfeContext {
 
     const bool capsOracle_ = getenv("TRUSTME_CAPS_ORACLE") != nullptr;
     const RcString vtableName_ = RcString::newInterned("vtable#");
-    stl::Vector<ActiveDiscriminant> activeDiscriminants_;
+    Vector<ActiveDiscriminant> activeDiscriminants_;
 
 public:
     bool capsOracle() const {
@@ -95,7 +97,7 @@ public:
     }
 };
 
-CtfeContext* CtfeCreateContext(stl::ObjPool& pool) {
+CtfeContext* CtfeCreateContext(ObjPool& pool) {
     return pool.make<CtfeContext>();
 }
 
@@ -508,22 +510,22 @@ public:
 /// "Statically allocated" constant data
 class MIREvalConstantPtr final: public MIREvalPtr<MIREvalConstant> {
 public:
-    static MIREvalConstantPtr allocate(stl::ObjPool* pool, const void* data, size_t len);
+    static MIREvalConstantPtr allocate(ObjPool* pool, const void* data, size_t len);
 };
 
 /// Mutable allocation
 class MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
 public:
-    static MIREvalAllocationPtr allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty);
-    static MIREvalAllocationPtr allocateScratch(stl::ObjPool* pool, size_t size);
-    static MIREvalAllocationPtr allocateHeap(stl::ObjPool* pool, size_t size, size_t alignment);
-    static MIREvalAllocationPtr allocateRo(stl::ObjPool* pool, const void* data, size_t len);
+    static MIREvalAllocationPtr allocate(ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty);
+    static MIREvalAllocationPtr allocateScratch(ObjPool* pool, size_t size);
+    static MIREvalAllocationPtr allocateHeap(ObjPool* pool, size_t size, size_t alignment);
+    static MIREvalAllocationPtr allocateRo(ObjPool* pool, const void* data, size_t len);
 };
 
 /// Reference to a `static`
 class MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
 public:
-    static MIREvalStaticRefPtr allocate(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending = false);
+    static MIREvalStaticRefPtr allocate(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending = false);
 };
 
 /// Common interface for data storage
@@ -648,7 +650,7 @@ void putbHex(std::ostream& os, u8 v) {
 
 /// Constant data
 class MIREvalConstant final: public IValue {
-    friend struct stl::Embed<MIREvalConstant>;
+    friend struct Embed<MIREvalConstant>;
     friend class MIREvalConstantPtr;
     unsigned const length;
     const u8* const data;
@@ -722,7 +724,7 @@ public:
 };
 
 class MIREvalAllocation final: public IValue {
-    friend struct stl::Embed<MIREvalAllocation>;
+    friend struct Embed<MIREvalAllocation>;
     friend class MIREvalAllocationPtr;
 
 public:
@@ -959,10 +961,10 @@ private:
 };
 
 class MIREvalStaticRef final: public IValue {
-    friend struct stl::Embed<MIREvalStaticRef>;
+    friend struct Embed<MIREvalStaticRef>;
     friend class MIREvalStaticRefPtr;
 
-    stl::ObjPool* pool;
+    ObjPool* pool;
     HIRPath path_;
     const EncodedLiteral* encoded;
     size_t length;
@@ -970,7 +972,7 @@ class MIREvalStaticRef final: public IValue {
     // usable, reading its bytes is a value cycle.
     bool valuePending;
 
-    MIREvalStaticRef(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending)
+    MIREvalStaticRef(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending)
         : pool(pool)
         , path_(std::move(p))
         , encoded(lit)
@@ -1196,7 +1198,7 @@ public:
         }
     }
 
-    void copyFromOverlapping(const MIRTypeResolve& state, const MIREvalValueRef& other, stl::ObjPool* pool) {
+    void copyFromOverlapping(const MIRTypeResolve& state, const MIREvalValueRef& other, ObjPool* pool) {
         ensureLive(state);
         other.ensureLive(state);
         const size_t copyLen = std::min(this->len, other.len);
@@ -1376,14 +1378,14 @@ std::ostream& operator<<(std::ostream& os, const MIREvalAllocationPtr& ap) {
 }
 
 // ---
-MIREvalConstantPtr MIREvalConstantPtr::allocate(stl::ObjPool* pool, const void* data, size_t len) {
+MIREvalConstantPtr MIREvalConstantPtr::allocate(ObjPool* pool, const void* data, size_t len) {
     MIREvalConstantPtr rv;
     rv.ptr = pool->make<MIREvalConstant>(data, len);
     return rv;
 }
 
 // ---
-MIREvalAllocationPtr MIREvalAllocationPtr::allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty) {
+MIREvalAllocationPtr MIREvalAllocationPtr::allocate(ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty) {
     size_t len;
     if (!TargetGetSizeOf(Span(), resolve, ty, len)) {
         BUG(Span(), "Layout not computable during const evaluation - " << "sizeof " << ty);
@@ -1395,14 +1397,14 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocate(stl::ObjPool* pool, const St
     return rv;
 }
 
-MIREvalAllocationPtr MIREvalAllocationPtr::allocateScratch(stl::ObjPool* pool, size_t size) {
+MIREvalAllocationPtr MIREvalAllocationPtr::allocateScratch(ObjPool* pool, size_t size) {
     auto* data = static_cast<u8*>(pool->allocate(size + ((size + 7) / 8)));
     MIREvalAllocationPtr rv;
     rv.ptr = pool->make<MIREvalAllocation>(data, size, HIRTypeRef());
     return rv;
 }
 
-MIREvalAllocationPtr MIREvalAllocationPtr::allocateHeap(stl::ObjPool* pool, size_t size, size_t alignment) {
+MIREvalAllocationPtr MIREvalAllocationPtr::allocateHeap(ObjPool* pool, size_t size, size_t alignment) {
     auto* data = static_cast<u8*>(pool->allocate(size + ((size + 7) / 8)));
     MIREvalAllocationPtr rv;
     rv.ptr = pool->make<MIREvalAllocation>(data, size, HIRTypeRef());
@@ -1411,7 +1413,7 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocateHeap(stl::ObjPool* pool, size
     return rv;
 }
 
-MIREvalAllocationPtr MIREvalAllocationPtr::allocateRo(stl::ObjPool* pool, const void* dataIn, size_t len) {
+MIREvalAllocationPtr MIREvalAllocationPtr::allocateRo(ObjPool* pool, const void* dataIn, size_t len) {
     auto* data = static_cast<u8*>(pool->allocate(len + ((len + 7) / 8)));
     MIREvalAllocationPtr rv;
     rv.ptr = pool->make<MIREvalAllocation>(data, len, HIRTypeRef());
@@ -1421,7 +1423,7 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocateRo(stl::ObjPool* pool, const 
 }
 
 // ---
-MIREvalStaticRefPtr MIREvalStaticRefPtr::allocate(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending) {
+MIREvalStaticRefPtr MIREvalStaticRefPtr::allocate(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending) {
     MIREvalStaticRefPtr rv;
     rv.ptr = pool->make<MIREvalStaticRef>(pool, std::move(p), lit, len, valuePending);
     return rv;
@@ -1666,7 +1668,7 @@ public:
 
 class MIREvalCallStackEntry {
 public:
-    stl::ObjPool* const valuePool;
+    ObjPool* const valuePool;
     const unsigned frameIndex;
     const std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs;
     const HIRTypeRef retType;
@@ -1694,7 +1696,7 @@ public:
     MIREvalCallStackEntry(MIREvalCallStackEntry&&) = delete;
 
     MIREvalCallStackEntry(
-        stl::ObjPool* valuePool,
+        ObjPool* valuePool,
         unsigned frameIndex,
         const Span& rootSpan,
         const StaticTraitResolve& resolve,
@@ -5876,10 +5878,10 @@ namespace {
     };
 
     class ExpanderApply: public HIRVisitor {
-        stl::ObjPool& pool_;
+        ObjPool& pool_;
 
     public:
-        ExpanderApply(stl::ObjPool& pool, HIRTypeInterner& types)
+        ExpanderApply(ObjPool& pool, HIRTypeInterner& types)
             : HIRVisitor(nullptr, types)
             , pool_(pool)
         {
@@ -6142,7 +6144,7 @@ HIREvaluator::CsePtr& HIREvaluator::CsePtr::operator=(CsePtr&& x) {
 
 HIREvaluator::HIREvaluator(const Span& sp, const WireBoard& wb, Newval& nvs)
     : rootSpan(sp)
-    , valuePool(stl::ObjPool::fromMemory())
+    , valuePool(ObjPool::fromMemory())
     , resolve(wb)
     , nvs(nvs)
     , numFrames(0)

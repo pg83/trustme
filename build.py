@@ -105,7 +105,8 @@ platform_libstd_lto = import_build(
 )
 platform_libstd_lto.name = "platform_libstd_lto"
 
-SRC = build.glob("$(S)/bin/rustc/*.cpp")
+RUSTC_CPP_SRC = build.glob("$(S)/bin/rustc/*.cpp")
+SRC = RUSTC_CPP_SRC
 # Compiler C++ unit tests live next to the code they test (x.cpp -> x_ut.cpp)
 # and are linked into the rustc_ut runner, not into the compiler.
 UT_SRC = sorted(s for s in SRC if s.endswith("_ut.cpp"))
@@ -897,6 +898,26 @@ unit_tests.append(command(
     descr="UT",
     color="green",
 ))
+
+for source in sorted(RUSTC_CPP_SRC):
+    stem = source.rsplit("/", 1)[1][:-len(".cpp")]
+    stamp = f"$(B)/tst/unit/stl_namespace/{stem}.stamp"
+    unit_tests.append(command(
+        name=f"unit_stl_namespace_{stem}",
+        inputs=[
+            "$(S)/dev/stl_namespace_gate.py",
+            source,
+            *TIMEOUT_INPUT,
+        ],
+        outputs=[stamp],
+        cmd=[
+            *TEST_TIMEOUT,
+            "python3", "$(S)/dev/stl_namespace_gate.py",
+            source, stamp,
+        ],
+        descr="UT",
+        color="green",
+    ))
 
 unit_tests.append(command(
     name="unit_ident_ordering",

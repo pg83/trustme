@@ -17,6 +17,8 @@
 
 #include <algorithm>
 
+using namespace stl;
+
 namespace {
 
     bool typeIsUseCloned(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* type) {
@@ -95,7 +97,7 @@ namespace {
         ::std::vector<Scope> closureStack;
         /// Calls of a closure that had not been classified yet when the call was
         /// seen -- the closure is written later in the same expression.
-        stl::Vector<HIRExprNodeCallValue*> pendingCalls;
+        Vector<HIRExprNodeCallValue*> pendingCalls;
         /// Disable the capture logic in `ExprNode_Variable` (as the variable was captured using a field access)
         bool ignoreVariableCapture;
 
@@ -1681,12 +1683,12 @@ namespace {
         const ::std::vector<HIRExprNodeClosure::AvuCache::Capture>& captures;
 
         const Monomorphiser& monomorphiser;
-        stl::ObjPool* pool;
+        ObjPool* pool;
 
         HIRExprNodeP replacement_;
 
     public:
-        ClosureExprVisitorMutate(stl::ObjPool* pool, const HIRTypeData* closureType, const ::std::vector<unsigned int>& localVars, const ::std::vector<HIRExprNodeClosure::AvuCache::Capture>& captures, const Monomorphiser& mcb)
+        ClosureExprVisitorMutate(ObjPool* pool, const HIRTypeData* closureType, const ::std::vector<unsigned int>& localVars, const ::std::vector<HIRExprNodeClosure::AvuCache::Capture>& captures, const Monomorphiser& mcb)
             : HIRExprVisitorDef(mcb.typeInterner())
             , closureType(closureType)
             , localVars(localVars)
@@ -1944,7 +1946,7 @@ namespace {
     public:
         const HIRCrate& crate;
         StaticTraitResolve resolve_;
-        stl::ObjPool* pool;
+        ObjPool* pool;
         const Monomorphiser& monomorphiser;
         const OutState* out;
         bool allowUnextracted;
@@ -2125,7 +2127,7 @@ namespace {
     /// Extract closures from the main tree
     class ClosureExprVisitorExtract: public HIRExprVisitorDef {
         const StaticTraitResolve& resolve_;
-        stl::ObjPool* pool;
+        ObjPool* pool;
         const HIRTypeData* selfType;
         const ::std::vector<HIRTypeRef>& variableTypes;
         const HIRExprPtr& exprPtr;
@@ -2790,7 +2792,7 @@ namespace {
                 case HIRExprNodeClosure::Class::NoCapture: {
 
                     struct H2 {
-                        static ::std::pair<HIRExprNodeClosure::Class, HIRTraitImpl> makeDispatch(HIRTypeInterner& types, stl::ObjPool* pool, const Span& sp, HIRExprNodeClosure::Class c, HIRGenericParams params, HIRPathParams traitParams, const HIRTypeData* closureType, const HIRTypeData* argsTy, const HIRTypeData* retType) {
+                        static ::std::pair<HIRExprNodeClosure::Class, HIRTraitImpl> makeDispatch(HIRTypeInterner& types, ObjPool* pool, const Span& sp, HIRExprNodeClosure::Class c, HIRGenericParams params, HIRPathParams traitParams, const HIRTypeData* closureType, const HIRTypeData* argsTy, const HIRTypeData* retType) {
                             const auto& argsTupInner = argsTy->as_Tuple();
                             // 1. Create a list of `arg.0, arg.1, arg.2, ...` for the dispatch methods
                             ::std::vector<HIRExprNodeP> dispatchArgs;
@@ -5275,12 +5277,12 @@ public:
             }
 
             struct Nvs: HIREvaluator::Newval {
-                stl::ObjPool& pool;
+                ObjPool& pool;
                 HIRSimplePath currentModulePath;
                 HIRModule& currentModule;
                 size_t nextIdx;
 
-                Nvs(stl::ObjPool& pool, HIRSimplePath currentModulePath, HIRModule& currentModule, size_t idx)
+                Nvs(ObjPool& pool, HIRSimplePath currentModulePath, HIRModule& currentModule, size_t idx)
                     : pool(pool)
                     , currentModulePath(::std::move(currentModulePath))
                     , currentModule(currentModule)

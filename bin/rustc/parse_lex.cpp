@@ -16,10 +16,12 @@
 #include <typeinfo>
 #include <algorithm> // std::count
 
+using namespace stl;
+
 //#define TRACE_CHARS
 //#define TRACE_RAW_TOKENS
 
-Lexer::Lexer(u32& id, stl::ObjPool& pool, const ::std::string& filename, ASTEdition edition, ParseState ps)
+Lexer::Lexer(u32& id, ObjPool& pool, const ::std::string& filename, ASTEdition edition, ParseState ps)
     : TokenStream(ps)
     , id(id)
     , path_(filename.c_str())
@@ -54,7 +56,7 @@ Lexer::Lexer(u32& id, stl::ObjPool& pool, const ::std::string& filename, ASTEdit
     }
 }
 
-Lexer::Lexer(u32& id, stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, ParseState ps)
+Lexer::Lexer(u32& id, ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, ParseState ps)
     : TokenStream(ps)
     , id(id)
     , path_("-")
@@ -1727,14 +1729,14 @@ bool Codepoint::isxdigit() const {
     return os;
 }
 
-Token LexFindOperator(stl::StringView s) {
-    const stl::StringView underscore(reinterpret_cast<const u8*>("_"), 1);
+Token LexFindOperator(StringView s) {
+    const StringView underscore(reinterpret_cast<const u8*>("_"), 1);
     if (s == underscore) {
         return TOK_UNDERSCORE;
     }
     for (size_t i = 0; i < LEN(TOKENMAP); i++) {
         const auto& e = TOKENMAP[i];
-        const stl::StringView chars(reinterpret_cast<const u8*>(e.chars), e.len);
+        const StringView chars(reinterpret_cast<const u8*>(e.chars), e.len);
         if (s < chars) {
             break;
         }
@@ -1749,7 +1751,7 @@ Token LexFindOperator(stl::StringView s) {
 }
 
 Token LexFindOperator(const ::std::string& s) {
-    return LexFindOperator(stl::StringView(reinterpret_cast<const u8*>(s.data()), s.size()));
+    return LexFindOperator(StringView(reinterpret_cast<const u8*>(s.data()), s.size()));
 }
 
 Token LexFindReservedWord(const ::std::string& s, ASTEdition edition) {

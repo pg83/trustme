@@ -28,6 +28,8 @@
 #include <limits.h>
 #include <unordered_set>
 
+using namespace stl;
+
 struct ImplTraitSource {
     const HIRItemPath* path;
     const HIRGenericParams* paramsOuter;
@@ -111,7 +113,7 @@ struct AST2HIR {
     void LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate);
     HIRExprPtr LowerHIRExprNode(const ASTExprNode& e);
 
-    HIRCrate* lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& crate);
+    HIRCrate* lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crate);
 };
 
 namespace {
@@ -1160,13 +1162,13 @@ namespace {
         struct Binder {
             Binder* parent;
             const ASTHigherRankedBounds& bounds;
-            stl::Vector<SeenLifetime> seen;
-            stl::Vector<size_t> inputLifetimes;
+            Vector<SeenLifetime> seen;
+            Vector<size_t> inputLifetimes;
             size_t nextCanonical = 0;
             Phase phase = Phase::Other;
         };
 
-        stl::StringBuilder text;
+        StringBuilder text;
         Binder* binder = nullptr;
         bool hasLifetime = false;
         bool hasFreeLifetime = false;
@@ -3223,15 +3225,15 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     return rv;
 }
 
-void _add_mod_ns_item(stl::ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRTypeItem ti) {
+void _add_mod_ns_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRTypeItem ti) {
     mod.modItems.insert(::std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{isPub, mv$(ti)})));
 }
 
-void _add_mod_val_item(stl::ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRValueItem ti) {
+void _add_mod_val_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRValueItem ti) {
     mod.valueItems.insert(::std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{isPub, mv$(ti)})));
 }
 
-void _add_mod_mac_item(stl::ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRMacroItem ti) {
+void _add_mod_mac_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRMacroItem ti) {
     mod.macroItems.insert(::std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{isPub, mv$(ti)})));
 }
 
@@ -3697,8 +3699,8 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
         // A lifetime of the impl that neither the type nor the trait mentions
         // cannot be worked out at a use, so an associated type may not carry it.
         {
-            stl::Vector<RcString> constrained;
-            auto add = [](stl::Vector<RcString>& into, const RcString& n) {
+            Vector<RcString> constrained;
+            auto add = [](Vector<RcString>& into, const RcString& n) {
                 for (const auto& v : into) {
                     if (v == n) {
                         return;
@@ -3706,7 +3708,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 }
                 into.pushBack(n);
             };
-            auto holds = [](const stl::Vector<RcString>& in, const RcString& n) {
+            auto holds = [](const Vector<RcString>& in, const RcString& n) {
                 for (const auto& v : in) {
                     if (v == n) {
                         return true;
@@ -3743,7 +3745,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 if (!ta) {
                     continue;
                 }
-                stl::Vector<RcString> used;
+                Vector<RcString> used;
                 collectTypeLifetimes(ta->type(), [&](const ASTLifetimeRef& lft) { add(used, lft.name().name); });
                 for (const auto& p : impl.def().params().params) {
                     const auto* lft = p.opt_Lifetime();
@@ -3977,11 +3979,11 @@ public:
 ///
 /// - Removes all possibility for unexpanded macros
 /// - Performs desugaring of for/if-let/while-let/...
-HIRCrate* LowerHIRFromAST(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& crate) {
+HIRCrate* LowerHIRFromAST(const WireBoard& wb, ObjPool* pool, ASTCrate& crate) {
     AST2HIR self;
     return self.lowerCrate(wb, pool, crate);
 }
-HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& crate) {
+HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crate) {
     this->wb = &wb;
     auto& rv = *pool->make<HIRCrate>(pool, crate.types);
 

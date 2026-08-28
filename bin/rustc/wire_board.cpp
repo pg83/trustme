@@ -7,7 +7,9 @@
 
 #include <std/mem/obj_pool.h>
 
-WireBoard::WireBoard(stl::ObjPool* pool)
+using namespace stl;
+
+WireBoard::WireBoard(ObjPool* pool)
     : pool(pool)
     , expandRegistry(pool->make<ExpandRegistry>(pool))
     , targetLayouts(TargetCreateLayoutContext(*pool))

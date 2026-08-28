@@ -1,5 +1,7 @@
 #include "mir_from_hir.h"
 
+using namespace stl;
+
 // Arrays at least this large use the sparse PartialArray move-tracking state.
 static const size_t PARTIAL_ARRAY_MIN = 32;
 
@@ -464,7 +466,7 @@ namespace {
         void generatorFindCompositeStorageConflicts(
             const MIRFunction& fcn,
             unsigned firstStoredLocal,
-            stl::IntMap<bool>& conflicts
+            IntMap<bool>& conflicts
         ) const {
             for (const auto& block : fcn.blocks) {
                 for (const auto& statement : block.statements) {
@@ -515,8 +517,8 @@ namespace {
             unsigned local,
             unsigned slot,
             unsigned firstStoredLocal,
-            const stl::IntMap<unsigned>& storageSlots,
-            const stl::IntMap<bool>& compositeConflicts,
+            const IntMap<unsigned>& storageSlots,
+            const IntMap<bool>& compositeConflicts,
             const MIRValueLifetimes& segmentLifetimes
         ) const {
             for (unsigned other = firstStoredLocal; other < local; other++) {
@@ -557,8 +559,8 @@ namespace {
             MIRFunction& fcn
         ) {
             ASSERT_BUG(sp, !generatorState.states.empty(), "Coroutine has no initial state");
-            auto traversalPool = stl::ObjPool::fromMemory();
-            stl::IntMap<bool> bridgedReturns{traversalPool.mutPtr()};
+            auto traversalPool = ObjPool::fromMemory();
+            IntMap<bool> bridgedReturns{traversalPool.mutPtr()};
             ThinVector<MIRBasicBlockId> bridgedReturnBlocks;
             auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
             MIRTypeResolve mirResolve{sp, resolve, pathCallback, retTy, args, fcn};
@@ -574,7 +576,7 @@ namespace {
                 // the block that produces Pending and its eventual Return.
                 // Bridge every Return reachable from that suspension path so
                 // liveness sees execution continue at the resume entrypoint.
-                stl::IntMap<bool> visited{traversalPool.mutPtr()};
+                IntMap<bool> visited{traversalPool.mutPtr()};
                 ThinVector<MIRBasicBlockId> pending;
                 pending.push_back(state.suspensionBlock);
                 bool foundReturn = false;
@@ -3592,7 +3594,7 @@ default:
                             // the path is `Self`; in that case every field must
                             // be supplied by the expression.
                             const auto& fields = e->data.as_Tuple();
-                            stl::Vector<u8> valuesSet;
+                            Vector<u8> valuesSet;
                             valuesSet.zero(fields.size());
                             std::vector<MIRParam> values;
                             values.resize(fields.size());
@@ -3864,9 +3866,9 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
             ASSERT_BUG(sp, valueVarIdx == 1, "Assumption on MaybeUninit.value's variant index failed");
             auto& fields = stateTy.data.as_Tuple();
             const auto firstStoredLocal = static_cast<unsigned>(1 + genNode->captureUsages.size());
-            auto storagePool = stl::ObjPool::fromMemory();
-            stl::IntMap<unsigned> storageSlots{storagePool.mutPtr()};
-            stl::IntMap<bool> compositeConflicts{storagePool.mutPtr()};
+            auto storagePool = ObjPool::fromMemory();
+            IntMap<unsigned> storageSlots{storagePool.mutPtr()};
+            IntMap<bool> compositeConflicts{storagePool.mutPtr()};
             ev.generatorFindCompositeStorageConflicts(fcn, firstStoredLocal, compositeConflicts);
             ThinVector<HIRTypeRef> storageTypes;
             unsigned storageSlotCount = 0;

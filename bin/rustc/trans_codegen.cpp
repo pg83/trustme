@@ -22,6 +22,8 @@
 #include <iomanip>
 #include <algorithm>
 
+using namespace stl;
+
 namespace {
     struct FunctionOrderNode;
 
@@ -52,10 +54,10 @@ namespace {
         TransList& list;
         const Span& sp;
         StaticTraitResolve resolve;
-        stl::ObjPool::Ref poolOwner = stl::ObjPool::fromMemory();
-        stl::ObjPool* pool = poolOwner.mutPtr();
-        stl::Vector<FunctionOrderNode*> nodes;
-        stl::Vector<FunctionOrderNode*> tarjanStack;
+        ObjPool::Ref poolOwner = ObjPool::fromMemory();
+        ObjPool* pool = poolOwner.mutPtr();
+        Vector<FunctionOrderNode*> nodes;
+        Vector<FunctionOrderNode*> tarjanStack;
         unsigned nextIndex = 0;
 
         FunctionOrderNode* findNode(const HIRPath& path) const {
@@ -239,7 +241,7 @@ namespace {
         }
 
     public:
-        stl::Vector<FunctionOrderNode*> ordered;
+        Vector<FunctionOrderNode*> ordered;
 
         FunctionOrder(const WireBoard& wb, TransList& list, const Span& sp)
             : list(list)

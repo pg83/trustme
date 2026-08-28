@@ -4,6 +4,8 @@
 
 #include <std/mem/obj_pool.h>
 
+using namespace stl;
+
 namespace {
     class LangItemsImpl final: public LangItems {
         HIRSimplePath copy_;
@@ -146,6 +148,6 @@ namespace {
     };
 }
 
-LangItems* LangItems::create(stl::ObjPool& pool, const HIRCrate& crate) {
+LangItems* LangItems::create(ObjPool& pool, const HIRCrate& crate) {
     return pool.make<LangItemsImpl>(crate);
 }

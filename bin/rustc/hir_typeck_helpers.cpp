@@ -18,6 +18,8 @@
 #include <algorithm>
 #include <unordered_map>
 
+using namespace stl;
+
 SolverImpl SolverImpl::fromLegacy(ImplRef impl) {
     SolverImpl result;
     result.ambiguousIdentity = impl.isAmbiguousIdentity();
@@ -78,11 +80,11 @@ namespace {
         // positionally so structurally identical goals share one cache key
         // regardless of which caller variables they hold.  The canonical
         // name is derived from the position, so only the node is stored.
-        mutable stl::Vector<const HIRTypeData*> ivarNodes_;
+        mutable Vector<const HIRTypeData*> ivarNodes_;
         // Unresolved const inference variables, canonicalised positionally
         // into the same reserved index range (value ivars live in their own
         // index space).  Stores the original table index per slot.
-        mutable stl::Vector<unsigned> valueIvarIndexes_;
+        mutable Vector<unsigned> valueIvarIndexes_;
         // Only mappings present when the goal is sealed belong to the input.
         // Placeholders first seen while canonicalising a response are
         // existential and must be freshly instantiated at every boundary.
@@ -296,7 +298,7 @@ namespace {
             return nullptr;
         }
 
-        const stl::Vector<const HIRTypeData*>& ivarNodes() const {
+        const Vector<const HIRTypeData*>& ivarNodes() const {
             return ivarNodes_;
         }
 
@@ -511,7 +513,7 @@ namespace {
     // the correlation without mutating the inference table.
     class CorrelateSolverResponseSlots final: public MonomorphiserNop {
         const SolverSlotValues& slots_;
-        stl::Vector<::std::pair<HIRTypeRef, HIRTypeRef>> structuralTypes_;
+        Vector<::std::pair<HIRTypeRef, HIRTypeRef>> structuralTypes_;
 
         void correlateParams(const HIRPathParams& input, const HIRPathParams& response) {
             if (input.types.size() != response.types.size()) {
@@ -774,7 +776,7 @@ namespace {
 // --------------------------------------------------------------------
 void HMTypeInferrence::checkForLoops() {
     struct LoopChecker {
-        stl::Vector<unsigned int>& indexes;
+        Vector<unsigned int>& indexes;
 
         void checkTy(const HMTypeInferrence& ivars, const HIRTypeData* ty) {
             visitTyWith(ty, [&](const HIRTypeData* t) {
@@ -796,7 +798,7 @@ void HMTypeInferrence::checkForLoops() {
         }
     };
 
-    stl::Vector<unsigned int> indexes;
+    Vector<unsigned int> indexes;
     unsigned int i = 0;
     for (const auto& v : ivars) {
         if (!v.isAlias() && !v.type->is_Infer()) {
@@ -3798,7 +3800,7 @@ default:
                 ThinVector<SolverTypeEquality> relationEqualities;
                 ThinVector<SolverValueEquality> relationValueEqualities;
                 ThinVector<SolverObligation> relationObligations;
-                stl::Vector<const HIRGenericBound*> normalizationNestedGoals;
+                Vector<const HIRGenericBound*> normalizationNestedGoals;
                 bool discarded = false;
                 // The certainty of the trait goal alone, before the root
                 // associated-item requirement could downgrade it.
@@ -3843,7 +3845,7 @@ default:
                     viable.reserve(32);
                 }
 
-                void clear(stl::ObjList<Candidate>& nodes) {
+                void clear(ObjList<Candidate>& nodes) {
                     for (auto* candidate : candidates) {
                         nodes.release(candidate);
                     }
@@ -3915,16 +3917,16 @@ default:
             // representation contains an invocation-scoped numeric binder,
             // never a formatted address. Reusing one set per immutable impl
             // preserves recursive-goal identity for cycle detection.
-            stl::IntMap<ThinVector<ImplExistentials>> implExistentials_;
+            IntMap<ThinVector<ImplExistentials>> implExistentials_;
 
             // Frames and candidates have stable pool-backed addresses.  Vectors
             // are pointer indexes only, so recursive growth never moves an ImplRef
             // or invalidates a parent candidate.
-            stl::ObjList<Candidate> candidateNodes;
+            ObjList<Candidate> candidateNodes;
             ::std::vector<CandidateFrame*> frames;
             size_t frameDepth = 0;
-            stl::ObjList<GoalKey> activeGoalNodes;
-            stl::ObjList<CachedGoal> cachedGoalNodes;
+            ObjList<GoalKey> activeGoalNodes;
+            ObjList<CachedGoal> cachedGoalNodes;
             ::std::vector<GoalKey*> goalStack;
             ::std::vector<CachedGoal*> goalCache;
             ::std::unordered_multimap<size_t, GoalKey*> activeGoalIndex;
@@ -3948,7 +3950,7 @@ default:
             }
 
             const HIRPathParams& implExistentials(const HIRGenericParams& definition) {
-                const auto key = stl::splitMix64(reinterpret_cast<uintptr_t>(&definition));
+                const auto key = splitMix64(reinterpret_cast<uintptr_t>(&definition));
                 auto* bucket = implExistentials_.find(key);
                 if (bucket) {
                     for (const auto& entry : *bucket) {
@@ -5395,8 +5397,8 @@ default:
                     HMTypeInferrence& table_;
 
                 public:
-                    mutable stl::Vector<HrtbTypeBinding> typeBindings;
-                    mutable stl::Vector<HrtbValueBinding> valueBindings;
+                    mutable Vector<HrtbTypeBinding> typeBindings;
+                    mutable Vector<HrtbValueBinding> valueBindings;
 
                     InstantiateHrtb(HIRTypeInterner& types, HMTypeInferrence& table)
                         : MonomorphiserNop(types)
@@ -5448,7 +5450,7 @@ default:
                 } else if (const auto* bounded = impl.data.opt_BoundedPtr()) {
                     originalAssoc = bounded->assoc;
                 }
-                stl::Vector<RcString> hrtbAssocNames;
+                Vector<RcString> hrtbAssocNames;
                 if (originalAssoc) {
                     for (const auto& entry : *originalAssoc) {
                         if (pathParamsContainGenericGroup(entry.second.sourceTrait.params, GENERICHrtb)
@@ -5520,11 +5522,11 @@ default:
                     // a dead inference-table index.
                     class MaterializeHrtb final: public MonomorphiserNop {
                         const HMTypeInferrence& table_;
-                        const stl::Vector<HrtbTypeBinding>& typeBindings_;
-                        const stl::Vector<HrtbValueBinding>& valueBindings_;
+                        const Vector<HrtbTypeBinding>& typeBindings_;
+                        const Vector<HrtbValueBinding>& valueBindings_;
 
                     public:
-                        MaterializeHrtb(HIRTypeInterner& types, const HMTypeInferrence& table, const stl::Vector<HrtbTypeBinding>& typeBindings, const stl::Vector<HrtbValueBinding>& valueBindings)
+                        MaterializeHrtb(HIRTypeInterner& types, const HMTypeInferrence& table, const Vector<HrtbTypeBinding>& typeBindings, const Vector<HrtbValueBinding>& valueBindings)
                             : MonomorphiserNop(types)
                             , table_(table)
                             , typeBindings_(typeBindings)
@@ -5971,8 +5973,8 @@ default:
                     resolve_.ivars.rollbackTo(snapshot);
                 };
 
-                stl::Vector<CandidateTypeBinding> typeBindings;
-                stl::Vector<CandidateValueBinding> valueBindings;
+                Vector<CandidateTypeBinding> typeBindings;
+                Vector<CandidateValueBinding> valueBindings;
 
                 const auto addTypeBinding = [&](const HIRTypeData* type) {
                     const auto* generic = type->opt_Generic();
@@ -6015,11 +6017,11 @@ default:
                 }
 
                 class InstantiateCandidate final: public MonomorphiserNop {
-                    const stl::Vector<CandidateTypeBinding>& typeBindings_;
-                    const stl::Vector<CandidateValueBinding>& valueBindings_;
+                    const Vector<CandidateTypeBinding>& typeBindings_;
+                    const Vector<CandidateValueBinding>& valueBindings_;
 
                 public:
-                    InstantiateCandidate(HIRTypeInterner& types, const stl::Vector<CandidateTypeBinding>& typeBindings, const stl::Vector<CandidateValueBinding>& valueBindings)
+                    InstantiateCandidate(HIRTypeInterner& types, const Vector<CandidateTypeBinding>& typeBindings, const Vector<CandidateValueBinding>& valueBindings)
                         : MonomorphiserNop(types)
                         , typeBindings_(typeBindings)
                         , valueBindings_(valueBindings)
@@ -6130,11 +6132,11 @@ default:
 
                 class MaterializeCandidate final: public MonomorphiserNop {
                     const HMTypeInferrence& table_;
-                    const stl::Vector<CandidateTypeBinding>& typeBindings_;
-                    const stl::Vector<CandidateValueBinding>& valueBindings_;
+                    const Vector<CandidateTypeBinding>& typeBindings_;
+                    const Vector<CandidateValueBinding>& valueBindings_;
 
                 public:
-                    MaterializeCandidate(HIRTypeInterner& types, const HMTypeInferrence& table, const stl::Vector<CandidateTypeBinding>& typeBindings, const stl::Vector<CandidateValueBinding>& valueBindings)
+                    MaterializeCandidate(HIRTypeInterner& types, const HMTypeInferrence& table, const Vector<CandidateTypeBinding>& typeBindings, const Vector<CandidateValueBinding>& valueBindings)
                         : MonomorphiserNop(types)
                         , table_(table)
                         , typeBindings_(typeBindings)
@@ -7488,7 +7490,7 @@ default:
             bool evaluateOverlap(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right) {
                 // The probe is a pure function of the impl pair (impls are
                 // immutable after conversion), so cache it by identity.
-                const auto key = stl::splitMix64(reinterpret_cast<uintptr_t>(&left)) ^ stl::splitMix64(~reinterpret_cast<uintptr_t>(&right));
+                const auto key = splitMix64(reinterpret_cast<uintptr_t>(&left)) ^ splitMix64(~reinterpret_cast<uintptr_t>(&right));
                 auto* bucket = overlapCache.find(key);
                 if (bucket) {
                     for (const auto& ent : *bucket) {
@@ -7511,7 +7513,7 @@ default:
                 bool overlaps;
             };
 
-            stl::IntMap<ThinVector<OverlapEntry>> overlapCache;
+            IntMap<ThinVector<OverlapEntry>> overlapCache;
 
             bool evaluateOverlapUncached(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right) {
                 ASSERT_BUG(callSpan, !span_, "nested coherence overlap session");
@@ -7745,7 +7747,7 @@ default:
                     }
                 }
                 const auto rootHash = goalHash(trait, canonical.params, canonical.type, nullptr);
-                stl::Vector<::std::pair<const Candidate*, Certainty>> distinctViable;
+                Vector<::std::pair<const Candidate*, Certainty>> distinctViable;
                 auto deliverResponse = [&](const SolverResponse& response, const ImplRef* directImpl) {
                     if (!outermost && !callerBoundary) {
                         DecanonicalizeSolverInfers mapper(crate.types, canonicalizer);
@@ -8749,7 +8751,7 @@ default:
             , visPath(visPath)
             , currentTraitPath_(currentTrait)
             , currentTraitPtr(currentTrait ? &crate.getTraitByPath(Span(), currentTrait->path) : nullptr)
-            , eatCachePool(stl::ObjPool::fromMemory())
+            , eatCachePool(ObjPool::fromMemory())
             , eatCache(eatCachePool.mutPtr())
         {
             implGenerics_ = implParams;
@@ -9671,7 +9673,7 @@ default:
                 HIRPathParams& outImplParams;
 
             public:
-                GetParams(Span sp, stl::ObjPool& valuePool, HIRPathParams& outImplParams)
+                GetParams(Span sp, ObjPool& valuePool, HIRPathParams& outImplParams)
                     : HIRMatchGenerics(valuePool)
                     , sp(sp)
                     , outImplParams(outImplParams)
@@ -12277,7 +12279,7 @@ default: {
         HMTypeInferrence::HMTypeInferrence(HIRTypeInterner& types)
             : types(types)
             , hasChanged(false)
-            , aliasIvarPool(stl::ObjPool::fromMemory())
+            , aliasIvarPool(ObjPool::fromMemory())
             , aliasTypeIvars(aliasIvarPool.mutPtr())
             , aliasValueIvars(aliasIvarPool.mutPtr())
         {

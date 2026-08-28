@@ -22,6 +22,8 @@
 #include <sys/wait.h>
 #include <unordered_set>
 
+using namespace stl;
+
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__) || defined(__APPLE__)
 extern char** environ;
 #endif
@@ -234,7 +236,7 @@ struct ProcMacroInv: public TokenStream {
     } handles;
 
     bool eofHit = false;
-    stl::Vector<u8> pendingSymbols;
+    Vector<u8> pendingSymbols;
     size_t pendingSymbolOffset = 0;
 
 public:
@@ -2443,7 +2445,7 @@ Token ProcMacroInv::realGetToken_() {
 }
 
 Token ProcMacroInv::takePendingSymbol() {
-    const stl::StringView remaining(
+    const StringView remaining(
         pendingSymbols.begin() + pendingSymbolOffset,
         pendingSymbols.length() - pendingSymbolOffset);
     for (size_t len = remaining.length(); len != 0; --len) {

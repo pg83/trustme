@@ -23,24 +23,26 @@
 #include <optional>
 #include <stdexcept>
 
+using namespace stl;
+
 namespace {}
 
 // The cfg!() evaluation state: --cfg values/flags, value callbacks and the
 // --check-cfg expectations with their lint settings. Opaque outside this
 // file; Settings holds a pointer.
 struct CfgState {
-    stl::ObjPool* pool;
+    ObjPool* pool;
     ::std::multimap<::std::string, ::std::string> values;
     ::std::map<::std::string, CfgValueCallback*> valueFcns;
     ::std::set<::std::string> flags;
 
-    explicit CfgState(stl::ObjPool& pool)
+    explicit CfgState(ObjPool& pool)
         : pool(&pool)
     {
     }
 };
 
-CfgState* CfgCreateState(stl::ObjPool& pool) {
+CfgState* CfgCreateState(ObjPool& pool) {
     return pool.make<CfgState>(pool);
 }
 

@@ -9,6 +9,8 @@
 #include <std/mem/obj_pool.h>
 #include <std/rng/split_mix_64.h>
 
+using namespace stl;
+
 HIRTraitPath::HIRTraitPath()
     : traitPtr(nullptr)
 {
@@ -141,11 +143,11 @@ namespace {
     const u64 POS_STEP = 0x9E3779B97F4A7C15;
 
     u64 key1(u64 ch, size_t i) {
-        return stl::splitMix64(ch + (i + 1) * POS_STEP);
+        return splitMix64(ch + (i + 1) * POS_STEP);
     }
 
     u64 key2(u64 ch, size_t i) {
-        return stl::splitMix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
+        return splitMix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
     }
 
     // A stored path: the shared data plus the link of the per-hash1 chain.
@@ -162,9 +164,9 @@ namespace {
     };
 
     struct PathInterner {
-        stl::ObjPool::Ref poolRef = stl::ObjPool::fromMemory();
-        stl::ObjPool* pool = poolRef.mutPtr();
-        stl::IntMap<PathNode*> table{pool};
+        ObjPool::Ref poolRef = ObjPool::fromMemory();
+        ObjPool* pool = poolRef.mutPtr();
+        IntMap<PathNode*> table{pool};
     };
 
     PathInterner& interner() {
@@ -801,7 +803,7 @@ bool HIRPath::operator==(const HIRPath& x) const {
     return this->ord(x) == ::OrdEqual;
 }
 
-const EncodedLiteral* freezeEncodedLiteral(stl::ObjPool& pool, EncodedLiteral e) {
+const EncodedLiteral* freezeEncodedLiteral(ObjPool& pool, EncodedLiteral e) {
     return pool.make<EncodedLiteral>(mv$(e));
 }
 

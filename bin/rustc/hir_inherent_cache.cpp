@@ -9,6 +9,8 @@
 #include <memory>
 #include <vector>
 
+using namespace stl;
+
 namespace {
     /// Cached lookup logic for inherent (non-trait) methods on types
     class InherentCacheImpl final: public HIRInherentCache {
@@ -334,6 +336,6 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
     }
 }
 
-HIRInherentCache* HIRInherentCache::create(stl::ObjPool& pool) {
+HIRInherentCache* HIRInherentCache::create(ObjPool& pool) {
     return pool.make<InherentCacheImpl>();
 }

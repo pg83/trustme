@@ -25,6 +25,8 @@
 #include <algorithm>
 #include <string_view>
 
+using namespace stl;
+
 namespace {
     struct FmtShell {
         const ::std::string& s;
@@ -277,16 +279,16 @@ namespace {
         FILE* literalBlob = nullptr;
         size_t literalBlobSize = 0;
         const MIRTypeResolve* mirRes = nullptr;
-        stl::Vector<u8> noOpCleanupBlocks;
-        stl::Vector<u8> cleanupCandidateBlocks;
-        stl::Vector<MIRBasicBlockId> cleanupReachabilityWorklist;
-        stl::Vector<MIRBasicBlockId> forwardedBlockTargets;
-        stl::Vector<u8> inlinedReturnBlocks;
-        stl::Vector<u8> forwardingState;
-        stl::Vector<MIRBasicBlockId> forwardingPath;
-        stl::Vector<u32> blockIncoming;
-        stl::Vector<u8> asmLabelBlocks;
-        stl::Vector<u8> blockLabels;
+        Vector<u8> noOpCleanupBlocks;
+        Vector<u8> cleanupCandidateBlocks;
+        Vector<MIRBasicBlockId> cleanupReachabilityWorklist;
+        Vector<MIRBasicBlockId> forwardedBlockTargets;
+        Vector<u8> inlinedReturnBlocks;
+        Vector<u8> forwardingState;
+        Vector<MIRBasicBlockId> forwardingPath;
+        Vector<u32> blockIncoming;
+        Vector<u8> asmLabelBlocks;
+        Vector<u8> blockLabels;
         MIRBasicBlockId fallthroughBlock = ~0u;
         bool currentFunctionTracksCaller = false;
         bool currentFunctionRealignsArguments = false;
@@ -345,7 +347,7 @@ namespace {
             const EncodedLiteral* value;
         };
 
-        stl::IntMap<PromotedNode*> promotedValues;
+        IntMap<PromotedNode*> promotedValues;
 
         struct CallerLocationNode {
             CallerLocationNode* hashNext;
@@ -362,9 +364,9 @@ namespace {
             }
         };
 
-        stl::ObjPool::Ref callerLocationPoolOwner = stl::ObjPool::fromMemory();
-        stl::ObjPool* callerLocationPool = callerLocationPoolOwner.mutPtr();
-        stl::IntMap<CallerLocationNode*> callerLocations{callerLocationPool};
+        ObjPool::Ref callerLocationPoolOwner = ObjPool::fromMemory();
+        ObjPool* callerLocationPool = callerLocationPoolOwner.mutPtr();
+        IntMap<CallerLocationNode*> callerLocations{callerLocationPool};
         CallerLocationNode* firstCallerLocation = nullptr;
         CallerLocationNode* lastCallerLocation = nullptr;
         u32 callerLocationCount = 0;
@@ -2019,12 +2021,12 @@ default:
         }
 
         static u64 promotedHash(const RcString& ctype, const EncodedLiteral& value) {
-            auto h = stl::splitMix64(ctype.contentHash());
+            auto h = splitMix64(ctype.contentHash());
             for (auto b : value.bytes) {
-                h = stl::splitMix64(h ^ static_cast<u64>(b));
+                h = splitMix64(h ^ static_cast<u64>(b));
             }
             for (const auto& reloc : value.relocations) {
-                h = stl::splitMix64(h ^ reloc.ofs ^ (reloc.len << 8));
+                h = splitMix64(h ^ reloc.ofs ^ (reloc.len << 8));
             }
             return h;
         }
@@ -3121,7 +3123,7 @@ default:
                 of << "\tbool df" << i << " = " << code->dropFlags[i] << ";\n";
             }
 
-            stl::Vector<MIRBasicBlockId> pendingCleanupBlocks;
+            Vector<MIRBasicBlockId> pendingCleanupBlocks;
             for (const auto& block : code->blocks) {
                 switch (block.terminator.tag()) {
                     case MIRTerminator::TAG_Drop: {
@@ -3151,10 +3153,10 @@ default:
                     continue;
                 }
                 struct QueueTargets final: public MIRTargetVisitor {
-                    stl::Vector<MIRBasicBlockId>& pending;
+                    Vector<MIRBasicBlockId>& pending;
                     const CodeGeneratorC& codegen;
 
-                    QueueTargets(stl::Vector<MIRBasicBlockId>& pending, const CodeGeneratorC& codegen)
+                    QueueTargets(Vector<MIRBasicBlockId>& pending, const CodeGeneratorC& codegen)
                         : pending(pending)
                         , codegen(codegen)
                     {
@@ -3362,9 +3364,9 @@ default:
                 }
                 struct CountIncoming final: public MIRTargetVisitor {
                     const CodeGeneratorC& codegen;
-                    stl::Vector<u32>& incoming;
+                    Vector<u32>& incoming;
 
-                    CountIncoming(const CodeGeneratorC& codegen, stl::Vector<u32>& incoming)
+                    CountIncoming(const CodeGeneratorC& codegen, Vector<u32>& incoming)
                         : codegen(codegen)
                         , incoming(incoming)
                     {
@@ -3400,7 +3402,7 @@ default:
             }
         }
 
-        void findNoOpCleanupBlocks(const MIRTypeResolve& localMirRes, const MIRFunction& code, const stl::Vector<MIRBasicBlockId>& cleanupEntries) {
+        void findNoOpCleanupBlocks(const MIRTypeResolve& localMirRes, const MIRFunction& code, const Vector<MIRBasicBlockId>& cleanupEntries) {
             noOpCleanupBlocks.clear();
             noOpCleanupBlocks.zero(code.blocks.size());
             cleanupCandidateBlocks.clear();
@@ -3415,9 +3417,9 @@ default:
                 }
                 cleanupCandidateBlocks.mut(blockIndex) = 1;
                 struct QueueTargets final: public MIRTargetVisitor {
-                    stl::Vector<MIRBasicBlockId>& pending;
+                    Vector<MIRBasicBlockId>& pending;
 
-                    explicit QueueTargets(stl::Vector<MIRBasicBlockId>& pending)
+                    explicit QueueTargets(Vector<MIRBasicBlockId>& pending)
                         : pending(pending)
                     {
                     }
@@ -6141,7 +6143,7 @@ default:
                 // value is emitted as is a struct -- which the compiler will not
                 // put in one. Copy such an operand through a vector of the same
                 // width, which it will.
-                stl::Vector<size_t> vectorShim;
+                Vector<size_t> vectorShim;
                 vectorShim.zero(asmParams.size());
                 auto paramIndexOf = [&](const MIRAsmParam::Data_Reg* reg) {
                     for (size_t i = 0; i < asmParams.size(); i++) {
@@ -6611,8 +6613,8 @@ default:
 
         u64 callerLocationHash(const SourceLocation& source) const {
             return source.filename.contentHash()
-                ^ stl::splitMix64(source.line + 0x9e3779b97f4a7c15ULL)
-                ^ stl::splitMix64(source.column + 0xd6e8feb86659fd93ULL);
+                ^ splitMix64(source.line + 0x9e3779b97f4a7c15ULL)
+                ^ splitMix64(source.column + 0xd6e8feb86659fd93ULL);
         }
 
         CallerLocationNode* internCallerLocation(const SourceLocation& source) {

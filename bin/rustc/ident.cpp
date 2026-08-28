@@ -4,6 +4,8 @@
 
 #include <std/mem/obj_pool.h>
 
+using namespace stl;
+
 namespace {
     constexpr unsigned int ITEM_OPAQUE = 1u << 31;
 
@@ -99,18 +101,18 @@ Ident::Hygiene::Inner Ident::Hygiene::clone() const {
     return inner ? *inner : Inner{};
 }
 
-const Ident::Hygiene::Inner* Ident::Hygiene::store(stl::ObjPool& pool, Inner v) {
+const Ident::Hygiene::Inner* Ident::Hygiene::store(ObjPool& pool, Inner v) {
     return pool.make<Inner>(::std::move(v));
 }
 
-Ident::Hygiene Ident::Hygiene::newScope(u32& id, stl::ObjPool& pool) {
+Ident::Hygiene Ident::Hygiene::newScope(u32& id, ObjPool& pool) {
     Inner v;
     v.contexts.push_back(++id);
     v.macroDefinitions.push_back(0);
     return Hygiene(store(pool, ::std::move(v)));
 }
 
-Ident::Hygiene Ident::Hygiene::newScopeChained(u32& id, stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition, bool itemOpaque) {
+Ident::Hygiene Ident::Hygiene::newScopeChained(u32& id, ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition, bool itemOpaque) {
     Inner v;
     if (parent.inner) {
         v.searchModule = parent.inner->searchModule;
@@ -125,7 +127,7 @@ Ident::Hygiene Ident::Hygiene::newScopeChained(u32& id, stl::ObjPool& pool, cons
     return Hygiene(store(pool, ::std::move(v)));
 }
 
-Ident::Hygiene Ident::Hygiene::withTailScope(stl::ObjPool& pool, const Hygiene& scope, bool inheritModPath) const {
+Ident::Hygiene Ident::Hygiene::withTailScope(ObjPool& pool, const Hygiene& scope, bool inheritModPath) const {
     assert(scope.inner);
     const auto& s = *scope.inner;
     assert(!s.contexts.empty());
@@ -139,7 +141,7 @@ Ident::Hygiene Ident::Hygiene::withTailScope(stl::ObjPool& pool, const Hygiene& 
     return Hygiene(store(pool, ::std::move(v)));
 }
 
-Ident::Hygiene Ident::Hygiene::getParent(stl::ObjPool& pool) const {
+Ident::Hygiene Ident::Hygiene::getParent(ObjPool& pool) const {
     assert(inner);
     const auto& c = *inner;
     Inner v;
@@ -148,7 +150,7 @@ Ident::Hygiene Ident::Hygiene::getParent(stl::ObjPool& pool) const {
     return Hygiene(store(pool, ::std::move(v)));
 }
 
-bool Ident::Hygiene::leaveMacroDefinition(stl::ObjPool& pool, unsigned int definition, const Hygiene& tokenContext, const Hygiene& definitionContext) {
+bool Ident::Hygiene::leaveMacroDefinition(ObjPool& pool, unsigned int definition, const Hygiene& tokenContext, const Hygiene& definitionContext) {
     if (!inner) {
         return false;
     }
@@ -167,7 +169,7 @@ bool Ident::Hygiene::leaveMacroDefinition(stl::ObjPool& pool, unsigned int defin
     return true;
 }
 
-void Ident::Hygiene::setModPath(stl::ObjPool& pool, ModPath p) {
+void Ident::Hygiene::setModPath(ObjPool& pool, ModPath p) {
     Inner v = clone();
     v.searchModule = ::std::make_shared<ModPath>(::std::move(p));
     *this = Hygiene(store(pool, ::std::move(v)));

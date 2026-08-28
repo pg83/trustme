@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <cassert>
 
+using namespace stl;
+
 namespace {
     struct TypeFmtRecursionNode {
         const HIRTypeData* type;
@@ -3020,7 +3022,7 @@ default:
     UNREACHABLE();
 }
 
-HIRTypeInterner::HIRTypeInterner(stl::ObjPool& pool, u32& id)
+HIRTypeInterner::HIRTypeInterner(ObjPool& pool, u32& id)
     : pool(pool)
     , id(id)
 {

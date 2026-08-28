@@ -5,9 +5,11 @@
 
 #include <std/lib/vector.h>
 
+using namespace stl;
+
 namespace {
     using Ent = MacroPatEnt;
-    using Ents = stl::Vector<const Ent*>;
+    using Ents = Vector<const Ent*>;
 
     bool isFragment(const Ent& e) {
         return e.type != Ent::PAT_TOKEN && e.type != Ent::PAT_LOOP;

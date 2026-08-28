@@ -1,5 +1,7 @@
 #include "ast_generics.h"
 
+using namespace stl;
+
 ASTTypeParam::ASTTypeParam(const ASTTypeParam& x)
     : attrs_(x.attrs_)
     , span_(x.span_)
@@ -8,7 +10,7 @@ ASTTypeParam::ASTTypeParam(const ASTTypeParam& x)
 {
 }
 
-ASTTypeParam::ASTTypeParam(stl::ObjPool& pool, Span sp, ASTAttributeList attrs, RcString name)
+ASTTypeParam::ASTTypeParam(ObjPool& pool, Span sp, ASTAttributeList attrs, RcString name)
     : attrs_(::std::move(attrs))
     , span_(::std::move(sp))
     , name_(::std::move(name))

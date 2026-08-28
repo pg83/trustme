@@ -19,6 +19,8 @@
 #include <optional>
 #include <algorithm> // std::find_if
 
+using namespace stl;
+
 namespace {
     inline HIRExprNodeP mkExprnodep(HIRExprNode* en, HIRTypeRef ty) {
         en->resType = mv$(ty);
@@ -107,14 +109,14 @@ namespace {
         /// more extreme actions (e.g. ignoring an ambigious inherent method
         /// and using a trait method instead)
         bool isFallback;
-        const stl::Vector<const HIRTypeData*>* passStartIvars;
+        const Vector<const HIRTypeData*>* passStartIvars;
 
         bool nodeDiverges(const HIRExprNode& node) const {
             return node.diverges || this->context.getType(node.resType)->is_Diverge();
         }
 
     public:
-        ExprVisitorRevisit(Context& context, bool fallback = false, const stl::Vector<const HIRTypeData*>* passStartIvars = nullptr)
+        ExprVisitorRevisit(Context& context, bool fallback = false, const Vector<const HIRTypeData*>* passStartIvars = nullptr)
             : context(context)
             , completed(false)
             , isFallback(fallback)
@@ -5307,7 +5309,7 @@ void Context::equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSi
 }
 
 u64 Context::associatedIndexKey(HIRTypeRef leftTy, const HIRSimplePath& trait, HIRTypeRef implTy, RcString name, bool isOperator, TypeckPrimitiveOperator operatorKind) {
-    return stl::mix(leftTy, implTy, trait.rawData()) ^ (static_cast<u64>(name.rawId()) << 8) ^ (static_cast<u64>(operatorKind) << 1) ^ isOperator;
+    return mix(leftTy, implTy, trait.rawData()) ^ (static_cast<u64>(name.rawId()) << 8) ^ (static_cast<u64>(operatorKind) << 1) ^ isOperator;
 }
 
 u64 Context::associatedIndexKey(const Associated& rule) {
@@ -9762,7 +9764,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
         }
         // 4. Revisit nodes that require revisiting
         if (!context.ivars.peekChanged()) {
-            stl::Vector<const HIRTypeData*> passStartIvars;
+            Vector<const HIRTypeData*> passStartIvars;
             passStartIvars.grow(context.ivars.ivars.size());
             for (unsigned int i = 0; i < context.ivars.ivars.size(); i++) {
                 passStartIvars.pushBack(context.ivars.getType(i));
@@ -10792,9 +10794,9 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
 // -----------------------------------------------------------------------
 class ExprVisitorTagStaleIvars: public HIRExprVisitorDef {
     class Mapper final: public MonomorphiserNop {
-        mutable stl::Vector<::std::pair<unsigned, unsigned>> valueIndexes_;
+        mutable Vector<::std::pair<unsigned, unsigned>> valueIndexes_;
 
-        unsigned taggedIndex(stl::Vector<::std::pair<unsigned, unsigned>>& indexes, unsigned original) const {
+        unsigned taggedIndex(Vector<::std::pair<unsigned, unsigned>>& indexes, unsigned original) const {
             for (const auto& entry : indexes) {
                 if (entry.first == original) {
                     return entry.second;
@@ -13070,7 +13072,7 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
     , ivars(wb.crate->types)
     , resolve(ivars, wb, implParams, itemParams, modPath, currentTrait)
     , nextRuleIdx(0)
-    , linkAssocIndexPool(stl::ObjPool::fromMemory())
+    , linkAssocIndexPool(ObjPool::fromMemory())
     , linkAssocIndex(linkAssocIndexPool.mutPtr())
     , langBox(crate.getLangItemPathOpt("owned_box"))
 {

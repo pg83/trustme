@@ -21,6 +21,8 @@
 #include <algorithm>
 #include <unordered_map>
 
+using namespace stl;
+
 namespace {
     TargetArch archX86_64() {
         return {
@@ -100,7 +102,7 @@ struct TargetLayoutContext {
     ::std::unordered_map<HIRTypeRef, const TypeRepr*> exact;
 };
 
-TargetLayoutContext* TargetCreateLayoutContext(stl::ObjPool& pool) {
+TargetLayoutContext* TargetCreateLayoutContext(ObjPool& pool) {
     return pool.make<TargetLayoutContext>();
 }
 
@@ -887,7 +889,7 @@ namespace {
             size_t align;
         };
 
-        stl::Vector<Future> futures;
+        Vector<Future> futures;
 
         bool empty() const {
             return futures.empty();

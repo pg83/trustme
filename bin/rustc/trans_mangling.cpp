@@ -19,41 +19,43 @@
 #define XXH_INLINE_ALL
 #include <xxhash.h>
 
+using namespace stl;
+
 class ManglingContext {
 public:
-    stl::StringBuilder buffer;
-    stl::Vector<RcString> names;
-    stl::IntMap<RcString> ordinaryTypeCache;
-    stl::IntMap<RcString> typeIdCache;
+    StringBuilder buffer;
+    Vector<RcString> names;
+    IntMap<RcString> ordinaryTypeCache;
+    IntMap<RcString> typeIdCache;
 
-    explicit ManglingContext(stl::ObjPool& pool)
+    explicit ManglingContext(ObjPool& pool)
         : ordinaryTypeCache(&pool)
         , typeIdCache(&pool)
     {
     }
 };
 
-ManglingContext* TransCreateManglingContext(stl::ObjPool& pool) {
+ManglingContext* TransCreateManglingContext(ObjPool& pool) {
     return pool.make<ManglingContext>(pool);
 }
 
 namespace {
 
-    stl::StringBuilder& operator<<(stl::StringBuilder& sb, char c) {
+    StringBuilder& operator<<(StringBuilder& sb, char c) {
         sb.append(&c, 1);
         return sb;
     }
 
-    stl::StringBuilder& operator<<(stl::StringBuilder& sb, const char* s) {
+    StringBuilder& operator<<(StringBuilder& sb, const char* s) {
         sb.append(s, strlen(s));
         return sb;
     }
 
     template <typename T>
         requires(std::is_integral_v<T> && sizeof(T) >= 2)
-    stl::StringBuilder& operator<<(stl::StringBuilder& sb, T v) {
+    StringBuilder& operator<<(StringBuilder& sb, T v) {
         char buf[20];
-        sb.append(buf, static_cast<char*>(stl::formatU64Base10(static_cast<u64>(v), buf)) - buf);
+        sb.append(buf, static_cast<char*>(formatU64Base10(static_cast<u64>(v), buf)) - buf);
         return sb;
     }
 }
@@ -65,8 +67,8 @@ enum class LifetimeIdentityMode {
 };
 
 class Mangler {
-    stl::StringBuilder& os;
-    stl::Vector<RcString>& names;
+    StringBuilder& os;
+    Vector<RcString>& names;
     const size_t nameWindowStart = names.length();
     const LifetimeIdentityMode lifetimeIdentityMode;
 
@@ -537,13 +539,13 @@ case HIRTypeData::TAG_Infer:
 };
 
 namespace {
-    stl::StringBuilder& mangleBegin(ManglingContext& context) {
+    StringBuilder& mangleBegin(ManglingContext& context) {
         context.buffer.reset();
         context.names.clear();
         return context.buffer;
     }
 
-    RcString mangleFinish(stl::StringBuilder& sb) {
+    RcString mangleFinish(StringBuilder& sb) {
         const auto* data = static_cast<const char*>(sb.data());
         const auto size = static_cast<const char*>(sb.current()) - data;
         auto hash = XXH3_64bits(data, size);

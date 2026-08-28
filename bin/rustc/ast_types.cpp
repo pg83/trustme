@@ -6,6 +6,8 @@
 #include "ast_crate.h"
 #include <std/mem/obj_pool.h>
 
+using namespace stl;
+
 // TypeData is an ordinary inline tagged union now (see ast_types.h); no
 // out-of-line implementation is needed.
 
@@ -481,59 +483,59 @@ PrettyPrintType::PrettyPrintType(const ASTType* ty)
 // ------------------------------------------------------------------------
 // Type node pool + factories
 // ------------------------------------------------------------------------
-ASTType* mkType(stl::ObjPool& pool, Span sp, TypeData data) {
+ASTType* mkType(ObjPool& pool, Span sp, TypeData data) {
     return pool.make<ASTType>(mv$(sp), mv$(data), &pool);
 }
 
-ASTType* mkType(stl::ObjPool& pool, Span sp) {
+ASTType* mkType(ObjPool& pool, Span sp) {
     return mkType(pool, sp, TypeData::make_Any({}));
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Invalid, Span sp) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Invalid, Span sp) {
     return mkType(pool, sp, TypeData::make_None({}));
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Macro, ASTMacroInvocation inv) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Macro, ASTMacroInvocation inv) {
     auto sp = inv.span();
     return mkType(pool, sp, TypeData::make_Macro({pool.make<ASTMacroInvocation>(mv$(inv))}));
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Unit, Span sp) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Unit, Span sp) {
     return mkType(pool, sp, TypeData::make_Unit({}));
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Primitive, Span sp, enum eCoreType type) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Primitive, Span sp, enum eCoreType type) {
     return mkType(pool, sp, TypeData::make_Primitive({type}));
 }
-ASTType* mkType(stl::ObjPool& pool, Span sp, enum eCoreType type) {
+ASTType* mkType(ObjPool& pool, Span sp, enum eCoreType type) {
     return mkType(pool, sp, TypeData::make_Primitive({type}));
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, ::std::vector<ASTType*> innerTypes) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Tuple, Span sp, ::std::vector<ASTType*> innerTypes) {
     return mkType(pool, sp, TypeData::make_Tuple({mv$(innerTypes)}));
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<ASTType*> args, bool isVariadic, ASTType* ret) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<ASTType*> args, bool isVariadic, ASTType* ret) {
     return mkType(pool, sp, TypeData::make_Function({TypeFunction(mv$(hrbs), isUnsafe, abi, ret, mv$(args), isVariadic)}));
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType, bool isPin) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType, bool isPin) {
     return mkType(pool, sp, TypeData::make_Borrow({mv$(lft), isMut, innerType, isPin}));
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTType* innerType) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTType* innerType) {
     return mkType(pool, sp, TypeData::make_Pointer({isMut, innerType}));
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, ::std::shared_ptr<ASTExprNode> size) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, ::std::shared_ptr<ASTExprNode> size) {
     return mkType(pool, sp, TypeData::make_Array({innerType, mv$(size)}));
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::UnsizedArray, Span sp, ASTType* innerType) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::UnsizedArray, Span sp, ASTType* innerType) {
     return mkType(pool, sp, TypeData::make_Slice({innerType}));
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Arg, Span sp, RcString name, unsigned int binding) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Arg, Span sp, RcString name, unsigned int binding) {
     return mkType(pool, sp, TypeData::make_Generic({mv$(name), binding}));
 }
-ASTType* mkType(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding) {
+ASTType* mkType(ObjPool& pool, Span sp, RcString name, unsigned int binding) {
     return mkType(pool, ASTTypeTags::Arg(), sp, mv$(name), binding);
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Path, Span sp, ASTPath path) {
+ASTType* mkType(ObjPool& pool, ASTTypeTags::Path, Span sp, ASTPath path) {
     return mkType(pool, sp, TypeData::make_Path(pool.make<ASTPath>(mv$(path))));
 }
-ASTType* mkType(stl::ObjPool& pool, Span sp, ASTPath path) {
+ASTType* mkType(ObjPool& pool, Span sp, ASTPath path) {
     return mkType(pool, ASTTypeTags::Path(), sp, mv$(path));
 }
-ASTType* mkType(stl::ObjPool& pool, Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes) {
+ASTType* mkType(ObjPool& pool, Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes) {
     return mkType(pool, sp, TypeData::make_TraitObject({mv$(traits), mv$(lifetimes)}));
 }

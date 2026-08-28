@@ -10,6 +10,8 @@
 #include "trans_main_bindings.h"
 #include <std/lib/vector.h>
 
+using namespace stl;
+
 namespace {
     class AsyncDropPollBuilder {
         const Span& sp;
@@ -19,7 +21,7 @@ namespace {
         MIRFunction output;
         unsigned statePtrLocal;
         unsigned nextPhase = 3;
-        stl::Vector<::std::pair<unsigned, MIRBasicBlockId>> resumeTargets;
+        Vector<::std::pair<unsigned, MIRBasicBlockId>> resumeTargets;
 
         class CoroutineDropCloner: public MIRCloner {
             const AsyncDropPollBuilder& owner;
@@ -657,7 +659,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         // A generated literal can relocate to a static that Newval has added
         // to HIR but that the insertion loop below has not put in TransList
         // yet. Defer relocation enumeration until those statics are present.
-        stl::Vector<const EncodedLiteral*> generatedLiterals;
+        Vector<const EncodedLiteral*> generatedLiterals;
 
         // Reverse order is intentional: const-eval commonly needs constants
         // referenced by a later entry to have been evaluated first.
@@ -737,7 +739,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
     // the translation graph reaches a fixed point.
     ::std::set<const TransListFunction*> processedFunctions;
     while (processedFunctions.size() < list.functions.size()) {
-        stl::Vector<const TransListFunction*> generatedFunctions;
+        Vector<const TransListFunction*> generatedFunctions;
         for (auto& fcnEnt : list.functions) {
             auto* transFcn = fcnEnt.second.get();
             if (!processedFunctions.insert(transFcn).second) {

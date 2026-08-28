@@ -22,6 +22,8 @@
 #include <algorithm> // find_if
 #include <unordered_set>
 
+using namespace stl;
+
 namespace {
     struct State {
         HIRCrate& crate;
@@ -1630,9 +1632,9 @@ namespace {
 }
 
 struct MIREnumCache {
-    stl::Vector<const HIRPath*> paths;
-    stl::Vector<const HIRTypeData*> typeids;
-    stl::Vector<const HIRTypeData*> destructorTypes;
+    Vector<const HIRPath*> paths;
+    Vector<const HIRTypeData*> typeids;
+    Vector<const HIRTypeData*> destructorTypes;
 
     MIREnumCache() {
     }
@@ -2259,9 +2261,9 @@ default:
     // region-bearing value paths which the canonical ABI variant does not, so
     // enumerate those bodies too. A borrowed ABI type alone needs only a C
     // forward declaration and must not retain a body which accesses its fields.
-    stl::Vector<const TransListFunction*> enumeratedImplicitDrops;
+    Vector<const TransListFunction*> enumeratedImplicitDrops;
     for (;;) {
-        stl::Vector<const TransListFunction*> generatedFunctions;
+        Vector<const TransListFunction*> generatedFunctions;
         for (const auto& entry : list.functions) {
             const auto* type = implicitDropType(entry.first, state.resolve.langDrop());
             if (!type || (!newList.hasType(type, false) && newList.dropGlue.count(type) == 0)
@@ -2512,7 +2514,7 @@ bool TransEnumerateGeneratedLiteral(const WireBoard& wb, TransList& list, const 
     return mergeEnumeratedItems(state.crate.types, list, TransEnumerateCommonPost(state));
 }
 
-bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const stl::Vector<const TransListFunction*>& functions) {
+bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const Vector<const TransListFunction*>& functions) {
     EnumState state{wb};
     for (const auto* function : functions) {
         const MIRFunction* mir;

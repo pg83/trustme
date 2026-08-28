@@ -22,6 +22,8 @@
 #include <fstream> // Used by directory path
 #include <iostream>
 
+using namespace stl;
+
 // TODO: Use a ProtoSpan instead of a point span?
 static inline ASTExprNodeP mkExprnodep(const TokenStream& lex, ASTExprNode* en) {
     en->setSpan(lex.pointSpan());
@@ -5701,7 +5703,7 @@ void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs) 
     lex.parseState().module = prevMod;
 }
 
-ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, ::std::string mainfile, ASTEdition edition) {
+ASTCrate* ParseCrate(const WireBoard& wb, ObjPool* pool, ::std::string mainfile, ASTEdition edition) {
     Token tok;
 
     Lexer lex(wb.id, *wb.pool, mainfile, edition, ParseState());

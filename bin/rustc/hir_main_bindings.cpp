@@ -13,6 +13,8 @@
 
 #include <typeinfo>
 
+using namespace stl;
+
 namespace {
     bool isMetadataFile(const auto& filename) {
         ::std::ifstream direct(filename, ::std::ios_base::in | ::std::ios_base::binary);
@@ -55,9 +57,9 @@ class HirDeserialiser {
     HIRPublicity privateVisibility = HIRPublicity::newNone();
 
 public:
-    stl::ObjPool& pool;
+    ObjPool& pool;
 
-    HirDeserialiser(u32& id, stl::ObjPool& pool,
+    HirDeserialiser(u32& id, ObjPool& pool,
         HIRSerialiseReader& in, HIRTypeInterner& typeInterner)
         : in(in)
         , typeInterner(typeInterner)
@@ -1595,7 +1597,7 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
 //}
 
 HIRCrate* HIRDeserialise(u32& id,
-    stl::ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename) {
+    ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename) {
     {
         HIRSerialiseReader in{metadataFilename(filename)};
         HirDeserialiser s{id, *pool, in, types};

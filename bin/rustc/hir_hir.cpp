@@ -21,6 +21,8 @@
 #include <optional>
 #include <algorithm>
 
+using namespace stl;
+
 ::std::ostream& operator<<(::std::ostream& os, const HIRPublicity& x) {
     switch (x.kind) {
         case HIRPublicity::Kind::Global:
@@ -840,10 +842,10 @@ namespace {
 
     class ImplMatcher: public HIRMatchGenerics {
         // Borrowed reused scratch (see matchesTypeRoot); nullptr = unbound.
-        stl::Vector<HIRTypeRef>& implTypes;
+        Vector<HIRTypeRef>& implTypes;
 
     public:
-        ImplMatcher(stl::Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics)
+        ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics)
             : HIRMatchGenerics(BorrowMatchedValues{})
             , implTypes(buf)
         {
@@ -1322,11 +1324,11 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     // pattern generic's assignments. A one-way match is a strict head
     // relation; the parent's predicates are then compared after applying that
     // assignment, so `T: Clone, U: Clone` correctly collapses to one bound.
-    stl::Vector<HIRTypeRef> parentMappings;
+    Vector<HIRTypeRef> parentMappings;
     ImplMatcher parentMatcher(parentMappings, other.params);
     const bool parentMatchesChild = matchImplHead(sp, other, *this, parentMatcher);
 
-    stl::Vector<HIRTypeRef> childMappings;
+    Vector<HIRTypeRef> childMappings;
     ImplMatcher childMatcher(childMappings, params);
     const bool childMatchesParent = matchImplHead(sp, *this, other, childMatcher);
 
@@ -2412,7 +2414,7 @@ HIRTrait::HIRTrait(HIRGenericParams gps, ::std::vector<HIRTraitPath> parents)
 HIRModule::HIRModule() {
 }
 
-HIRCrate::HIRCrate(stl::ObjPool* pool, HIRTypeInterner& types)
+HIRCrate::HIRCrate(ObjPool* pool, HIRTypeInterner& types)
     : pool(pool)
     , types(types)
     , intrinsicOffsetof(HIRValueItem::make_Function(nullptr))

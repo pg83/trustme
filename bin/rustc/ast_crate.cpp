@@ -11,6 +11,8 @@
 #include <fstream>
 #include <dirent.h>
 
+using namespace stl;
+
 namespace {
     bool checkAttributeCfg(const Settings& settings, const ASTAttribute& attr) {
         if (attr.name() == "cfg") {
@@ -51,7 +53,7 @@ namespace {
     }
 }
 
-ASTCrate::ASTCrate(const WireBoard& wb, stl::ObjPool* pool, stl::ObjPool* hirPool, HIRTypeInterner& types)
+ASTCrate::ASTCrate(const WireBoard& wb, ObjPool* pool, ObjPool* hirPool, HIRTypeInterner& types)
     : wb(wb)
     , pool(pool)
     , hirPool(hirPool)
@@ -345,7 +347,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
 }
 
 ASTExternCrate::ASTExternCrate(u32& id,
-    stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name,
+    ObjPool* pool, HIRTypeInterner& types, const RcString& name,
     const ::std::string& path)
     : name(name)
     , shortName(name)

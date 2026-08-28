@@ -23,6 +23,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+using namespace stl;
+
 class MirOperationsContext {
 public:
     const RcString vtableName = RcString::newInterned("vtable#");
@@ -32,7 +34,7 @@ public:
     bool visitingBlocks = false;
 };
 
-MirOperationsContext* MIRCreateOperationsContext(stl::ObjPool& pool) {
+MirOperationsContext* MIRCreateOperationsContext(ObjPool& pool) {
     return pool.make<MirOperationsContext>();
 }
 

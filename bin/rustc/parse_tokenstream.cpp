@@ -5,6 +5,8 @@
 #include "wire_board.h" // typePool() reads the pool off the board
 #include "parse_parseerror.h"
 
+using namespace stl;
+
 TokenStream::TokenStream(ParseState ps)
     : cacheValid(false)
     , parseState_(ps)
@@ -22,7 +24,7 @@ bool TokenStream::isMacroExpansionPlaceholder() const {
     return macroExpansionPlaceholder_;
 }
 
-stl::ObjPool& TokenStream::typePool() const {
+ObjPool& TokenStream::typePool() const {
     return *parseState_.wb->pool;
 }
 

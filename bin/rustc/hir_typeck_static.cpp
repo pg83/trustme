@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+using namespace stl;
+
 namespace {
     bool specializationLookupNeedsResolution(const HIRTypeData* type, const HIRPathParams& params) {
         auto typeNeedsResolution = [](const HIRTypeData* inner) {
@@ -126,8 +128,8 @@ namespace {
     class GetParams: public HIRMatchGenerics {
     public:
         struct ParamsSet {
-            stl::Vector<u8> types;
-            stl::Vector<u8> values;
+            Vector<u8> types;
+            Vector<u8> values;
         };
 
     private:
@@ -136,7 +138,7 @@ namespace {
         ParamsSet& paramsSet;
 
     public:
-        GetParams(Span sp, stl::ObjPool& valuePool, const HIRGenericParams& implParamsDef, HIRPathParams& implParams, ParamsSet& paramsSet)
+        GetParams(Span sp, ObjPool& valuePool, const HIRGenericParams& implParamsDef, HIRPathParams& implParams, ParamsSet& paramsSet)
             : HIRMatchGenerics(valuePool)
             , sp(sp)
             , implParams(implParams)

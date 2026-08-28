@@ -41,6 +41,8 @@
 #include <set>
 #include <string>
 
+using namespace stl;
+
 #define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
 
 void ExpandTestHarness(ASTCrate& crate) {
@@ -295,10 +297,10 @@ static int compile(int argc, char* argv[]) {
 #if TRUSTME_SANITIZER_BUILD
     // Keep teardown out of production, but make sanitizer builds destroy every
     // pooled object so ASan/LSan can distinguish real leaks from arena lifetime.
-    auto poolOwner = stl::ObjPool::fromMemory();
+    auto poolOwner = ObjPool::fromMemory();
     auto* pool = poolOwner.mutPtr();
 #else
-    auto* pool = stl::ObjPool::fromMemoryRaw();
+    auto* pool = ObjPool::fromMemoryRaw();
 #endif
     WireBoard& wb = *pool->make<WireBoard>(pool);
     unsigned memoryDumpSequence = 0;
@@ -377,10 +379,10 @@ static int compile(int argc, char* argv[]) {
     // Error-path tests can leave before AST Drop. Keep an owner in sanitizer
     // builds so those paths are leak-checkable; successful production builds
     // still release this pool at the early drop point below.
-    auto astPoolOwner = stl::ObjPool::fromMemory();
+    auto astPoolOwner = ObjPool::fromMemory();
     auto* astPool = astPoolOwner.mutPtr();
 #else
-    auto* astPool = stl::ObjPool::fromMemoryRaw();
+    auto* astPool = ObjPool::fromMemoryRaw();
 #endif
     wb.astPool = astPool;
 

@@ -12,6 +12,8 @@
 #include <std/str/view.h>
 #include <std/str/builder.h>
 
+using namespace stl;
+
 Token::~Token() {
     switch (type_) {
         case TOK_INTERPOLATED_TYPE:
@@ -373,21 +375,21 @@ enum eTokenType Token::typefromstr(const ::std::string& s) {
 }
 
 /// The text of a string literal, viewed as the bytes it holds.
-static stl::StringView literalBytes(const ::std::string& s) {
-    return stl::StringView(reinterpret_cast<const u8*>(s.data()), s.size());
+static StringView literalBytes(const ::std::string& s) {
+    return StringView(reinterpret_cast<const u8*>(s.data()), s.size());
 }
 
 struct EscapedString {
-    stl::StringView s;
+    StringView s;
 
-    EscapedString(stl::StringView s)
+    EscapedString(StringView s)
         : s(s)
     {
     }
 
     /// How many bytes the UTF-8 sequence starting at `i` runs for, or zero
     /// when the bytes there are not one.
-    static size_t utf8Run(stl::StringView s, size_t i) {
+    static size_t utf8Run(StringView s, size_t i) {
         const u8 lead = s[i];
         const size_t len = (lead & 0xE0) == 0xC0 ? 2 : (lead & 0xF0) == 0xE0 ? 3 : (lead & 0xF8) == 0xF0 ? 4 : 0;
         if (len == 0 || i + len > s.length()) {
@@ -450,9 +452,9 @@ struct EscapedString {
 /// A byte string holds bytes, not text: rustc writes every byte that is not
 /// printable ASCII as a hex escape, since `\u{..}` has no meaning there.
 struct EscapedByteString {
-    stl::StringView s;
+    StringView s;
 
-    EscapedByteString(stl::StringView s)
+    EscapedByteString(StringView s)
         : s(s)
     {
     }
@@ -491,7 +493,7 @@ struct EscapedByteString {
 };
 
 void printEscapedLiteral(::std::ostream& os, eTokenType type, const u8* value, size_t size) {
-    const auto bytes = stl::StringView(value, size);
+    const auto bytes = StringView(value, size);
     switch (type) {
         case TOK_STRING:
             os << "\"" << EscapedString(bytes) << "\"";
@@ -510,7 +512,7 @@ void printEscapedLiteral(::std::ostream& os, eTokenType type, const u8* value, s
 namespace {
     /// The fewest hashes that let a raw literal hold `text`: one more than the
     /// longest run of `#` that follows a quote in it, and none without a quote.
-    static size_t rawStringHashes(stl::StringView text) {
+    static size_t rawStringHashes(StringView text) {
         size_t needed = 0;
         for (size_t i = 0; i < text.length(); i++) {
             if (text[i] != '"') {
@@ -529,7 +531,7 @@ namespace {
 
     /// Append `tt` to `out` as source, spacing the tokens the way whoever wrote
     /// them had to.  `prev` carries the token before the tree.
-    static void appendTokenTreeSource(stl::StringBuilder& out, const TokenTree& tt, eTokenType& prev) {
+    static void appendTokenTreeSource(StringBuilder& out, const TokenTree& tt, eTokenType& prev) {
         if (tt.isToken()) {
             if (!out.empty() && tokensNeedSpace(prev, tt.tok().type())) {
                 out.append(" ", 1);
@@ -544,7 +546,7 @@ namespace {
     }
 
     /// An attribute's meta item as source: `doc = "..."`, `cfg(unix)`, `C`.
-    static void attributeToSource(stl::StringBuilder& out, const ASTAttribute& attr) {
+    static void attributeToSource(StringBuilder& out, const ASTAttribute& attr) {
         auto name = FMT(attr.name());
         out.append(name.data(), name.size());
         auto prev = TOK_IDENT;
@@ -624,7 +626,7 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
             return ss.str();
         }
         case TOK_INTERPOLATED_META: {
-            stl::StringBuilder out;
+            StringBuilder out;
             attributeToSource(out, *reinterpret_cast<const ASTAttribute*>(data_.as_Fragment()));
             return {static_cast<const char*>(out.data()), out.used()};
         }

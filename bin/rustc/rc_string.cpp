@@ -10,6 +10,8 @@
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
+using namespace stl;
+
 // The string interner. Every constructed string lives here forever:
 // zero-terminated bytes in the interner's ObjPool, one InternedString
 // entry per unique content, and an open-addressing slot table keyed by
@@ -24,10 +26,10 @@ namespace {
     };
 
     struct StrInterner {
-        stl::ObjPool::Ref poolRef = stl::ObjPool::fromMemory();
-        stl::ObjPool* pool = poolRef.mutPtr();
-        stl::Vector<InternedString> strs;
-        stl::Vector<u32> slots; // values are ids; 0 = empty slot
+        ObjPool::Ref poolRef = ObjPool::fromMemory();
+        ObjPool* pool = poolRef.mutPtr();
+        Vector<InternedString> strs;
+        Vector<u32> slots; // values are ids; 0 = empty slot
         size_t mask;
         size_t used = 0;
 
@@ -42,7 +44,7 @@ namespace {
         }
 
         void grow() {
-            stl::Vector<u32> next;
+            Vector<u32> next;
             next.zero((mask + 1) * 2);
             const size_t nextMask = (mask + 1) * 2 - 1;
             for (u32 id = 1; id < strs.length(); id++) {

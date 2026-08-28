@@ -15,6 +15,8 @@
 
 #include <limits.h>
 
+using namespace stl;
+
 // Map of: LoopIndex=>(Path=>Count)
 typedef std::map<unsigned, std::map<std::vector<unsigned>, unsigned>> loopCountsT;
 
@@ -530,12 +532,12 @@ class MacroExpander: public TokenStream {
     Ident::Hygiene lastHygiene;
 
 public:
-    stl::ObjPool& pool;
+    ObjPool& pool;
 
     MacroExpander(const MacroExpander& x) = delete;
 
     MacroExpander(u32& id,
-        stl::ObjPool& pool, const RcString& macroName, const Span& sp,
+        ObjPool& pool, const RcString& macroName, const Span& sp,
         ASTEdition edition, bool isMacroItem, bool transparent,
         unsigned int definitionId, const Ident::Hygiene& parentHygiene,
         const ::std::vector<MacroExpansionEnt>& contents,

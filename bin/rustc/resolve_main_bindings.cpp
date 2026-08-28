@@ -11,6 +11,8 @@
 #include "main_bindings.h"
 #include "macro_rules_macro_rules.h"
 
+using namespace stl;
+
 #define FLAG_CONST_GENERIC (1u << 31)
 
 namespace {
@@ -91,7 +93,7 @@ namespace {
         const Settings& settings;
 
         // Pool that owns AST type nodes created during resolution.
-        stl::ObjPool& typePool() const {
+        ObjPool& typePool() const {
             return *crate.pool;
         }
 
@@ -1184,7 +1186,7 @@ namespace {
         return np;
     }
 
-    ASTPath splitIntoUfcsTy(stl::ObjPool& pool, const Span& sp, const ASTPath& path, unsigned int i /*item_name_idx*/) {
+    ASTPath splitIntoUfcsTy(ObjPool& pool, const Span& sp, const ASTPath& path, unsigned int i /*item_name_idx*/) {
         const auto& pathAbs = path.cls.as_Absolute();
         auto typePath = ASTPath(path);
         typePath.cls.as_Absolute().nodes.resize(i + 1);
@@ -1199,7 +1201,7 @@ namespace {
         return newPath;
     }
 
-    ASTPath splitReplaceIntoUfcsPath(stl::ObjPool& pool, const Span& sp, ASTPath path, unsigned int i, const ASTPath& tyPathTpl) {
+    ASTPath splitReplaceIntoUfcsPath(ObjPool& pool, const Span& sp, ASTPath path, unsigned int i, const ASTPath& tyPathTpl) {
         auto& pathAbs = path.cls.as_Absolute();
         auto& n = pathAbs.nodes[i];
 

@@ -19,6 +19,8 @@
 
 #include <std/sym/s_map.h>
 
+using namespace stl;
+
 namespace {
     class CommonFunction: public ExpandDecorator {
     public:
@@ -857,7 +859,7 @@ public:
 
 
 namespace {
-    ASTType* mktypeSelf(stl::ObjPool& pool, const Span& sp) {
+    ASTType* mktypeSelf(ObjPool& pool, const Span& sp) {
         return mkType(pool, sp, RcString("Self"), 0xFFFF);
     }
 }
@@ -1022,7 +1024,7 @@ struct Deriver {
         }
     }
 
-    ASTGenericParams getParamsWithBounds(stl::ObjPool& pool, const Span& sp, const ASTGenericParams& p, const ASTPath& traitPath, ::std::vector<ASTType*> additionalBoundedTypes, bool boundTypeParams = true) const {
+    ASTGenericParams getParamsWithBounds(ObjPool& pool, const Span& sp, const ASTGenericParams& p, const ASTPath& traitPath, ::std::vector<ASTType*> additionalBoundedTypes, bool boundTypeParams = true) const {
         ASTGenericParams params = p.clone();
 
         // TODO: Get bounds based on generic (or similar) types used within the type.
@@ -2009,7 +2011,7 @@ class DeriverDefault: public Deriver {
         return getPath(coreName, "default", "Default");
     }
 
-    ASTPath getMethodPath(stl::ObjPool& pool, const RcString& coreName) const {
+    ASTPath getMethodPath(ObjPool& pool, const RcString& coreName) const {
         return ASTPath::newUfcsTrait(::mkType(pool, Span()), getTraitPath(coreName), {ASTPathNode(RcString::newInterned("default"), {})});
     }
 
@@ -2026,7 +2028,7 @@ class DeriverDefault: public Deriver {
         return mv$(rv);
     }
 
-    ASTExprNodeP defaultCall(stl::ObjPool& pool, const RcString& coreName) const {
+    ASTExprNodeP defaultCall(ObjPool& pool, const RcString& coreName) const {
         return NEWNODE(CallPath, this->getMethodPath(pool, coreName), {});
     }
 
@@ -2343,7 +2345,7 @@ class DeriverRustcEncodable: public Deriver {
         return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(name));
     }
 
-    ASTExprNodeP encClosure(stl::ObjPool& pool, Span sp, ASTExprNodeP code) const {
+    ASTExprNodeP encClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const {
         return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, RcString("s")), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false, false);
     }
 
@@ -2519,7 +2521,7 @@ class DeriverRustcDecodable: public Deriver {
         return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(name));
     }
 
-    ASTExprNodeP decClosure(stl::ObjPool& pool, Span sp, ASTExprNodeP code) const {
+    ASTExprNodeP decClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const {
         return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false, false);
     }
 
@@ -2836,7 +2838,7 @@ namespace {
         return rv;
     }
 
-    ASTType* makeType(stl::ObjPool& pool, const Span& sp, const ASTAbsolutePath& path, const ASTGenericParams& params) {
+    ASTType* makeType(ObjPool& pool, const Span& sp, const ASTAbsolutePath& path, const ASTGenericParams& params) {
         ASTType* type = mkType(pool, sp, path);
         auto& typesArgs = type->path().nodes().back().args();
         for (const auto& param : params.params) {
@@ -3061,7 +3063,7 @@ namespace {
         return changed;
     }
 
-    ASTGenericParams makeImplParams(stl::ObjPool& pool, const Span& sp, const ASTGenericParams& source) {
+    ASTGenericParams makeImplParams(ObjPool& pool, const Span& sp, const ASTGenericParams& source) {
         auto params = source.clone();
         for (auto& param : params.params) {
             if (auto* type = param.opt_Type()) {
@@ -3415,10 +3417,10 @@ struct Handler {
 };
 
 class LangItemRegistry {
-    stl::SymbolMap<Handler> handlers;
+    SymbolMap<Handler> handlers;
 
 public:
-    explicit LangItemRegistry(stl::ObjPool* pool);
+    explicit LangItemRegistry(ObjPool* pool);
 
     const Handler* find(const char* name) const {
         return handlers.find(name);
@@ -3437,7 +3439,7 @@ void handleSave(const Span& sp, ASTCrate& crate, const std::string& name, const 
     }
 }
 
-LangItemRegistry::LangItemRegistry(stl::ObjPool* pool)
+LangItemRegistry::LangItemRegistry(ObjPool* pool)
     : handlers(pool)
 {
     auto add = [&](const char* name, Handler handler) {
