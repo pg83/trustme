@@ -31,42 +31,42 @@ struct ManglingContext {
 };
 
 namespace {
-enum class LifetimeIdentityMode {
-    Erased,
-    Closed,
-    All,
-};
+    enum class LifetimeIdentityMode {
+        Erased,
+        Closed,
+        All,
+    };
 
-struct Mangler {
-    StringBuilder& os;
-    Vector<RcString>& names;
-    const size_t nameWindowStart = names.length();
-    const LifetimeIdentityMode lifetimeIdentityMode;
+    struct Mangler {
+        StringBuilder& os;
+        Vector<RcString>& names;
+        const size_t nameWindowStart = names.length();
+        const LifetimeIdentityMode lifetimeIdentityMode;
 
-    bool includeLifetimeIdentity(bool hasFree) const;
+        bool includeLifetimeIdentity(bool hasFree) const;
 
-    Mangler(ManglingContext& context, LifetimeIdentityMode lifetimeIdentityMode = LifetimeIdentityMode::Erased);
+        Mangler(ManglingContext& context, LifetimeIdentityMode lifetimeIdentityMode = LifetimeIdentityMode::Erased);
 
-    void fmtBase26Int(unsigned val);
+        void fmtBase26Int(unsigned val);
 
-    void fmtName(const RcString& s);
+        void fmtName(const RcString& s);
 
-    void fmtName(const char* const s);
+        void fmtName(const char* const s);
 
-    void fmtSimplePath(const HIRSimplePath& sp);
+        void fmtSimplePath(const HIRSimplePath& sp);
 
-    void fmtPathParams(const HIRPathParams& pp);
+        void fmtPathParams(const HIRPathParams& pp);
 
-    void fmtConstGeneric(const HIRConstGeneric& value);
+        void fmtConstGeneric(const HIRConstGeneric& value);
 
-    void fmtGenericPath(const HIRGenericPath& gp);
+        void fmtGenericPath(const HIRGenericPath& gp);
 
-    void fmtPath(const HIRPath& p);
+        void fmtPath(const HIRPath& p);
 
-    // - TraitObject: 'D' <data:GenericPath> <nmarker> [markers: <GenericPath> ...] <naty> [<ASTType*> ...]    TODO: Does this need to include the ATY name?
+        // - TraitObject: 'D' <data:GenericPath> <nmarker> [markers: <GenericPath> ...] <naty> [<ASTType*> ...]    TODO: Does this need to include the ATY name?
 
-    void fmtType(const HIRTypeData* ty);
-};
+        void fmtType(const HIRTypeData* ty);
+    };
 }
 
 ManglingContext* TransCreateManglingContext(ObjPool& pool) {

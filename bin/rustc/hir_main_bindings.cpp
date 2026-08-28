@@ -16,8 +16,8 @@
 using namespace stl;
 
 namespace {
-template <typename T>
-struct D {};
+    template <typename T>
+    struct D {};
 }
 
 struct HirDeserialiser {
@@ -219,104 +219,104 @@ namespace {
         }                                   \
     };
 
-template <>
-DEF_D(std::string, return d.readString(););
-template <>
-DEF_D(RcString, return d.readIstring(););
-template <>
-DEF_D(bool, return d.readBool(););
-template <>
-DEF_D(u8, return d.readU8(););
+    template <>
+    DEF_D(std::string, return d.readString(););
+    template <>
+    DEF_D(RcString, return d.readIstring(););
+    template <>
+    DEF_D(bool, return d.readBool(););
+    template <>
+    DEF_D(u8, return d.readU8(););
 
-template <typename T>
-DEF_D(std::unique_ptr<T>, return d.deserialisePtr<T>();)
+    template <typename T>
+    DEF_D(std::unique_ptr<T>, return d.deserialisePtr<T>();)
 
-template <typename T>
-DEF_D(std::vector<T>, return d.deserialiseVec<T>();)
-template <typename T, typename U>
-struct D<std::pair<T, U>> {
-    static std::pair<T, U> des(HirDeserialiser& d);
-};
+    template <typename T>
+    DEF_D(std::vector<T>, return d.deserialiseVec<T>();)
+    template <typename T, typename U>
+    struct D<std::pair<T, U>> {
+        static std::pair<T, U> des(HirDeserialiser& d);
+    };
 
-template <typename T>
-DEF_D(HIRVisEnt<T>, return d.deserialiseVisent<T>();)
+    template <typename T>
+    DEF_D(HIRVisEnt<T>, return d.deserialiseVisent<T>();)
 
-template <>
-DEF_D(HIRTypeRef, return d.deserialiseType();)
-template <>
-DEF_D(HIRSimplePath, return d.deserialiseSimplepath();)
-template <>
-DEF_D(HIRGenericPath, return d.deserialiseGenericpath();)
-template <>
-DEF_D(HIRTraitPath, return d.deserialiseTraitpath();)
+    template <>
+    DEF_D(HIRTypeRef, return d.deserialiseType();)
+    template <>
+    DEF_D(HIRSimplePath, return d.deserialiseSimplepath();)
+    template <>
+    DEF_D(HIRGenericPath, return d.deserialiseGenericpath();)
+    template <>
+    DEF_D(HIRTraitPath, return d.deserialiseTraitpath();)
 
-template <>
-DEF_D(HIRTypeParamDef, return d.deserialiseTyparamdef();)
-template <>
-DEF_D(HIRValueParamDef, return d.deserialiseValueparamdef();)
-template <>
-DEF_D(HIRGenericBound, return d.deserialiseGenericbound();)
+    template <>
+    DEF_D(HIRTypeParamDef, return d.deserialiseTyparamdef();)
+    template <>
+    DEF_D(HIRValueParamDef, return d.deserialiseValueparamdef();)
+    template <>
+    DEF_D(HIRGenericBound, return d.deserialiseGenericbound();)
 
-template <>
-DEF_D(HIRValueItem, return d.deserialiseValueitem();)
-template <>
-DEF_D(HIRTypeItem, return d.deserialiseTypeitem();)
-template <>
-DEF_D(HIRMacroItem, return d.deserialiseMacroitem();)
+    template <>
+    DEF_D(HIRValueItem, return d.deserialiseValueitem();)
+    template <>
+    DEF_D(HIRTypeItem, return d.deserialiseTypeitem();)
+    template <>
+    DEF_D(HIRMacroItem, return d.deserialiseMacroitem();)
 
-template <>
-DEF_D(HIREnum::ValueVariant, return d.deserialiseEnumvaluevariant();)
-template <>
-DEF_D(HIREnum::DataVariant, return d.deserialiseEnumdatavariant();)
-template <>
-DEF_D(HIRStructField, return d.deserialiseStructField();)
-template <>
-DEF_D(HIRConstGeneric, return d.deserialiseConstgeneric();)
+    template <>
+    DEF_D(HIREnum::ValueVariant, return d.deserialiseEnumvaluevariant();)
+    template <>
+    DEF_D(HIREnum::DataVariant, return d.deserialiseEnumdatavariant();)
+    template <>
+    DEF_D(HIRStructField, return d.deserialiseStructField();)
+    template <>
+    DEF_D(HIRConstGeneric, return d.deserialiseConstgeneric();)
 
-template <>
-DEF_D(HIRAssociatedType, return d.deserialiseAssociatedtype();)
-template <>
-DEF_D(HIRTraitValueItem, return d.deserialiseTraitvalueitem();)
+    template <>
+    DEF_D(HIRAssociatedType, return d.deserialiseAssociatedtype();)
+    template <>
+    DEF_D(HIRTraitValueItem, return d.deserialiseTraitvalueitem();)
 
-template <>
-DEF_D(MIRParam, return d.deserialiseMirParam();)
-template <>
-DEF_D(MIRLValue::Wrapper, return d.deserialiseMirLvalueWrapper();)
-template <>
-DEF_D(MIRLValue, return d.deserialiseMirLvalue();)
-template <>
-DEF_D(AsmLineFragment, return d.deserialiseAsmLineFrag();)
-template <>
-DEF_D(AsmLine, return d.deserialiseAsmLine();)
-template <>
-DEF_D(MIRAsmParam, return d.deserialiseAsmParam();)
-template <>
-DEF_D(MIRStatement, return d.deserialiseMirStatement();)
-template <>
-DEF_D(MIRBasicBlock, return d.deserialiseMirBasicblock();)
+    template <>
+    DEF_D(MIRParam, return d.deserialiseMirParam();)
+    template <>
+    DEF_D(MIRLValue::Wrapper, return d.deserialiseMirLvalueWrapper();)
+    template <>
+    DEF_D(MIRLValue, return d.deserialiseMirLvalue();)
+    template <>
+    DEF_D(AsmLineFragment, return d.deserialiseAsmLineFrag();)
+    template <>
+    DEF_D(AsmLine, return d.deserialiseAsmLine();)
+    template <>
+    DEF_D(MIRAsmParam, return d.deserialiseAsmParam();)
+    template <>
+    DEF_D(MIRStatement, return d.deserialiseMirStatement();)
+    template <>
+    DEF_D(MIRBasicBlock, return d.deserialiseMirBasicblock();)
 
-template <>
-DEF_D(HIRTraitPath::AtyEqual, auto src = d.deserialiseGenericpath(); return HIRTraitPath::AtyEqual{mv$(src), d.deserialisePathparams(), d.deserialiseType()};)
-template <>
-DEF_D(HIRTraitPath::AtyBound, auto src = d.deserialiseGenericpath(); return HIRTraitPath::AtyBound{mv$(src), d.deserialisePathparams(), d.deserialiseVec<HIRTraitPath>()};);
+    template <>
+    DEF_D(HIRTraitPath::AtyEqual, auto src = d.deserialiseGenericpath(); return HIRTraitPath::AtyEqual{mv$(src), d.deserialisePathparams(), d.deserialiseType()};)
+    template <>
+    DEF_D(HIRTraitPath::AtyBound, auto src = d.deserialiseGenericpath(); return HIRTraitPath::AtyBound{mv$(src), d.deserialisePathparams(), d.deserialiseVec<HIRTraitPath>()};);
 
-template <>
-DEF_D(HIRProcMacro, return d.deserialiseProcmacro();)
-template <>
-DEF_D(HIRTypeImpl, return d.deserialiseTypeimpl();)
-template <>
-DEF_D(HIRTraitImpl, return d.deserialiseTraitimpl();)
-template <>
-DEF_D(HIRMarkerImpl, return d.deserialiseMarkerimpl();)
-template <>
-DEF_D(::MacroRulesPtr, return d.deserialiseMacrorulesptr();)
-template <>
-DEF_D(unsigned int, return static_cast<unsigned int>(d.deserialiseCount());)
+    template <>
+    DEF_D(HIRProcMacro, return d.deserialiseProcmacro();)
+    template <>
+    DEF_D(HIRTypeImpl, return d.deserialiseTypeimpl();)
+    template <>
+    DEF_D(HIRTraitImpl, return d.deserialiseTraitimpl();)
+    template <>
+    DEF_D(HIRMarkerImpl, return d.deserialiseMarkerimpl();)
+    template <>
+    DEF_D(::MacroRulesPtr, return d.deserialiseMacrorulesptr();)
+    template <>
+    DEF_D(unsigned int, return static_cast<unsigned int>(d.deserialiseCount());)
 
-template <typename T>
-DEF_D(HIRCrate::ImplGroup<std::unique_ptr<T>>, HIRCrate::ImplGroup<std::unique_ptr<T>> rv; rv.named = d.deserialisePathmap<std::vector<std::unique_ptr<T>>>(); rv.nonNamed = d.deserialiseVec<std::unique_ptr<T>>(); rv.generic = d.deserialiseVec<std::unique_ptr<T>>(); return rv;)
-template <>
-DEF_D(HIRExternLibrary, return d.deserialiseExtlib();)
+    template <typename T>
+    DEF_D(HIRCrate::ImplGroup<std::unique_ptr<T>>, HIRCrate::ImplGroup<std::unique_ptr<T>> rv; rv.named = d.deserialisePathmap<std::vector<std::unique_ptr<T>>>(); rv.nonNamed = d.deserialiseVec<std::unique_ptr<T>>(); rv.generic = d.deserialiseVec<std::unique_ptr<T>>(); return rv;)
+    template <>
+    DEF_D(HIRExternLibrary, return d.deserialiseExtlib();)
 
 }
 

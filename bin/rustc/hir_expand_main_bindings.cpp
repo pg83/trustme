@@ -751,214 +751,214 @@ namespace {
 }
 
 namespace {
-struct StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
-    const StaticTraitResolve& resolve_;
-    const HIRTypeData* selfType;
-    const HIRExprPtr& exprPtr;
+    struct StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
+        const StaticTraitResolve& resolve_;
+        const HIRTypeData* selfType;
+        const HIRExprPtr& exprPtr;
 
-    HIRSimplePath langRangeFull_;
+        HIRSimplePath langRangeFull_;
 
-    bool isConstant;
-    bool allConstant_;
-    bool promoteAllConstFnCalls;
+        bool isConstant;
+        bool allConstant_;
+        bool promoteAllConstFnCalls;
 
-    StaticBorrowExprVisitorMark(const StaticTraitResolve& resolve, const HIRTypeData* selfType, const HIRExprPtr& exprPtr, bool promoteAllConstFnCalls = false);
+        StaticBorrowExprVisitorMark(const StaticTraitResolve& resolve, const HIRTypeData* selfType, const HIRExprPtr& exprPtr, bool promoteAllConstFnCalls = false);
 
-    bool allConstant() const;
+        bool allConstant() const;
 
-    void visitNodePtr(HIRExprPtr& root);
+        void visitNodePtr(HIRExprPtr& root);
 
-    void visitNodePtr(HIRExprNodeP& node) override;
+        void visitNodePtr(HIRExprNodeP& node) override;
 
-    void visit(HIRExprNodeBorrow& node) override;
+        void visit(HIRExprNodeBorrow& node) override;
 
-    void visit(HIRExprNodeArraySized& node) override;
+        void visit(HIRExprNodeArraySized& node) override;
 
-    void visit(HIRExprNodeArrayList& node) override;
+        void visit(HIRExprNodeArrayList& node) override;
 
-    void visit(HIRExprNodeStructLiteral& node) override;
+        void visit(HIRExprNodeStructLiteral& node) override;
 
-    void visit(HIRExprNodeTupleVariant& node) override;
+        void visit(HIRExprNodeTupleVariant& node) override;
 
-    void visit(HIRExprNodeTuple& node) override;
+        void visit(HIRExprNodeTuple& node) override;
 
-    void visit(HIRExprNodeLet& node) override;
+        void visit(HIRExprNodeLet& node) override;
 
-    void visit(HIRExprNodeCallMethod& node) override;
+        void visit(HIRExprNodeCallMethod& node) override;
 
-    void visit(HIRExprNodeCallPath& node) override;
+        void visit(HIRExprNodeCallPath& node) override;
 
-    void visit(HIRExprNodeDeref& node) override;
+        void visit(HIRExprNodeDeref& node) override;
 
-    void visit(HIRExprNodeField& node) override;
+        void visit(HIRExprNodeField& node) override;
 
-    void visit(HIRExprNodeIndex& node) override;
+        void visit(HIRExprNodeIndex& node) override;
 
-    void visit(HIRExprNodeCast& node) override;
+        void visit(HIRExprNodeCast& node) override;
 
-    void visit(HIRExprNodeUnsize& node) override;
+        void visit(HIRExprNodeUnsize& node) override;
 
-    void visit(HIRExprNodeBinOp& node) override;
+        void visit(HIRExprNodeBinOp& node) override;
 
-    void visit(HIRExprNodeUniOp& node) override;
+        void visit(HIRExprNodeUniOp& node) override;
 
-    void visit(HIRExprNodeBlock& node) override;
+        void visit(HIRExprNodeBlock& node) override;
 
-    void visit(HIRExprNodeConstBlock& node) override;
+        void visit(HIRExprNodeConstBlock& node) override;
 
-    void visit(HIRExprNodeLiteral& node) override;
+        void visit(HIRExprNodeLiteral& node) override;
 
-    void visit(HIRExprNodeConstParam& node) override;
+        void visit(HIRExprNodeConstParam& node) override;
 
-    void visit(HIRExprNodeUnitVariant& node) override;
+        void visit(HIRExprNodeUnitVariant& node) override;
 
-    void visit(HIRExprNodePathValue& node) override;
+        void visit(HIRExprNodePathValue& node) override;
 
-    void visit(HIRExprNodeClosure& node) override;
+        void visit(HIRExprNodeClosure& node) override;
 
-    bool nodeIsConstant(HIRExprNodeP& node);
+        bool nodeIsConstant(HIRExprNodeP& node);
 
-    bool candidateNeedsDrop(HIRExprNodeP& root) const;
+        bool candidateNeedsDrop(HIRExprNodeP& root) const;
 
-    bool isMaybeInteriorMut(const HIRExprNode& node) const;
-};
-
-struct StaticBorrowOuterVisitorMark: public HIRVisitor {
-    const HIRCrate& crate;
-    StaticTraitResolve resolve_;
-
-    const HIRTypeData* selfType = nullptr;
-    const HIRItemPath* currentModulePath;
-    const HIRModule* currentModule;
-
-    StaticBorrowOuterVisitorMark(const WireBoard& wb);
-
-    void visitModule(HIRItemPath p, HIRModule& mod) override;
-
-    void visitTrait(HIRItemPath p, HIRTrait& item) override;
-
-    void visitTypeImpl(HIRTypeImpl& impl) override;
-
-    void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
-
-    void visitExpr(HIRExprPtr& exp) override;
-
-    void visitConstgeneric(HIRConstGeneric& c) override;
-
-    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
-
-    void visitFunction(HIRItemPath p, HIRFunction& item) override;
-
-    void visitStatic(HIRItemPath p, HIRStatic& item) override;
-
-    void visitConstant(HIRItemPath p, HIRConstant& item) override;
-
-    void visitEnum(HIRItemPath p, HIREnum& item) override;
-};
-
-struct NewStaticCallback {
-    virtual HIRSimplePath create(Span sp, HIRTypeRef type, HIRExprPtr value, HIRGenericParams generics, bool isConst) = 0;
-};
-
-template <typename F>
-struct NewStaticCb final: NewStaticCallback {
-    F f;
-
-    explicit NewStaticCb(F f);
-
-    HIRSimplePath create(Span sp, HIRTypeRef type, HIRExprPtr value, HIRGenericParams generics, bool isConst) override;
-};
-
-struct StaticBorrowExprVisitorMutate: public HIRExprVisitorDef {
-    const StaticTraitResolve& resolve_;
-    const HIRTypeData* selfType;
-    NewStaticCallback& newStaticCb;
-    const HIRExprPtr& exprPtr;
-
-    HIRSimplePath langRangeFull_;
-
-    StaticBorrowExprVisitorMutate(const StaticTraitResolve& resolve, const HIRTypeData* selfType, NewStaticCallback& newStaticCb, const HIRExprPtr& exprPtr);
-
-    void visitNodePtr(HIRExprPtr& root);
-
-    void visitNodePtr(HIRExprNodeP& root) override;
-
-    struct Monomorph: public Monomorphiser {
-        const HIRGenericParams& params;
-        unsigned ofsImplT;
-        unsigned ofsItemT;
-        unsigned ofsImplV;
-        unsigned ofsItemV;
-
-        Monomorph(HIRTypeInterner& types, const HIRGenericParams& params, unsigned ofsImplT, unsigned ofsItemT, unsigned ofsImplV, unsigned ofsItemV);
-
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& ge) const override;
-
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& ge) const override;
+        bool isMaybeInteriorMut(const HIRExprNode& node) const;
     };
 
-    Monomorph createParams(const Span& sp, HIRGenericParams& params, HIRPathParams& constructorPathParams) const;
+    struct StaticBorrowOuterVisitorMark: public HIRVisitor {
+        const HIRCrate& crate;
+        StaticTraitResolve resolve_;
 
-    HIRExprPtr extractNode(HIRExprNodeP& node, StaticTraitResolve& resolve, HIRGenericParams& paramsDef, HIRPathParams& constrParams, bool preserveGenericContext = false);
+        const HIRTypeData* selfType = nullptr;
+        const HIRItemPath* currentModulePath;
+        const HIRModule* currentModule;
 
-    struct MonomorphLifetimesStatic: public Monomorphiser {
-        explicit MonomorphLifetimesStatic(HIRTypeInterner& types);
+        StaticBorrowOuterVisitorMark(const WireBoard& wb);
 
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override;
+        void visitModule(HIRItemPath p, HIRModule& mod) override;
 
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
+        void visitTrait(HIRItemPath p, HIRTrait& item) override;
+
+        void visitTypeImpl(HIRTypeImpl& impl) override;
+
+        void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
+
+        void visitExpr(HIRExprPtr& exp) override;
+
+        void visitConstgeneric(HIRConstGeneric& c) override;
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+
+        void visitFunction(HIRItemPath p, HIRFunction& item) override;
+
+        void visitStatic(HIRItemPath p, HIRStatic& item) override;
+
+        void visitConstant(HIRItemPath p, HIRConstant& item) override;
+
+        void visitEnum(HIRItemPath p, HIREnum& item) override;
     };
 
-    void visit(HIRExprNodeBorrow& node) override;
+    struct NewStaticCallback {
+        virtual HIRSimplePath create(Span sp, HIRTypeRef type, HIRExprPtr value, HIRGenericParams generics, bool isConst) = 0;
+    };
 
-    void visit(HIRExprNodeConstBlock& node) override;
-};
+    template <typename F>
+    struct NewStaticCb final: NewStaticCallback {
+        F f;
 
-struct StaticBorrowOuterVisitor: public HIRVisitor, public NewStaticCallback {
-    const HIRCrate& crate;
-    StaticTraitResolve resolve_;
+        explicit NewStaticCb(F f);
 
-    const HIRTypeData* selfType = nullptr;
-    const HIRItemPath* currentModulePath;
-    const HIRModule* currentModule;
-    bool isConst;
+        HIRSimplePath create(Span sp, HIRTypeRef type, HIRExprPtr value, HIRGenericParams generics, bool isConst) override;
+    };
 
-    struct NewStatic {
-        HIRSimplePath path;
-        HIRStatic data;
+    struct StaticBorrowExprVisitorMutate: public HIRExprVisitorDef {
+        const StaticTraitResolve& resolve_;
+        const HIRTypeData* selfType;
+        NewStaticCallback& newStaticCb;
+        const HIRExprPtr& exprPtr;
+
+        HIRSimplePath langRangeFull_;
+
+        StaticBorrowExprVisitorMutate(const StaticTraitResolve& resolve, const HIRTypeData* selfType, NewStaticCallback& newStaticCb, const HIRExprPtr& exprPtr);
+
+        void visitNodePtr(HIRExprPtr& root);
+
+        void visitNodePtr(HIRExprNodeP& root) override;
+
+        struct Monomorph: public Monomorphiser {
+            const HIRGenericParams& params;
+            unsigned ofsImplT;
+            unsigned ofsItemT;
+            unsigned ofsImplV;
+            unsigned ofsItemV;
+
+            Monomorph(HIRTypeInterner& types, const HIRGenericParams& params, unsigned ofsImplT, unsigned ofsItemT, unsigned ofsImplV, unsigned ofsItemV);
+
+            HIRTypeRef getType(const Span& sp, const HIRGenericRef& ge) const override;
+
+            HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& ge) const override;
+        };
+
+        Monomorph createParams(const Span& sp, HIRGenericParams& params, HIRPathParams& constructorPathParams) const;
+
+        HIRExprPtr extractNode(HIRExprNodeP& node, StaticTraitResolve& resolve, HIRGenericParams& paramsDef, HIRPathParams& constrParams, bool preserveGenericContext = false);
+
+        struct MonomorphLifetimesStatic: public Monomorphiser {
+            explicit MonomorphLifetimesStatic(HIRTypeInterner& types);
+
+            HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override;
+
+            HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
+        };
+
+        void visit(HIRExprNodeBorrow& node) override;
+
+        void visit(HIRExprNodeConstBlock& node) override;
+    };
+
+    struct StaticBorrowOuterVisitor: public HIRVisitor, public NewStaticCallback {
+        const HIRCrate& crate;
+        StaticTraitResolve resolve_;
+
+        const HIRTypeData* selfType = nullptr;
+        const HIRItemPath* currentModulePath;
+        const HIRModule* currentModule;
         bool isConst;
+
+        struct NewStatic {
+            HIRSimplePath path;
+            HIRStatic data;
+            bool isConst;
+        };
+
+        std::map<const HIRModule*, std::vector<NewStatic>> newStatics;
+
+        StaticBorrowOuterVisitor(const WireBoard& wb);
+
+        HIRSimplePath create(Span sp, HIRTypeRef ty, HIRExprPtr valExpr, HIRGenericParams generics, bool isConst) override;
+
+        void visitCrate(HIRCrate& crate) override;
+
+        void visitModule(HIRItemPath p, HIRModule& mod) override;
+
+        void visitTrait(HIRItemPath p, HIRTrait& item) override;
+
+        void visitTypeImpl(HIRTypeImpl& impl) override;
+
+        void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
+
+        void visitExpr(HIRExprPtr& exp) override;
+
+        void visitConstgeneric(HIRConstGeneric& c) override;
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+
+        void visitFunction(HIRItemPath p, HIRFunction& item) override;
+
+        void visitStatic(HIRItemPath p, HIRStatic& item) override;
+
+        void visitConstant(HIRItemPath p, HIRConstant& item) override;
+
+        void visitEnum(HIRItemPath p, HIREnum& item) override;
     };
-
-    std::map<const HIRModule*, std::vector<NewStatic>> newStatics;
-
-    StaticBorrowOuterVisitor(const WireBoard& wb);
-
-    HIRSimplePath create(Span sp, HIRTypeRef ty, HIRExprPtr valExpr, HIRGenericParams generics, bool isConst) override;
-
-    void visitCrate(HIRCrate& crate) override;
-
-    void visitModule(HIRItemPath p, HIRModule& mod) override;
-
-    void visitTrait(HIRItemPath p, HIRTrait& item) override;
-
-    void visitTypeImpl(HIRTypeImpl& impl) override;
-
-    void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
-
-    void visitExpr(HIRExprPtr& exp) override;
-
-    void visitConstgeneric(HIRConstGeneric& c) override;
-
-    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
-
-    void visitFunction(HIRItemPath p, HIRFunction& item) override;
-
-    void visitStatic(HIRItemPath p, HIRStatic& item) override;
-
-    void visitConstant(HIRItemPath p, HIRConstant& item) override;
-
-    void visitEnum(HIRItemPath p, HIREnum& item) override;
-};
 }
 
 namespace {
@@ -1218,53 +1218,53 @@ namespace {
 #define NEWNODE(TY, CLASS, ...) mkExprnodep(resolve_.hirCrate().pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
 
 namespace {
-static void checkConstFinalBorrow(const StaticTraitResolve& resolve, HIRExprNode& root) {
-    HIRExprNode* node = &root;
-    while (auto* block = cast<HIRExprNodeBlock>(node)) {
-        if (!block->valueNode) {
+    static void checkConstFinalBorrow(const StaticTraitResolve& resolve, HIRExprNode& root) {
+        HIRExprNode* node = &root;
+        while (auto* block = cast<HIRExprNodeBlock>(node)) {
+            if (!block->valueNode) {
+                return;
+            }
+            node = &*block->valueNode;
+        }
+        auto* borrow = cast<HIRExprNodeBorrow>(node);
+        if (!borrow) {
             return;
         }
-        node = &*block->valueNode;
-    }
-    auto* borrow = cast<HIRExprNodeBorrow>(node);
-    if (!borrow) {
-        return;
-    }
-    bool isMutable = borrow->type != HIRBorrowType::Shared;
-    HIRExprNode* held = &*borrow->value;
-    while (auto* deref = cast<HIRExprNodeDeref>(held)) {
-        auto* inner = cast<HIRExprNodeBorrow>(&*deref->value);
-        if (!inner) {
-            break;
+        bool isMutable = borrow->type != HIRBorrowType::Shared;
+        HIRExprNode* held = &*borrow->value;
+        while (auto* deref = cast<HIRExprNodeDeref>(held)) {
+            auto* inner = cast<HIRExprNodeBorrow>(&*deref->value);
+            if (!inner) {
+                break;
+            }
+            isMutable |= inner->type != HIRBorrowType::Shared;
+            held = &*inner->value;
         }
-        isMutable |= inner->type != HIRBorrowType::Shared;
-        held = &*inner->value;
+        if (cast<HIRExprNodePathValue>(held)) {
+            return;
+        }
+        if (isMutable) {
+            ERROR(borrow->span(), E0000, "A mutable reference is not allowed in the final value of a constant");
+        }
+        if (resolve.typeIsInteriorMutable(borrow->span(), held->resType) == HIRCompare::Equal) {
+            ERROR(borrow->span(), E0000, "A constant may not refer to interior mutable data - " << held->resType);
+        }
     }
-    if (cast<HIRExprNodePathValue>(held)) {
-        return;
-    }
-    if (isMutable) {
-        ERROR(borrow->span(), E0000, "A mutable reference is not allowed in the final value of a constant");
-    }
-    if (resolve.typeIsInteriorMutable(borrow->span(), held->resType) == HIRCompare::Equal) {
-        ERROR(borrow->span(), E0000, "A constant may not refer to interior mutable data - " << held->resType);
-    }
-}
 
-static HIRExprNodeP* staticBorrowPromotionRoot(HIRExprNodeP& value) {
-    auto* root = &value;
-    for (;;) {
-        if (auto* index = cast<HIRExprNodeIndex>(root->get())) {
-            root = &index->value;
-            continue;
+    static HIRExprNodeP* staticBorrowPromotionRoot(HIRExprNodeP& value) {
+        auto* root = &value;
+        for (;;) {
+            if (auto* index = cast<HIRExprNodeIndex>(root->get())) {
+                root = &index->value;
+                continue;
+            }
+            if (auto* unsize = cast<HIRExprNodeUnsize>(root->get())) {
+                root = &unsize->value;
+                continue;
+            }
+            return root;
         }
-        if (auto* unsize = cast<HIRExprNodeUnsize>(root->get())) {
-            root = &unsize->value;
-            continue;
-        }
-        return root;
     }
-}
 }
 
 void HIRExpandStaticBorrowConstantsMarkExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {

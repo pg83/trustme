@@ -530,60 +530,64 @@ namespace {
     };
 }
 
-std::ostream& operator<<(std::ostream& os, const FmtShell& x) {
-    for (char c : x.s) {
-        switch (c) {
-            case '\\':
-            case '\"':
-            case ' ':
-                os << "\\";
-            default:
-                os << c;
+namespace {
+    std::ostream& operator<<(std::ostream& os, const FmtShell& x) {
+        for (char c : x.s) {
+            switch (c) {
+                case '\\':
+                case '\"':
+                case ' ':
+                    os << "\\";
+                default:
+                    os << c;
+            }
         }
+        return os;
     }
-    return os;
 }
 
-std::ostream& operator<<(std::ostream& os, const FmtGccAsm& x) {
-    bool inComment = false;
-    for (const char& ch : x.s) {
-        if (ch == '/' && (&ch)[1] == '/') {
-            if (!inComment) {
-                os << "\" ";
-            }
-            inComment = true;
-        } else {
-            inComment = false;
-        }
-        switch (ch) {
-            case '\n':
-                os << "\\n\"\n\"";
-                break;
-            case '\"':
-                os << "\\\"";
-                break;
-            case '%':
-                if (x.escapePercent) {
-                    os << "%%";
-                } else {
-                    os << "%";
+namespace {
+    std::ostream& operator<<(std::ostream& os, const FmtGccAsm& x) {
+        bool inComment = false;
+        for (const char& ch : x.s) {
+            if (ch == '/' && (&ch)[1] == '/') {
+                if (!inComment) {
+                    os << "\" ";
                 }
-                break;
-            case '{':
-                os << "%{";
-                break;
-            case '}':
-                os << "%}";
-                break;
-            case '|':
-                os << "%|";
-                break;
-            default:
-                os << ch;
-                break;
+                inComment = true;
+            } else {
+                inComment = false;
+            }
+            switch (ch) {
+                case '\n':
+                    os << "\\n\"\n\"";
+                    break;
+                case '\"':
+                    os << "\\\"";
+                    break;
+                case '%':
+                    if (x.escapePercent) {
+                        os << "%%";
+                    } else {
+                        os << "%";
+                    }
+                    break;
+                case '{':
+                    os << "%{";
+                    break;
+                case '}':
+                    os << "%}";
+                    break;
+                case '|':
+                    os << "%|";
+                    break;
+                default:
+                    os << ch;
+                    break;
+            }
         }
+        return os;
     }
-    return os;
 }
 
 namespace {

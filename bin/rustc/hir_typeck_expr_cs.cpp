@@ -463,213 +463,213 @@ namespace {
 }
 
 namespace {
-struct OwnedImplMatcher: public HIRMatchGenerics {
-    HIRPathParams& implParams;
+    struct OwnedImplMatcher: public HIRMatchGenerics {
+        HIRPathParams& implParams;
 
-    OwnedImplMatcher(HIRTypeInterner& types, HIRPathParams& implParams);
+        OwnedImplMatcher(HIRTypeInterner& types, HIRPathParams& implParams);
 
-    HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override;
+        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override;
 
-    HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
-};
+        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
+    };
 
-struct ExprVisitorTagStaleIvars: public HIRExprVisitorDef {
-    struct Mapper final: public MonomorphiserNop {
-        mutable Vector<std::pair<unsigned, unsigned>> valueIndexes_;
+    struct ExprVisitorTagStaleIvars: public HIRExprVisitorDef {
+        struct Mapper final: public MonomorphiserNop {
+            mutable Vector<std::pair<unsigned, unsigned>> valueIndexes_;
 
-        unsigned taggedIndex(Vector<std::pair<unsigned, unsigned>>& indexes, unsigned original) const;
+            unsigned taggedIndex(Vector<std::pair<unsigned, unsigned>>& indexes, unsigned original) const;
 
-        using MonomorphiserNop::MonomorphiserNop;
+            using MonomorphiserNop::MonomorphiserNop;
 
-        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override;
-    } mapper_;
+            HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override;
+        } mapper_;
 
-    explicit ExprVisitorTagStaleIvars(HIRTypeInterner& types);
+        explicit ExprVisitorTagStaleIvars(HIRTypeInterner& types);
 
-    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
 
-    void visitPathParams(HIRPathParams& params) override;
-};
+        void visitPathParams(HIRPathParams& params) override;
+    };
 
-struct ExprVisitorAddIvars: public HIRExprVisitorDef {
-    Context& context;
-
-    struct LocalImplTraitLowering: Monomorphiser {
+    struct ExprVisitorAddIvars: public HIRExprVisitorDef {
         Context& context;
-        mutable const HIRTypeData* curSelf = nullptr;
 
-        explicit LocalImplTraitLowering(Context& context);
+        struct LocalImplTraitLowering: Monomorphiser {
+            Context& context;
+            mutable const HIRTypeData* curSelf = nullptr;
 
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override;
+            explicit LocalImplTraitLowering(Context& context);
 
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
+            HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override;
 
-        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override;
+            HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
+
+            HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override;
+        };
+
+        ExprVisitorAddIvars(Context& context);
+
+        void innerVisitType(HIRTypeRef& ty);
+
+        void visitPathParams(HIRPathParams& pp) override;
+
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
+
+        void visit(HIRExprNodeLet& node) override;
     };
 
-    ExprVisitorAddIvars(Context& context);
-
-    void innerVisitType(HIRTypeRef& ty);
-
-    void visitPathParams(HIRPathParams& pp) override;
-
-    [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
-
-    void visit(HIRExprNodeLet& node) override;
-};
-
-struct ExprVisitorEnum: public HIRExprVisitor {
-    Context& context;
-    const HIRTypeData* retType;
-
-    struct RetTarget {
+    struct ExprVisitorEnum: public HIRExprVisitor {
+        Context& context;
         const HIRTypeData* retType;
-        const HIRTypeData* resumeType;
-        const HIRTypeData* yieldType;
 
-        RetTarget(const HIRTypeData* retType);
+        struct RetTarget {
+            const HIRTypeData* retType;
+            const HIRTypeData* resumeType;
+            const HIRTypeData* yieldType;
 
-        RetTarget(const HIRTypeData* retType, const HIRTypeData* resumeType, const HIRTypeData* yieldType);
+            RetTarget(const HIRTypeData* retType);
+
+            RetTarget(const HIRTypeData* retType, const HIRTypeData* resumeType, const HIRTypeData* yieldType);
+        };
+
+        std::vector<RetTarget> closureRetTypes;
+
+        std::vector<bool> innerCoerceEnabledStack;
+
+        std::vector<HIRExprNodeLoop*> loopBlocks;
+
+        tTraitList traits;
+
+        struct RevisitDefaultUnit: public Context::Revisitor {
+            HIRExprNode* node;
+
+            RevisitDefaultUnit(HIRExprNode* node);
+
+            const Span& span(void) const;
+
+            void fmt(std::ostream& os) const;
+
+            bool revisit(Context& context, bool isFallback);
+        };
+
+        ExprVisitorEnum(Context& context, tTraitList baseTraits, const HIRTypeData* retType);
+
+        void visit(HIRExprNodeBlock& node) override;
+
+        void visit(HIRExprNodeConstBlock& node) override;
+
+        void visit(HIRExprNodeAsm& node) override;
+
+        void visit(HIRExprNodeAsm2& node) override;
+
+        void visit(HIRExprNodeReturn& node) override;
+
+        void visit(HIRExprNodeYield& node) override;
+
+        void visit(HIRExprNodeAWait& node) override;
+
+        void visit(HIRExprNodeUse& node) override;
+
+        void visit(HIRExprNodeLoop& node) override;
+
+        void visit(HIRExprNodeLoopControl& node) override;
+
+        void visit(HIRExprNodeLet& node) override;
+
+        void visit(HIRExprNodeMatch& node) override;
+
+        void visit(HIRExprNodeAssign& node) override;
+
+        void visit(HIRExprNodeBinOp& node) override;
+
+        void visit(HIRExprNodeUniOp& node) override;
+
+        void visit(HIRExprNodeBorrow& node) override;
+
+        void visit(HIRExprNodeRawBorrow& node) override;
+
+        void visit(HIRExprNodeCast& node) override;
+
+        void visit(HIRExprNodeUnsize& node) override;
+
+        void visit(HIRExprNodeIndex& node) override;
+
+        void visit(HIRExprNodeDeref& node) override;
+
+        void visit(HIRExprNodeEmplace& node) override;
+
+        void addIvarsGenericPath(const Span& sp, HIRGenericPath& gp);
+
+        void addIvarsPath(const Span& sp, HIRPath& path);
+
+        HIRTypeRef getStructenumTy(const Span& sp, bool isStruct, HIRGenericPath& gp);
+
+        void visit(HIRExprNodeTupleVariant& node) override;
+
+        void visit(HIRExprNodeStructLiteral& node) override;
+
+        void visit(HIRExprNodeUnitVariant& node) override;
+
+        void visit(HIRExprNodeCallPath& node) override;
+
+        void visit(HIRExprNodeCallValue& node) override;
+
+        void visit(HIRExprNodeCallMethod& node) override;
+
+        void visit(HIRExprNodeField& node) override;
+
+        void visit(HIRExprNodeTuple& node) override;
+
+        void visit(HIRExprNodeArrayList& node) override;
+
+        void visit(HIRExprNodeArraySized& node) override;
+
+        void visit(HIRExprNodeLiteral& node) override;
+
+        void visit(HIRExprNodePathValue& node) override;
+
+        void visit(HIRExprNodeVariable& node) override;
+
+        void visit(HIRExprNodeConstParam& node) override;
+
+        void visit(HIRExprNodeClosure& node) override;
+
+        void visit(HIRExprNodeGenerator& node) override;
+
+        void visit(HIRExprNodeGeneratorWrapper& node) override;
+
+        void visit(HIRExprNodeAsyncBlock& node) override;
+
+        bool nodeDiverges(const HIRExprNode& node) const;
+
+        void inheritDivergence(HIRExprNode& node, const HIRExprNode& child) const;
+
+        void pushTraits(const tTraitList& list);
+
+        void popTraits(const tTraitList& list);
+
+        void visitGenericPath(const Span& sp, HIRGenericPath& gp);
+
+        void visitPath(const Span& sp, HIRPath& path);
+
+        struct InnerCoerceGuard {
+            ExprVisitorEnum& t;
+
+            InnerCoerceGuard(ExprVisitorEnum& t);
+
+            ~InnerCoerceGuard();
+        };
+
+        InnerCoerceGuard pushInnerCoerceScoped(bool val);
+
+        void pushInnerCoerce(bool val);
+
+        void popInnerCoerce();
+
+        bool canCoerceInnerResult() const;
+
+        void equateTypesInnerCoerce(const Span& sp, const HIRTypeData* target, HIRExprNodeP& node);
     };
-
-    std::vector<RetTarget> closureRetTypes;
-
-    std::vector<bool> innerCoerceEnabledStack;
-
-    std::vector<HIRExprNodeLoop*> loopBlocks;
-
-    tTraitList traits;
-
-    struct RevisitDefaultUnit: public Context::Revisitor {
-        HIRExprNode* node;
-
-        RevisitDefaultUnit(HIRExprNode* node);
-
-        const Span& span(void) const;
-
-        void fmt(std::ostream& os) const;
-
-        bool revisit(Context& context, bool isFallback);
-    };
-
-    ExprVisitorEnum(Context& context, tTraitList baseTraits, const HIRTypeData* retType);
-
-    void visit(HIRExprNodeBlock& node) override;
-
-    void visit(HIRExprNodeConstBlock& node) override;
-
-    void visit(HIRExprNodeAsm& node) override;
-
-    void visit(HIRExprNodeAsm2& node) override;
-
-    void visit(HIRExprNodeReturn& node) override;
-
-    void visit(HIRExprNodeYield& node) override;
-
-    void visit(HIRExprNodeAWait& node) override;
-
-    void visit(HIRExprNodeUse& node) override;
-
-    void visit(HIRExprNodeLoop& node) override;
-
-    void visit(HIRExprNodeLoopControl& node) override;
-
-    void visit(HIRExprNodeLet& node) override;
-
-    void visit(HIRExprNodeMatch& node) override;
-
-    void visit(HIRExprNodeAssign& node) override;
-
-    void visit(HIRExprNodeBinOp& node) override;
-
-    void visit(HIRExprNodeUniOp& node) override;
-
-    void visit(HIRExprNodeBorrow& node) override;
-
-    void visit(HIRExprNodeRawBorrow& node) override;
-
-    void visit(HIRExprNodeCast& node) override;
-
-    void visit(HIRExprNodeUnsize& node) override;
-
-    void visit(HIRExprNodeIndex& node) override;
-
-    void visit(HIRExprNodeDeref& node) override;
-
-    void visit(HIRExprNodeEmplace& node) override;
-
-    void addIvarsGenericPath(const Span& sp, HIRGenericPath& gp);
-
-    void addIvarsPath(const Span& sp, HIRPath& path);
-
-    HIRTypeRef getStructenumTy(const Span& sp, bool isStruct, HIRGenericPath& gp);
-
-    void visit(HIRExprNodeTupleVariant& node) override;
-
-    void visit(HIRExprNodeStructLiteral& node) override;
-
-    void visit(HIRExprNodeUnitVariant& node) override;
-
-    void visit(HIRExprNodeCallPath& node) override;
-
-    void visit(HIRExprNodeCallValue& node) override;
-
-    void visit(HIRExprNodeCallMethod& node) override;
-
-    void visit(HIRExprNodeField& node) override;
-
-    void visit(HIRExprNodeTuple& node) override;
-
-    void visit(HIRExprNodeArrayList& node) override;
-
-    void visit(HIRExprNodeArraySized& node) override;
-
-    void visit(HIRExprNodeLiteral& node) override;
-
-    void visit(HIRExprNodePathValue& node) override;
-
-    void visit(HIRExprNodeVariable& node) override;
-
-    void visit(HIRExprNodeConstParam& node) override;
-
-    void visit(HIRExprNodeClosure& node) override;
-
-    void visit(HIRExprNodeGenerator& node) override;
-
-    void visit(HIRExprNodeGeneratorWrapper& node) override;
-
-    void visit(HIRExprNodeAsyncBlock& node) override;
-
-    bool nodeDiverges(const HIRExprNode& node) const;
-
-    void inheritDivergence(HIRExprNode& node, const HIRExprNode& child) const;
-
-    void pushTraits(const tTraitList& list);
-
-    void popTraits(const tTraitList& list);
-
-    void visitGenericPath(const Span& sp, HIRGenericPath& gp);
-
-    void visitPath(const Span& sp, HIRPath& path);
-
-    struct InnerCoerceGuard {
-        ExprVisitorEnum& t;
-
-        InnerCoerceGuard(ExprVisitorEnum& t);
-
-        ~InnerCoerceGuard();
-    };
-
-    InnerCoerceGuard pushInnerCoerceScoped(bool val);
-
-    void pushInnerCoerce(bool val);
-
-    void popInnerCoerce();
-
-    bool canCoerceInnerResult() const;
-
-    void equateTypesInnerCoerce(const Span& sp, const HIRTypeData* target, HIRExprNodeP& node);
-};
 }
 
 namespace {
@@ -731,7 +731,7 @@ namespace {
 #define NEWNODE(TY, SP, CLASS, ...) mkExprnodep(context.crate.pool->make<HIRExprNode##CLASS>(SP, ##__VA_ARGS__), TY)
 
 namespace {
-void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams& paramsDef, const Monomorphiser& ms, bool isImplLevel);
+    void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams& paramsDef, const Monomorphiser& ms, bool isImplLevel);
 }
 
 namespace {
@@ -7047,220 +7047,220 @@ namespace {
 }
 
 namespace {
-bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr);
+    bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr);
 
-bool inherentImplMatchesReceiver(Context& context, const Span& sp, const HIRTypeImpl& impl, const HIRTypeData* receiver, ThinVector<SolverTypeEquality>* equalities = nullptr) {
-    HIRPathParams implParams;
-    while (implParams.types.size() < impl.params.types.size()) {
-        implParams.types.push_back(context.crate.types.infer());
-    }
-    implParams.values.resize(impl.params.values.size());
-
-    OwnedImplMatcher matcher(context.crate.types, implParams);
-    const auto match = impl.type->matchTestGenericsFuzz(sp, receiver, context.ivars.callbackResolveInfer(), matcher);
-    if (match != HIRCompare::Fuzzy) {
-        return match == HIRCompare::Equal;
-    }
-
-    const auto candidate = MonomorphStatePtr(context.crate.types, receiver, &implParams, nullptr).monomorphType(sp, impl.type, false);
-
-    const bool hasDefiningOpaque = visitTyWith(receiver, [&](const HIRTypeData* type) {
-        const auto* erased = type->opt_ErasedType();
-        const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
-        return alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
-    });
-    if (hasDefiningOpaque) {
-        return true;
-    }
-
-    const auto matchRigid = [&](auto&& self, const HIRTypeData* left, const HIRTypeData* right) -> HIRCompare {
-        const auto resolveCallerInfer = [&](const HIRTypeData* type) {
-            const auto* infer = type->opt_Infer();
-            return infer && infer->index == ~0u ? type : context.getType(type);
-        };
-        left = resolveCallerInfer(left);
-        right = resolveCallerInfer(right);
-        if (left == right) {
-            return HIRCompare::Equal;
+    bool inherentImplMatchesReceiver(Context& context, const Span& sp, const HIRTypeImpl& impl, const HIRTypeData* receiver, ThinVector<SolverTypeEquality>* equalities = nullptr) {
+        HIRPathParams implParams;
+        while (implParams.types.size() < impl.params.types.size()) {
+            implParams.types.push_back(context.crate.types.infer());
         }
-        if (left->is_Infer() || right->is_Infer()) {
-            const auto containsCandidateInfer = [](const HIRTypeData* type) {
-                return visitTyWith(type, [](const HIRTypeData* inner) {
-                    const auto* infer = inner->opt_Infer();
-                    return infer && infer->index == ~0u;
-                });
+        implParams.values.resize(impl.params.values.size());
+
+        OwnedImplMatcher matcher(context.crate.types, implParams);
+        const auto match = impl.type->matchTestGenericsFuzz(sp, receiver, context.ivars.callbackResolveInfer(), matcher);
+        if (match != HIRCompare::Fuzzy) {
+            return match == HIRCompare::Equal;
+        }
+
+        const auto candidate = MonomorphStatePtr(context.crate.types, receiver, &implParams, nullptr).monomorphType(sp, impl.type, false);
+
+        const bool hasDefiningOpaque = visitTyWith(receiver, [&](const HIRTypeData* type) {
+            const auto* erased = type->opt_ErasedType();
+            const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+            return alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
+        });
+        if (hasDefiningOpaque) {
+            return true;
+        }
+
+        const auto matchRigid = [&](auto&& self, const HIRTypeData* left, const HIRTypeData* right) -> HIRCompare {
+            const auto resolveCallerInfer = [&](const HIRTypeData* type) {
+                const auto* infer = type->opt_Infer();
+                return infer && infer->index == ~0u ? type : context.getType(type);
             };
-            if (containsCandidateInfer(left) || containsCandidateInfer(right)) {
+            left = resolveCallerInfer(left);
+            right = resolveCallerInfer(right);
+            if (left == right) {
+                return HIRCompare::Equal;
+            }
+            if (left->is_Infer() || right->is_Infer()) {
+                const auto containsCandidateInfer = [](const HIRTypeData* type) {
+                    return visitTyWith(type, [](const HIRTypeData* inner) {
+                        const auto* infer = inner->opt_Infer();
+                        return infer && infer->index == ~0u;
+                    });
+                };
+                if (containsCandidateInfer(left) || containsCandidateInfer(right)) {
+                    return HIRCompare::Fuzzy;
+                }
+                if (equalities) {
+                    equalities->push_back(SolverTypeEquality{left, right});
+                }
                 return HIRCompare::Fuzzy;
             }
-            if (equalities) {
-                equalities->push_back(SolverTypeEquality{left, right});
+            const auto* leftPath = left->opt_Path();
+            const auto* rightPath = right->opt_Path();
+            if (!leftPath || !rightPath || leftPath->path.data.tag() != rightPath->path.data.tag()) {
+                return left->compareWithPlaceholders(sp, right, context.ivars.callbackResolveInfer());
             }
-            return HIRCompare::Fuzzy;
-        }
-        const auto* leftPath = left->opt_Path();
-        const auto* rightPath = right->opt_Path();
-        if (!leftPath || !rightPath || leftPath->path.data.tag() != rightPath->path.data.tag()) {
+            const auto matchParams = [&](const HIRPathParams& leftParams, const HIRPathParams& rightParams) {
+                if (leftParams.types.size() != rightParams.types.size() || leftParams.values.size() != rightParams.values.size()) {
+                    return HIRCompare::Unequal;
+                }
+                auto result = HIRCompare::Equal;
+                for (size_t i = 0; i < leftParams.types.size(); i++) {
+                    result &= self(self, leftParams.types[i], rightParams.types[i]);
+                    if (result == HIRCompare::Unequal) {
+                        return result;
+                    }
+                }
+                for (size_t i = 0; i < leftParams.values.size(); i++) {
+                    if (leftParams.values[i] != rightParams.values[i]) {
+                        result = HIRCompare::Fuzzy;
+                    }
+                }
+                return result;
+            };
+            if (const auto* leftGeneric = leftPath->path.data.opt_Generic()) {
+                const auto& rightGeneric = rightPath->path.data.as_Generic();
+                return leftGeneric->path == rightGeneric.path ? matchParams(leftGeneric->params, rightGeneric.params) : HIRCompare::Unequal;
+            }
+            if (const auto* leftProjection = leftPath->path.data.opt_UfcsKnown()) {
+                const auto& rightProjection = rightPath->path.data.as_UfcsKnown();
+                if (leftProjection->trait.path != rightProjection.trait.path || leftProjection->item != rightProjection.item) {
+                    return HIRCompare::Unequal;
+                }
+                auto result = self(self, leftProjection->type, rightProjection.type);
+                result &= matchParams(leftProjection->trait.params, rightProjection.trait.params);
+                result &= matchParams(leftProjection->params, rightProjection.params);
+                return result;
+            }
             return left->compareWithPlaceholders(sp, right, context.ivars.callbackResolveInfer());
-        }
-        const auto matchParams = [&](const HIRPathParams& leftParams, const HIRPathParams& rightParams) {
-            if (leftParams.types.size() != rightParams.types.size() || leftParams.values.size() != rightParams.values.size()) {
-                return HIRCompare::Unequal;
-            }
-            auto result = HIRCompare::Equal;
-            for (size_t i = 0; i < leftParams.types.size(); i++) {
-                result &= self(self, leftParams.types[i], rightParams.types[i]);
-                if (result == HIRCompare::Unequal) {
-                    return result;
-                }
-            }
-            for (size_t i = 0; i < leftParams.values.size(); i++) {
-                if (leftParams.values[i] != rightParams.values[i]) {
-                    result = HIRCompare::Fuzzy;
-                }
-            }
-            return result;
         };
-        if (const auto* leftGeneric = leftPath->path.data.opt_Generic()) {
-            const auto& rightGeneric = rightPath->path.data.as_Generic();
-            return leftGeneric->path == rightGeneric.path ? matchParams(leftGeneric->params, rightGeneric.params) : HIRCompare::Unequal;
+        if (matchRigid(matchRigid, candidate, receiver) == HIRCompare::Unequal) {
+            return false;
         }
-        if (const auto* leftProjection = leftPath->path.data.opt_UfcsKnown()) {
-            const auto& rightProjection = rightPath->path.data.as_UfcsKnown();
-            if (leftProjection->trait.path != rightProjection.trait.path || leftProjection->item != rightProjection.item) {
-                return HIRCompare::Unequal;
-            }
-            auto result = self(self, leftProjection->type, rightProjection.type);
-            result &= matchParams(leftProjection->trait.params, rightProjection.trait.params);
-            result &= matchParams(leftProjection->params, rightProjection.params);
-            return result;
+
+        const bool hasRigidOpaque = visitTyWith(receiver, [&](const HIRTypeData* type) {
+            const auto* erased = type->opt_ErasedType();
+            const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+            return alias && !context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
+        });
+        if (!hasRigidOpaque) {
+            return true;
         }
-        return left->compareWithPlaceholders(sp, right, context.ivars.callbackResolveInfer());
-    };
-    if (matchRigid(matchRigid, candidate, receiver) == HIRCompare::Unequal) {
-        return false;
+
+        return candidate->compareWithPlaceholders(sp, receiver, context.ivars.callbackResolveInfer()) != HIRCompare::Unequal;
     }
 
-    const bool hasRigidOpaque = visitTyWith(receiver, [&](const HIRTypeData* type) {
-        const auto* erased = type->opt_ErasedType();
-        const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
-        return alias && !context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
-    });
-    if (!hasRigidOpaque) {
-        return true;
-    }
-
-    return candidate->compareWithPlaceholders(sp, receiver, context.ivars.callbackResolveInfer()) != HIRCompare::Unequal;
-}
-
-void populateDefaults(const Span& sp, Context& context, const MonomorphStatePtr& ms, const HIRGenericParams& paramDefs, HIRPathParams& params) {
-    for (size_t i = 0; i < paramDefs.types.size(); i++) {
-        const auto& ty = params.types[i];
-        const auto& typ = paramDefs.types[i];
-        if (const auto* te = ty->opt_Infer()) {
-            if (!typ.defaultValue->is_Infer()) {
-                if (auto* ent = context.getIvarPossibilities(sp, te->index)) {
-                    auto defTy = ms.monomorphType(sp, typ.defaultValue);
-                    ent->typesDefault.insert(std::move(defTy));
+    void populateDefaults(const Span& sp, Context& context, const MonomorphStatePtr& ms, const HIRGenericParams& paramDefs, HIRPathParams& params) {
+        for (size_t i = 0; i < paramDefs.types.size(); i++) {
+            const auto& ty = params.types[i];
+            const auto& typ = paramDefs.types[i];
+            if (const auto* te = ty->opt_Infer()) {
+                if (!typ.defaultValue->is_Infer()) {
+                    if (auto* ent = context.getIvarPossibilities(sp, te->index)) {
+                        auto defTy = ms.monomorphType(sp, typ.defaultValue);
+                        ent->typesDefault.insert(std::move(defTy));
+                    }
                 }
             }
         }
     }
-}
 
-template <typename T>
-void fix_param_count_(const Span& sp, Context& context, const HIRTypeData* selfTy, bool useDefaults, const T& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
-    if (params.types.size() == paramDefs.types.size()) {
-    } else if (params.types.size() > paramDefs.types.size()) {
-        while (params.types.size() > paramDefs.types.size() && params.values.size() < paramDefs.values.size() && params.types.back()->is_Infer()) {
-            params.types.pop_back();
-            params.values.push_back({});
-            context.ivars.addIvars(params.values.back());
-        }
-        if (params.types.size() > paramDefs.types.size()) {
-            ERROR(sp, E0000, "Too many type parameters passed to " << path);
-        }
-    } else {
-        while (params.types.size() < paramDefs.types.size()) {
-            const auto& typ = paramDefs.types[params.types.size()];
-            if (useDefaults) {
-                if (typ.defaultValue->is_Infer()) {
-                    ERROR(sp, E0000, "Omitted type parameter with no default in " << path);
-                } else if (monomorphiseTypeNeeded(typ.defaultValue)) {
-                    auto cb = MonomorphStatePtr(context.crate.types, selfTy, nullptr, nullptr);
-                    params.types.push_back(cb.monomorphType(sp, typ.defaultValue));
+    template <typename T>
+    void fix_param_count_(const Span& sp, Context& context, const HIRTypeData* selfTy, bool useDefaults, const T& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
+        if (params.types.size() == paramDefs.types.size()) {
+        } else if (params.types.size() > paramDefs.types.size()) {
+            while (params.types.size() > paramDefs.types.size() && params.values.size() < paramDefs.values.size() && params.types.back()->is_Infer()) {
+                params.types.pop_back();
+                params.values.push_back({});
+                context.ivars.addIvars(params.values.back());
+            }
+            if (params.types.size() > paramDefs.types.size()) {
+                ERROR(sp, E0000, "Too many type parameters passed to " << path);
+            }
+        } else {
+            while (params.types.size() < paramDefs.types.size()) {
+                const auto& typ = paramDefs.types[params.types.size()];
+                if (useDefaults) {
+                    if (typ.defaultValue->is_Infer()) {
+                        ERROR(sp, E0000, "Omitted type parameter with no default in " << path);
+                    } else if (monomorphiseTypeNeeded(typ.defaultValue)) {
+                        auto cb = MonomorphStatePtr(context.crate.types, selfTy, nullptr, nullptr);
+                        params.types.push_back(cb.monomorphType(sp, typ.defaultValue));
+                    } else {
+                        params.types.push_back(typ.defaultValue);
+                    }
                 } else {
-                    params.types.push_back(typ.defaultValue);
+                    params.types.push_back(context.ivars.newIvarTr());
+                    // TODO: It's possible that the default could be added using `context.possible_equate_type_def` to give inferrence a fallback
                 }
-            } else {
-                params.types.push_back(context.ivars.newIvarTr());
-                // TODO: It's possible that the default could be added using `context.possible_equate_type_def` to give inferrence a fallback
+            }
+        }
+
+        if (params.values.size() == paramDefs.values.size()) {
+        } else if (params.values.size() > paramDefs.values.size()) {
+            ERROR(sp, E0000, "Too many const parameters passed to " << path);
+        } else {
+            while (params.values.size() < paramDefs.values.size()) {
+                params.values.push_back({});
+                context.ivars.addIvars(params.values.back());
             }
         }
     }
 
-    if (params.values.size() == paramDefs.values.size()) {
-    } else if (params.values.size() > paramDefs.values.size()) {
-        ERROR(sp, E0000, "Too many const parameters passed to " << path);
-    } else {
-        while (params.values.size() < paramDefs.values.size()) {
-            params.values.push_back({});
-            context.ivars.addIvars(params.values.back());
+    void fixParamCount(const Span& sp, Context& context, const HIRTypeData* selfTy, bool useDefaults, const HIRPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
+        fix_param_count_(sp, context, selfTy, useDefaults, path, paramDefs, params);
+    }
+
+    void fixParamCount(const Span& sp, Context& context, const HIRTypeData* selfTy, bool useDefaults, const HIRGenericPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
+        fix_param_count_(sp, context, selfTy, useDefaults, path, paramDefs, params);
+    }
+
+    void applyBoundsAsRulesTrait(Context& context, const Span& sp, const HIRTypeData* realType, const HIRTraitPath& traitPath) {
+        if (traitPath.typeBounds.size() == 0) {
+            context.addTraitBound(sp, realType, traitPath.path.path, traitPath.path.params.clone());
         }
-    }
-}
 
-void fixParamCount(const Span& sp, Context& context, const HIRTypeData* selfTy, bool useDefaults, const HIRPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
-    fix_param_count_(sp, context, selfTy, useDefaults, path, paramDefs, params);
-}
-
-void fixParamCount(const Span& sp, Context& context, const HIRTypeData* selfTy, bool useDefaults, const HIRGenericPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
-    fix_param_count_(sp, context, selfTy, useDefaults, path, paramDefs, params);
-}
-
-void applyBoundsAsRulesTrait(Context& context, const Span& sp, const HIRTypeData* realType, const HIRTraitPath& traitPath) {
-    if (traitPath.typeBounds.size() == 0) {
-        context.addTraitBound(sp, realType, traitPath.path.path, traitPath.path.params.clone());
-    }
-
-    for (const auto& assoc : traitPath.typeBounds) {
-        context.equateTypesAssoc(sp, assoc.second.type, assoc.second.sourceTrait.path, assoc.second.sourceTrait.params.clone(), realType, assoc.first.c_str(), assoc.second.atyParams.clone(), false);
-    }
-    for (const auto& assoc : traitPath.traitBounds) {
-        auto atyTy = context.crate.types.path(HIRPath(realType, assoc.second.sourceTrait.clone(), assoc.first, assoc.second.atyParams.clone()), {});
-        for (const auto& tr : assoc.second.traits) {
-            applyBoundsAsRulesTrait(context, sp, atyTy, tr);
+        for (const auto& assoc : traitPath.typeBounds) {
+            context.equateTypesAssoc(sp, assoc.second.type, assoc.second.sourceTrait.path, assoc.second.sourceTrait.params.clone(), realType, assoc.first.c_str(), assoc.second.atyParams.clone(), false);
         }
-    }
-}
-
-void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams& paramsDef, const Monomorphiser& ms, bool isImplLevel) {
-    for (const auto& bound : paramsDef.bounds) {
-        switch (bound.tag()) {
-            case HIRGenericBound::TAG_TraitBound: {
-                auto& be = bound.as_TraitBound();
-                auto realType = ms.monomorphType(sp, be.type);
-                auto realTrait = ms.monomorphTraitpath(sp, be.trait, false);
-                applyBoundsAsRulesTrait(context, sp, realType, realTrait);
-                break;
-            }
-            case HIRGenericBound::TAG_TypeEquality: {
-                auto& be = bound.as_TypeEquality();
-                auto realTypeLeft = context.expandAssociatedTypes(sp, ms.monomorphType(sp, be.type));
-                auto realTypeRight = context.expandAssociatedTypes(sp, ms.monomorphType(sp, be.otherType));
-                context.equateTypes(sp, realTypeLeft, realTypeRight);
-                break;
+        for (const auto& assoc : traitPath.traitBounds) {
+            auto atyTy = context.crate.types.path(HIRPath(realType, assoc.second.sourceTrait.clone(), assoc.first, assoc.second.atyParams.clone()), {});
+            for (const auto& tr : assoc.second.traits) {
+                applyBoundsAsRulesTrait(context, sp, atyTy, tr);
             }
         }
     }
 
-    for (size_t i = 0; i < paramsDef.types.size(); i++) {
-        if (paramsDef.types[i].isSized) {
-            HIRTypeRef ty = context.crate.types.generic("", (isImplLevel ? 0 : 256) + i);
-            context.requireSized(sp, ms.getType(Span(), ty->as_Generic()));
+    void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams& paramsDef, const Monomorphiser& ms, bool isImplLevel) {
+        for (const auto& bound : paramsDef.bounds) {
+            switch (bound.tag()) {
+                case HIRGenericBound::TAG_TraitBound: {
+                    auto& be = bound.as_TraitBound();
+                    auto realType = ms.monomorphType(sp, be.type);
+                    auto realTrait = ms.monomorphTraitpath(sp, be.trait, false);
+                    applyBoundsAsRulesTrait(context, sp, realType, realTrait);
+                    break;
+                }
+                case HIRGenericBound::TAG_TypeEquality: {
+                    auto& be = bound.as_TypeEquality();
+                    auto realTypeLeft = context.expandAssociatedTypes(sp, ms.monomorphType(sp, be.type));
+                    auto realTypeRight = context.expandAssociatedTypes(sp, ms.monomorphType(sp, be.otherType));
+                    context.equateTypes(sp, realTypeLeft, realTypeRight);
+                    break;
+                }
+            }
+        }
+
+        for (size_t i = 0; i < paramsDef.types.size(); i++) {
+            if (paramsDef.types[i].isSized) {
+                HIRTypeRef ty = context.crate.types.generic("", (isImplLevel ? 0 : 256) + i);
+                context.requireSized(sp, ms.getType(Span(), ty->as_Generic()));
+            }
         }
     }
-}
 
 }
 
@@ -7438,97 +7438,97 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
 }
 
 namespace {
-bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr) {
-    auto& e = path.data.as_UfcsInherent();
-    context.selectWellFormed(sp, e.type);
-    auto lookupType = context.revealOpaqueTypes(e.type);
-    lookupType = context.expandAssociatedTypes(sp, mv$(lookupType));
-    e.type = lookupType;
+    bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr) {
+        auto& e = path.data.as_UfcsInherent();
+        context.selectWellFormed(sp, e.type);
+        auto lookupType = context.revealOpaqueTypes(e.type);
+        lookupType = context.expandAssociatedTypes(sp, mv$(lookupType));
+        e.type = lookupType;
 
-    const HIRTypeImpl* implPtr = nullptr;
-    ThinVector<SolverTypeEquality> implEqualities;
-    unsigned int count = 0;
-    context.crate.findTypeImpls(lookupType, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
-        ThinVector<SolverTypeEquality> candidateEqualities;
-        const bool matches = inherentImplMatchesReceiver(context, sp, impl, lookupType, &candidateEqualities);
-        if (!matches) {
+        const HIRTypeImpl* implPtr = nullptr;
+        ThinVector<SolverTypeEquality> implEqualities;
+        unsigned int count = 0;
+        context.crate.findTypeImpls(lookupType, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
+            ThinVector<SolverTypeEquality> candidateEqualities;
+            const bool matches = inherentImplMatchesReceiver(context, sp, impl, lookupType, &candidateEqualities);
+            if (!matches) {
+                return false;
+            }
+            auto it = impl.methods.find(e.item);
+            if (it == impl.methods.end()) {
+                return false;
+            }
+            fcnPtr = &it->second.data;
+            implPtr = &impl;
+            implEqualities = std::move(candidateEqualities);
+            count++;
+            return false;
+        });
+        if (!fcnPtr) {
+            ERROR(sp, E0000, "Failed to locate function " << path);
+        }
+        if (count > 1) {
             return false;
         }
-        auto it = impl.methods.find(e.item);
-        if (it == impl.methods.end()) {
-            return false;
+        assert(implPtr);
+        for (const auto& equality : implEqualities) {
+            context.equateTypes(sp, equality.left, equality.right);
         }
-        fcnPtr = &it->second.data;
-        implPtr = &impl;
-        implEqualities = std::move(candidateEqualities);
-        count++;
-        return false;
-    });
-    if (!fcnPtr) {
-        ERROR(sp, E0000, "Failed to locate function " << path);
-    }
-    if (count > 1) {
-        return false;
-    }
-    assert(implPtr);
-    for (const auto& equality : implEqualities) {
-        context.equateTypes(sp, equality.left, equality.right);
-    }
-    fixParamCount(sp, context, e.type, false, path, fcnPtr->params, e.params);
-    cache.fcnParams = &fcnPtr->params;
+        fixParamCount(sp, context, e.type, false, path, fcnPtr->params, e.params);
+        cache.fcnParams = &fcnPtr->params;
 
-    auto& implParams = e.implParams;
-    if (implPtr->params.isGeneric()) {
-        while (implParams.types.size() < implPtr->params.types.size()) {
-            implParams.types.push_back(context.crate.types.infer());
-        }
-        implParams.values.resize(implPtr->params.values.size());
-        OwnedImplMatcher matcher(context.crate.types, implParams);
+        auto& implParams = e.implParams;
+        if (implPtr->params.isGeneric()) {
+            while (implParams.types.size() < implPtr->params.types.size()) {
+                implParams.types.push_back(context.crate.types.infer());
+            }
+            implParams.values.resize(implPtr->params.values.size());
+            OwnedImplMatcher matcher(context.crate.types, implParams);
 
-        auto cmp = implPtr->type->matchTestGenericsFuzz(sp, lookupType, context.ivars.callbackResolveInfer(), matcher);
-        if (cmp == HIRCompare::Fuzzy) {
+            auto cmp = implPtr->type->matchTestGenericsFuzz(sp, lookupType, context.ivars.callbackResolveInfer(), matcher);
+            if (cmp == HIRCompare::Fuzzy) {
+                for (auto& ty : implParams.types) {
+                    if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
+                        ty = context.ivars.newIvarTr();
+                    }
+                }
+
+                context.ivars.addIvarsParams(implParams);
+
+                // TODO: Use a copy of `MonomorphStatePtr` that calls `context.get_type`
+                auto implMonomorphCb = MonomorphStatePtr(context.crate.types, e.type, &implParams, nullptr);
+                auto implTyMono = implMonomorphCb.monomorphType(sp, implPtr->type, false);
+
+                context.equateTypes(sp, implTyMono, e.type);
+            } else if (cmp == HIRCompare::Unequal) {
+                BUG(sp, "Failed to match inherent impl?!");
+            } else {
+                context.ivars.addIvarsParams(implParams);
+            }
+
             for (auto& ty : implParams.types) {
                 if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
                     ty = context.ivars.newIvarTr();
                 }
             }
-
-            context.ivars.addIvarsParams(implParams);
-
-            // TODO: Use a copy of `MonomorphStatePtr` that calls `context.get_type`
-            auto implMonomorphCb = MonomorphStatePtr(context.crate.types, e.type, &implParams, nullptr);
-            auto implTyMono = implMonomorphCb.monomorphType(sp, implPtr->type, false);
-
-            context.equateTypes(sp, implTyMono, e.type);
-        } else if (cmp == HIRCompare::Unequal) {
-            BUG(sp, "Failed to match inherent impl?!");
-        } else {
-            context.ivars.addIvarsParams(implParams);
         }
 
-        for (auto& ty : implParams.types) {
-            if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
-                ty = context.ivars.newIvarTr();
-            }
+        const auto& fcnParams = e.params;
+        // TODO: Use a copy of `MonomorphStatePtr` that calls `context.get_type`
+        cache.monomorph.reset(new MonomorphStatePtr(context.crate.types, e.type, &implParams, &fcnParams));
+
+        applyBoundsAsRules(context, sp, implPtr->params, *cache.monomorph, /*is_impl_level=*/true);
+
+        {
+            HIRTypeRef tmp;
+            const auto& implTyM = cache.monomorph->maybeMonomorphType(sp, tmp, implPtr->type);
+
+            context.equateTypes(sp, e.type, implTyM);
         }
+        e.type = context.revealOpaqueTypes(e.type);
+
+        return true;
     }
-
-    const auto& fcnParams = e.params;
-    // TODO: Use a copy of `MonomorphStatePtr` that calls `context.get_type`
-    cache.monomorph.reset(new MonomorphStatePtr(context.crate.types, e.type, &implParams, &fcnParams));
-
-    applyBoundsAsRules(context, sp, implPtr->params, *cache.monomorph, /*is_impl_level=*/true);
-
-    {
-        HIRTypeRef tmp;
-        const auto& implTyM = cache.monomorph->maybeMonomorphType(sp, tmp, implPtr->type);
-
-        context.equateTypes(sp, e.type, implTyM);
-    }
-    e.type = context.revealOpaqueTypes(e.type);
-
-    return true;
-}
 
 }
 

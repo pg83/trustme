@@ -31,139 +31,139 @@ extern char** environ;
 #define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
 
 namespace {
-enum class TokenClass {
-    EndOfStream = 0,
-    Symbol = 1,
-    Ident = 2,
-    Lifetime = 3,
-    String = 4,
-    ByteString = 5,
-    CharLit = 6,
-    UnsignedInt = 7,
-    SignedInt = 8,
-    Float = 9,
-    SpanRef = 10,
-    SpanDef = 11,
-    RawLiteral = 12,
-};
+    enum class TokenClass {
+        EndOfStream = 0,
+        Symbol = 1,
+        Ident = 2,
+        Lifetime = 3,
+        String = 4,
+        ByteString = 5,
+        CharLit = 6,
+        UnsignedInt = 7,
+        SignedInt = 8,
+        Float = 9,
+        SpanRef = 10,
+        SpanDef = 11,
+        RawLiteral = 12,
+    };
 
-enum class FragType {
-    Ident = 0,
-    Tt = 1,
+    enum class FragType {
+        Ident = 0,
+        Tt = 1,
 
-    Path = 2,
-    Type = 3,
+        Path = 2,
+        Type = 3,
 
-    Expr = 4,
-    Statement = 5,
-    Block = 6,
-    Pattern = 7,
-};
+        Expr = 4,
+        Statement = 5,
+        Block = 6,
+        Pattern = 7,
+    };
 
-struct DecoratorProcMacroDerive: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorProcMacroDerive: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorProcMacroAttribute: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorProcMacroAttribute: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct DecoratorProcMacro: public ExpandDecorator {
-    AttrStage stage() const override;
+    struct DecoratorProcMacro: public ExpandDecorator {
+        AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
-};
+        void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+    };
 
-struct ProcMacroInv: public TokenStream {
-    Span parentSpan;
-    Span thisSpan;
-    const HIRProcMacro& procMacroDesc;
-    ASTEdition edition;
-    std::ofstream dumpFileOut;
-    std::ofstream dumpFileRes;
+    struct ProcMacroInv: public TokenStream {
+        Span parentSpan;
+        Span thisSpan;
+        const HIRProcMacro& procMacroDesc;
+        ASTEdition edition;
+        std::ofstream dumpFileOut;
+        std::ofstream dumpFileRes;
 
-    std::unordered_map<const SpanInner*, size_t> knownSpans;
-    std::unordered_set<size_t> sentSpans;
-    size_t nextSpanIndex = 2;
+        std::unordered_map<const SpanInner*, size_t> knownSpans;
+        std::unordered_set<size_t> sentSpans;
+        size_t nextSpanIndex = 2;
 
-    struct Handles {
-        Handles();
+        struct Handles {
+            Handles();
 
-        Handles(Handles&&);
-        Handles(const Handles&) = delete;
-        Handles& operator=(Handles&&) = delete;
-        Handles& operator=(const Handles&) = delete;
-        pid_t childPid = 0;
-        int childStdin = -1;
-        int childStdout = -1;
-    } handles;
+            Handles(Handles&&);
+            Handles(const Handles&) = delete;
+            Handles& operator=(Handles&&) = delete;
+            Handles& operator=(const Handles&) = delete;
+            pid_t childPid = 0;
+            int childStdin = -1;
+            int childStdout = -1;
+        } handles;
 
-    bool eofHit = false;
-    Vector<u8> pendingSymbols;
-    size_t pendingSymbolOffset = 0;
+        bool eofHit = false;
+        Vector<u8> pendingSymbols;
+        size_t pendingSymbolOffset = 0;
 
-    ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
-    ProcMacroInv(const ProcMacroInv&) = delete;
-    ProcMacroInv(ProcMacroInv&&) = default;
-    ProcMacroInv& operator=(const ProcMacroInv&) = delete;
-    ProcMacroInv& operator=(ProcMacroInv&&) = delete;
-    ~ProcMacroInv();
+        ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
+        ProcMacroInv(const ProcMacroInv&) = delete;
+        ProcMacroInv(ProcMacroInv&&) = default;
+        ProcMacroInv& operator=(const ProcMacroInv&) = delete;
+        ProcMacroInv& operator=(ProcMacroInv&&) = delete;
+        ~ProcMacroInv();
 
-    bool checkGood();
+        bool checkGood();
 
-    void sendDone();
+        void sendDone();
 
-    void sendSymbol(const char* val);
+        void sendSymbol(const char* val);
 
-    void sendRword(const char* val);
+        void sendRword(const char* val);
 
-    void sendIdent(const char* val);
+        void sendIdent(const char* val);
 
-    void sendIdent(const Ident& val);
+        void sendIdent(const Ident& val);
 
-    void sendLifetime(const char* val);
+        void sendLifetime(const char* val);
 
-    void sendString(const std::string& s);
+        void sendString(const std::string& s);
 
-    void sendRawLiteral(const std::string& s);
+        void sendRawLiteral(const std::string& s);
 
-    void sendBytestring(const std::string& s);
+        void sendBytestring(const std::string& s);
 
-    void sendChar(u32 ch);
+        void sendChar(u32 ch);
 
-    void sendInt(eCoreType ct, U128 v);
+        void sendInt(eCoreType ct, U128 v);
 
-    void sendFloat(eCoreType ct, FloatValue v);
+        void sendFloat(eCoreType ct, FloatValue v);
 
-    void sendSpanDef(size_t index, const Span& sp);
+        void sendSpanDef(size_t index, const Span& sp);
 
-    bool attrIsUsed(const RcString& n) const;
+        bool attrIsUsed(const RcString& n) const;
 
-    virtual Position getPosition() const override;
-    virtual Token realGetToken() override;
+        virtual Position getPosition() const override;
+        virtual Token realGetToken() override;
 
-    virtual ASTEdition realGetEdition() const override;
+        virtual ASTEdition realGetEdition() const override;
 
-    virtual Ident::Hygiene realGetHygiene() const override;
+        virtual Ident::Hygiene realGetHygiene() const override;
 
-    Token realGetToken_();
-    Token takePendingSymbol();
-    void sendU8(u8 v);
-    void sendBytes(const void* val, size_t size);
-    void sendBytesRaw(const void* val, size_t size);
-    void sendV128u(u64 val);
-    void sendV128u(U128 val);
+        Token realGetToken_();
+        Token takePendingSymbol();
+        void sendU8(u8 v);
+        void sendBytes(const void* val, size_t size);
+        void sendBytesRaw(const void* val, size_t size);
+        void sendV128u(u64 val);
+        void sendV128u(U128 val);
 
-    u8 recvU8();
-    std::string recvBytes();
-    void recvBytesRaw(void* outVoid, size_t len);
-    u64 recvV128u();
-    U128 recvV128uU128();
-};
+        u8 recvU8();
+        std::string recvBytes();
+        void recvBytesRaw(void* outVoid, size_t len);
+        u64 recvV128u();
+        U128 recvV128uU128();
+    };
 }
 
 namespace {
@@ -295,65 +295,65 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
 }
 
 namespace {
-ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath) {
-    const auto& crateName = macPath.front();
-    ASSERT_BUG(sp, crate.externCrates.count(crateName), "Crate not loaded for macro: [" << macPath << "]");
-    const auto& extCrate = crate.externCrates.at(crateName);
-    // TODO: Ensure that this macro is in the listed crate.
-    const HIRProcMacro* pmp = nullptr;
-    for (const auto& mi : extCrate.hir->rootModule.macroItems) {
-        if (!mi.second->ent.is_ProcMacro()) {
-            continue;
-        }
-        const auto& pm = mi.second->ent.as_ProcMacro();
-        bool good = true;
-        for (size_t i = 0; i < std::min(macPath.size() - 1, pm.path.components().size()); i++) {
-            if (macPath[1 + i] != pm.path.components()[i]) {
-                good = false;
+    ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath) {
+        const auto& crateName = macPath.front();
+        ASSERT_BUG(sp, crate.externCrates.count(crateName), "Crate not loaded for macro: [" << macPath << "]");
+        const auto& extCrate = crate.externCrates.at(crateName);
+        // TODO: Ensure that this macro is in the listed crate.
+        const HIRProcMacro* pmp = nullptr;
+        for (const auto& mi : extCrate.hir->rootModule.macroItems) {
+            if (!mi.second->ent.is_ProcMacro()) {
+                continue;
+            }
+            const auto& pm = mi.second->ent.as_ProcMacro();
+            bool good = true;
+            for (size_t i = 0; i < std::min(macPath.size() - 1, pm.path.components().size()); i++) {
+                if (macPath[1 + i] != pm.path.components()[i]) {
+                    good = false;
+                    break;
+                }
+            }
+            if (good) {
+                pmp = &pm;
                 break;
             }
         }
-        if (good) {
-            pmp = &pm;
-            break;
+        if (!pmp) {
+            ERROR(sp, E0000, "Unable to find referenced proc macro " << macPath);
         }
+
+        const auto* procMacroExeName = extCrate.procMacroFilename != "" ? extCrate.procMacroFilename.c_str() : extCrate.filename.c_str();
+
+        auto rv = ProcMacroInv(wb.id, sp, extCrate.hir->edition, procMacroExeName, *pmp);
+        rv.parseState().crate = &crate;
+        rv.parseState().wb = &wb;
+
+        return rv;
     }
-    if (!pmp) {
-        ERROR(sp, E0000, "Unable to find referenced proc macro " << macPath);
-    }
 
-    const auto* procMacroExeName = extCrate.procMacroFilename != "" ? extCrate.procMacroFilename.c_str() : extCrate.filename.c_str();
-
-    auto rv = ProcMacroInv(wb.id, sp, extCrate.hir->edition, procMacroExeName, *pmp);
-    rv.parseState().crate = &crate;
-    rv.parseState().wb = &wb;
-
-    return rv;
-}
-
-template <typename F>
-std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, const TokenTree* attrInput, F cb) {
-    auto pmi = ProcMacroInvokeInt(sp, wb, crate, macPath);
-    if (!pmi.checkGood()) {
-        return std::unique_ptr<TokenStream>();
-    }
-    if (attrInput) {
-        // TODO: Assert that this is a `#[proc_macro_attribute]` macro
-        if (attrInput->size() != 0) {
-            ASSERT_BUG(sp, attrInput->size() >= 2, "");
-            ASSERT_BUG(sp, (*attrInput)[0].tok() == TOK_PAREN_OPEN || (*attrInput)[0].tok() == TOK_SQUARE_OPEN, "");
-            ProcMacroVisitor v(wb, sp, *wb.settings, pmi);
-            for (size_t i = 1; i < attrInput->size() - 1; i++) {
-                v.visitTokentree((*attrInput)[i]);
+    template <typename F>
+    std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, const TokenTree* attrInput, F cb) {
+        auto pmi = ProcMacroInvokeInt(sp, wb, crate, macPath);
+        if (!pmi.checkGood()) {
+            return std::unique_ptr<TokenStream>();
+        }
+        if (attrInput) {
+            // TODO: Assert that this is a `#[proc_macro_attribute]` macro
+            if (attrInput->size() != 0) {
+                ASSERT_BUG(sp, attrInput->size() >= 2, "");
+                ASSERT_BUG(sp, (*attrInput)[0].tok() == TOK_PAREN_OPEN || (*attrInput)[0].tok() == TOK_SQUARE_OPEN, "");
+                ProcMacroVisitor v(wb, sp, *wb.settings, pmi);
+                for (size_t i = 1; i < attrInput->size() - 1; i++) {
+                    v.visitTokentree((*attrInput)[i]);
+                }
             }
+            pmi.sendDone();
         }
+        ProcMacroVisitor v(wb, sp, *wb.settings, pmi);
+        cb(v);
         pmi.sendDone();
+        return box$(pmi);
     }
-    ProcMacroVisitor v(wb, sp, *wb.settings, pmi);
-    cb(v);
-    pmi.sendDone();
-    return box$(pmi);
-}
 }
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {

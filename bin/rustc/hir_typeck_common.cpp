@@ -8,62 +8,62 @@
 #include <std/alg/defer.h>
 
 namespace {
-template <typename I>
-struct WConst {
-    typedef const I T;
-};
+    template <typename I>
+    struct WConst {
+        typedef const I T;
+    };
 
-template <typename I>
-struct WMut {
-    typedef I T;
-};
+    template <typename I>
+    struct WMut {
+        typedef I T;
+    };
 
-template <template <typename> typename W>
-struct TyVisitor {
-    const LList<const HIRTypeData*>* curRecurseStack = nullptr;
+    template <template <typename> typename W>
+    struct TyVisitor {
+        const LList<const HIRTypeData*>* curRecurseStack = nullptr;
 
-    virtual typename W<HIRTypeData>::T& getTyData(const HIRTypeData* ty) const = 0;
+        virtual typename W<HIRTypeData>::T& getTyData(const HIRTypeData* ty) const = 0;
 
-    virtual bool visitConstGeneric(typename W<HIRConstGeneric>::T&);
+        virtual bool visitConstGeneric(typename W<HIRConstGeneric>::T&);
 
-    virtual bool visitPathParams(typename W<HIRPathParams>::T& tpl);
+        virtual bool visitPathParams(typename W<HIRPathParams>::T& tpl);
 
-    virtual bool visitTraitPath(typename W<HIRTraitPath>::T& tpl);
+        virtual bool visitTraitPath(typename W<HIRTraitPath>::T& tpl);
 
-    virtual bool visitPath(typename W<HIRPath>::T& path);
+        virtual bool visitPath(typename W<HIRPath>::T& path);
 
-    virtual bool visitType(const HIRTypeData* ty);
-};
+        virtual bool visitType(const HIRTypeData* ty);
+    };
 
-struct TyVisitorCbConst: TyVisitor<WConst> {
-    HIRTypeVisitorCallback& callback;
+    struct TyVisitorCbConst: TyVisitor<WConst> {
+        HIRTypeVisitorCallback& callback;
 
-    explicit TyVisitorCbConst(HIRTypeVisitorCallback& callback);
+        explicit TyVisitorCbConst(HIRTypeVisitorCallback& callback);
 
-    const HIRTypeData& getTyData(const HIRTypeData* ty) const override;
+        const HIRTypeData& getTyData(const HIRTypeData* ty) const override;
 
-    bool visitType(const HIRTypeData* ty) override;
-};
+        bool visitType(const HIRTypeData* ty) override;
+    };
 
-struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
-    const HIRTypeData& getTyData(const HIRTypeData* ty) const override;
+    struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
+        const HIRTypeData& getTyData(const HIRTypeData* ty) const override;
 
-    bool visitPathParams(const HIRPathParams& pp) override;
+        bool visitPathParams(const HIRPathParams& pp) override;
 
-    bool visitType(const HIRTypeData* ty) override;
-};
+        bool visitType(const HIRTypeData* ty) override;
+    };
 
-struct CloneTyWithMonomorph: Monomorphiser {
-    HIRTypeCloneCallback& callback;
+    struct CloneTyWithMonomorph: Monomorphiser {
+        HIRTypeCloneCallback& callback;
 
-    CloneTyWithMonomorph(HIRTypeInterner& types, HIRTypeCloneCallback& callback);
+        CloneTyWithMonomorph(HIRTypeInterner& types, HIRTypeCloneCallback& callback);
 
-    HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override;
+        HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override;
 
-    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
 
-    HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
-};
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
+    };
 }
 
 namespace {
