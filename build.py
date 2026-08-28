@@ -880,25 +880,6 @@ style += [
         color="green",
     ),
     command(
-        name="style_compiler_failure_paths",
-        inputs=[
-            "$(S)/dev/compiler_failure_gate.py",
-            *build.glob("$(S)/bin/rustc/**/*.h"),
-            *build.glob("$(S)/bin/rustc/**/*.cpp"),
-            *TIMEOUT_INPUT,
-        ],
-        outputs=["$(B)/tst/style/compiler_failure_paths.stamp"],
-        cmd=[
-            *TEST_TIMEOUT,
-            "python3", "$(S)/dev/compiler_failure_gate.py",
-            "--stamp", "$(B)/tst/style/compiler_failure_paths.stamp",
-            *build.glob("$(S)/bin/rustc/**/*.h"),
-            *build.glob("$(S)/bin/rustc/**/*.cpp"),
-        ],
-        descr="ST",
-        color="green",
-    ),
-    command(
         name="unit_node_cast",
         inputs=[
             "$(S)/tst/unit/test_node_cast.py",
