@@ -437,12 +437,10 @@ namespace {
         }
     }
 
-    namespace {
-        slice<const ASTAttribute> getAttrsAfter(const ASTAttributeList& attrs, const ASTAttribute& a) {
-            const auto* start = &a + 1;
-            const auto* end = &attrs.items.back() + 1;
-            return slice<const ASTAttribute>(start, end - start);
-        }
+    slice<const ASTAttribute> getAttrsAfter(const ASTAttributeList& attrs, const ASTAttribute& a) {
+        const auto* start = &a + 1;
+        const auto* end = &attrs.items.back() + 1;
+        return slice<const ASTAttribute>(start, end - start);
     }
 
     void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, const ASTVisibility& vis, ASTItem& item) {
@@ -1007,14 +1005,12 @@ namespace {
         }
     }
 
-    namespace {
-        static ASTPath getPath(const RcString& coreCrate, const char* c1, const char* c2) {
-            return ASTAbsolutePath(coreCrate, {RcString::newInterned(c1), RcString::newInterned(c2)});
-        }
+    static ASTPath getPath(const RcString& coreCrate, const char* c1, const char* c2) {
+        return ASTAbsolutePath(coreCrate, {RcString::newInterned(c1), RcString::newInterned(c2)});
+    }
 
-        static ASTPath getPath(const RcString& coreCrate, const char* c1, const char* c2, const char* c3) {
-            return ASTAbsolutePath(coreCrate, {RcString::newInterned(c1), RcString::newInterned(c2), RcString::newInterned(c3)});
-        }
+    static ASTPath getPath(const RcString& coreCrate, const char* c1, const char* c2, const char* c3) {
+        return ASTAbsolutePath(coreCrate, {RcString::newInterned(c1), RcString::newInterned(c2), RcString::newInterned(c3)});
     }
 
     void ExpandExpr(const ExpandState& es, ASTExprNodeP& node) {

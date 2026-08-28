@@ -385,19 +385,16 @@ namespace {
         virtual void visit(ASTExprNodeDeref& v) override;
     };
 
-    namespace {
-
-        HIRBoundConstness LowerHIRBoundConstness(ASTBoundConstness v) {
-            switch (v) {
-                case ASTBoundConstness::Never:
-                    return HIRBoundConstness::Never;
-                case ASTBoundConstness::Always:
-                    return HIRBoundConstness::Always;
-                case ASTBoundConstness::Maybe:
-                    return HIRBoundConstness::Maybe;
-            }
-            UNREACHABLE();
+    HIRBoundConstness LowerHIRBoundConstness(ASTBoundConstness v) {
+        switch (v) {
+            case ASTBoundConstness::Never:
+                return HIRBoundConstness::Never;
+            case ASTBoundConstness::Always:
+                return HIRBoundConstness::Always;
+            case ASTBoundConstness::Maybe:
+                return HIRBoundConstness::Maybe;
         }
+        UNREACHABLE();
     }
 }
 

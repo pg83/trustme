@@ -33,19 +33,17 @@ namespace {
         ITEM_TYPE_ALIAS,
     };
 
-    namespace {
-        struct CommonFunction: public ExpandDecorator {
-            virtual void handle(const ASTAttribute& mi, ASTFunction& fcn) const = 0;
+    struct CommonFunction: public ExpandDecorator {
+        virtual void handle(const ASTAttribute& mi, ASTFunction& fcn) const = 0;
 
-            AttrStage stage() const override;
+        AttrStage stage() const override;
 
-            void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-            void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-            void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
-        };
-    }
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
+    };
 
     struct CHandlerInline: public CommonFunction {
         void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
@@ -921,438 +919,436 @@ namespace {
         return nullptr;
     }
 
-    namespace {
-        std::vector<ASTPath> getDeriveItems(const ASTAttribute& attr) {
-            Token tok;
-            std::vector<ASTPath> rv;
+    std::vector<ASTPath> getDeriveItems(const ASTAttribute& attr) {
+        Token tok;
+        std::vector<ASTPath> rv;
 
-            TTStream lex(attr.span(), ParseState(), attr.data());
-            lex.getTokenCheck(TOK_PAREN_OPEN);
-            while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-                if (lex.getTokenIf(TOK_DOUBLE_COLON)) {
-                    auto item = lex.lookahead(0) == TOK_STRING ? ASTPath(lex.getTokenCheck(TOK_STRING).str().c_str(), {}) : ASTPath((std::string("=") + lex.getTokenCheck(TOK_IDENT).ident().name.c_str()).c_str(), {});
-                    lex.getTokenCheck(TOK_DOUBLE_COLON);
-                    do {
-                        item += ASTPathNode(lex.getTokenCheck(TOK_IDENT).ident().name);
-                    } while (lex.getTokenIf(TOK_DOUBLE_COLON));
-                    rv.push_back(std::move(item));
-                } else if (lex.getTokenIf(TOK_INTERPOLATED_TYPE, tok)) {
-                    const auto& ty = tok.fragType();
-                    ASSERT_BUG(lex.pointSpan(), ty->isPath(), "TODO: No path :ty in derive, " << ty);
-                    ASSERT_BUG(lex.pointSpan(), ty->data.as_Path(), "" << ty);
-                    rv.push_back(*ty->data.as_Path());
-                } else if (lex.getTokenIf(TOK_INTERPOLATED_META, tok)) {
-                    const auto& mi = tok.fragMeta();
-                    ASSERT_BUG(lex.pointSpan(), !mi.name().elems.empty(), "Empty meta item in derive");
-                    auto item = ASTPath::newRelative({}, {});
-                    for (const auto& e : mi.name().elems) {
-                        item += ASTPathNode(e);
-                    }
-                    rv.push_back(std::move(item));
-                } else {
-                    auto item = ASTPath::newRelative({}, {});
-                    do {
-                        item += ASTPathNode(lex.getTokenCheck(TOK_IDENT).ident().name);
-                    } while (lex.getTokenIf(TOK_DOUBLE_COLON));
-                    rv.push_back(std::move(item));
+        TTStream lex(attr.span(), ParseState(), attr.data());
+        lex.getTokenCheck(TOK_PAREN_OPEN);
+        while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
+            if (lex.getTokenIf(TOK_DOUBLE_COLON)) {
+                auto item = lex.lookahead(0) == TOK_STRING ? ASTPath(lex.getTokenCheck(TOK_STRING).str().c_str(), {}) : ASTPath((std::string("=") + lex.getTokenCheck(TOK_IDENT).ident().name.c_str()).c_str(), {});
+                lex.getTokenCheck(TOK_DOUBLE_COLON);
+                do {
+                    item += ASTPathNode(lex.getTokenCheck(TOK_IDENT).ident().name);
+                } while (lex.getTokenIf(TOK_DOUBLE_COLON));
+                rv.push_back(std::move(item));
+            } else if (lex.getTokenIf(TOK_INTERPOLATED_TYPE, tok)) {
+                const auto& ty = tok.fragType();
+                ASSERT_BUG(lex.pointSpan(), ty->isPath(), "TODO: No path :ty in derive, " << ty);
+                ASSERT_BUG(lex.pointSpan(), ty->data.as_Path(), "" << ty);
+                rv.push_back(*ty->data.as_Path());
+            } else if (lex.getTokenIf(TOK_INTERPOLATED_META, tok)) {
+                const auto& mi = tok.fragMeta();
+                ASSERT_BUG(lex.pointSpan(), !mi.name().elems.empty(), "Empty meta item in derive");
+                auto item = ASTPath::newRelative({}, {});
+                for (const auto& e : mi.name().elems) {
+                    item += ASTPathNode(e);
                 }
-
-                if (lex.lookahead(0) != TOK_COMMA) {
-                    break;
-                }
-                lex.getTokenCheck(TOK_COMMA);
+                rv.push_back(std::move(item));
+            } else {
+                auto item = ASTPath::newRelative({}, {});
+                do {
+                    item += ASTPathNode(lex.getTokenCheck(TOK_IDENT).ident().name);
+                } while (lex.getTokenIf(TOK_DOUBLE_COLON));
+                rv.push_back(std::move(item));
             }
-            lex.getTokenCheck(TOK_PAREN_CLOSE);
-            return rv;
+
+            if (lex.lookahead(0) != TOK_COMMA) {
+                break;
+            }
+            lex.getTokenCheck(TOK_COMMA);
         }
+        lex.getTokenCheck(TOK_PAREN_CLOSE);
+        return rv;
+    }
 
-        ASTType* makeType(ObjPool& pool, const Span& sp, const ASTAbsolutePath& path, const ASTGenericParams& params) {
-            ASTType* type = mkType(pool, sp, path);
-            auto& typesArgs = type->path().nodes().back().args();
-            for (const auto& param : params.params) {
-                if (const auto* pe = param.opt_Type()) {
-                    typesArgs.entries.push_back(mkType(pool, ASTTypeTags::Arg(), sp, pe->name()));
-                }
-                if (const auto* pe = param.opt_Value()) {
-                    auto p = ASTPath(pe->name().name);
-                    typesArgs.entries.push_back(ASTExprNodeP(new ASTExprNodeNamedValue(std::move(p))));
-                }
+    ASTType* makeType(ObjPool& pool, const Span& sp, const ASTAbsolutePath& path, const ASTGenericParams& params) {
+        ASTType* type = mkType(pool, sp, path);
+        auto& typesArgs = type->path().nodes().back().args();
+        for (const auto& param : params.params) {
+            if (const auto* pe = param.opt_Type()) {
+                typesArgs.entries.push_back(mkType(pool, ASTTypeTags::Arg(), sp, pe->name()));
             }
-            return type;
+            if (const auto* pe = param.opt_Value()) {
+                auto p = ASTPath(pe->name().name);
+                typesArgs.entries.push_back(ASTExprNodeP(new ASTExprNodeNamedValue(std::move(p))));
+            }
         }
+        return type;
+    }
 
-        bool substituteType(ASTType*& type, const RcString& from, ASTType* to);
-        bool substitutePath(ASTPath& path, const RcString& from, ASTType* to);
+    bool substituteType(ASTType*& type, const RcString& from, ASTType* to);
+    bool substitutePath(ASTPath& path, const RcString& from, ASTType* to);
 
-        bool substitutePathParams(ASTPathParams& params, const RcString& from, ASTType* to) {
-            bool changed = false;
-            for (auto& param : params.entries) {
-                switch (param.tag()) {
-                    case ASTPathParamEnt::TAG_Null: {
-                        break;
-                    }
-                    case ASTPathParamEnt::TAG_Lifetime: {
-                        break;
-                    }
-                    case ASTPathParamEnt::TAG_Type: {
-                        auto& e = param.as_Type();
-                        changed |= substituteType(e, from, to);
-                        break;
-                    }
-                    case ASTPathParamEnt::TAG_Value: {
-                        break;
-                    }
-                    case ASTPathParamEnt::TAG_AssociatedTyEqual: {
-                        auto& e = param.as_AssociatedTyEqual();
-                        changed |= substitutePathParams(e.first.args(), from, to);
-                        changed |= substituteType(e.second, from, to);
-                        break;
-                    }
-                    case ASTPathParamEnt::TAG_AssociatedValueEqual: {
-                        auto& e = param.as_AssociatedValueEqual();
-                        changed |= substitutePathParams(e.first.args(), from, to);
-                        break;
-                    }
-                    case ASTPathParamEnt::TAG_AssociatedTyBound: {
-                        auto& e = param.as_AssociatedTyBound();
-                        changed |= substitutePathParams(e.first.args(), from, to);
-                        for (auto& trait : e.second) {
-                            changed |= substitutePath(*trait.path, from, to);
-                        }
-                        break;
-                    }
-                }
-            }
-            return changed;
-        }
-
-        bool substitutePath(ASTPath& path, const RcString& from, ASTType* to) {
-            bool changed = false;
-            if (!path.cls.is_Local() && !path.cls.is_Invalid()) {
-                for (auto& node : path.nodes()) {
-                    changed |= substitutePathParams(node.args(), from, to);
-                }
-            }
-            if (auto* ufcs = path.cls.opt_UFCS()) {
-                changed |= substituteType(ufcs->type, from, to);
-                if (ufcs->trait) {
-                    changed |= substitutePath(*ufcs->trait, from, to);
-                }
-            }
-            return changed;
-        }
-
-        bool substituteType(ASTType*& type, const RcString& from, ASTType* to) {
-            if (const auto* generic = type->data.opt_Generic()) {
-                if (generic->name == from) {
-                    type = to->clone();
-                    return true;
-                }
-                return false;
-            }
-            if (const auto* path = type->data.opt_Path()) {
-                if ((*path)->isTrivial() && (*path)->asTrivial() == from) {
-                    type = to->clone();
-                    return true;
-                }
-            }
-
-            bool changed = false;
-            switch (type->data.tag()) {
-                case TypeData::TAG_None: {
+    bool substitutePathParams(ASTPathParams& params, const RcString& from, ASTType* to) {
+        bool changed = false;
+        for (auto& param : params.entries) {
+            switch (param.tag()) {
+                case ASTPathParamEnt::TAG_Null: {
                     break;
                 }
-                case TypeData::TAG_Any: {
+                case ASTPathParamEnt::TAG_Lifetime: {
                     break;
                 }
-                case TypeData::TAG_Bang: {
+                case ASTPathParamEnt::TAG_Type: {
+                    auto& e = param.as_Type();
+                    changed |= substituteType(e, from, to);
                     break;
                 }
-                case TypeData::TAG_Unit: {
+                case ASTPathParamEnt::TAG_Value: {
                     break;
                 }
-                case TypeData::TAG_Macro: {
+                case ASTPathParamEnt::TAG_AssociatedTyEqual: {
+                    auto& e = param.as_AssociatedTyEqual();
+                    changed |= substitutePathParams(e.first.args(), from, to);
+                    changed |= substituteType(e.second, from, to);
                     break;
                 }
-                case TypeData::TAG_Primitive: {
+                case ASTPathParamEnt::TAG_AssociatedValueEqual: {
+                    auto& e = param.as_AssociatedValueEqual();
+                    changed |= substitutePathParams(e.first.args(), from, to);
                     break;
                 }
-                case TypeData::TAG_Function: {
-                    auto& e = type->data.as_Function();
-                    changed |= substituteType(e.info.rettype, from, to);
-                    for (auto*& arg : e.info.argTypes) {
-                        changed |= substituteType(arg, from, to);
-                    }
-                    break;
-                }
-                case TypeData::TAG_Tuple: {
-                    auto& e = type->data.as_Tuple();
-                    for (auto*& inner : e.innerTypes) {
-                        changed |= substituteType(inner, from, to);
-                    }
-                    break;
-                }
-                case TypeData::TAG_Borrow: {
-                    auto& e = type->data.as_Borrow();
-                    changed |= substituteType(e.inner, from, to);
-                    break;
-                }
-                case TypeData::TAG_Pointer: {
-                    auto& e = type->data.as_Pointer();
-                    changed |= substituteType(e.inner, from, to);
-                    break;
-                }
-                case TypeData::TAG_Array: {
-                    auto& e = type->data.as_Array();
-                    changed |= substituteType(e.inner, from, to);
-                    break;
-                }
-                case TypeData::TAG_Slice: {
-                    auto& e = type->data.as_Slice();
-                    changed |= substituteType(e.inner, from, to);
-                    break;
-                }
-                case TypeData::TAG_Pattern: {
-                    auto& e = type->data.as_Pattern();
-                    changed |= substituteType(e.inner, from, to);
-                    break;
-                }
-                case TypeData::TAG_Generic: {
-                    break;
-                }
-                case TypeData::TAG_Path: {
-                    auto& e = type->data.as_Path();
-                    changed |= substitutePath(*e, from, to);
-                    break;
-                }
-                case TypeData::TAG_TraitObject: {
-                    auto& e = type->data.as_TraitObject();
-                    for (auto& trait : e.traits) {
+                case ASTPathParamEnt::TAG_AssociatedTyBound: {
+                    auto& e = param.as_AssociatedTyBound();
+                    changed |= substitutePathParams(e.first.args(), from, to);
+                    for (auto& trait : e.second) {
                         changed |= substitutePath(*trait.path, from, to);
                     }
                     break;
                 }
-                case TypeData::TAG_ErasedType: {
-                    auto& e = type->data.as_ErasedType();
-                    for (auto& trait : e->traits) {
-                        changed |= substitutePath(*trait.path, from, to);
-                    }
-                    for (auto& trait : e->maybeTraits) {
-                        changed |= substitutePath(*trait.path, from, to);
-                    }
-                    if (e->use) {
-                        changed |= substitutePathParams(*e->use, from, to);
-                    }
-                    break;
-                }
             }
-            return changed;
         }
+        return changed;
+    }
 
-        bool substituteBound(ASTGenericBound& bound, const RcString& from, ASTType* to) {
-            bool changed = false;
-            switch (bound.tag()) {
-                case ASTGenericBound::TAG_None: {
-                    break;
-                }
-                case ASTGenericBound::TAG_Lifetime: {
-                    break;
-                }
-                case ASTGenericBound::TAG_TypeLifetime: {
-                    auto& e = bound.as_TypeLifetime();
-                    changed |= substituteType(e.type, from, to);
-                    break;
-                }
-                case ASTGenericBound::TAG_IsTrait: {
-                    auto& e = bound.as_IsTrait();
-                    changed |= substituteType(e.type, from, to);
-                    changed |= substitutePath(e.trait, from, to);
-                    break;
-                }
-                case ASTGenericBound::TAG_MaybeTrait: {
-                    auto& e = bound.as_MaybeTrait();
-                    changed |= substituteType(e.type, from, to);
-                    changed |= substitutePath(e.trait, from, to);
-                    break;
-                }
-                case ASTGenericBound::TAG_NotTrait: {
-                    auto& e = bound.as_NotTrait();
-                    changed |= substituteType(e.type, from, to);
-                    changed |= substitutePath(e.trait, from, to);
-                    break;
-                }
-                case ASTGenericBound::TAG_Equality: {
-                    auto& e = bound.as_Equality();
-                    changed |= substituteType(e.type, from, to);
-                    changed |= substituteType(e.replacement, from, to);
-                    break;
-                }
+    bool substitutePath(ASTPath& path, const RcString& from, ASTType* to) {
+        bool changed = false;
+        if (!path.cls.is_Local() && !path.cls.is_Invalid()) {
+            for (auto& node : path.nodes()) {
+                changed |= substitutePathParams(node.args(), from, to);
             }
-            return changed;
         }
-
-        ASTGenericParams makeImplParams(ObjPool& pool, const Span& sp, const ASTGenericParams& source) {
-            auto params = source.clone();
-            for (auto& param : params.params) {
-                if (auto* type = param.opt_Type()) {
-                    type->getDefault() = mkType(pool, sp);
-                } else if (auto* value = param.opt_Value()) {
-                    value->defaultValue() = ASTExpr();
-                }
+        if (auto* ufcs = path.cls.opt_UFCS()) {
+            changed |= substituteType(ufcs->type, from, to);
+            if (ufcs->trait) {
+                changed |= substitutePath(*ufcs->trait, from, to);
             }
-            return params;
         }
+        return changed;
+    }
 
-        bool isCoercePointee(const ASTPath& traitPath) {
-            if (traitPath.isTrivial()) {
-                return traitPath.asTrivial() == "CoercePointee";
-            }
-            if (const auto* path = traitPath.cls.opt_Relative()) {
-                return path->nodes.size() == 3 && (path->nodes[0].name() == "core" || path->nodes[0].name() == "std") && path->nodes[1].name() == "marker" && path->nodes[2].name() == "CoercePointee";
-            }
-            if (const auto* path = traitPath.cls.opt_Absolute()) {
-                return (path->crate == "=core" || path->crate == "=std") && path->nodes.size() == 2 && path->nodes[0].name() == "marker" && path->nodes[1].name() == "CoercePointee";
+    bool substituteType(ASTType*& type, const RcString& from, ASTType* to) {
+        if (const auto* generic = type->data.opt_Generic()) {
+            if (generic->name == from) {
+                type = to->clone();
+                return true;
             }
             return false;
         }
-
-        void addCoercePointeeImpl(const Span& sp, ASTModule& mod, ASTPath traitPath, ASTGenericParams params, ASTType* selfType) {
-            mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", ASTImpl(ASTImplDef(mv$(params), makeSpanned(sp, mv$(traitPath)), selfType)), {});
+        if (const auto* path = type->data.opt_Path()) {
+            if ((*path)->isTrivial() && (*path)->asTrivial() == from) {
+                type = to->clone();
+                return true;
+            }
         }
 
-        void deriveCoercePointee(const Span& sp, const DeriveOpts& opts, ASTModule& mod, const ASTGenericParams& sourceParams, ASTType* selfType, const ASTStruct& str) {
-            bool hasField = false;
-            switch (str.data.tag()) {
-                case ASTStructData::TAG_Unit: {
-                    break;
-                }
-                case ASTStructData::TAG_Struct: {
-                    auto& e = str.data.as_Struct();
-                    hasField = !e.ents.empty();
-                    break;
-                }
-                case ASTStructData::TAG_Tuple: {
-                    auto& e = str.data.as_Tuple();
-                    hasField = !e.ents.empty();
-                    break;
-                }
+        bool changed = false;
+        switch (type->data.tag()) {
+            case TypeData::TAG_None: {
+                break;
             }
-            if (!hasField) {
-                ERROR(sp, E0000, "CoercePointee can only be derived for a struct with fields");
+            case TypeData::TAG_Any: {
+                break;
             }
+            case TypeData::TAG_Bang: {
+                break;
+            }
+            case TypeData::TAG_Unit: {
+                break;
+            }
+            case TypeData::TAG_Macro: {
+                break;
+            }
+            case TypeData::TAG_Primitive: {
+                break;
+            }
+            case TypeData::TAG_Function: {
+                auto& e = type->data.as_Function();
+                changed |= substituteType(e.info.rettype, from, to);
+                for (auto*& arg : e.info.argTypes) {
+                    changed |= substituteType(arg, from, to);
+                }
+                break;
+            }
+            case TypeData::TAG_Tuple: {
+                auto& e = type->data.as_Tuple();
+                for (auto*& inner : e.innerTypes) {
+                    changed |= substituteType(inner, from, to);
+                }
+                break;
+            }
+            case TypeData::TAG_Borrow: {
+                auto& e = type->data.as_Borrow();
+                changed |= substituteType(e.inner, from, to);
+                break;
+            }
+            case TypeData::TAG_Pointer: {
+                auto& e = type->data.as_Pointer();
+                changed |= substituteType(e.inner, from, to);
+                break;
+            }
+            case TypeData::TAG_Array: {
+                auto& e = type->data.as_Array();
+                changed |= substituteType(e.inner, from, to);
+                break;
+            }
+            case TypeData::TAG_Slice: {
+                auto& e = type->data.as_Slice();
+                changed |= substituteType(e.inner, from, to);
+                break;
+            }
+            case TypeData::TAG_Pattern: {
+                auto& e = type->data.as_Pattern();
+                changed |= substituteType(e.inner, from, to);
+                break;
+            }
+            case TypeData::TAG_Generic: {
+                break;
+            }
+            case TypeData::TAG_Path: {
+                auto& e = type->data.as_Path();
+                changed |= substitutePath(*e, from, to);
+                break;
+            }
+            case TypeData::TAG_TraitObject: {
+                auto& e = type->data.as_TraitObject();
+                for (auto& trait : e.traits) {
+                    changed |= substitutePath(*trait.path, from, to);
+                }
+                break;
+            }
+            case TypeData::TAG_ErasedType: {
+                auto& e = type->data.as_ErasedType();
+                for (auto& trait : e->traits) {
+                    changed |= substitutePath(*trait.path, from, to);
+                }
+                for (auto& trait : e->maybeTraits) {
+                    changed |= substitutePath(*trait.path, from, to);
+                }
+                if (e->use) {
+                    changed |= substitutePathParams(*e->use, from, to);
+                }
+                break;
+            }
+        }
+        return changed;
+    }
 
-            size_t pointeeIndex = SIZE_MAX;
-            size_t typeCount = 0;
+    bool substituteBound(ASTGenericBound& bound, const RcString& from, ASTType* to) {
+        bool changed = false;
+        switch (bound.tag()) {
+            case ASTGenericBound::TAG_None: {
+                break;
+            }
+            case ASTGenericBound::TAG_Lifetime: {
+                break;
+            }
+            case ASTGenericBound::TAG_TypeLifetime: {
+                auto& e = bound.as_TypeLifetime();
+                changed |= substituteType(e.type, from, to);
+                break;
+            }
+            case ASTGenericBound::TAG_IsTrait: {
+                auto& e = bound.as_IsTrait();
+                changed |= substituteType(e.type, from, to);
+                changed |= substitutePath(e.trait, from, to);
+                break;
+            }
+            case ASTGenericBound::TAG_MaybeTrait: {
+                auto& e = bound.as_MaybeTrait();
+                changed |= substituteType(e.type, from, to);
+                changed |= substitutePath(e.trait, from, to);
+                break;
+            }
+            case ASTGenericBound::TAG_NotTrait: {
+                auto& e = bound.as_NotTrait();
+                changed |= substituteType(e.type, from, to);
+                changed |= substitutePath(e.trait, from, to);
+                break;
+            }
+            case ASTGenericBound::TAG_Equality: {
+                auto& e = bound.as_Equality();
+                changed |= substituteType(e.type, from, to);
+                changed |= substituteType(e.replacement, from, to);
+                break;
+            }
+        }
+        return changed;
+    }
+
+    ASTGenericParams makeImplParams(ObjPool& pool, const Span& sp, const ASTGenericParams& source) {
+        auto params = source.clone();
+        for (auto& param : params.params) {
+            if (auto* type = param.opt_Type()) {
+                type->getDefault() = mkType(pool, sp);
+            } else if (auto* value = param.opt_Value()) {
+                value->defaultValue() = ASTExpr();
+            }
+        }
+        return params;
+    }
+
+    bool isCoercePointee(const ASTPath& traitPath) {
+        if (traitPath.isTrivial()) {
+            return traitPath.asTrivial() == "CoercePointee";
+        }
+        if (const auto* path = traitPath.cls.opt_Relative()) {
+            return path->nodes.size() == 3 && (path->nodes[0].name() == "core" || path->nodes[0].name() == "std") && path->nodes[1].name() == "marker" && path->nodes[2].name() == "CoercePointee";
+        }
+        if (const auto* path = traitPath.cls.opt_Absolute()) {
+            return (path->crate == "=core" || path->crate == "=std") && path->nodes.size() == 2 && path->nodes[0].name() == "marker" && path->nodes[1].name() == "CoercePointee";
+        }
+        return false;
+    }
+
+    void addCoercePointeeImpl(const Span& sp, ASTModule& mod, ASTPath traitPath, ASTGenericParams params, ASTType* selfType) {
+        mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", ASTImpl(ASTImplDef(mv$(params), makeSpanned(sp, mv$(traitPath)), selfType)), {});
+    }
+
+    void deriveCoercePointee(const Span& sp, const DeriveOpts& opts, ASTModule& mod, const ASTGenericParams& sourceParams, ASTType* selfType, const ASTStruct& str) {
+        bool hasField = false;
+        switch (str.data.tag()) {
+            case ASTStructData::TAG_Unit: {
+                break;
+            }
+            case ASTStructData::TAG_Struct: {
+                auto& e = str.data.as_Struct();
+                hasField = !e.ents.empty();
+                break;
+            }
+            case ASTStructData::TAG_Tuple: {
+                auto& e = str.data.as_Tuple();
+                hasField = !e.ents.empty();
+                break;
+            }
+        }
+        if (!hasField) {
+            ERROR(sp, E0000, "CoercePointee can only be derived for a struct with fields");
+        }
+
+        size_t pointeeIndex = SIZE_MAX;
+        size_t typeCount = 0;
+        for (size_t i = 0; i < sourceParams.params.size(); i++) {
+            if (const auto* type = sourceParams.params[i].opt_Type()) {
+                typeCount++;
+                if (type->attrs().has("pointee")) {
+                    if (pointeeIndex != SIZE_MAX) {
+                        ERROR(sp, E0000, "Only one CoercePointee type parameter can have #[pointee]");
+                    }
+                    pointeeIndex = i;
+                }
+            }
+        }
+        if (typeCount == 0) {
+            ERROR(sp, E0000, "CoercePointee requires a generic type parameter");
+        }
+        if (typeCount == 1 && pointeeIndex == SIZE_MAX) {
             for (size_t i = 0; i < sourceParams.params.size(); i++) {
-                if (const auto* type = sourceParams.params[i].opt_Type()) {
-                    typeCount++;
-                    if (type->attrs().has("pointee")) {
-                        if (pointeeIndex != SIZE_MAX) {
-                            ERROR(sp, E0000, "Only one CoercePointee type parameter can have #[pointee]");
-                        }
-                        pointeeIndex = i;
-                    }
+                if (sourceParams.params[i].is_Type()) {
+                    pointeeIndex = i;
+                    break;
                 }
             }
-            if (typeCount == 0) {
-                ERROR(sp, E0000, "CoercePointee requires a generic type parameter");
-            }
-            if (typeCount == 1 && pointeeIndex == SIZE_MAX) {
-                for (size_t i = 0; i < sourceParams.params.size(); i++) {
-                    if (sourceParams.params[i].is_Type()) {
-                        pointeeIndex = i;
-                        break;
-                    }
-                }
-            }
-            if (pointeeIndex == SIZE_MAX) {
-                ERROR(sp, E0000, "One CoercePointee type parameter must have #[pointee]");
-            }
-
-            const auto& pointeeName = sourceParams.params[pointeeIndex].as_Type().name();
-            const auto targetName = RcString::newInterned("__S");
-            auto* targetParamType = mkType(*selfType->pool, sp, targetName);
-            auto* targetSelfType = selfType->clone();
-            ASSERT_BUG(sp, substituteType(targetSelfType, pointeeName, targetParamType), "CoercePointee self type does not use " << pointeeName);
-
-            addCoercePointeeImpl(sp, mod, getPath(opts.coreName, "marker", "CoercePointeeValidated"), makeImplParams(*selfType->pool, sp, sourceParams), selfType->clone());
-
-            auto params = makeImplParams(*selfType->pool, sp, sourceParams);
-            for (const auto& sourceBound : sourceParams.bounds) {
-                auto targetBound = sourceBound.clone();
-                if (substituteBound(targetBound, pointeeName, targetParamType)) {
-                    params.bounds.push_back(mv$(targetBound));
-                }
-            }
-            params.addTyParam(ASTTypeParam(*selfType->pool, sp, ASTAttributeList(), targetName));
-
-            auto unsizePath = getPath(opts.coreName, "marker", "Unsize");
-            unsizePath.nodes().back().args().entries.push_back(targetParamType->clone());
-            params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*selfType->pool, sp, pointeeName), {}, mv$(unsizePath)}));
-
-            auto dispatchPath = getPath(opts.coreName, "ops", "DispatchFromDyn");
-            dispatchPath.nodes().back().args().entries.push_back(targetSelfType->clone());
-            addCoercePointeeImpl(sp, mod, mv$(dispatchPath), params.clone(), selfType->clone());
-
-            auto coercePath = getPath(opts.coreName, "ops", "CoerceUnsized");
-            coercePath.nodes().back().args().entries.push_back(targetSelfType);
-            addCoercePointeeImpl(sp, mod, mv$(coercePath), mv$(params), selfType->clone());
+        }
+        if (pointeeIndex == SIZE_MAX) {
+            ERROR(sp, E0000, "One CoercePointee type parameter must have #[pointee]");
         }
 
-        template <typename T>
-        void deriveCoercePointee(const Span& sp, const DeriveOpts&, ASTModule&, const ASTGenericParams&, ASTType*, const T&) {
-            ERROR(sp, E0000, "CoercePointee can only be derived for structs");
+        const auto& pointeeName = sourceParams.params[pointeeIndex].as_Type().name();
+        const auto targetName = RcString::newInterned("__S");
+        auto* targetParamType = mkType(*selfType->pool, sp, targetName);
+        auto* targetSelfType = selfType->clone();
+        ASSERT_BUG(sp, substituteType(targetSelfType, pointeeName, targetParamType), "CoercePointee self type does not use " << pointeeName);
+
+        addCoercePointeeImpl(sp, mod, getPath(opts.coreName, "marker", "CoercePointeeValidated"), makeImplParams(*selfType->pool, sp, sourceParams), selfType->clone());
+
+        auto params = makeImplParams(*selfType->pool, sp, sourceParams);
+        for (const auto& sourceBound : sourceParams.bounds) {
+            auto targetBound = sourceBound.clone();
+            if (substituteBound(targetBound, pointeeName, targetParamType)) {
+                params.bounds.push_back(mv$(targetBound));
+            }
         }
+        params.addTyParam(ASTTypeParam(*selfType->pool, sp, ASTAttributeList(), targetName));
 
-        std::vector<RcString> findMacro(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, const ASTPath& traitPath) {
-            std::vector<RcString> macPath;
+        auto unsizePath = getPath(opts.coreName, "marker", "Unsize");
+        unsizePath.nodes().back().args().entries.push_back(targetParamType->clone());
+        params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*selfType->pool, sp, pointeeName), {}, mv$(unsizePath)}));
 
-            if (traitPath.isTrivial()) {
-                auto macName = traitPath.asTrivial();
+        auto dispatchPath = getPath(opts.coreName, "ops", "DispatchFromDyn");
+        dispatchPath.nodes().back().args().entries.push_back(targetSelfType->clone());
+        addCoercePointeeImpl(sp, mod, mv$(dispatchPath), params.clone(), selfType->clone());
 
-                for (const auto& macImport : mod.macroImports) {
-                    if (macImport.name == macName) {
-                        switch (macImport.ref.tag()) {
-                            default:
-                                break;
-                            case MacroRef::TAG_ExternalProcMacro: {
-                                auto& pm = macImport.ref.as_ExternalProcMacro();
-                                macPath.push_back(pm->path.crateName());
-                                macPath.insert(macPath.end(), pm->path.components().begin(), pm->path.components().end());
-                                break;
-                            }
-                        }
-                        if (!macPath.empty()) {
+        auto coercePath = getPath(opts.coreName, "ops", "CoerceUnsized");
+        coercePath.nodes().back().args().entries.push_back(targetSelfType);
+        addCoercePointeeImpl(sp, mod, mv$(coercePath), mv$(params), selfType->clone());
+    }
+
+    template <typename T>
+    void deriveCoercePointee(const Span& sp, const DeriveOpts&, ASTModule&, const ASTGenericParams&, ASTType*, const T&) {
+        ERROR(sp, E0000, "CoercePointee can only be derived for structs");
+    }
+
+    std::vector<RcString> findMacro(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, const ASTPath& traitPath) {
+        std::vector<RcString> macPath;
+
+        if (traitPath.isTrivial()) {
+            auto macName = traitPath.asTrivial();
+
+            for (const auto& macImport : mod.macroImports) {
+                if (macImport.name == macName) {
+                    switch (macImport.ref.tag()) {
+                        default:
+                            break;
+                        case MacroRef::TAG_ExternalProcMacro: {
+                            auto& pm = macImport.ref.as_ExternalProcMacro();
+                            macPath.push_back(pm->path.crateName());
+                            macPath.insert(macPath.end(), pm->path.components().begin(), pm->path.components().end());
                             break;
                         }
                     }
-                }
-            }
-            if (macPath.empty()) {
-                auto mac = ExpandLookupMacro(sp, wb, crate, LList<const ASTModule*>(nullptr, &mod), traitPath);
-
-                switch (mac.tag()) {
-                    case MacroRef::TAG_None: {
-                        break;
-                    }
-                    case MacroRef::TAG_ExternalProcMacro: {
-                        auto& extProcMac = mac.as_ExternalProcMacro();
-                        macPath.push_back(extProcMac->path.crateName());
-                        macPath.insert(macPath.end(), extProcMac->path.components().begin(), extProcMac->path.components().end());
-                        break;
-                    }
-                    case MacroRef::TAG_BuiltinProcMacro: {
-                        TODO(sp, "Handle builtin proc macro");
-                        break;
-                    }
-                    case MacroRef::TAG_MacroRules: {
-                        TODO(sp, "Custom derive using macro_rules?");
+                    if (!macPath.empty()) {
                         break;
                     }
                 }
             }
-            return macPath;
         }
+        if (macPath.empty()) {
+            auto mac = ExpandLookupMacro(sp, wb, crate, LList<const ASTModule*>(nullptr, &mod), traitPath);
+
+            switch (mac.tag()) {
+                case MacroRef::TAG_None: {
+                    break;
+                }
+                case MacroRef::TAG_ExternalProcMacro: {
+                    auto& extProcMac = mac.as_ExternalProcMacro();
+                    macPath.push_back(extProcMac->path.crateName());
+                    macPath.insert(macPath.end(), extProcMac->path.components().begin(), extProcMac->path.components().end());
+                    break;
+                }
+                case MacroRef::TAG_BuiltinProcMacro: {
+                    TODO(sp, "Handle builtin proc macro");
+                    break;
+                }
+                case MacroRef::TAG_MacroRules: {
+                    TODO(sp, "Custom derive using macro_rules?");
+                    break;
+                }
+            }
+        }
+        return macPath;
     }
 
     template <typename T>

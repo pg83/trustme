@@ -247,10 +247,8 @@ namespace {
 namespace {
     void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& lval);
 
-    namespace {
-        HIRTypeRef getVtableType(const Span& sp, const ::StaticTraitResolve& resolve, const HIRTypeData::Data_TraitObject& te) {
-            return te.trait.traitPtr->getVtableType(sp, resolve.hirCrate(), te);
-        }
+    HIRTypeRef getVtableType(const Span& sp, const ::StaticTraitResolve& resolve, const HIRTypeData::Data_TraitObject& te) {
+        return te.trait.traitPtr->getVtableType(sp, resolve.hirCrate(), te);
     }
 
     const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const HIRPath& path, HIRTypeRef& outTy, MonomorphState& params) {
@@ -296,33 +294,31 @@ namespace {
         }
     }
 
-    namespace {
-        bool typeAcceptsAllBitPatterns(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
-            if (const auto* primitive = ty->opt_Primitive()) {
-                return *primitive != HIRCoreType::Bool && *primitive != HIRCoreType::Char && *primitive != HIRCoreType::Str;
+    bool typeAcceptsAllBitPatterns(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
+        if (const auto* primitive = ty->opt_Primitive()) {
+            return *primitive != HIRCoreType::Bool && *primitive != HIRCoreType::Char && *primitive != HIRCoreType::Str;
+        }
+        if (const auto* array = ty->opt_Array()) {
+            return array->size.as_Known() == 0 || typeAcceptsAllBitPatterns(sp, resolve, array->inner);
+        }
+        if (ty->is_Tuple() || (ty->is_Path() && ty->as_Path().binding.is_Struct())) {
+            const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
+            if (!repr) {
+                return false;
             }
-            if (const auto* array = ty->opt_Array()) {
-                return array->size.as_Known() == 0 || typeAcceptsAllBitPatterns(sp, resolve, array->inner);
-            }
-            if (ty->is_Tuple() || (ty->is_Path() && ty->as_Path().binding.is_Struct())) {
-                const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
-                if (!repr) {
+            for (const auto& field : repr->fields) {
+                if (!typeAcceptsAllBitPatterns(sp, resolve, field.ty)) {
                     return false;
                 }
-                for (const auto& field : repr->fields) {
-                    if (!typeAcceptsAllBitPatterns(sp, resolve, field.ty)) {
-                        return false;
-                    }
-                }
-                return true;
             }
-            return false;
+            return true;
         }
+        return false;
+    }
 
-        MIRConstant createVtable(HIRTypeRef ty, const HIRTraitPath& trait, const RcString& vtableName) {
-            auto vtablePath = HIRPath(mv$(ty), trait.path.clone(), vtableName);
-            return MIRConstant::make_ItemAddr(box$(vtablePath));
-        }
+    MIRConstant createVtable(HIRTypeRef ty, const HIRTraitPath& trait, const RcString& vtableName) {
+        auto vtablePath = HIRPath(mv$(ty), trait.path.clone(), vtableName);
+        return MIRConstant::make_ItemAddr(box$(vtablePath));
     }
 
     MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mutator, EncodedLiteralSlice lit, HIRTypeRef ty, const MonomorphState& params, HIRPath path) {
@@ -1156,13 +1152,11 @@ namespace {
 
     void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam& p);
 
-    namespace {
-        static void MIRCleanupAsmConst(const MIRTypeResolve& state, MirMutator& mutator, MIRAsmParam& p) {
-            auto param = MIRParam(std::move(p.as_Const()));
-            MIRCleanupParam(state, mutator, param);
-            if (param.is_Constant()) {
-                p = MIRAsmParam::make_Const(std::move(param.as_Constant()));
-            }
+    static void MIRCleanupAsmConst(const MIRTypeResolve& state, MirMutator& mutator, MIRAsmParam& p) {
+        auto param = MIRParam(std::move(p.as_Const()));
+        MIRCleanupParam(state, mutator, param);
+        if (param.is_Constant()) {
+            p = MIRAsmParam::make_Const(std::move(param.as_Constant()));
         }
     }
 
@@ -2954,76 +2948,73 @@ namespace {
         return inlineHappened;
     }
 
-    namespace {
+    std::ostream& operator<<(std::ostream& os, const OptimiseStmtRef& x) {
+        return os << "BB" << x.bbIdx << "/" << x.stmtIdx;
+    }
 
-        std::ostream& operator<<(std::ostream& os, const OptimiseStmtRef& x) {
-            return os << "BB" << x.bbIdx << "/" << x.stmtIdx;
+    enum class IterPathRes {
+        Abort,
+        EarlyTrue,
+        Complete,
+    };
+
+    IterPathRes iterPathWith(const MIRFunction& fcn, const OptimiseStmtRef& start, const OptimiseStmtRef& end, IterPathCallback& cb) {
+        if (start.bbIdx == end.bbIdx) {
+            assert(start.stmtIdx <= end.stmtIdx);
         }
 
-        enum class IterPathRes {
-            Abort,
-            EarlyTrue,
-            Complete,
-        };
+        auto vistedBbs = std::set<unsigned>();
+        for (auto ref = start; ref.bbIdx != end.bbIdx || ref.stmtIdx < end.stmtIdx;) {
+            const auto& bb = fcn.blocks.at(ref.bbIdx);
+            if (ref.stmtIdx < bb.statements.size()) {
+                if (cb.visitStatement(ref, bb.statements.at(ref.stmtIdx))) {
+                    return IterPathRes::EarlyTrue;
+                }
 
-        IterPathRes iterPathWith(const MIRFunction& fcn, const OptimiseStmtRef& start, const OptimiseStmtRef& end, IterPathCallback& cb) {
-            if (start.bbIdx == end.bbIdx) {
-                assert(start.stmtIdx <= end.stmtIdx);
-            }
+                ref.stmtIdx++;
+            } else {
+                if (cb.visitTerminator(ref, bb.terminator)) {
+                    return IterPathRes::EarlyTrue;
+                }
 
-            auto vistedBbs = std::set<unsigned>();
-            for (auto ref = start; ref.bbIdx != end.bbIdx || ref.stmtIdx < end.stmtIdx;) {
-                const auto& bb = fcn.blocks.at(ref.bbIdx);
-                if (ref.stmtIdx < bb.statements.size()) {
-                    if (cb.visitStatement(ref, bb.statements.at(ref.stmtIdx))) {
-                        return IterPathRes::EarlyTrue;
-                    }
+                if (ref.bbIdx == end.bbIdx) {
+                    break;
+                }
 
-                    ref.stmtIdx++;
-                } else {
-                    if (cb.visitTerminator(ref, bb.terminator)) {
-                        return IterPathRes::EarlyTrue;
-                    }
-
-                    if (ref.bbIdx == end.bbIdx) {
-                        break;
-                    }
-
-                    if (const auto* te = bb.terminator.opt_Goto()) {
-                        if (!vistedBbs.insert(*te).second) {
-                            return IterPathRes::Abort;
-                        }
-                        ref.stmtIdx = 0;
-                        ref.bbIdx = *te;
-                    } else if (const auto* te = bb.terminator.opt_Call()) {
-                        if (!vistedBbs.insert(te->retBlock).second) {
-                            return IterPathRes::Abort;
-                        }
-                        ref.stmtIdx = 0;
-                        ref.bbIdx = te->retBlock;
-                    } else {
+                if (const auto* te = bb.terminator.opt_Goto()) {
+                    if (!vistedBbs.insert(*te).second) {
                         return IterPathRes::Abort;
                     }
+                    ref.stmtIdx = 0;
+                    ref.bbIdx = *te;
+                } else if (const auto* te = bb.terminator.opt_Call()) {
+                    if (!vistedBbs.insert(te->retBlock).second) {
+                        return IterPathRes::Abort;
+                    }
+                    ref.stmtIdx = 0;
+                    ref.bbIdx = te->retBlock;
+                } else {
+                    return IterPathRes::Abort;
                 }
             }
-            return IterPathRes::Complete;
         }
+        return IterPathRes::Complete;
+    }
 
-        template <typename S, typename T>
-        IterPathRes iterPath(const MIRFunction& fcn, const OptimiseStmtRef& start, const OptimiseStmtRef& end, S statement, T terminator) {
-            IterPathCb<S, T> cb(statement, terminator);
-            return iterPathWith(fcn, start, end, cb);
-        }
+    template <typename S, typename T>
+    IterPathRes iterPath(const MIRFunction& fcn, const OptimiseStmtRef& start, const OptimiseStmtRef& end, S statement, T terminator) {
+        IterPathCb<S, T> cb(statement, terminator);
+        return iterPathWith(fcn, start, end, cb);
+    }
 
-        bool checkInvalidatesLvalue(const MIRStatement& stmt, const MIRLValue& val, bool isCopy, bool alsoRead = false) {
-            CheckInvalidatesLvalue cb{val, isCopy, alsoRead};
-            return optVisitMirLvalues(stmt, cb);
-        }
+    bool checkInvalidatesLvalue(const MIRStatement& stmt, const MIRLValue& val, bool isCopy, bool alsoRead = false) {
+        CheckInvalidatesLvalue cb{val, isCopy, alsoRead};
+        return optVisitMirLvalues(stmt, cb);
+    }
 
-        bool checkInvalidatesLvalue(const MIRTerminator& term, const MIRLValue& val, bool isCopy, bool alsoRead = false) {
-            CheckInvalidatesLvalue cb{val, isCopy, alsoRead};
-            return optVisitMirLvalues(term, cb);
-        }
+    bool checkInvalidatesLvalue(const MIRTerminator& term, const MIRLValue& val, bool isCopy, bool alsoRead = false) {
+        CheckInvalidatesLvalue cb{val, isCopy, alsoRead};
+        return optVisitMirLvalues(term, cb);
     }
 
     bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& fcn) {

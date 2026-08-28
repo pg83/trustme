@@ -412,284 +412,296 @@ namespace {
         }
     }
 
-    namespace {
-        ASTPath splitIntoCrate(const Span& sp, ASTPath path, unsigned int start, const RcString& crateName) {
-            auto& nodes = path.nodes();
-            ASTPath np = ASTPath(crateName, {});
-            for (unsigned int i = start; i < nodes.size(); i++) {
-                np.nodes().push_back(mv$(nodes[i]));
-            }
-            np.bindings = path.bindings.clone();
-            return np;
+    ASTPath splitIntoCrate(const Span& sp, ASTPath path, unsigned int start, const RcString& crateName) {
+        auto& nodes = path.nodes();
+        ASTPath np = ASTPath(crateName, {});
+        for (unsigned int i = start; i < nodes.size(); i++) {
+            np.nodes().push_back(mv$(nodes[i]));
+        }
+        np.bindings = path.bindings.clone();
+        return np;
+    }
+
+    ASTPath splitIntoUfcsTy(ObjPool& pool, const Span& sp, const ASTPath& path, unsigned int i /*item_name_idx*/) {
+        const auto& pathAbs = path.cls.as_Absolute();
+        auto typePath = ASTPath(path);
+        typePath.cls.as_Absolute().nodes.resize(i + 1);
+
+        auto newPath = ASTPath::newUfcsTy(::mkType(pool, sp, mv$(typePath)));
+        for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
+            newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
         }
 
-        ASTPath splitIntoUfcsTy(ObjPool& pool, const Span& sp, const ASTPath& path, unsigned int i /*item_name_idx*/) {
-            const auto& pathAbs = path.cls.as_Absolute();
-            auto typePath = ASTPath(path);
-            typePath.cls.as_Absolute().nodes.resize(i + 1);
+        return newPath;
+    }
 
-            auto newPath = ASTPath::newUfcsTy(::mkType(pool, sp, mv$(typePath)));
-            for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
-                newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
-            }
+    ASTPath splitReplaceIntoUfcsPath(ObjPool& pool, const Span& sp, ASTPath path, unsigned int i, const ASTPath& tyPathTpl) {
+        auto& pathAbs = path.cls.as_Absolute();
+        auto& n = pathAbs.nodes[i];
 
-            return newPath;
+        auto typePath = ASTPath(tyPathTpl);
+        if (!n.args().isEmpty()) {
+            typePath.nodes().back().args() = mv$(n.args());
+        }
+        auto newPath = ASTPath::newUfcsTy(::mkType(pool, sp, mv$(typePath)));
+        for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
+            newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
         }
 
-        ASTPath splitReplaceIntoUfcsPath(ObjPool& pool, const Span& sp, ASTPath path, unsigned int i, const ASTPath& tyPathTpl) {
-            auto& pathAbs = path.cls.as_Absolute();
-            auto& n = pathAbs.nodes[i];
+        return newPath;
+    }
 
-            auto typePath = ASTPath(tyPathTpl);
-            if (!n.args().isEmpty()) {
-                typePath.nodes().back().args() = mv$(n.args());
-            }
-            auto newPath = ASTPath::newUfcsTy(::mkType(pool, sp, mv$(typePath)));
-            for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
-                newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
-            }
-
-            return newPath;
-        }
-
-        void ResolveAbsolutePathBindAbsoluteHirFromImport(Context& context, const Span& sp, bool isValue, ASTPath& path, const HIRSimplePath& p) {
-            if (p.crateName() == CRATE_BUILTINS) {
-                ASTPath rv(p.crateName(), {});
-                rv.nodes().reserve(p.components().size());
-                for (const auto& c : p.components()) {
-                    rv.nodes().push_back(ASTPathNode(c));
-                }
-                rv.nodes().back().args() = mv$(path.nodes().back().args());
-                auto ap = spToAp(p);
-
-                if (coretypeFromstring(p.components().back().c_str()) != CORETYPE_INVAL) {
-                    rv.bindings.type.set(ap, ASTPathBindingType::make_TypeAlias({nullptr}));
-                } else {
-                    rv.bindings.macro.set(ap, ASTPathBindingMacro::make_MacroRules({nullptr}));
-                }
-                path = mv$(rv);
-                return;
-            }
-            const auto& extCrate = context.crate.externCrates.at(p.crateName());
-            const HIRModule* hmod = &extCrate.hir->rootModule;
-            for (unsigned int i = 0; i < p.components().size() - 1; i++) {
-                const auto& name = p.components()[i];
-                auto it = hmod->modItems.find(name);
-                if (it == hmod->modItems.end()) {
-                    ERROR(sp, E0000, "Couldn't find path component '" << name << "' of " << p);
-                }
-
-                switch (it->second->ent.tag()) {
-                    default:
-                        TODO(sp, "Unknown item type in path - " << i << " " << p << " - " << it->second->ent.tagStr());
-                    case HIRTypeItem::TAG_Enum: {
-                        auto& e = it->second->ent.as_Enum();
-                        if (i != p.components().size() - 2) {
-                            ERROR(sp, E0000, "Enum as path component in unexpected location - " << p);
-                        }
-                        const auto& varname = p.components().back();
-                        auto varIdx = e.findVariant(varname);
-                        ASSERT_BUG(sp, varIdx != SIZE_MAX, "Extern crate import path points to non-present variant - " << p);
-
-                        ASTPath rv(p.crateName(), {});
-                        rv.nodes().reserve(p.components().size());
-                        for (const auto& c : p.components()) {
-                            rv.nodes().push_back(ASTPathNode(c));
-                        }
-                        rv.nodes().back().args() = mv$(path.nodes().back().args());
-                        auto ap = spToAp(p);
-                        if (e.data.is_Data() && e.data.as_Data()[varIdx].isStruct) {
-                            rv.bindings.type.set(ap, ASTPathBindingType::make_EnumVar({nullptr, static_cast<unsigned>(varIdx), &e}));
-                        } else {
-                            rv.bindings.value.set(ap, ASTPathBindingValue::make_EnumVar({nullptr, static_cast<unsigned>(varIdx), &e}));
-                        }
-                        path = mv$(rv);
-
-                        return;
-                    }
-                    case HIRTypeItem::TAG_Module: {
-                        auto& e = it->second->ent.as_Module();
-                        hmod = &e;
-                        break;
-                    }
-                }
-            }
-
-            ASTPath::Bindings pb;
-
-            const auto& name = p.components().back();
-            auto ap = spToAp(p);
-            if (isValue) {
-                auto it = hmod->valueItems.find(name);
-                if (it == hmod->valueItems.end()) {
-                    ERROR(sp, E0000, "Couldn't find final component of " << p);
-                }
-                ASTPathBindingValue pbv;
-                switch (it->second->ent.tag()) {
-                    case HIRValueItem::TAG_Import: {
-                        BUG(sp, "HIR Import item pointed to an import");
-                        break;
-                    }
-                    case HIRValueItem::TAG_Constant: {
-                        pbv = ASTPathBindingValue::make_Static({nullptr, nullptr});
-                        break;
-                    }
-                    case HIRValueItem::TAG_Static: {
-                        pbv = ASTPathBindingValue::make_Static({nullptr, it->second->ent.as_Static()});
-                        break;
-                    }
-                    case HIRValueItem::TAG_StructConstant: {
-                        auto& e = it->second->ent.as_StructConstant();
-                        pbv = ASTPathBindingValue::make_Struct({nullptr, &extCrate.hir->getTypeitemByPath(sp, e.ty, true).as_Struct()});
-                        break;
-                    }
-                    case HIRValueItem::TAG_Function: {
-                        pbv = ASTPathBindingValue::make_Function({nullptr /*, &e*/});
-                        break;
-                    }
-                    case HIRValueItem::TAG_StructConstructor: {
-                        auto& e = it->second->ent.as_StructConstructor();
-                        pbv = ASTPathBindingValue::make_Struct({nullptr, &extCrate.hir->getTypeitemByPath(sp, e.ty, true).as_Struct()});
-                        break;
-                    }
-                }
-                pb.value.set(std::move(ap), std::move(pbv));
-            } else {
-                auto it = hmod->modItems.find(name);
-                if (it == hmod->modItems.end()) {
-                    ERROR(sp, E0000, "Couldn't find final component of " << p);
-                }
-                ASTPathBindingType pbt;
-                switch (it->second->ent.tag()) {
-                    case HIRTypeItem::TAG_Import: {
-                        BUG(sp, "HIR Import item pointed to an import");
-                        break;
-                    }
-                    case HIRTypeItem::TAG_Module: {
-                        auto& e = it->second->ent.as_Module();
-                        pbt = ASTPathBindingType::make_Module({nullptr, {&extCrate, &e}});
-                        break;
-                    }
-                    case HIRTypeItem::TAG_Trait: {
-                        auto& e = it->second->ent.as_Trait();
-                        pbt = ASTPathBindingType::make_Trait({nullptr, &e});
-                        break;
-                    }
-                    case HIRTypeItem::TAG_TraitAlias: {
-                        auto& e = it->second->ent.as_TraitAlias();
-                        pbt = ASTPathBindingType::make_TraitAlias({nullptr, &e});
-                        break;
-                    }
-                    case HIRTypeItem::TAG_TypeAlias: {
-                        pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
-                        break;
-                    }
-                    case HIRTypeItem::TAG_ExternType: {
-                        pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
-                        break;
-                    }
-                    case HIRTypeItem::TAG_Struct: {
-                        auto& e = it->second->ent.as_Struct();
-                        pbt = ASTPathBindingType::make_Struct({nullptr, &e});
-                        break;
-                    }
-                    case HIRTypeItem::TAG_Union: {
-                        auto& e = it->second->ent.as_Union();
-                        pbt = ASTPathBindingType::make_Union({nullptr, &e});
-                        break;
-                    }
-                    case HIRTypeItem::TAG_Enum: {
-                        auto& e = it->second->ent.as_Enum();
-                        pbt = ASTPathBindingType::make_Enum({nullptr, &e});
-                        break;
-                    }
-                }
-                pb.type.set(std::move(ap), std::move(pbt));
-            }
-
+    void ResolveAbsolutePathBindAbsoluteHirFromImport(Context& context, const Span& sp, bool isValue, ASTPath& path, const HIRSimplePath& p) {
+        if (p.crateName() == CRATE_BUILTINS) {
             ASTPath rv(p.crateName(), {});
             rv.nodes().reserve(p.components().size());
             for (const auto& c : p.components()) {
                 rv.nodes().push_back(ASTPathNode(c));
             }
             rv.nodes().back().args() = mv$(path.nodes().back().args());
-            rv.bindings = mv$(pb);
+            auto ap = spToAp(p);
+
+            if (coretypeFromstring(p.components().back().c_str()) != CORETYPE_INVAL) {
+                rv.bindings.type.set(ap, ASTPathBindingType::make_TypeAlias({nullptr}));
+            } else {
+                rv.bindings.macro.set(ap, ASTPathBindingMacro::make_MacroRules({nullptr}));
+            }
             path = mv$(rv);
+            return;
         }
-
-        void ResolveAbsolutePathBindAbsoluteHirFrom(Context& context, const Span& sp, Context::LookupMode& mode, ASTPath& path, const ASTExternCrate& crate, unsigned int start) {
-            assert(crate.hir->crateName == crate.name);
-            auto& pathAbs = path.cls.as_Absolute();
-
-            if (pathAbs.nodes.empty()) {
-                switch (mode) {
-                    case Context::LookupMode::Namespace:
-                        path.bindings.type.set({crate.name, {}}, ASTPathBindingType::make_Module({nullptr, {&crate, &crate.hir->rootModule}}));
-                        return;
-                    default:
-                        TODO(sp, "Looking up a non-namespace, but pointed to crate root");
-                }
+        const auto& extCrate = context.crate.externCrates.at(p.crateName());
+        const HIRModule* hmod = &extCrate.hir->rootModule;
+        for (unsigned int i = 0; i < p.components().size() - 1; i++) {
+            const auto& name = p.components()[i];
+            auto it = hmod->modItems.find(name);
+            if (it == hmod->modItems.end()) {
+                ERROR(sp, E0000, "Couldn't find path component '" << name << "' of " << p);
             }
 
-            const HIRModule* hmod = &crate.hir->rootModule;
-            ASTAbsolutePath resolvedPath(crate.name, {});
-            for (unsigned int i = start; i < pathAbs.nodes.size() - 1; i++) {
-                auto& n = pathAbs.nodes[i];
-                const auto nodeName = n.hygienicName();
-                assert(hmod);
-                auto it = findHygienicItem(hmod->modItems, n.name(), nodeName);
-                if (it == hmod->modItems.end()) {
-                    ERROR(sp, E0000, "Couldn't find path component '" << n.name() << "' of " << path);
+            switch (it->second->ent.tag()) {
+                default:
+                    TODO(sp, "Unknown item type in path - " << i << " " << p << " - " << it->second->ent.tagStr());
+                case HIRTypeItem::TAG_Enum: {
+                    auto& e = it->second->ent.as_Enum();
+                    if (i != p.components().size() - 2) {
+                        ERROR(sp, E0000, "Enum as path component in unexpected location - " << p);
+                    }
+                    const auto& varname = p.components().back();
+                    auto varIdx = e.findVariant(varname);
+                    ASSERT_BUG(sp, varIdx != SIZE_MAX, "Extern crate import path points to non-present variant - " << p);
+
+                    ASTPath rv(p.crateName(), {});
+                    rv.nodes().reserve(p.components().size());
+                    for (const auto& c : p.components()) {
+                        rv.nodes().push_back(ASTPathNode(c));
+                    }
+                    rv.nodes().back().args() = mv$(path.nodes().back().args());
+                    auto ap = spToAp(p);
+                    if (e.data.is_Data() && e.data.as_Data()[varIdx].isStruct) {
+                        rv.bindings.type.set(ap, ASTPathBindingType::make_EnumVar({nullptr, static_cast<unsigned>(varIdx), &e}));
+                    } else {
+                        rv.bindings.value.set(ap, ASTPathBindingValue::make_EnumVar({nullptr, static_cast<unsigned>(varIdx), &e}));
+                    }
+                    path = mv$(rv);
+
+                    return;
                 }
-                resolvedPath.nodes.push_back(it->first);
+                case HIRTypeItem::TAG_Module: {
+                    auto& e = it->second->ent.as_Module();
+                    hmod = &e;
+                    break;
+                }
+            }
+        }
 
-                switch (it->second->ent.tag()) {
-                    case HIRTypeItem::TAG_Import: {
-                        auto& e = it->second->ent.as_Import();
-                        auto newpath = ASTPath(e.path.crateName(), {});
-                        for (const auto& n : e.path.components()) {
-                            newpath.nodes().push_back(ASTPathNode(n));
-                        }
-                        if (newpath.nodes().empty()) {
-                            ASSERT_BUG(sp, n.args().isEmpty(), "Params present, but name resolves to a crate root - " << path << " #" << i << " -> " << newpath);
-                        } else {
-                            newpath.nodes().back().args() = mv$(path.nodes()[i].args());
-                        }
-                        for (unsigned int j = i + 1; j < path.nodes().size(); j++) {
-                            newpath.nodes().push_back(mv$(path.nodes()[j]));
-                        }
-                        path = mv$(newpath);
-                        // TODO: Recursion limit
-                        ResolveAbsolutePathBindAbsolute(context, sp, mode, path);
-                        return;
-                    }
-                    case HIRTypeItem::TAG_Module: {
-                        auto& e = it->second->ent.as_Module();
-                        hmod = &e;
-                        break;
-                    }
-                    case HIRTypeItem::TAG_TraitAlias: {
-                        TODO(sp, "Path referring to a trait alias - " << path);
-                        break;
-                    }
-                    case HIRTypeItem::TAG_Trait: {
-                        auto& e = it->second->ent.as_Trait();
-                        auto ap = resolvedPath;
-                        ASTPathParams pp;
-                        if (!n.args().isEmpty()) {
-                            pp = mv$(n.args());
-                        } else {
-                            for (const auto& typ : e.params.types) {
-                                pp.entries.push_back(::mkType(context.typePool(), sp));
-                            }
-                        }
-                        ASTPath traitPath(ap, std::move(pp));
-                        traitPath.bindings.type.set(std::move(ap), ASTPathBindingType::make_Trait({nullptr, &e}));
+        ASTPath::Bindings pb;
 
-                        ASTPath newPath;
-                        const auto& nextNode = pathAbs.nodes[i + 1];
-                        auto nextName = nextNode.hygienicName();
-                        bool found = false;
+        const auto& name = p.components().back();
+        auto ap = spToAp(p);
+        if (isValue) {
+            auto it = hmod->valueItems.find(name);
+            if (it == hmod->valueItems.end()) {
+                ERROR(sp, E0000, "Couldn't find final component of " << p);
+            }
+            ASTPathBindingValue pbv;
+            switch (it->second->ent.tag()) {
+                case HIRValueItem::TAG_Import: {
+                    BUG(sp, "HIR Import item pointed to an import");
+                    break;
+                }
+                case HIRValueItem::TAG_Constant: {
+                    pbv = ASTPathBindingValue::make_Static({nullptr, nullptr});
+                    break;
+                }
+                case HIRValueItem::TAG_Static: {
+                    pbv = ASTPathBindingValue::make_Static({nullptr, it->second->ent.as_Static()});
+                    break;
+                }
+                case HIRValueItem::TAG_StructConstant: {
+                    auto& e = it->second->ent.as_StructConstant();
+                    pbv = ASTPathBindingValue::make_Struct({nullptr, &extCrate.hir->getTypeitemByPath(sp, e.ty, true).as_Struct()});
+                    break;
+                }
+                case HIRValueItem::TAG_Function: {
+                    pbv = ASTPathBindingValue::make_Function({nullptr /*, &e*/});
+                    break;
+                }
+                case HIRValueItem::TAG_StructConstructor: {
+                    auto& e = it->second->ent.as_StructConstructor();
+                    pbv = ASTPathBindingValue::make_Struct({nullptr, &extCrate.hir->getTypeitemByPath(sp, e.ty, true).as_Struct()});
+                    break;
+                }
+            }
+            pb.value.set(std::move(ap), std::move(pbv));
+        } else {
+            auto it = hmod->modItems.find(name);
+            if (it == hmod->modItems.end()) {
+                ERROR(sp, E0000, "Couldn't find final component of " << p);
+            }
+            ASTPathBindingType pbt;
+            switch (it->second->ent.tag()) {
+                case HIRTypeItem::TAG_Import: {
+                    BUG(sp, "HIR Import item pointed to an import");
+                    break;
+                }
+                case HIRTypeItem::TAG_Module: {
+                    auto& e = it->second->ent.as_Module();
+                    pbt = ASTPathBindingType::make_Module({nullptr, {&extCrate, &e}});
+                    break;
+                }
+                case HIRTypeItem::TAG_Trait: {
+                    auto& e = it->second->ent.as_Trait();
+                    pbt = ASTPathBindingType::make_Trait({nullptr, &e});
+                    break;
+                }
+                case HIRTypeItem::TAG_TraitAlias: {
+                    auto& e = it->second->ent.as_TraitAlias();
+                    pbt = ASTPathBindingType::make_TraitAlias({nullptr, &e});
+                    break;
+                }
+                case HIRTypeItem::TAG_TypeAlias: {
+                    pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
+                    break;
+                }
+                case HIRTypeItem::TAG_ExternType: {
+                    pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
+                    break;
+                }
+                case HIRTypeItem::TAG_Struct: {
+                    auto& e = it->second->ent.as_Struct();
+                    pbt = ASTPathBindingType::make_Struct({nullptr, &e});
+                    break;
+                }
+                case HIRTypeItem::TAG_Union: {
+                    auto& e = it->second->ent.as_Union();
+                    pbt = ASTPathBindingType::make_Union({nullptr, &e});
+                    break;
+                }
+                case HIRTypeItem::TAG_Enum: {
+                    auto& e = it->second->ent.as_Enum();
+                    pbt = ASTPathBindingType::make_Enum({nullptr, &e});
+                    break;
+                }
+            }
+            pb.type.set(std::move(ap), std::move(pbt));
+        }
+
+        ASTPath rv(p.crateName(), {});
+        rv.nodes().reserve(p.components().size());
+        for (const auto& c : p.components()) {
+            rv.nodes().push_back(ASTPathNode(c));
+        }
+        rv.nodes().back().args() = mv$(path.nodes().back().args());
+        rv.bindings = mv$(pb);
+        path = mv$(rv);
+    }
+
+    void ResolveAbsolutePathBindAbsoluteHirFrom(Context& context, const Span& sp, Context::LookupMode& mode, ASTPath& path, const ASTExternCrate& crate, unsigned int start) {
+        assert(crate.hir->crateName == crate.name);
+        auto& pathAbs = path.cls.as_Absolute();
+
+        if (pathAbs.nodes.empty()) {
+            switch (mode) {
+                case Context::LookupMode::Namespace:
+                    path.bindings.type.set({crate.name, {}}, ASTPathBindingType::make_Module({nullptr, {&crate, &crate.hir->rootModule}}));
+                    return;
+                default:
+                    TODO(sp, "Looking up a non-namespace, but pointed to crate root");
+            }
+        }
+
+        const HIRModule* hmod = &crate.hir->rootModule;
+        ASTAbsolutePath resolvedPath(crate.name, {});
+        for (unsigned int i = start; i < pathAbs.nodes.size() - 1; i++) {
+            auto& n = pathAbs.nodes[i];
+            const auto nodeName = n.hygienicName();
+            assert(hmod);
+            auto it = findHygienicItem(hmod->modItems, n.name(), nodeName);
+            if (it == hmod->modItems.end()) {
+                ERROR(sp, E0000, "Couldn't find path component '" << n.name() << "' of " << path);
+            }
+            resolvedPath.nodes.push_back(it->first);
+
+            switch (it->second->ent.tag()) {
+                case HIRTypeItem::TAG_Import: {
+                    auto& e = it->second->ent.as_Import();
+                    auto newpath = ASTPath(e.path.crateName(), {});
+                    for (const auto& n : e.path.components()) {
+                        newpath.nodes().push_back(ASTPathNode(n));
+                    }
+                    if (newpath.nodes().empty()) {
+                        ASSERT_BUG(sp, n.args().isEmpty(), "Params present, but name resolves to a crate root - " << path << " #" << i << " -> " << newpath);
+                    } else {
+                        newpath.nodes().back().args() = mv$(path.nodes()[i].args());
+                    }
+                    for (unsigned int j = i + 1; j < path.nodes().size(); j++) {
+                        newpath.nodes().push_back(mv$(path.nodes()[j]));
+                    }
+                    path = mv$(newpath);
+                    // TODO: Recursion limit
+                    ResolveAbsolutePathBindAbsolute(context, sp, mode, path);
+                    return;
+                }
+                case HIRTypeItem::TAG_Module: {
+                    auto& e = it->second->ent.as_Module();
+                    hmod = &e;
+                    break;
+                }
+                case HIRTypeItem::TAG_TraitAlias: {
+                    TODO(sp, "Path referring to a trait alias - " << path);
+                    break;
+                }
+                case HIRTypeItem::TAG_Trait: {
+                    auto& e = it->second->ent.as_Trait();
+                    auto ap = resolvedPath;
+                    ASTPathParams pp;
+                    if (!n.args().isEmpty()) {
+                        pp = mv$(n.args());
+                    } else {
+                        for (const auto& typ : e.params.types) {
+                            pp.entries.push_back(::mkType(context.typePool(), sp));
+                        }
+                    }
+                    ASTPath traitPath(ap, std::move(pp));
+                    traitPath.bindings.type.set(std::move(ap), ASTPathBindingType::make_Trait({nullptr, &e}));
+
+                    ASTPath newPath;
+                    const auto& nextNode = pathAbs.nodes[i + 1];
+                    auto nextName = nextNode.hygienicName();
+                    bool found = false;
+                    switch (i + 1 < pathAbs.nodes.size() ? Context::LookupMode::Namespace : mode) {
+                        case Context::LookupMode::Namespace:
+                        case Context::LookupMode::Type:
+                        case Context::LookupMode::PatternType:
+                            found = (e.types.find(nextName) != e.types.end());
+                        case Context::LookupMode::PatternValue:
+                        case Context::LookupMode::Constant:
+                        case Context::LookupMode::Variable:
+                            found |= (e.values.find(nextName) != e.values.end());
+                            break;
+                    }
+                    if (!found && nextName != nextNode.name()) {
+                        nextName = nextNode.name();
                         switch (i + 1 < pathAbs.nodes.size() ? Context::LookupMode::Namespace : mode) {
                             case Context::LookupMode::Namespace:
                             case Context::LookupMode::Type:
@@ -701,216 +713,202 @@ namespace {
                                 found |= (e.values.find(nextName) != e.values.end());
                                 break;
                         }
-                        if (!found && nextName != nextNode.name()) {
+                    }
+
+                    if (!found) {
+                        newPath = ASTPath::newUfcsTy(::mkType(context.typePool(), sp, mv$(traitPath)));
+                    } else {
+                        newPath = ASTPath::newUfcsTrait(::mkType(context.typePool(), sp), mv$(traitPath));
+                    }
+                    for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
+                        newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
+                    }
+
+                    path = mv$(newPath);
+                    return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
+                }
+                case HIRTypeItem::TAG_ExternType:
+                case HIRTypeItem::TAG_TypeAlias:
+                case HIRTypeItem::TAG_Struct:
+                case HIRTypeItem::TAG_Union:
+                    path = splitIntoCrate(sp, mv$(path), start, crate.name);
+                    path = splitIntoUfcsTy(context.typePool(), sp, mv$(path), i - start);
+                    return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
+                case HIRTypeItem::TAG_Enum: {
+                    auto& e = it->second->ent.as_Enum();
+                    if (i + 1 < pathAbs.nodes.size()) {
+                        auto& nextNode = pathAbs.nodes[i + 1];
+                        auto nextName = nextNode.hygienicName();
+                        auto idx = e.findVariant(nextName);
+                        if (idx == SIZE_MAX && nextName != nextNode.name()) {
                             nextName = nextNode.name();
-                            switch (i + 1 < pathAbs.nodes.size() ? Context::LookupMode::Namespace : mode) {
-                                case Context::LookupMode::Namespace:
-                                case Context::LookupMode::Type:
-                                case Context::LookupMode::PatternType:
-                                    found = (e.types.find(nextName) != e.types.end());
-                                case Context::LookupMode::PatternValue:
-                                case Context::LookupMode::Constant:
-                                case Context::LookupMode::Variable:
-                                    found |= (e.values.find(nextName) != e.values.end());
-                                    break;
+                            idx = e.findVariant(nextName);
+                        }
+                        if (idx != SIZE_MAX) {
+                            if (i != pathAbs.nodes.size() - 2) {
+                                ERROR(sp, E0000, "Unexpected enum in path " << path);
                             }
-                        }
 
-                        if (!found) {
-                            newPath = ASTPath::newUfcsTy(::mkType(context.typePool(), sp, mv$(traitPath)));
-                        } else {
-                            newPath = ASTPath::newUfcsTrait(::mkType(context.typePool(), sp), mv$(traitPath));
-                        }
-                        for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
-                            newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
-                        }
+                            auto ap = resolvedPath + nextName;
 
-                        path = mv$(newPath);
-                        return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
-                    }
-                    case HIRTypeItem::TAG_ExternType:
-                    case HIRTypeItem::TAG_TypeAlias:
-                    case HIRTypeItem::TAG_Struct:
-                    case HIRTypeItem::TAG_Union:
-                        path = splitIntoCrate(sp, mv$(path), start, crate.name);
-                        path = splitIntoUfcsTy(context.typePool(), sp, mv$(path), i - start);
-                        return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
-                    case HIRTypeItem::TAG_Enum: {
-                        auto& e = it->second->ent.as_Enum();
-                        if (i + 1 < pathAbs.nodes.size()) {
-                            auto& nextNode = pathAbs.nodes[i + 1];
-                            auto nextName = nextNode.hygienicName();
-                            auto idx = e.findVariant(nextName);
-                            if (idx == SIZE_MAX && nextName != nextNode.name()) {
-                                nextName = nextNode.name();
-                                idx = e.findVariant(nextName);
-                            }
-                            if (idx != SIZE_MAX) {
-                                if (i != pathAbs.nodes.size() - 2) {
-                                    ERROR(sp, E0000, "Unexpected enum in path " << path);
-                                }
-
-                                auto ap = resolvedPath + nextName;
-
-                                if (!n.args().isEmpty()) {
-                                    if (nextNode.args().isEmpty()) {
-                                        nextNode.args() = std::move(n.args());
-                                    } else {
-                                        ERROR(sp, E0000, "Type parameters were not expected here (enum params go on the variant)");
-                                    }
-                                }
-
-                                if (e.data.is_Data() && e.data.as_Data()[idx].isStruct) {
-                                    path.bindings.type.set(ap, ASTPathBindingType::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &e}));
+                            if (!n.args().isEmpty()) {
+                                if (nextNode.args().isEmpty()) {
+                                    nextNode.args() = std::move(n.args());
                                 } else {
-                                    path.bindings.value.set(ap, ASTPathBindingValue::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &e}));
+                                    ERROR(sp, E0000, "Type parameters were not expected here (enum params go on the variant)");
                                 }
-                                path = splitIntoCrate(sp, mv$(path), start, crate.name);
-                                return;
                             }
+
+                            if (e.data.is_Data() && e.data.as_Data()[idx].isStruct) {
+                                path.bindings.type.set(ap, ASTPathBindingType::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &e}));
+                            } else {
+                                path.bindings.value.set(ap, ASTPathBindingValue::make_EnumVar({nullptr, static_cast<unsigned int>(idx), &e}));
+                            }
+                            path = splitIntoCrate(sp, mv$(path), start, crate.name);
+                            return;
                         }
-                        path = splitIntoCrate(sp, mv$(path), start, crate.name);
-                        path = splitIntoUfcsTy(context.typePool(), sp, mv$(path), i - start);
-                        return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                     }
+                    path = splitIntoCrate(sp, mv$(path), start, crate.name);
+                    path = splitIntoUfcsTy(context.typePool(), sp, mv$(path), i - start);
+                    return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
             }
-
-            const auto& finalNode = pathAbs.nodes.back();
-            const auto name = finalNode.hygienicName();
-            switch (mode) {
-                // TODO: Don't bind to a Module if LookupMode::Type
-                case Context::LookupMode::Namespace:
-                case Context::LookupMode::Type:
-                case Context::LookupMode::PatternType: {
-                    auto v = findHygienicItem(hmod->modItems, finalNode.name(), name);
-                    if (v != hmod->modItems.end()) {
-                        auto ap = resolvedPath + v->first;
-                        ASTPathBindingType pbt;
-                        switch (v->second->ent.tag()) {
-                            case HIRTypeItem::TAG_Import: {
-                                auto& e = v->second->ent.as_Import();
-                                ResolveAbsolutePathBindAbsoluteHirFromImport(context, sp, false, path, e.path);
-                                return;
-                            }
-                            case HIRTypeItem::TAG_Trait: {
-                                auto& e = v->second->ent.as_Trait();
-                                pbt = ASTPathBindingType::make_Trait({nullptr, &e});
-                                break;
-                            }
-                            case HIRTypeItem::TAG_TraitAlias: {
-                                auto& e = v->second->ent.as_TraitAlias();
-                                pbt = ASTPathBindingType::make_TraitAlias({nullptr, &e});
-                                break;
-                            }
-                            case HIRTypeItem::TAG_Module: {
-                                auto& e = v->second->ent.as_Module();
-                                pbt = ASTPathBindingType::make_Module({nullptr, {&crate, &e}});
-                                break;
-                            }
-                            case HIRTypeItem::TAG_ExternType: {
-                                pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
-                                break;
-                            }
-                            case HIRTypeItem::TAG_TypeAlias: {
-                                pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
-                                break;
-                            }
-                            case HIRTypeItem::TAG_Enum: {
-                                auto& e = v->second->ent.as_Enum();
-                                pbt = ASTPathBindingType::make_Enum({nullptr, &e});
-                                break;
-                            }
-                            case HIRTypeItem::TAG_Struct: {
-                                auto& e = v->second->ent.as_Struct();
-                                pbt = ASTPathBindingType::make_Struct({nullptr, &e});
-                                break;
-                            }
-                            case HIRTypeItem::TAG_Union: {
-                                auto& e = v->second->ent.as_Union();
-                                pbt = ASTPathBindingType::make_Union({nullptr, &e});
-                                break;
-                            }
-                        }
-                        path.bindings.type.set(std::move(ap), std::move(pbt));
-                        path = splitIntoCrate(sp, mv$(path), start, crate.name);
-                        return;
-                    }
-                } break;
-
-                case Context::LookupMode::PatternValue: {
-                    auto v = findHygienicItem(hmod->valueItems, finalNode.name(), name);
-                    if (v != hmod->valueItems.end()) {
-                        auto ap = resolvedPath + v->first;
-                        switch (v->second->ent.tag()) {
-                            default:
-                                break;
-                            case HIRValueItem::TAG_StructConstant: {
-                                auto& e = v->second->ent.as_StructConstant();
-                                auto tyPath = e.ty;
-                                path.bindings.value.set(std::move(ap), ASTPathBindingValue::make_Struct({nullptr, &crate.hir->getStructByPath(sp, tyPath)}));
-                                path = splitIntoCrate(sp, mv$(path), start, crate.name);
-                                return;
-                            }
-                            case HIRValueItem::TAG_Import: {
-                                auto& e = v->second->ent.as_Import();
-                                ResolveAbsolutePathBindAbsoluteHirFromImport(context, sp, true, path, e.path);
-                                return;
-                            }
-                            case HIRValueItem::TAG_Constant: {
-                                path.bindings.value.set(std::move(ap), ASTPathBindingValue::make_Static({nullptr, nullptr}));
-                                path = splitIntoCrate(sp, mv$(path), start, crate.name);
-                                return;
-                            }
-                        }
-                    } else {
-                    }
-                } break;
-                case Context::LookupMode::Constant:
-                case Context::LookupMode::Variable: {
-                    auto v = findHygienicItem(hmod->valueItems, finalNode.name(), name);
-                    if (v != hmod->valueItems.end()) {
-                        auto ap = resolvedPath + v->first;
-                        ASTPathBindingValue pbv;
-                        switch (v->second->ent.tag()) {
-                            case HIRValueItem::TAG_Import: {
-                                auto& e = v->second->ent.as_Import();
-                                ResolveAbsolutePathBindAbsoluteHirFromImport(context, sp, true, path, e.path);
-                                return;
-                            }
-                            case HIRValueItem::TAG_Function: {
-                                pbv = ASTPathBindingValue::make_Function({nullptr /*, &e*/});
-                                break;
-                            }
-                            case HIRValueItem::TAG_StructConstructor: {
-                                auto& e = v->second->ent.as_StructConstructor();
-                                auto tyPath = e.ty;
-                                pbv = ASTPathBindingValue::make_Struct({nullptr, &crate.hir->getStructByPath(sp, tyPath)});
-                                break;
-                            }
-                            case HIRValueItem::TAG_StructConstant: {
-                                auto& e = v->second->ent.as_StructConstant();
-                                auto tyPath = e.ty;
-                                pbv = ASTPathBindingValue::make_Struct({nullptr, &crate.hir->getStructByPath(sp, tyPath)});
-                                break;
-                            }
-                            case HIRValueItem::TAG_Static: {
-                                pbv = ASTPathBindingValue::make_Static({nullptr, v->second->ent.as_Static()});
-                                break;
-                            }
-                            case HIRValueItem::TAG_Constant: {
-                                pbv = ASTPathBindingValue::make_Static({nullptr, nullptr});
-                                break;
-                            }
-                        }
-                        path.bindings.value.set(std::move(ap), std::move(pbv));
-                        path = splitIntoCrate(sp, mv$(path), start, crate.name);
-                        return;
-                    }
-                } break;
-            }
-            ERROR(sp, E0000, "Couldn't find " << Context::lookupModeMsg(mode) << " '" << pathAbs.nodes.back().name() << "' of " << path);
         }
+
+        const auto& finalNode = pathAbs.nodes.back();
+        const auto name = finalNode.hygienicName();
+        switch (mode) {
+            // TODO: Don't bind to a Module if LookupMode::Type
+            case Context::LookupMode::Namespace:
+            case Context::LookupMode::Type:
+            case Context::LookupMode::PatternType: {
+                auto v = findHygienicItem(hmod->modItems, finalNode.name(), name);
+                if (v != hmod->modItems.end()) {
+                    auto ap = resolvedPath + v->first;
+                    ASTPathBindingType pbt;
+                    switch (v->second->ent.tag()) {
+                        case HIRTypeItem::TAG_Import: {
+                            auto& e = v->second->ent.as_Import();
+                            ResolveAbsolutePathBindAbsoluteHirFromImport(context, sp, false, path, e.path);
+                            return;
+                        }
+                        case HIRTypeItem::TAG_Trait: {
+                            auto& e = v->second->ent.as_Trait();
+                            pbt = ASTPathBindingType::make_Trait({nullptr, &e});
+                            break;
+                        }
+                        case HIRTypeItem::TAG_TraitAlias: {
+                            auto& e = v->second->ent.as_TraitAlias();
+                            pbt = ASTPathBindingType::make_TraitAlias({nullptr, &e});
+                            break;
+                        }
+                        case HIRTypeItem::TAG_Module: {
+                            auto& e = v->second->ent.as_Module();
+                            pbt = ASTPathBindingType::make_Module({nullptr, {&crate, &e}});
+                            break;
+                        }
+                        case HIRTypeItem::TAG_ExternType: {
+                            pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
+                            break;
+                        }
+                        case HIRTypeItem::TAG_TypeAlias: {
+                            pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
+                            break;
+                        }
+                        case HIRTypeItem::TAG_Enum: {
+                            auto& e = v->second->ent.as_Enum();
+                            pbt = ASTPathBindingType::make_Enum({nullptr, &e});
+                            break;
+                        }
+                        case HIRTypeItem::TAG_Struct: {
+                            auto& e = v->second->ent.as_Struct();
+                            pbt = ASTPathBindingType::make_Struct({nullptr, &e});
+                            break;
+                        }
+                        case HIRTypeItem::TAG_Union: {
+                            auto& e = v->second->ent.as_Union();
+                            pbt = ASTPathBindingType::make_Union({nullptr, &e});
+                            break;
+                        }
+                    }
+                    path.bindings.type.set(std::move(ap), std::move(pbt));
+                    path = splitIntoCrate(sp, mv$(path), start, crate.name);
+                    return;
+                }
+            } break;
+
+            case Context::LookupMode::PatternValue: {
+                auto v = findHygienicItem(hmod->valueItems, finalNode.name(), name);
+                if (v != hmod->valueItems.end()) {
+                    auto ap = resolvedPath + v->first;
+                    switch (v->second->ent.tag()) {
+                        default:
+                            break;
+                        case HIRValueItem::TAG_StructConstant: {
+                            auto& e = v->second->ent.as_StructConstant();
+                            auto tyPath = e.ty;
+                            path.bindings.value.set(std::move(ap), ASTPathBindingValue::make_Struct({nullptr, &crate.hir->getStructByPath(sp, tyPath)}));
+                            path = splitIntoCrate(sp, mv$(path), start, crate.name);
+                            return;
+                        }
+                        case HIRValueItem::TAG_Import: {
+                            auto& e = v->second->ent.as_Import();
+                            ResolveAbsolutePathBindAbsoluteHirFromImport(context, sp, true, path, e.path);
+                            return;
+                        }
+                        case HIRValueItem::TAG_Constant: {
+                            path.bindings.value.set(std::move(ap), ASTPathBindingValue::make_Static({nullptr, nullptr}));
+                            path = splitIntoCrate(sp, mv$(path), start, crate.name);
+                            return;
+                        }
+                    }
+                } else {
+                }
+            } break;
+            case Context::LookupMode::Constant:
+            case Context::LookupMode::Variable: {
+                auto v = findHygienicItem(hmod->valueItems, finalNode.name(), name);
+                if (v != hmod->valueItems.end()) {
+                    auto ap = resolvedPath + v->first;
+                    ASTPathBindingValue pbv;
+                    switch (v->second->ent.tag()) {
+                        case HIRValueItem::TAG_Import: {
+                            auto& e = v->second->ent.as_Import();
+                            ResolveAbsolutePathBindAbsoluteHirFromImport(context, sp, true, path, e.path);
+                            return;
+                        }
+                        case HIRValueItem::TAG_Function: {
+                            pbv = ASTPathBindingValue::make_Function({nullptr /*, &e*/});
+                            break;
+                        }
+                        case HIRValueItem::TAG_StructConstructor: {
+                            auto& e = v->second->ent.as_StructConstructor();
+                            auto tyPath = e.ty;
+                            pbv = ASTPathBindingValue::make_Struct({nullptr, &crate.hir->getStructByPath(sp, tyPath)});
+                            break;
+                        }
+                        case HIRValueItem::TAG_StructConstant: {
+                            auto& e = v->second->ent.as_StructConstant();
+                            auto tyPath = e.ty;
+                            pbv = ASTPathBindingValue::make_Struct({nullptr, &crate.hir->getStructByPath(sp, tyPath)});
+                            break;
+                        }
+                        case HIRValueItem::TAG_Static: {
+                            pbv = ASTPathBindingValue::make_Static({nullptr, v->second->ent.as_Static()});
+                            break;
+                        }
+                        case HIRValueItem::TAG_Constant: {
+                            pbv = ASTPathBindingValue::make_Static({nullptr, nullptr});
+                            break;
+                        }
+                    }
+                    path.bindings.value.set(std::move(ap), std::move(pbv));
+                    path = splitIntoCrate(sp, mv$(path), start, crate.name);
+                    return;
+                }
+            } break;
+        }
+        ERROR(sp, E0000, "Couldn't find " << Context::lookupModeMsg(mode) << " '" << pathAbs.nodes.back().name() << "' of " << path);
     }
 
     void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::LookupMode& mode, ASTPath& path) {
@@ -3348,16 +3346,14 @@ namespace {
         UNREACHABLE();
     }
 
-    namespace {
-        ASTPath hirToAst(const HIRSimplePath& p) {
-            assert(p.crateName() != "");
-            ASTPath rv(p.crateName(), {});
-            rv.nodes().reserve(p.components().size());
-            for (const auto& n : p.components()) {
-                rv.nodes().push_back(ASTPathNode(n));
-            }
-            return rv;
+    ASTPath hirToAst(const HIRSimplePath& p) {
+        assert(p.crateName() != "");
+        ASTPath rv(p.crateName(), {});
+        rv.nodes().reserve(p.components().size());
+        for (const auto& n : p.components()) {
+            rv.nodes().push_back(ASTPathNode(n));
         }
+        return rv;
     }
 
     bool spanIsFromMacro(const Span& sp) {
@@ -4303,19 +4299,17 @@ void ResolveIndex(ASTCrate& crate) {
 }
 
 namespace {
-    namespace {
-        RcString crateBuiltinsName() {
-            return RcString::newInterned(CRATE_BUILTINS);
-        }
+    RcString crateBuiltinsName() {
+        return RcString::newInterned(CRATE_BUILTINS);
+    }
 
-        bool isUseResolutionActive(const UseResolutionContext& context, const ASTPath& path) {
-            for (auto* active = context.activeUse; active; active = active->parent) {
-                if (active->path == &path) {
-                    return true;
-                }
+    bool isUseResolutionActive(const UseResolutionContext& context, const ASTPath& path) {
+        for (auto* active = context.activeUse; active; active = active->parent) {
+            if (active->path == &path) {
+                return true;
             }
-            return false;
         }
+        return false;
     }
 
     void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, std::span<const ASTModule*> parentModules = {});
@@ -5067,52 +5061,50 @@ namespace {
         }
     }
 
-    namespace {
-        const HIRModule* getHirModByPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& path);
+    const HIRModule* getHirModByPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& path);
 
-        const void* getHirModenumByPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& path, bool& is_enum) {
-            const auto* hmod = &crate.externCrates.at(path.crateName()).hir->rootModule;
-            for (const auto& node : path.components()) {
-                auto it = hmod->modItems.find(node);
-                if (it == hmod->modItems.end()) {
-                    BUG(sp, "");
-                }
-                if (it->second->ent.is_Module()) {
-                    auto& mod = it->second->ent.as_Module();
-                    hmod = &mod;
-                } else if (it->second->ent.is_Import()) {
-                    auto& import = it->second->ent.as_Import();
-                    hmod = getHirModByPath(sp, crate, import.path);
-                    if (!hmod) {
-                        BUG(sp, "Import in module position didn't resolve as a module - " << import.path);
-                    }
-                } else if (it->second->ent.is_Enum()) {
-                    auto& enm = it->second->ent.as_Enum();
-                    if (&node == &path.components().back()) {
-                        is_enum = true;
-                        return &enm;
-                    }
-                    BUG(sp, "");
-                } else {
-                    if (&node == &path.components().back()) {
-                        return nullptr;
-                    }
-                    BUG(sp, "");
-                }
+    const void* getHirModenumByPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& path, bool& is_enum) {
+        const auto* hmod = &crate.externCrates.at(path.crateName()).hir->rootModule;
+        for (const auto& node : path.components()) {
+            auto it = hmod->modItems.find(node);
+            if (it == hmod->modItems.end()) {
+                BUG(sp, "");
             }
-            is_enum = false;
-            return hmod;
+            if (it->second->ent.is_Module()) {
+                auto& mod = it->second->ent.as_Module();
+                hmod = &mod;
+            } else if (it->second->ent.is_Import()) {
+                auto& import = it->second->ent.as_Import();
+                hmod = getHirModByPath(sp, crate, import.path);
+                if (!hmod) {
+                    BUG(sp, "Import in module position didn't resolve as a module - " << import.path);
+                }
+            } else if (it->second->ent.is_Enum()) {
+                auto& enm = it->second->ent.as_Enum();
+                if (&node == &path.components().back()) {
+                    is_enum = true;
+                    return &enm;
+                }
+                BUG(sp, "");
+            } else {
+                if (&node == &path.components().back()) {
+                    return nullptr;
+                }
+                BUG(sp, "");
+            }
         }
+        is_enum = false;
+        return hmod;
+    }
 
-        const HIRModule* getHirModByPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& path) {
-            bool is_enum = false;
-            auto rv = getHirModenumByPath(sp, crate, path, is_enum);
-            if (!rv) {
-                return nullptr;
-            }
-            ASSERT_BUG(sp, !is_enum, "");
-            return reinterpret_cast<const HIRModule*>(rv);
+    const HIRModule* getHirModByPath(const Span& sp, const ASTCrate& crate, const HIRSimplePath& path) {
+        bool is_enum = false;
+        auto rv = getHirModenumByPath(sp, crate, path, is_enum);
+        if (!rv) {
+            return nullptr;
         }
+        ASSERT_BUG(sp, !is_enum, "");
+        return reinterpret_cast<const HIRModule*>(rv);
     }
 
     ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& hcrate, const HIRModule& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap) {
