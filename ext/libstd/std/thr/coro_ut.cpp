@@ -230,6 +230,7 @@ STD_TEST_SUITE(CoroExecutor) {
         auto& mtx = *Mutex::create(pool.mutPtr(), exec);
         auto cv = exec->createCondVar(pool.mutPtr());
 
+        // consumer
         exec->spawn([&] {
             for (int i = 0; i < N; ++i) {
                 LockGuard guard(&mtx);
@@ -240,6 +241,7 @@ STD_TEST_SUITE(CoroExecutor) {
             }
         });
 
+        // producer
         exec->spawn([&] {
             for (int i = 0; i < N; ++i) {
                 LockGuard guard(&mtx);

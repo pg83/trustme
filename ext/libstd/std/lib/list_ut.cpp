@@ -1925,9 +1925,11 @@ STD_TEST_SUITE(IntrusiveList) {
         src.pushBack(&d);
         src.cutHalf(dst);
 
+        // Verify backward traversal of src: b, a
         STD_INSIST(src.mutBack() == &b);
         STD_INSIST(src.mutBack()->prev == &a);
 
+        // Verify backward traversal of dst: d, c
         STD_INSIST(dst.mutBack() == &d);
         STD_INSIST(dst.mutBack()->prev == &c);
     }

@@ -29,13 +29,15 @@ namespace {
         ChannelImpl(Mutex* mu) noexcept
             : exec_(nullptr)
             , mu_(mu)
-            , closed_(false) {
+            , closed_(false)
+        {
         }
 
         ChannelImpl(CoroExecutor* exec, Mutex* mu) noexcept
             : exec_(exec)
             , mu_(mu)
-            , closed_(false) {
+            , closed_(false)
+        {
         }
 
         bool sendOne(void* v) noexcept;
@@ -88,12 +90,14 @@ namespace {
 
         BufferedImpl(Mutex* mu, void** storage, size_t capa) noexcept
             : ChannelImpl(mu)
-            , buf_(storage, capa) {
+            , buf_(storage, capa)
+        {
         }
 
         BufferedImpl(CoroExecutor* exec, Mutex* mu, void** storage, size_t capa) noexcept
             : ChannelImpl(exec, mu)
-            , buf_(storage, capa) {
+            , buf_(storage, capa)
+        {
         }
 
         bool bufferOne(void* v) noexcept override;
@@ -243,12 +247,14 @@ size_t ChannelImpl::dequeue(void** to, size_t len) noexcept {
         return 0;
     }
 
+    // block for the first element
     if (!dequeue(to)) {
         return 0;
     }
 
     size_t n = 1;
 
+    // drain the rest under one lock
     mu_->lock();
 
     while (n < len && recvOne(to + n)) {
@@ -302,7 +308,8 @@ Pow2RingBuf::Pow2RingBuf(void** buf, size_t capa) noexcept
     : buf_(buf)
     , mask_(capa - 1)
     , head_(0)
-    , size_(0) {
+    , size_(0)
+{
 }
 
 void Pow2RingBuf::push(void* v) noexcept {

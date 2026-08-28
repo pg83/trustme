@@ -6,15 +6,18 @@ struct iovec;
 
 namespace stl {
     class FD {
+        // does not own fd
         int fd;
 
     public:
         FD() noexcept
-            : fd(-1) {
+            : fd(-1)
+        {
         }
 
         FD(int _fd) noexcept
-            : fd(_fd) {
+            : fd(_fd)
+        {
         }
 
         int get() const noexcept {

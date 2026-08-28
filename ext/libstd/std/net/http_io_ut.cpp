@@ -91,6 +91,7 @@ STD_TEST_SUITE(LimitedInput) {
         Buffer out;
         drain(in, out);
 
+        // inner should now be positioned after "hello"
         const void* chunk;
         size_t n = inner.next(&chunk);
 
@@ -162,6 +163,7 @@ STD_TEST_SUITE(ChunkedInput) {
     }
 
     STD_TEST(HexChunkSize) {
+        // chunk size 16 = 0x10
         const char* data = "10\r\n0123456789abcdef\r\n0\r\n\r\n";
         MemoryInput inner(data, strlen(data));
         auto pool = ObjPool::fromMemory();
@@ -182,6 +184,7 @@ STD_TEST_SUITE(ChunkedInput) {
         Buffer out;
         drain(in, out);
 
+        // second drain should be empty
         Buffer out2;
         drain(in, out2);
 
@@ -391,6 +394,7 @@ STD_TEST_SUITE(ChunkedOutputRoundtrip) {
         StringBuilder sb;
         auto out = createChunkedOutput(pool.mutPtr(), &sb);
 
+        // 256 bytes - chunk size should be "100" in hex
         u8 data[256];
 
         for (size_t i = 0; i < sizeof(data); i++) {

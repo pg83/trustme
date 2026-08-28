@@ -5,7 +5,7 @@
 #if __has_include(<rapidhash.h>)
     #include <rapidhash.h>
 #elif __has_include(<xxhash.h>)
-
+    // Header-only mode: consumers of libstd.a must not need -lxxhash.
     #define XXH_INLINE_ALL
     #include <xxhash.h>
 #endif

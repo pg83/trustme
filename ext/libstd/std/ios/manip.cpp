@@ -4,6 +4,7 @@
 using namespace stl;
 using namespace stl::Manip;
 
+// modifiers
 template <>
 void stl::output<ZeroCopyOutput, Flush>(ZeroCopyOutput& out, Flush) {
     out.flush();

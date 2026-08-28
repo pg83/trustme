@@ -168,12 +168,7 @@ int PollIoReactor::recvmmsg(int fd, mmsghdr* msgs, unsigned vlen, int flags, uns
         }
     }
 #else
-    (void)fd;
-    (void)msgs;
-    (void)vlen;
-    (void)flags;
-    (void)nMsgs;
-    (void)deadlineUs;
+    (void)fd; (void)msgs; (void)vlen; (void)flags; (void)nMsgs; (void)deadlineUs;
     return ENOSYS;
 #endif
 }
@@ -388,6 +383,7 @@ int PollIoReactor::fsync(int fd) {
 int PollIoReactor::fdatasync(int fd) {
     int result = 0;
 
+    // clang-format off
     exec_->offload(offload_, [&] {
 #if defined(__APPLE__)
         if (::fcntl(fd, F_FULLFSYNC) < 0) {
@@ -399,6 +395,7 @@ int PollIoReactor::fdatasync(int fd) {
         }
 #endif
     });
+    // clang-format on
 
     return result;
 }

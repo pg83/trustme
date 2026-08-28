@@ -5,6 +5,7 @@
 using namespace stl;
 
 STD_TEST_SUITE(Xchg) {
+    // .xchg
     static bool x1Called = false;
 
     struct T1 {
@@ -28,6 +29,7 @@ STD_TEST_SUITE(Xchg) {
         STD_INSIST(x1Called);
     }
 
+    // .swap
     static bool x2Called = false;
 
     struct T2 {
@@ -51,19 +53,17 @@ STD_TEST_SUITE(Xchg) {
         STD_INSIST(x2Called);
     }
 
+    // move
     static bool x3Called = false;
 
     struct T3 {
         T3() = default;
 
         T3(const T3&) = delete;
-
         T3(T3&&) {
             x3Called = true;
         }
-
         T3& operator=(const T3&) = delete;
-
         T3& operator=(T3&&) {
             x3Called = true;
 

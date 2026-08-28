@@ -12,10 +12,12 @@ namespace stl {
         void finishImpl() override;
 
     public:
+        // does not own fd
         FD* fd;
 
         FDOutput(FD& _fd) noexcept
-            : fd(&_fd) {
+            : fd(&_fd)
+        {
         }
 
         ~FDOutput() noexcept override;

@@ -177,7 +177,7 @@ namespace {
 namespace {
     struct PollPoller: public PollerIface {
         IntMap<PollFD> armed_;
-        Vector<struct pollfd> fds_;
+        Vector<struct pollfd> fds_; // rebuilt each wait()
 
         PollPoller(ObjPool* pool)
             : armed_(ObjPool::create(pool))

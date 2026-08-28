@@ -11,12 +11,14 @@ namespace stl {
 
     public:
         RefCountPtr(T* t) noexcept
-            : t_(t) {
+            : t_(t)
+        {
             O::ref(t_);
         }
 
         RefCountPtr(const RefCountPtr& ptr) noexcept
-            : RefCountPtr(ptr.t_) {
+            : RefCountPtr(ptr.t_)
+        {
         }
 
         ~RefCountPtr() noexcept {
@@ -46,6 +48,7 @@ namespace stl {
             return t_->refCount();
         }
 
+        // sugar
         auto operator->() noexcept {
             return mutPtr();
         }

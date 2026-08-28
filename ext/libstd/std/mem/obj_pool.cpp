@@ -31,7 +31,8 @@ namespace {
         alignas(max_align_t) u8 buf[256 - sizeof(Base)];
 
         Pool() noexcept
-            : Base(buf, sizeof(buf)) {
+            : Base(buf, sizeof(buf))
+        {
         }
 
         void* allocate(size_t len) override {
@@ -45,7 +46,8 @@ namespace {
 
     static_assert(sizeof(Pool) == 256);
 
-    struct ChunkMapFailed {};
+    struct ChunkMapFailed {
+    };
 }
 
 #if defined(__linux__)
@@ -84,13 +86,16 @@ HugePool::HugePool(ObjPool* s, Chunk* first) noexcept
     : slave(s)
     , lastChunk(first)
     , cur((u8*)first->page)
-    , end((u8*)first->page + first->len) {
+    , end((u8*)first->page + first->len)
+{
 }
 
 Chunk::Chunk(size_t requestedLen)
     : len((requestedLen + HUGE_PAGE_SIZE - 1) & ~(HUGE_PAGE_SIZE - 1))
 {
-    page = mmap(nullptr, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | MAP_HUGE_2MB, -1, 0);
+    page = mmap(nullptr, len, PROT_READ | PROT_WRITE,
+                MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | MAP_HUGE_2MB,
+                -1, 0);
 
     if (page == MAP_FAILED) {
         throw ChunkMapFailed{};
@@ -107,6 +112,7 @@ void* HugePool::allocate(size_t len) {
     return exchange(cur, cur + alignedLen);
 }
 
+// Forward to slave so chunks and user disposables interleave in one chain — LIFO drain destroys each user object while its chunk is still mapped.
 void HugePool::submit(Disposable* d) noexcept {
     slave->submit(d);
 }

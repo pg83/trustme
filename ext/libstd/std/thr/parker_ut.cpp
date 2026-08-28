@@ -64,7 +64,8 @@ STD_TEST_SUITE(Parker) {
     STD_TEST(UnparkAfterParkLeaveIsNoop) {
         Parker p;
 
-        p.park([&] {});
+        p.park([&] {
+        });
 
         p.unpark();
 
@@ -104,6 +105,7 @@ STD_TEST_SUITE(Parker) {
 
         for (int i = 0; i < 100; ++i) {
             p.park([&] {
+                // spin until eventfd is readable or short timeout
                 struct pollfd pfd;
 
                 pfd.fd = p.fd();

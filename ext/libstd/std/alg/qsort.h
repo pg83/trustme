@@ -20,7 +20,8 @@ namespace stl::QSP {
 
         Context(C& _f, void* seed) noexcept
             : f(_f)
-            , r(seed) {
+            , r(seed)
+        {
         }
 
         void insertionSort(I b, I e) {
@@ -35,6 +36,9 @@ namespace stl::QSP {
             return b + r.uniformBiased(e - b);
         }
 
+        // called as partitionHoare(b, l) where l = e-1 (pivot is at *l).
+        // p captures l; the second while pre-decrements e, so e never reaches p.
+        // *p is never swapped — pivot stays in place throughout.
         auto partitionHoare(I b, I e) {
             for (auto p = e;; ++b) {
                 while (b != e && f(*b, *p)) {
@@ -52,6 +56,7 @@ namespace stl::QSP {
             }
         }
 
+        // assume b < e
         bool alreadySorted(I b, I e) {
             for (++b; b != e; ++b) {
                 if (f(*b, *(b - 1))) {
@@ -73,12 +78,16 @@ namespace stl::QSP {
 
             auto l = e - 1;
 
+            // pivot to last
             xchg(*chooseRandom(b, e), *l);
 
+            // place for pivot
             auto p = partitionHoare(b, l);
 
+            // move pivot form last to proper place
             xchg(*p, *l);
 
+            // recurse
             w.pushBack(WorkItem{p + 1, e});
             w.pushBack(WorkItem{b, p});
         }

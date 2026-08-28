@@ -126,13 +126,12 @@ STD_TEST_SUITE(SymbolMap) {
         int* result = map.insert("key");
 
         STD_INSIST(result != nullptr);
-        STD_INSIST(*result == 0);
+        STD_INSIST(*result == 0); // int default-initialized
     }
 
     STD_TEST(InsertWithMultipleArgs) {
         struct Point {
             int x, y;
-
             Point(int x_, int y_)
                 : x(x_)
                 , y(y_)
@@ -284,7 +283,6 @@ STD_TEST_SUITE(SymbolMap) {
                 , value(0.0f)
             {
             }
-
             Data(int i, float v)
                 : id(i)
                 , value(v)
@@ -398,7 +396,6 @@ STD_TEST_SUITE(SymbolMap) {
             {
                 other.value = 0;
             }
-
             MoveOnly(const MoveOnly&) = delete;
         };
 

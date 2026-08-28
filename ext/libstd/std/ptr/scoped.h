@@ -13,6 +13,7 @@ namespace stl {
             delete ptr;
         }
 
+        // sugar
         auto operator->() noexcept {
             return ptr;
         }

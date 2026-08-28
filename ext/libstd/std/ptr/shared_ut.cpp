@@ -11,7 +11,6 @@ STD_TEST_SUITE(SharedPtr) {
         u32 value = 0;
 
         IntValue() = default;
-
         IntValue(u32 v)
             : value(v)
         {
@@ -21,7 +20,6 @@ STD_TEST_SUITE(SharedPtr) {
     struct BaseValue {
         u32 baseValue = 42;
         virtual ~BaseValue() = default;
-
         virtual u32 getValue() const {
             return baseValue;
         }
@@ -29,7 +27,6 @@ STD_TEST_SUITE(SharedPtr) {
 
     struct DerivedValue: public BaseValue {
         u32 derivedValue = 100;
-
         u32 getValue() const override {
             return derivedValue;
         }
@@ -89,10 +86,12 @@ STD_TEST_SUITE(SharedPtr) {
     STD_TEST(testDereferenceOperators) {
         auto v = AtomicSharedPtr<IntValue>::make(55);
 
+        // Test operator->
         STD_INSIST(v->value == 55);
         v->value = 66;
         STD_INSIST(v->value == 66);
 
+        // Test operator*
         STD_INSIST((*v).value == 66);
         (*v).value = 77;
         STD_INSIST((*v).value == 77);

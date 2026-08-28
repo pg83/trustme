@@ -68,6 +68,7 @@ size_t ZeroCopyOutput::next(void** chunk) {
     return res;
 }
 
+// std types
 #define DEF_OUT(typ)                                                                       \
     template <>                                                                            \
     void stl::output<ZeroCopyOutput, typ>(ZeroCopyOutput & out, typ v) {                   \

@@ -1,7 +1,8 @@
 #pragma once
 
 namespace stl {
-
+    // First position in the sorted range [b, e) whose element is not less
+    // than value; e when every element is smaller.
     template <typename I, typename T>
     I lowerBound(I b, I e, const T& value) {
         while (b != e) {
@@ -17,6 +18,8 @@ namespace stl {
         return b;
     }
 
+    // First position in the sorted range [b, e) whose element is greater
+    // than value; e when no element is.
     template <typename I, typename T>
     I upperBound(I b, I e, const T& value) {
         while (b != e) {
@@ -32,6 +35,7 @@ namespace stl {
         return b;
     }
 
+    // True when the sorted range [b, e) contains value.
     template <typename I, typename T>
     bool binaryContains(I b, I e, const T& value) {
         I at = lowerBound(b, e, value);

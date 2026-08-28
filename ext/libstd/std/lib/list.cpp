@@ -163,6 +163,7 @@ IntrusiveNode* IntrusiveList::popBackOrNull() noexcept {
 
 void IntrusiveList::pushBack(IntrusiveList& lst) noexcept {
     if (lst.empty()) {
+        // nothing to do
     } else if (empty()) {
         lst.xchgWithEmptyList(*this);
     } else {

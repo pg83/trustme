@@ -13,7 +13,7 @@
 using namespace stl;
 
 namespace {
-
+    // pthread_cond_t cannot be a base class: it is a union on glibc
     struct PosixCondVarImpl: public CondVar {
         pthread_cond_t cond;
 

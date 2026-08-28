@@ -54,7 +54,7 @@ STD_TEST_SUITE(Buffer) {
         STD_INSIST(b2.used() == b1.used());
         STD_INSIST(b2.capacity() >= b1.capacity());
         STD_INSIST(memCmp(b1.data(), b2.data(), len) == 0);
-        STD_INSIST(b1.data() != b2.data());
+        STD_INSIST(b1.data() != b2.data()); // deep copy
     }
 
     STD_TEST(move_constructor) {
@@ -68,7 +68,7 @@ STD_TEST_SUITE(Buffer) {
 
         STD_INSIST(b2.used() == originalUsed);
         STD_INSIST(b2.data() == originalData);
-        STD_INSIST(b1.empty());
+        STD_INSIST(b1.empty()); // b1 should be empty after move
     }
 
     STD_TEST(copy_assignment) {
@@ -227,7 +227,7 @@ STD_TEST_SUITE(Buffer) {
 
         b.growDelta(50);
 
-        STD_INSIST(b.capacity() >= 54);
+        STD_INSIST(b.capacity() >= 54); // 4 + 50
     }
 
     STD_TEST(shrinkToFit) {

@@ -246,7 +246,8 @@ void ExternalRing::wakeUp(int targetFd) noexcept {
 
 UringCondVarImpl::UringCondVarImpl(Ring* ring, UringReactorImpl* reactor) noexcept
     : ring_(ring)
-    , reactor_(reactor) {
+    , reactor_(reactor)
+{
     ring_->enable();
 }
 
@@ -333,16 +334,13 @@ template <typename Req, typename F>
 void UringReactorImpl::submitReq(Req& req, F prep) noexcept {
     auto ring = currentRing();
 
-    exec_->parkWith(
-        makeRunable([&] {
+    exec_->parkWith(makeRunable([&] {
         auto sqe = ring->getSqe();
 
         prep(sqe);
 
         io_uring_sqe_set_data(sqe, static_cast<UringReqBase*>(&req));
-    }),
-        &req.task
-    );
+    }), &req.task);
 }
 
 template <typename Req, typename F>
@@ -351,8 +349,7 @@ void UringReactorImpl::submitReq(Req& req, F prep, u64 deadlineUs) noexcept {
     auto now = monotonicNowUs();
     auto ts = usToTimespec(deadlineUs - now);
 
-    exec_->parkWith(
-        makeRunable([&] {
+    exec_->parkWith(makeRunable([&] {
         io_uring_sqe* sqe;
         io_uring_sqe* tsqe;
 
@@ -366,9 +363,7 @@ void UringReactorImpl::submitReq(Req& req, F prep, u64 deadlineUs) noexcept {
         io_uring_prep_link_timeout(tsqe, &ts, 0);
         io_uring_sqe_set_data64(tsqe, WAKEUP_COOKIE);
         tsqe->flags |= IOSQE_CQE_SKIP_SUCCESS;
-    }),
-        &req.task
-    );
+    }), &req.task);
 }
 
 Mutex* UringReactorImpl::createMutex(ObjPool* pool) {
@@ -380,13 +375,9 @@ CondVar* UringReactorImpl::createCondVar(ObjPool* pool, size_t index) {
 }
 
 int UringReactorImpl::recv(int fd, size_t* nRead, void* buf, size_t len, u64 deadlineUs) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_recv(sqe, fd, buf, len, 0);
-    },
-               deadlineUs
-    )
-        .readInto(nRead);
+    }, deadlineUs).readInto(nRead);
 }
 
 int UringReactorImpl::recvfrom(int fd, size_t* nRead, void* buf, size_t len, sockaddr* addr, u32* addrLen, u64 deadlineUs) {
@@ -398,13 +389,9 @@ int UringReactorImpl::recvfrom(int fd, size_t* nRead, void* buf, size_t len, soc
     msg.msg_name = addr;
     msg.msg_namelen = addrLen ? *addrLen : 0;
 
-    auto res = submit(
-                   [&](auto sqe) {
+    auto res = submit([&](auto sqe) {
         io_uring_prep_recvmsg(sqe, fd, &msg, 0);
-    },
-                   deadlineUs
-    )
-                   .readInto(nRead);
+    }, deadlineUs).readInto(nRead);
 
     if (!res && addrLen) {
         *addrLen = msg.msg_namelen;
@@ -414,13 +401,9 @@ int UringReactorImpl::recvfrom(int fd, size_t* nRead, void* buf, size_t len, soc
 }
 
 int UringReactorImpl::recvmsg(int fd, msghdr* msg, int flags, size_t* nRead, u64 deadlineUs) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_recvmsg(sqe, fd, msg, flags);
-    },
-               deadlineUs
-    )
-        .readInto(nRead);
+    }, deadlineUs).readInto(nRead);
 }
 
 int UringReactorImpl::recvmmsg(int fd, mmsghdr* msgs, unsigned vlen, int flags, unsigned* nMsgs, u64 deadlineUs) {
@@ -443,13 +426,9 @@ int UringReactorImpl::recvmmsg(int fd, mmsghdr* msgs, unsigned vlen, int flags, 
 }
 
 int UringReactorImpl::send(int fd, size_t* nWritten, const void* buf, size_t len, u64 deadlineUs) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_send(sqe, fd, buf, len, MSG_NOSIGNAL);
-    },
-               deadlineUs
-    )
-        .readInto(nWritten);
+    }, deadlineUs).readInto(nWritten);
 }
 
 int UringReactorImpl::sendto(int fd, size_t* nWritten, const void* buf, size_t len, const sockaddr* addr, u32 addrLen, u64 deadlineUs) {
@@ -461,113 +440,72 @@ int UringReactorImpl::sendto(int fd, size_t* nWritten, const void* buf, size_t l
     msg.msg_name = const_cast<sockaddr*>(addr);
     msg.msg_namelen = addrLen;
 
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_sendmsg(sqe, fd, &msg, MSG_NOSIGNAL);
-    },
-               deadlineUs
-    )
-        .readInto(nWritten);
+    }, deadlineUs).readInto(nWritten);
 }
 
 int UringReactorImpl::sendmsg(int fd, const msghdr* msg, int flags, size_t* nWritten, u64 deadlineUs) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_sendmsg(sqe, fd, msg, flags | MSG_NOSIGNAL);
-    },
-               deadlineUs
-    )
-        .readInto(nWritten);
+    }, deadlineUs).readInto(nWritten);
 }
 
 int UringReactorImpl::read(int fd, size_t* nRead, void* buf, size_t len, u64 deadlineUs) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
+        // offset = -1 tells io_uring "no offset, stream-style read",
+        // which is the right semantics for non-seekable fds (TUN,
+        // pipes, sockets used as streams).
         io_uring_prep_read(sqe, fd, buf, len, (u64)-1);
-    },
-               deadlineUs
-    )
-        .readInto(nRead);
+    }, deadlineUs).readInto(nRead);
 }
 
 int UringReactorImpl::write(int fd, size_t* nWritten, const void* buf, size_t len, u64 deadlineUs) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_write(sqe, fd, buf, len, (u64)-1);
-    },
-               deadlineUs
-    )
-        .readInto(nWritten);
+    }, deadlineUs).readInto(nWritten);
 }
 
 int UringReactorImpl::writev(int fd, size_t* nWritten, iovec* iov, size_t iovcnt, u64 deadlineUs) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_writev(sqe, fd, iov, iovcnt, 0);
-    },
-               deadlineUs
-    )
-        .readInto(nWritten);
+    }, deadlineUs).readInto(nWritten);
 }
 
 int UringReactorImpl::accept(int fd, int* newFd, sockaddr* addr, u32* addrLen, u64 deadlineUs) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_accept(sqe, fd, addr, (socklen_t*)addrLen, SOCK_NONBLOCK | SOCK_CLOEXEC);
-    },
-               deadlineUs
-    )
-        .readInto(newFd);
+    }, deadlineUs).readInto(newFd);
 }
 
 int UringReactorImpl::connect(int fd, const sockaddr* addr, u32 addrLen, u64 deadlineUs) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_connect(sqe, fd, addr, addrLen);
-    },
-               deadlineUs
-    )
-        .error();
+    }, deadlineUs).error();
 }
 
 int UringReactorImpl::pread(int fd, size_t* nRead, void* buf, size_t len, off_t offset) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_read(sqe, fd, buf, len, offset);
-    },
-               UINT64_MAX
-    )
-        .readInto(nRead);
+    }, UINT64_MAX).readInto(nRead);
 }
 
 int UringReactorImpl::pwrite(int fd, size_t* nWritten, const void* buf, size_t len, off_t offset) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_write(sqe, fd, buf, len, offset);
-    },
-               UINT64_MAX
-    )
-        .readInto(nWritten);
+    }, UINT64_MAX).readInto(nWritten);
 }
 
 int UringReactorImpl::fsync(int fd) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_fsync(sqe, fd, 0);
-    },
-               UINT64_MAX
-    )
-        .error();
+    }, UINT64_MAX).error();
 }
 
 int UringReactorImpl::fdatasync(int fd) {
-    return submit(
-               [&](auto sqe) {
+    return submit([&](auto sqe) {
         io_uring_prep_fsync(sqe, fd, IORING_FSYNC_DATASYNC);
-    },
-               UINT64_MAX
-    )
-        .error();
+    }, UINT64_MAX).error();
 }
 
 u32 UringReactorImpl::poll(PollFD pfd, u64 deadlineUs) {
@@ -595,6 +533,8 @@ void UringReactorImpl::sleep(u64 deadlineUs) {
         io_uring_prep_timeout(sqe, &req.ts, 0, IORING_TIMEOUT_ABS);
     });
 }
+
+// factory
 
 IoReactor* stl::createIoUringReactor(ObjPool* pool, CoroExecutor* exec, size_t threads) {
     try {

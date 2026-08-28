@@ -14,6 +14,7 @@ namespace stl {
         virtual size_t writeImpl(const void* data, size_t len) = 0;
         virtual size_t hintImpl() const noexcept;
 
+        // have sensible defaults
         virtual void flushImpl();
         virtual void finishImpl();
         virtual size_t writeVImpl(iovec* parts, size_t count);
@@ -30,6 +31,7 @@ namespace stl {
         size_t writeV(iovec* parts, size_t count);
         size_t writeV(const StringView* parts, size_t count);
 
+        // zero == no hint
         size_t hint() const noexcept {
             return hintImpl();
         }
