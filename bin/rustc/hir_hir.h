@@ -695,9 +695,6 @@ public:
     bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes) const;
 
     bool moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& x) const;
-    // headOnly: only unify the impl heads (with binding consistency /
-    // occurs check), skipping the recursive bound satisfiability walk.
-    bool overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other) const;
 };
 
 class HIRMarkerImpl {

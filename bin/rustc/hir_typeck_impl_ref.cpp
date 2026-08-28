@@ -57,7 +57,10 @@ bool ImplRef::overlapsWith(const HIRCrate& crate, const ImplRef& other) const {
         case Data::TAG_TraitImpl: {
             auto& te = this->data.as_TraitImpl();
             auto& oe = other.data.as_TraitImpl();
-            if (te.impl != nullptr && oe.impl != nullptr) return te.impl->overlapsWith(crate, *oe.impl);
+            // Distinct concrete impl heads are related by the next-solver
+            // coherence evaluator.  This fallback only recognises identity
+            // for incomplete/legacy ImplRefs.
+            return te.impl == oe.impl;
             break;
         }
         case Data::TAG_BoundedPtr: {

@@ -8942,18 +8942,6 @@ default:
                 return true;
             }
 
-            // Structural head unification with binding consistency is a
-            // necessary condition: `Extend<T>` and `Extend<&T>` for the same
-            // self can never overlap (`T = &T` is an infinite type).  The
-            // goal probe below over-approximates here because its one-way
-            // matcher drops goal-side inference constraints (no occurs
-            // check), which would let specialization discard a live impl.
-            // Heads only: the legacy bound walk recurses without a cycle
-            // guard on coinductive marker traits; bounds are the probe's job.
-            if (!leftImpl->impl->overlapsWith(crate, *rightImpl->impl)) {
-                return false;
-            }
-
             // The probe runs on the caller's own inference table under a
             // snapshot: every binding and fresh variable it creates is rolled
             // back, so nothing escapes into the type-checking context.  A

@@ -127,7 +127,7 @@
 2	make_shared	bin/rustc/hir_hir.cpp
 1	make_unique	bin/rustc/hir_hir.cpp
 1	shared_ptr	bin/rustc/hir_hir.cpp
-13	std::vector	bin/rustc/hir_hir.cpp
+11	std::vector	bin/rustc/hir_hir.cpp
 2	shared_ptr	bin/rustc/hir_hir.h
 16	std::map	bin/rustc/hir_hir.h
 1	std::set	bin/rustc/hir_hir.h
