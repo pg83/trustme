@@ -4,19 +4,6 @@ trustme: a standalone Rust compiler (hard fork of mrustc), C++26. The
 compiler lives in `bin/rustc/`, the C++ standard-library replacement in
 `ext/libstd/` (it has its own CLAUDE.md), build/codegen tooling in `dev/`.
 
-## Build and test
-
-Builds run inside the ix realm:
-
-```sh
-env -u CC -u CXX /path/to/ix/ix run set/pg/libs -- bash -c \
-  'export CC=cc CXX=c++ AR=llvm-ar SSL_CERT_FILE=/etc/ssl/cert.pem; ./build -j 20 -k <target>'
-```
-
-Targets: `rustc` (compiler binary), `ut` (light compiler unit tests),
-`unit` (the gate: UT runner + per-fix regression tests + audits). Gate
-with `unit` at most — never the full `test` group in a dev loop.
-
 ## Ideology: the brave new world
 
 The stated goal of this codebase is to rewrite everything from `std::`

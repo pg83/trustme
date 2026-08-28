@@ -491,7 +491,7 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCr
 }
 
 namespace {
-    struct Visitor {
+    struct ProcMacroVisitor {
         const WireBoard& wb;
         const Span& sp;
         const Settings& settings;
@@ -501,7 +501,7 @@ namespace {
         // strips them before invoking a derive macro).
         bool skipDeriveAttrs = false;
 
-        Visitor(const WireBoard& wb, const Span& sp, const Settings& settings, ProcMacroInv& pmi)
+        ProcMacroVisitor(const WireBoard& wb, const Span& sp, const Settings& settings, ProcMacroInv& pmi)
             : wb(wb)
             , sp(sp)
             , settings(settings)
@@ -2030,7 +2030,7 @@ template <typename F>
             // If the input is non-empty, then it must be a parenthesised token tree
             ASSERT_BUG(sp, attrInput->size() >= 2, "");
             ASSERT_BUG(sp, (*attrInput)[0].tok() == TOK_PAREN_OPEN || (*attrInput)[0].tok() == TOK_SQUARE_OPEN, "");
-            Visitor v(wb, sp, *wb.settings, pmi);
+            ProcMacroVisitor v(wb, sp, *wb.settings, pmi);
             // - Strip the parens when sending
             for (size_t i = 1; i < attrInput->size() - 1; i++) {
                 v.visitTokentree((*attrInput)[i]);
@@ -2039,7 +2039,7 @@ template <typename F>
         pmi.sendDone();
     }
     // 2. Feed item as a token stream.
-    Visitor v(wb, sp, *wb.settings, pmi);
+    ProcMacroVisitor v(wb, sp, *wb.settings, pmi);
     cb(v);
     pmi.sendDone();
     // 3. Return boxed invocation instance
@@ -2048,7 +2048,7 @@ template <typename F>
 
 // --- Derive inputs
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {
-    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](Visitor& v) {
+    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitStruct(itemName, vis, i);
@@ -2056,7 +2056,7 @@ template <typename F>
 }
 
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTEnum& i) {
-    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](Visitor& v) {
+    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitEnum(itemName, vis, i);
@@ -2064,7 +2064,7 @@ template <typename F>
 }
 
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTUnion& i) {
-    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](Visitor& v) {
+    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         v.skipDeriveAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitUnion(itemName, vis, i);
@@ -2073,7 +2073,7 @@ template <typename F>
 
 // --- attribute
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTItem& i) {
-    return ProcMacroInvoke(sp, wb, crate, macPath, &tt, [&](Visitor& v) {
+    return ProcMacroInvoke(sp, wb, crate, macPath, &tt, [&](ProcMacroVisitor& v) {
         v.emitAllAttrs = true;
         v.visitTopAttrs(attrs);
         v.visitItem(itemName, vis, i);
@@ -2082,7 +2082,7 @@ template <typename F>
 
 // -- function-like input
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt) {
-    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](Visitor& v) {
+    return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         v.visitTokentree(tt);
     });
 }
