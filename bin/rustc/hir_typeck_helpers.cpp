@@ -5667,7 +5667,7 @@ default:
                 // every bound existential now and represent the still-free
                 // ones with solver-owned tagged variables; no string identity
                 // and no inference-table index is allowed to escape rollback.
-                const auto& stableExistentials = resolve_.implExistentials(span(), implParamsDef);
+                const auto& stableExistentials = resolve_.solverExistentials(span(), implParamsDef);
 
                 class MaterializeCandidate final: public MonomorphiserNop {
                     const HMTypeInferrence& table;
@@ -8733,7 +8733,7 @@ default:
             , currentTraitPtr(currentTrait ? &crate.getTraitByPath(Span(), currentTrait->path) : nullptr)
             , eatCachePool(stl::ObjPool::fromMemory())
             , eatCache(eatCachePool.mutPtr())
-            , implExistentials_(eatCachePool.mutPtr())
+            , solverExistentials_(eatCachePool.mutPtr())
         {
             implGenerics_ = implParams;
             itemGenerics_ = itemParams;
@@ -8815,9 +8815,9 @@ default:
             return result;
         }
 
-        const HIRPathParams& TraitResolution::implExistentials(const Span& sp, const HIRGenericParams& definition) const {
+        const HIRPathParams& TraitResolution::solverExistentials(const Span& sp, const HIRGenericParams& definition) const {
             const auto key = stl::splitMix64(reinterpret_cast<uintptr_t>(&definition));
-            auto* bucket = implExistentials_.find(key);
+            auto* bucket = solverExistentials_.find(key);
             if (bucket) {
                 for (const auto& entry : *bucket) {
                     if (entry.definition == &definition) {
@@ -8825,7 +8825,7 @@ default:
                     }
                 }
             } else {
-                bucket = implExistentials_.insert(key);
+                bucket = solverExistentials_.insert(key);
             }
 
             // One resolver-wide binder identity per immutable impl.  The
@@ -8845,7 +8845,7 @@ default:
                 ASSERT_BUG(sp, i < 256, "Too many candidate value parameters");
                 params.values.push_back(HIRGenericRef::newSolverExistential(scope, static_cast<u16>(i)));
             }
-            bucket->push_back(ImplExistentials{&definition, ::std::move(params)});
+            bucket->push_back(SolverExistentials{&definition, ::std::move(params)});
             return bucket->back().params;
         }
 
@@ -8854,7 +8854,7 @@ default:
             const HIRGenericParams& definition,
             const HIRPathParams& inferenceParams
         ) const {
-            const auto& stable = this->implExistentials(sp, definition);
+            const auto& stable = this->solverExistentials(sp, definition);
 
             class Materialize final: public MonomorphiserNop {
                 const HMTypeInferrence& table;
@@ -11502,19 +11502,7 @@ default: {
                             *outUndecided = true;
                         }
                         {
-                            HIRPathParams methodParams;
-                            RcString placeholderName;
-                            if (method.data.params.isGeneric()) {
-                                placeholderName = RcString::newInterned(FMT("method_wf_" << &method.data));
-                            }
-                            methodParams.types.reserve(method.data.params.types.size());
-                            for (size_t i = 0; i < method.data.params.types.size(); i++) {
-                                methodParams.types.push_back(crate.types.generic(placeholderName, GENERICPlaceholder * 256 + i));
-                            }
-                            methodParams.values.reserve(method.data.params.values.size());
-                            for (size_t i = 0; i < method.data.params.values.size(); i++) {
-                                methodParams.values.push_back(HIRGenericRef(placeholderName, GENERICPlaceholder, i));
-                            }
+                            const auto& methodParams = this->solverExistentials(sp, method.data.params);
 
                             const auto monomorph = MonomorphStatePtr(crate.types, selfTy, &implParams, &methodParams);
                             const auto returnType = monomorph.monomorphType(sp, method.data.returnType, true);
@@ -11530,10 +11518,14 @@ default: {
                                     nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*this, crate);
                                 }
                                 auto projectionWf = nextSolver->evaluateCertainty(sp, projection->trait.path, projection->trait.params, projection->type);
-                                if (projectionWf == HIRCompare::Unequal && placeholderName != RcString()) {
+                                if (projectionWf == HIRCompare::Unequal && method.data.params.isGeneric()) {
                                     const bool dependsOnMethodParam = visitTyWith(inner, [&](const HIRTypeData* part) {
-                                        const auto* generic = part->opt_Generic();
-                                        return generic && generic->isPlaceholder() && generic->name == placeholderName;
+                                        for (const auto* parameter : methodParams.types) {
+                                            if (part == parameter) {
+                                                return true;
+                                            }
+                                        }
+                                        return false;
                                     });
                                     if (dependsOnMethodParam) {
                                         projectionWf = HIRCompare::Fuzzy;

@@ -616,11 +616,11 @@ private:
 
     mutable stl::ObjPool::Ref eatCachePool;
     mutable stl::IntMap<EatCacheEntry> eatCache;
-    struct ImplExistentials {
+    struct SolverExistentials {
         const HIRGenericParams* definition;
         HIRPathParams params;
     };
-    mutable stl::IntMap<ThinVector<ImplExistentials>> implExistentials_;
+    mutable stl::IntMap<ThinVector<SolverExistentials>> solverExistentials_;
     mutable u64 eatCacheGeneration = 0;
     friend class NextTraitGoalEvaluator;
     mutable bool normalizingBoundType = false;
@@ -746,6 +746,10 @@ public:
     /// both sets of where-clauses in an isolated inference context.
     bool implsOverlap(const Span& sp, const ImplRef& left, const ImplRef& right) const;
 
+    /// One stable typed existential binder for an immutable generic
+    /// definition.  The returned parameters contain no inference-table state.
+    const HIRPathParams& solverExistentials(const Span& sp, const HIRGenericParams& definition) const;
+
     /// Instantiate an inherent impl's existential parameters as real inference
     /// variables and relate its declared Self type to the receiver.  Callers
     /// probing more than one impl must wrap this in an inference snapshot.
@@ -806,7 +810,6 @@ private:
     }
 
     HIRPathParams makeFreshImplParams(const HIRGenericParams& params) const;
-    const HIRPathParams& implExistentials(const Span& sp, const HIRGenericParams& definition) const;
     HIRPathParams materializeImplParams(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& inferenceParams) const;
     SolverCertainty solveNonBuiltinTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRTypeData* type) const;
     HIRCompare typeIsSizedBuiltin(const Span& sp, const HIRTypeData* type) const;

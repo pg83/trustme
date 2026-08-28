@@ -52,17 +52,7 @@ public:
         HIRPathParams inferredParams;
         if (!params) {
             const auto& traitDef = resolve_.hirCrate().getTraitByPath(sp, trait);
-            // This resolver owns m_ivars, so its inference indexes must not
-            // escape into HIR and be mistaken for indexes in expression typeck.
-            const auto placeholderName = RcString::newInterned(FMT("static_find_impl_" << &inferredParams));
-            inferredParams.types.reserve(traitDef.params.types.size());
-            for (size_t i = 0; i < traitDef.params.types.size(); i++) {
-                inferredParams.types.push_back(resolve_.hirCrate().types.generic(placeholderName, GENERICPlaceholder * 256 + i));
-            }
-            inferredParams.values.reserve(traitDef.params.values.size());
-            for (size_t i = 0; i < traitDef.params.values.size(); i++) {
-                inferredParams.values.push_back(HIRConstGeneric::make_Generic({placeholderName, static_cast<unsigned int>(GENERICPlaceholder * 256 + i)}));
-            }
+            inferredParams = resolve_.solverExistentials(sp, traitDef.params).clone();
             params = &inferredParams;
         }
 
