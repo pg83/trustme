@@ -856,53 +856,55 @@ if not system_rustc_mode:
         descr="UT",
         color="green",
     ))
-unit_tests.append(command(
-    name="unit_node_cast",
-    inputs=[
-        "$(S)/tst/unit/test_node_cast.py",
-        "$(S)/bin/rustc/common.h",
-        *build.glob("$(S)/bin/rustc/**/*.h"),
-        *build.glob("$(S)/bin/rustc/**/*.cpp"),
-        *build.glob("$(S)/bin/rustc/**/*.inc"),
-        *TIMEOUT_INPUT,
-    ],
-    outputs=["$(B)/tst/unit/node_cast.stamp"],
-    cmd=[
-        *TEST_TIMEOUT,
-        "python3", "$(S)/tst/unit/test_node_cast.py",
-        "$(S)/bin/rustc", "$(B)/tst/unit/node_cast_test",
-        "$(B)/tst/unit/node_cast.stamp",
-    ],
-    deps=[node_cast_test],
-    descr="UT",
-    color="green",
-))
-unit_tests.append(command(
-    name="unit_std_ratchet",
-    inputs=[
-        "$(S)/dev/std_ratchet.py",
-        "$(S)/dev/std_ratchet.baseline",
-        *build.glob("$(S)/bin/rustc/**/*.h"),
-        *build.glob("$(S)/bin/rustc/**/*.cpp"),
-        *TIMEOUT_INPUT,
-    ],
-    outputs=["$(B)/tst/unit/std_ratchet.stamp"],
-    cmd=[
-        *TEST_TIMEOUT,
-        "python3", "$(S)/dev/std_ratchet.py",
-        "--baseline", "$(S)/dev/std_ratchet.baseline",
-        "--stamp", "$(B)/tst/unit/std_ratchet.stamp",
-        *build.glob("$(S)/bin/rustc/**/*.h"),
-        *build.glob("$(S)/bin/rustc/**/*.cpp"),
-    ],
-    descr="UT",
-    color="green",
-))
+style = [
+    command(
+        name="unit_node_cast",
+        inputs=[
+            "$(S)/tst/unit/test_node_cast.py",
+            "$(S)/bin/rustc/common.h",
+            *build.glob("$(S)/bin/rustc/**/*.h"),
+            *build.glob("$(S)/bin/rustc/**/*.cpp"),
+            *build.glob("$(S)/bin/rustc/**/*.inc"),
+            *TIMEOUT_INPUT,
+        ],
+        outputs=["$(B)/tst/unit/node_cast.stamp"],
+        cmd=[
+            *TEST_TIMEOUT,
+            "python3", "$(S)/tst/unit/test_node_cast.py",
+            "$(S)/bin/rustc", "$(B)/tst/unit/node_cast_test",
+            "$(B)/tst/unit/node_cast.stamp",
+        ],
+        deps=[node_cast_test],
+        descr="UT",
+        color="green",
+    ),
+    command(
+        name="unit_std_ratchet",
+        inputs=[
+            "$(S)/dev/std_ratchet.py",
+            "$(S)/dev/std_ratchet.baseline",
+            *build.glob("$(S)/bin/rustc/**/*.h"),
+            *build.glob("$(S)/bin/rustc/**/*.cpp"),
+            *TIMEOUT_INPUT,
+        ],
+        outputs=["$(B)/tst/unit/std_ratchet.stamp"],
+        cmd=[
+            *TEST_TIMEOUT,
+            "python3", "$(S)/dev/std_ratchet.py",
+            "--baseline", "$(S)/dev/std_ratchet.baseline",
+            "--stamp", "$(B)/tst/unit/std_ratchet.stamp",
+            *build.glob("$(S)/bin/rustc/**/*.h"),
+            *build.glob("$(S)/bin/rustc/**/*.cpp"),
+        ],
+        descr="UT",
+        color="green",
+    ),
+]
 
 for source in sorted(RUSTC_CPP_SRC):
     stem = source.rsplit("/", 1)[1][:-len(".cpp")]
     stamp = f"$(B)/tst/unit/stl_namespace/{stem}.stamp"
-    unit_tests.append(command(
+    style.append(command(
         name=f"unit_stl_namespace_{stem}",
         inputs=[
             "$(S)/dev/stl_namespace_gate.py",
@@ -956,7 +958,7 @@ unit_tests.append(command(
     descr="UT",
     color="green",
 ))
-unit_tests.append(command(
+style.append(command(
     name="unit_rustc_header_pairs",
     inputs=[
         "$(S)/tst/unit/test_rustc_header_pairs.py",
@@ -983,7 +985,7 @@ unit_tests.append(command(
     descr="UT",
     color="green",
 ))
-unit_tests.append(command(
+style.append(command(
     name="unit_compiler_no_dead_branches",
     inputs=[
         "$(S)/tst/unit/test_compiler_no_dead_branches.py",
@@ -2163,6 +2165,7 @@ for _index, _case in enumerate(miri_cases):
 
 lite_tests = [
     *(rust_unit_tests if system_rustc_mode else unit_tests),
+    *style,
     *rust_1_90_tests,
     *rust_ui_compile_tests,
     *gccrs_tests,
@@ -2205,10 +2208,9 @@ group("test", *lite_tests)
 group("lite_tests", *partition_lite_tests(lite_tests))
 group("projects", *project_tests)
 group("slow_tests", *project_tests, *slow_rust_lib_tests)
-group("unit", *(rust_unit_tests if system_rustc_mode else unit_tests))
-# `ut` builds+runs only the C++ *_ut.cpp runner (bin/rustc/*_ut.cpp), without the
-# much larger `unit` group (which also runs the semantic .rs regression corpus).
-group("ut", rustc_ut_run)
+group("unit", *(rust_unit_tests if system_rustc_mode else unit_tests), *style)
+group("ut", rustc_ut_run, *style)
+group("style", *style)
 group("perf", *perf_tests)
 group("rust_1_90", *rust_1_90_tests)
 group("rust_ui_compile", *rust_ui_compile_tests)

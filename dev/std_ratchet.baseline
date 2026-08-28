@@ -167,6 +167,8 @@
 2	unique_ptr	bin/rustc/hir_type.cpp
 1	std::unordered	bin/rustc/hir_type.h
 5	std::vector	bin/rustc/hir_type.h
+1	std::map	bin/rustc/hir_type_ref.h
+1	std::set	bin/rustc/hir_type_ref.h
 2	make_unique	bin/rustc/hir_typeck_common.cpp
 3	std::vector	bin/rustc/hir_typeck_common.cpp
 5	make_unique	bin/rustc/hir_typeck_expr_cs.cpp
@@ -188,6 +190,7 @@
 1	std::string	bin/rustc/hir_typeck_main_bindings.cpp
 3	std::vector	bin/rustc/hir_typeck_main_bindings.cpp
 1	std::map	bin/rustc/hir_typeck_static.h
+1	make_unique	bin/rustc/hir_visitor.cpp
 1	unique_ptr	bin/rustc/hir_visitor.cpp
 1	make_shared	bin/rustc/ident.cpp
 1	shared_ptr	bin/rustc/ident.h
@@ -310,11 +313,9 @@
 3	std::string	bin/rustc/trans_codegen.cpp
 1	unique_ptr	bin/rustc/trans_codegen.cpp
 1	std::string	bin/rustc/trans_codegen.h
-1	new	bin/rustc/trans_codegen_c.cpp
-3	std::set	bin/rustc/trans_codegen_c.cpp
-63	std::string	bin/rustc/trans_codegen_c.cpp
-47	std::vector	bin/rustc/trans_codegen_c.cpp
-2	unique_ptr	bin/rustc/trans_codegen_c.cpp
+2	std::set	bin/rustc/trans_codegen_c.cpp
+48	std::string	bin/rustc/trans_codegen_c.cpp
+33	std::vector	bin/rustc/trans_codegen_c.cpp
 1	std::string	bin/rustc/trans_codegen_c.h
 1	unique_ptr	bin/rustc/trans_codegen_c.h
 1	new	bin/rustc/trans_codegen_mir.cpp
@@ -333,7 +334,7 @@
 5	std::vector	bin/rustc/trans_main_bindings.h
 1	std::string	bin/rustc/trans_mangling.cpp
 3	std::set	bin/rustc/trans_monomorphise.cpp
-3	std::vector	bin/rustc/trans_monomorphise.cpp
+4	std::vector	bin/rustc/trans_monomorphise.cpp
 3	std::map	bin/rustc/trans_target.cpp
 8	std::string	bin/rustc/trans_target.cpp
 3	std::unordered	bin/rustc/trans_target.cpp
