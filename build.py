@@ -856,7 +856,28 @@ if not system_rustc_mode:
         descr="UT",
         color="green",
     ))
+COMMENT_SOURCES = [
+    *build.glob("$(S)/**/*.h"),
+    *build.glob("$(S)/**/*.cpp"),
+]
 style = [
+    command(
+        name="style_line_comments",
+        inputs=[
+            "$(S)/dev/comment_gate.py",
+            *COMMENT_SOURCES,
+            *TIMEOUT_INPUT,
+        ],
+        outputs=["$(B)/tst/style/line_comments.stamp"],
+        cmd=[
+            *TEST_TIMEOUT,
+            "python3", "$(S)/dev/comment_gate.py",
+            "--stamp", "$(B)/tst/style/line_comments.stamp",
+            *COMMENT_SOURCES,
+        ],
+        descr="ST",
+        color="green",
+    ),
     command(
         name="unit_node_cast",
         inputs=[
