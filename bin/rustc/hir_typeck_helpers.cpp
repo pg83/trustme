@@ -11220,6 +11220,70 @@ default: {
                         possibilities.push_back(mv$(selectedPossibility));
                     }
                 };
+                auto canonicalizeTraitCandidates = [&]() {
+                    auto sharedParams = [&](const HIRPathParams& shape) {
+                        ASSERT_BUG(sp, typeIvarCount <= ivars.size(), "Invalid method ivar split");
+                        ASSERT_BUG(sp, shape.types.size() <= typeIvarCount, "Not enough type ivars for method candidate");
+                        ASSERT_BUG(sp, shape.values.size() <= ivars.size() - typeIvarCount, "Not enough value ivars for method candidate");
+
+                        HIRPathParams params;
+                        params.types.reserve(shape.types.size());
+                        for (size_t i = 0; i < shape.types.size(); i++) {
+                            params.types.push_back(crate.types.infer(ivars[i], HIRInferClass::None));
+                        }
+                        params.values.reserve(shape.values.size());
+                        for (size_t i = 0; i < shape.values.size(); i++) {
+                            params.values.push_back(HIRConstGeneric::make_Infer({ivars[typeIvarCount + i]}));
+                        }
+                        return params;
+                    };
+
+                    for (auto first = possibilities.begin(); first != possibilities.end(); ++first) {
+                        auto* firstPath = first->path.data.opt_UfcsKnown();
+                        if (!firstPath) {
+                            continue;
+                        }
+                        for (auto second = first + 1; second != possibilities.end();) {
+                            auto* secondPath = second->path.data.opt_UfcsKnown();
+                            if (!secondPath) {
+                                ++second;
+                                continue;
+                            }
+                            if (first->path == second->path) {
+                                second = possibilities.erase(second);
+                                continue;
+                            }
+
+                            const bool sameSelf = firstPath->type == secondPath->type
+                                || firstPath->type->equalsIgnoringRegions(secondPath->type);
+                            if (!sameSelf || firstPath->trait.path != secondPath->trait.path) {
+                                ++second;
+                                continue;
+                            }
+
+                            // Multiple ParamEnv routes to one method are one
+                            // candidate identity. Keep their trait arguments
+                            // existential so the call signature and solver can
+                            // select the applicable bound.
+                            firstPath->trait.params = sharedParams(firstPath->trait.params);
+                            second = possibilities.erase(second);
+                        }
+                    }
+
+                };
+                auto preferCurrentTraitCandidate = [&]() {
+                    if (possibilities.size() > 1 && currentTraitPath_) {
+                        for (size_t i = 0; i < possibilities.size(); i++) {
+                            const auto* path = possibilities[i].path.data.opt_UfcsKnown();
+                            if (path && path->trait.path == currentTraitPath_->path) {
+                                auto selected = mv$(possibilities[i]);
+                                possibilities.clear();
+                                possibilities.push_back(mv$(selected));
+                                break;
+                            }
+                        }
+                    }
+                };
                 do {
                     const auto* ty = this->ivars.getType(currentTy);
                     auto shouldPause = [](const auto& ty) -> bool {
@@ -11302,7 +11366,9 @@ default: {
                     if (possibilities.empty() && curAccess >= MethodAccess::Move && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Owned, possibilities, &undecided)) {
                     }
                     if (!possibilities.empty()) {
+                        canonicalizeTraitCandidates();
                         collapseToMostSpecificSubtrait();
+                        preferCurrentTraitCandidate();
                         // A candidate that only matches while the receiver is
                         // unknown is not yet an answer, even when it is alone:
                         // the eventual type may expose an inherent method at a
@@ -11536,10 +11602,15 @@ default: {
             }
             const auto* erased = inherentReceiver->opt_ErasedType();
             const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+            const bool inherentReceiverUnknown = inherentReceiver->is_Infer();
             const bool opaqueCanReveal = !erased
                 || (alias && this->isOpaqueAliasDefiningScope(*alias->inner))
                 || erased->inner.is_Known();
-            if (opaqueCanReveal) {
+            if (inherentReceiverUnknown) {
+                if (outUndecided) {
+                    *outUndecided = true;
+                }
+            } else if (opaqueCanReveal) {
                 this->wb.inherentMethods->find(sp, methodName, ty, this->ivars.callbackResolveInfer(), [&](const HIRTypeData* selfTy, const HIRTypeImpl& impl) {
                     const auto& method = impl.methods.at(methodName);
                     if (!method.publicity.isVisible(this->visPath)) {
