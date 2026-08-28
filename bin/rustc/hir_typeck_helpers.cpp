@@ -9467,10 +9467,12 @@ default:
             return relation.unify(receiver, candidate);
         }
 
-        SolverCertainty TraitResolution::evaluateInherentImplBounds(
+        SolverCertainty TraitResolution::evaluateGenericBounds(
             const Span& sp,
-            const HIRTypeImpl& impl,
-            const HIRPathParams& implParams
+            const HIRGenericParams& definition,
+            const HIRPathParams& parameters,
+            const Monomorphiser& monomorph,
+            u32 conditionalScope
         ) const {
             auto result = SolverCertainty::Proven;
             const auto merge = [&](SolverCertainty certainty) {
@@ -9493,10 +9495,40 @@ default:
                 }
             };
 
-            auto monomorph = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr);
-            monomorph.setConstevalState(this->board(), HIRItemPath(""));
+            struct ContainsConditionalParameter final: MonomorphiserNop {
+                u32 scope;
+                mutable bool found = false;
 
-            for (const auto& bound : impl.params.bounds) {
+                ContainsConditionalParameter(HIRTypeInterner& types, u32 scope)
+                    : MonomorphiserNop(types)
+                    , scope(scope)
+                {
+                }
+
+                HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override {
+                    found |= generic.solverScope == scope;
+                    return MonomorphiserNop::getType(sp, generic);
+                }
+
+                HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override {
+                    found |= generic.solverScope == scope;
+                    return MonomorphiserNop::getValue(sp, generic);
+                }
+
+                bool contains(const Span& sp, const HIRTypeData* type) const {
+                    found = false;
+                    (void)this->monomorphType(sp, type, true);
+                    return found;
+                }
+
+                bool contains(const Span& sp, const HIRTraitPath& trait) const {
+                    found = false;
+                    (void)this->monomorphTraitpath(sp, trait, true);
+                    return found;
+                }
+            } conditional(crate.types, conditionalScope);
+
+            for (const auto& bound : definition.bounds) {
                 if (const auto* traitBound = bound.opt_TraitBound()) {
                     auto realType = monomorph.monomorphType(sp, traitBound->type, true);
                     auto realTrait = monomorph.monomorphTraitpath(sp, traitBound->trait, true);
@@ -9506,6 +9538,15 @@ default:
                     }
                     for (auto& associated : realTrait.typeBounds) {
                         associated.second.type = this->expandAssociatedTypes(sp, ::std::move(associated.second.type));
+                    }
+                    if (conditionalScope
+                        && (conditional.contains(sp, realType) || conditional.contains(sp, realTrait))) {
+                        // A method's own parameters are inferred from its
+                        // turbofish and arguments.  Their bounds are call-site
+                        // obligations, installed by visitCallPopulateCache;
+                        // they are not facts that method lookup can prove or
+                        // reject before those inputs exist.
+                        continue;
                     }
 
                     bool sawResponse = false;
@@ -9588,6 +9629,10 @@ default:
                 } else if (const auto* equality = bound.opt_TypeEquality()) {
                     const auto left = monomorph.monomorphType(sp, equality->type, true);
                     const auto right = monomorph.monomorphType(sp, equality->otherType, true);
+                    if (conditionalScope
+                        && (conditional.contains(sp, left) || conditional.contains(sp, right))) {
+                        continue;
+                    }
                     Unifier relation(sp, ivars, this, {
                         .bindRigidValues = true,
                         .relateProjectionInputs = true,
@@ -9599,11 +9644,17 @@ default:
                 }
             }
 
-            for (size_t i = 0; i < impl.params.types.size(); i++) {
-                if (!impl.params.types[i].isSized) {
+            ASSERT_BUG(sp, parameters.types.size() == definition.types.size(),
+                "Generic bound parameter count mismatch");
+            for (size_t i = 0; i < definition.types.size(); i++) {
+                if (!definition.types[i].isSized) {
                     continue;
                 }
-                switch (this->typeIsSized(sp, ivars.getType(implParams.types[i]))) {
+                const auto* parameter = ivars.getType(parameters.types[i]);
+                if (conditionalScope && conditional.contains(sp, parameter)) {
+                    continue;
+                }
+                switch (this->typeIsSized(sp, parameter)) {
                     case HIRCompare::Equal:
                         break;
                     case HIRCompare::Fuzzy:
@@ -9614,6 +9665,16 @@ default:
                 }
             }
             return result;
+        }
+
+        SolverCertainty TraitResolution::evaluateInherentImplBounds(
+            const Span& sp,
+            const HIRTypeImpl& impl,
+            const HIRPathParams& implParams
+        ) const {
+            auto monomorph = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr);
+            monomorph.setConstevalState(this->board(), HIRItemPath(""));
+            return this->evaluateGenericBounds(sp, impl.params, implParams, monomorph);
         }
 
         SolverCertainty TraitResolution::evaluateInherentImpl(
@@ -11501,39 +11562,33 @@ default: {
                         }
                         {
                             const auto& methodParams = this->solverExistentials(sp, method.data.params);
+                            u32 methodScope = 0;
+                            if (!methodParams.types.empty()) {
+                                const auto* generic = methodParams.types.front()->opt_Generic();
+                                ASSERT_BUG(sp, generic && generic->isSolverExistential(),
+                                    "Method type parameter is not a solver existential");
+                                methodScope = generic->solverScope;
+                            } else if (!methodParams.values.empty()) {
+                                const auto* generic = methodParams.values.front().opt_Generic();
+                                ASSERT_BUG(sp, generic && generic->isSolverExistential(),
+                                    "Method value parameter is not a solver existential");
+                                methodScope = generic->solverScope;
+                            }
 
-                            const auto monomorph = MonomorphStatePtr(crate.types, selfTy, &implParams, &methodParams);
-                            const auto returnType = monomorph.monomorphType(sp, method.data.returnType, true);
-                            auto wf = HIRCompare::Equal;
-                            visitTyWith(returnType, [&](const HIRTypeData* inner) {
-                                const auto* path = inner->opt_Path();
-                                const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
-                                if (!projection) {
-                                    return false;
-                                }
-                                if (!nextSolver) {
-                                    ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
-                                    nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*this, crate);
-                                }
-                                auto projectionWf = nextSolver->evaluateCertainty(sp, projection->trait.path, projection->trait.params, projection->type);
-                                if (projectionWf == HIRCompare::Unequal && method.data.params.isGeneric()) {
-                                    const bool dependsOnMethodParam = visitTyWith(inner, [&](const HIRTypeData* part) {
-                                        for (const auto* parameter : methodParams.types) {
-                                            if (part == parameter) {
-                                                return true;
-                                            }
-                                        }
-                                        return false;
-                                    });
-                                    if (dependsOnMethodParam) {
-                                        projectionWf = HIRCompare::Fuzzy;
-                                    }
-                                }
-                                wf &= projectionWf;
-                                return wf == HIRCompare::Unequal;
-                            });
-                            if (wf == HIRCompare::Unequal) {
+                            auto monomorph = MonomorphStatePtr(crate.types, selfTy, &implParams, &methodParams);
+                            monomorph.setConstevalState(this->board(), HIRItemPath(""));
+                            const auto methodBounds = this->evaluateGenericBounds(
+                                sp,
+                                method.data.params,
+                                methodParams,
+                                monomorph,
+                                methodScope
+                            );
+                            if (methodBounds == SolverCertainty::NoSolution) {
                                 return;
+                            }
+                            if (outUndecided && methodBounds == SolverCertainty::Ambiguous) {
+                                *outUndecided = true;
                             }
                         }
                         possibilities.push_back(::std::make_pair(borrowType, HIRPath(selfTy, methodName, {})));

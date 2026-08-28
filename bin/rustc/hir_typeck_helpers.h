@@ -822,6 +822,13 @@ private:
     HIRCompare typeIsCopyBuiltin(const Span& sp, const HIRTypeData* type) const;
     SolverCertainty evaluateCoercionGoal(const Span& sp, const SolverCoercionConstraint& constraint, const HIRTypeData* input, ThinVector<SolverTypeEquality>* equalities = nullptr) const;
     Ordering compareCoercionEndpoints(const Span& sp, const SolverCoercionConstraint& constraint, const HIRTypeData* left, const HIRTypeData* right) const;
+    SolverCertainty evaluateGenericBounds(
+        const Span& sp,
+        const HIRGenericParams& definition,
+        const HIRPathParams& parameters,
+        const Monomorphiser& monomorph,
+        u32 conditionalScope = 0
+    ) const;
     SolverCertainty evaluateInherentImplBounds(const Span& sp, const HIRTypeImpl& impl, const HIRPathParams& implParams) const;
 
 public:
