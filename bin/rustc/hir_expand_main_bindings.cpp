@@ -22,8 +22,8 @@ namespace {
     bool typeIsUseCloned(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* type) {
         const auto& trait = resolve.hirCrate().getLangItemPathOpt("use_cloned");
         return !trait.components().empty()
-            && resolve.findImpl(sp, trait, HIRPathParams{}, type, [](auto, bool isFuzzed) {
-                return !isFuzzed;
+            && resolve.findImpl(sp, trait, HIRPathParams{}, type, [](auto, SolverCertainty certainty) {
+                return certainty == SolverCertainty::Proven;
             });
     }
 
@@ -5837,7 +5837,7 @@ namespace {
             if (traitPath.components().empty()) {
                 return true;
             }
-            return !resolve_.findImpl(sp, traitPath, traitParams, tyL, [&](ImplRef impl, bool) {
+            return !resolve_.findImpl(sp, traitPath, traitParams, tyL, [&](ImplRef impl, SolverCertainty) {
                 const auto* traitImpl = impl.data.opt_TraitImpl();
                 return !(currentTraitImpl && traitImpl && traitImpl->impl == currentTraitImpl);
             });
@@ -5856,7 +5856,7 @@ namespace {
             if (traitPath.components().empty()) {
                 return true;
             }
-            return !resolve_.findImpl(sp, traitPath, HIRPathParams(), ty, [&](ImplRef impl, bool) {
+            return !resolve_.findImpl(sp, traitPath, HIRPathParams(), ty, [&](ImplRef impl, SolverCertainty) {
                 const auto* traitImpl = impl.data.opt_TraitImpl();
                 return !(currentTraitImpl && traitImpl && traitImpl->impl == currentTraitImpl);
             });

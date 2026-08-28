@@ -697,7 +697,7 @@ public:
     bool moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& x) const;
     // headOnly: only unify the impl heads (with binding consistency /
     // occurs check), skipping the recursive bound satisfiability walk.
-    bool overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other, bool headOnly = false) const;
+    bool overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other) const;
 };
 
 class HIRMarkerImpl {

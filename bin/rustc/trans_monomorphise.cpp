@@ -136,8 +136,8 @@ namespace {
 
         bool hasDropImpl(const HIRTypeData* ty) const {
             const auto& trait = resolve.langDrop();
-            return !trait.components().empty() && resolve.findImpl(sp, trait, HIRPathParams{}, ty, [](ImplRef impl, bool fuzzed) {
-                return !fuzzed && impl.data.is_TraitImpl();
+            return !trait.components().empty() && resolve.findImpl(sp, trait, HIRPathParams{}, ty, [](ImplRef impl, SolverCertainty certainty) {
+                return certainty == SolverCertainty::Proven && impl.data.is_TraitImpl();
             });
         }
 

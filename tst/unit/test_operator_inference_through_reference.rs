@@ -1,3 +1,5 @@
+//@ compile-flags: -O
+
 // An integer literal's type comes from the operator around it. A shift of a
 // literal yields the literal's own type, so an enclosing operator reaches it;
 // and a borrowed primitive goes through the standard library's forwarding
@@ -6,8 +8,16 @@ fn egg_count(display_value: u32) -> usize {
     (0..32).filter(|i| display_value & (1 << i) != 0).count()
 }
 
+struct Header(u32);
+
+fn search<const N: usize>(headers: &[Header; N], needle: u32) {
+    let _ = headers.binary_search_by_key(&(needle << 11), |header| header.0 << 11);
+}
+
 fn main() {
     assert_eq!(egg_count(0b1011), 3);
+    assert_eq!(7u32 << 11, 14336u32);
+    search(&[Header(0), Header(1)], 1);
 
     let array = [0x42u8; 4];
     for b in &array {

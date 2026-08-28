@@ -125,8 +125,8 @@ namespace {
             if (trait.components().empty()) {
                 return false;
             }
-            return builder.resolve().findImpl(sp, trait, HIRPathParams{}, ty, [](ImplRef impl, bool fuzzed) {
-                return !fuzzed && impl.data.is_TraitImpl();
+            return builder.resolve().findImpl(sp, trait, HIRPathParams{}, ty, [](ImplRef impl, SolverCertainty certainty) {
+                return certainty == SolverCertainty::Proven && impl.data.is_TraitImpl();
             });
         }
 
@@ -2506,7 +2506,7 @@ default:
                 switch ((*tyOut).tag()) {
 default: {
                         const auto& langUnsize = builder.crate().getLangItemPath(node.span(), "unsize");
-                        if (builder.resolve().findImpl(node.span(), langUnsize, HIRPathParams(tyOut), tyIn, [](auto, bool) {
+                        if (builder.resolve().findImpl(node.span(), langUnsize, HIRPathParams(tyOut), tyIn, [](auto, SolverCertainty) {
                             return true;
                         })) {
                             // - HACK: Emit a cast operation on the pointers. Leave it up to monomorph to 'fix' it

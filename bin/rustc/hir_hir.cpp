@@ -1490,7 +1490,7 @@ namespace {
 }
 
 // Returns `true` if the two impls overlap in the types they will accept
-bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other, bool headOnly) const {
+bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other) const {
     // TODO: Pre-calculate impl trees (with pointers to parent impls)
     struct H {
         static bool typesOverlap(const HIRPathParams& a, const HIRPathParams& b) {
@@ -1701,143 +1701,16 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
     // > Create values for impl params from the type, then check if the trait params are compatible
     // > Requires two lists, and telling which one to use by the end
     auto cbIdent = HIRResolvePlaceholdersNop();
-    bool isReversed = false;
     ImplTyMatcher matcher(crate.types);
     matcher.reinit(this->params);
-    if (!this->type->matchTestGenerics(sp, other.type, cbIdent, matcher)) {
-        isReversed = true;
-        matcher.reinit(other.params);
-        if (!other.type->matchTestGenerics(sp, this->type, cbIdent, matcher)) {
-            return false;
-        }
-        if (other.traitArgs.matchTestGenericsFuzz(sp, this->traitArgs, cbIdent, matcher) != HIRCompare::Equal) {
-            return false;
-        }
-        // Matched with second ordering
-    } else if (this->traitArgs.matchTestGenericsFuzz(sp, other.traitArgs, cbIdent, matcher) != HIRCompare::Equal) {
-        isReversed = true;
-        matcher.reinit(other.params);
-        if (!other.type->matchTestGenerics(sp, this->type, cbIdent, matcher)) {
-            return false;
-        }
-        if (other.traitArgs.matchTestGenericsFuzz(sp, this->traitArgs, cbIdent, matcher) != HIRCompare::Equal) {
-            return false;
-        }
-        // Matched with second ordering
-    } else {
-        // Matched with first ordering
-    }
-
-    struct H2 {
-        static const HIRTypeData* monomorph(const Span& sp, const HIRTypeData* inTy, const Monomorphiser& ms, HIRTypeRef& tmp) {
-            if (!monomorphiseTypeNeeded(inTy)) {
-                return inTy;
-            } else {
-                tmp = ms.monomorphType(sp, inTy);
-                // TODO: EAT?
-                return tmp;
-            }
-        }
-
-        static const HIRTraitPath& monomorph(const Span& sp, const HIRTraitPath& in, const Monomorphiser& ms, HIRTraitPath& tmp) {
-            if (!monomorphiseTraitpathNeeded(in)) {
-                return in;
-            } else {
-                tmp = ms.monomorphTraitpath(sp, in, true);
-                // TODO: EAT?
-                return tmp;
-            }
-        }
-
-        static bool checkBounds(const HIRCrate& crate, const HIRTraitImpl& id, const Monomorphiser& ms, const HIRTraitImpl& gSrc) {
-            Span sp;
-            for (const auto& tb : id.params.bounds) {
-                if (tb.is_TraitBound()) {
-                    HIRTypeRef tmpTy;
-                    HIRTraitPath tmpTp;
-                    const auto& ty = H2::monomorph(sp, tb.as_TraitBound().type, ms, tmpTy);
-                    const auto& trait = H2::monomorph(sp, tb.as_TraitBound().trait, ms, tmpTp);
-                    ;
-
-                    // Determine if `ty` would be bounded (it's an ATY or generic)
-                    if (ty->is_Generic()) {
-                        bool found = false;
-                        for (const auto& bound : gSrc.params.bounds) {
-                            if (const auto* be = bound.opt_TraitBound()) {
-                                if (be->type != ty) {
-                                    continue;
-                                }
-                                if (be->trait != trait) {
-                                    continue;
-                                }
-                                found = true;
-                            }
-                        }
-                        if (!found) {
-                            return false;
-                        }
-                    } else if (((*ty).is_Path() && ((*ty).as_Path().binding.is_Opaque()))) {
-                        TODO(sp, "Check bound " << ty << " : " << trait << " in source bounds or trait bounds");
-                    } else {
-                        // Search the crate for an impl
-                        auto cbIdent = HIRResolvePlaceholdersNop();
-                        bool rv = crate.findTraitImpls(trait.path.path, ty, cbIdent, [&](const HIRTraitImpl& ti) -> bool {
-
-                            ImplTyMatcher matcher(crate.types);
-                            matcher.reinit(ti.params);
-                            // 1. Triple-check the type matches (and get generics)
-                            if (!ti.type->matchTestGenerics(sp, ty, cbIdent, matcher)) {
-                                return false;
-                            }
-                            // 2. Check trait params
-                            assert(trait.path.params.types.size() == ti.traitArgs.types.size());
-                            for (size_t i = 0; i < trait.path.params.types.size(); i++) {
-                                if (!ti.traitArgs.types[i]->matchTestGenerics(sp, trait.path.params.types[i], cbIdent, matcher)) {
-                                    return false;
-                                }
-                            }
-                            // 3. Check bounds on the impl
-                            if (!H2::checkBounds(crate, ti, matcher, gSrc)) {
-                                return false;
-                            }
-                            // 4. Check ATY bounds on the trait path
-                            for (const auto& atyb : trait.typeBounds) {
-                                if (ti.types.count(atyb.first) != 0) {
-                                    const auto& aty = ti.types.at(atyb.first);
-                                    if (!aty.data->matchTestGenerics(sp, atyb.second.type, cbIdent, matcher)) {
-                                        return false;
-                                    }
-                                }
-                            }
-                            // All those pass? It's good.
-                            return true;
-                        });
-                        if (!rv) {
-                            return false;
-                        }
-                    }
-                } else {
-                    // TODO: Other bound types?
-                }
-            }
-            // No bounds failed, it's good
-            return true;
-        }
-    };
-
-    if (headOnly) {
+    if (this->type->matchTestGenerics(sp, other.type, cbIdent, matcher)
+        && this->traitArgs.matchTestGenericsFuzz(sp, other.traitArgs, cbIdent, matcher) == HIRCompare::Equal) {
         return true;
     }
 
-    // The two impls could overlap, pending on trait bounds
-    if (isReversed) {
-        // Check bounds on `other` using these params
-        // TODO: Take a callback that does the checks. Or somehow return a "maybe overlaps" result?
-        return H2::checkBounds(crate, other, matcher, *this);
-    } else {
-        // Check bounds on `*this`
-        return H2::checkBounds(crate, *this, matcher, other);
-    }
+    matcher.reinit(other.params);
+    return other.type->matchTestGenerics(sp, this->type, cbIdent, matcher)
+        && other.traitArgs.matchTestGenericsFuzz(sp, this->traitArgs, cbIdent, matcher) == HIRCompare::Equal;
 }
 
 namespace {

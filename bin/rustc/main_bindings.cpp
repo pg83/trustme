@@ -638,7 +638,7 @@ static int compile(int argc, char* argv[]) {
         // - Does simple replacements
         // - Done before bind so type alises can be used in patterns?
         {
-            ConvertHIRExpandAliases(*hirCrate);
+            ConvertHIRExpandAliases(wb, *hirCrate);
         }
         {
             ConvertHIRValidateReceivers(wb, *hirCrate);

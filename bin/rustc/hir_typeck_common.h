@@ -5,6 +5,12 @@
 #include "hir_typeck_impl_ref.h"
 #include "hir_typeck_monomorph.h"
 
+enum class SolverCertainty : u8 {
+    NoSolution,
+    Ambiguous,
+    Proven,
+};
+
 struct HIRTypeVisitorCallback {
     virtual bool visit(const HIRTypeData* type) = 0;
 };

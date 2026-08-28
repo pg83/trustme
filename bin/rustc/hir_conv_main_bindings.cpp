@@ -1663,6 +1663,7 @@ std::vector<HIRTraitPath> ConvertHIRExpandAliasesGetTraitExpansion(const Span& s
 }
 
 class Expander: public HIRVisitor {
+    const WireBoard& wb;
     const HIRCrate& crate;
     bool inExpr = false;
     const HIRTypeData* implType = nullptr;
@@ -1693,8 +1694,9 @@ class Expander: public HIRVisitor {
     }
 
 public:
-    Expander(const HIRCrate& crate)
+    Expander(const WireBoard& wb, const HIRCrate& crate)
         : HIRVisitor(nullptr, crate.types)
+        , wb(wb)
         , crate(crate)
     {
     }
@@ -1989,17 +1991,11 @@ public:
 
         // `<Foo as A>::Assoc { .. }` matches the struct the associated type
         // resolves to, so the projection is replaced by that type.
-        if (const auto* ufcs = path.data.opt_UfcsKnown()) {
-            const HIRTypeData* revealed = nullptr;
-            crate.findTraitImpls(ufcs->trait.path, ufcs->type, HIRResolvePlaceholdersNop(), [&](const HIRTraitImpl& impl) {
-                auto it = impl.types.find(ufcs->item);
-                if (it == impl.types.end()) {
-                    return false;
-                }
-                revealed = it->second.data;
-                return true;
-            });
-            if (!revealed || !revealed->is_Path() || !revealed->as_Path().path.data.is_Generic()) {
+        if (path.data.is_UfcsKnown()) {
+            auto revealed = crate.types.path(path.clone(), HIRTypePathBinding::make_Opaque({}));
+            StaticTraitResolve resolve{wb};
+            resolve.expandAssociatedTypes(sp, revealed);
+            if (!revealed->is_Path() || !revealed->as_Path().path.data.is_Generic()) {
                 ERROR(sp, E0000, "Expected a struct behind the associated type in a pattern, got " << path);
             }
             path = revealed->as_Path().path.data.as_Generic().clone();
@@ -2383,9 +2379,9 @@ public:
     }
 };
 
-void ConvertHIRExpandAliases(HIRCrate& crate) {
+void ConvertHIRExpandAliases(const WireBoard& wb, HIRCrate& crate) {
     AliasConstGenericParamBinder(crate.types).visitCrate(crate);
-    Expander exp{crate};
+    Expander exp{wb, crate};
     exp.visitCrate(crate);
 }
 
@@ -3517,7 +3513,7 @@ public:
 
         // TODO: This is VERY arbitary and possibly nowhere near what rustc does.
         // NOTE: `nullptr` passed for param count, as defaults are not yet expanded
-        this->resolve_.findImpl(sp, traitPath.path, nullptr, type, [&](const auto& impl, bool fuzzy) -> bool {
+        this->resolve_.findImpl(sp, traitPath.path, nullptr, type, [&](const auto& impl, SolverCertainty) -> bool {
             auto pp = impl.getTraitParams(crate.types);
             // Replace all placeholder parameters (group 2) with ivars (empty types)
             struct KillPlaceholders: public Monomorphiser {

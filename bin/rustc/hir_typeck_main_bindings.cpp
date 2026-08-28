@@ -148,10 +148,10 @@ namespace {
         }
 
         static bool traitBoundSatisfied(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* type, const HIRTraitPath& trait) {
-            return resolve.findImpl(sp, trait.path.path, &trait.path.params, type, [](const auto&, bool isFuzzed) {
+            return resolve.findImpl(sp, trait.path.path, &trait.path.params, type, [](const auto&, SolverCertainty certainty) {
                 // A possible impl is not proof that a generic signature is
                 // well formed; an in-scope bound or a concrete impl is exact.
-                return !isFuzzed;
+                return certainty == SolverCertainty::Proven;
             });
         }
 
@@ -473,9 +473,8 @@ namespace {
         bool setFromImpl(const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd) {
             auto& e = pd.as_UfcsUnknown();
             const auto& type = e.type;
-            return this->crate.findTraitImpls(traitPath.path, type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
-                // TODO: Check bounds
-                for (const auto& bound : impl.params.bounds) {
+            return resolve_.findImpl(Span(), traitPath.path, traitPath.params, type, [&](ImplRef, SolverCertainty certainty) {
+                if (certainty != SolverCertainty::Proven) {
                     return false;
                 }
                 pd = getUfcsKnown(mv$(e), makeGenericPath(traitPath.path, trait), trait);

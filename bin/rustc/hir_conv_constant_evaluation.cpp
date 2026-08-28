@@ -4794,8 +4794,8 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
             if (trait.isConst) {
                 ImplRef bestImpl;
                 bool hasConstBound = false;
-                resolve.findImpl(state.sp, e->trait.path, e->trait.params, e->type, [&](ImplRef impl, bool isFuzzed) {
-                    if (isFuzzed) {
+                resolve.findImpl(state.sp, e->trait.path, e->trait.params, e->type, [&](ImplRef impl, SolverCertainty certainty) {
+                    if (certainty != SolverCertainty::Proven) {
                         return false;
                     }
                     if (!impl.data.is_TraitImpl()) {

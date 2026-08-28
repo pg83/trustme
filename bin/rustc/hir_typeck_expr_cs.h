@@ -54,21 +54,17 @@ struct Context {
         bool forceNoTo = false;
         bool forceNoFrom = false;
 
-        // Possible types from trait impls (may introduce new types)
-        // - This is union of all input bounds
-        bool hasBounded = false;
-        /// If the bounds include this ivar, mark differently (permits any incoming type, but types can be removed)
-        /// - If an existing type isn't in the incoming set, it is removed
-        /// - But any type in an incoming set is accepted (even if it doesn't already exist)
-        bool boundsIncludeSelf = false;
         // Target types for coercion/unsizing (these types are known to exist in the function)
         ::std::vector<CoerceTy> typesCoerceTo;
         // Source types for coercion/unsizing (these types are known to exist in the function)
         ::std::vector<CoerceTy> typesCoerceFrom;
         // Possible default types (from generic defaults)
         HIRTypeRefSet typesDefault;
-
-        ::std::vector<HIRTypeRef> bounded;
+        // Raw-pointer casts do not constrain their source pointee, but an
+        // inferred cast endpoint still needs a last-resort type once every
+        // real coercion has settled.  These are not trait possibilities and
+        // never participate in normal coercion ordering.
+        HIRTypeRefSet rawPointerFallbacks;
 
         void reset();
 
@@ -259,7 +255,7 @@ struct Context {
     /// Record that the IVar may be this type (and what the source is)
     void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRTypeData* t, PossibleTypeSource srcTy);
     /// Add a possible type for an ivar (which is used if only one possibility meets available bounds)
-    void possibleEquateIvarBounds(const Span& sp, unsigned int ivarIndex, ::std::vector<HIRTypeRef> t);
+    void possibleEquateIvarRawPointerFallback(const Span& sp, unsigned int ivarIndex, const HIRTypeData* type);
     /// Record that the IVar is equated to an unknown type
     void possibleEquateIvarUnknown(const Span& sp, unsigned int ivarIndex, IvarUnknownType srcTy);
 

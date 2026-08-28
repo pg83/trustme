@@ -17,7 +17,7 @@ enum class MetadataType {
 std::ostream& operator<<(std::ostream& os, const MetadataType& x);
 
 struct StaticImplCallback {
-    virtual bool visit(ImplRef impl, bool isFuzzed) = 0;
+    virtual bool visit(ImplRef impl, SolverCertainty certainty) = 0;
 };
 
 template <typename F>
@@ -29,8 +29,8 @@ struct StaticImplCb final: StaticImplCallback {
     {
     }
 
-    bool visit(ImplRef impl, bool isFuzzed) override {
-        return f(mv$(impl), isFuzzed);
+    bool visit(ImplRef impl, SolverCertainty certainty) override {
+        return f(mv$(impl), certainty);
     }
 };
 
@@ -147,7 +147,6 @@ class StaticTraitResolve: public TraitResolveCommon {
 
     /// Cache of the result of find_impl__check_crate_raw
     mutable ::std::map<ImplCheckKey, ThinVector<ImplCheckEntry>> cachedImplChecks;
-    mutable ::std::vector<::std::tuple<const HIRSimplePath*, const HIRPathParams*, const HIRTypeData*>> findImplStack;
     mutable bool normalizingBoundType = false;
     /// Set at construction; never changes over the resolver's lifetime.
     OpaqueReveal reveal_ = OpaqueReveal::UserFacing;
@@ -166,7 +165,6 @@ public:
     /// Whether a where-clause in this parameter set still names an
     /// unresolved (UfcsUnknown) path: early phases query impls before the
     /// UFCS resolution pass has run.
-    static bool genericBoundsUnresolved(const HIRGenericParams* params);
 
     NullOnDrop<const HIRGenericParams> setImplGenerics(HIRStructMarkings::DstType structDstType, const HIRGenericParams& gps);
 
@@ -203,9 +201,7 @@ public:
         return this->findImplCb(sp, traitPath, &traitParams, type, foundCb);
     }
 
-    // dontHandoffToSpecialised: skip the Copy/Clone/Sized/Unsize
-    // definitional shortcuts.
-    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, bool dontHandoffToSpecialised = false) const;
+    bool findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb) const;
 
     template <typename F>
     bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams& traitParams, const HIRTypeData* type, F f) const {
@@ -214,28 +210,19 @@ public:
     }
 
     template <typename F>
-    bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, F f, bool dontHandoffToSpecialised = false) const {
+    bool findImpl(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, F f) const {
         StaticImplCb<F> cb(f);
-        return findImplCb(sp, traitPath, traitParams, type, cb, dontHandoffToSpecialised);
+        return findImplCb(sp, traitPath, traitParams, type, cb);
     }
 
 private:
-    bool findImplBoundsCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb) const;
-    bool findImplCheckCrateCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, const HIRTraitImpl& impl) const;
     bool findImplCheckCrateRawCb(const Span& sp, const HIRSimplePath& desTraitPath, const HIRPathParams* desTraitParams, const HIRTypeData* desType, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitParams, const HIRTypeData* implType, StaticImplMatchCallback& foundCb) const;
-
-    template <typename F>
-    bool findImplBounds(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, F f) const {
-        StaticImplCb<F> cb(f);
-        return findImplBoundsCb(sp, traitPath, traitParams, type, cb);
-    }
 
     template <typename F>
     bool findImplCheckCrateRaw(const Span& sp, const HIRSimplePath& desTraitPath, const HIRPathParams* desTraitParams, const HIRTypeData* desType, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitParams, const HIRTypeData* implType, F f) const {
         StaticImplMatchCb<F> cb(f);
         return findImplCheckCrateRawCb(sp, desTraitPath, desTraitParams, desType, implParamsDef, implTraitParams, implType, cb);
     }
-    HIRCompare checkAutoTraitImplDestructure(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* paramsPtr, const HIRTypeData* type) const;
     bool typeNeedsAsyncDropInner(const Span& sp, const HIRTypeData* ty, HIRTypeRefSet& stack) const;
 
 public:

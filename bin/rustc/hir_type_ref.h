@@ -110,6 +110,10 @@ inline bool isAliasInputInfer(unsigned index) {
 // Nested inside the alias-input range, so the inference table passes these
 // through untouched; they never outlive one solver evaluation.
 constexpr unsigned HIR_INFER_SOLVER_CANONICAL_MIN = 0xF0000000u;
+// A rigid protocol variable used as the destination of NormalizesTo queries.
+// Unlike an HM ivar it does not grow the caller's inference table merely to
+// ask whether a projection has a useful normal form.
+constexpr unsigned HIR_INFER_SOLVER_NORMALIZES_TO_OUTPUT = ~1u;
 inline bool isSolverCanonicalInfer(unsigned index) {
     return index >= HIR_INFER_SOLVER_CANONICAL_MIN && index != ~0u;
 }

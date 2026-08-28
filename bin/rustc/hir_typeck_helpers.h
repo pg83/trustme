@@ -11,12 +11,6 @@
 
 bool typeIsUnboundedInfer(const HIRTypeData* ty);
 
-enum class SolverCertainty : u8 {
-    NoSolution,
-    Ambiguous,
-    Proven,
-};
-
 /// Owning description of the implementation selected by the solver.  The
 /// only pointers are to crate-lifetime HIR declarations; all response-shaped
 /// data (path, parameters and associated values) belongs to this object.
@@ -53,23 +47,32 @@ struct SolverTypeEquality {
     HIRTypeRef right;
 };
 
+struct SolverValueEquality {
+    HIRConstGeneric left;
+    HIRConstGeneric right;
+};
+
 struct SolverCandidateResponse {
     const SolverImpl* impl = nullptr;
     SolverCertainty certainty = SolverCertainty::Ambiguous;
     SolverSlotValues slots;
     ThinVector<SolverObligation> obligations;
     ThinVector<SolverTypeEquality> equalities;
+    ThinVector<SolverValueEquality> valueEqualities;
 };
 
 /// A self-contained solver answer.  Slot values are positional with respect
 /// to the canonical input goal and can therefore be replayed into any caller
-/// with the same key.  `ImplRef` is reconstructed only by the legacy callback
-/// adapter.
+/// with the same key.  Exported candidate `impl` values are read-only views
+/// whose response variables are correlated with that candidate's caller goal
+/// inputs; inference effects remain exclusively in slots, equalities and
+/// obligations.  A selected `impl` is already the materialised answer.
 struct SolverResponse {
     SolverCertainty certainty = SolverCertainty::NoSolution;
     SolverSlotValues slots;
     ThinVector<SolverObligation> obligations;
     ThinVector<SolverTypeEquality> equalities;
+    ThinVector<SolverValueEquality> valueEqualities;
     const SolverImpl* impl = nullptr;
     bool hasImpl = false;
     ThinVector<SolverCandidateResponse> candidates;
@@ -397,6 +400,51 @@ private:
 
 class NextTraitGoalEvaluator;
 
+enum class SolverCoercionOp : u8 {
+    Coercion,
+    Unsizing,
+};
+
+struct SolverCoercionConstraint {
+    enum class Direction : u8 {
+        /// `other` is coerced to the selected trait input.
+        InputIsDestination,
+        /// The selected trait input is coerced to `other`.
+        InputIsSource,
+    };
+
+    unsigned typeIndex;
+    HIRTypeRef other;
+    Direction direction;
+    SolverCoercionOp op;
+    /// Select `Self` instead of `traitParams.types[typeIndex]`.
+    bool isSelf = false;
+};
+
+/// Read-only language coercion relation used to solve a trait goal together
+/// with the call-site coercions that constrain its input parameters.  The
+/// solver owns candidate filtering and preference; the expression type
+/// checker only supplies the existing coercion graph as additional goals.
+class SolverCoercionEvaluator {
+public:
+    virtual ~SolverCoercionEvaluator() = default;
+
+    virtual SolverCertainty evaluate(
+        const Span& sp,
+        const SolverCoercionConstraint& constraint,
+        const HIRTypeData* input
+    ) const = 0;
+
+    /// Compare two viable values for the selected trait input.  Greater means
+    /// that `left` is the preferred coercion endpoint.
+    virtual Ordering compare(
+        const Span& sp,
+        const SolverCoercionConstraint& constraint,
+        const HIRTypeData* left,
+        const HIRTypeData* right
+    ) const = 0;
+};
+
 /// Options for a next-solver goal query.
 struct TraitGoalQuery {
     /// With `assocName`/`assocType`/`assocParams`, an associated-type
@@ -417,6 +465,14 @@ struct TraitGoalQuery {
     /// head (Equal only for a definite head with proven own predicates)
     /// before the identity response.
     bool exportAmbiguousCandidates = false;
+    /// Omit this concrete impl from root candidate selection.  This is used
+    /// while checking the language-defined primitive semantics inside that
+    /// same operator impl; it is part of the goal, not a caller-side filter.
+    const HIRTraitImpl* excludedImpl = nullptr;
+    /// Additional call-site coercion goals over trait type inputs.  Both
+    /// fields are either null or live for the duration of the query.
+    const ThinVector<SolverCoercionConstraint>* coercions = nullptr;
+    const SolverCoercionEvaluator* coercionEvaluator = nullptr;
 };
 
 /// A projection-equality goal.  `output` is represented by a fresh canonical
@@ -556,20 +612,6 @@ private:
     const HIRGenericPath* currentTraitPath_;
     const HIRTrait* currentTraitPtr;
 
-    // A legacy solver invocation only needs this stack while it is actively
-    // resolving nested trait bounds.  The goal is canonicalised before it is
-    // stored, so fresh implementation placeholders do not hide a cycle.
-    struct LegacyTraitGoal {
-        HIRSimplePath trait;
-        HIRPathParams params;
-        HIRTypeRef type;
-        bool hasParams;
-
-        LegacyTraitGoal(const HIRSimplePath& trait, const HIRPathParams& params, bool hasParams, const HIRTypeData* type);
-
-        bool matches(const HIRSimplePath& otherTrait, const HIRPathParams& otherParams, bool otherHasParams, const HIRTypeData* otherType) const;
-    };
-
     struct EatCacheEntry {
         u64 generation;
         // An expansion touching inference variables is only valid until the
@@ -578,7 +620,6 @@ private:
         HIRTypeRef type;
     };
 
-    mutable ::std::vector<LegacyTraitGoal> legacyTraitGoalStack;
     mutable stl::ObjPool::Ref eatCachePool;
     mutable stl::IntMap<EatCacheEntry> eatCache;
     mutable u64 eatCacheGeneration = 0;
@@ -591,6 +632,11 @@ private:
     // snapshot that is rolled back afterwards; a dedicated evaluator keeps
     // the probe's goal bookkeeping out of any active evaluation session.
     mutable NextTraitGoalEvaluator* coherenceEvaluator = nullptr;
+    // Builtin predicates such as structural Sized/Copy/Clone must ask whether
+    // a declared impl or ParamEnv predicate exists without recursively adding
+    // the builtin candidate currently being assembled.  A separate evaluator
+    // keeps that root-candidate scope out of the ordinary response cache.
+    mutable NextTraitGoalEvaluator* nonBuiltinSolver = nullptr;
     // Bumped when the defining-opaque registrations change: they alter what
     // containsDefiningOpaque answers, so cached goals must not outlive them.
     mutable u64 solverEnvGeneration = 0;
@@ -677,38 +723,6 @@ public:
         return iterateAtyBoundsCb(sp, pe, cb);
     }
 
-    /// Searches for a trait impl using the solver selected for this session.
-    bool findTraitImplsCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, bool magicTraitImpls) const;
-
-    template <typename F>
-    bool findTraitImpls(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, bool magicTraitImpls = true) const {
-        TraitImplCb<F> cb(f);
-        return findTraitImplsCb(sp, trait, params, type, cb, magicTraitImpls);
-    }
-
-    /// Candidate lookup used by the legacy selector and by next-solver
-    /// candidate assembly.  Callers performing trait selection must use
-    /// `find_trait_impls`, not this assembly primitive.
-    bool findTraitImplsLegacyCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, bool magicTraitImpls = true, bool searchCrate = true, bool searchBounds = true) const;
-
-    template <typename F>
-    bool findTraitImplsLegacy(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, bool magicTraitImpls = true, bool searchCrate = true, bool searchBounds = true) const {
-        TraitImplCb<F> cb(f);
-        return findTraitImplsLegacyCb(sp, trait, params, type, cb, magicTraitImpls, searchCrate, searchBounds);
-    }
-
-    /// Evaluate a trait goal using the next-solver candidate model.  Candidate
-    /// assembly is exhaustive, impl where-clauses are evaluated recursively,
-    /// and only a merged response is exposed to the caller; `query` selects
-    /// the extended behaviours.
-    bool findTraitImplsNextCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback, const TraitGoalQuery& query = {}) const;
-
-    template <typename F>
-    bool findTraitImplsNext(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f, const TraitGoalQuery& query = {}) const {
-        TraitImplCb<F> cb(f);
-        return findTraitImplsNextCb(sp, trait, params, type, cb, query);
-    }
-
     /// Return the complete next-solver answer.  Slot constraints and nested
     /// obligations are data in the response; this is the API new consumers
     /// use instead of observing inference effects through callbacks.
@@ -741,58 +755,37 @@ public:
         TraitPathCb<F> cb(f);
         return findNamedTraitInTraitCb(sp, des, params, traitPtr, traitPath, pp, selfType, cb);
     }
-    /// Search for a trait implementation in current bounds
-    bool findTraitImplsBoundCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
-
-    template <typename F>
-    bool findTraitImplsBound(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
-        TraitImplCb<F> cb(f);
-        return findTraitImplsBoundCb(sp, trait, params, type, cb);
-    }
-
-    /// Search for a trait implementation in the crate
-    bool findTraitImplsCrateCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const {
-        return findTraitImplsCrateCb(sp, trait, &params, type, callback);
-    }
-
-    /// Search for a trait implementation in the crate (allows nullptr to ignore params)
-    bool findTraitImplsCrateCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, TraitImplCallback& callback) const;
-
-    template <typename F>
-    bool findTraitImplsCrate(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
-        TraitImplCb<F> cb(f);
-        return findTraitImplsCrateCb(sp, trait, params, type, cb);
-    }
-
-    template <typename F>
-    bool findTraitImplsCrate(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, F f) const {
-        TraitImplCb<F> cb(f);
-        return findTraitImplsCrateCb(sp, trait, params, type, cb);
-    }
-    /// Check for magic (automatically determined) trait implementations
-    bool findTraitImplsMagicCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
-
-    template <typename F>
-    bool findTraitImplsMagic(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
-        TraitImplCb<F> cb(f);
-        return findTraitImplsMagicCb(sp, trait, params, type, cb);
-    }
-    /// Check for trait implementations on magical types (closures, generators, fn pointers, ...)
-    bool findTraitImplsTypesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
-
-    template <typename F>
-    bool findTraitImplsTypes(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
-        TraitImplCb<F> cb(f);
-        return findTraitImplsTypesCb(sp, trait, params, type, cb);
-    }
-
-
 private:
     friend class NextTraitGoalEvaluator;
 
-    HIRPathParams makeFreshImplParams(const HIRGenericParams& params) const;
+    bool assembleMagicCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
+    bool assembleTypeCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
+    bool assembleOtherCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
+    bool assembleParamEnvCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
 
-    HIRCompare checkAutoTraitImplDestructure(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* paramsPtr, const HIRTypeData* type) const;
+    template <typename F>
+    bool assembleMagicCandidates(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
+        TraitImplCb<F> cb(f);
+        return assembleMagicCandidatesCb(sp, trait, params, type, cb);
+    }
+
+    template <typename F>
+    bool assembleOtherCandidates(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
+        TraitImplCb<F> cb(f);
+        return assembleOtherCandidatesCb(sp, trait, params, type, cb);
+    }
+
+    template <typename F>
+    bool assembleParamEnvCandidates(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
+        TraitImplCb<F> cb(f);
+        return assembleParamEnvCandidatesCb(sp, trait, params, type, cb);
+    }
+
+    HIRPathParams makeFreshImplParams(const HIRGenericParams& params) const;
+    SolverCertainty solveNonBuiltinTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRTypeData* type) const;
+    HIRCompare typeIsSizedBuiltin(const Span& sp, const HIRTypeData* type) const;
+    HIRCompare typeIsCopyBuiltin(const Span& sp, const HIRTypeData* type) const;
+
     HIRCompare fticCheckParams(
         const Span& sp,
         const HIRSimplePath& trait,
@@ -829,6 +822,7 @@ public:
         unsigned int typeIvarCount,
         const HIRTypeData* topTy,
         const RcString& methodName,
+        const HIRTypeData* expectedResult,
         bool mustDecide,
         /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities
     ) const;
@@ -870,7 +864,7 @@ public:
         Box,
     };
     friend ::std::ostream& operator<<(::std::ostream& os, const AllowedReceivers& x);
-    bool findMethod(const Span& sp, const tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
+    bool findMethod(const Span& sp, const tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
 
     /// Locates a named method in a trait, and returns the path of the trait that contains it (with fixed parameters)
     const HIRFunction* traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const;

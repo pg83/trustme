@@ -444,8 +444,8 @@ default:
                                 node.value = NEWNODE(ty, sp, Cast, mv$(node.value), ty);
                                 this->completed = true;
                             } else {
-                                bool found = !this->context.resolve.langUnsize().components().empty() && this->context.resolve.findTraitImpls(sp, this->context.resolve.langUnsize(), HIRPathParams(e.inner), sE.inner, [](auto, auto) {
-                                    return true;
+                                bool found = !this->context.resolve.langUnsize().components().empty() && this->context.resolve.solveTraitGoal(sp, this->context.resolve.langUnsize(), HIRPathParams(e.inner), sE.inner, [](SolverResponse response) {
+                                    return response.hasImpl;
                                 });
                                 if (found) {
                                     auto ty = context.crate.types.borrow(e.type, e.inner);
@@ -466,19 +466,11 @@ default:
                             const auto& dstInner = this->context.getType(e.inner);
                             const auto& srcInner = this->context.getType(sE.inner);
                             if (dstInner->is_Infer()) {
-                                // NOTE: Don't equate on fallback, to avoid cast chains breaking
-                                // - Instead, leave the bounds present (which will hopefully get used by ivar_poss)
-                                ::std::vector<HIRTypeRef> tys;
-                                tys.push_back(dstInner);
-                                tys.push_back(srcInner);
-                                this->context.possibleEquateIvarBounds(sp, dstInner->as_Infer().index, std::move(tys));
+                                this->context.possibleEquateIvarRawPointerFallback(sp, dstInner->as_Infer().index, srcInner);
                                 return;
                             } else if (srcInner->is_Infer()) {
                                 if (!this->isFallback) {
-                                    ::std::vector<HIRTypeRef> tys;
-                                    tys.push_back(dstInner);
-                                    tys.push_back(srcInner);
-                                    this->context.possibleEquateIvarBounds(sp, srcInner->as_Infer().index, std::move(tys));
+                                    this->context.possibleEquateIvarRawPointerFallback(sp, srcInner->as_Infer().index, dstInner);
                                     return;
                                 }
                                 // A pointer cast doesn't constrain its source. If a real *coercion*
@@ -602,11 +594,32 @@ default:
                 HIRTypeRef possibleIndexType;
                 HIRTypeRef possibleResType;
                 unsigned int count = 0;
-                bool rv = this->context.resolve.findTraitImpls(node.span(), langIndex, traitPp, ty, [&](auto impl, auto cmp) {
+                const auto inspectImpl = [&](ImplRef impl) {
                     possibleResType = impl.getType(context.crate.types, "Output", {});
-                    count += 1;
                     possibleIndexType = impl.getTraitTyParam(context.crate.types, 0);
-                    return cmp == HIRCompare::Equal;
+                };
+                bool rv = this->context.resolve.solveTraitGoal(node.span(), langIndex, traitPp, ty, [&](SolverResponse response) {
+                    if (response.hasImpl && response.certainty == SolverCertainty::Proven && response.impl && !response.impl->ambiguousIdentity) {
+                        inspectImpl(response.impl->legacy());
+                        count = 1;
+                        context.applySolverResponse(node.span(), response);
+                        return true;
+                    }
+                    for (const auto& candidate : response.candidates) {
+                        if (!candidate.impl || candidate.impl->ambiguousIdentity) {
+                            continue;
+                        }
+                        count++;
+                        inspectImpl(candidate.impl->legacy());
+                    }
+                    if (count == 0 && response.hasImpl && response.impl && !response.impl->ambiguousIdentity) {
+                        count = 1;
+                        inspectImpl(response.impl->legacy());
+                    }
+                    return false;
+                }, {
+                    .allowInferInputs = true,
+                    .exportAmbiguousCandidates = true,
                 });
                 if (rv) {
                     // If a non-fuzzy impl was found, but there was no result type - then the result must be opaque
@@ -650,8 +663,8 @@ default:
                         const HIRTypeData* possibleType = nullptr;
                         for (const auto integerType : integerTypes) {
                             const auto* candidateType = this->context.crate.types.primitive(integerType);
-                            const bool isViable = this->context.resolve.findTraitImpls(node.span(), langIndex, HIRPathParams(candidateType), ty, [](ImplRef, HIRCompare cmp) {
-                                return cmp == HIRCompare::Equal;
+                            const bool isViable = this->context.resolve.solveTraitGoal(node.span(), langIndex, HIRPathParams(candidateType), ty, [](SolverResponse response) {
+                                return response.hasImpl && response.certainty == SolverCertainty::Proven;
                             });
                             if (!isViable) {
                                 continue;
@@ -811,17 +824,40 @@ default: {
                     continue;
                 }
                 HIRTypeRef fcnArgsTup;
-                unsigned int count = 0;
-                this->context.resolve.findTraitImpls(node.span(), candidate.trait, traitPp, ty, [&](auto impl, auto cmp) -> bool {
-                    count++;
+                const auto inspectImpl = [&](ImplRef impl) {
                     auto tup = impl.getTraitTyParam(context.crate.types, 0);
                     if (!tup->is_Tuple()) {
                         ERROR(node.span(), E0000, "AsyncFn* expects a tuple argument, got " << tup);
                     }
                     fcnArgsTup = mv$(tup);
-                    return cmp == HIRCompare::Equal;
+                };
+                const bool found = this->context.resolve.solveTraitGoal(node.span(), candidate.trait, traitPp, ty, [&](SolverResponse response) {
+                    if (response.hasImpl && response.impl && !response.impl->ambiguousIdentity) {
+                        inspectImpl(response.impl->legacy());
+                        context.applySolverResponse(node.span(), response);
+                        return true;
+                    }
+                    const SolverCandidateResponse* selected = nullptr;
+                    for (const auto& possible : response.candidates) {
+                        if (!possible.impl || possible.impl->ambiguousIdentity) {
+                            continue;
+                        }
+                        if (selected) {
+                            return false;
+                        }
+                        selected = &possible;
+                    }
+                    if (!selected) {
+                        return false;
+                    }
+                    inspectImpl(selected->impl->legacy());
+                    context.applySolverResponse(node.span(), *selected);
+                    return true;
+                }, {
+                    .allowInferInputs = true,
+                    .exportAmbiguousCandidates = true,
                 });
-                if (count != 1) {
+                if (!found) {
                     continue;
                 }
                 // `CallRefFuture` is a generic associated type, but its only
@@ -932,10 +968,7 @@ default: {
                     // e.g. `&mut _` (where `_ = Box<...>`) later will pick the FnMut impl for `&mut T: FnMut` - but Box doesn't have those forwarding impls
                     // - Maybe just keep applying auto-deref until it's no longer possible?
                     unsigned int count = 0;
-                    this->context.resolve.findTraitImpls(node.span(), langFnOnce, traitPp, ty, [&](auto impl, auto cmp) -> bool {
-                        // TODO: Don't accept if too fuzzy
-                        count++;
-
+                    const auto inspectImpl = [&](ImplRef impl) {
                         auto tup = impl.getTraitTyParam(context.crate.types, 0);
                         if (!tup->is_Tuple()) {
                             ERROR(node.span(), E0000, "FnOnce expects a tuple argument, got " << tup);
@@ -943,7 +976,34 @@ default: {
                         fcnArgsTup = mv$(tup);
 
                         fcnRet = impl.getType(context.crate.types, "Output", {});
-                        return cmp == HIRCompare::Equal;
+                    };
+                    this->context.resolve.solveTraitGoal(node.span(), langFnOnce, traitPp, ty, [&](SolverResponse response) {
+                        if (response.hasImpl && response.certainty == SolverCertainty::Proven && response.impl && !response.impl->ambiguousIdentity) {
+                            count = 1;
+                            inspectImpl(response.impl->legacy());
+                            context.applySolverResponse(node.span(), response);
+                            return true;
+                        }
+                        const SolverCandidateResponse* selected = nullptr;
+                        for (const auto& candidate : response.candidates) {
+                            if (!candidate.impl || candidate.impl->ambiguousIdentity) {
+                                continue;
+                            }
+                            count++;
+                            selected = &candidate;
+                        }
+                        if (count == 0 && response.hasImpl && response.impl && !response.impl->ambiguousIdentity) {
+                            count = 1;
+                            inspectImpl(response.impl->legacy());
+                            context.applySolverResponse(node.span(), response);
+                        } else if (count == 1) {
+                            inspectImpl(selected->impl->legacy());
+                            context.applySolverResponse(node.span(), *selected);
+                        }
+                        return false;
+                    }, {
+                        .allowInferInputs = true,
+                        .exportAmbiguousCandidates = true,
                     });
                     if (count > 1) {
                         return;
@@ -972,29 +1032,6 @@ default: {
                         keepLooping = true;
                         continue;
                     } else {
-                        if (!ty->is_Generic()) {
-                            bool found = this->context.resolve.findTraitImplsCrate(node.span(), langFnOnce, traitPp, ty, [&](auto impl, auto cmp) -> bool {
-                                if (cmp == HIRCompare::Fuzzy) {
-                                    TODO(node.span(), "Handle fuzzy match - " << impl);
-                                }
-
-                                auto tup = impl.getTraitTyParam(context.crate.types, 0);
-                                if (!tup->is_Tuple()) {
-                                    ERROR(node.span(), E0000, "FnOnce expects a tuple argument, got " << tup);
-                                }
-                                fcnArgsTup = mv$(tup);
-                                fcnRet = impl.getType(context.crate.types, "Output", {});
-                                ASSERT_BUG(node.span(), fcnRet != HIRTypeRef(), "Impl didn't have a type for Output - " << impl);
-                                return true;
-                            });
-                            if (found) {
-                                // Fill cache and leave the TU_MATCH
-                                node.argTypes = fcnArgsTup->as_Tuple();
-                                node.argTypes.push_back(mv$(fcnRet));
-                                node.traitUsed = HIRExprNodeCallValue::TraitUsed::Unknown;
-                                break; // leaves TU_MATCH
-                            }
-                        }
                         if (const auto* nextTyP = this->context.resolve.autoderef(node.span(), ty, tmpType)) {
                             derefCount++;
                             ty = nextTyP;
@@ -1101,10 +1138,10 @@ default: {
             ::std::vector<::std::pair<TraitResolution::AutoderefBorrow, HIRPath>> possibleMethods;
             // Once type checking has stabilised there is nothing left to wait
             // for, so the probe answers from what is known.
-            unsigned int derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.method, this->isFallback, possibleMethods);
+            unsigned int derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.method, this->context.getType(node.resType), this->isFallback, possibleMethods);
             if ((derefCount == ~0u || possibleMethods.empty()) && node.method != node.fallbackMethod) {
                 possibleMethods.clear();
-                derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.fallbackMethod, this->isFallback, possibleMethods);
+                derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.fallbackMethod, this->context.getType(node.resType), this->isFallback, possibleMethods);
                 if (derefCount != ~0u && !possibleMethods.empty()) {
                     node.method = node.fallbackMethod;
                 }
@@ -1321,7 +1358,6 @@ default: {
                     }
                     return;
                 }
-
                 assert(node.cache.argTypes.size() >= 1);
 
                 if (node.args.size() + 1 != node.cache.argTypes.size() - 1) {
@@ -1772,12 +1808,12 @@ default:
 
                     // 3. Locate the most permissive implemented Fn* trait (Fn first, then FnMut, then assume just FnOnce)
                     // NOTE: Borrowing is added by the expansion to CallPath
-                    if (!this->context.resolve.langFn().components().empty() && this->context.resolve.findTraitImpls(node.span(), this->context.resolve.langFn(), traitPp, ty, [&](auto impl, auto cmp) {
-                        return true;
+                    if (!this->context.resolve.langFn().components().empty() && this->context.resolve.solveTraitGoal(node.span(), this->context.resolve.langFn(), traitPp, ty, [&](SolverResponse response) {
+                        return response.hasImpl;
                     })) {
                         node.traitUsed = HIRExprNodeCallValue::TraitUsed::Fn;
-                    } else if (!this->context.resolve.langFnMut().components().empty() && this->context.resolve.findTraitImpls(node.span(), this->context.resolve.langFnMut(), traitPp, ty, [&](auto impl, auto cmp) {
-                        return true;
+                    } else if (!this->context.resolve.langFnMut().components().empty() && this->context.resolve.solveTraitGoal(node.span(), this->context.resolve.langFnMut(), traitPp, ty, [&](SolverResponse response) {
+                        return response.hasImpl;
                     })) {
                         node.traitUsed = HIRExprNodeCallValue::TraitUsed::FnMut;
                     } else {
@@ -5652,56 +5688,18 @@ void Context::possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const H
     }
 }
 
-void Context::possibleEquateIvarBounds(const Span& sp, unsigned int ivarIndex, std::vector<HIRTypeRef> types) {
-    // Obtain the entry (and returning early if already known)
-    auto* entp = getIvarPossibilities(sp, ivarIndex);
-    if (!entp) {
+void Context::possibleEquateIvarRawPointerFallback(const Span& sp, unsigned int ivarIndex, const HIRTypeData* rawType) {
+    auto* possibilities = getIvarPossibilities(sp, ivarIndex);
+    if (!possibilities) {
         return;
     }
-    auto& ent = *entp;
 
-    // Determine if this ivar is in the list of possibilities
-    bool hasSelf = false;
-    for (auto it = types.begin(); it != types.end();) {
-        auto& e = *it;
-        ASSERT_BUG(sp, !typeContainsImplPlaceholder(crate.types, e), "Type contained an impl placeholder parameter - " << e);
-        e = ivars.getType(e);
-        if (((*e).is_Infer() && ((*e).as_Infer().index == ivarIndex))) {
-            hasSelf = true;
-            it = types.erase(it);
-        } else {
-            ++it;
-        }
+    ASSERT_BUG(sp, !typeContainsImplPlaceholder(crate.types, rawType), "Type contained an impl placeholder parameter - " << rawType);
+    const auto* type = ivars.getType(rawType);
+    if (const auto* infer = type->opt_Infer(); infer && infer->index == ivarIndex) {
+        return;
     }
-
-    if (ent.hasBounded) {
-        // Get the union of the bound set and this
-
-        // TODO: If `ent.bounds_include_self` was set, then accept check if it's still set?
-        ent.boundsIncludeSelf |= hasSelf;
-        if (ent.boundsIncludeSelf) {
-            // Accept everything in `types`
-            for (auto& ty : types) {
-                if (std::find(ent.bounded.begin(), ent.bounded.end(), ty) == ent.bounded.end()) {
-                    ent.bounded.push_back(::std::move(ty));
-                }
-            }
-        } else {
-            // For each existing bound
-            for (auto itExisting = ent.bounded.begin(); itExisting != ent.bounded.end();) {
-                // Remove if it can't be found in the incoming set
-                if (std::find(types.begin(), types.end(), *itExisting) != types.end()) {
-                    ++itExisting;
-                } else {
-                    itExisting = ent.bounded.erase(itExisting);
-                }
-            }
-        }
-    } else {
-        ent.hasBounded = true;
-        ent.boundsIncludeSelf = hasSelf;
-        ent.bounded = std::move(types);
-    }
+    possibilities->rawPointerFallbacks.insert(type);
 }
 
 std::ostream& operator<<(std::ostream& os, const Context::IvarUnknownType& x) {
@@ -6289,8 +6287,8 @@ namespace {
                         }
                     } else {
                         // Check that the trait is implemented (so this only returns `Unsize` if the rule would be valid - use for check_ivar_poss)
-                        if (!context.resolve.findTraitImpls(sp, trait.path, trait.params, src, [&](auto _impl_ref, auto _cmp) {
-                            return true;
+                        if (!context.resolve.solveTraitGoal(sp, trait.path, trait.params, src, [](SolverResponse response) {
+                            return response.hasImpl;
                         })) {
                             return CoerceResult::Equality;
                         }
@@ -6327,29 +6325,51 @@ namespace {
 
             ImplRef bestImpl;
             unsigned int count = 0;
+            bool proven = false;
+            HIRTypeRef selectedDst;
 
             HIRPathParams pp{dst};
-            bool found = context.resolve.findTraitImpls(sp, context.resolve.langUnsize(), pp, src, [&bestImpl, &count, &context, &sp](auto impl, auto cmp) {
-                if (!context.resolve.implsOverlap(sp, impl, bestImpl)) {
-                    // No overlap, count it as a new possibility
-                    if (count == 0) {
-                        bestImpl = mv$(impl);
+            context.resolve.solveTraitGoal(sp, context.resolve.langUnsize(), pp, src, [&](SolverResponse response) {
+                if (response.hasImpl && response.certainty == SolverCertainty::Proven && response.impl && !response.impl->ambiguousIdentity) {
+                    proven = true;
+                    if (contextMut) {
+                        contextMut->applySolverResponse(sp, response);
                     }
-                    count++;
-                } else if (impl.moreSpecificThan(context.crate.types, bestImpl)) {
-                    bestImpl = mv$(impl);
-                } else {
-                    // Less specific
+                    return true;
                 }
-                // TODO: Record the best impl (if fuzzy) and equate params
-                return cmp != HIRCompare::Fuzzy;
+                const SolverCandidateResponse* bestResponse = nullptr;
+                for (const auto& candidate : response.candidates) {
+                    if (!candidate.impl || candidate.impl->ambiguousIdentity) {
+                        continue;
+                    }
+                    auto impl = candidate.impl->legacy();
+                    if (!context.resolve.implsOverlap(sp, impl, bestImpl)) {
+                        if (count == 0) {
+                            bestImpl = mv$(impl);
+                            bestResponse = &candidate;
+                        }
+                        count++;
+                    } else if (impl.moreSpecificThan(context.crate.types, bestImpl)) {
+                        bestImpl = mv$(impl);
+                        bestResponse = &candidate;
+                    }
+                }
+                if (count == 1 && bestResponse) {
+                    selectedDst = bestImpl.getTraitTyParam(context.crate.types, 0);
+                    if (contextMut) {
+                        contextMut->applySolverResponse(sp, *bestResponse);
+                    }
+                }
+                return false;
+            }, {
+                .allowInferInputs = true,
+                .exportAmbiguousCandidates = true,
             });
-            if (found) {
+            if (proven) {
                 return CoerceResult::Unsize;
             } else if (count == 1) {
-                auto pp = bestImpl.getTraitParams(context.crate.types);
                 if (contextMut) {
-                    contextMut->equateTypes(sp, dst, pp.types.at(0));
+                    contextMut->equateTypes(sp, dst, selectedDst);
                 }
                 return CoerceResult::Unsize;
             } else {
@@ -6542,9 +6562,13 @@ default:
 
         struct H {
             static bool typeIsBounded(const HIRTypeData* ty) {
+                // A custom/ParamEnv CoerceUnsized goal can select a generic
+                // or an ADT/projection path.  Generic material nested in a
+                // builtin pointer/reference is handled by the structural
+                // coercion below (for example `*mut T -> *const T`).
                 if (ty->is_Generic()) {
                     return true;
-                } else if (((*ty).is_Path() && ((*ty).as_Path().binding.is_Opaque()))) {
+                } else if (ty->is_Path() && (monomorphiseTypeNeeded(ty) || ty->as_Path().binding.is_Opaque())) {
                     return true;
                 } else {
                     return false;
@@ -6562,27 +6586,23 @@ default:
         };
 
         const auto langCoerceUnsized = context.crate.getLangItemPathOpt("coerce_unsized"); // TODO: Pre-load
-        if (!langCoerceUnsized.components().empty()) {
-            HIRPathParams params{dst};
-            bool fuzzyBound = false;
-            const bool foundBound = context.resolve.findTraitImplsBound(sp, langCoerceUnsized, params, src, [&](auto, auto cmp) {
-                fuzzyBound |= cmp == HIRCompare::Fuzzy;
-                return cmp == HIRCompare::Equal;
-            });
-            if (foundBound) {
-                return CoerceResult::Unsize;
+
+        const bool sameStructWithInference = [&]() {
+            const auto* srcPath = src->opt_Path();
+            const auto* dstPath = dst->opt_Path();
+            if (!srcPath || !dstPath || !srcPath->binding.is_Struct() || !dstPath->binding.is_Struct()
+                || srcPath->binding.as_Struct() != dstPath->binding.as_Struct()) {
+                return false;
             }
-            if (fuzzyBound) {
-                return CoerceResult::Unknown;
-            }
-        }
+            return context.resolve.typeContainsIvars(src) || context.resolve.typeContainsIvars(dst);
+        }();
 
         // A CoerceUnsized generic/aty/erased on one side
         // - If other side is an ivar, do a possible equality and return Unknown
         // - If impl is found, emit _Unsize
         // - Else, equate and return
         // TODO: Should ErasedType be counted here? probably not.
-        if (H::typeIsBounded(src) || H::typeIsBounded(dst)) {
+        if (!sameStructWithInference && (H::typeIsBounded(src) || H::typeIsBounded(dst))) {
             // `CoerceUnsized<U> for T` means `T -> U`
 
             if (!langCoerceUnsized.components().empty()) {
@@ -6590,26 +6610,24 @@ default:
 
                 // PROBLEM: This can false-negative leading to the types being falsely equated.
 
-                bool fuzzyMatch = false;
-                ImplRef bestImpl;
-                bool found = context.resolve.findTraitImpls(sp, langCoerceUnsized, pp, src, [&](auto impl, auto cmp) -> bool {
-                    // TODO: Allow fuzzy match if it's the only matching possibility?
-                    // - Recorded for now to know if there could be a matching impl later
-                    if (cmp == HIRCompare::Fuzzy) {
-                        fuzzyMatch = true;
-                        if (impl.moreSpecificThan(context.crate.types, bestImpl)) {
-                            bestImpl = mv$(impl);
-                        } else {
-                            TODO(sp, "Equal specificity impls");
-                        }
+                SolverCertainty certainty = SolverCertainty::NoSolution;
+                context.resolve.solveTraitGoal(sp, langCoerceUnsized, pp, src, [&](SolverResponse response) {
+                    if (!response.hasImpl) {
+                        return false;
                     }
-                    return cmp == HIRCompare::Equal;
+                    certainty = response.certainty;
+                    if (certainty == SolverCertainty::Proven && contextMut) {
+                        contextMut->applySolverResponse(sp, response);
+                    }
+                    return certainty == SolverCertainty::Proven;
+                }, {
+                    .allowInferInputs = true,
                 });
                 // - Concretely found - emit the _Unsize op and remove this rule
-                if (found) {
+                if (certainty == SolverCertainty::Proven) {
                     return CoerceResult::Unsize;
                 }
-                if (fuzzyMatch) {
+                if (certainty == SolverCertainty::Ambiguous) {
                     return CoerceResult::Unknown;
                 }
             }
@@ -6901,6 +6919,12 @@ default:
                 // Borrows can coerce to pointers while reducing in strength
                 // - Shared < Unique. If the destination is not weaker or equal to the source, it's an error
                 if (!(dep->type <= se.type)) {
+                    // Read-only coercion probes use failure to reject a solver
+                    // candidate. They must not emit the diagnostic belonging
+                    // to an actually selected expression coercion.
+                    if (!contextMut) {
+                        return CoerceResult::Fail;
+                    }
                     ERROR(sp, E0000, "Type mismatch between " << dst << " and " << src << " - Mutability not compatible");
                 }
 
@@ -7066,9 +7090,9 @@ default:
             if (dst->is_ErasedType()) {
                 // rustc derives an unannotated closure signature from the
                 // predicates of its expected opaque type before checking the
-                // closure body.  Querying FnOnce also elaborates Fn/FnMut and
-                // user-defined supertraits, and exposes the associated Output
-                // equality carried by the opaque bound.
+                // closure body. Query the async callable bound first: its
+                // Output describes what the returned future resolves to,
+                // whereas ordinary FnOnce::Output is the closure return type.
                 ::std::vector<HIRTypeRef> closureArgs;
                 closureArgs.reserve(nodeP->args.size());
                 for (const auto& arg : nodeP->args) {
@@ -7078,7 +7102,7 @@ default:
 
                 ::std::vector<HIRTypeRef> expectedArgs;
                 HIRTypeRef expectedOutput;
-                const bool foundExpectation = context.resolve.findTraitImpls(sp, context.resolve.langFnOnce(), desiredParams, dst, [&](ImplRef impl, HIRCompare) {
+                const auto inspectExpectation = [&](ImplRef impl) {
                     auto params = impl.getTraitParams(context.crate.types);
                     if (params.types.size() != 1 || !params.types.front()->is_Tuple()) {
                         return false;
@@ -7092,11 +7116,10 @@ default:
                         return false;
                     }
 
-                    // A fuzzy impl candidate can retain placeholders for its
-                    // own generic parameters.  Those parameters belong to the
-                    // candidate matcher, not to this inference context, so use
-                    // only the signature components that the opaque bounds
-                    // actually determined.
+                    // A generic bound can retain placeholders for its own
+                    // parameters. Those belong to the candidate matcher, not
+                    // this inference context, so use only components that the
+                    // opaque bounds actually determined.
                     bool hasExpectation = false;
                     ::std::vector<HIRTypeRef> concreteArgs;
                     concreteArgs.reserve(args.size());
@@ -7120,7 +7143,22 @@ default:
                     expectedArgs = mv$(concreteArgs);
                     expectedOutput = mv$(output);
                     return true;
-                });
+                };
+                const auto findExpectation = [&](const HIRSimplePath& trait) {
+                    return context.resolve.solveTraitGoal(sp, trait, desiredParams, dst, [&](SolverResponse response) {
+                        for (const auto& candidate : response.candidates) {
+                            if (candidate.certainty == SolverCertainty::Proven && candidate.impl && inspectExpectation(candidate.impl->legacy())) {
+                                return true;
+                            }
+                        }
+                        return response.hasImpl && response.certainty == SolverCertainty::Proven && response.impl && inspectExpectation(response.impl->legacy());
+                    }, {
+                        .allowInferInputs = true,
+                        .exportAmbiguousCandidates = true,
+                    });
+                };
+                const bool asyncExpectation = findExpectation(context.resolve.langAsyncFnOnce());
+                const bool foundExpectation = asyncExpectation || findExpectation(context.resolve.langFnOnce());
                 if (foundExpectation && contextMut) {
                     for (size_t i = 0; i < expectedArgs.size(); i++) {
                         if (expectedArgs[i] != HIRTypeRef()) {
@@ -7128,7 +7166,11 @@ default:
                         }
                     }
                     if (expectedOutput != HIRTypeRef()) {
-                        contextMut->equateTypes(sp, nodeP->returnType, expectedOutput);
+                        if (asyncExpectation) {
+                            contextMut->equateTypesAssoc(sp, expectedOutput, context.resolve.langFuture(), {}, nodeP->returnType, "Output", {});
+                        } else {
+                            contextMut->equateTypes(sp, nodeP->returnType, expectedOutput);
+                        }
                     }
                 }
                 return CoerceResult::Equality;
@@ -7182,7 +7224,6 @@ default:
             if (const auto* de = dst->opt_Function()) {
                 auto ft = context.expandAssociatedTypes(sp, context.crate.types.function(se->decay(context.crate.types, sp)));
                 const auto* se = &ft->as_Function();
-
                 // ABI must match
                 if (se->abi != de->abi) {
                     return CoerceResult::Equality;
@@ -7266,7 +7307,6 @@ default:
         const auto& sp = nodePtr->span();
         const auto& tyDst = context.ivars.getType(v.leftTy);
         const auto& tySrc = context.ivars.getType(nodePtr->resType);
-
         // A dereference with a visible trait implementation has a pending
         // `Deref::Target` equation.  Its output must be selected before an
         // outer coercion fixes an otherwise unbound result ivar to the
@@ -7298,6 +7338,113 @@ default:
         }
         UNREACHABLE();
     }
+
+    class ContextSolverCoercions final: public SolverCoercionEvaluator {
+        const Context& context;
+
+        const HIRTypeData* resolveKnown(const HIRTypeData* type) const {
+            const auto* infer = type->opt_Infer();
+            if (!infer || infer->index == ~0u || infer->index >= context.ivars.ivars.size()) {
+                return type;
+            }
+            return context.getType(type);
+        }
+
+        bool samePointerTarget(const HIRTypeData* left, const HIRTypeData* right) const {
+            left = resolveKnown(left);
+            right = resolveKnown(right);
+            const auto compatibleTarget = [&](const HIRTypeData* leftInner, const HIRTypeData* rightInner) {
+                return context.ivars.typesEqual(leftInner, rightInner)
+                    || leftInner->compareWithPlaceholders(
+                        Span(), rightInner, context.ivars.callbackResolveInfer()) != HIRCompare::Unequal;
+            };
+            if (const auto* leftBorrow = left->opt_Borrow()) {
+                const auto* rightBorrow = right->opt_Borrow();
+                return rightBorrow && compatibleTarget(leftBorrow->inner, rightBorrow->inner);
+            }
+            if (const auto* leftPointer = left->opt_Pointer()) {
+                const auto* rightPointer = right->opt_Pointer();
+                return rightPointer && compatibleTarget(leftPointer->inner, rightPointer->inner);
+            }
+            return false;
+        }
+
+    public:
+        explicit ContextSolverCoercions(const Context& context)
+            : context(context)
+        {
+        }
+
+        SolverCertainty evaluate(
+            const Span& sp,
+            const SolverCoercionConstraint& constraint,
+            const HIRTypeData* input
+        ) const override {
+            const auto* destination = constraint.direction == SolverCoercionConstraint::Direction::InputIsDestination ? input : constraint.other;
+            const auto* source = constraint.direction == SolverCoercionConstraint::Direction::InputIsDestination ? constraint.other : input;
+            destination = resolveKnown(destination);
+            source = resolveKnown(source);
+            if (constraint.op == SolverCoercionOp::Unsizing
+                && constraint.direction == SolverCoercionConstraint::Direction::InputIsDestination) {
+                HIRTypeRef derefStorage;
+                const auto* dereferenced = source;
+                while ((dereferenced = context.resolve.autoderef(sp, dereferenced, derefStorage))) {
+                    const auto result = checkUnsizeTys(context, sp, destination, dereferenced, nullptr);
+                    if (result == CoerceResult::Custom || result == CoerceResult::Unsize) {
+                        return SolverCertainty::Proven;
+                    }
+                    if (result == CoerceResult::Equality
+                        && destination->compareWithPlaceholders(sp, dereferenced, context.ivars.callbackResolveInfer()) == HIRCompare::Equal) {
+                        return SolverCertainty::Proven;
+                    }
+                }
+            }
+            const auto result = constraint.op == SolverCoercionOp::Coercion
+                ? checkCoerceTys(context, sp, destination, source)
+                : checkUnsizeTys(context, sp, destination, source, nullptr);
+            switch (result) {
+                case CoerceResult::Fail:
+                    return SolverCertainty::NoSolution;
+                case CoerceResult::Unknown:
+                    return SolverCertainty::Ambiguous;
+                case CoerceResult::Custom:
+                case CoerceResult::Unsize:
+                    return SolverCertainty::Proven;
+                case CoerceResult::Equality: {
+                    const auto comparison = destination->compareWithPlaceholders(sp, source, context.ivars.callbackResolveInfer());
+                    if (comparison == HIRCompare::Unequal) {
+                        return SolverCertainty::NoSolution;
+                    }
+                    return comparison == HIRCompare::Equal ? SolverCertainty::Proven : SolverCertainty::Ambiguous;
+                }
+            }
+            UNREACHABLE();
+        }
+
+        Ordering compare(
+            const Span&,
+            const SolverCoercionConstraint& constraint,
+            const HIRTypeData* left,
+            const HIRTypeData* right
+        ) const override {
+            // Coercion inference chooses the most restrictive destination: it
+            // preserves `&mut` instead of weakening to `&` when both accept
+            // the same source.  A source-side variable has no analogous safe
+            // ordering; viability can filter it, but it remains ambiguous.
+            if (constraint.direction != SolverCoercionConstraint::Direction::InputIsDestination || !samePointerTarget(left, right)) {
+                return OrdEqual;
+            }
+            left = resolveKnown(left);
+            right = resolveKnown(right);
+            if (const auto* leftBorrow = left->opt_Borrow()) {
+                return ord(static_cast<int>(leftBorrow->type), static_cast<int>(right->as_Borrow().type));
+            }
+            if (const auto* leftPointer = left->opt_Pointer()) {
+                return ord(static_cast<int>(leftPointer->type), static_cast<int>(right->as_Pointer().type));
+            }
+            return OrdEqual;
+        }
+    };
 
     enum class AssociatedCheckResult {
         Complete,
@@ -7415,6 +7562,10 @@ default:
         auto implHasBuiltinOperatorSignature = [&](const ImplRef& impl) {
             auto implTy = impl.getImplType(context.crate.types);
             auto implParams = impl.getTraitParams(context.crate.types);
+            implTy = context.getType(implTy);
+            for (auto& ty : implParams.types) {
+                ty = context.getType(ty);
+            }
             // Impl probing can expose inference placeholders that belong to
             // the candidate, not this expression.  They have no Context
             // slot, so do not feed them to expansion/comparison below.
@@ -7442,7 +7593,7 @@ default:
             if (context.ivars.typeContainsIvars(output, /*only_unbound=*/true)) {
                 return false;
             }
-            output = context.expandAssociatedTypes(sp, mv$(output));
+            output = context.expandAssociatedTypes(sp, context.getType(output));
 
             auto builtinOutput = implTy;
             if (v.operatorKind == TypeckPrimitiveOperator::Deref) {
@@ -7487,17 +7638,17 @@ default:
                     probeParams.types.front() = source;
                 }
             }
-            // A semantic-overload PROBE is an enumeration, not a decision:
-            // the exporting mode surfaces the viable candidate heads an
-            // ambiguity would otherwise fold away (u32 / NonZero<u32> must
-            // not look like a builtin-only operator).
-            auto probeCallback = [&](ImplRef impl, HIRCompare) {
-                if (impl.isAmbiguousIdentity()) {
+            // A semantic-overload probe inspects the typed answer's viable
+            // candidate heads: an ambiguity between u32 / NonZero<u32> must
+            // not look like a builtin-only operator.
+            const auto inspectImpl = [&](const SolverImpl* solverImpl) {
+                if (!solverImpl || solverImpl->ambiguousIdentity) {
                     // A merged identity response says that no concrete impl
                     // may guide inference.  It is not itself an overloaded
                     // operator implementation.
                     return false;
                 }
+                const auto impl = solverImpl->legacy();
                 if (context.isCurrentOperatorImpl(impl)) {
                     sawCurrentOperatorImpl = true;
                     currentOperatorImplHasBuiltinSignature = implHasBuiltinOperatorSignature(impl);
@@ -7509,7 +7660,14 @@ default:
                 }
                 return false;
             };
-            context.resolve.findTraitImplsNext(sp, v.trait, probeParams, v.implTy, probeCallback, {.assocName = "", .exportAmbiguousCandidates = true});
+            context.resolve.solveTraitGoal(sp, v.trait, probeParams, v.implTy, [&](SolverResponse response) {
+                for (const auto& candidate : response.candidates) {
+                    if (inspectImpl(candidate.impl)) {
+                        return true;
+                    }
+                }
+                return response.hasImpl && inspectImpl(response.impl);
+            }, {.assocName = "", .exportAmbiguousCandidates = true});
         }
 
         // An integer literal can only become a primitive integer, and shifting
@@ -7605,6 +7763,14 @@ default:
                     }
                     if (isShiftOperator) {
                         // Shifts can have mismatched types on each side.
+                        // A literal RHS therefore cannot be selected from the
+                        // many primitive Shl/Shr impls. The result is already
+                        // known from the LHS; let ordinary numeric fallback
+                        // choose the independently unconstrained RHS.
+                        if (rightTy->is_Infer() && rightTy->as_Infer().isLit() && !leftTy->is_Infer()) {
+                            context.possibleEquateTypeUnknown(sp, right, Context::IvarUnknownType::To);
+                            return AssociatedCheckResult::Stalled;
+                        }
                     } else {
                         // NOTE: This only holds if not a shift
                         context.equateTypes(sp, left, right);
@@ -7637,14 +7803,18 @@ default:
 
         // If the impl type is an unbounded ivar, and there's no trait args - don't bother searching
         if (const auto* e = context.ivars.getType(v.implTy)->opt_Infer()) {
+            const bool hasSelfCoercionGuidance = e->index != ~0u
+                && e->index < context.possibleIvarVals.size()
+                && (!context.possibleIvarVals[e->index].typesCoerceTo.empty()
+                    || !context.possibleIvarVals[e->index].typesCoerceFrom.empty());
             // TODO: ?
-            if (!e->isLit() && v.params.types.empty()) {
+            if (!e->isLit() && v.params.types.empty() && !hasSelfCoercionGuidance) {
                 return AssociatedCheckResult::Ambiguous;
             }
 
             // If the type is completely unbounded, then any lookup will fail.
             // - Disable inference on the type params (as a future impl will add bounds)
-            if (!e->isLit()) {
+            if (!e->isLit() && !hasSelfCoercionGuidance) {
                 for (const auto& t : v.params.types) {
                     context.possibleEquateTypeUnknown(sp, t, Context::IvarUnknownType::To);
                 }
@@ -7672,523 +7842,182 @@ default:
             return false;
         };
 
-        // Locate applicable trait impl
-        unsigned int count = 0;
-
-        struct Possibility {
-            HIRTypeRef implTy;
-            HIRPathParams params;
-            ImplRef implRef;
-            HIRTypeRef outputType;
-            SolverCandidateResponse response;
-            bool hasResponse = false;
+        ThinVector<SolverCoercionConstraint> coercionGoals;
+        const auto appendCoercionGoals = [&](const HIRTypeData* rawInput, unsigned typeIndex, bool isSelf) {
+            const auto* input = context.getType(rawInput);
+            const auto* infer = input->opt_Infer();
+            if (!infer || infer->index == ~0u || infer->index >= context.possibleIvarVals.size()) {
+                return;
+            }
+            const auto append = [&](const Context::IVarPossible::CoerceTy& edge, SolverCoercionConstraint::Direction direction) {
+                const auto* other = context.getType(edge.ty);
+                if (const auto* otherInfer = other->opt_Infer(); otherInfer && otherInfer->index != ~0u) {
+                    return;
+                }
+                coercionGoals.push_back(SolverCoercionConstraint{
+                    static_cast<unsigned>(typeIndex),
+                    other,
+                    direction,
+                    edge.op == Context::IVarPossible::CoerceTy::Coercion ? SolverCoercionOp::Coercion : SolverCoercionOp::Unsizing,
+                    isSelf,
+                });
+            };
+            const auto& possible = context.possibleIvarVals[infer->index];
+            for (const auto& edge : possible.typesCoerceFrom) {
+                // A diverging source coerces to every destination and thus
+                // carries no information about this trait input. Feeding
+                // `! -> ?T` to candidate selection can otherwise make a real
+                // `Trait for !` implementation infer `?T = !` before the
+                // non-diverging arm supplies its type.
+                if (context.getType(edge.ty)->is_Diverge()) {
+                    continue;
+                }
+                append(edge, SolverCoercionConstraint::Direction::InputIsDestination);
+            }
+            for (const auto& edge : possible.typesCoerceTo) {
+                append(edge, SolverCoercionConstraint::Direction::InputIsSource);
+            }
         };
+        appendCoercionGoals(v.implTy, 0, true);
+        for (size_t typeIndex = 0; typeIndex < v.params.types.size(); typeIndex++) {
+            appendCoercionGoals(v.params.types[typeIndex], static_cast<unsigned>(typeIndex), false);
+        }
+        const bool hasSelfCoercionGoal = ::std::any_of(coercionGoals.begin(), coercionGoals.end(), [](const SolverCoercionConstraint& constraint) {
+            return constraint.isSelf;
+        });
+        ContextSolverCoercions coercionEvaluator(context);
 
-        ::std::vector<Possibility> possibleImpls;
-        size_t lastPossibilityIndex = ~size_t(0);
-        bool sawAmbiguousIdentity = false;
-        {
-            const HIRTraitImpl* specialisableImpl = nullptr;
-            bool selectSpecialisableFallback = false;
-            const auto selectExactImpl = [&](const ImplRef& impl) {
-                // A tentative impl placeholder in the response is not a
-                // commitment; equating it would leak `impl_?_*` into the
-                // inference table (matches the possibilities path below).
-                const auto implSelfTy = impl.getImplType(context.crate.types);
-                if (!typeContainsImplPlaceholder(context.crate.types, implSelfTy)) {
-                    context.equateTypes(sp, v.implTy, implSelfTy);
-                }
-                auto implParams = impl.getTraitParams(context.crate.types);
-                ASSERT_BUG(sp, v.params.types.size() == implParams.types.size(), "Parameter count mismatch between impl and rule: r=" << v.params << " i=" << implParams);
-                for (unsigned int i = 0; i < v.params.types.size(); i++) {
-                    if (typeContainsImplPlaceholder(context.crate.types, implParams.types[i])) {
-                        continue;
-                    }
-                    context.equateTypes(sp, v.params.types[i], implParams.types[i]);
-                }
-                for (unsigned int i = 0; i < v.params.values.size(); i++) {
-                    context.equateValues(sp, v.params.values[i], implParams.values[i]);
-                }
-                // Nested goals and their inference effects are carried by the
-                // typed solver response and committed after this callback
-                // accepts the candidate.
-            };
-            auto candidateCallback = [&](ImplRef impl, HIRCompare cmp) {
-                lastPossibilityIndex = ~size_t(0);
-                HIRTypeRef candidateOutputType;
-                if (impl.isAmbiguousIdentity()) {
-                    ASSERT_BUG(sp, cmp == HIRCompare::Fuzzy, "Definite solver response marked as ambiguous identity");
-                    sawAmbiguousIdentity = true;
-                    return false;
-                }
-                if (v.operatorKind != TypeckPrimitiveOperator::None && context.isCurrentOperatorImpl(impl)) {
-                    if (currentOperatorUsesLanguagePrimitive()) {
-                        return false;
-                    }
-                }
-                if (v.name != "") {
-                    // A generic associated type is substituted with the
-                    // arguments the projection gave it (`Self::Bar<T>`).
-                    auto outTyO = impl.getType(context.crate.types, v.name.c_str(), v.atyPp);
-                    if (outTyO == HIRTypeRef()) {
-                        outTyO = context.crate.types.path(HIRPath(v.implTy, HIRGenericPath(v.trait, v.params.clone()), v.name, v.atyPp.clone()), {});
-                    }
-                    outTyO = context.expandAssociatedTypes(sp, mv$(outTyO));
-                    outTyO = context.revealOpaqueTypes(outTyO);
+        // A wholly diverging, unannotated closure can acquire its concrete
+        // return expectation only after method projection.  Its body validly
+        // coerces from `!`; keep that language rule as an explicit obligation
+        // and ask the solver only for the callable trait proof.
+        bool lateClosureOutput = false;
+        if (v.name != "" && (v.trait == context.resolve.langFn() || v.trait == context.resolve.langFnMut() || v.trait == context.resolve.langFnOnce())) {
+            const auto* implType = context.getType(v.implTy);
+            const auto* closure = implType->is_NodeType() ? implType->as_NodeType().opt_Closure() : nullptr;
+            const auto* expectedOutput = context.getType(v.leftTy);
+            if (closure && (*closure)->returnType->is_Infer()
+                && context.getType((*closure)->returnType)->is_Diverge()
+                && !expectedOutput->is_Diverge()
+                && !context.ivars.typeContainsIvars(expectedOutput)) {
+                context.registerClosureReturnObligation(sp, *closure, expectedOutput);
+                lateClosureOutput = true;
+            }
+        }
 
-                    // TODO: if this is an unbound UfcsUnknown, treat as a fuzzy match.
-                    // - Shouldn't compare_with_placeholders do that?
+        SolverResponse response;
+        bool hasResponse = false;
+        context.resolve.solveTraitGoal(sp, v.trait, v.params, v.implTy, [&](SolverResponse value) {
+            response = ::std::move(value);
+            hasResponse = true;
+            return true;
+        }, {
+            .assocName = v.name.c_str(),
+            .assocType = v.name == "" || lateClosureOutput ? nullptr : v.leftTy,
+            .assocParams = v.name == "" ? nullptr : &v.atyPp,
+            .allowInferInputs = true,
+            .excludedImpl = currentOperatorUsesLanguagePrimitive() ? context.currentTraitImpl : nullptr,
+            .coercions = coercionGoals.empty() ? nullptr : &coercionGoals,
+            .coercionEvaluator = coercionGoals.empty() ? nullptr : &coercionEvaluator,
+        });
 
-                    // - If we're looking for an associated type, allow it to eliminate impossible impls
-                    //  > This makes `let v: usize = !0;` work without special cases
-                    auto cmp2 = v.leftTy->compareWithPlaceholders(sp, outTyO, context.ivars.callbackResolveInfer());
-                    const bool definingOpaqueOutput = visitTyWith(v.leftTy, [&](const HIRTypeData* type) {
-                        const auto* erased = type->opt_ErasedType();
-                        const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
-                        return alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
-                    });
-                    // A selected method can expose its closure bound only
-                    // after a later projection has fixed the method's other
-                    // type parameters.  By then an unannotated, wholly
-                    // diverging closure may already have settled its result
-                    // ivar to `!`.  Apply the now-known expected output to the
-                    // closure signature; its body still validly coerces from
-                    // `!` to that type.
-                    const auto* implType = context.getType(v.implTy);
-                    const auto* closure = implType->is_NodeType() ? implType->as_NodeType().opt_Closure() : nullptr;
-                    const auto* expectedOutput = context.getType(v.leftTy);
-                    if (cmp2 == HIRCompare::Unequal && closure
-                        && (*closure)->returnType->is_Infer()
-                        && context.getType(outTyO)->is_Diverge()
-                        && !expectedOutput->is_Diverge()
-                        && !context.ivars.typeContainsIvars(expectedOutput)) {
-                        context.registerClosureReturnObligation(sp, *closure, expectedOutput);
-                        outTyO = expectedOutput;
-                        cmp2 = HIRCompare::Equal;
+        if (hasResponse) {
+            ASSERT_BUG(sp, response.hasImpl && response.impl, "trait solver returned a response without an implementation");
+            if (response.certainty == SolverCertainty::Ambiguous && !coercionGoals.empty() && !response.impl->ambiguousIdentity) {
+                const auto impl = response.impl->legacy();
+                const auto implType = impl.getImplType(context.crate.types);
+                const auto implParams = impl.getTraitParams(context.crate.types);
+                for (const auto& constraint : coercionGoals) {
+                    ASSERT_BUG(sp, constraint.isSelf || constraint.typeIndex < implParams.types.size(), "coercion-constrained trait input is out of range");
+                    const auto* input = constraint.isSelf ? implType : implParams.types[constraint.typeIndex];
+                    if (coercionEvaluator.evaluate(sp, constraint, input) == SolverCertainty::Ambiguous) {
+                        // A conditional impl head must not choose an inference
+                        // variable while its only expression/expectation edge
+                        // still relates opaque projections. Let the coercion
+                        // graph settle that variable, then retry the trait goal
+                        // with the resulting concrete head.
+                        return AssociatedCheckResult::Ambiguous;
                     }
-                    if (cmp2 == HIRCompare::Unequal && !definingOpaqueOutput) {
-                        return false;
-                    }
-                    // if solid or fuzzy, leave as-is
-                    candidateOutputType = mv$(outTyO);
-                }
-                if (cmp == HIRCompare::Equal) {
-                    // NOTE: Sometimes equal can be returned when it's not 100% equal (TODO)
-                    const auto* traitImpl = impl.data.opt_TraitImpl();
-                    if (selectSpecialisableFallback) {
-                        if (!traitImpl || traitImpl->impl != specialisableImpl) {
-                            return false;
-                        }
-                        if (v.name != "") {
-                            outputType = candidateOutputType;
-                        }
-                        selectExactImpl(impl);
-                        return true;
-                    }
-                    // A default associated type is only a fallback.  Keep
-                    // looking for a proven child impl before committing its
-                    // output; the crate index is not ordered by specialization.
-                    // This applies under the goal bridge too: the identity
-                    // fallback re-enters through the legacy enumeration, which
-                    // reports the specialisable default before its sibling.
-                    if (v.name != "" && impl.typeIsSpecialisable(v.name.c_str()) && traitImpl && traitImpl->impl) {
-                        if (!specialisableImpl || traitImpl->impl->moreSpecificThan(context.crate.types, *specialisableImpl)) {
-                            specialisableImpl = traitImpl->impl;
-                        }
-                        return false;
-                    }
-                    if (v.name != "") {
-                        outputType = candidateOutputType;
-                    }
-                    selectExactImpl(impl);
-                    return true;
-                } else {
-                    count += 1;
-
-                    auto implTy = impl.getImplType(context.crate.types);
-                    auto implParams = impl.getTraitParams(context.crate.types);
-
-                    implTy = context.expandAssociatedTypes(sp, std::move(implTy));
-                    for (auto& t : implParams.types) {
-                        t = context.expandAssociatedTypes(sp, mv$(t));
-                    }
-
-                    if (possibleImpls.empty()) {
-                        possibleImpls.push_back({std::move(implTy), std::move(implParams), std::move(impl)});
-                        lastPossibilityIndex = 0;
-                    }
-                    // If there is an existing impl, determine if this is part of the same specialisation tree
-                    // - If more specific, replace. If less, ignore.
-                    // NOTE: `overlaps_with` (should be) reflective
-                    else {
-                        bool wasUsed = false;
-                        for (auto& possibleImpl : possibleImpls) {
-                            const auto& bestImpl = possibleImpl.implRef;
-                            // TODO: Handle duplicates (from overlapping bounds)
-                            if (context.resolve.implsOverlap(sp, impl, bestImpl)) {
-                                // Both matches are fuzzy, so overlap only orders the
-                                // candidates after their predicates are known.  Keep
-                                // this candidate in the possibility set: collapsing
-                                // it here makes `count` and `possible_impls` disagree
-                                // and can incorrectly close an ivar's bounded set over
-                                // just the first, ultimately inapplicable impl.
-                                break;
-                            } else {
-                                // Disjoint impls.
-                            }
-
-                            // Edge case: Might be just outright identical
-                            if (possibleImpl.implTy == implTy && possibleImpl.params == implParams) {
-                                auto t1 = v.name == "" ? HIRTypeRef() : possibleImpl.implRef.getType(context.crate.types, v.name.c_str(), v.atyPp);
-                                auto t2 = v.name == "" ? HIRTypeRef() : impl.getType(context.crate.types, v.name.c_str(), v.atyPp);
-                                if (v.name == "" || t1 == t2 || t2 == HIRTypeRef()) {
-                                    wasUsed = true;
-                                    lastPossibilityIndex = static_cast<size_t>(&possibleImpl - possibleImpls.data());
-                                    count -= 1;
-                                    break;
-                                } else if (t1 == HIRTypeRef()) {
-                                    // NOTE: This picks the _least_ specific impl
-                                    possibleImpl.implTy = ::std::move(implTy);
-                                    possibleImpl.params = ::std::move(implParams);
-                                    possibleImpl.implRef = ::std::move(impl);
-                                    wasUsed = true;
-                                    lastPossibilityIndex = static_cast<size_t>(&possibleImpl - possibleImpls.data());
-                                    count -= 1;
-                                    break;
-                                } else {
-                                }
-                            }
-                        }
-                        if (!wasUsed) {
-                            possibleImpls.push_back({::std::move(implTy), ::std::move(implParams), ::std::move(impl)});
-                            lastPossibilityIndex = possibleImpls.size() - 1;
-                        }
-                    }
-
-                    if (lastPossibilityIndex != ~size_t(0) && v.name != "" && !possibleImpls.at(lastPossibilityIndex).hasResponse) {
-                        possibleImpls.at(lastPossibilityIndex).outputType = candidateOutputType;
-                    }
-
-                    return false;
-                }
-            };
-            // Ambiguity between distinct responses exports the solver's own
-            // viable candidate heads (exportAmbiguousCandidates): they feed
-            // the possibility handling in the callback directly, replacing
-            // the legacy fuzzy re-walk this path used to perform on an
-            // identity response.
-            const TraitGoalQuery goalQuery{
-                .assocName = v.name.c_str(),
-                .assocType = v.name == "" ? nullptr : v.leftTy,
-                .assocParams = v.name == "" ? nullptr : &v.atyPp,
-                .exportAmbiguousCandidates = true,
-            };
-            const auto consumeResponse = [&](SolverResponse response) {
-                const auto commitEffects = [&]() {
-                    context.applySolverResponse(sp, response);
-                };
-                const auto saveCandidateEffects = [&](SolverCandidateResponse candidate) {
-                    if (lastPossibilityIndex == ~size_t(0)) {
-                        return;
-                    }
-                    auto& possibility = possibleImpls.at(lastPossibilityIndex);
-                    if (!possibility.hasResponse) {
-                        possibility.response = ::std::move(candidate);
-                        possibility.hasResponse = true;
-                    }
-                };
-                for (auto& candidate : response.candidates) {
-                    ASSERT_BUG(sp, candidate.impl, "solver candidate response has no implementation");
-                    if (candidateCallback(candidate.impl->legacy(), candidate.certainty == SolverCertainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy)) {
-                        context.applySolverResponse(sp, candidate);
-                        return true;
-                    }
-                    saveCandidateEffects(::std::move(candidate));
-                }
-                if (!response.hasImpl) {
-                    return false;
-                }
-                ASSERT_BUG(sp, response.impl, "solver response has no implementation");
-                if (!candidateCallback(response.impl->legacy(), response.certainty == SolverCertainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy)) {
-                    SolverCandidateResponse candidate;
-                    candidate.impl = response.impl;
-                    candidate.certainty = response.certainty;
-                    candidate.slots = ::std::move(response.slots);
-                    candidate.obligations = ::std::move(response.obligations);
-                    candidate.equalities = ::std::move(response.equalities);
-                    saveCandidateEffects(::std::move(candidate));
-                    return false;
-                }
-                commitEffects();
-                return true;
-            };
-            bool found = context.resolve.solveTraitGoal(sp, v.trait, v.params, v.implTy, consumeResponse, goalQuery);
-            if (!found && specialisableImpl) {
-                // An applicability predicate on a more-specific impl can be
-                // resolved by later inference.  Do not select the default
-                // while such a child remains fuzzy.
-                bool hasFuzzySpecialisation = false;
-                for (const auto& possible : possibleImpls) {
-                    const auto* traitImpl = possible.implRef.data.opt_TraitImpl();
-                    if (traitImpl && traitImpl->impl && traitImpl->impl->moreSpecificThan(context.crate.types, *specialisableImpl)) {
-                        hasFuzzySpecialisation = true;
-                        break;
-                    }
-                }
-                if (!hasFuzzySpecialisation) {
-                    // ImplRef owns its inferred impl arguments, so locate the
-                    // stable HIR impl again instead of retaining a response
-                    // past its callback.  The repeat re-runs the solver: the
-                    // exporting mode re-visits the specialisable default with
-                    // its Equal head, and the callback now commits it.
-                    selectSpecialisableFallback = true;
-                    found = context.resolve.solveTraitGoal(sp, v.trait, v.params, v.implTy, consumeResponse, goalQuery);
-                    ASSERT_BUG(sp, found, "Selected specialisable impl disappeared during repeated lookup");
                 }
             }
-            if (found) {
-                // Fully-known impl
-                if (v.name != "") {
-                    // Stop this from just pushing the same rule again.
-                    if ((*outputType)->is_Path() && (*outputType)->as_Path().path.data.is_UfcsKnown()) {
-                        const auto& te = (*outputType)->as_Path();
-                        const auto& pe = te.path.data.as_UfcsKnown();
-                        // If the target type is unbound, and is this rule exactly, don't return success
-                        if (te.binding.is_Unbound() && pe.type == v.implTy && pe.item == v.name && pe.trait.path == v.trait && pe.trait.params == v.params) {
-                            auto data = (*outputType)->cloneData();
-                            data.as_Path().binding = HIRTypePathBinding::make_Opaque({});
-                            outputType = context.crate.types.intern(std::move(data));
-                        }
-                    }
-                    context.equateTypes(sp, v.leftTy, *outputType);
-                }
-                // TODO: Any equating of type params?
-                return AssociatedCheckResult::Complete;
-            } else if (count == 0) {
-                if (sawAmbiguousIdentity) {
-                    return AssociatedCheckResult::Ambiguous;
-                }
-                // No applicable impl
-                // - TODO: This should really only fire when there isn't an impl. But it currently fires when _
-                const bool needsInference = typeNeedsFurtherInference(context, v.implTy)
-                    || pathParamsNeedFurtherInference(context, v.params)
-                    || (v.name != "" && (typeNeedsFurtherInference(context, v.leftTy)
-                        || pathParamsNeedFurtherInference(context, v.atyPp)));
-                if (needsInference) {
-                    // A nested ivar can still change both impl applicability
-                    // and an associated output match. Keep the obligation
-                    // until its concrete inputs are available.
-                    return AssociatedCheckResult::Stalled;
-                } else if (v.trait == context.resolve.langUnsize()) {
-                    // TODO: Detect if this was a compiler-generated bound, or was actually in the code.
-
-                    ASSERT_BUG(sp, v.params.types.size() == 1, "Incorrect number of parameters for Unsize");
-                    const auto& srcTy = context.getType(v.implTy);
-                    const auto& dstTy = context.getType(v.params.types[0]);
-
-                    context.equateTypes(sp, dstTy, srcTy);
-                    return AssociatedCheckResult::Complete;
-                } else if (v.operatorKind != TypeckPrimitiveOperator::None && (v.params.types.size() == 0 ? primitiveOperatorHasBuiltin(v.operatorKind, context.getType(v.implTy)) : v.params.types.size() == 1 && primitiveOperatorHasBuiltin(v.operatorKind, context.getType(v.implTy), context.getType(v.params.types.at(0))))) {
-                    // No trait implementation matched this expression.  The
-                    // language-defined primitive candidate therefore wins.
-                    return AssociatedCheckResult::Complete;
-                } else {
-                    if (v.name == "") {
-                        ERROR(sp, E0000, "Failed to find an impl of " << v.trait << context.ivars.fmt(v.params) << " for " << context.ivars.fmtType(v.implTy));
-                    } else {
-                        ERROR(sp, E0000, "Failed to find an impl of " << v.trait << context.ivars.fmt(v.params) << " for " << context.ivars.fmtType(v.implTy) << " with " << v.name << " = " << context.ivars.fmtType(v.leftTy));
-                    }
-                }
-            } else if (count == 1) {
-                auto& possibleImplTy = possibleImpls.at(0).implTy;
-                auto& possibleParams = possibleImpls.at(0).params;
-                auto& bestImpl = possibleImpls.at(0).implRef;
-                // - If there are any magic params in the impl, don't use it yet.
-                //  > Ideally, there should be a match_test_generics to resolve the magic impls.
-                if (bestImpl.hasMagicParams()) {
-                    // Pick this impl, and evaluate it (expanding the magic params out)
-                    // - Equate `v.impl_ty` and `best_impl`'s type...
-                    //   - We expect an ivar from `v.impl_ty` to be matched against some sort of known type (struct, tuple, array, ...)
-                    //   - When that happens, allocate new ivars for the magic params in that type and assign.
-                    struct Matcher: public HIRMatchGenerics, public Monomorphiser {
-                        Context& context;
-                        mutable ::std::map<HIRGenericRef, HIRTypeRef> types;
-                        mutable ::std::map<HIRGenericRef, HIRConstGeneric> values;
-
-                        Matcher(Context& context)
-                            : HIRMatchGenerics(BorrowMatchedValues{})
-                            , Monomorphiser(context.crate.types)
-                            , context(context)
-                        {
-                        }
-
-                        HIRCompare cmpType(const Span& sp, const HIRTypeData* tyL, const HIRTypeData* tyR, tCbResolveType resolveCb) override {
-                            const auto& l = (tyL->is_Infer() ? resolveCb.getType(sp, tyL) : tyL);
-                            const auto& r = (tyR->is_Infer() ? resolveCb.getType(sp, tyR) : tyR);
-                            if (tyR->is_Generic() && tyR->as_Generic().group() == GENERICPlaceholder) {
-                                BUG(sp, "Assigning into a placeholder? should have been known");
-                            }
-                            if (l->is_Infer() && !r->is_Infer()) {
-                                // Monomorph the RHS, assigning new ivars to each impl param
-                                auto newTy = this->monomorphType(sp, r, true);
-                                context.equateTypes(sp, l, newTy);
-                                return HIRCompare::Equal;
-                            }
-                            return HIRMatchGenerics::cmpType(sp, tyL, tyR, resolveCb);
-                        }
-
-                        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override {
-                            if (ty->is_Generic() && ty->as_Generic() == g) {
-                                return HIRCompare::Equal;
-                            }
-                            TODO(Span(), "match_ty - " << g << " = " << ty);
-                        }
-
-                        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& v) override {
-                            if (v.is_Generic() && v.as_Generic() == g) {
-                                return HIRCompare::Equal;
-                            }
-                            TODO(Span(), "match_val - " << g << " = " << v);
-                        }
-
-                        HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override {
-                            if (g.group() == GENERICPlaceholder) {
-                                auto it = types.find(g);
-                                if (it == types.end()) {
-                                    it = types.insert(std::make_pair(g, context.ivars.newIvarTr())).first;
-                                }
-                                return it->second;
-                            } else {
-                                return context.crate.types.generic(g.name, g.binding);
-                            }
-                        }
-
-                        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override {
-                            if (g.group() == GENERICPlaceholder) {
-                                auto it = values.find(g);
-                                if (it == values.end()) {
-                                    auto v = HIRConstGeneric::make_Infer(HIRConstGeneric::Data_Infer{context.ivars.newIvarVal()});
-                                    it = values.insert(std::make_pair(g, std::move(v))).first;
-                                }
-                                return it->second.clone();
-                            } else {
-                                return g;
-                            }
-                        }
-
-                    } m{context};
-
-                    m.cmpType(sp, v.implTy, possibleImplTy, context.ivars.callbackResolveInfer());
-                    for (size_t i = 0; i < possibleParams.types.size(); i++) {
-                        m.cmpType(sp, v.params.types[i], possibleParams.types[i], context.ivars.callbackResolveInfer());
-                    }
-                    ASSERT_BUG(sp, possibleImpls.at(0).hasResponse, "selected fuzzy solver candidate has no typed response");
-                    const auto& response = possibleImpls.at(0).response;
-                    for (size_t i = 0; i < response.slots.types.size(); i++) {
-                        context.equateTypes(sp, m.monomorphType(sp, response.slots.typeInputs[i], true), m.monomorphType(sp, response.slots.types[i], true));
-                    }
-                    for (size_t i = 0; i < response.slots.values.size(); i++) {
-                        context.equateValues(sp, m.monomorphConstgeneric(sp, response.slots.valueInputs[i], true), m.monomorphConstgeneric(sp, response.slots.values[i], true));
-                    }
-                    for (const auto& equality : response.equalities) {
-                        context.equateTypes(sp, m.monomorphType(sp, equality.left, true), m.monomorphType(sp, equality.right, true));
-                    }
-                    for (const auto& obligation : response.obligations) {
-                        context.registerSolverObligation(sp, m.monomorphType(sp, obligation.type, true), m.monomorphTraitpath(sp, obligation.trait, true));
-                    }
-                    return AssociatedCheckResult::Retry;
-                }
-                const auto& implTy = context.ivars.getType(v.implTy);
-                if (((*implTy).is_Path() && ((*implTy).as_Path().binding.is_Unbound()))) {
+            if (response.certainty == SolverCertainty::Ambiguous && !hasSelfCoercionGoal) {
+                // Do not commit a merely unique candidate's shape to an open
+                // Self. A blanket `AsyncFnOnce for &mut F`, for example, can
+                // be the only candidate seen before a closure coercion fixes
+                // Self, but `_ = &mut F` is not a shared solver consequence.
+                const auto* implType = context.getType(v.implTy);
+                if (const auto* path = implType->opt_Path(); path && path->binding.is_Unbound()) {
                     return AssociatedCheckResult::Stalled;
                 }
-                if (((*implTy).is_Infer() && ((*implTy).as_Infer().isLit() == false))) {
+                if (const auto* infer = implType->opt_Infer(); infer && !infer->isLit()) {
                     return AssociatedCheckResult::Ambiguous;
                 }
-                if (v.name != "") {
-                    ASSERT_BUG(sp, possibleImpls.at(0).outputType, "selected fuzzy solver candidate has no associated output");
-                    outputType = possibleImpls.at(0).outputType;
-                }
-                ASSERT_BUG(sp, possibleImpls.at(0).hasResponse, "selected fuzzy solver candidate has no typed response");
-                context.applySolverResponse(sp, possibleImpls.at(0).response);
-                assert(possibleImplTy != HIRTypeRef());
-                // A tentative impl placeholder is not a commitment; equating
-                // it would leak `impl_?_*` into the inference table (matches
-                // selectExactImpl above).
-                if (!typeContainsImplPlaceholder(context.crate.types, possibleImplTy)) {
-                    context.equateTypes(sp, v.implTy, possibleImplTy);
-                }
-                for (unsigned int i = 0; i < possibleParams.types.size(); i++) {
-                    if (typeContainsImplPlaceholder(context.crate.types, possibleParams.types[i])) {
-                        continue;
-                    }
-                    context.equateTypes(sp, v.params.types[i], possibleParams.types[i]);
-                }
-                for (unsigned int i = 0; i < possibleParams.values.size(); i++) {
-                    context.equateValues(sp, v.params.values[i], possibleParams.values[i]);
-                }
-                // Only one possible impl. Resolve its inputs before the output:
-                // an associated type can depend on an ivar fixed by the selected impl.
-                if (v.name != "") {
-                    outputType = context.expandAssociatedTypes(sp, mv$(*outputType));
-
-                    // A magic trait response can be the identity projection
-                    // while its input is still a numeric literal ivar.  That
-                    // response has not resolved the associated type: keep the
-                    // rule until literal fallback fixes the input and lets the
-                    // magic impl return its concrete output.
-                    if (const auto* outputPath = (*outputType)->opt_Path();
-                        outputPath && outputPath->path.data.is_UfcsKnown()) {
-                        const auto& pe = outputPath->path.data.as_UfcsKnown();
-                        if (pe.type == v.implTy && pe.trait.path == v.trait && pe.trait.params == v.params && pe.item == v.name
-                            && context.getType(v.implTy)->is_Infer()) {
-                            return AssociatedCheckResult::Stalled;
-                        }
-                    }
-
-                    // If the output type is just < v.impl_ty as v.trait >::v.name, return false
-                    if (((**outputType).is_Path() && ((**outputType).as_Path().path.data.is_UfcsKnown()))) {
-                        auto& pe = (*outputType)->as_Path().path.data.as_UfcsKnown();
-
-                        if (pe.type == v.implTy && pe.trait.path == v.trait && pe.trait.params == v.params && pe.item == v.name) {
-                            if (((*v.leftTy).is_Path() && ((*v.leftTy).as_Path().path.data.is_UfcsKnown()))) {
-                                auto data = (*outputType)->cloneData();
-                                data.as_Path().binding = HIRTypePathBinding::make_Opaque({});
-                                outputType = context.crate.types.intern(std::move(data));
-                            }
-                        }
-                    }
-                    context.equateTypes(sp, v.leftTy, *outputType);
-                }
-                return AssociatedCheckResult::Complete;
-            } else {
-                // Multiple possible impls, don't know yet
-                // TODO: Make a solid list of possibilities in each of `v.params`
-                std::map<unsigned, std::vector<HIRTypeRef>> ivarPossibilities;
-                for (const auto& pi : possibleImpls) {
-                    for (size_t i = 0; i < pi.params.types.size(); i++) {
-                        const auto& t = context.getType(v.params.types[i]);
-                        if (const auto* e = t->opt_Infer()) {
-                            const auto& piT = pi.params.types[i];
-                            HIRTypeRef possibleTy;
-                            if (!typeContainsImplPlaceholder(context.crate.types, piT)) {
-                                possibleTy = piT;
-                            } else {
-                                // Push this ivar
-                                possibleTy = t;
-                            }
-
-                            if (std::find(ivarPossibilities[e->index].begin(), ivarPossibilities[e->index].end(), possibleTy) == ivarPossibilities[e->index].end()) {
-                                ivarPossibilities[e->index].push_back(std::move(possibleTy));
-                            }
-                        }
-                    }
-                }
-                for (auto& e : ivarPossibilities) {
-                    context.possibleEquateIvarBounds(sp, e.first, std::move(e.second));
-                }
+            }
+            context.applySolverResponse(sp, response);
+            if (response.impl->ambiguousIdentity) {
                 return AssociatedCheckResult::Ambiguous;
             }
+            // A single canonical response can still be conditional on input
+            // inference (most notably a magic builtin head).  Its shared
+            // effects are useful now, but the associated rule must survive
+            // until those inputs settle and the response becomes proven.
+            if (response.certainty == SolverCertainty::Ambiguous) {
+                // A unique impl whose uncertainty is entirely represented by
+                // explicit nested obligations has already transferred all of
+                // its future work into the Context. Keeping the parent rule
+                // would only recreate a completed child obligation on every
+                // pass and prevent numeric/coercion fallback from running.
+                if (!response.obligations.empty()) {
+                    return AssociatedCheckResult::Complete;
+                }
+                // A callable builtin exposes the closure's own return slot as
+                // `Output`.  Once the typed response has related both sides,
+                // an equation `_ = <closure() -> _ as FnOnce>::Output` is a
+                // completed identity, not unresolved trait work. Keeping it
+                // alive would block the pre-2024 diverging-expression fallback
+                // which is responsible for choosing `()` for that slot.
+                if (v.name != "" && (v.trait == context.resolve.langFn() || v.trait == context.resolve.langFnMut() || v.trait == context.resolve.langFnOnce())) {
+                    const auto* implType = context.getType(v.implTy);
+                    const auto* closure = implType->is_NodeType() ? implType->as_NodeType().opt_Closure() : nullptr;
+                    if (closure && context.ivars.typesEqual(v.leftTy, (*closure)->returnType)) {
+                        return AssociatedCheckResult::Complete;
+                    }
+                }
+                // A unique response may be conditional on nested obligations,
+                // which were split out above.  Only an unresolved top-level
+                // Self still prevents this associated rule from being
+                // discharged; interior/head effects already came back in the
+                // typed response.
+                if (v.name != "" && typeNeedsFurtherInference(context, v.leftTy)) {
+                    return AssociatedCheckResult::Stalled;
+                }
+            }
+            return AssociatedCheckResult::Complete;
+        }
+
+        // No applicable impl.  A nested ivar can still change both impl
+        // applicability and an associated output match, so retain the rule.
+        const bool needsInference = typeNeedsFurtherInference(context, v.implTy)
+            || pathParamsNeedFurtherInference(context, v.params)
+            || (v.name != "" && (typeNeedsFurtherInference(context, v.leftTy)
+                || pathParamsNeedFurtherInference(context, v.atyPp)));
+        if (needsInference) {
+            return AssociatedCheckResult::Stalled;
+        }
+        if (v.trait == context.resolve.langUnsize()) {
+            ASSERT_BUG(sp, v.params.types.size() == 1, "Incorrect number of parameters for Unsize");
+            const auto& srcTy = context.getType(v.implTy);
+            const auto& dstTy = context.getType(v.params.types[0]);
+            context.equateTypes(sp, dstTy, srcTy);
+            return AssociatedCheckResult::Complete;
+        }
+        if (v.operatorKind != TypeckPrimitiveOperator::None && (v.params.types.size() == 0 ? primitiveOperatorHasBuiltin(v.operatorKind, context.getType(v.implTy)) : v.params.types.size() == 1 && primitiveOperatorHasBuiltin(v.operatorKind, context.getType(v.implTy), context.getType(v.params.types.at(0))))) {
+            return AssociatedCheckResult::Complete;
+        }
+        if (v.name == "") {
+            ERROR(sp, E0000, "Failed to find an impl of " << v.trait << context.ivars.fmt(v.params) << " for " << context.ivars.fmtType(v.implTy));
+        } else {
+            ERROR(sp, E0000, "Failed to find an impl of " << v.trait << context.ivars.fmt(v.params) << " for " << context.ivars.fmtType(v.implTy) << " with " << v.name << " = " << context.ivars.fmtType(v.leftTy));
         }
     }
 
@@ -8226,9 +8055,6 @@ const HIRTypeData* Context::closureReturnExpectation(const HIRExprNodeClosure* c
 }
 
 void Context::applySolverResponse(const Span& sp, const SolverResponse& response) {
-    if (response.hasImpl && response.impl && response.impl->ambiguousIdentity) {
-        return;
-    }
     ASSERT_BUG(sp, response.slots.typeInputs.size() == response.slots.types.size(), "solver type slot response is malformed");
     ASSERT_BUG(sp, response.slots.valueInputs.size() == response.slots.values.size(), "solver value slot response is malformed");
     for (size_t i = 0; i < response.slots.types.size(); i++) {
@@ -8239,6 +8065,9 @@ void Context::applySolverResponse(const Span& sp, const SolverResponse& response
     }
     for (const auto& equality : response.equalities) {
         equateTypes(sp, equality.left, equality.right);
+    }
+    for (const auto& equality : response.valueEqualities) {
+        equateValues(sp, equality.left, equality.right);
     }
     for (const auto& obligation : response.obligations) {
         registerSolverObligation(sp, obligation.type, obligation.trait.clone());
@@ -8256,6 +8085,9 @@ void Context::applySolverResponse(const Span& sp, const SolverCandidateResponse&
     }
     for (const auto& equality : response.equalities) {
         equateTypes(sp, equality.left, equality.right);
+    }
+    for (const auto& equality : response.valueEqualities) {
+        equateValues(sp, equality.left, equality.right);
     }
     for (const auto& obligation : response.obligations) {
         registerSolverObligation(sp, obligation.type, obligation.trait.clone());
@@ -8474,7 +8306,7 @@ namespace {
                 for (const auto& type : possible.typesCoerceTo) {
                     collectDirectIvars(type.ty, sources);
                 }
-                for (const auto& type : possible.bounded) {
+                for (const auto& type : possible.rawPointerFallbacks) {
                     collectDirectIvars(type, sources);
                 }
                 deduplicate(sources);
@@ -8511,15 +8343,13 @@ namespace {
         }
     };
 
-    struct IvarBoundRefs {
+    struct IvarCoercionRefs {
         ::std::vector<const Context::Coercion*> coercions;
-        ::std::vector<const Context::Associated*> associated;
-        ::std::vector<const HIRExprNodeCallMethod*> methods;
     };
 
-    struct IvarBoundIndex {
+    struct IvarCoercionIndex {
         const Context& context;
-        ::std::vector<IvarBoundRefs> refs;
+        ::std::vector<IvarCoercionRefs> refs;
 
         void collectIvars(const HIRTypeData* root, ::std::vector<unsigned int>& out) const {
             ::std::vector<HIRTypeRef> pending{root};
@@ -8545,7 +8375,7 @@ namespace {
         }
 
         template <typename T>
-        void addRefs(const ::std::vector<unsigned int>& dependencies, ::std::vector<T> IvarBoundRefs::* member, T value) {
+        void addRefs(const ::std::vector<unsigned int>& dependencies, ::std::vector<T> IvarCoercionRefs::* member, T value) {
             for (const auto index : dependencies) {
                 if (index < refs.size()) {
                     (refs[index].*member).push_back(value);
@@ -8553,7 +8383,7 @@ namespace {
             }
         }
 
-        explicit IvarBoundIndex(const Context& context)
+        explicit IvarCoercionIndex(const Context& context)
             : context(context)
             , refs(context.possibleIvarVals.size())
         {
@@ -8563,28 +8393,11 @@ namespace {
                 collectIvars(bound->leftTy, dependencies);
                 collectIvars((*bound->rightNodePtr)->resType, dependencies);
                 IvarDependencyIndex::deduplicate(dependencies);
-                addRefs(dependencies, &IvarBoundRefs::coercions, static_cast<const Context::Coercion*>(bound.get()));
-            }
-            for (const auto& bound : context.linkAssoc) {
-                dependencies.clear();
-                collectIvars(bound.implTy, dependencies);
-                for (const auto& type : bound.params.types) {
-                    collectIvars(type, dependencies);
-                }
-                IvarDependencyIndex::deduplicate(dependencies);
-                addRefs(dependencies, &IvarBoundRefs::associated, &bound);
-            }
-            for (const auto* nodePtrDyn : context.toVisit) {
-                if (const auto* nodePtr = cast<const HIRExprNodeCallMethod>(nodePtrDyn)) {
-                    dependencies.clear();
-                    collectIvars(context.getType(nodePtr->value->resType), dependencies);
-                    IvarDependencyIndex::deduplicate(dependencies);
-                    addRefs(dependencies, &IvarBoundRefs::methods, nodePtr);
-                }
+                addRefs(dependencies, &IvarCoercionRefs::coercions, static_cast<const Context::Coercion*>(bound.get()));
             }
         }
 
-        const IvarBoundRefs& operator[](unsigned int index) const {
+        const IvarCoercionRefs& operator[](unsigned int index) const {
             return refs.at(index);
         }
     };
@@ -8665,18 +8478,42 @@ namespace {
     // it and thereby determine the literal (`unknown / 5` in a closure). Let
     // that obligation settle instead of prematurely turning the literal into
     // i32. Fully numeric expressions such as `1 + 2` still use normal fallback.
-    bool numericDefaultMustWait(const Context& context, const IvarBoundIndex& boundIndex, unsigned int index) {
+    bool typeDependsOnIvar(const Context& context, const HIRTypeData* type, unsigned int index) {
+        bool found = false;
+        visitTyWith(type, [&](const HIRTypeData* inner) {
+            const auto* resolved = context.getType(inner);
+            if (const auto* infer = resolved->opt_Infer(); infer && infer->index == index) {
+                found = true;
+                return true;
+            }
+            if (resolved != inner && typeDependsOnIvar(context, resolved, index)) {
+                found = true;
+                return true;
+            }
+            return false;
+        });
+        return found;
+    }
+
+    bool numericDefaultMustWait(const Context& context, unsigned int index) {
         if (index >= context.possibleIvarVals.size()) {
             return false;
         }
-        for (const auto* associated : boundIndex[index].associated) {
-            if (!associated->isOperator) {
+        for (const auto& associated : context.linkAssoc) {
+            if (!associated.isOperator) {
                 continue;
             }
-            if (typeHasIndependentUnresolvedIvar(context, associated->implTy, index)) {
+            bool usesIndex = typeDependsOnIvar(context, associated.implTy, index);
+            for (const auto& type : associated.params.types) {
+                usesIndex |= typeDependsOnIvar(context, type, index);
+            }
+            if (!usesIndex) {
+                continue;
+            }
+            if (typeHasIndependentUnresolvedIvar(context, associated.implTy, index)) {
                 return true;
             }
-            for (const auto& type : associated->params.types) {
+            for (const auto& type : associated.params.types) {
                 if (typeHasIndependentUnresolvedIvar(context, type, index)) {
                     return true;
                 }
@@ -8685,17 +8522,15 @@ namespace {
         return false;
     }
 
-    bool checkIvarPossFailsBounds(
+    bool coercionCandidateIsInvalid(
         const Span& sp,
         Context& context,
-        const IvarBoundRefs& boundRefs,
+        const IvarCoercionRefs& coercionRefs,
         const HIRTypeData* tyL,
-        const HIRTypeData* newTy,
-        unsigned int* exactBoundCount = nullptr
+        const HIRTypeData* newTy
     ) {
         const auto ivarIdx = tyL->as_Infer().index;
         bool usedTy = false;
-        unsigned int exactBounds = 0;
 
         struct Cb {
             bool& usedTy;
@@ -8733,7 +8568,7 @@ namespace {
         };
 
         Cb cb{usedTy, sp, context, ivarIdx, newTy};
-        for (const auto* bound : boundRefs.coercions) {
+        for (const auto* bound : coercionRefs.coercions) {
             usedTy = false;
             auto tL = cloneTyWith(context.crate.types, sp, bound->leftTy, cb);
             auto tR = cloneTyWith(context.crate.types, sp, (*bound->rightNodePtr)->resType, cb);
@@ -8794,97 +8629,6 @@ namespace {
             }
         }
 
-        for (const auto* bound : boundRefs.associated) {
-            usedTy = false;
-            auto t = cloneTyWith(context.crate.types, sp, bound->implTy, cb);
-            auto p = clonePathParamsWith(context.crate.types, sp, bound->params, cb);
-            if (!usedTy) {
-                continue;
-            }
-            // - Run EAT on t and p
-            t = context.expandAssociatedTypes(sp, mv$(t));
-            // TODO: Run EAT on `p`?
-
-            // Search for any trait impl that could match this,
-            bool boundFailed = true;
-            bool boundExact = false;
-            // An ENUMERATION, like the overload probe: the canonical solver's
-            // merged/identity response hides candidates it folded away and
-            // answers NoSolution for opaque-laden goals it cannot judge, so a
-            // viable possibility would be filtered out.  Walk legacy paths.
-            auto boundProbe = [&](const auto impl, auto cmp) {
-                // If this bound specifies an associated type, then check that that type could match
-                if (bound->name != "") {
-                    auto aty = impl.getType(context.crate.types, bound->name.c_str(), bound->atyPp);
-                    // The associated type is not present, what does that mean?
-                    if (aty == HIRTypeRef()) {
-                        // A possible match was found, so don't delete just yet
-                        boundFailed = false;
-                        // - Return false to keep searching
-                        return false;
-                    }
-                    const auto atyComparison = aty->compareWithPlaceholders(sp, bound->leftTy, context.ivars.callbackResolveInfer());
-                    if (atyComparison == HIRCompare::Unequal) {
-                        return false;
-                    }
-                }
-                boundFailed = false;
-                // Rank by the trait's input types. An unresolved associated
-                // output is a later inference result and must not make an
-                // otherwise exact input match tie with a fuzzy one.
-                if (cmp == HIRCompare::Equal) {
-                    boundExact = true;
-                    return true;
-                }
-                return false;
-            };
-            context.resolve.findTraitImplsLegacy(sp, bound->trait, p, t, boundProbe)
-                || context.resolve.findTraitImplsMagic(sp, bound->trait, p, t, boundProbe)
-                || context.resolve.findTraitImplsBound(sp, bound->trait, p, t, boundProbe);
-            if (boundFailed && !t->is_Infer()) {
-                // If none was found, remove from the possibility list
-                return true;
-            }
-            exactBounds += boundExact;
-
-            // TODO: Check for the resultant associated type
-        }
-
-        // Handle methods
-        for (const auto* nodePtr : boundRefs.methods) {
-            const auto& node = *nodePtr;
-            const auto& tyTpl = context.getType(node.value->resType);
-
-            bool usedTy = false;
-            auto t = cloneTyWith(context.crate.types, sp, tyTpl, [&](const auto& ty, auto& outTy) {
-                if (const auto* e = ty->opt_Infer(); e && e->index == ivarIdx) {
-                    outTy = newTy;
-                    usedTy = true;
-                    return true;
-                } else {
-                    return false;
-                }
-            });
-            if (!usedTy) {
-                continue;
-            }
-
-            ::std::vector<::std::pair<TraitResolution::AutoderefBorrow, HIRPath>> possibleMethods;
-            unsigned int derefCount = context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, t, node.method, false, possibleMethods);
-            if ((derefCount == ~0u || possibleMethods.empty()) && node.method != node.fallbackMethod) {
-                possibleMethods.clear();
-                derefCount = context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, t, node.fallbackMethod, false, possibleMethods);
-            }
-            // TODO: Detect the above hitting an ivar, and use that instead of this hacky check of if it's `_` or `&_`
-            if (!(t->is_Infer() || ((*t).is_Borrow() && ((*t).as_Borrow().inner->is_Infer()))) && possibleMethods.empty()) {
-                // No method found, which would be an error
-                return true;
-            }
-        }
-
-        if (exactBoundCount) {
-            *exactBoundCount = exactBounds;
-        }
         return false;
     }
 
@@ -8897,8 +8641,6 @@ namespace {
         Assume,
         // Ignores the weaker disable flags (`force_no_to` and `force_no_from`)
         IgnoreWeakDisable,
-        // First bound, if nothing else works
-        PickFirstBound,
         // Just picks an option (even if it might be wrong)
         FinalOption,
     };
@@ -8916,9 +8658,6 @@ namespace {
                 break;
             case IvarPossFallbackType::IgnoreWeakDisable:
                 os << " unblock";
-                break;
-            case IvarPossFallbackType::PickFirstBound:
-                os << " pick-bound";
                 break;
             case IvarPossFallbackType::FinalOption:
                 os << " final";
@@ -9049,18 +8788,6 @@ namespace {
     };
 
     struct TypeRestrictiveOrdering {
-        static bool hasSamePointerTarget(const HIRTypeData* l, const HIRTypeData* r) {
-            if (const auto* lBorrow = l->opt_Borrow()) {
-                const auto* rBorrow = r->opt_Borrow();
-                return rBorrow && lBorrow->inner == rBorrow->inner;
-            }
-            if (const auto* lPointer = l->opt_Pointer()) {
-                const auto* rPointer = r->opt_Pointer();
-                return rPointer && lPointer->inner == rPointer->inner;
-            }
-            return false;
-        }
-
         /// Get the inner type of a pointer (if it matches a template)
         static const HIRTypeData* matchAndExtractPtrTy(const HIRTypeData* ptrTpl, const HIRTypeData* ty) {
             if (ty->tag() != ptrTpl->tag()) {
@@ -9455,17 +9182,17 @@ default:
 
     // TODO: Split the below into a common portion, and a "run" portion (which uses the fallback)
 
-    /// Check IVar possibilities, from both coercion/unsizing (which have well-encoded rules) and from trait impls
-    bool checkIvarPoss(Context& context, const IvarBoundIndex& boundIndex, unsigned int i, Context::IVarPossible& ivarEnt, IvarPossFallbackType fallbackTy = IvarPossFallbackType::None) {
+    /// Resolve an inference variable from the directed coercion/unsizing graph.
+    bool checkIvarPoss(Context& context, const IvarCoercionIndex& coercionIndex, unsigned int i, Context::IVarPossible& ivarEnt, IvarPossFallbackType fallbackTy = IvarPossFallbackType::None) {
         Span _span;
         const auto& sp = _span;
         const bool honourDisable = (fallbackTy != IvarPossFallbackType::IgnoreWeakDisable);
 
         // Solver probes append temporary ivars and may reallocate the table.
         // Keep the interned type pointer, not a reference into the table's
-        // HIRTypeRef slot, across the bound checks below.
+        // HIRTypeRef slot, across coercion probes below.
         const auto* tyL = context.ivars.getType(i);
-        const auto& boundRefs = boundIndex[i];
+        const auto& coercionRefs = coercionIndex[i];
 
         if (!((*tyL).is_Infer() && ((*tyL).as_Infer().index == i))) {
             if (ivarEnt.hasRules()) {
@@ -9486,22 +9213,14 @@ default:
         ///
         /// - Always rules:
         ///   - If the same type is in both the from/to lists, use that
-        /// - Skip if:
-        ///   - `bounds_include_self`: Means that the bound set is incomplete (this can be disabled)
-        ///   - `bounds_populated && bounds.empty()`: Bound set is incomplete
-        ///
         /// - Look for a "bottom" type in the sources
         ///   - E.g. If a trait object or slice is seen as a souce, pick that (they can't coerce to anything)
         ///   - Note: Can't look for a "top" type in the destinations, as deref coercions exist
         ///
-        /// - If bounds are present:
-        ///   - Look for a unique entry in the bounds also in the source/destination lists
         /// - If there are no destination disables
         ///   - Look for a destination that all other destinations can coerce from
         /// - If there are no source disables
         ///   - Look for a source that all other soures can coerce to
-        ///
-        /// TODO: If in fallback mode, there's no infer options, and there are bounds - Pick a random bound
 
         // ---
         // Always rules:
@@ -9521,18 +9240,16 @@ default:
         // ---
         // Skip Conditions
         // ---
-        if (ivarEnt.hasBounded && (!ivarEnt.boundsIncludeSelf && ivarEnt.bounded.empty())) {
-            return false;
-        }
         if (ivarEnt.forceDisable && fallbackTy != IvarPossFallbackType::FinalOption) {
             return false;
         }
 
-        // Don't attempt to guess literals
-        // - TODO: What about if there's a bound?
+        // Don't attempt to guess literals.
         if (tyL->as_Infer().isLit()) {
             return false;
         }
+
+        bool mayUseRawPointerFallback = false;
 
         //if( ivar_ent.force_no_to || ivar_ent.force_no_from )
         //{
@@ -9543,8 +9260,6 @@ default:
         //    default:
         //    }
         //}
-
-        bool hasNoCoercePosiblities;
 
         // Fill a single list with all possibilities, and pick the most suitable type.
         // - This list needs to include flags to say if the type can be dereferenced.
@@ -9583,140 +9298,16 @@ default:
                 possibleTys.resize(newEnd - possibleTys.begin());
             }
 
-            // If the bound set is populated, and is fully restrictive
-            if (ivarEnt.hasBounded && !ivarEnt.boundsIncludeSelf) {
-                // Look for a bound that matches all other restrictions
-                const HIRTypeData* bestTy = nullptr;
-                const HIRTypeData* strongestTy = nullptr;
-                unsigned int strongestExactBounds = 0;
-                bool foundTwo = false;
-                bool strongestTied = false;
-                bool hasCoercionSource = false;
-                for (const auto& possibleTy : possibleTys) {
-                    hasCoercionSource |= possibleTy.hasType() && possibleTy.isSource();
-                }
-                for (const auto& bTy : ivarEnt.bounded) {
-                    // Check bound against bounds
-                    unsigned int exactBounds = 0;
-                    if (!checkIvarPossFailsBounds(sp, context, boundRefs, tyL, bTy, &exactBounds)) {
-                        if (bestTy) {
-                            foundTwo = true;
-                        } else {
-                            bestTy = bTy;
-                        }
-                        if (!strongestTy || exactBounds > strongestExactBounds) {
-                            strongestTy = bTy;
-                            strongestExactBounds = exactBounds;
-                            strongestTied = false;
-                        } else if (exactBounds == strongestExactBounds) {
-                            if (hasCoercionSource && TypeRestrictiveOrdering::hasSamePointerTarget(bTy, strongestTy)) {
-                                bool unordered = false;
-                                if (TypeRestrictiveOrdering::getOrderingPtr(sp, context, bTy, strongestTy, unordered, /*deep=*/false) == OrdGreater && !unordered) {
-                                    strongestTy = bTy;
-                                }
-                            } else {
-                                strongestTied = true;
-                            }
-                        }
-                    } else {
-                    }
-                }
-                if (!bestTy) {
-                    TODO(sp, "No none of the bounded types (" << ivarEnt.bounded << ") fit other bounds");
-                } else if (!foundTwo) {
-                    context.equateTypes(sp, tyL, bestTy);
-                    return true;
-                } else if (strongestTy && !strongestTied) {
-                    context.equateTypes(sp, tyL, strongestTy);
-                    return true;
-                } else {
-                    if (fallbackTy == IvarPossFallbackType::PickFirstBound && possibleTys.empty()) {
-                        context.equateTypes(sp, tyL, strongestTy ? strongestTy : bestTy);
-                        return true;
-                    }
-                }
-            }
-
-            // Check if any of the bounded types match only one of the possible types
-            {
-                struct H {
-                    static const HIRTypeData* getBorrowInner(const HIRTypeData* ty) {
-                        if (ty->is_Borrow()) {
-                            return getBorrowInner(ty->as_Borrow().inner);
-                        } else {
-                            return ty;
-                        }
-                    }
-                };
-
-                bool failed = false;
-                const HIRTypeData* foundTy = nullptr;
-                for (const auto& boundedTy : ivarEnt.bounded) {
-                    // Skip ivars
-                    if (H::getBorrowInner(boundedTy)->is_Infer()) {
-                        continue;
-                    }
-                    for (const auto& t : possibleTys) {
-                        if (!t.hasType()) {
-                            continue;
-                        }
-                        // Skip ivars
-                        if (H::getBorrowInner(t.ty)->is_Infer()) {
-                            continue;
-                        }
-
-                        if (boundedTy->compareWithPlaceholders(sp, t.ty, context.ivars.callbackResolveInfer()) != HIRCompare::Unequal) {
-                            if (!foundTy) {
-                                foundTy = boundedTy;
-                            } else if (foundTy == boundedTy) {
-                                // Same type still, continue
-                            } else if (boundedTy->compareWithPlaceholders(sp, foundTy, context.ivars.callbackResolveInfer()) == HIRCompare::Unequal) {
-                                // Incompatible types
-                                failed = true;
-                            } else {
-                                // Compatible, keep the first one?
-                                // - Nope, could be ivars involved.
-                                failed = true;
-                            }
-                        }
-                    }
-                }
-                if (foundTy && !failed) {
-                    // Replace ivars in this type with new ivars (TODO: only if it's a fuzzy match)
-                    auto t = cloneTyWith(context.crate.types, sp, foundTy, [&](const HIRTypeData* t1, HIRTypeRef& out) -> bool {
-                        if (t1->is_Infer()) {
-                            const auto& t = context.getType(t1);
-                            if (t->is_Infer()) {
-                                out = context.ivars.newIvarTr();
-                            } else {
-                                out = t;
-                            }
-                            return true;
-                        } else {
-                            return false;
-                        }
-                    });
-                    context.equateTypes(sp, tyL, t);
-                    return true;
-                }
-            }
-
-            // Either there are no bounds available, OR the bounds are not fully restrictive
-            // - Add the bounded types to `possible_tys`
-            for (const auto& newTy : ivarEnt.bounded) {
-                possibleTys.push_back(PossibleType::concrete(PossibleType::Equal, newTy));
-            }
-
             // TODO: Rewrite ALL of the below (extract the helpers to somewhere useful)
             // Need FULLY codified rules
 
             // If in fallback mode, pick the only source (if it's valid)
-            if (fallbackTy != IvarPossFallbackType::None && ::std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1 && !ivarEnt.forceNoFrom && !ivarEnt.hasBounded) {
+            if (fallbackTy != IvarPossFallbackType::None && ::std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1 && !ivarEnt.forceNoFrom) {
                 // Single source, pick it?
                 const auto& ent = *::std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS);
                 // - Only if there's no ivars
                 if (!context.ivars.typeContainsIvars(ent.ty) && !(ent.ty)->is_Diverge()) {
-                    if (!checkIvarPossFailsBounds(sp, context, boundRefs, tyL, ent.ty)) {
+                    if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, ent.ty)) {
                         context.equateTypes(sp, tyL, ent.ty);
                         return true;
                     }
@@ -9724,14 +9315,14 @@ default:
             }
             if (fallbackTy == IvarPossFallbackType::IgnoreWeakDisable && possibleTys.size() == 1) {
                 auto ent = possibleTys[0];
-                if (!checkIvarPossFailsBounds(sp, context, boundRefs, tyL, ent.ty)) {
+                if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, ent.ty)) {
                     context.equateTypes(sp, tyL, ent.ty);
                     return true;
                 }
             }
 
             // If there's only one source, and one destination, and no possibility of unknown options, then pick whichever has no ivars (or whichever is valid)
-            if (::std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS) == 1 && ::std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1 && !ivarEnt.forceNoFrom && !ivarEnt.forceNoTo && !ivarEnt.hasBounded) {
+            if (::std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS) == 1 && ::std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1 && !ivarEnt.forceNoFrom && !ivarEnt.forceNoTo) {
                 const auto& entS = *::std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS);
                 const auto& entD = *::std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isDestS);
 
@@ -9740,8 +9331,8 @@ default:
                 if (entS.isCoerce() && entD.isCoerce()) {
                     bool srcNoivars = !context.ivars.typeContainsIvars(entS.ty);
                     bool dstNoivars = !context.ivars.typeContainsIvars(entD.ty);
-                    bool srcValid = !checkIvarPossFailsBounds(sp, context, boundRefs, tyL, entS.ty);
-                    bool dstValid = !checkIvarPossFailsBounds(sp, context, boundRefs, tyL, entD.ty);
+                    bool srcValid = !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, entS.ty);
+                    bool dstValid = !coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, entD.ty);
 
                     if (srcValid) {
                         if (srcNoivars) {
@@ -9783,7 +9374,7 @@ default:
                     HIRTypeRef tmpTy;
 
                     do {
-                        if (!checkIvarPossFailsBounds(sp, context, boundRefs, tyL, tyP)) {
+                        if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, tyP)) {
                             break;
                         }
                     } while ((tyP = context.resolve.autoderef(sp, tyP, tmpTy)));
@@ -9802,7 +9393,6 @@ default:
             if (ivarEnt.forceNoTo || ivarEnt.forceNoFrom) {
                 switch (fallbackTy) {
                     case IvarPossFallbackType::IgnoreWeakDisable:
-                    case IvarPossFallbackType::PickFirstBound:
                     case IvarPossFallbackType::FinalOption:
                         break;
                     default:
@@ -9890,18 +9480,11 @@ default:
                     }
                 }
                 auto newTy = context.crate.types.function(std::move(*target));
-                if (!checkIvarPossFailsBounds(sp, context, boundRefs, tyL, newTy)) {
+                if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, newTy)) {
                     context.equateTypes(sp, tyL, newTy);
                     return true;
                 }
             }
-
-            if (ivarEnt.hasBounded && ivarEnt.boundsIncludeSelf) {
-                nIvars += 1;
-            }
-
-            // Rules:
-            // - If bounds_include_self
 
             // === If there's no source ivars, find the least permissive source ===
             // - If this source can't be unsized (e.g. in `&_, &str`, `&str` is the least permissive, and can't be
@@ -10292,7 +9875,7 @@ default:
                         }
                     }
                 }
-                if (!removeOption && !(it->ty)->is_Infer() && checkIvarPossFailsBounds(sp, context, boundRefs, tyL, it->ty)) {
+                if (!removeOption && !(it->ty)->is_Infer() && coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, it->ty)) {
                     removeOption = true;
                 }
                 it = (removeOption ? possibleTys.erase(it) : it + 1);
@@ -10304,13 +9887,13 @@ default:
                 // `!` leaves its pending bounds unsatisfiable (`Default for !`).
                 if (context.crate.edition < ASTEdition::Rust2024) {
                     auto unit = context.crate.types.unit();
-                    if (!checkIvarPossFailsBounds(sp, context, boundRefs, tyL, unit)) {
+                    if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, unit)) {
                         context.equateTypes(sp, tyL, unit);
                         return true;
                     }
                 }
                 auto t = context.crate.types.diverge();
-                if (!checkIvarPossFailsBounds(sp, context, boundRefs, tyL, t)) {
+                if (!coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, t)) {
                     context.equateTypes(sp, tyL, context.crate.types.diverge());
                     return true;
                 }
@@ -10341,12 +9924,9 @@ default:
                     case IvarPossFallbackType::None:
                     case IvarPossFallbackType::Backwards:
                     case IvarPossFallbackType::IgnoreWeakDisable:
-                        active = (nIvars == 0 && ivarEnt.bounded.size() == 0);
+                        active = nIvars == 0;
                         break;
                     case IvarPossFallbackType::Assume:
-                    case IvarPossFallbackType::PickFirstBound:
-                        active = (ivarEnt.bounded.size() == 0);
-                        break;
                     case IvarPossFallbackType::FinalOption:
                         active = true;
                         break;
@@ -10358,8 +9938,7 @@ default:
                 }
             }
             // -- Single source/destination --
-            // Try if in first level fallback, or the bounded list is empty
-            if ((!honourDisable || !ivarEnt.hasBounded)) {
+            if (!honourDisable) {
                 // If there's only one non-deref in the list OR there's only one deref in the list
                 if (nSrcIvars == 0 && ::std::count_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS) == 1) {
                     auto it = ::std::find_if(possibleTys.begin(), possibleTys.end(), PossibleType::isSourceS);
@@ -10379,100 +9958,33 @@ default:
                 }
             }
             // If there's multiple possiblilties, we're in fallback mode, AND there's no ivars in the list
-            // TODO: Exclude bounds? (not all of those are safe to include)
-            if (ivarEnt.bounded.size() == 0) {
-                if (possibleTys.size() > 0 && !honourDisable && nIvars == 0) {
-                    //::std::sort(possible_tys.begin(), possible_tys.end());  // Sorts ivars to the front
-                    const auto* newTy = possibleTys.back().ty;
-                    context.equateTypes(sp, tyL, newTy);
-                    return true;
-                }
+            if (possibleTys.size() > 0 && !honourDisable && nIvars == 0) {
+                const auto* newTy = possibleTys.back().ty;
+                context.equateTypes(sp, tyL, newTy);
+                return true;
             }
 
-            // If only one bound meets the possible set, use it
-            if (!possibleTys.empty() && (!ivarEnt.boundsIncludeSelf || fallbackTy == IvarPossFallbackType::FinalOption)) {
-                ::std::vector<const HIRTypeData*> feasableBounds;
-                for (const auto& newTy : ivarEnt.bounded) {
-                    bool failedABound = false;
-                    // TODO: Check if this bounded type _cannot_ work with any of the existing bounds
-                    // - Don't add to the possiblity list if so
-                    for (const auto& opt : possibleTys) {
-                        if (opt.cls == PossibleType::Equal) {
-                            continue;
-                        }
-                        // If a fuzzy compare succeeds, keep
-                        switch (newTy->compareWithPlaceholders(sp, opt.ty, context.ivars.callbackResolveInfer())) {
-                            case HIRCompare::Unequal:
-                                // If not equal, then maybe an unsize could happen
-                                break;
-                            case HIRCompare::Fuzzy:
-                            case HIRCompare::Equal:
-                                continue;
-                        }
-                        CoerceResult cmp;
-                        if (opt.isSource()) {
-                            cmp = checkUnsizeTys(context, sp, newTy, opt.ty, nullptr);
-                        } else {
-                            // Destination type, this option must deref to it
-                            cmp = checkUnsizeTys(context, sp, opt.ty, newTy, nullptr);
-                        }
-                        if (cmp == CoerceResult::Equality) {
-                            failedABound = true;
-                            break;
-                        }
-                    }
-                    // TODO: Should this also check check_ivar_poss__fails_bounds
-                    if (!failedABound) {
-                        feasableBounds.push_back(newTy);
-                    }
-                }
-                if (feasableBounds.size() == 1) {
-                    const auto* newTy = feasableBounds.front();
-                    context.equateTypes(sp, tyL, newTy);
-                    return true;
-                }
-            } else {
-                // Not checking bounded list, because there's nothing to check
-            }
-
-            hasNoCoercePosiblities = possibleTys.empty() && nIvars == 0;
+            mayUseRawPointerFallback = possibleTys.empty() && nIvars == 0;
         }
 
-        if (hasNoCoercePosiblities && !ivarEnt.bounded.empty()) {
-            // TODO: Search know possibilties and check if they satisfy the bounds for this ivar
-            unsigned int nGoodInts = 0;
-            ::std::vector<const HIRTypeData*> goodTypes;
-            goodTypes.reserve(ivarEnt.bounded.size());
-            for (const auto& newTy : ivarEnt.bounded) {
-                if (checkIvarPossFailsBounds(sp, context, boundRefs, tyL, newTy)) {
-                } else {
-                    goodTypes.push_back(newTy);
-
-                    if (newTy->is_Primitive()) {
-                        nGoodInts++;
-                    }
-
+        if (mayUseRawPointerFallback && fallbackTy == IvarPossFallbackType::FinalOption) {
+            const HIRTypeData* selected = nullptr;
+            bool conflicting = false;
+            for (const auto& candidate : ivarEnt.rawPointerFallbacks) {
+                const auto* type = context.getType(candidate);
+                if (type == tyL || type->is_Infer() || coercionCandidateIsInvalid(sp, context, coercionRefs, tyL, type)) {
+                    continue;
+                }
+                if (!selected) {
+                    selected = type;
+                } else if (!context.ivars.typesEqual(selected, type)) {
+                    conflicting = true;
+                    break;
                 }
             }
-            // Picks the first if in fallback mode (which is signalled by `honour_disable` being false)
-            // - This handles the case where there's multiple valid options (needed for libcompiler_builtins)
-            // TODO: Only pick any if all options are the same class (or just all are integers)
-            if (goodTypes.empty()) {
-            } else if (goodTypes.size() == 1) {
-                // Since it's the only possibility, choose it?
-                context.equateTypes(sp, tyL, goodTypes.front());
+            if (selected && !conflicting) {
+                context.equateTypes(sp, tyL, selected);
                 return true;
-            } else if (goodTypes.size() > 0 && fallbackTy == IvarPossFallbackType::FinalOption) {
-                auto typIsBorrow = [&](const HIRTypeData* typ) {
-                    return typ->is_Borrow();
-                };
-                // NOTE: We want to select from sets of primitives and generics (which can be interchangable)
-                if (::std::all_of(goodTypes.begin(), goodTypes.end(), typIsBorrow) == ::std::any_of(goodTypes.begin(), goodTypes.end(), typIsBorrow)) {
-                    context.equateTypes(sp, tyL, goodTypes.front());
-                    return true;
-                } else {
-                    // Mix of borrows with non-borrows
-                }
             }
         }
 
@@ -10640,9 +10152,9 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
             }
         }
 
-        ::std::unique_ptr<IvarBoundIndex> ivarBoundIndex;
+        ::std::unique_ptr<IvarCoercionIndex> ivarCoercionIndex;
         if (!context.ivars.peekChanged()) {
-            ivarBoundIndex = ::std::make_unique<IvarBoundIndex>(context);
+            ivarCoercionIndex = ::std::make_unique<IvarCoercionIndex>(context);
         }
 
         // If nothing changed this pass, apply ivar possibilities
@@ -10666,7 +10178,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                     if (hasConcreteSource != (sourcePass == 0)) {
                         continue;
                     }
-                    if (checkIvarPoss(context, *ivarBoundIndex, i, context.possibleIvarVals[i])) {
+                    if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i])) {
                         // Look at all other ivar possibility sets, and disable processing if they depend on this ivar (prevents races)
                         if (!dependencyIndex) {
                             dependencyIndex = ::std::make_unique<IvarDependencyIndex>(context);
@@ -10681,7 +10193,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
         if (!context.ivars.peekChanged()) {
             // Check the possible equations
             for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarBoundIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::Backwards)) {
+                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::Backwards)) {
                     break;
                 }
             }
@@ -10691,7 +10203,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
         if (!context.ivars.peekChanged()) {
             // Check the possible equations
             for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarBoundIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::Assume)) {
+                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::Assume)) {
                     break;
                 }
             }
@@ -10701,7 +10213,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
         if (!context.ivars.peekChanged()) {
             // Check the possible equations
             for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarBoundIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::IgnoreWeakDisable)) {
+                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::IgnoreWeakDisable)) {
                     break;
                 } else {
                 }
@@ -10735,14 +10247,11 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
             }
         } // `if peek_changed` (node revisits)
 
-        // Default numeric literals before making an arbitrary choice between
-        // trait-bound candidates. The default can turn a fuzzy obligation
-        // (for example `u128: CastInto<_>`) into a definite mismatch and leave
-        // the candidate selected by the actual `i32` obligation.
+        // Default numeric literals after ordinary solver and coercion passes.
         if (!context.ivars.peekChanged()) {
             bool appliedDefault = false;
             for (unsigned int i = 0; i < context.ivars.ivars.size(); i++) {
-                if (!numericDefaultMustWait(context, *ivarBoundIndex, i)) {
+                if (!numericDefaultMustWait(context, i)) {
                     appliedDefault |= context.ivars.applyDefault(i);
                 }
             }
@@ -10754,15 +10263,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
         if (!context.ivars.peekChanged()) {
             // Check the possible equations
             for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarBoundIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::PickFirstBound)) {
-                    break;
-                }
-            }
-        }
-        if (!context.ivars.peekChanged()) {
-            // Check the possible equations
-            for (unsigned int i = 0; i < context.possibleIvarVals.size(); i++) {
-                if (checkIvarPoss(context, *ivarBoundIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::FinalOption)) {
+                if (checkIvarPoss(context, *ivarCoercionIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::FinalOption)) {
                     break;
                 }
             }
@@ -11118,7 +10619,8 @@ bool inherentImplMatchesReceiver(
     Context& context,
     const Span& sp,
     const HIRTypeImpl& impl,
-    const HIRTypeData* receiver
+    const HIRTypeData* receiver,
+    ThinVector<SolverTypeEquality>* equalities = nullptr
 ) {
     HIRPathParams implParams;
     while (implParams.types.size() < impl.params.types.size()) {
@@ -11133,6 +10635,99 @@ bool inherentImplMatchesReceiver(
         return match == HIRCompare::Equal;
     }
 
+    const auto candidate = MonomorphStatePtr(
+        context.crate.types, receiver, &implParams, nullptr
+    ).monomorphType(sp, impl.type, false);
+
+    // A defining opaque is an inference target in its defining scope.  Let
+    // the selected inherent method constrain it (for example,
+    // `Wrapper<Hidden>` selecting an impl for `Wrapper<u32>`).  Treating the
+    // erased alias as a rigid constructor here rejects that valid candidate
+    // before its signature can reveal the hidden type.
+    const bool hasDefiningOpaque = visitTyWith(receiver, [&](const HIRTypeData* type) {
+        const auto* erased = type->opt_ErasedType();
+        const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+        return alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
+    });
+    if (hasDefiningOpaque) {
+        return true;
+    }
+
+    // Impl-header projections are rigid aliases.  When both sides contain
+    // the same projection constructor, compare that declared form
+    // structurally instead of letting the opaque path act as a wildcard.
+    // Any caller-ivar relations are committed only after this impl is the
+    // sole surviving inherent candidate.
+    const auto matchRigid = [&](auto&& self, const HIRTypeData* left, const HIRTypeData* right) -> HIRCompare {
+        const auto resolveCallerInfer = [&](const HIRTypeData* type) {
+            const auto* infer = type->opt_Infer();
+            return infer && infer->index == ~0u ? type : context.getType(type);
+        };
+        left = resolveCallerInfer(left);
+        right = resolveCallerInfer(right);
+        if (left == right) {
+            return HIRCompare::Equal;
+        }
+        if (left->is_Infer() || right->is_Infer()) {
+            const auto containsCandidateInfer = [](const HIRTypeData* type) {
+                return visitTyWith(type, [](const HIRTypeData* inner) {
+                    const auto* infer = inner->opt_Infer();
+                    return infer && infer->index == ~0u;
+                });
+            };
+            if (containsCandidateInfer(left) || containsCandidateInfer(right)) {
+                return HIRCompare::Fuzzy;
+            }
+            if (equalities) {
+                equalities->push_back(SolverTypeEquality{left, right});
+            }
+            return HIRCompare::Fuzzy;
+        }
+        const auto* leftPath = left->opt_Path();
+        const auto* rightPath = right->opt_Path();
+        if (!leftPath || !rightPath || leftPath->path.data.tag() != rightPath->path.data.tag()) {
+            return left->compareWithPlaceholders(sp, right, context.ivars.callbackResolveInfer());
+        }
+        const auto matchParams = [&](const HIRPathParams& leftParams, const HIRPathParams& rightParams) {
+            if (leftParams.types.size() != rightParams.types.size() || leftParams.values.size() != rightParams.values.size()) {
+                return HIRCompare::Unequal;
+            }
+            auto result = HIRCompare::Equal;
+            for (size_t i = 0; i < leftParams.types.size(); i++) {
+                result &= self(self, leftParams.types[i], rightParams.types[i]);
+                if (result == HIRCompare::Unequal) {
+                    return result;
+                }
+            }
+            for (size_t i = 0; i < leftParams.values.size(); i++) {
+                if (leftParams.values[i] != rightParams.values[i]) {
+                    result = HIRCompare::Fuzzy;
+                }
+            }
+            return result;
+        };
+        if (const auto* leftGeneric = leftPath->path.data.opt_Generic()) {
+            const auto& rightGeneric = rightPath->path.data.as_Generic();
+            return leftGeneric->path == rightGeneric.path
+                ? matchParams(leftGeneric->params, rightGeneric.params)
+                : HIRCompare::Unequal;
+        }
+        if (const auto* leftProjection = leftPath->path.data.opt_UfcsKnown()) {
+            const auto& rightProjection = rightPath->path.data.as_UfcsKnown();
+            if (leftProjection->trait.path != rightProjection.trait.path || leftProjection->item != rightProjection.item) {
+                return HIRCompare::Unequal;
+            }
+            auto result = self(self, leftProjection->type, rightProjection.type);
+            result &= matchParams(leftProjection->trait.params, rightProjection.trait.params);
+            result &= matchParams(leftProjection->params, rightProjection.params);
+            return result;
+        }
+        return left->compareWithPlaceholders(sp, right, context.ivars.callbackResolveInfer());
+    };
+    if (matchRigid(matchRigid, candidate, receiver) == HIRCompare::Unequal) {
+        return false;
+    }
+
     const bool hasRigidOpaque = visitTyWith(receiver, [&](const HIRTypeData* type) {
         const auto* erased = type->opt_ErasedType();
         const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
@@ -11142,9 +10737,6 @@ bool inherentImplMatchesReceiver(
         return true;
     }
 
-    const auto candidate = MonomorphStatePtr(
-        context.crate.types, receiver, &implParams, nullptr
-    ).monomorphType(sp, impl.type, false);
     return candidate->compareWithPlaceholders(
         sp, receiver, context.ivars.callbackResolveInfer()) != HIRCompare::Unequal;
 }
@@ -11372,39 +10964,15 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
                 HIRPathParams selectedImplParams;
 
                 if (!monomorphiseTypeNeeded(e.type) && !monomorphisePathparamsNeeded(e.trait.params) && !context.resolve.typeContainsIvars(e.type) && !context.resolve.paramsContainIvars(e.trait.params)) {
-                    std::vector<ImplRef> impls;
-                    context.resolve.findTraitImpls(sp, e.trait.path, e.trait.params, e.type, [&](ImplRef impl, HIRCompare cmp) {
-                        if (cmp == HIRCompare::Equal && !impl.isAmbiguousIdentity() && impl.data.is_TraitImpl()) {
-                            const auto* traitImpl = impl.data.as_TraitImpl().impl;
-                            if (traitImpl->methods.find(e.item) == traitImpl->methods.end()) {
-                                return false;
-                            }
-                            const bool seen = std::any_of(impls.begin(), impls.end(), [&](const ImplRef& other) {
-                                return other.data.as_TraitImpl().impl == traitImpl;
-                            });
-                            if (!seen) {
-                                impls.push_back(std::move(impl));
-                            }
+                    context.resolve.solveTraitGoal(sp, e.trait.path, e.trait.params, e.type, [&](SolverResponse response) {
+                        if (!response.hasImpl || response.certainty != SolverCertainty::Proven || !response.impl || response.impl->ambiguousIdentity) {
+                            return false;
                         }
-                        return false;
-                    });
-
-                    ImplRef* selected = nullptr;
-                    for (auto& candidate : impls) {
-                        const bool dominated = std::any_of(impls.begin(), impls.end(), [&](const ImplRef& other) {
-                            return &candidate != &other && other.moreSpecificThan(context.crate.types, candidate);
-                        });
-                        if (!dominated) {
-                            if (selected) {
-                                selected = nullptr;
-                                break;
-                            }
-                            selected = &candidate;
+                        auto selected = response.impl->legacy();
+                        if (!selected.data.is_TraitImpl()) {
+                            return false;
                         }
-                    }
-
-                    if (selected) {
-                        auto& implData = selected->data.as_TraitImpl();
+                        auto& implData = selected.data.as_TraitImpl();
                         auto method = implData.impl->methods.find(e.item);
                         if (method != implData.impl->methods.end() && method->second.data.traitReturnType) {
                             fcnPtr = &method->second.data;
@@ -11413,7 +10981,8 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
                             selectedImplParams = implData.implParams.clone();
                             implParams = &selectedImplParams;
                         }
-                    }
+                        return true;
+                    }, {.valueName = e.item.c_str()});
                 }
 
                 cache.monomorph.reset(new Monomorph(context, e.type, implParams, e.params, {}));
@@ -11478,10 +11047,13 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
     e.type = lookupType;
 
     const HIRTypeImpl* implPtr = nullptr;
+    ThinVector<SolverTypeEquality> implEqualities;
     // Detect multiple applicable methods and get the caller to try again later if there are multiple
     unsigned int count = 0;
     context.crate.findTypeImpls(lookupType, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
-        if (!inherentImplMatchesReceiver(context, sp, impl, lookupType)) {
+        ThinVector<SolverTypeEquality> candidateEqualities;
+        const bool matches = inherentImplMatchesReceiver(context, sp, impl, lookupType, &candidateEqualities);
+        if (!matches) {
             return false;
         }
         auto it = impl.methods.find(e.item);
@@ -11490,6 +11062,7 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
         }
         fcnPtr = &it->second.data;
         implPtr = &impl;
+        implEqualities = ::std::move(candidateEqualities);
         count++;
         return false;
     });
@@ -11501,6 +11074,9 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
         return false;
     }
     assert(implPtr);
+    for (const auto& equality : implEqualities) {
+        context.equateTypes(sp, equality.left, equality.right);
+    }
     fixParamCount(sp, context, e.type, false, path, fcnPtr->params, e.params);
     cache.fcnParams = &fcnPtr->params;
 
@@ -13801,9 +13377,7 @@ void Context::IVarPossible::reset() {
     this->forceNoFrom = false;
     this->typesCoerceTo.clear();
     this->typesCoerceFrom.clear();
-    this->hasBounded = false;
-    this->boundsIncludeSelf = false;
-    this->bounded.clear();
+    this->rawPointerFallbacks.clear();
 }
 
 bool Context::IVarPossible::hasRules() const {
@@ -13816,8 +13390,7 @@ bool Context::IVarPossible::hasRules() const {
     if (forceNoFrom || !typesCoerceFrom.empty()) {
         return true;
     }
-    //if( !types_default.empty() )
-    if (hasBounded) {
+    if (!rawPointerFallbacks.empty()) {
         return true;
     }
     return false;
@@ -13841,36 +13414,7 @@ void Context::IVarPossible::mergeFrom(const IVarPossible& source) {
     mergeCoercions(typesCoerceTo, source.typesCoerceTo);
     mergeCoercions(typesCoerceFrom, source.typesCoerceFrom);
     typesDefault.insert(source.typesDefault.begin(), source.typesDefault.end());
-
-    if (!source.hasBounded) {
-        return;
-    }
-    if (!hasBounded) {
-        hasBounded = true;
-        boundsIncludeSelf = source.boundsIncludeSelf;
-        bounded = source.bounded;
-        return;
-    }
-
-    boundsIncludeSelf |= source.boundsIncludeSelf;
-    if (boundsIncludeSelf) {
-        for (const auto type : source.bounded) {
-            if (::std::find(bounded.begin(), bounded.end(), type) == bounded.end()) {
-                bounded.push_back(type);
-            }
-        }
-    } else {
-        bounded.erase(
-            ::std::remove_if(
-                bounded.begin(),
-                bounded.end(),
-                [&](const auto type) {
-            return ::std::find(source.bounded.begin(), source.bounded.end(), type) == source.bounded.end();
-        }
-            ),
-            bounded.end()
-        );
-    }
+    rawPointerFallbacks.insert(source.rawPointerFallbacks.begin(), source.rawPointerFallbacks.end());
 }
 
 Context::TaitEntry::TaitEntry(const HIRPathParams& p, HIRTypeRef t)

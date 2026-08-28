@@ -1978,9 +1978,9 @@ namespace {
             // prove this exact impl before eagerly emitting its public items.
             bool implAvailable = true;
             if (!impl.params.bounds.empty()) {
-                implAvailable = resolve.findImpl(sp, traitPath, impl.traitArgs, implTy, [&](const ImplRef& implRef, bool isFuzzy) {
+                implAvailable = resolve.findImpl(sp, traitPath, impl.traitArgs, implTy, [&](const ImplRef& implRef, SolverCertainty certainty) {
                     const auto* candidate = implRef.data.opt_TraitImpl();
-                    return !isFuzzy && candidate && candidate->impl == &impl;
+                    return certainty == SolverCertainty::Proven && candidate && candidate->impl == &impl;
                 });
             }
             if (!implAvailable) {
@@ -2024,7 +2024,7 @@ namespace {
                             auto bTpMono = cbMonomorph.monomorphTraitpath(sp, be.trait, false);
                             resolve.expandAssociatedTypesTp(sp, bTpMono);
 
-                            rv = resolve.findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](const ImplRef& impl, bool) {
+                            rv = resolve.findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](const ImplRef& impl, SolverCertainty) {
                                 for (const auto& tyB : bTpMono.typeBounds) {
                                     const auto& ty = impl.getType(state.crate.types, tyB.first.c_str(), tyB.second.atyParams);
                                     if (ty != tyB.second.type) {
@@ -3401,7 +3401,7 @@ default:
                 //  > Need to check if the trait is impled bounded
                 bool foundBound = false;
                 bool foundImpl = false;
-                resolve.findImpl(sp, pe->trait.path, pe->trait.params, pe->type, [&](auto implRef, auto isFuzz) -> bool {
+                resolve.findImpl(sp, pe->trait.path, pe->trait.params, pe->type, [&](auto implRef, SolverCertainty) -> bool {
                     if (implRef.data.is_TraitImpl()) {
                         foundImpl = true;
                     } else {

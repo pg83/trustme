@@ -66,15 +66,21 @@ public:
             params = &inferredParams;
         }
 
-        return resolve_.findTraitImplsNext(sp, trait, *params, type, [&](ImplRef impl, HIRCompare match) {
-            return callback.visit(::std::move(impl), match != HIRCompare::Equal);
+        return resolve_.solveTraitGoal(sp, trait, *params, type, [&](SolverResponse response) {
+            if (!response.hasImpl || !response.impl) {
+                return false;
+            }
+            return callback.visit(response.impl->legacy(), response.certainty);
         }, {.assocName = ""});
     }
 
     bool findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const char* valueName, StaticImplCallback& callback) {
         resolve_.setGenericContext(implGenerics, itemGenerics);
-        return resolve_.findTraitImplsNext(sp, trait, params, type, [&](ImplRef impl, HIRCompare match) {
-            return callback.visit(::std::move(impl), match != HIRCompare::Equal);
+        return resolve_.solveTraitGoal(sp, trait, params, type, [&](SolverResponse response) {
+            if (!response.hasImpl || !response.impl) {
+                return false;
+            }
+            return callback.visit(response.impl->legacy(), response.certainty);
         }, {.valueName = valueName});
     }
 
@@ -87,960 +93,41 @@ public:
             return true;
         });
     }
+
+    bool typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* type) {
+        resolve_.setGenericContext(implGenerics, itemGenerics);
+        return resolve_.typeIsCopy(sp, type) == HIRCompare::Equal;
+    }
 };
 
-namespace {
-    bool typeHasUnresolvedPath(const HIRTypeData* ty) {
-        return ty && visitTyWith(ty, [](const HIRTypeData* inner) {
-            const auto* path = inner->opt_Path();
-            return path && path->path.data.is_UfcsUnknown();
-        });
-    }
-}
-
-bool StaticTraitResolve::genericBoundsUnresolved(const HIRGenericParams* params) {
-    if (!params) {
+bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb) const {
+    if (traitPath.components().empty()) {
         return false;
     }
-    for (const auto& bound : params->bounds) {
-        if (const auto* tb = bound.opt_TraitBound()) {
-            if (typeHasUnresolvedPath(tb->type)) {
-                return true;
-            }
-            for (const auto& ty : tb->trait.path.params.types) {
-                if (typeHasUnresolvedPath(ty)) {
-                    return true;
-                }
-            }
-        } else if (const auto* eq = bound.opt_TypeEquality()) {
-            if (typeHasUnresolvedPath(eq->type) || typeHasUnresolvedPath(eq->otherType)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, bool dontHandoffToSpecialised) const {
-    auto cbIdent = HIRResolvePlaceholdersNop();
-
     if (const auto* path = type->opt_Path(); path && path->path.data.is_UfcsKnown()) {
         HIRTypeRef normalizedType = type;
         this->expandAssociatedTypes(sp, normalizedType);
         if (normalizedType != type) {
-            return this->findImplCb(sp, traitPath, traitParams, normalizedType, foundCb, dontHandoffToSpecialised);
+            return this->findImplCb(sp, traitPath, traitParams, normalizedType, foundCb);
         }
     }
 
-    if (!dontHandoffToSpecialised) {
-        if (traitPath == langCopy()) {
-            if (this->typeIsCopy(sp, type)) {
-                return foundCb.visit(ImplRef(type, nullptr, nullptr), false);
-            }
-        } else if (traitPath == langClone()) {
-            // NOTE: Duplicated check for enumerate
-            if (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || ((*type).is_Path() && ((*type).as_Path().isClosure()))) {
-                if (this->typeIsClone(sp, type)) {
-                    return foundCb.visit(ImplRef(type, nullptr, nullptr), false);
-                }
-            }
-        } else if (traitPath == langSized()) {
-            if (this->typeIsSized(sp, type)) {
-                return foundCb.visit(ImplRef(type, nullptr, nullptr), false);
-            }
-        } else if (traitPath == langUnsize()) {
-            ASSERT_BUG(sp, traitParams, "TODO: Support no params for Unsize");
-            const auto& dstTy = traitParams->types.at(0);
-            if (this->canUnsize(sp, dstTy, type)) {
-                return foundCb.visit(ImplRef(type, traitParams, nullptr), false);
-            }
-        } else if (traitPath == langDiscriminantKind()) {
-            // If the type is generic, then don't populate the ATY
-            // Otherwise, populate the ATY with the correct type
-            // - Unit for non-enums
-            // - Enum type (usize probably) for enums
-            if (type->is_Generic() || (type->is_Path() && type->as_Path().binding.is_Opaque())) {
-                return foundCb.visit(ImplRef(type, traitParams, nullptr), false);
-            } else if (type->is_Path()) {
-                if (const auto* enmpp = type->as_Path().binding.opt_Enum()) {
-                    const auto& enm = **enmpp;
-                    HIRTypeRef tagTy = crate.types.primitive(enm.getReprType(enm.tagRepr));
-                    HIRTraitPath::assocListT assocList;
-                    assocList.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{langDiscriminantKind(), {}, std::move(tagTy)}));
-                    return foundCb.visit(ImplRef(type, {}, std::move(assocList)), false);
-                } else {
-                }
-            } else {
-            }
-            HIRTraitPath::assocListT assocU8;
-            HIRTraitPath::assocListT assocU32;
-            assocU8.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{langDiscriminantKind(), {}, crate.types.primitive(HIRCoreType::U8)}));
-            assocU32.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{langDiscriminantKind(), {}, crate.types.primitive(HIRCoreType::U32)}));
-            if ((type->is_NodeType() && (type->as_NodeType().is_Generator() || type->as_NodeType().is_Async()))
-                || (type->is_Path() && (type->as_Path().isGenerator() || type->as_Path().isFuture()))) {
-                return foundCb.visit(ImplRef(type, traitParams, &assocU32), false);
-            }
-            return foundCb.visit(ImplRef(type, traitParams, &assocU8), false);
-        } else if (traitPath == langPointee()) {
-            HIRTraitPath::assocListT assocUnit;
-            HIRTraitPath::assocListT assocSlice;
-            const auto nameMetadata = RcString::newInterned("Metadata");
-            assocUnit.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{langPointee(), {}, crate.types.unit()}));
-            assocSlice.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{langPointee(), {}, crate.types.primitive(HIRCoreType::Usize)}));
-
-            // Generics (or opaque ATYs)
-            if (type->is_Generic() || (type->is_Path() && type->as_Path().binding.is_Opaque())) {
-                // If the type is `Sized` return `()` as the type
-                if (typeIsSized(sp, type)) {
-                    return foundCb.visit(ImplRef(type, traitParams, &assocUnit), false);
-                } else {
-                    // Return unbounded
-                    return foundCb.visit(ImplRef(type, traitParams, nullptr), false);
-                }
-            }
-            // Trait object: `Metadata=DynMetadata<T>`
-            else if (type->is_TraitObject()) {
-                HIRTraitPath::assocListT assocList;
-                assocList.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{langPointee(), {}, crate.types.path(HIRGenericPath(langDynMetadata(), HIRPathParams(type)), &crate.getStructByPath(sp, langDynMetadata()))}));
-                return foundCb.visit(ImplRef(type, {}, std::move(assocList)), false);
-            }
-            // Slice and str
-            else if (type->is_Slice() || ((*type).is_Primitive() && ((*type).as_Primitive() == HIRCoreType::Str))) {
-                return foundCb.visit(ImplRef(type, traitParams, &assocSlice), false);
-            }
-            // Structs: Can delegate their metadata
-            else if (type->is_Path() && type->as_Path().binding.is_Struct()) {
-                const auto& str = *type->as_Path().binding.as_Struct();
-                switch (str.structMarkings.dstType) {
-                    case HIRStructMarkings::DstType::None:
-                        return foundCb.visit(ImplRef(type, traitParams, &assocUnit), false);
-                    case HIRStructMarkings::DstType::Possible:
-                    case HIRStructMarkings::DstType::Projection:
-                    case HIRStructMarkings::DstType::TraitObject: {
-                        const HIRTypeData* tailTpl = nullptr;
-                        switch (str.data.tag()) {
-                            case HIRStructData::TAG_Unit: {
-                                BUG(sp, "Unsized unit struct in Pointee lookup - " << type);
-                                break;
-                            }
-                            case HIRStructData::TAG_Tuple: {
-                                auto& se = str.data.as_Tuple();
-                                ASSERT_BUG(sp, !se.empty(), "Unsized tuple struct without fields - " << type); tailTpl = se.back().ent;
-                                break;
-                            }
-                            case HIRStructData::TAG_Named: {
-                                auto& se = str.data.as_Named();
-                                ASSERT_BUG(sp, !se.empty(), "Unsized struct without fields - " << type); tailTpl = se.back().ty;
-                                break;
-                            }
-                        }
-                        ASSERT_BUG(sp, tailTpl, "Missing unsized tail field for " << type);
-
-                        const auto& path = type->as_Path().path.data.as_Generic();
-                        auto tailTy = MonomorphStatePtr(crate.types, type, &path.params, nullptr).monomorphType(sp, tailTpl);
-                        this->expandAssociatedTypes(sp, tailTy);
-
-                        return findImpl(sp, traitPath, traitParams, tailTy, [&](ImplRef impl, bool unk) {
-                            HIRTraitPath::assocListT assoc;
-                            auto metadataTy = impl.getType(crate.types, "Metadata", {});
-                            if (metadataTy) {
-                                assoc.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{traitPath, {}, std::move(metadataTy)}));
-                            }
-                            return foundCb.visit(ImplRef(type, traitParams ? traitParams->clone() : HIRPathParams(), std::move(assoc)), unk);
-                        });
-                    }
-                    case HIRStructMarkings::DstType::Slice:
-                        return foundCb.visit(ImplRef(type, traitParams, &assocSlice), false);
-                }
-            }
-            // A tuple is unsized when its last element is, and it takes that
-            // element's metadata.
-            else if (type->is_Tuple() && !type->as_Tuple().empty()) {
-                auto tailTy = HIRTypeRef(type->as_Tuple().back());
-                this->expandAssociatedTypes(sp, tailTy);
-                return findImpl(sp, traitPath, traitParams, tailTy, [&](ImplRef impl, bool unk) {
-                    HIRTraitPath::assocListT assoc;
-                    auto metadataTy = impl.getType(crate.types, "Metadata", {});
-                    if (metadataTy) {
-                        assoc.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{traitPath, {}, std::move(metadataTy)}));
-                    }
-                    return foundCb.visit(ImplRef(type, traitParams ? traitParams->clone() : HIRPathParams(), std::move(assoc)), unk);
-                });
-            }
-            return foundCb.visit(ImplRef(type, traitParams, &assocUnit), false);
-        } else if (traitPath == langPointeeSized()) {
-            // Lowest level of sizedness: This _might_ be sized (i.e. it's not an extern type?)
-            return foundCb.visit(ImplRef(type, nullptr, nullptr), false);
-            //switch( this->metadata_type(sp, type) )
-            //{
-            //case MetadataType::Unknown:
-            //case MetadataType::None:
-            //case MetadataType::Slice:
-            //case MetadataType::TraitObject:
-            //case MetadataType::Zero:
-            //}
-        } else if (traitPath == langMetaSized()) {
-            // Next level of sizedness: There's metadata that allows getting the size
-            // - No difference to the above?
-            switch (this->metadataType(sp, type)) {
-                case MetadataType::Unknown:
-                    break;
-                case MetadataType::None:
-                case MetadataType::Slice:
-                case MetadataType::TraitObject:
-                case MetadataType::Zero: // TODO: Does zero apply here?
-                    return foundCb.visit(ImplRef(type, nullptr, nullptr), false);
-            }
-        } else if (traitPath == langDestruct()) {
-            // is there anything indestructible? Maybe extern types
-            return foundCb.visit(ImplRef(type, nullptr, nullptr), false);
-        }
+    if (!nextSolver) {
+        ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
+        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
     }
-
-    // Special case: Generic placeholder
-    if (const auto* e = type->opt_Generic()) {
-        if (e->group() == GENERICPlaceholder) {
-            // TODO: If the type is a magic placeholder, assume it impls the specified trait.
-            // TODO: Restructure so this knows that the placehlder impls the impl-provided bounds.
-            return foundCb.visit(ImplRef(type, traitParams, nullptr), false);
-        }
-    }
-
-    // The definitional shortcuts above answer from type structure alone and
-    // must stay authoritative: general candidate assembly walks in-scope
-    // bounds, and early pipeline phases (metadata for ResolveUFCSOuter)
-    // still hold those in unresolved UfcsUnknown form -- data the goal
-    // machinery must not see. Once the bounds are resolved the bridge takes
-    // every query.
-    if (!dontHandoffToSpecialised
-        && !genericBoundsUnresolved(implGenerics_) && !genericBoundsUnresolved(itemGenerics_)) {
-        if (!nextSolver) {
-            ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
-            nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
-        }
-        return nextSolver->findImpl(sp, implGenerics_, itemGenerics_, traitPath, traitParams, type, foundCb);
-    }
-
-    struct H {
-        static const HIRTypeData* getRootTy(const HIRTypeData* t) {
-            if (const auto* e = t->opt_Path()) {
-                switch (e->path.data.tag()) {
-                    case HIRPathData::TAG_Generic: {
-                        break;
-                    }
-                    case HIRPathData::TAG_UfcsKnown: {
-                        auto& ee = e->path.data.as_UfcsKnown();
-                        return getRootTy(ee.type);
-                    }
-                    case HIRPathData::TAG_UfcsUnknown: {
-                        auto& ee = e->path.data.as_UfcsUnknown();
-                        return getRootTy(ee.type);
-                    }
-                    case HIRPathData::TAG_UfcsInherent: {
-                        auto& ee = e->path.data.as_UfcsInherent();
-                        return getRootTy(ee.type);
-                    }
-                }
-            }
-            return t;
-        }
-
-        static bool checkParams(const Span& sp, const HIRPathParams& targetParams, const HIRPathParams* traitParams) {
-            if (!traitParams) {
-                return true;
-            }
-
-            return targetParams.compareWithPlaceholders(sp, *traitParams, HIRResolvePlaceholdersNop()) != HIRCompare::Unequal;
-        }
-    };
-
-    if (type != HIRTypeRef() && H::getRootTy(type) == HIRTypeRef()) {
-        return foundCb.visit(ImplRef(type, traitParams, nullptr), false);
-    }
-
-    const bool isAsyncCallableTrait = traitPath == langAsyncFn() || traitPath == langAsyncFnMut() || traitPath == langAsyncFnOnce();
-    auto findAsyncCallable = [&](const ::std::vector<HIRTypeRef>& inputTypes, const HIRTypeData* futureType, bool supportsShared, bool supportsMutable) {
-        if (!isAsyncCallableTrait || (traitPath == langAsyncFn() && !supportsShared) || (traitPath == langAsyncFnMut() && !supportsMutable)) {
-            return false;
-        }
-
-        HIRPathParams actualParams;
-        actualParams.types.push_back(crate.types.tuple(inputTypes));
-        if (!H::checkParams(sp, actualParams, traitParams)) {
-            return false;
-        }
-
-        HIRTypeRef outputType = HIRTypeRef();
-        bool futureUnknown = false;
-        this->findImpl(sp, langFuture(), nullptr, futureType, [&](ImplRef impl, bool unknown) {
-            auto candidateOutput = impl.getType(crate.types, "Output", {});
-            if (candidateOutput == HIRTypeRef()) {
-                return false;
-            }
-            outputType = mv$(candidateOutput);
-            futureUnknown = unknown;
-            return true;
-        });
-        if (outputType == HIRTypeRef()) {
-            return false;
-        }
-
-        HIRGenericPath oncePath(langAsyncFnOnce(), actualParams.clone());
-        HIRTraitPath::assocListT assoc;
-        assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{oncePath.clone(), {}, outputType}));
-        assoc.insert(::std::make_pair("CallOnceFuture", HIRTraitPath::AtyEqual{mv$(oncePath), {}, futureType}));
-        // A by-reference call hands back the same future; its lifetime parameter
-        // is not carried in HIR.
-        assoc.insert(::std::make_pair("CallRefFuture", HIRTraitPath::AtyEqual{HIRGenericPath(langAsyncFnMut(), actualParams.clone()), {}, futureType}));
-        return foundCb.visit(ImplRef(type, mv$(actualParams), mv$(assoc)), futureUnknown);
-    };
-
-    // --- MAGIC IMPLS ---
-    // TODO: There should be quite a few more here, but laziness
-    switch ((*type).tag()) {
-default:
-        // Nothing magic
-        break;
-        case HIRTypeData::TAG_Tuple: {
-            if (traitPath == crate.getLangItemPath(sp, "tuple_trait")) {
-                return foundCb.visit(ImplRef(type, HIRPathParams(), HIRTraitPath::assocListT()), false);
-            }
-            break;
-        }
-        case HIRTypeData::TAG_Function: {
-            auto& e = (*type).as_Function();
-            if (isAsyncCallableTrait) {
-                if (e.abi != ABI_RUST || e.isUnsafe) {
-                    return false;
-                }
-                return findAsyncCallable(e.argTypes, e.rettype, true, true);
-            }
-            if (traitPath == langFn() || traitPath == langFnMut() || traitPath == langFnOnce()) {
-                if (traitParams) {
-                    const auto& desArgTys = traitParams->types.at(0)->as_Tuple();
-                    if (desArgTys.size() != e.argTypes.size()) {
-                        return false;
-                    }
-                    for (unsigned int i = 0; i < desArgTys.size(); i++) {
-                        if (desArgTys[i]->compareWithPlaceholders(sp, e.argTypes[i], cbIdent) == HIRCompare::Unequal) {
-                            return false;
-                        }
-                    }
-                }
-                std::vector<HIRTypeRef> argTypes;
-                for (unsigned int i = 0; i < e.argTypes.size(); i++) {
-                    argTypes.push_back(e.argTypes[i]);
-                }
-                HIRPathParams params;
-                params.types.push_back(crate.types.tuple(std::move(argTypes)));
-                HIRTraitPath::assocListT assoc;
-                assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), params.clone()), {}, e.rettype}));
-                return foundCb.visit(ImplRef(type, mv$(params), mv$(assoc)), false);
-            }
-            // 1.74: Magic impls of `eq` for function pointers
-            if (traitPath == this->crate.getLangItemPathOpt("fn_ptr_trait")) {
-                return foundCb.visit(ImplRef(type, {}, {}), false);
-            }
-            break;
-        }
-        case HIRTypeData::TAG_NamedFunction: {
-            auto& realE = (*type).as_NamedFunction();
-            if (isAsyncCallableTrait) {
-                auto e = realE.decay(crate.types, sp);
-                if (e.abi != ABI_RUST || e.isUnsafe) {
-                    return false;
-                }
-                return findAsyncCallable(e.argTypes, e.rettype, true, true);
-            }
-            if (traitPath == langFn() || traitPath == langFnMut() || traitPath == langFnOnce()) {
-                auto e = realE.decay(crate.types, sp);
-                if (traitParams) {
-                    const auto& desArgTys = traitParams->types.at(0)->as_Tuple();
-                    if (desArgTys.size() != e.argTypes.size()) {
-                        return false;
-                    }
-                    for (unsigned int i = 0; i < desArgTys.size(); i++) {
-                        if (desArgTys[i]->compareWithPlaceholders(sp, e.argTypes[i], cbIdent) == HIRCompare::Unequal) {
-                            return false;
-                        }
-                    }
-                }
-                std::vector<HIRTypeRef> argTypes;
-                for (unsigned int i = 0; i < e.argTypes.size(); i++) {
-                    argTypes.push_back(e.argTypes[i]);
-                }
-                HIRPathParams params;
-                params.types.push_back(crate.types.tuple(std::move(argTypes)));
-                HIRTraitPath::assocListT assoc;
-                assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), params.clone()), {}, e.rettype}));
-                return foundCb.visit(ImplRef(type, mv$(params), mv$(assoc)), false);
-            }
-            break;
-        }
-        case HIRTypeData::TAG_NodeType: {
-            auto& e = (*type).as_NodeType();
-            switch (e.tag()) {
-                case HIRTypeDataNodeType::TAG_Closure: {
-                    auto& nodeP = e.as_Closure();
-                    if (isAsyncCallableTrait) {
-                        bool supportsShared = true;
-                        bool supportsMutable = true;
-                        if (nodeP->cls == HIRExprNodeClosure::Class::Once) {
-                            supportsShared = false;
-                            supportsMutable = false;
-                        } else if (nodeP->cls == HIRExprNodeClosure::Class::Mut) {
-                            supportsShared = false;
-                        }
-                        ::std::vector<HIRTypeRef> inputs;
-                        inputs.reserve(nodeP->args.size());
-                        for (const auto& arg : nodeP->args) {
-                            inputs.push_back(arg.second);
-                        }
-                        return findAsyncCallable(inputs, nodeP->returnType, supportsShared, supportsMutable);
-                    }
-                    if (traitPath == langFn() || traitPath == langFnMut() || traitPath == langFnOnce()) {
-                        HIRPathParams traitPathParams;
-                        HIRPathParams responseParams;
-                        if (traitParams) {
-                            const auto& desArgTys = traitParams->types.at(0)->as_Tuple();
-                            if (desArgTys.size() != nodeP->args.size()) {
-                                return false;
-                            }
-                            for (unsigned int i = 0; i < desArgTys.size(); i++) {
-                                if (desArgTys[i]->compareWithPlaceholders(sp, nodeP->args[i].second, HIRResolvePlaceholdersNop()) == HIRCompare::Unequal) {
-                                    return false;
-                                }
-                            }
-                            traitPathParams = traitParams->clone();
-                            responseParams = traitParams->clone();
-                        }
-                        switch (nodeP->cls) {
-                            case HIRExprNodeClosure::Class::Unknown:
-                                break;
-                            case HIRExprNodeClosure::Class::NoCapture:
-                                break;
-                            case HIRExprNodeClosure::Class::Once:
-                                if (traitPath == langFnMut()) {
-                                    return false;
-                                }
-                            case HIRExprNodeClosure::Class::Mut:
-                                if (traitPath == langFn()) {
-                                    return false;
-                                }
-                            case HIRExprNodeClosure::Class::Shared:
-                                break;
-                        }
-                        HIRTraitPath::assocListT assoc;
-                        assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), mv$(traitPathParams)), {}, nodeP->returnType}));
-                        return foundCb.visit(ImplRef(type, mv$(responseParams), mv$(assoc)), false);
-                    }
-                    break;
-                }
-                case HIRTypeDataNodeType::TAG_Generator: {
-                    auto& nodeP = e.as_Generator();
-                    if (traitPath == langGenerator()) {
-                        HIRTraitPath::assocListT assoc;
-                        assoc.insert(::std::make_pair("Yield", HIRTraitPath::AtyEqual{traitPath.clone(), {}, nodeP->yieldTy}));
-                        assoc.insert(::std::make_pair("Return", HIRTraitPath::AtyEqual{traitPath.clone(), {}, nodeP->returnType}));
-                        HIRPathParams params;
-                        params.types.push_back(nodeP->resumeTy);
-                        return foundCb.visit(ImplRef(type, mv$(params), mv$(assoc)), HIRCompare::Equal);
-                    }
-                    break;
-                }
-                case HIRTypeDataNodeType::TAG_Async: {
-                    auto& nodeP = e.as_Async();
-                    if (nodeP->isAsyncGen) {
-                        // An `async gen` block is an AsyncIterator, not a Future.
-                        if (traitPath == langAsyncIterator()) {
-                            HIRTraitPath::assocListT assoc;
-                            assoc.insert(::std::make_pair("Item", HIRTraitPath::AtyEqual{traitPath.clone(), {}, nodeP->yieldTy}));
-                            return foundCb.visit(ImplRef(type, HIRPathParams(), mv$(assoc)), HIRCompare::Equal);
-                        }
-                    } else if (traitPath == langFuture()) {
-                        HIRTraitPath::assocListT assoc;
-                        assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{traitPath.clone(), {}, nodeP->code->resType}));
-                        HIRPathParams params;
-                        return foundCb.visit(ImplRef(type, mv$(params), mv$(assoc)), HIRCompare::Equal);
-                    }
-                    break;
-                }
-            }
-            break;
-        }
-        case HIRTypeData::TAG_TraitObject: {
-            auto& e = (*type).as_TraitObject();
-            if (traitPath == e.trait.path.path) {
-                if (H::checkParams(sp, e.trait.path.params, traitParams)) {
-                    return foundCb.visit(ImplRef(type, &e.trait.path.params, &e.trait.typeBounds, e.trait.constness), false);
-                }
-            }
-            // Markers too
-            for (const auto& mt : e.markers) {
-                if (traitPath == mt.path) {
-                    if (H::checkParams(sp, mt.params, traitParams)) {
-                        return foundCb.visit(ImplRef(type, &mt.params, nullptr), false);
-                    }
-                }
-            }
-
-            // - Check if the desired trait is a supertrait of this.
-            // TODO: What if `trait_params` is nullptr?
-            bool rv = false;
-            bool isSupertrait = traitParams && e.trait.traitPtr && this->findNamedTraitInTrait(sp, traitPath, *traitParams, *e.trait.traitPtr, e.trait.path.path, e.trait.path.params, type, [&](const HIRPathParams& iParams, HIRTraitPath::assocListT iAssoc) -> bool {
-                // Invoke callback with a proper ImplRef
-                HIRTraitPath::assocListT assocClone;
-                for (const auto& e : iAssoc) {
-                    assocClone.insert(::std::make_pair(e.first, e.second.clone()));
-                }
-                // HACK! Just add all the associated type bounds (only inserted if not already present)
-                for (const auto& e2 : e.trait.typeBounds) {
-                    assocClone.insert(::std::make_pair(e2.first, e2.second.clone()));
-                }
-
-                ImplRef ir{type, iParams.clone(), std::move(assocClone)};
-                rv = foundCb.visit(mv$(ir), false);
-                return true;
-            });
-            if (isSupertrait) {
-                return rv;
-            }
-            break;
-        }
-        case HIRTypeData::TAG_ErasedType: {
-            auto& e = (*type).as_ErasedType();
-            for (const auto& trait : e.traits) {
-                bool rv = false;
-                // TODO: If `trait_params` is nullptr, this doesn't run (is that sane?)
-                bool isSupertrait = traitParams && this->findNamedTraitInTrait(sp, traitPath, *traitParams, *trait.traitPtr, trait.path.path, trait.path.params, type, [&](const auto& iParams, const auto& iAssoc) {
-                    // Invoke callback with a proper ImplRef
-                    HIRTraitPath::assocListT assocClone;
-                    for (const auto& assocE : iAssoc) {
-                        assocClone.insert(::std::make_pair(assocE.first, assocE.second.clone()));
-                    }
-                    // HACK! Just add all the associated type bounds (only inserted if not already present)
-                    for (const auto& e2 : trait.typeBounds) {
-                        assocClone.insert(::std::make_pair(e2.first, e2.second.clone()));
-                    }
-                    auto ir = ImplRef(type, iParams.clone(), mv$(assocClone));
-                    rv = foundCb.visit(mv$(ir), false);
-                    return true;
-                });
-                if (isSupertrait) {
-                    return rv;
-                }
-            }
-            break;
-        }
-        case HIRTypeData::TAG_Path: {
-            auto& e = (*type).as_Path();
-            if (e.binding.is_Opaque()) {
-                ASSERT_BUG(sp, e.path.data.is_UfcsKnown(), "Opaque bound type wasn't UfcsKnown - " << type);
-                const auto& pe = e.path.data.as_UfcsKnown();
-
-                // If this associated type has a bound of the desired trait, return it.
-                const auto& traitRef = crate.getTraitByPath(sp, pe.trait.path);
-                ASSERT_BUG(sp, traitRef.types.count(pe.item) != 0, "Trait " << pe.trait.path << " doesn't contain an associated type " << pe.item);
-                const auto& atyDef = traitRef.types.find(pe.item)->second;
-
-                auto monomorphCb = MonomorphStatePtr(crate.types, pe.type, &pe.trait.params, &pe.params);
-
-                auto checkBound = [&](const HIRTraitPath& bound) {
-                    const auto& bParams = bound.path.params;
-                    HIRPathParams paramsMonoO;
-                    const auto& bParamsMono = monomorphisePathparamsWithOpt(sp, paramsMonoO, bParams, monomorphCb, false);
-                    this->expandAssociatedTypesParams(sp, paramsMonoO);
-
-                    if (bound.path.path == traitPath) {
-                        if (H::checkParams(sp, bParamsMono, traitParams)) {
-                            // Optimisation: If this was a monomorphised path, then move ownership into the ImplRef
-                            if (&bParamsMono == &paramsMonoO || ::std::any_of(bound.typeBounds.begin(), bound.typeBounds.end(), [&](const auto& x) {
-                                return monomorphisePathparamsNeeded(x.second.atyParams)
-                                    || monomorphiseTypeNeeded(x.second.type);
-                            })) {
-                                HIRTraitPath::assocListT atys;
-                                if (!bound.typeBounds.empty()) {
-                                    for (const auto& tb : bound.typeBounds) {
-                                        auto src = monomorphCb.monomorphGenericpath(sp, tb.second.sourceTrait, false);
-                                        auto atyParams = monomorphCb.monomorphPathParams(sp, tb.second.atyParams, false);
-                                        auto aty = monomorphCb.monomorphType(sp, tb.second.type, false);
-                                        expandAssociatedTypes(sp, aty);
-                                        expandAssociatedTypesParams(sp, src.params);
-                                        expandAssociatedTypesParams(sp, atyParams);
-                                        atys.insert(::std::make_pair(tb.first, HIRTraitPath::AtyEqual{mv$(src), mv$(atyParams), mv$(aty)}));
-                                    }
-                                }
-                                if (foundCb.visit(ImplRef(type, mv$(paramsMonoO), mv$(atys), bound.constness), false)) {
-                                    return true;
-                                }
-                                paramsMonoO = monomorphCb.monomorphPathParams(sp, bParams, false);
-                            } else {
-                                if (foundCb.visit(ImplRef(type, &bound.path.params, &bound.typeBounds, bound.constness), false)) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-
-                    if (traitParams) {
-                        return this->findNamedTraitInTrait(sp, traitPath, *traitParams, *bound.traitPtr, bound.path.path, bParamsMono, type, [&](const auto& iParams, const auto& iAssoc) {
-                            if (iParams != *traitParams) {
-                                return false;
-                            }
-                            return foundCb.visit(ImplRef(type, iParams.clone(), {}, bound.constness), false);
-                        });
-                    } else {
-                        auto monomorph = MonomorphStatePtr(crate.types, type, &bParamsMono, nullptr);
-
-                        for (const auto& pt : bound.traitPtr->allParentTraits) {
-                            auto ptMono = monomorph.monomorphTraitpath(sp, pt, false);
-
-                            // TODO: When in pre-typecheck mode, this needs to be a fuzzy match (because there might be a UfcsUnknown in the
-                            // monomorphed version) OR, there may be placeholders
-                            if (pt.path.path == traitPath) {
-                                // TODO: Monomorphse trait params
-                                return foundCb.visit(ImplRef(type, mv$(ptMono.path.params), {}, ptMono.constness), false);
-                            }
-                        }
-                        return false;
-                    }
-                };
-
-                for (const auto& bound : atyDef.traitBounds) {
-                    if (checkBound(bound)) {
-                        return true;
-                    }
-                }
-
-                // Check `where` clauses on the trait too
-                for (const auto& bound : traitRef.params.bounds) {
-                    if (!bound.is_TraitBound()) {
-                        continue;
-                    }
-                    const auto& be = bound.as_TraitBound();
-
-                    if (!be.type->is_Path()) {
-                        continue;
-                    }
-                    if (!be.type->as_Path().path.data.is_UfcsKnown()) {
-                        continue;
-                    }
-                    {
-                        const auto& pe2 = be.type->as_Path().path.data.as_UfcsKnown();
-                        if (pe2.type != crate.types.self()) {
-                            continue;
-                        }
-                        if (pe2.trait.path != pe.trait.path) {
-                            continue;
-                        }
-                        if (pe2.item != pe.item) {
-                            continue;
-                        }
-                    }
-
-                    if (checkBound(be.trait)) {
-                        return true;
-                    }
-                }
-
-                // Recurse into the type to find an inner `impl Foo`
-                //if( pe.type->is_Path() )
-                {
-                    ::std::vector<const HIRPath::Data::Data_UfcsKnown*> stack;
-                    stack.push_back(&pe);
-                    const auto* ity = &pe.type;
-                    while (const auto* inner = (*ity)->opt_Path()) {
-                        if (const auto* ufcs = inner->path.data.opt_UfcsKnown()) {
-                            stack.push_back(ufcs);
-                            ity = &ufcs->type;
-                        }
-                        break;
-                    }
-                    if (const auto* innerErased = (*ity)->opt_ErasedType()) {
-                        assert(!stack.empty());
-                        const auto* traits = &innerErased->traits;
-
-                        for (;;) {
-                            const auto* pe = stack.back();
-                            const HIRTraitPath* tp = nullptr;
-                            for (const auto& t : *traits) {
-                                if (t.path == pe->trait) {
-                                    tp = &t;
-                                    break;
-                                }
-                            }
-                            assert(tp != nullptr);
-                            if (tp->traitBounds.count(pe->item)) {
-                                traits = &tp->traitBounds.at(pe->item).traits;
-                            } else {
-                                traits = nullptr;
-                                break;
-                            }
-
-                            stack.pop_back();
-                            if (stack.empty()) {
-                                break;
-                            }
-                        }
-
-                        // Found the final trait list
-                        // - This is for the top-level trait
-                        if (traits) {
-                            for (const auto& t : *traits) {
-                                if (checkBound(t)) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-
-            }
-            break;
-        }
-    }
-
-    const bool isMarker = crate.getTraitByPath(sp, traitPath).isMarker;
-    bool pushedNonMarkerGoal = false;
-    if (!isMarker) {
-        for (const auto& ent : findImplStack) {
-            if (*::std::get<0>(ent) != traitPath) {
-                continue;
-            }
-            if ((::std::get<1>(ent) == nullptr) != (traitParams == nullptr)) {
-                continue;
-            }
-            if (traitParams && *::std::get<1>(ent) != *traitParams) {
-                continue;
-            }
-            if (::std::get<2>(ent) != type) {
-                continue;
-            }
-
-            // Ordinary trait goals are inductive: seeing the same fully
-            // interned goal while checking one of its candidates means that
-            // candidate cannot prove itself.
-            return false;
-        }
-        findImplStack.push_back(::std::make_tuple(&traitPath, traitParams, type));
-        pushedNonMarkerGoal = true;
-    }
-    STD_DEFER {
-        if (pushedNonMarkerGoal) {
-            findImplStack.pop_back();
-        }
-    };
-
-    bool ret;
-
-    if( isMarker )
-    {
-        struct H {
-            static bool findImplAutoTraitCheck(const StaticTraitResolve& self, const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, const HIRMarkerImpl& impl, bool& outRv) {
-                if (impl.isPositive) {
-                    return self.findImplCheckCrateRaw(sp, traitPath, traitParams, type, impl.params, impl.traitArgs, impl.type, [&](auto implParams, auto cmp) -> bool {
-                        outRv = foundCb.visit(ImplRef(type, traitParams, nullptr), cmp == HIRCompare::Fuzzy);
-                        return outRv;
-                    });
-                } else {
-                    return self.findImplCheckCrateRaw(sp, traitPath, traitParams, type, impl.params, impl.traitArgs, impl.type, [&](auto implParams, auto cmp) -> bool {
-                        outRv = false;
-                        return true;
-                    });
-                }
-            }
-        };
-
-        // Positive/negative impls
-        bool rv = false;
-        ret = this->crate.findAutoTraitImpls(traitPath, type, cbIdent, [&](const auto& impl) -> bool {
-            return H::findImplAutoTraitCheck(*this, sp, traitPath, traitParams, type, foundCb, impl, rv);
-        });
-        if (ret) {
-            return rv;
-        }
-
-        // Legacy static lookup is recursive too.  Keep its active goals on
-        // this resolver instance instead of in process-global state.
-        for (const auto& ent : findImplStack) {
-            if (*::std::get<0>(ent) != traitPath) {
-                continue;
-            }
-            if (::std::get<1>(ent) && traitParams && *::std::get<1>(ent) != *traitParams) {
-                continue;
-            }
-            if (::std::get<2>(ent) != type) {
-                continue;
-            }
-
-            return foundCb.visit(ImplRef(type, traitParams, nullptr), false);
-        }
-        findImplStack.push_back(::std::make_tuple(&traitPath, traitParams, type));
-        STD_DEFER {
-            findImplStack.pop_back();
-        };
-
-        auto cmp = this->checkAutoTraitImplDestructure(sp, traitPath, traitParams, type);
-        if (cmp != HIRCompare::Unequal) {
-            return foundCb.visit(ImplRef(type, traitParams, nullptr), cmp == HIRCompare::Fuzzy);
-        }
-    }
-    else
-    {
-        // Search the crate for impls
-        ret = crate.findTraitImpls(traitPath, type, cbIdent, [&](const auto& impl) {
-            return this->findImplCheckCrateCb(sp, traitPath, traitParams, type, foundCb, impl);
-        });
-        if (ret) {
-            return true;
-        }
-    }
-
-    // A closure that returns a future is async-callable. The closure's own
-    // `Fn*` impls are generated (so the magic impl above no longer applies once
-    // the closure is a struct), and each async callable trait forwards to the
-    // `Fn*` trait that passes the closure the same way.
-    if (isAsyncCallableTrait && type->is_Path() && type->as_Path().isClosure() && traitParams && traitParams->types.size() == 1 && traitParams->types[0]->is_Tuple()) {
-        const auto& fnTrait = traitPath == langAsyncFn() ? langFn() : (traitPath == langAsyncFnMut() ? langFnMut() : langFnOnce());
-        // `Output` lives on `FnOnce`, so the returned future comes from there
-        // whichever of the three traits decides how the closure is passed.
-        HIRTypeRef futureType;
-        this->findImpl(sp, langFnOnce(), traitParams, type, [&](ImplRef impl, bool unknown) {
-            futureType = impl.getType(crate.types, "Output", {});
-            return futureType != HIRTypeRef();
-        });
-        const bool callable = fnTrait == langFnOnce() || this->findImpl(sp, fnTrait, traitParams, type, [](ImplRef, bool) {
-            return true;
-        });
-        if (callable && futureType != HIRTypeRef() && findAsyncCallable(traitParams->types[0]->as_Tuple(), futureType, true, true)) {
-            return true;
-        }
-    }
-
-    // TODO: A bound can imply something via its associated types. How deep can this go?
-    // E.g. `T: IntoIterator<Item=&u8>` implies `<T as IntoIterator>::IntoIter : Iterator<Item=&u8>`
-    if( this->findImplBoundsCb(sp, traitPath, traitParams, type, foundCb) )
-    {
-        return true;
-    }
-
-    if( type->is_Path() )
-    {
-    }
-
-    return false;
-}
-
-bool StaticTraitResolve::findImplBoundsCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb) const {
-    struct H {
-        static bool comparePp(const Span& sp, const HIRPathParams& left, const HIRPathParams& right) {
-            ASSERT_BUG(sp, left.types.size() == right.types.size(), "Parameter count mismatch between " << left << " and " << right);
-            for (unsigned int i = 0; i < left.types.size(); i++) {
-                // TODO: Permits fuzzy comparison to handle placeholder params, should instead do a match/test/assign
-                if (left.types[i]->compareWithPlaceholders(sp, right.types[i], HIRResolvePlaceholdersNop()) == HIRCompare::Unequal) {
-                    return false;
-                }
-            }
-            return true;
-        }
-    };
-
-    const bool typeHasInfer = visitTyWith(type, [&](const HIRTypeData* t) -> bool {
-        return t->is_Infer();
-    });
-    for (auto it = traitBounds.begin(); it != traitBounds.end(); ++it) {
-        if (it->first.second.path != traitPath) {
-            continue;
-        }
-        const auto& bType = it->first.first;
-        const auto& bParams = it->first.second.params;
-
-        HIRPathParams normalizedParams;
-        const HIRPathParams* comparableParams = &bParams;
-        for (const auto& type : bParams.types) {
-            if (type->mayHaveAssociatedType()) {
-                normalizedParams = bParams.clone();
-                this->expandAssociatedTypesParams(sp, normalizedParams);
-                comparableParams = &normalizedParams;
-                break;
-            }
-        }
-
-        HIRTypeRef normalizedBound;
-        const HIRTypeData* comparableBound = bType;
-        if (bType->mayHaveAssociatedType() && !normalizingBoundType) {
-            normalizingBoundType = true;
-            STD_DEFER {
-                normalizingBoundType = false;
-            };
-            normalizedBound = bType;
-            this->expandAssociatedTypes(sp, normalizedBound);
-            comparableBound = normalizedBound;
-        }
-
-        if (typeHasInfer) {
-            if (comparableBound->compareWithPlaceholders(sp, type, HIRResolvePlaceholdersNop()) == HIRCompare::Unequal) {
-                continue;
-            }
-        } else if (comparableBound != type && !comparableBound->equalsIgnoringRegions(type)) {
-            continue;
-        }
-        // Check against `params`
-        if (traitParams) {
-            if (!H::comparePp(sp, *traitParams, *comparableParams)) {
-                continue;
-            }
-        }
-        // Hand off to the closure, and return true if it does
-        if (foundCb.visit(ImplRef(type, comparableParams, &it->second.assoc, it->second.constness), false)) {
-            return true;
-        }
-    }
-
-    // Obtain a pointer to UfcsKnown for magic later
-    const HIRPath::Data::Data_UfcsKnown* assocInfo = nullptr;
-    if (const auto* e = type->opt_Path()) {
-        assocInfo = e->path.data.opt_UfcsKnown();
-    }
-    if (assocInfo) {
-        for (auto it = traitBounds.begin(); it != traitBounds.end(); ++it) {
-            if (it->first.second.path != assocInfo->trait.path || (it->first.first != assocInfo->type && !it->first.first->equalsIgnoringRegions(assocInfo->type))) {
-                continue;
-            }
-            const auto& bound = *it;
-            const auto& bParams = it->first.second.params;
-
-            if (H::comparePp(sp, bParams, assocInfo->trait.params)) {
-                const auto& traitRef = *bound.second.traitPtr;
-                const auto& at = traitRef.types.at(assocInfo->item);
-                for (const auto& bound : at.traitBounds) {
-                    if (bound.path.path == traitPath && (!traitParams || H::comparePp(sp, bound.path.params, *traitParams))) {
-
-                        auto tpMono = MonomorphStatePtr(crate.types, assocInfo->type, &assocInfo->trait.params, &assocInfo->params).monomorphTraitpath(sp, bound, false);
-                        // - Expand associated types
-                        for (auto& ty : tpMono.typeBounds) {
-                            this->expandAssociatedTypes(sp, ty.second.type);
-                        }
-                        // TODO: Instead of using `type` here, build the real type
-                        if (foundCb.visit(ImplRef(type, mv$(tpMono.path.params), mv$(tpMono.typeBounds), tpMono.constness), false)) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    return false;
+    return nextSolver->findImpl(sp, implGenerics_, itemGenerics_, traitPath, traitParams, type, foundCb);
 }
 
 namespace {
-
+    // Generic-header matching is also used by inherent impl lookup.  Keep this
+    // small collector independent of trait candidate selection: it only records
+    // substitutions produced by HIR's structural matcher.
     class GetParams: public HIRMatchGenerics {
     public:
         struct ParamsSet {
-            std::vector<bool> types;
-            std::vector<bool> values;
+            stl::Vector<u8> types;
+            stl::Vector<u8> values;
         };
 
     private:
@@ -1057,34 +144,28 @@ namespace {
         {
             implParams.types.resize(implParamsDef.types.size());
             implParams.values.resize(implParamsDef.values.size());
-            paramsSet.types.resize(implParamsDef.types.size());
-            paramsSet.values.resize(implParamsDef.values.size());
+            paramsSet.types.zero(implParamsDef.types.size());
+            paramsSet.values.zero(implParamsDef.values.size());
         }
 
         HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override {
             ASSERT_BUG(sp, g.binding < implParams.types.size(), "[GetParams] Type generic " << g << " out of bounds (" << implParams.types.size() << ")");
             if (!paramsSet.types[g.binding]) {
-                paramsSet.types[g.binding] = true;
+                paramsSet.types.mut(g.binding) = true;
                 implParams.types[g.binding] = ty;
                 return HIRCompare::Equal;
-            } else {
-                return implParams.types[g.binding]->compareWithPlaceholders(sp, ty, resolveCb);
             }
+            return implParams.types[g.binding]->compareWithPlaceholders(sp, ty, resolveCb);
         }
 
-        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
+        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& value) override {
             ASSERT_BUG(sp, g.binding < implParams.values.size(), "[GetParams] Value generic " << g << " out of range (" << implParams.values.size() << ")");
             if (!paramsSet.values[g.binding]) {
-                paramsSet.values[g.binding] = true;
-                implParams.values[g.binding] = sz.clone();
+                paramsSet.values.mut(g.binding) = true;
+                implParams.values[g.binding] = value.clone();
                 return HIRCompare::Equal;
-            } else {
-                if (implParams.values[g.binding] != sz) {
-                    return HIRCompare::Unequal;
-                } else {
-                    return HIRCompare::Equal;
-                }
             }
+            return implParams.values[g.binding] == value ? HIRCompare::Equal : HIRCompare::Unequal;
         }
     };
 }
@@ -1162,7 +243,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
         if (!paramsSet.types[i]) {
             if (placeholders.types.size() == 0) {
                 placeholders.types.resize(implParams.types.size());
-                placeholdersSet.types.resize(implParams.types.size());
+                placeholdersSet.types.zero(implParams.types.size());
             }
             placeholders.types[i] = crate.types.generic(placeholderName, 2 * 256 + baseImplPlaceholderIdx.ty + i);
         }
@@ -1171,7 +252,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
         if (!paramsSet.values[i]) {
             if (placeholders.values.size() == 0) {
                 placeholders.values.resize(implParams.values.size());
-                placeholdersSet.values.resize(implParams.values.size());
+                placeholdersSet.values.zero(implParams.values.size());
             }
             placeholders.values[i] = HIRConstGeneric::make_Generic(HIRGenericRef(placeholderName, 2 * 256 + baseImplPlaceholderIdx.val + i));
         }
@@ -1209,7 +290,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
                     ASSERT_BUG(sp, !paramsSet.types[i], "Placeholder to populated type returned. new " << ty << ", existing " << implParams.types[i]);
                     auto& ph = placeholders.types[i];
                     if (!placeholdersSet.types[i]) {
-                        placeholdersSet.types[i] = true;
+                        placeholdersSet.types.mut(i) = true;
                         ph = ty;
                         return HIRCompare::Equal;
                     } else if (ph == ty) {
@@ -1239,7 +320,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
                     ASSERT_BUG(sp, !paramsSet.values[i], "Placeholder to populated value returned. new " << val << ", existing " << implParams.values[i]);
                     auto& ph = placeholders.values[i];
                     if (!placeholdersSet.values[i]) {
-                        placeholdersSet.values[i] = true;
+                        placeholdersSet.values.mut(i) = true;
                         ph = val.clone();
                         return HIRCompare::Equal;
                     } else if (ph == val) {
@@ -1263,7 +344,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
                 TODO(sp, "get_type Self");
             }
             ASSERT_BUG(sp, !ge.isPlaceholder(), "[find_impl__check_crate_raw] Placeholder param seen - " << ge);
-            if (paramsSet.types.at(ge.binding)) {
+            if (paramsSet.types[ge.binding]) {
                 return implParams.types.at(ge.binding);
             }
             return placeholders.types.at(ge.binding);
@@ -1272,7 +353,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override {
             ASSERT_BUG(sp, val.binding < 256, "Generic value binding in " << val << " out of range (>=256)");
             ASSERT_BUG(sp, val.binding < implParams.values.size(), "Generic value binding in " << val << " out of range (>= " << implParams.values.size() << ")");
-            if (paramsSet.values.at(val.binding)) {
+            if (paramsSet.values[val.binding]) {
                 return implParams.values.at(val.binding).clone();
             }
             ASSERT_BUG(sp, placeholders.values.size() == implParams.values.size(), "Placeholder size mismatch: " << placeholders.values.size() << " != " << implParams.values.size() << " - value=" << implParams.values.at(val.binding));
@@ -1316,7 +397,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
                         if (bTyMono->is_Generic() && bTyMono->as_Generic().isPlaceholder()) {
                             rv = true;
                         } else {
-                            rv = this->findImpl(sp, atySrcTrait.path, atySrcTrait.params, bTyMono, [&](const ImplRef& impl, bool) -> bool {
+                            rv = this->findImpl(sp, atySrcTrait.path, atySrcTrait.params, bTyMono, [&](const ImplRef& impl, SolverCertainty) -> bool {
                                 HIRTypeRef have = impl.getType(crate.types, atyName.c_str(), assocBound.second.atyParams);
                                 if (have == HIRTypeRef()) {
                                     have = crate.types.path(HIRPath(impl.getImplType(crate.types), HIRGenericPath(atySrcTrait.path, impl.getTraitParams(crate.types)), atyName), HIRTypePathBinding::make_Unbound({}));
@@ -1342,7 +423,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
                     if (bTyMono->is_Generic() && bTyMono->as_Generic().isPlaceholder()) {
                         rv = true;
                     } else {
-                        rv = this->findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](const auto& impl, bool) {
+                        rv = this->findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](const auto& impl, SolverCertainty) {
                             return true;
                         });
                     }
@@ -1399,163 +480,19 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
     return foundCb.visit(mv$(implParams), match);
 }
 
-bool StaticTraitResolve::findImplCheckCrateCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb, const HIRTraitImpl& impl) const {
-    return this->findImplCheckCrateRaw(sp, traitPath, traitParams, type, impl.params, impl.traitArgs, impl.type, [&](auto implParams, auto match) {
-        return foundCb.visit(ImplRef(mv$(implParams), crate.getTraitByPath(sp, traitPath), traitPath, impl), (match == HIRCompare::Fuzzy));
-    });
-}
-
-HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, const HIRSimplePath& trait, const HIRPathParams* paramsPtr, const HIRTypeData* type) const {
-    // HELPER: Search for an impl of this trait for an inner type, and return the match type
-    auto typeImplsTrait = [&](const auto& innerTy) -> HIRCompare {
-        auto lRes = HIRCompare::Unequal;
-        this->findImpl(sp, trait, *paramsPtr, innerTy, [&](auto, auto isFuzzy) {
-            lRes = isFuzzy ? HIRCompare::Fuzzy : HIRCompare::Equal;
-            return !isFuzzy;
-        });
-        return lRes;
-    };
-
-    // - If the type is a path (struct/enum/...), search for impls for all contained types.
-    if (const auto* ep = type->opt_Path()) {
-        const auto& e = *ep;
-        HIRCompare res = HIRCompare::Equal;
-        switch (e.path.data.tag()) {
-            case HIRPathData::TAG_Generic: {
-                auto& pe = e.path.data.as_Generic();
-                HIRTypeRef tmp;
-                    auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe.params, nullptr);
-                    // HELPER: Get a possibily monomorphised version of the input type (stored in `tmp` if needed)
-                    auto monomorphGet = [&](const auto& ty) -> const HIRTypeData* {
-                        return this->monomorphExpandOpt(sp, tmp, ty, monomorph);
-                    };
-
-                switch (e.binding.tag()) {
-                    case HIRTypePathBinding::TAG_Opaque: {
-                        BUG(sp, "Opaque binding on generic path - " << type);
-                        break;
-                    }
-                    case HIRTypePathBinding::TAG_Unbound: {
-                        BUG(sp, "Unbound binding on generic path - " << type);
-                        break;
-                    }
-                    case HIRTypePathBinding::TAG_Struct: {
-                        auto& tpb = e.binding.as_Struct();
-                        const auto& str = *tpb;
-
-                        // TODO: Somehow store a ruleset for auto traits on the type
-                        // - Map of trait->does_impl for local fields?
-                        // - Problems occur with type parameters
-                        switch (str.data.tag()) {
-                            case HIRStruct::Data::TAG_Unit: {
-                                break;
-                            }
-                            case HIRStruct::Data::TAG_Tuple: {
-                                auto& se = str.data.as_Tuple();
-                                for (const auto& fld : se) {
-                                    const auto& fldTyMono = monomorphGet(fld.ent);
-                                    res &= typeImplsTrait(fldTyMono);
-                                    if (res == HIRCompare::Unequal) {
-                                        return HIRCompare::Unequal;
-                                    }
-                                }
-                                break;
-                            }
-                            case HIRStruct::Data::TAG_Named: {
-                                auto& se = str.data.as_Named();
-                                for (const auto& fld : se) {
-                                    const auto& fldTyMono = monomorphGet(fld.ty);
-
-                                    res &= typeImplsTrait(fldTyMono);
-                                    if (res == HIRCompare::Unequal) {
-                                        return HIRCompare::Unequal;
-                                    }
-                                }
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                    case HIRTypePathBinding::TAG_Enum: {
-                        auto& tpb = e.binding.as_Enum();
-                        if (const auto* e = tpb->data.opt_Data()) {
-                            for (const auto& var : *e) {
-                                const auto& fldTyMono = monomorphGet(var.type);
-                                res &= typeImplsTrait(fldTyMono);
-                                if (res == HIRCompare::Unequal) {
-                                    return HIRCompare::Unequal;
-                                }
-                            }
-                        }
-                        break;
-                    }
-                    case HIRTypePathBinding::TAG_Union: {
-                        auto& tpb = e.binding.as_Union();
-                        for (const auto& fld : tpb->variants) {
-                            const auto& fldTyMono = monomorphGet(fld.ty);
-                            res &= typeImplsTrait(fldTyMono);
-                            if (res == HIRCompare::Unequal) {
-                                return HIRCompare::Unequal;
-                            }
-                        }
-                        break;
-                    }
-                    case HIRTypePathBinding::TAG_ExternType: {
-                        TODO(sp, "Check auto trait destructure on extern type " << type);
-                        break;
-                    }
-                }
-                break;
-            }
-            case HIRPathData::TAG_UfcsUnknown: {
-                BUG(sp, "UfcsUnknown in typeck - " << type);
-                break;
-            }
-            case HIRPathData::TAG_UfcsKnown: {
-                return HIRCompare::Unequal;
-                //TODO(sp, "Check trait bounds for bound on UfcsKnown " << type);
-                break;
-            }
-            case HIRPathData::TAG_UfcsInherent: {
-                TODO(sp, "Auto trait lookup on UFCS Inherent type");
-                break;
-            }
-        }
-        return res;
-    } else if (const auto* ep = type->opt_Tuple()) {
-        HIRCompare res = HIRCompare::Equal;
-        for (const auto& sty : *ep) {
-            res &= typeImplsTrait(sty);
-            if (res == HIRCompare::Unequal) {
-                return HIRCompare::Unequal;
-            }
-        }
-        return res;
-    } else if (const auto* e = type->opt_Array()) {
-        return typeImplsTrait(e->inner);
-    }
-    // Otherwise, there's no negative so it must be positive
-    else {
-        return HIRCompare::Equal;
-    }
-}
-
-const HIRTypeData* StaticTraitResolve::fixTraitDefaultReturn(const Span& sp, const HIRItemPath& p, const HIRTypeData* tpl, HIRTypeRef& tmp) const {
-    // If in a trait, then force expand erased associated types:
-    // These are `<Self/**/ as ::"bin#"::TestTrait>::erased#with_default_0<'M0,>/*O*/`
-    // Detect this by first ensuring that we're in a trait body, then if there's an ATY from that trait
-    const auto& topIp = p.getTopIp();
+const HIRTypeData* StaticTraitResolve::fixTraitDefaultReturn(const Span& sp, const HIRItemPath& path, const HIRTypeData* tpl, HIRTypeRef& tmp) const {
+    const auto& topIp = path.getTopIp();
     if (topIp.ty && topIp.trait && topIp.ty == crate.types.self()) {
-        auto prefix = FMT(ATY_PREFIX_ERASED << p.name << "_");
+        auto prefix = FMT(ATY_PREFIX_ERASED << path.name << "_");
         const auto& trait = crate.getTraitByPath(sp, *topIp.trait);
-        tmp = cloneTyWith(crate.types, sp, tpl, [&](const HIRTypeData* tpl, HIRTypeRef& out) -> bool {
-            if (const auto* p = tpl->opt_Path()) {
-                if (const auto* pe = p->path.data.opt_UfcsKnown()) {
-                    if (pe->type == topIp.ty && pe->trait.path == *topIp.trait && std::strncmp(pe->item.c_str(), prefix.c_str(), prefix.size()) == 0) {
-                        // Does this type have a default?
-                        const auto& ty = trait.types.at(pe->item);
-                        if (ty.hasDefault) {
-                            out = ty.defaultValue;
+        tmp = cloneTyWith(crate.types, sp, tpl, [&](const HIRTypeData* inner, HIRTypeRef& out) -> bool {
+            if (const auto* typePath = inner->opt_Path()) {
+                if (const auto* projection = typePath->path.data.opt_UfcsKnown()) {
+                    if (projection->type == topIp.ty && projection->trait.path == *topIp.trait
+                        && std::strncmp(projection->item.c_str(), prefix.c_str(), prefix.size()) == 0) {
+                        const auto& type = trait.types.at(projection->item);
+                        if (type.hasDefault) {
+                            out = type.defaultValue;
                             return true;
                         }
                     }
@@ -1570,12 +507,6 @@ const HIRTypeData* StaticTraitResolve::fixTraitDefaultReturn(const Span& sp, con
 
 void StaticTraitResolve::expandAssociatedTypes(const Span& sp, HIRTypeRef& input) const {
     input = this->expandAssociatedTypesInner(sp, input);
-    // A RevealAll resolver sees through opaques as part of normalisation
-    // itself: any opaque the expansion produces (e.g. `<fn{bar} as
-    // Func>::Ret` through the fn-def's return type) is substituted by its
-    // hidden type and the result normalised again, to a fixpoint. Each
-    // substitution eliminates the opaques present and can only surface
-    // strictly-nested ones, so the loop terminates.
     while (reveal_ == OpaqueReveal::All
             && visitTyWith(input, [](const HIRTypeData* inner) { return inner->is_ErasedType(); })) {
         this->revealOpaqueTypesShallow(sp, input);
@@ -1589,34 +520,34 @@ void StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, HIRTypeRef& in
         const StaticTraitResolve& resolve;
         bool clearOpaque = false;
 
-        void revealOpaqueType(HIRTypeRef& ty) {
-            const auto& erased = ty->as_ErasedType();
+        void revealOpaqueType(HIRTypeRef& type) {
+            const auto& erased = type->as_ErasedType();
             HIRTypeRef revealed;
 
             switch (erased.inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Fcn: {
-                    auto& e = erased.inner.as_Fcn();
+                    const auto& functionOpaque = erased.inner.as_Fcn();
                     MonomorphState monomorph(resolve.hirCrate().types);
-                    auto value = resolve.getValue(sp, e.origin, monomorph);
-                    if (value.is_NotYetKnown() && e.origin.data.is_UfcsKnown()) {
-                        const auto& path = e.origin.data.as_UfcsKnown();
-                        auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << path.item << "_" << e.index));
+                    auto value = resolve.getValue(sp, functionOpaque.origin, monomorph);
+                    if (value.is_NotYetKnown() && functionOpaque.origin.data.is_UfcsKnown()) {
+                        const auto& path = functionOpaque.origin.data.as_UfcsKnown();
+                        auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << path.item << "_" << functionOpaque.index));
                         revealed = resolve.hirCrate().types.path(HIRPath(path.type, path.trait.clone(), name, path.params.clone()), {});
                     } else {
-                        ASSERT_BUG(sp, value.is_Function(), "ErasedType with Fcn type doesn't point at a function: " << e.origin << ": " << value.tagStr());
+                        ASSERT_BUG(sp, value.is_Function(), "ErasedType with Fcn type doesn't point at a function: " << functionOpaque.origin << ": " << value.tagStr());
                         const auto& function = *value.as_Function();
-                        if (e.index >= function.code.erasedTypes.size()) {
-                            resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(e.origin), function);
+                        if (functionOpaque.index >= function.code.erasedTypes.size()) {
+                            resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(functionOpaque.origin), function);
                         }
-                        ASSERT_BUG(sp, e.index < function.code.erasedTypes.size(), "Erased type index out of range for " << e.origin << " - " << e.index << " >= " << function.code.erasedTypes.size());
-                        revealed = monomorph.monomorphType(sp, function.code.erasedTypes[e.index]);
+                        ASSERT_BUG(sp, functionOpaque.index < function.code.erasedTypes.size(), "Erased type index out of range for " << functionOpaque.origin << " - " << functionOpaque.index << " >= " << function.code.erasedTypes.size());
+                        revealed = monomorph.monomorphType(sp, function.code.erasedTypes[functionOpaque.index]);
                     }
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
-                    auto& e = erased.inner.as_Alias();
-                    if (e.inner->type == HIRTypeRef()) {
-                        auto definers = resolve.hirCrate().opaqueTypeDefiners.find(e.inner->path);
+                    const auto& alias = erased.inner.as_Alias();
+                    if (alias.inner->type == HIRTypeRef()) {
+                        auto definers = resolve.hirCrate().opaqueTypeDefiners.find(alias.inner->path);
                         if (definers != resolve.hirCrate().opaqueTypeDefiners.end()) {
                             for (const auto& path : definers->second) {
                                 MonomorphState monomorph(resolve.hirCrate().types);
@@ -1624,26 +555,24 @@ void StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, HIRTypeRef& in
                                 if (const auto* function = value.opt_Function()) {
                                     resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(path), **function);
                                 }
-                                if (e.inner->type != HIRTypeRef()) {
+                                if (alias.inner->type != HIRTypeRef()) {
                                     break;
                                 }
                             }
                         }
-                        if (e.inner->type == HIRTypeRef()) {
-                            ERROR(sp, E0000, "Erased type alias " << e.inner->path << " never set");
+                        if (alias.inner->type == HIRTypeRef()) {
+                            ERROR(sp, E0000, "Erased type alias " << alias.inner->path << " never set");
                         }
                     }
-                    revealed = MonomorphStatePtr(resolve.hirCrate().types, nullptr, &e.params, nullptr).monomorphType(sp, e.inner->type);
+                    revealed = MonomorphStatePtr(resolve.hirCrate().types, nullptr, &alias.params, nullptr).monomorphType(sp, alias.inner->type);
                     break;
                 }
-                case TypeDataErasedTypeInner::TAG_Known: {
-                    auto& e = erased.inner.as_Known();
-                    revealed = e;
+                case TypeDataErasedTypeInner::TAG_Known:
+                    revealed = erased.inner.as_Known();
                     break;
-                }
             }
 
-            ty = std::move(revealed);
+            type = std::move(revealed);
         }
 
     public:
@@ -1654,23 +583,23 @@ void StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, HIRTypeRef& in
         {
         }
 
-        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
+        [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override {
             auto savedClearOpaque = clearOpaque;
             clearOpaque = false;
-            if (ty->is_ErasedType()) {
-                revealOpaqueType(ty);
-                ty = visitType(ty);
+            if (type->is_ErasedType()) {
+                revealOpaqueType(type);
+                type = visitType(type);
                 clearOpaque = true;
             } else {
-                ty = HIRVisitor::visitType(ty);
-                if (clearOpaque && ty->is_Path() && ty->as_Path().binding.is_Opaque()) {
-                    auto data = ty->cloneData();
+                type = HIRVisitor::visitType(type);
+                if (clearOpaque && type->is_Path() && type->as_Path().binding.is_Opaque()) {
+                    auto data = type->cloneData();
                     data.as_Path().binding = HIRTypePathBinding::make_Unbound({});
-                    ty = resolve.hirCrate().types.intern(std::move(data));
+                    type = resolve.hirCrate().types.intern(std::move(data));
                 }
             }
             clearOpaque |= savedClearOpaque;
-            return ty;
+            return type;
         }
     } visitor(sp, *this);
 
@@ -1678,11 +607,6 @@ void StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, HIRTypeRef& in
 }
 
 void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) const {
-    // Substitute hidden types and re-normalise to a fixpoint; the shallow
-    // pass eliminates every opaque it visits, so only strictly-nested
-    // hidden types keep the loop going. A RevealAll resolver's
-    // expandAssociatedTypes already runs this loop internally, and the
-    // extra pass here then finds nothing to do.
     this->expandAssociatedTypes(sp, input);
     while (visitTyWith(input, [](const HIRTypeData* inner) { return inner->is_ErasedType(); })) {
         this->revealOpaqueTypesShallow(sp, input);
@@ -1699,29 +623,27 @@ void StaticTraitResolve::revealOpaqueTypesPath(const Span& sp, HIRPath& input) c
 
     expandAssociatedTypesPath(sp, input);
     switch (input.data.tag()) {
-        case HIRPathData::TAG_Generic: {
-            auto& e = input.data.as_Generic();
-            revealParams(e.params);
+        case HIRPathData::TAG_Generic:
+            revealParams(input.data.as_Generic().params);
             break;
-        }
         case HIRPathData::TAG_UfcsInherent: {
-            auto& e = input.data.as_UfcsInherent();
-            revealOpaqueTypes(sp, e.type);
-            revealParams(e.params);
-            revealParams(e.implParams);
+            auto& path = input.data.as_UfcsInherent();
+            revealOpaqueTypes(sp, path.type);
+            revealParams(path.params);
+            revealParams(path.implParams);
             break;
         }
         case HIRPathData::TAG_UfcsKnown: {
-            auto& e = input.data.as_UfcsKnown();
-            revealOpaqueTypes(sp, e.type);
-            revealParams(e.trait.params);
-            revealParams(e.params);
+            auto& path = input.data.as_UfcsKnown();
+            revealOpaqueTypes(sp, path.type);
+            revealParams(path.trait.params);
+            revealParams(path.params);
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            auto& e = input.data.as_UfcsUnknown();
-            revealOpaqueTypes(sp, e.type);
-            revealParams(e.params);
+            auto& path = input.data.as_UfcsUnknown();
+            revealOpaqueTypes(sp, path.type);
+            revealParams(path.params);
             break;
         }
     }
@@ -1744,32 +666,29 @@ void StaticTraitResolve::evaluatePathParams(const Span& sp, HIRPathParams& param
 
 void StaticTraitResolve::expandAssociatedTypesPath(const Span& sp, HIRPath& input) const {
     switch (input.data.tag()) {
-        case HIRPathData::TAG_Generic: {
-            auto& e2 = input.data.as_Generic();
-            this->expandAssociatedTypesParams(sp, e2.params);
+        case HIRPathData::TAG_Generic:
+            this->expandAssociatedTypesParams(sp, input.data.as_Generic().params);
             break;
-        }
         case HIRPathData::TAG_UfcsInherent: {
-            auto& e2 = input.data.as_UfcsInherent();
-            e2.type = this->expandAssociatedTypesInner(sp, e2.type);
-            this->expandAssociatedTypesParams(sp, e2.params);
-            // TODO: impl params too?
-            for (auto& arg : e2.implParams.types) {
-                arg = this->expandAssociatedTypesInner(sp, arg);
+            auto& path = input.data.as_UfcsInherent();
+            path.type = this->expandAssociatedTypesInner(sp, path.type);
+            this->expandAssociatedTypesParams(sp, path.params);
+            for (auto& argument : path.implParams.types) {
+                argument = this->expandAssociatedTypesInner(sp, argument);
             }
             break;
         }
         case HIRPathData::TAG_UfcsKnown: {
-            auto& e2 = input.data.as_UfcsKnown();
-            e2.type = this->expandAssociatedTypesInner(sp, e2.type);
-            this->expandAssociatedTypesParams(sp, e2.trait.params);
-            this->expandAssociatedTypesParams(sp, e2.params);
+            auto& path = input.data.as_UfcsKnown();
+            path.type = this->expandAssociatedTypesInner(sp, path.type);
+            this->expandAssociatedTypesParams(sp, path.trait.params);
+            this->expandAssociatedTypesParams(sp, path.params);
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            auto& e2 = input.data.as_UfcsUnknown();
-            e2.type = this->expandAssociatedTypesInner(sp, e2.type);
-            this->expandAssociatedTypesParams(sp, e2.params);
+            auto& path = input.data.as_UfcsUnknown();
+            path.type = this->expandAssociatedTypesInner(sp, path.type);
+            this->expandAssociatedTypesParams(sp, path.params);
             break;
         }
     }
@@ -2344,280 +1263,44 @@ bool StaticTraitResolve::traitContainsType(const Span& sp, const HIRGenericPath&
     return false;
 }
 
-bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const {
-    {
-        auto it = copyCache.find(ty);
-        if (it != copyCache.end()) {
-            return it->second;
-        }
+bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* type) const {
+    if (const auto it = copyCache.find(type); it != copyCache.end()) {
+        return it->second;
     }
 
-    // Bounds in the active parameter environment take precedence over the
-    // structural rules below.  This matters for deliberately inconsistent
-    // bounds accepted by `trivial_bounds`, such as `where str: Copy`.
-    if (traitBounds.size() != 0) {
-        auto pp = HIRPathParams();
-        if (this->findImplBounds(sp, langCopy(), &pp, ty, [](auto, bool) {
-                return true;
-            })) {
-            copyCache.insert(::std::make_pair(ty, true));
-            return true;
-        }
+    if (!nextSolver) {
+        ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
+        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
     }
-
-    switch ((*ty).tag()) {
-        case HIRTypeData::TAG_Generic: {
-            copyCache.insert(::std::make_pair(ty, false));
-            return false;
-        }
-        case HIRTypeData::TAG_Path: {
-            auto& e = (*ty).as_Path();
-            const auto* markings = e.binding.getTraitMarkings();
-            if (markings) {
-                if (!markings->isCopy) {
-                    // Doesn't impl Copy
-                    return false;
-                } else if (!e.path.data.as_Generic().params.hasParams()) {
-                    // No params, must be Copy
-                    return true;
-                } else {
-                    // TODO: Also have a marking that indicates that the type is unconditionally Copy
-                }
-            }
-
-            auto pp = HIRPathParams();
-            bool rv = this->findImpl(sp, langCopy(), &pp, ty, [&](auto, bool) {
-                return true;
-            }, true);
-            copyCache.insert(::std::make_pair(ty, rv));
-            return rv;
-        }
-        case HIRTypeData::TAG_Diverge: {
-            // The ! type is kinda Copy ...
-            return true;
-        }
-        case HIRTypeData::TAG_NodeType: {
-            auto& e = (*ty).as_NodeType();
-            switch (e.tag()) {
-                case HIRTypeDataNodeType::TAG_Closure: {
-                    auto& nodeP = e.as_Closure();
-                    return nodeP->isCopy;
-                }
-                case HIRTypeDataNodeType::TAG_Generator: {
-                    // NOTE: Generators aren't Copy
-                    return false;
-                }
-                case HIRTypeDataNodeType::TAG_Async: {
-                    // NOTE: Async blocks aren't Copy? Can they be?
-                    return false;
-                }
-            }
-            break;
-        }
-        case HIRTypeData::TAG_Infer: {
-            // Shouldn't be hit
-            return false;
-        }
-        case HIRTypeData::TAG_Borrow: {
-            auto& e = (*ty).as_Borrow();
-            // Only shared &-ptrs are copy
-            return (e.type == HIRBorrowType::Shared);
-        }
-        case HIRTypeData::TAG_Pointer: {
-            // All raw pointers are Copy
-            return true;
-        }
-        case HIRTypeData::TAG_NamedFunction: {
-            // All function pointers are Copy/Clone
-            return true;
-        }
-        case HIRTypeData::TAG_Function: {
-            // All function pointers are Copy
-            return true;
-        }
-        case HIRTypeData::TAG_Primitive: {
-            auto& e = (*ty).as_Primitive();
-            // All primitives (except the unsized `str`) are Copy
-            return e != HIRCoreType::Str;
-        }
-        case HIRTypeData::TAG_Array: {
-            auto& e = (*ty).as_Array();
-            // TODO: Why is `[T; 0]` treated as `Copy`?
-            if ((e.size.is_Known() && (e.size.as_Known() == 0))) {
-                return true;
-            }
-            return typeIsCopy(sp, e.inner);
-        }
-        case HIRTypeData::TAG_Slice: {
-            // [T] isn't Sized, so isn't Copy ether
-            return false;
-        }
-        case HIRTypeData::TAG_Pattern: {
-            auto& e = (*ty).as_Pattern();
-            return typeIsCopy(sp, e.inner);
-        }
-        case HIRTypeData::TAG_TraitObject: {
-            // (Trait) isn't Sized, so isn't Copy ether
-            return false;
-        }
-        case HIRTypeData::TAG_ErasedType: {
-            auto& e = (*ty).as_ErasedType();
-            for (const auto& trait : e.traits) {
-                if (findNamedTraitInTrait(sp, langCopy(), {}, *trait.traitPtr, trait.path.path, trait.path.params, ty, [](const auto&, auto) {
-                    return true;
-                })) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        case HIRTypeData::TAG_Tuple: {
-            auto& e = (*ty).as_Tuple();
-            for (const auto& ty : e) {
-                if (!typeIsCopy(sp, ty)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-    }
-    UNREACHABLE();
+    const bool proven = nextSolver->typeIsCopy(sp, implGenerics_, itemGenerics_, type);
+    copyCache.insert(::std::make_pair(type, proven));
+    return proven;
 }
 
-bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) const {
-    switch ((*ty).tag()) {
-        case HIRTypeData::TAG_Generic: {
-            {
-                auto it = cloneCache.find(ty);
-                if (it != cloneCache.end()) {
-                    return it->second;
-                }
-            }
-            auto pp = HIRPathParams();
-            bool rv = this->findImplBounds(sp, langClone(), &pp, ty, [&](auto, bool) {
-                return true;
-            });
-            cloneCache.insert(::std::make_pair(ty, rv));
-            return rv;
-        }
-        case HIRTypeData::TAG_Path: {
-            auto& e = (*ty).as_Path();
-            if (true) {
-                auto it = cloneCache.find(ty);
-                if (it != cloneCache.end()) {
-                    return it->second;
-                }
-            }
-            if (e.isClosure()) {
-                bool rv = true;
-                // TODO: Check all captures
-                cloneCache.insert(::std::make_pair(ty, rv));
-                return rv;
-            }
-            auto pp = HIRPathParams();
-            bool rv = this->findImpl(sp, langClone(), &pp, ty, [&](auto, bool) {
-                return true;
-            }, true);
-            cloneCache.insert(::std::make_pair(ty, rv));
-            return rv;
-        }
-        case HIRTypeData::TAG_Diverge: {
-            // The ! type is kinda Copy/Clone ...
-            return true;
-        }
-        case HIRTypeData::TAG_NodeType: {
-            auto& e = (*ty).as_NodeType();
-            switch (e.tag()) {
-                case HIRTypeDataNodeType::TAG_Closure: {
-                    auto& nodeP = e.as_Closure();
-                    return nodeP->isCopy;
-                }
-                case HIRTypeDataNodeType::TAG_Generator: {
-                    TODO(sp, "type_is_clone - Generator");
-                    break;
-                }
-                case HIRTypeDataNodeType::TAG_Async: {
-                    TODO(sp, "type_is_clone - Async");
-                    break;
-                }
-            }
-            break;
-        }
-        case HIRTypeData::TAG_Infer: {
-            // Shouldn't be hit
-            return false;
-        }
-        case HIRTypeData::TAG_Borrow: {
-            auto& e = (*ty).as_Borrow();
-            // Only shared &-ptrs are copy/clone
-            return (e.type == HIRBorrowType::Shared);
-        }
-        case HIRTypeData::TAG_Pointer: {
-            // All raw pointers are Copy/Clone
-            return true;
-        }
-        case HIRTypeData::TAG_NamedFunction: {
-            // All function pointers are Copy/Clone
-            return true;
-        }
-        case HIRTypeData::TAG_Function: {
-            // All function pointers are Copy/Clone
-            return true;
-        }
-        case HIRTypeData::TAG_Primitive: {
-            auto& e = (*ty).as_Primitive();
-            // All primitives (except the unsized `str`) are Copy/Clone
-            return e != HIRCoreType::Str;
-        }
-        case HIRTypeData::TAG_Array: {
-            auto& e = (*ty).as_Array();
-            return (e.size.is_Known() && e.size.as_Known() == 0) || typeIsClone(sp, e.inner);
-        }
-        case HIRTypeData::TAG_Slice: {
-            // [T] isn't Sized, so isn't Copy ether
-            return false;
-        }
-        case HIRTypeData::TAG_Pattern: {
-            auto& e = (*ty).as_Pattern();
-            return typeIsClone(sp, e.inner);
-        }
-        case HIRTypeData::TAG_TraitObject: {
-            // (Trait) isn't Sized, so isn't Copy ether
-            return false;
-        }
-        case HIRTypeData::TAG_ErasedType: {
-            auto& e = (*ty).as_ErasedType();
-            for (const auto& trait : e.traits) {
-                if (findNamedTraitInTrait(sp, langClone(), {}, *trait.traitPtr, trait.path.path, trait.path.params, ty, [](const auto&, auto) {
-                    return true;
-                })) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        case HIRTypeData::TAG_Tuple: {
-            auto& e = (*ty).as_Tuple();
-            for (const auto& ty : e) {
-                if (!typeIsClone(sp, ty)) {
-                    return false;
-                }
-            }
-            return true;
-        }
+bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* type) const {
+    if (const auto it = cloneCache.find(type); it != cloneCache.end()) {
+        return it->second;
     }
-    UNREACHABLE();
+
+    HIRPathParams params;
+    bool proven = false;
+    this->findImpl(sp, langClone(), &params, type, [&](ImplRef, SolverCertainty certainty) {
+        proven = certainty == SolverCertainty::Proven;
+        return proven;
+    });
+    cloneCache.insert(::std::make_pair(type, proven));
+    return proven;
 }
 
-bool StaticTraitResolve::typeIsSized(const Span& sp, const HIRTypeData* ty) const {
-    switch (this->metadataType(sp, ty)) {
-        case MetadataType::None:
-            return true;
-        default:
-            return false;
-    }
+bool StaticTraitResolve::typeIsSized(const Span& sp, const HIRTypeData* type) const {
+    HIRPathParams params;
+    bool proven = false;
+    this->findImpl(sp, langSized(), &params, type, [&](ImplRef, SolverCertainty certainty) {
+        proven = certainty == SolverCertainty::Proven;
+        return proven;
+    });
+    return proven;
 }
-
 bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRTypeData* ty) const {
     switch ((*ty).tag()) {
 break;
@@ -2901,7 +1584,7 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
             good = true;
         } else {
             good = false;
-            findImpl(sp, de->trait.path.path, de->trait.path.params, srcTy, [&](const auto impl, auto fuzz) {
+            findImpl(sp, de->trait.path.path, de->trait.path.params, srcTy, [&](const auto impl, SolverCertainty) {
                 good = true;
                 for (const auto& aty : de->trait.typeBounds) {
                     // TODO: Can ATY bounds have generics
@@ -2929,7 +1612,7 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
         }
 
         // Then markers
-        auto cb = [&](const auto impl, auto) {
+        auto cb = [&](const auto impl, SolverCertainty) {
             tmpE.markers.back().params = impl.getTraitParams(crate.types);
             return true;
         };
@@ -3167,11 +1850,7 @@ default:
         case HIRTypeData::TAG_Generic: {
             auto& e = (*ty).as_Generic();
             // Check for an explicit `Sized` bound
-            auto pp = HIRPathParams();
-            bool rv = this->findImplBounds(sp, langSized(), &pp, ty, [&](auto, bool) {
-                return true;
-            });
-            if (rv) {
+            if (this->typeIsSized(sp, ty)) {
                 return MetadataType::None;
             }
             if (e.binding == 0xFFFF) {
@@ -3344,9 +2023,9 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             }
 
             auto pp = HIRPathParams();
-            bool hasDirectDrop = this->findImpl(sp, langDrop(), &pp, ty, [&](auto, bool) {
+            bool hasDirectDrop = this->findImpl(sp, langDrop(), &pp, ty, [&](auto, SolverCertainty) {
                 return true;
-            }, true);
+            });
             if (hasDirectDrop) {
                 dropCache.insert(::std::make_pair(ty, true));
                 return true;
@@ -3494,8 +2173,8 @@ bool StaticTraitResolve::findAsyncDrop(const Span& sp, const HIRTypeData* ty, HI
     }
 
     bool found = false;
-    findImpl(sp, trait, HIRPathParams{}, ty, [&](ImplRef impl, bool fuzzed) {
-        if (!fuzzed && impl.data.is_TraitImpl()) {
+    findImpl(sp, trait, HIRPathParams{}, ty, [&](ImplRef impl, SolverCertainty certainty) {
+        if (certainty == SolverCertainty::Proven && impl.data.is_TraitImpl()) {
             found = true;
             return true;
         }
@@ -3806,19 +2485,19 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             } else {
                 bool bestIsSpec = false;
                 bool hasBoundedImpl = false;
-                bool hasFuzzyImpl = false;
+                bool hasAmbiguousImpl = false;
                 ImplRef bestImpl;
                 ValuePtr rv;
                 bool lookupNeedsResolution = specializationLookupNeedsResolution(pe.type, pe.trait.params);
-                auto visitImpl = [&](auto impl, bool isFuzz) -> bool {
+                auto visitImpl = [&](auto impl, SolverCertainty certainty) -> bool {
                     if (!impl.data.is_TraitImpl()) {
                         hasBoundedImpl = true;
                         return false;
                     }
-                    if (isFuzz && lookupNeedsResolution) {
+                    if (certainty != SolverCertainty::Proven && lookupNeedsResolution) {
                         // A body or associated constant from a merely possible
                         // impl cannot be selected until the receiver is known.
-                        hasFuzzyImpl = true;
+                        hasAmbiguousImpl = true;
                         return false;
                     }
                     const HIRTraitImpl& ti = *impl.data.as_TraitImpl().impl;
@@ -3864,21 +2543,14 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     }
                 };
 
-                if (!genericBoundsUnresolved(implGenerics_) && !genericBoundsUnresolved(itemGenerics_)) {
-                    if (!nextSolver) {
-                        ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
-                        nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
-                    }
-                    StaticImplCb<decltype(visitImpl)> callback(visitImpl);
-                    nextSolver->findValue(sp, implGenerics_, itemGenerics_, pe.trait.path, pe.trait.params, pe.type, pe.item.c_str(), callback);
-                } else {
-                    // ResolveUFCSOuter can still hold UfcsUnknown in generic
-                    // bounds.  Its legacy walk is the early-pipeline source;
-                    // resolved item lookup uses the specialization query.
-                    this->findImpl(sp, pe.trait.path, &pe.trait.params, pe.type, visitImpl);
+                if (!nextSolver) {
+                    ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
+                    nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
                 }
+                StaticImplCb<decltype(visitImpl)> callback(visitImpl);
+                nextSolver->findValue(sp, implGenerics_, itemGenerics_, pe.trait.path, pe.trait.params, pe.type, pe.item.c_str(), callback);
                 if (!bestImpl.isValid()) {
-                    if (hasBoundedImpl || hasFuzzyImpl) {
+                    if (hasBoundedImpl || hasAmbiguousImpl) {
                         return ValuePtr::make_NotYetKnown({});
                     }
                     // If the type and impl are fully known, then look for trait provided values/bodies
