@@ -82,6 +82,25 @@ def strip_code(text):
 
 ESCAPE = re.compile(r"//\s*escape:\s*\S")
 
+RATCHET_HINT = """\
+## The ratchet
+
+`dev/std_ratchet.py` (run by the `unit` gate) counts banned `std::`
+constructs per file against `dev/std_ratchet.baseline`. Counts may only
+go down: any increase fails the gate; any decrease rewrites the baseline
+automatically, locking the improvement in. Never edit the baseline
+upward by hand.
+
+Escape hatch — for dire necessity only. The rules are not absolute:
+when a banned construct is truly unavoidable (FFI shape, a std::
+interface you do not control, a measured perf exception), annotate it
+with a `// escape: <why>` comment on the same line or an adjacent line
+and the ratchet skips that line, so the counter grows only where the
+necessity is written down. The reason is mandatory; an escape without a
+real justification is a review reject. Reach for the pool/interning
+idiom first — an escape is the last resort, not an alternative.
+"""
+
 
 def escaped_lines(text):
     """Line indices exempted by `// escape: why` markers (marker line +-1)."""
@@ -171,10 +190,8 @@ def main():
         worse = [(k, baseline.get(k, 0), v) for k, v in sorted(current.items())
                  if v > baseline.get(k, 0)]
         if worse:
-            print("std_ratchet: banned std:: constructs increased —"
-                  " use the libstd idiom (ObjPool ownership, interning;"
-                  " see CLAUDE.md); if truly unavoidable, annotate with"
-                  " `// escape: <why>`:", file=sys.stderr)
+            print(RATCHET_HINT, file=sys.stderr, end="")
+            print("Increased entries:", file=sys.stderr)
             for (rel, label), base, cur in worse:
                 print(f"  {rel}: {label} {base} -> {cur}", file=sys.stderr)
             return 1
