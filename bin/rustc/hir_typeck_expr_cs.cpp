@@ -95,7 +95,7 @@ namespace {
     // Handles visiting nodes during inferrence passes
     // -----------------------------------------------------------------------
     // TODO: Convert these to `Revisitor` instances
-    class ExprVisitorRevisit: public HIRExprVisitor {
+    struct ExprVisitorRevisit: public HIRExprVisitor {
         Context& context;
         bool completed;
         /// Tells vistors that inferrence has stalled, and that they can take
@@ -106,7 +106,6 @@ namespace {
 
         bool nodeDiverges(const HIRExprNode& node) const;
 
-    public:
         ExprVisitorRevisit(Context& context, bool fallback = false, const Vector<const HIRTypeData*>* passStartIvars = nullptr);
 
         bool nodeCompleted() const;
@@ -205,22 +204,20 @@ namespace {
 
         void visit(HIRExprNodeAsyncBlock& node) override;
 
-    private:
         void noRevisit(HIRExprNode& node);
-    }; // class ExprVisitor_Revisit
+    }; // struct ExprVisitor_Revisit
 
     // -----------------------------------------------------------------------
     // Post-inferrence visitor
     // Saves the inferred types into the HIR expression tree, and ensures that
     // all types were inferred.
     // -----------------------------------------------------------------------
-    class ExprVisitorApply: public HIRExprVisitorDef {
+    struct ExprVisitorApply: public HIRExprVisitorDef {
         const Context& context;
         const HMTypeInferrence& ivars;
         HIRPathParams nopImpl;
         HIRPathParams nopItem;
 
-    public:
         ExprVisitorApply(const Context& context);
 
         void visitNodePtr(HIRExprPtr& nodePtr);
@@ -263,7 +260,6 @@ namespace {
 
         void visit(HIRExprNodeUnsize& node) override;
 
-    private:
         void checkTypeResolvedTop(const Span& sp, HIRTypeRef& ty) const;
 
         void checkTypeResolvedConstgeneric(const Span& sp, HIRConstGeneric& v, const HIRTypeData* topType) const;
@@ -281,13 +277,12 @@ namespace {
         void checkTypesEqual(const Span& sp, const HIRTypeData* l, const HIRTypeData* r) const;
         void visit(HIRExprNodeArraySized& node) override;
 
-    }; // class ExprVisitor_Apply
+    }; // struct ExprVisitor_Apply
 
-    class ExprVisitorPrint: public HIRExprVisitor {
+    struct ExprVisitorPrint: public HIRExprVisitor {
         const Context& context;
         ::std::ostream& os;
 
-    public:
         ExprVisitorPrint(const Context& context, ::std::ostream& os);
 
         void visit(HIRExprNodeBlock& node) override;
@@ -370,11 +365,10 @@ namespace {
 
         void visit(HIRExprNodeAsyncBlock& node) override;
 
-    private:
         HMTypeInferrence::FmtType fmtResTy(const HIRExprNode& n);
 
         void noRevisit(HIRExprNode& n);
-    }; // class ExprVisitor_Print
+    }; // struct ExprVisitor_Print
 }
 
 void Context::equateTypes(const Span& sp, const HIRTypeData* li, const HIRTypeData* ri) {
@@ -3840,7 +3834,7 @@ namespace {
             if (const auto* sep = src->opt_TraitObject()) {
                 // Ensure that the trait list in the destination is a strict subset of the source
 
-                class ProjectionMatcher: public HIRMatchGenerics {
+                struct ProjectionMatcher: public HIRMatchGenerics {
                     const Context& context;
 
                     bool isDefiningOpaque(const HIRTypeData* type) const {
@@ -3856,7 +3850,6 @@ namespace {
                         return function && context.revealOpaqueType(type)->is_Infer();
                     }
 
-                public:
                     explicit ProjectionMatcher(const Context& context)
                         : HIRMatchGenerics(BorrowMatchedValues{})
                         , context(context)
@@ -7488,10 +7481,9 @@ namespace {
 bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) __attribute__((warn_unused_result));
 bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr);
 
-class OwnedImplMatcher: public HIRMatchGenerics {
+struct OwnedImplMatcher: public HIRMatchGenerics {
     HIRPathParams& implParams;
 
-public:
     OwnedImplMatcher(HIRTypeInterner& types, HIRPathParams& implParams);
 
     HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override;
@@ -8019,19 +8011,17 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
 // IVar generation visitor
 // Iterates the HIR expression tree and adds ivars to all types
 // -----------------------------------------------------------------------
-class ExprVisitorTagStaleIvars: public HIRExprVisitorDef {
-    class Mapper final: public MonomorphiserNop {
+struct ExprVisitorTagStaleIvars: public HIRExprVisitorDef {
+    struct Mapper final: public MonomorphiserNop {
         mutable Vector<::std::pair<unsigned, unsigned>> valueIndexes_;
 
         unsigned taggedIndex(Vector<::std::pair<unsigned, unsigned>>& indexes, unsigned original) const;
 
-    public:
         using MonomorphiserNop::MonomorphiserNop;
 
         HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override;
     } mapper_;
 
-public:
     explicit ExprVisitorTagStaleIvars(HIRTypeInterner& types);
 
     [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
@@ -8039,7 +8029,7 @@ public:
     void visitPathParams(HIRPathParams& params) override;
 };
 
-class ExprVisitorAddIvars: public HIRExprVisitorDef {
+struct ExprVisitorAddIvars: public HIRExprVisitorDef {
     Context& context;
 
     struct LocalImplTraitLowering: Monomorphiser {
@@ -8055,7 +8045,6 @@ class ExprVisitorAddIvars: public HIRExprVisitorDef {
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override;
     };
 
-public:
     ExprVisitorAddIvars(Context& context);
 
     void innerVisitType(HIRTypeRef& ty);
@@ -8071,7 +8060,7 @@ public:
 // Enumeration visitor
 // Iterates the HIR expression tree and extracts type "equations"
 // -----------------------------------------------------------------------
-class ExprVisitorEnum: public HIRExprVisitor {
+struct ExprVisitorEnum: public HIRExprVisitor {
     Context& context;
     const HIRTypeData* retType;
 
@@ -8107,7 +8096,6 @@ class ExprVisitorEnum: public HIRExprVisitor {
         bool revisit(Context& context, bool isFallback);
     };
 
-public:
     ExprVisitorEnum(Context& context, tTraitList baseTraits, const HIRTypeData* retType);
 
     void visit(HIRExprNodeBlock& node) override;
@@ -8196,7 +8184,6 @@ public:
 
     void visit(HIRExprNodeAsyncBlock& node) override;
 
-private:
     bool nodeDiverges(const HIRExprNode& node) const;
 
     void inheritDivergence(HIRExprNode& node, const HIRExprNode& child) const;
@@ -8209,10 +8196,9 @@ private:
 
     void visitPath(const Span& sp, HIRPath& path);
 
-    class InnerCoerceGuard {
+    struct InnerCoerceGuard {
         ExprVisitorEnum& t;
 
-    public:
         InnerCoerceGuard(ExprVisitorEnum& t);
 
         ~InnerCoerceGuard();
@@ -8417,11 +8403,10 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
 }
 
 namespace {
-    class RpitOriginMonomorph: public HIRMatchGenerics, public Monomorphiser {
+    struct RpitOriginMonomorph: public HIRMatchGenerics, public Monomorphiser {
         ::std::map<u32, HIRTypeRef> typeBindings;
         ::std::map<u32, HIRConstGeneric> valueBindings;
 
-    public:
         explicit RpitOriginMonomorph(HIRTypeInterner& types);
 
         HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override;
@@ -10438,7 +10423,7 @@ auto ExprVisitorApply::checkTypeResolvedGenericpath(const Span& sp, HIRGenericPa
 }
 
 auto ExprVisitorApply::checkTypeResolved(const Span& sp, HIRTypeRef& ty, const HIRTypeData* topType) const -> void {
-    class InnerVisitor: public HIRVisitor {
+    struct InnerVisitor: public HIRVisitor {
         struct ActiveType {
             const HIRTypeData* type;
             const ActiveType* parent;
@@ -10449,7 +10434,6 @@ auto ExprVisitorApply::checkTypeResolved(const Span& sp, HIRTypeRef& ty, const H
         const HIRTypeData* topType;
         const ActiveType* activeTypes = nullptr;
 
-    public:
         InnerVisitor(const ExprVisitorApply& parent, const Span& sp, const HIRTypeData* topType)
             : HIRVisitor(nullptr, parent.context.crate.types)
             , parent(parent)

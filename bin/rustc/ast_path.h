@@ -175,24 +175,6 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTPathNode& pn);
 };
 
-/*
-* TODO: New Path structure:
-* - Local(Ident): a resolved local name (variable, generic, ...)
-* - Relative(Ident, vector<RcString>, Generics): `foo::bar<...>`
-* - ModRelative(unsigned, vector<RcString>, Generics): `super::foo::bar<...>` or `self::foo`
-* - Absolute(RcString, vector<RcString>, Generics): `::foocrate::bar<...>`
-* - FullyQualified(Type, Path, Ident, Generics): `<Foo as Bar>::baz<...>`
-* - TypeQualified(Type, Ident, Generics): `<FooType>::baz<...>`
-* - UnknownQualified(Path, Ident, Generics): `FooTrait<...>::baz<...>` 
-* 
-* Goal:
-* - Reduce memory usage of AST (avoids `PathParams` everywhere)
-* - Simplify manipulation?
-* 
-* Downsides:
-* - Resolve uses append methods etc
-*/
-
 // Definitions generated from ast_path_class.tu.
 #include "ast_path_class_tu.h"
 

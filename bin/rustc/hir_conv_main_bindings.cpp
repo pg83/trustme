@@ -136,7 +136,7 @@ namespace {
         }
     }
 
-    class BindVisitor: public HIRVisitor {
+    struct BindVisitor: public HIRVisitor {
         const HIRCrate& crate;
 
         TypeckModuleState ms;
@@ -157,7 +157,6 @@ namespace {
         const ::std::vector<HIRSimplePath>* defineOpaque = nullptr;
         unsigned int fcnErasedCount = 0;
 
-    public:
         BindVisitor(const WireBoard& wb);
 
         HIRTypeInterner& interner() const;
@@ -220,21 +219,19 @@ namespace {
         void visitExpr(HIRExprPtr& expr) override;
     };
 
-    class VisitorEnumSuperTraits: public HIRVisitor {
+    struct VisitorEnumSuperTraits: public HIRVisitor {
         const HIRCrate& crate;
 
-    public:
         VisitorEnumSuperTraits(const HIRCrate& crate);
 
         void visitTrait(HIRItemPath ip, HIRTrait& tr) override;
     };
 
-    class VisitorPost: public HIRVisitor {
+    struct VisitorPost: public HIRVisitor {
         const HIRCrate& crate;
 
         TypeckModuleState ms;
 
-    public:
         VisitorPost(const WireBoard& wb);
 
         HIRTypeInterner& interner() const;
@@ -450,7 +447,7 @@ std::vector<HIRTraitPath> ConvertHIRExpandAliasesGetTraitExpansion(const Span& s
     return rv;
 }
 
-class Expander: public HIRVisitor {
+struct Expander: public HIRVisitor {
     const WireBoard& wb;
     const HIRCrate& crate;
     bool inExpr = false;
@@ -468,7 +465,6 @@ class Expander: public HIRVisitor {
 
     const ActiveTypeAlias* activeTypeAlias(const HIRTypeAlias* alias) const;
 
-public:
     Expander(const WireBoard& wb, const HIRCrate& crate);
 
     using GenericBounds = decltype(HIRGenericParams::bounds);
@@ -513,12 +509,11 @@ public:
     void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
 };
 
-class ExpanderSelf: public HIRVisitor {
+struct ExpanderSelf: public HIRVisitor {
     const HIRCrate& crate;
     const HIRTypeData* implType = nullptr;
     bool inExpr = false;
 
-public:
     ExpanderSelf(const HIRCrate& crate, const HIRTypeData* implType = nullptr);
 
     HIRTypeInterner& interner() const;
@@ -540,7 +535,7 @@ public:
 
 // Alias expansion clones unevaluated consts before the normal binding pass.
 // Attach the alias definition's identity arguments before those clones exist.
-class AliasConstGenericParamBinder: public HIRVisitor {
+struct AliasConstGenericParamBinder: public HIRVisitor {
     const HIRGenericParams* implParams = nullptr;
 
     struct Guard {
@@ -552,7 +547,6 @@ class AliasConstGenericParamBinder: public HIRVisitor {
         ~Guard();
     };
 
-public:
     explicit AliasConstGenericParamBinder(HIRTypeInterner& types);
 
     void visitConstgeneric(HIRConstGeneric& value) override;
@@ -571,7 +565,7 @@ void ConvertHIRExpandAliases(const WireBoard& wb, HIRCrate& crate) {
 }
 
 namespace {
-    class ReceiverValidator {
+    struct ReceiverValidator {
         HIRCrate& crate;
         StaticTraitResolve resolve;
         const HIRTypeData* implType = nullptr;
@@ -589,7 +583,6 @@ namespace {
         template <typename Impl, typename Callback>
         void forEachImpl(HIRCrate::ImplGroup<::std::unique_ptr<Impl>>& group, Callback callback);
 
-    public:
         ReceiverValidator(const WireBoard& wb, HIRCrate& crate);
 
         void validate();
@@ -617,7 +610,7 @@ void ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRTypeData* i
 
 namespace {
 
-    class MarkingsVisitor: public HIRVisitor {
+    struct MarkingsVisitor: public HIRVisitor {
         const HIRCrate& crate;
         StaticTraitResolve resolve_;
         const HIRSimplePath& langUnsize_;
@@ -626,7 +619,6 @@ namespace {
         const HIRSimplePath& langDeref_;
         const HIRSimplePath& langDrop_;
 
-    public:
         MarkingsVisitor(const WireBoard& wb);
 
         void visitStruct(HIRItemPath ip, HIRStruct& str) override;
@@ -638,10 +630,9 @@ namespace {
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
     };
 
-    class Visitor2: public HIRVisitor {
+    struct Visitor2: public HIRVisitor {
         StaticTraitResolve resolve_;
 
-    public:
         explicit Visitor2(const WireBoard& wb);
 
         size_t getUnsizeParamIdx(const Span& sp, const HIRTypeData* pointee) const;
@@ -693,7 +684,7 @@ void expandTraitImplDefaults(const HIRCrate& crate, const HIRSimplePath& traitPa
     }
 }
 
-class UfcsVisitor: public HIRVisitor {
+struct UfcsVisitor: public HIRVisitor {
     const HIRCrate& crate;
     bool visitExprs_;
     bool runEat;
@@ -712,7 +703,6 @@ class UfcsVisitor: public HIRVisitor {
     bool inExpr = false;
     HIRSimplePath curModPath;
 
-public:
     UfcsVisitor(const WireBoard& wb, bool visitExprs);
 
     void restoreExprContext(const HIRExprState& state, const HIRItemPath* traitPath);
@@ -4072,7 +4062,7 @@ auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathCo
     // This pass rewrites paths and resolves expressions inside const
     // generics, and those live inside types too: the path-bearing node
     // kinds go through a working copy and the owned-structure hooks
-    // (including this class's visitPath/visitConstgeneric overrides);
+    // (including this struct's visitPath/visitConstgeneric overrides);
     // everything else is plain recursion.
     switch (ty->tag()) {
         case HIRTypeData::TAG_Path:

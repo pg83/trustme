@@ -9,11 +9,10 @@
 
 namespace {
 
-    class MirDumper {
+    struct MirDumper {
         ::std::ostream& os;
         unsigned int indentLevel;
 
-    public:
         MirDumper(::std::ostream& os, unsigned int il);
 
         void dumpMir(const MIRFunction& fcn);
@@ -26,7 +25,6 @@ namespace {
 
         void fmtVal(::std::ostream& os, const MIRRValue& rval);
 
-    private:
         RepeatLitStr indent() const;
 
         void incIndent();
@@ -39,12 +37,11 @@ namespace {
         md.dumpMir(fcn);
     }
 
-    class TreeVisitor: public HIRVisitor {
+    struct TreeVisitor: public HIRVisitor {
         ::std::ostream& os;
         unsigned int indentLevel;
         bool shortItemName = false;
 
-    public:
         TreeVisitor(HIRTypeInterner& types, ::std::ostream& os);
 
         void visitTypeImpl(HIRTypeImpl& impl) override;
@@ -62,7 +59,6 @@ namespace {
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override;
 
-    private:
         RepeatLitStr indent() const;
 
         void incIndent();

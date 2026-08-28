@@ -60,7 +60,7 @@ namespace {
 #include <std/alg/defer.h>
 #include <algorithm>
 
-class CtfeContext {
+struct CtfeContext {
     struct ActiveDiscriminant {
         const HIREnum* enm;
         size_t idx;
@@ -70,7 +70,6 @@ class CtfeContext {
     const RcString vtableName_ = RcString::newInterned("vtable#");
     Vector<ActiveDiscriminant> activeDiscriminants_;
 
-public:
     bool capsOracle() const;
 
     const RcString& vtableName() const;
@@ -306,19 +305,17 @@ namespace {
     };
 }
 
-class MIREvalAllocation;
-class MIREvalConstant;
-class MIREvalStaticRef;
-class MIREvalRelocPtr;
+struct MIREvalAllocation;
+struct MIREvalConstant;
+struct MIREvalStaticRef;
+struct MIREvalRelocPtr;
 
 template <typename T>
-class MIREvalPtr {
-    friend class MIREvalRelocPtr;
+struct MIREvalPtr {
+    friend struct MIREvalRelocPtr;
 
-protected:
     T* ptr;
 
-public:
     MIREvalPtr();
 
     operator bool() const;
@@ -333,14 +330,12 @@ public:
 };
 
 /// "Statically allocated" constant data
-class MIREvalConstantPtr final: public MIREvalPtr<MIREvalConstant> {
-public:
+struct MIREvalConstantPtr final: public MIREvalPtr<MIREvalConstant> {
     static MIREvalConstantPtr allocate(ObjPool* pool, const void* data, size_t len);
 };
 
 /// Mutable allocation
-class MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
-public:
+struct MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
     static MIREvalAllocationPtr allocate(ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty);
     static MIREvalAllocationPtr allocateScratch(ObjPool* pool, size_t size);
     static MIREvalAllocationPtr allocateHeap(ObjPool* pool, size_t size, size_t alignment);
@@ -348,14 +343,12 @@ public:
 };
 
 /// Reference to a `static`
-class MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
-public:
+struct MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
     static MIREvalStaticRefPtr allocate(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending = false);
 };
 
 /// Common interface for data storage
-class IValue {
-public:
+struct IValue {
     virtual void fmtIdent(std::ostream& os) const = 0;
     virtual void fmt(::std::ostream& os, size_t ofs, size_t len) const = 0;
 
@@ -375,7 +368,7 @@ public:
 };
 
 /// Pointer wrapping a reference-counted allocation
-class MIREvalRelocPtr {
+struct MIREvalRelocPtr {
     uintptr_t ptr;
 
     enum Tag {
@@ -384,7 +377,6 @@ class MIREvalRelocPtr {
         TAG_StaticRef,
     };
 
-public:
     ~MIREvalRelocPtr() = default;
     MIREvalRelocPtr(const MIREvalRelocPtr&) = default;
     MIREvalRelocPtr(MIREvalRelocPtr&&) = default;
@@ -422,7 +414,6 @@ public:
         return os;
     }
 
-private:
     IValue* asValuePtr() const;
 
     void set(uintptr_t ptr, Tag tag);
@@ -438,15 +429,14 @@ void putbHex(std::ostream& os, u8 v) {
 }
 
 /// Constant data
-class MIREvalConstant final: public IValue {
+struct MIREvalConstant final: public IValue {
     friend struct Embed<MIREvalConstant>;
-    friend class MIREvalConstantPtr;
+    friend struct MIREvalConstantPtr;
     unsigned const length;
     const u8* const data;
 
     MIREvalConstant(const void* data, size_t len);
 
-public:
     void fmtIdent(std::ostream& os) const override;
 
     void fmt(::std::ostream& os, size_t ofs, size_t len) const override;
@@ -468,17 +458,15 @@ public:
     void setReloc(size_t ofs, MIREvalRelocPtr ptr) override;
 };
 
-class MIREvalAllocation final: public IValue {
+struct MIREvalAllocation final: public IValue {
     friend struct Embed<MIREvalAllocation>;
-    friend class MIREvalAllocationPtr;
+    friend struct MIREvalAllocationPtr;
 
-public:
     struct Reloc {
         size_t offset;
         MIREvalRelocPtr ptr;
     };
 
-private:
     unsigned length;
     bool isReadonly;
     HIRTypeRef type_;
@@ -494,7 +482,6 @@ private:
     MIREvalAllocation(const MIREvalAllocation&) = delete;
     MIREvalAllocation& operator=(const MIREvalAllocation&) = delete;
 
-public:
     void fmtIdent(std::ostream& os) const override;
 
     void fmt(::std::ostream& os, size_t ofs, size_t len) const override;
@@ -531,15 +518,14 @@ public:
 
     const std::vector<Reloc>& getRelocations() const;
 
-private:
     u8* getMask();
 
     const u8* getMask() const;
 };
 
-class MIREvalStaticRef final: public IValue {
+struct MIREvalStaticRef final: public IValue {
     friend struct Embed<MIREvalStaticRef>;
-    friend class MIREvalStaticRefPtr;
+    friend struct MIREvalStaticRefPtr;
 
     ObjPool* pool;
     HIRPath path_;
@@ -551,7 +537,6 @@ class MIREvalStaticRef final: public IValue {
 
     MIREvalStaticRef(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending);
 
-public:
     void fmtIdent(std::ostream& os) const override;
 
     void fmt(::std::ostream& os, size_t ofs, size_t len) const override;
@@ -617,12 +602,11 @@ namespace {
     }
 }
 
-class MIREvalValueRef {
+struct MIREvalValueRef {
     MIREvalRelocPtr storage;
     u32 ofs;
     u32 len;
 
-public:
     MIREvalValueRef();
 
     MIREvalValueRef(MIREvalRelocPtr alloc, size_t ofs = 0);
@@ -677,7 +661,6 @@ public:
 
     friend std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr);
 
-private:
     void ensureLive(const MIRTypeResolve& state) const;
 };
 
@@ -894,17 +877,15 @@ namespace {
     const unsigned TERM_RET_RETURN = UINT_MAX;
 } // namespace <anon>
 
-class MIREvalPathCallback final: public MIRPathCallback {
+struct MIREvalPathCallback final: public MIRPathCallback {
     HIRItemPath path;
 
-public:
     explicit MIREvalPathCallback(const HIRItemPath& path);
 
     void write(::std::ostream& os) const override;
 };
 
-class MIREvalCallStackEntry {
-public:
+struct MIREvalCallStackEntry {
     ObjPool* const valuePool;
     const unsigned frameIndex;
     const std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs;
@@ -3468,10 +3449,9 @@ namespace {
         static void visitEnumInner(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& p, const HIRModule& mod, const HIRItemPath& modPath, const char* name, HIREnum& item);
     };
 
-    class ExpanderApply: public HIRVisitor {
+    struct ExpanderApply: public HIRVisitor {
         ObjPool& pool_;
 
-    public:
         ExpanderApply(ObjPool& pool, HIRTypeInterner& types);
 
         void visitModule(HIRItemPath p, HIRModule& mod) override;

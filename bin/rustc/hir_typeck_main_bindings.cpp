@@ -99,7 +99,7 @@ namespace {
         UNREACHABLE();
     }
 
-    class Visitor: public HIRVisitor {
+    struct Visitor: public HIRVisitor {
         HIRCrate& crate;
         StaticTraitResolve resolve_;
         HIRGenericParams emptyParams;
@@ -120,10 +120,8 @@ namespace {
         typedef ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitImports;
         tTraitImports traits;
 
-    public:
         Visitor(const WireBoard& wb, HIRCrate& crate);
 
-    private:
         struct ModTraitsGuard {
             Visitor* v;
             tTraitImports oldImports;
@@ -139,14 +137,12 @@ namespace {
 
         void checkParameters(const Span& sp, const HIRSimplePath& usedPath, PathContext pc, const HIRGenericParams& paramDef, HIRPathParams& paramVals);
 
-    public:
         void visitPathParams(HIRPathParams& pp) override;
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
 
         void visitGenericPath(HIRGenericPath& p, PathContext pc) override;
 
-    private:
         bool locateTraitItemInBounds(const Span& sp, HIRVisitor::PathContext pc, const HIRTypeData* tr, const HIRGenericParams& params, HIRPath::Data& pd);
 
         static HIRPath::Data getUfcsKnown(HIRPath::Data::Data_UfcsUnknown e, HIRGenericPath traitPath, const HIRTrait& trait);
@@ -165,7 +161,6 @@ namespace {
 
         void visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathContext pc);
 
-    public:
         void visitExpr(HIRExprPtr& exp) override;
 
         void visitPath(HIRPath& p, HIRVisitor::PathContext pc) override;

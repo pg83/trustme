@@ -13,8 +13,7 @@ using namespace stl;
 
 namespace {
     /// Cached lookup logic for inherent (non-trait) methods on types
-    class InherentCacheImpl final: public HIRInherentCache {
-    public:
+    struct InherentCacheImpl final: public HIRInherentCache {
         struct Lowest {
             // Same as HIR::Crate::ImplGroup
             typedef ::std::vector<const HIRTypeImpl*> listT;
@@ -103,8 +102,8 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
     };
 
     switch ((*curTy).tag()) {
-default:
-        BUG(sp, "Unknown receiver type - " << curTy);
+        default:
+            BUG(sp, "Unknown receiver type - " << curTy);
         case HIRTypeData::TAG_Generic: {
             auto& te = (*curTy).as_Generic();
             if (te.isSelf()) {
@@ -165,9 +164,9 @@ void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct,
     const Inner* inner = nullptr;
     const HIRTypeData* innerTy = nullptr;
     switch ((*curTy).tag()) {
-default:
-        // No recursion possible
-        break;
+        default:
+            // No recursion possible
+            break;
         case HIRTypeData::TAG_Borrow: {
             auto& te = (*curTy).as_Borrow();
             innerTy = te.inner;
@@ -222,7 +221,7 @@ default:
         }
     }
 
-    if(inner) {
+    if (inner) {
         assert(innerTy);
         inner->find(sp, innerTy, tyRes, cb);
     }
@@ -289,6 +288,7 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
 
         void visit(const HIRTypeData* roughSelfTy, const HIRTypeImpl& impl) override {
             const HIRFunction& fcn = impl.methods.at(name).data;
+
             struct GetSelf: public HIRMatchGenerics {
                 ::std::optional<HIRTypeRef> detectedSelfTy;
 
@@ -303,6 +303,7 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
                     }
                     return HIRCompare::Equal;
                 }
+
                 HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
                     TODO(Span(), "GetSelf::match_val " << g << " with " << sz);
                 }
@@ -318,8 +319,7 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
                     // The matched concrete impl is enough to turn `<_>::method`
                     // into a resolvable path. Keep generic impls on the old path:
                     // their parameters have not been monomorphised here.
-                    if (resolvedSelfTy->is_Infer() && !resolvedSelfTy->as_Infer().isLit()
-                        && !impl.type->needsMonomorphisation()) {
+                    if (resolvedSelfTy->is_Infer() && !resolvedSelfTy->as_Infer().isLit() && !impl.type->needsMonomorphisation()) {
                         selfTy = impl.type;
                     }
                     output.visit(selfTy, impl);
@@ -330,6 +330,7 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
             }
         }
     } filter(sp, name, ty, tyRes, cb);
+
     auto it = items.find(name);
     if (it != items.end()) {
         it->second.find(sp, ty, tyRes, filter);

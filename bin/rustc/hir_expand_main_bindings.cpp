@@ -72,7 +72,7 @@ namespace {
 // Definitions generated from hir_expand_scope.tu.
 #include "hir_expand_scope_tu.h"
 
-    class AnnotateExprVisitorMark:
+    struct AnnotateExprVisitorMark:
         public HIRExprVisitor //Def
     {
         const StaticTraitResolve& resolve_;
@@ -99,7 +99,6 @@ namespace {
 
         UsageGuard pushUsage(HIRValueUsage u);
 
-    public:
         AnnotateExprVisitorMark(const StaticTraitResolve& resolve, const ::std::vector<HIRTypeRef>& variableTypes);
 
         void visitRoot(HIRExprPtr& rootPtr);
@@ -186,7 +185,6 @@ namespace {
 
         void visit(HIRExprNodeAsyncBlock& node) override;
 
-    private:
         void addVarDefClosure(const Span& sp, ClosureScope& e, unsigned int slot);
 
         void addVarDefGenerator(const Span& sp, CoroutineScope& scope, unsigned int slot);
@@ -214,10 +212,9 @@ namespace {
         void applyCoroutine(const Span& sp, bool isMove, bool isCoroutineClosureBody, HIRExprNodeGenerator::AvuCache& avuCache, std::map<unsigned, CoroutineScope::Var>& usedVariables);
     };
 
-    class AnnotateOuterVisitor: public HIRVisitor {
+    struct AnnotateOuterVisitor: public HIRVisitor {
         StaticTraitResolve resolve_;
 
-    public:
         AnnotateOuterVisitor(const WireBoard& wb);
 
         void visitExpr(HIRExprPtr& exp) override;
@@ -357,7 +354,7 @@ namespace {
     }
 
     /// Mutate the contents of a closure to update captures, variables, and types
-    class ClosureExprVisitorMutate: public HIRExprVisitorDef {
+    struct ClosureExprVisitorMutate: public HIRExprVisitorDef {
         const HIRTypeData* closureType;
         const ::std::vector<unsigned int>& localVars;
         const ::std::vector<HIRExprNodeClosure::AvuCache::Capture>& captures;
@@ -367,7 +364,6 @@ namespace {
 
         HIRExprNodeP replacement_;
 
-    public:
         ClosureExprVisitorMutate(ObjPool* pool, const HIRTypeData* closureType, const ::std::vector<unsigned int>& localVars, const ::std::vector<HIRExprNodeClosure::AvuCache::Capture>& captures, const Monomorphiser& mcb);
 
         void visitPattern(const Span& sp, HIRPattern& pat) override;
@@ -395,19 +391,17 @@ namespace {
         HIRExprNodeP getSelf(const Span& sp) const;
     };
 
-    class AnonymousTypeMonomorph: public MonomorphiserNop {
+    struct AnonymousTypeMonomorph: public MonomorphiserNop {
         const Monomorphiser& pathMonomorphiser;
         bool allowUnextracted;
 
-    public:
         AnonymousTypeMonomorph(const Monomorphiser& pathMonomorphiser, bool allowUnextracted);
 
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer) const override;
     };
 
     /// Visitor to replace closure types with actual type
-    class ClosureExprVisitorFixup: public HIRExprVisitorDef {
-    public:
+    struct ClosureExprVisitorFixup: public HIRExprVisitorDef {
         const HIRCrate& crate;
         StaticTraitResolve resolve_;
         ObjPool* pool;
@@ -416,7 +410,6 @@ namespace {
         bool allowUnextracted;
         bool runEat;
 
-    public:
         ClosureExprVisitorFixup(const WireBoard& wb, const HIRGenericParams* params, const Monomorphiser& monomorphiser, const OutState* out, bool allowUnextracted = false);
 
         void visitRoot(HIRExprPtr& root);
@@ -458,7 +451,7 @@ namespace {
     };
 
     /// Extract closures from the main tree
-    class ClosureExprVisitorExtract: public HIRExprVisitorDef {
+    struct ClosureExprVisitorExtract: public HIRExprVisitorDef {
         const StaticTraitResolve& resolve_;
         ObjPool* pool;
         const HIRTypeData* selfType;
@@ -486,10 +479,9 @@ namespace {
             ~ActiveNodeGuard();
         };
 
-        class FrozenMonomorph: public MonomorphiserNop {
+        struct FrozenMonomorph: public MonomorphiserNop {
             const HIRPathParams& sourceParams;
 
-        public:
             FrozenMonomorph(HIRTypeInterner& types, const HIRPathParams& sourceParams);
 
             HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override;
@@ -497,10 +489,9 @@ namespace {
             HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
         };
 
-        class DeferredExprFixup: public HIRExprVisitorDef {
+        struct DeferredExprFixup: public HIRExprVisitorDef {
             const Monomorphiser& monomorphiser;
 
-        public:
             explicit DeferredExprFixup(const Monomorphiser& monomorphiser);
 
             void visitRoot(HIRExprPtr& root);
@@ -508,10 +499,9 @@ namespace {
             HIRTypeRef visitType(HIRTypeRef type) override;
         };
 
-        class DeferredItemFixup: public HIRVisitor {
+        struct DeferredItemFixup: public HIRVisitor {
             const Monomorphiser& monomorphiser;
 
-        public:
             explicit DeferredItemFixup(const Monomorphiser& monomorphiser);
 
             HIRTypeRef visitType(HIRTypeRef type) override;
@@ -533,7 +523,6 @@ namespace {
 
         DeferredFixup* deferredFixups = nullptr;
 
-    public:
         ClosureExprVisitorExtract(const StaticTraitResolve& resolve, const HIRTypeData* selfType, const ::std::vector<HIRTypeRef>& varTypes, const HIRExprPtr& exprPtr, OutState& out, const char* newTypeSuffix, bool isAsyncDropIntrinsic = false);
 
         void visitRoot(HIRExprNode& root);
@@ -571,7 +560,6 @@ namespace {
 
             void addBounds(const Span& sp, const StaticTraitResolve& resolve);
 
-        private:
             template <typename T, typename U>
             static bool contains(const ::std::vector<T>& l, const U& v);
 
@@ -607,13 +595,12 @@ namespace {
         void visit(HIRExprNodeClosure& node) override;
 
         // So, re-write all variable references into either a capture or a local.
-        class ExprVisitorGeneratorRewrite: public HIRExprVisitorDef {
+        struct ExprVisitorGeneratorRewrite: public HIRExprVisitorDef {
             const Monomorph& monomorph;
             const std::map<unsigned, unsigned>& variableRewrites;
 
             HIRExprNodeP replacement_;
 
-        public:
             ExprVisitorGeneratorRewrite(const Monomorph& monomorph, const std::map<unsigned, unsigned>& rewrites);
 
             [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
@@ -679,21 +666,18 @@ namespace {
         void visit(HIRExprNodeLoop& node) override;
 
         void visit(HIRExprNodeYield& node) override;
-
-    private:
     };
 
     /// <summary>
     /// Top-level visitor
     /// </summary>
-    class ClosureOuterVisitor: public HIRVisitor {
+    struct ClosureOuterVisitor: public HIRVisitor {
         StaticTraitResolve resolve_;
         OutState out;
 
         const HIRSimplePath* curModPath;
         const HIRTypeData* selfType = nullptr;
 
-    public:
         ClosureOuterVisitor(const WireBoard& wb);
 
         void visitCrate(HIRCrate& crate) override;
@@ -790,7 +774,6 @@ void HIRExpandClosures(const WireBoard& wb, HIRCrate& crate) {
     struct ClosureOuterVisitorPass2: public HIRVisitor {
         StaticTraitResolve resolve_;
 
-    public:
         ClosureOuterVisitorPass2(const WireBoard& wb)
             : HIRVisitor(nullptr, wb.crate->types)
             , resolve_(wb)
@@ -841,10 +824,9 @@ namespace {
         resolve.revealOpaqueTypes(sp, ty);
     }
 
-    class ErasedExprVisitorExtract: public HIRExprVisitorDef {
+    struct ErasedExprVisitorExtract: public HIRExprVisitorDef {
         const StaticTraitResolve& resolve_;
 
-    public:
         ErasedExprVisitorExtract(const StaticTraitResolve& resolve);
 
         void visitRoot(HIRExprPtr& root);
@@ -854,19 +836,17 @@ namespace {
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
     };
 
-    class ErasedOuterVisitor: public HIRVisitor {
+    struct ErasedOuterVisitor: public HIRVisitor {
         StaticTraitResolve resolve_;
 
-    public:
         ErasedOuterVisitor(const WireBoard& wb);
 
         void visitExpr(HIRExprPtr& exp) override;
     };
 
-    class ErasedOuterVisitorFixup: public HIRVisitor {
+    struct ErasedOuterVisitorFixup: public HIRVisitor {
         StaticTraitResolve resolve_;
 
-    public:
         ErasedOuterVisitorFixup(const WireBoard& wb);
 
         void visitParams(HIRGenericParams& params) override;
@@ -894,12 +874,11 @@ namespace {
 
 namespace {
 
-    class ReborrowExprVisitorMutate: public HIRExprVisitorDef {
+    struct ReborrowExprVisitorMutate: public HIRExprVisitorDef {
         const HIRCrate& crate;
 
         void markUniquePlace(HIRExprNodeP& node);
 
-    public:
         ReborrowExprVisitorMutate(const HIRCrate& crate);
 
         void visitNodePtr(HIRExprPtr& root);
@@ -939,10 +918,9 @@ namespace {
         void visit(HIRExprNodeAsyncBlock& node) override;
     };
 
-    class ReborrowOuterVisitor: public HIRVisitor {
+    struct ReborrowOuterVisitor: public HIRVisitor {
         const HIRCrate& crate;
 
-    public:
         ReborrowOuterVisitor(const HIRCrate& crate);
 
         void visitExpr(HIRExprPtr& exp) override;
@@ -1038,7 +1016,7 @@ static HIRExprNodeP* staticBorrowPromotionRoot(HIRExprNodeP& value) {
     }
 }
 
-class StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
+struct StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
     const StaticTraitResolve& resolve_;
     const HIRTypeData* selfType;
     const HIRExprPtr& exprPtr;
@@ -1051,7 +1029,6 @@ class StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
     bool allConstant_;
     bool promoteAllConstFnCalls;
 
-public:
     StaticBorrowExprVisitorMark(const StaticTraitResolve& resolve, const HIRTypeData* selfType, const HIRExprPtr& exprPtr, bool promoteAllConstFnCalls = false);
 
     bool allConstant() const;
@@ -1114,7 +1091,6 @@ public:
     // - Closures: Only constant if they don't capture anything
     void visit(HIRExprNodeClosure& node) override;
 
-private:
     bool nodeIsConstant(HIRExprNodeP& node);
 
     bool candidateNeedsDrop(HIRExprNodeP& root) const;
@@ -1125,7 +1101,7 @@ private:
 /// <summary>
 /// Visit all expressions and just mark borrows that are of promotable statics (don't promote just yet)
 /// </summary>
-class StaticBorrowOuterVisitorMark: public HIRVisitor {
+struct StaticBorrowOuterVisitorMark: public HIRVisitor {
     const HIRCrate& crate;
     StaticTraitResolve resolve_;
 
@@ -1133,7 +1109,6 @@ class StaticBorrowOuterVisitorMark: public HIRVisitor {
     const HIRItemPath* currentModulePath;
     const HIRModule* currentModule;
 
-public:
     StaticBorrowOuterVisitorMark(const WireBoard& wb);
 
     void visitModule(HIRItemPath p, HIRModule& mod) override;
@@ -1176,8 +1151,7 @@ struct NewStaticCb final: NewStaticCallback {
     HIRSimplePath create(Span sp, HIRTypeRef type, HIRExprPtr value, HIRGenericParams generics, bool isConst) override;
 };
 
-class StaticBorrowExprVisitorMutate: public HIRExprVisitorDef {
-private:
+struct StaticBorrowExprVisitorMutate: public HIRExprVisitorDef {
     const StaticTraitResolve& resolve_;
     const HIRTypeData* selfType;
     NewStaticCallback& newStaticCb;
@@ -1185,7 +1159,6 @@ private:
 
     HIRSimplePath langRangeFull_;
 
-public:
     StaticBorrowExprVisitorMutate(const StaticTraitResolve& resolve, const HIRTypeData* selfType, NewStaticCallback& newStaticCb, const HIRExprPtr& exprPtr);
 
     void visitNodePtr(HIRExprPtr& root);
@@ -1223,7 +1196,7 @@ public:
     void visit(HIRExprNodeConstBlock& node) override;
 };
 
-class StaticBorrowOuterVisitor: public HIRVisitor, public NewStaticCallback {
+struct StaticBorrowOuterVisitor: public HIRVisitor, public NewStaticCallback {
     const HIRCrate& crate;
     StaticTraitResolve resolve_;
 
@@ -1241,7 +1214,6 @@ class StaticBorrowOuterVisitor: public HIRVisitor, public NewStaticCallback {
 
     std::map<const HIRModule*, std::vector<NewStatic>> newStatics;
 
-public:
     StaticBorrowOuterVisitor(const WireBoard& wb);
 
     HIRSimplePath create(Span sp, HIRTypeRef ty, HIRExprPtr valExpr, HIRGenericParams generics, bool isConst) override;
@@ -1416,14 +1388,13 @@ namespace {
 
 namespace {
 
-    class UfcsExprVisitorMutate: public HIRExprVisitorDef {
+    struct UfcsExprVisitorMutate: public HIRExprVisitorDef {
         const HIRCrate& crate;
         const HIRTraitImpl* currentTraitImpl;
         StaticTraitResolve resolve_;
         HIRExprNodeP replacement_;
         HIRSimplePath langBox_;
 
-    public:
         UfcsExprVisitorMutate(const WireBoard& wb, const HIRTraitImpl* currentTraitImpl = nullptr);
 
         void visitNodePtr(HIRExprPtr& root);
@@ -1463,12 +1434,11 @@ namespace {
         void visit(HIRExprNodeUnsize& node) override;
     };
 
-    class UfcsOuterVisitor: public HIRVisitor {
+    struct UfcsOuterVisitor: public HIRVisitor {
         const WireBoard& wb;
         const HIRCrate& crate;
         const HIRTraitImpl* currentTraitImpl = nullptr;
 
-    public:
         UfcsOuterVisitor(const WireBoard& wb);
 
         // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
@@ -1506,7 +1476,7 @@ void HIRExpandUfcsEverything(const WireBoard& wb, HIRCrate& crate) {
 #undef NEWNODE
 
 namespace {
-    class VisitorImplTrait: public HIRVisitor {
+    struct VisitorImplTrait: public HIRVisitor {
         HIRTrait* targetTrait = nullptr;
         HIRTraitImpl* targetImpl = nullptr;
 
@@ -1518,21 +1488,18 @@ namespace {
         unsigned varIndex = 0;
         ::std::vector<HIRTypeRef> tys;
 
-    public:
         explicit VisitorImplTrait(HIRTypeInterner& types);
 
-    private:
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
 
         void handleMethod(const HIRSimplePath& traitPath, const HIRPathParams& traitArgs, const HIRTypeData* selfTy, const RcString& name, HIRFunction& fcn);
 
-    public:
         void visitTrait(HIRItemPath p, HIRTrait& tr) override;
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
     };
 
-    class VtableOuterVisitor: public HIRVisitor {
+    struct VtableOuterVisitor: public HIRVisitor {
         using NewTypes = ::std::vector<::std::pair<RcString, HIRVisEnt<HIRTypeItem>*>>;
 
         const WireBoard& wb;
@@ -1543,7 +1510,6 @@ namespace {
 
         HIRSimplePath createType(bool isPublic, RcString name, HIRStruct value);
 
-    public:
         VtableOuterVisitor(const WireBoard& wb);
 
         void visitModule(HIRItemPath p, HIRModule& mod) override;
@@ -1553,10 +1519,9 @@ namespace {
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
     };
 
-    class FixupVisitor: public HIRVisitor {
+    struct FixupVisitor: public HIRVisitor {
         const HIRCrate& crate;
 
-    public:
         FixupVisitor(const HIRCrate& crate);
 
         void visitStruct(HIRItemPath ip, HIRStruct& str);

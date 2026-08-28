@@ -22,11 +22,11 @@
         }                                                               \
     } while (0)
 
-class RustPrinter: public ASTNodeVisitor {
+struct RustPrinter: public ASTNodeVisitor {
     ::std::ostream& os;
     int indentLevel;
     bool exprRoot; //!< used to allow 'if' and 'match' to behave differently as standalone exprs
-public:
+
     RustPrinter(::std::ostream& os);
 
     void handleModule(const ASTModule& mod);
@@ -125,7 +125,6 @@ public:
 
     virtual void visit(ASTExprNodeMacroDefinition& n) override;
 
-private:
     void parenWrap(ASTExprNodeP& node);
 
     void printAttrs(const ASTAttributeList& attrs);

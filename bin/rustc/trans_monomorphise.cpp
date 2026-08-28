@@ -14,7 +14,7 @@
 using namespace stl;
 
 namespace {
-    class AsyncDropPollBuilder {
+    struct AsyncDropPollBuilder {
         const Span& sp;
         const StaticTraitResolve& resolve;
         const HIRTypeData* dropeeTy;
@@ -24,7 +24,7 @@ namespace {
         unsigned nextPhase = 3;
         Vector<::std::pair<unsigned, MIRBasicBlockId>> resumeTargets;
 
-        class CoroutineDropCloner: public MIRCloner {
+        struct CoroutineDropCloner: public MIRCloner {
             const AsyncDropPollBuilder& owner;
             const MonomorphState& params;
             MIRLValue dropee;
@@ -33,7 +33,6 @@ namespace {
             unsigned dropFlagBase;
             unsigned returnLocal;
 
-        public:
             CoroutineDropCloner(const AsyncDropPollBuilder& owner, const MonomorphState& monomorph, MIRLValue dropee, unsigned bbBase, unsigned localBase, unsigned dropFlagBase, unsigned returnLocal);
 
             MIRBasicBlockId mapBbIdx(MIRBasicBlockId idx) const override;
@@ -81,7 +80,6 @@ namespace {
 
         MIRBasicBlockId buildType(const HIRTypeData* ty, MIRLValue value, MIRBasicBlockId next);
 
-    public:
         AsyncDropPollBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* dropeeTy, const HIRTypeData* outerTy);
 
         MIRFunctionPointer build();
@@ -99,11 +97,10 @@ namespace {
         return intrinsic && intrinsic->name == "async_drop_glue_poll" ? intrinsic : nullptr;
     }
 
-    class Cloner: public MIRCloner {
+    struct Cloner: public MIRCloner {
         const ::StaticTraitResolve& resolve_;
         const TransParams& params;
 
-    public:
         Cloner(const Span& sp, const ::StaticTraitResolve& resolve, const TransParams& params);
 
         const HIRTypeData* valueGenericType(HIRGenericRef g) const override;

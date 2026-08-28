@@ -35,12 +35,11 @@ namespace {
     }
 }
 
-class StaticTraitResolve::NextSolverBridge {
+struct StaticTraitResolve::NextSolverBridge {
     HMTypeInferrence ivars;
     HIRSimplePath visibility;
     TraitResolution resolve_;
 
-public:
     explicit NextSolverBridge(const WireBoard& wb);
 
     bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, StaticImplCallback& callback);
@@ -75,19 +74,16 @@ namespace {
     // Generic-header matching is also used by inherent impl lookup.  Keep this
     // small collector independent of trait candidate selection: it only records
     // substitutions produced by HIR's structural matcher.
-    class GetParams: public HIRMatchGenerics {
-    public:
+    struct GetParams: public HIRMatchGenerics {
         struct ParamsSet {
             Vector<u8> types;
             Vector<u8> values;
         };
 
-    private:
         Span sp;
         HIRPathParams& implParams;
         ParamsSet& paramsSet;
 
-    public:
         GetParams(Span sp, ObjPool& valuePool, const HIRGenericParams& implParamsDef, HIRPathParams& implParams, ParamsSet& paramsSet);
 
         HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override;
@@ -441,7 +437,7 @@ void StaticTraitResolve::expandAssociatedTypes(const Span& sp, HIRTypeRef& input
 }
 
 void StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, HIRTypeRef& input) const {
-    class Visitor: public HIRVisitor {
+    struct Visitor: public HIRVisitor {
         const Span& sp;
         const StaticTraitResolve& resolve;
         bool clearOpaque = false;
@@ -501,7 +497,6 @@ void StaticTraitResolve::revealOpaqueTypesShallow(const Span& sp, HIRTypeRef& in
             type = std::move(revealed);
         }
 
-    public:
         Visitor(const Span& sp, const StaticTraitResolve& resolve)
             : HIRVisitor(nullptr, resolve.hirCrate().types)
             , sp(sp)

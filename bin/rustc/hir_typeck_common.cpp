@@ -17,7 +17,7 @@ struct WMut {
     typedef I T;
 };
 
-template <template <typename> class W>
+template <template <typename> typename W>
 struct TyVisitor {
     const LList<const HIRTypeData*>* curRecurseStack = nullptr;
 
@@ -690,12 +690,12 @@ bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRTypeData* 
     }
 }
 
-template <template <typename> class W>
+template <template <typename> typename W>
 auto TyVisitor<W>::visitConstGeneric(typename W<HIRConstGeneric>::T&) -> bool {
     return false;
 }
 
-template <template <typename> class W>
+template <template <typename> typename W>
 auto TyVisitor<W>::visitPathParams(typename W<HIRPathParams>::T& tpl) -> bool {
     for (auto& ty : tpl.types) {
         if (visitType(ty)) {
@@ -710,7 +710,7 @@ auto TyVisitor<W>::visitPathParams(typename W<HIRPathParams>::T& tpl) -> bool {
     return false;
 }
 
-template <template <typename> class W>
+template <template <typename> typename W>
 auto TyVisitor<W>::visitTraitPath(typename W<HIRTraitPath>::T& tpl) -> bool {
     if (visitPathParams(tpl.path.params)) {
         return true;
@@ -733,7 +733,7 @@ auto TyVisitor<W>::visitTraitPath(typename W<HIRTraitPath>::T& tpl) -> bool {
     return false;
 }
 
-template <template <typename> class W>
+template <template <typename> typename W>
 auto TyVisitor<W>::visitPath(typename W<HIRPath>::T& path) -> bool {
     switch (path.data.tag()) {
         case HIRPathData::TAG_Generic: {
@@ -756,7 +756,7 @@ auto TyVisitor<W>::visitPath(typename W<HIRPath>::T& path) -> bool {
     UNREACHABLE();
 }
 
-template <template <typename> class W>
+template <template <typename> typename W>
 auto TyVisitor<W>::visitType(const HIRTypeData* ty) -> bool {
     if (curRecurseStack) {
         for (const auto* p : *curRecurseStack) {

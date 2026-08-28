@@ -835,11 +835,10 @@ namespace {
         }
     }
 
-    class ImplMatcher: public HIRMatchGenerics {
+    struct ImplMatcher: public HIRMatchGenerics {
         // Borrowed reused scratch (see matchesTypeRoot); nullptr = unbound.
         Vector<HIRTypeRef>& implTypes;
 
-    public:
         ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics);
 
         HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override;
@@ -1193,11 +1192,10 @@ namespace {
         return pattern.traitArgs.matchTestGenericsFuzz(sp, value.traitArgs, resolve, matcher) != HIRCompare::Unequal;
     }
 
-    class ImplHeadMonomorphiser: public Monomorphiser {
+    struct ImplHeadMonomorphiser: public Monomorphiser {
         const ImplMatcher& matcher;
         mutable bool complete_ = true;
 
-    public:
         ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplMatcher& matcher);
 
         HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;

@@ -8,7 +8,7 @@
 #include <string.h> // memcpy
 #include <algorithm>
 
-class HIRSerialiseWriterInner {
+struct HIRSerialiseWriterInner {
     ::std::ofstream backing;
     z_stream zstream;
     ::std::vector<unsigned char> buffer;
@@ -16,7 +16,6 @@ class HIRSerialiseWriterInner {
     unsigned int byteOutCount = 0;
     unsigned int byteInCount = 0;
 
-public:
     HIRSerialiseWriterInner(const ::std::string& filename);
     ~HIRSerialiseWriterInner();
     void write(const void* buf, size_t len);
@@ -169,7 +168,7 @@ void HIRSerialiseWriterInner::write(const void* buf, size_t len) {
 }
 
 // --------------------------------------------------------------------
-class HIRSerialiseReaderInner {
+struct HIRSerialiseReaderInner {
     ::std::ifstream backing;
     z_stream zstream;
     ::std::vector<unsigned char> buffer;
@@ -177,7 +176,6 @@ class HIRSerialiseReaderInner {
     unsigned int byteOutCount = 0;
     unsigned int byteInCount = 0;
 
-public:
     HIRSerialiseReaderInner(const ::std::string& filename);
     ~HIRSerialiseReaderInner();
     size_t read(void* buf, size_t len);

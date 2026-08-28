@@ -1261,10 +1261,9 @@ namespace {
     // carries the ADT DefId as part of the nominal type and cannot represent
     // that state.  Restore the equivalent invariant at the translation
     // boundary instead of teaching codegen to accept missing metadata.
-    class BindTranslationNominals final: public HIRVisitor {
+    struct BindTranslationNominals final: public HIRVisitor {
         const HIRCrate& crate;
 
-    public:
         explicit BindTranslationNominals(const HIRCrate& crate);
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
@@ -1295,7 +1294,6 @@ namespace {
 
         void enumFcn(HIRPath p, const HIRFunction& fcn, TransParams pp);
 
-    private:
         void enumerateLinkFunctions();
 
         void enumerateLinkFunctionsIn(const HIRModule& mod, HIRItemPath modPath);
@@ -1319,12 +1317,11 @@ void TransEnumerateFillFromLiteral(EnumState& state, const EncodedLiteral& lit, 
 void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code);
 
 namespace {
-    class GlobalAsmOperandEvaluator: public HIRVisitor {
+    struct GlobalAsmOperandEvaluator: public HIRVisitor {
         const WireBoard& wb;
         const HIRCrate& crate;
         const Span* span = nullptr;
 
-    public:
         explicit GlobalAsmOperandEvaluator(const WireBoard& wb);
 
         void evaluate(HIRGlobalAssembly& item);

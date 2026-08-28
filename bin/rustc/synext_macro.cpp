@@ -52,28 +52,23 @@ namespace {
     }
 }
 
-class CTraceMacrosExpander: public ExpandProcMacro {
-public:
+struct CTraceMacrosExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override;
 };
 
-class CLogSyntaxExpander: public ExpandProcMacro {
-public:
+struct CLogSyntaxExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override;
 };
 
-class CPatternTypeExpander: public ExpandProcMacro {
-public:
+struct CPatternTypeExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override;
 };
 
-class CIterExpander: public ExpandProcMacro {
-public:
+struct CIterExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CLlvmAsmExpander: public ExpandProcMacro {
-public:
+struct CLlvmAsmExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
@@ -263,23 +258,19 @@ namespace {
     }
 }
 
-class CAsmExpander: public ExpandProcMacro {
-public:
+struct CAsmExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CGlobalAsmExpander: public ExpandProcMacro {
-public:
+struct CGlobalAsmExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CNakedAsmExpander: public ExpandProcMacro {
-public:
+struct CNakedAsmExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class GenericAssertCaptureVisitor: public ASTNodeVisitor {
-public:
+struct GenericAssertCaptureVisitor: public ASTNodeVisitor {
     struct Capture {
         ASTPath path;
         RcString name;
@@ -356,7 +347,6 @@ public:
 
     ASTExprNodeP makeTryCapture(RcString captureName, RcString localBindName, const Span& sp) const;
 
-private:
     ASTPath generatedPath(RcString name) const;
 
     ASTExprNodeP makeGeneratedValue(RcString name, const Span& sp) const;
@@ -367,19 +357,19 @@ private:
     bool consumed = true;
 };
 
-class CExpanderAssert: public ExpandProcMacro {
+struct CExpanderAssert: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CExpanderCompileError: public ExpandProcMacro {
+struct CExpanderCompileError: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CConcatExpander: public ExpandProcMacro {
+struct CConcatExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CConcatBytesExpander: public ExpandProcMacro {
+struct CConcatBytesExpander: public ExpandProcMacro {
     static char getArrayByte(const Span& sp, const ASTExprNode& node);
 
     static void append(const Span& sp, ::std::string& output, const ASTExprNode& node);
@@ -387,7 +377,7 @@ class CConcatBytesExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CConcatIdentsExpander: public ExpandProcMacro {
+struct CConcatIdentsExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
@@ -415,31 +405,31 @@ namespace {
     }
 }
 
-class CExpanderEnv: public ExpandProcMacro {
+struct CExpanderEnv: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CExpanderOptionEnv: public ExpandProcMacro {
+struct CExpanderOptionEnv: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CExpanderFile: public ExpandProcMacro {
+struct CExpanderFile: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CExpanderLine: public ExpandProcMacro {
+struct CExpanderLine: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CExpanderColumn: public ExpandProcMacro {
+struct CExpanderColumn: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CExpanderUnstableColumn: public ExpandProcMacro {
+struct CExpanderUnstableColumn: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CExpanderModulePath: public ExpandProcMacro {
+struct CExpanderModulePath: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
@@ -1308,15 +1298,15 @@ namespace {
     }
 }
 
-class CFormatArgsExpander: public ExpandProcMacro {
+struct CFormatArgsExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CConstFormatArgsExpander: public ExpandProcMacro {
+struct CConstFormatArgsExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CFormatArgsNlExpander: public ExpandProcMacro {
+struct CFormatArgsNlExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
@@ -1364,41 +1354,41 @@ namespace {
     }
 };
 
-class CIncludeExpander: public ExpandProcMacro {
+struct CIncludeExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CIncludeBytesExpander: public ExpandProcMacro {
+struct CIncludeBytesExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CIncludeStrExpander: public ExpandProcMacro {
+struct CIncludeStrExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
 // TODO: include_str! and include_bytes!
 
-class CExpanderPanic: public ExpandProcMacro {
+struct CExpanderPanic: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CExpanderUnreachable: public ExpandProcMacro {
+struct CExpanderUnreachable: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CExpanderRegisterDiagnostic: public ExpandProcMacro {
+struct CExpanderRegisterDiagnostic: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CExpanderDiagnosticUsed: public ExpandProcMacro {
+struct CExpanderDiagnosticUsed: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CExpanderBuildDiagnosticArray: public ExpandProcMacro {
+struct CExpanderBuildDiagnosticArray: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CExpander: public ExpandProcMacro {
+struct CExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 

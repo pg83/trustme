@@ -30,22 +30,19 @@ extern char** environ;
 
 #define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
 
-class DecoratorProcMacroDerive: public ExpandDecorator {
-public:
+struct DecoratorProcMacroDerive: public ExpandDecorator {
     AttrStage stage() const override;
 
     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
-class DecoratorProcMacroAttribute: public ExpandDecorator {
-public:
+struct DecoratorProcMacroAttribute: public ExpandDecorator {
     AttrStage stage() const override;
 
     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
-class DecoratorProcMacro: public ExpandDecorator {
-public:
+struct DecoratorProcMacro: public ExpandDecorator {
     AttrStage stage() const override;
 
     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
@@ -178,7 +175,6 @@ struct ProcMacroInv: public TokenStream {
     Vector<u8> pendingSymbols;
     size_t pendingSymbolOffset = 0;
 
-public:
     ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const char* executable, const HIRProcMacro& procMacroDesc);
     ProcMacroInv(const ProcMacroInv&) = delete;
     ProcMacroInv(ProcMacroInv&&) = default;
@@ -223,7 +219,6 @@ public:
 
     virtual Ident::Hygiene realGetHygiene() const override;
 
-private:
     Token realGetToken_();
     Token takePendingSymbol();
     void sendU8(u8 v);

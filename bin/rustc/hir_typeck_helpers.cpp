@@ -74,7 +74,7 @@ namespace {
     // spelling.  This makes a recurrence through independently-instantiated
     // blanket impls visible to the solver without changing the goal's actual
     // type data or inference state.
-    class CanonicalizeTraitGoal final: public Monomorphiser {
+    struct CanonicalizeTraitGoal final: public Monomorphiser {
         mutable ::std::vector<::std::pair<RcString, RcString>> placeholderNames_;
         // Unresolved inference variables in the goal, canonicalised
         // positionally so structurally identical goals share one cache key
@@ -100,7 +100,6 @@ namespace {
 
         RcString canonicalPlaceholderName(const RcString& name) const;
 
-    public:
         explicit CanonicalizeTraitGoal(HIRTypeInterner& types, const HMTypeInferrence* ivarTable = nullptr);
 
         // Canonical variables are interned Infer nodes in a reserved index
@@ -145,15 +144,14 @@ namespace {
         HIRConstGeneric canonicalValueSlot(size_t slot) const;
     };
 
-    class InstantiateCanonicalTraitResponse final: public Monomorphiser {
+    struct InstantiateCanonicalTraitResponse final: public Monomorphiser {
         const ::std::vector<::std::pair<RcString, RcString>>& goalNames;
-        const class CanonicalizeTraitGoal* goalCanonicalizer = nullptr;
+        const struct CanonicalizeTraitGoal* goalCanonicalizer = nullptr;
         const u64 instance;
         mutable ::std::vector<::std::pair<RcString, RcString>> freshNames;
 
         RcString instantiatePlaceholderName(const RcString& canonical) const;
 
-    public:
         InstantiateCanonicalTraitResponse(HIRTypeInterner& types, const ::std::vector<::std::pair<RcString, RcString>>& goalNames, u64 instance, const CanonicalizeTraitGoal* goalCanonicalizer = nullptr);
 
         HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
@@ -174,7 +172,7 @@ namespace {
     // caller's inference table before a root response leaves the solver.
     // Placeholders already present in the input goal are universal and stay
     // unchanged.
-    class InstantiateTraitResponseForCaller final: public Monomorphiser {
+    struct InstantiateTraitResponseForCaller final: public Monomorphiser {
         HMTypeInferrence& ivars;
         const ::std::vector<::std::pair<RcString, RcString>>& goalNames;
         const CanonicalizeTraitGoal* goalCanonicalizer = nullptr;
@@ -183,7 +181,6 @@ namespace {
 
         bool isGoalPlaceholder(const HIRGenericRef& generic) const;
 
-    public:
         InstantiateTraitResponseForCaller(HIRTypeInterner& types, HMTypeInferrence& ivars, const ::std::vector<::std::pair<RcString, RcString>>& goalNames, const CanonicalizeTraitGoal* goalCanonicalizer = nullptr);
 
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
@@ -204,7 +201,7 @@ namespace {
     // nowhere to apply the response's explicit slot assignments.  Present
     // response existentials as the input variables they refine, preserving
     // the correlation without mutating the inference table.
-    class CorrelateSolverResponseSlots final: public MonomorphiserNop {
+    struct CorrelateSolverResponseSlots final: public MonomorphiserNop {
         const SolverSlotValues& slots_;
         Vector<::std::pair<HIRTypeRef, HIRTypeRef>> structuralTypes_;
 
@@ -214,7 +211,6 @@ namespace {
 
         void correlatePath(const HIRPath& input, const HIRPath& response);
 
-    public:
         CorrelateSolverResponseSlots(HIRTypeInterner& interner, const SolverSlotValues& slots);
 
         void correlateType(const HIRTypeData* input, const HIRTypeData* response);
@@ -229,10 +225,9 @@ namespace {
     // Maps one level's canonical solver variables and placeholder spellings
     // back to what they stood for, so a response crossing a nested goal
     // boundary never leaks that level's canonical names into the parent.
-    class DecanonicalizeSolverInfers final: public MonomorphiserNop {
+    struct DecanonicalizeSolverInfers final: public MonomorphiserNop {
         const CanonicalizeTraitGoal& canonicalizer_;
 
-    public:
         DecanonicalizeSolverInfers(HIRTypeInterner& types, const CanonicalizeTraitGoal& canonicalizer);
 
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
@@ -3222,7 +3217,7 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
     return false;
 }
 
-class NextTraitGoalEvaluator {
+struct NextTraitGoalEvaluator {
     using Certainty = SolverCertainty;
 
     enum class CandidateSource {
@@ -3599,7 +3594,6 @@ class NextTraitGoalEvaluator {
 
     bool responsesEqual(const ImplRef& left, const ImplRef& right, const char* assocName, const HIRPathParams* assocParams, const char* valueName) const;
 
-public:
     NextTraitGoalEvaluator(const TraitResolution& resolve, const HIRCrate& crate);
 
     HIRCompare evaluateCertainty(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type);
@@ -4551,11 +4545,10 @@ HIRCompare TraitResolution::fticCheckParams(
     bool commitDefiningOpaque /*=false*/,
     SolverResponse* effects /*=nullptr*/
 ) const {
-    class GetParams: public HIRMatchGenerics {
+    struct GetParams: public HIRMatchGenerics {
         Span sp;
         HIRPathParams& outImplParams;
 
-    public:
         GetParams(Span sp, ObjPool& valuePool, HIRPathParams& outImplParams)
             : HIRMatchGenerics(valuePool)
             , sp(sp)
@@ -8695,12 +8688,11 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
         result.valueInputs.push_back(canonicalizer.canonicalValueSlot(i));
     }
 
-    class InstantiateSlots final: public MonomorphiserNop {
+    struct InstantiateSlots final: public MonomorphiserNop {
         const CanonicalizeTraitGoal& canonicalizer_;
         RcString foreignTypeName_;
         RcString foreignValueName_;
 
-    public:
         ThinVector<HIRTypeRef> types;
         ThinVector<HIRConstGeneric> values;
         mutable ThinVector<HIRTypeRef> foreignTypes;
@@ -8968,7 +8960,7 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
         return result;
     }
 
-    class MaterializeSlots final: public MonomorphiserNop {
+    struct MaterializeSlots final: public MonomorphiserNop {
         const HMTypeInferrence& table_;
         const CanonicalizeTraitGoal& canonicalizer_;
         const ThinVector<HIRTypeRef>& types_;
@@ -8978,7 +8970,6 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
         const ThinVector<HIRTypeRef>& foreignTypes_;
         const ThinVector<HIRConstGeneric>& foreignValues_;
 
-    public:
         MaterializeSlots(HIRTypeInterner& interner, const HMTypeInferrence& table, const CanonicalizeTraitGoal& canonicalizer, const ThinVector<HIRTypeRef>& types, const ThinVector<HIRConstGeneric>& values, const ThinVector<HIRTypeRef>& foreignTypes, const ThinVector<HIRConstGeneric>& foreignValues)
             : MonomorphiserNop(interner)
             , table_(table)
@@ -9305,10 +9296,9 @@ auto NextTraitGoalEvaluator::relateAssembledHead(const HIRPathParams& goalParams
     // probe exactly like an impl's existential parameters.  This
     // class only performs that instantiation; all matching is done
     // below by the common Unifier relation.
-    class InstantiateHrtb final: public MonomorphiserNop {
+    struct InstantiateHrtb final: public MonomorphiserNop {
         HMTypeInferrence& table_;
 
-    public:
         mutable Vector<HrtbTypeBinding> typeBindings;
         mutable Vector<HrtbValueBinding> valueBindings;
 
@@ -9430,12 +9420,11 @@ auto NextTraitGoalEvaluator::relateAssembledHead(const HIRPathParams& goalParams
         // every bound HRTB variable now; an unconstrained one is
         // restored to its stable binder spelling, never leaked as
         // a dead inference-table index.
-        class MaterializeHrtb final: public MonomorphiserNop {
+        struct MaterializeHrtb final: public MonomorphiserNop {
             const HMTypeInferrence& table_;
             const Vector<HrtbTypeBinding>& typeBindings_;
             const Vector<HrtbValueBinding>& valueBindings_;
 
-        public:
             MaterializeHrtb(HIRTypeInterner& types, const HMTypeInferrence& table, const Vector<HrtbTypeBinding>& typeBindings, const Vector<HrtbValueBinding>& valueBindings)
                 : MonomorphiserNop(types)
                 , table_(table)
@@ -9588,12 +9577,11 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
     // and no inference-table index is allowed to escape rollback.
     const auto& stableExistentials = implExistentials(implParamsDef);
 
-    class MaterializeCandidate final: public MonomorphiserNop {
+    struct MaterializeCandidate final: public MonomorphiserNop {
         const HMTypeInferrence& table;
         const HIRPathParams& inferenceParams;
         const HIRPathParams& stableExistentials;
 
-    public:
         MaterializeCandidate(HIRTypeInterner& types, const HMTypeInferrence& table, const HIRPathParams& inferenceParams, const HIRPathParams& stableExistentials)
             : MonomorphiserNop(types)
             , table(table)
@@ -9883,11 +9871,10 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(HIRPathParams& params, Relate 
         addValueBinding(value);
     }
 
-    class InstantiateCandidate final: public MonomorphiserNop {
+    struct InstantiateCandidate final: public MonomorphiserNop {
         const Vector<CandidateTypeBinding>& typeBindings_;
         const Vector<CandidateValueBinding>& valueBindings_;
 
-    public:
         InstantiateCandidate(HIRTypeInterner& types, const Vector<CandidateTypeBinding>& typeBindings, const Vector<CandidateValueBinding>& valueBindings)
             : MonomorphiserNop(types)
             , typeBindings_(typeBindings)
@@ -9940,12 +9927,11 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(HIRPathParams& params, Relate 
     const auto probeParams = instantiate.monomorphPathParams(span(), params, true);
     Unifier unifier(span(), resolve_.ivars, &resolve_, true);
 
-    class Relations {
+    struct Relations {
         const Span& span_;
         InstantiateCandidate& instantiate_;
         Unifier& unifier_;
 
-    public:
         bool failed = false;
 
         Relations(const Span& span, InstantiateCandidate& instantiate, Unifier& unifier)
@@ -9995,12 +9981,11 @@ auto NextTraitGoalEvaluator::unifyCandidateParams(HIRPathParams& params, Relate 
         return CandidateBindingResult::Mismatch;
     }
 
-    class MaterializeCandidate final: public MonomorphiserNop {
+    struct MaterializeCandidate final: public MonomorphiserNop {
         const HMTypeInferrence& table_;
         const Vector<CandidateTypeBinding>& typeBindings_;
         const Vector<CandidateValueBinding>& valueBindings_;
 
-    public:
         MaterializeCandidate(HIRTypeInterner& types, const HMTypeInferrence& table, const Vector<CandidateTypeBinding>& typeBindings, const Vector<CandidateValueBinding>& valueBindings)
             : MonomorphiserNop(types)
             , table_(table)

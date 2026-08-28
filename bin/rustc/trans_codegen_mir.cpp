@@ -316,7 +316,7 @@ namespace {
         return os;
     }
 
-    class CodeGeneratorMonoMir: public CodeGenerator {
+    struct CodeGeneratorMonoMir: public CodeGenerator {
         enum class MetadataType {
             None,
             Slice,
@@ -339,7 +339,6 @@ namespace {
         ::std::ofstream of;
         const MIRTypeResolve* mirRes;
 
-    public:
         CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile);
 
         void finalise(const TransOptions& opt, CodegenOutput outTy, const ::std::string& hirFile) override;
@@ -369,7 +368,6 @@ namespace {
 
         void emitGlobalAsm(const HIRGlobalAssembly&) override;
 
-    private:
         const HIRTypeData* monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunction& item, const TransParams& params);
     };
 

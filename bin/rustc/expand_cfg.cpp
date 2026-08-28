@@ -44,11 +44,10 @@ CfgState* CfgCreateState(ObjPool& pool) {
 
 namespace {
 
-    class CfgSpecParser {
+    struct CfgSpecParser {
         const ::std::string& input;
         size_t pos = 0;
 
-    public:
         explicit CfgSpecParser(const ::std::string& input);
 
         [[noreturn]] void fail(const ::std::string& message) const;
@@ -334,15 +333,15 @@ std::vector<ASTAttribute> checkCfgAttr(const Settings& settings, const ASTAttrib
     }
 }
 
-class CCfgExpander: public ExpandProcMacro {
+struct CCfgExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CCfgSelectExpander: public ExpandProcMacro {
+struct CCfgSelectExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CCfgHandler: public ExpandDecorator {
+struct CCfgHandler: public ExpandDecorator {
     AttrStage stage() const override;
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;

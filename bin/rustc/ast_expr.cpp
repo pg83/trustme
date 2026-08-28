@@ -233,11 +233,11 @@ unsigned int ASTExprNodeMacroDefinition::nodeKind() const {
     return ASTExprNodeMacroDefinition::kind;
 }
 
-#define NODE(class, _print, _clone)          \
-    void class ::visit(ASTNodeVisitor& nv) { \
-        nv.visit(*this);                     \
-    }                                        \
-    void class ::print(::std::ostream& os) const _print ASTExprNodeP class ::clone() const _clone
+#define NODE(nodeType, _print, _clone)          \
+    void nodeType ::visit(ASTNodeVisitor& nv) { \
+        nv.visit(*this);                        \
+    }                                           \
+    void nodeType ::print(::std::ostream& os) const _print ASTExprNodeP nodeType ::clone() const _clone
 #define OPT_CLONE(node) (node.get() ? node->clone() : ASTExprNodeP())
 
 namespace {
@@ -413,45 +413,45 @@ NODE(
             os << ", ";
         }
         for (const auto& p : params) {
-        switch (p.tag()) {
-            case ASTAsmParam::TAG_Const: {
-                auto& e = p.as_Const();
-                os << "const " << *e;
-                break;
-            }
-            case ASTAsmParam::TAG_Sym: {
-                auto& e = p.as_Sym();
-                os << "sym " << e;
-                break;
-            }
-            case ASTAsmParam::TAG_Label: {
-                auto& e = p.as_Label();
-                os << "label " << *e.code;
-                break;
-            }
-            case ASTAsmParam::TAG_RegSingle: {
-                auto& e = p.as_RegSingle();
-                os << "reg(" << e.dir << " " << e.spec << ") " << *e.val;
-                break;
-            }
-            case ASTAsmParam::TAG_Reg: {
-                auto& e = p.as_Reg();
-                os << "reg(" << e.dir << " " << e.spec << ") ";
-                if (e.valIn) {
-                    os << *e.valIn;
-                } else {
-                    os << "_";
+            switch (p.tag()) {
+                case ASTAsmParam::TAG_Const: {
+                    auto& e = p.as_Const();
+                    os << "const " << *e;
+                    break;
                 }
-                os << " => ";
-                if (e.valOut) {
-                    os << *e.valOut;
-                } else {
-                    os << "_";
+                case ASTAsmParam::TAG_Sym: {
+                    auto& e = p.as_Sym();
+                    os << "sym " << e;
+                    break;
                 }
-                break;
+                case ASTAsmParam::TAG_Label: {
+                    auto& e = p.as_Label();
+                    os << "label " << *e.code;
+                    break;
+                }
+                case ASTAsmParam::TAG_RegSingle: {
+                    auto& e = p.as_RegSingle();
+                    os << "reg(" << e.dir << " " << e.spec << ") " << *e.val;
+                    break;
+                }
+                case ASTAsmParam::TAG_Reg: {
+                    auto& e = p.as_Reg();
+                    os << "reg(" << e.dir << " " << e.spec << ") ";
+                    if (e.valIn) {
+                        os << *e.valIn;
+                    } else {
+                        os << "_";
+                    }
+                    os << " => ";
+                    if (e.valOut) {
+                        os << *e.valOut;
+                    } else {
+                        os << "_";
+                    }
+                    break;
+                }
             }
-        }
-        os << ", ";
+            os << ", ";
         }
         os << " )";
     },
@@ -459,33 +459,33 @@ NODE(
         std::vector<Param> params;
 
         for (const auto& p : this->params) {
-        switch (p.tag()) {
-            case ASTAsmParam::TAG_Const: {
-                auto& e = p.as_Const();
-                params.push_back(Param::make_Const(e->clone()));
-                break;
+            switch (p.tag()) {
+                case ASTAsmParam::TAG_Const: {
+                    auto& e = p.as_Const();
+                    params.push_back(Param::make_Const(e->clone()));
+                    break;
+                }
+                case ASTAsmParam::TAG_Sym: {
+                    auto& e = p.as_Sym();
+                    params.push_back(Param::make_Sym(e));
+                    break;
+                }
+                case ASTAsmParam::TAG_Label: {
+                    auto& e = p.as_Label();
+                    params.push_back(Param::make_Label({e.code->clone()}));
+                    break;
+                }
+                case ASTAsmParam::TAG_RegSingle: {
+                    auto& e = p.as_RegSingle();
+                    params.push_back(Param::make_RegSingle({e.dir, e.spec.clone(), e.val->clone()}));
+                    break;
+                }
+                case ASTAsmParam::TAG_Reg: {
+                    auto& e = p.as_Reg();
+                    params.push_back(Param::make_Reg({e.dir, e.spec.clone(), e.valIn ? e.valIn->clone() : nullptr, e.valOut ? e.valOut->clone() : nullptr}));
+                    break;
+                }
             }
-            case ASTAsmParam::TAG_Sym: {
-                auto& e = p.as_Sym();
-                params.push_back(Param::make_Sym(e));
-                break;
-            }
-            case ASTAsmParam::TAG_Label: {
-                auto& e = p.as_Label();
-                params.push_back(Param::make_Label({e.code->clone()}));
-                break;
-            }
-            case ASTAsmParam::TAG_RegSingle: {
-                auto& e = p.as_RegSingle();
-                params.push_back(Param::make_RegSingle({e.dir, e.spec.clone(), e.val->clone()}));
-                break;
-            }
-            case ASTAsmParam::TAG_Reg: {
-                auto& e = p.as_Reg();
-                params.push_back(Param::make_Reg({e.dir, e.spec.clone(), e.valIn ? e.valIn->clone() : nullptr, e.valOut ? e.valOut->clone() : nullptr}));
-                break;
-            }
-        }
         }
 
         return NEWNODE(ASTExprNodeAsm2, options, lines, std::move(params));
@@ -541,17 +541,39 @@ NODE(
     {
         os << *slot << " ";
         switch (op) {
-            case NONE: os << "="; break;
-            case ADD: os << "+="; break;
-            case SUB: os << "-="; break;
-            case MUL: os << "*="; break;
-            case DIV: os << "/="; break;
-            case MOD: os << "%="; break;
-            case AND: os << "&="; break;
-            case OR: os << "|="; break;
-            case XOR: os << "^="; break;
-            case SHR: os << ">>="; break;
-            case SHL: os << "<<="; break;
+            case NONE:
+                os << "=";
+                break;
+            case ADD:
+                os << "+=";
+                break;
+            case SUB:
+                os << "-=";
+                break;
+            case MUL:
+                os << "*=";
+                break;
+            case DIV:
+                os << "/=";
+                break;
+            case MOD:
+                os << "%=";
+                break;
+            case AND:
+                os << "&=";
+                break;
+            case OR:
+                os << "|=";
+                break;
+            case XOR:
+                os << "^=";
+                break;
+            case SHR:
+                os << ">>=";
+                break;
+            case SHL:
+                os << "<<=";
+                break;
         }
         os << " " << *value;
     },
@@ -1069,9 +1091,9 @@ NODE(
 
 NODE(ASTExprNodeMacroDefinition, { os << "/* macro definition #" << definitionId << " */"; }, { return NEWNODE(ASTExprNodeMacroDefinition, definitionId, tokenHygiene, definitionHygiene); })
 
-#define NV(type, actions)                                                 \
+#define NV(type, actions)                       \
     void ASTNodeVisitorDef::visit(type& node) { \
-        actions                                                           \
+        actions                                 \
     }
 
 NV(ASTExprNodeBlock, {
@@ -1148,9 +1170,7 @@ NV(ASTExprNodeCallObject, {
         visit(arg);
     }
 })
-NV(ASTExprNodeLoop, {
-    visit(node.code);
-})
+NV(ASTExprNodeLoop, { visit(node.code); })
 NV(ASTExprNodeFor, {
     visit(node.value);
     visit(node.code);
@@ -1212,9 +1232,10 @@ NV(ASTExprNodeTuple, {
         visit(val);
     }
 })
-NV(ASTExprNodeNamedValue, {
-    // LEAF
-})
+NV(ASTExprNodeNamedValue,
+   {
+       // LEAF
+   })
 
 NV(ASTExprNodeField, { visit(node.obj); })
 NV(ASTExprNodeIndex, {

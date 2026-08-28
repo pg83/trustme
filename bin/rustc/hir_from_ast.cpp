@@ -1140,7 +1140,7 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
 }
 
 namespace {
-    class LifetimeIdentity {
+    struct LifetimeIdentity {
         enum class Phase : u8 {
             Other,
             Input,
@@ -1191,13 +1191,12 @@ namespace {
 
         void type(const ASTType& value);
 
-    public:
         RcString make(const ASTType& value);
 
         bool hasFree() const;
     };
 
-    class TraitObjectLowering {
+    struct TraitObjectLowering {
         AST2HIR& ctx_;
         const Span& span_;
         HIRTypeData::Data_TraitObject& out;
@@ -1228,7 +1227,6 @@ namespace {
 
         void expandHirAlias(HIRTraitPath aliasPath, const HIRTraitAlias& alias);
 
-    public:
         TraitObjectLowering(AST2HIR& ctx, const Span& span, HIRTypeData::Data_TraitObject& out);
 
         void add(const ::TypeTraitPath& bound);
@@ -1591,10 +1589,9 @@ namespace {
         return parentIp->getSimplePath();
     }
 
-    class DefaultFieldParamRebase final: public MonomorphiserNop {
+    struct DefaultFieldParamRebase final: public MonomorphiserNop {
         const HIRPathParams& itemArgs;
 
-    public:
         DefaultFieldParamRebase(HIRTypeInterner& types, const HIRPathParams& itemArgs);
 
         HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override;
@@ -1602,10 +1599,9 @@ namespace {
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
     };
 
-    class RebaseDefaultFieldParams final: public HIRVisitor {
+    struct RebaseDefaultFieldParams final: public HIRVisitor {
         const Monomorphiser& monomorph;
 
-    public:
         explicit RebaseDefaultFieldParams(const Monomorphiser& monomorph);
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
@@ -1615,10 +1611,9 @@ namespace {
         void visitConstgeneric(HIRConstGeneric& value) override;
     };
 
-    class RebaseDefaultFieldExpr final: public HIRExprVisitorDef {
+    struct RebaseDefaultFieldExpr final: public HIRExprVisitorDef {
         const Monomorphiser& monomorph;
 
-    public:
         explicit RebaseDefaultFieldExpr(const Monomorphiser& monomorph);
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef type) override;
@@ -2099,10 +2094,9 @@ namespace {
     /// the order the binding pass numbers them in (`hir_conv_main_bindings.cpp`),
     /// so that the associated type named after a position is that position's.
     template <typename F>
-    class RpititTypeCollector: public HIRVisitor {
+    struct RpititTypeCollector: public HIRVisitor {
         F callback;
 
-    public:
         RpititTypeCollector(HIRTypeInterner& types, F callback);
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
@@ -2112,11 +2106,10 @@ namespace {
     /// A nested one belongs to no function of its own, so it cannot stay an
     /// erased type once it is copied out into a bound.
     template <typename F>
-    class RpititNestedRewrite: public HIRVisitor {
+    struct RpititNestedRewrite: public HIRVisitor {
         const HIRTypeRefMap<size_t>& indices;
         F projection;
 
-    public:
         RpititNestedRewrite(HIRTypeInterner& types, const HIRTypeRefMap<size_t>& indices, F projection);
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
@@ -3529,11 +3522,10 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
     }
 }
 
-class IndexVisitor: public HIRVisitor {
+struct IndexVisitor: public HIRVisitor {
     const HIRCrate& crate;
     Span nullSpan;
 
-public:
     IndexVisitor(const HIRCrate& crate);
 
     void visitParams(HIRGenericParams& params) override;

@@ -21,8 +21,7 @@
 
 using namespace stl;
 
-class ManglingContext {
-public:
+struct ManglingContext {
     StringBuilder buffer;
     Vector<RcString> names;
     IntMap<RcString> ordinaryTypeCache;
@@ -61,7 +60,7 @@ enum class LifetimeIdentityMode {
     All,
 };
 
-class Mangler {
+struct Mangler {
     StringBuilder& os;
     Vector<RcString>& names;
     const size_t nameWindowStart = names.length();
@@ -69,7 +68,6 @@ class Mangler {
 
     bool includeLifetimeIdentity(bool hasFree) const;
 
-public:
     Mangler(ManglingContext& context, LifetimeIdentityMode lifetimeIdentityMode = LifetimeIdentityMode::Erased);
 
     /// Formats an integer in a decodable format (lower case until the final digit)

@@ -48,7 +48,7 @@ namespace {
 template <typename T>
 struct D {};
 
-class HirDeserialiser {
+struct HirDeserialiser {
     RcString crateName;
     ::std::vector<HIRTypeRef> types;
     HIRSerialiseReader& in;
@@ -56,7 +56,6 @@ class HirDeserialiser {
     u32& id;
     HIRPublicity privateVisibility = HIRPublicity::newNone();
 
-public:
     ObjPool& pool;
 
     HirDeserialiser(u32& id, ObjPool& pool, HIRSerialiseReader& in, HIRTypeInterner& typeInterner);
@@ -969,11 +968,10 @@ RcString HIRDeserialiseJustName(const ::std::string& filename) {
 
 namespace {
 
-    class TreeVisitor: public HIRVisitor, public HIRExprVisitor {
+    struct TreeVisitor: public HIRVisitor, public HIRExprVisitor {
         ::std::ostream& os;
         unsigned int indentLevel;
 
-    public:
         TreeVisitor(HIRTypeInterner& types, ::std::ostream& os);
 
         void visitModule(HIRItemPath p, HIRModule& mod) override;
@@ -1088,7 +1086,6 @@ namespace {
 
         void visit(HIRExprNodeAsyncBlock& node) override;
 
-    private:
         RepeatLitStr indent() const;
 
         void incIndent();
@@ -1118,12 +1115,11 @@ void HIRDumpExpr(::std::ostream& sink, const HIRExprPtr& expr) {
 #undef NODE_IS
 
 //namespace {
-class HirSerialiser {
+struct HirSerialiser {
     ::std::map<std::string, size_t> types;
     HIRSerialiseWriter& out;
     HIRTypeInterner& typeInterner;
 
-public:
     HirSerialiser(HIRSerialiseWriter& out, HIRTypeInterner& typeInterner);
 
     void clear();

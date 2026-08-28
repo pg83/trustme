@@ -50,7 +50,7 @@ namespace {
         return function.monomorphised.code ? function.monomorphised.code : function.ptr->code.mir;
     }
 
-    class FunctionOrder {
+    struct FunctionOrder {
         TransList& list;
         const Span& sp;
         StaticTraitResolve resolve;
@@ -70,7 +70,6 @@ namespace {
 
         void visit(FunctionOrderNode& node);
 
-    public:
         Vector<FunctionOrderNode*> ordered;
 
         FunctionOrder(const WireBoard& wb, TransList& list, const Span& sp);

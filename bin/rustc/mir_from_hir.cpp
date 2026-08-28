@@ -33,7 +33,7 @@ static const size_t PARTIAL_ARRAY_MIN = 32;
 #include <std/sym/i_map.h>
 
 namespace {
-    class ExprVisitorConv: public MirConverter, public MIRDropEmitter {
+    struct ExprVisitorConv: public MirConverter, public MIRDropEmitter {
         MirBuilder& builder;
 
         const ::std::vector<HIRTypeRef>& variableTypes;
@@ -96,7 +96,6 @@ namespace {
             bool isAsyncGen = false;
         } generatorState;
 
-    public:
         ExprVisitorConv(MirBuilder& builder, const ::std::vector<HIRTypeRef>& varTypes, const HIRExprNodeGeneratorWrapper* isGenerator);
 
         bool findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path, HIRTypeRef& futureTy) const;
@@ -488,7 +487,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
 
             // 3. Rewrite usage of saved values
             // - Note: Need to allocate new temporaries if indexing by an updated lvalue
-            class Rewriter: public MIRVisitorMut {
+            struct Rewriter: public MIRVisitorMut {
                 /// Remapped locals (indexes into coroutine struct, not just into the state)
                 ///
                 /// From `Pin<&mut self>`, these are appended to `self.pin.*`
@@ -502,7 +501,6 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
                 unsigned bbIdx = 0;
                 unsigned stmtIdx = 0;
 
-            public:
                 Rewriter(const ::std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, const ::std::map<unsigned, unsigned>& dropFlagMapping, unsigned dropFlagsField)
                     : mappings_(mappings)
                     , dropFlagMapping(dropFlagMapping)
@@ -838,7 +836,6 @@ struct PatternRulesetBuilder {
     void appendFromLit(const Span& sp, EncodedLiteralSlice lit, const HIRTypeData* ty);
     void appendFrom(const Span& sp, const HIRPattern& pat, const HIRTypeData* ty);
 
-private:
     void pushRule(PatternRule r);
     void pushBinding(PatternBinding b);
     void pushBindings(std::vector<PatternBinding> b);
@@ -851,13 +848,12 @@ private:
     void multiplyRulesets(size_t n, F f);
 };
 
-class RulesetRef {
+struct RulesetRef {
     ::std::vector<PatternRuleset>* rulesVec = nullptr;
     RulesetRef* parent = nullptr;
     size_t parentOfs = 0; // If len == 0, this is the innner index, else it's the base
     size_t parentLen = 0;
 
-public:
     RulesetRef(::std::vector<PatternRuleset>& rules);
 
     RulesetRef(RulesetRef& parent, size_t start, size_t n);
@@ -4210,7 +4206,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
 // Match v2 Algo - Grouped rules
 // --
 
-class tRulesSubset {
+struct tRulesSubset {
     ::std::vector<const ::std::vector<PatternRule>*> ruleSets;
     bool isArmIndexes;
     ::std::vector<size_t> armIdxes;
@@ -4219,7 +4215,6 @@ class tRulesSubset {
 
     static size_t encodeArmIdx(size_t armIdx, size_t patIdx);
 
-public:
     tRulesSubset(size_t exp, bool isArmIndexes);
 
     size_t size() const;
@@ -4266,7 +4261,7 @@ public:
     }
 };
 
-class MatchGenGrouped {
+struct MatchGenGrouped {
     const Span& sp;
     MirBuilder& builder;
     const HIRTypeData* topTy;
@@ -4275,7 +4270,6 @@ class MatchGenGrouped {
 
     size_t fieldPathOfs;
 
-public:
     MatchGenGrouped(MirBuilder& builder, const Span& sp, const HIRTypeData* topTy, const MIRLValue& topVal, const ::std::vector<ArmCode>& armsCode, size_t fieldPathOfs);
 
     void genForSlice(tRulesSubset rules, size_t ofs, MIRBasicBlockId defaultArm);

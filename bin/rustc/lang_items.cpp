@@ -7,7 +7,7 @@
 using namespace stl;
 
 namespace {
-    class LangItemsImpl final: public LangItems {
+    struct LangItemsImpl final: public LangItems {
         HIRSimplePath copy_;
         HIRSimplePath clone_;
         HIRSimplePath drop_;
@@ -31,7 +31,6 @@ namespace {
         HIRSimplePath future_;
         HIRSimplePath asyncIterator_;
 
-    public:
         explicit LangItemsImpl(const HIRCrate& crate);
 
         const HIRSimplePath& copy() const override;

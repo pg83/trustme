@@ -11,13 +11,13 @@
 #include "parse_ttstream.h"
 #include "macro_rules_macro_rules.h"
 
-class CMacroRulesExpander: public ExpandProcMacro {
+struct CMacroRulesExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 
     ::std::unique_ptr<TokenStream> expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) override;
 };
 
-class CMacroUseHandler: public ExpandDecorator {
+struct CMacroUseHandler: public ExpandDecorator {
     AttrStage stage() const override;
 
     bool runDuringIter() const override;
@@ -93,7 +93,7 @@ void ExpandExportMacroRules(const Span& sp, const ASTAttribute& attr, const Wire
     exportMacroRules(sp, wb, crate, mod, name, macroExportUsesLocalInnerMacros(attr));
 }
 
-class CMacroExportHandler: public ExpandDecorator {
+struct CMacroExportHandler: public ExpandDecorator {
     AttrStage stage() const override;
 
     bool runDuringIter() const override;
@@ -101,13 +101,13 @@ class CMacroExportHandler: public ExpandDecorator {
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
-class CMacroReexportHandler: public ExpandDecorator {
+struct CMacroReexportHandler: public ExpandDecorator {
     AttrStage stage() const override;
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
-class CBuiltinMacroHandler: public ExpandDecorator {
+struct CBuiltinMacroHandler: public ExpandDecorator {
     AttrStage stage() const override;
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& /*mod*/, size_t /*mod_idx*/, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;

@@ -102,13 +102,11 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
 
 namespace {
 
-    class OuterVisitor: public HIRVisitor {
+    struct OuterVisitor: public HIRVisitor {
         TypeckModuleState ms;
 
-    public:
         OuterVisitor(const WireBoard& wb, HIRCrate& crate);
 
-    public:
         void visitModule(HIRItemPath p, HIRModule& mod) override;
 
         // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure

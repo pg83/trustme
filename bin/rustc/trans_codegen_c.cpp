@@ -41,11 +41,10 @@ namespace {
         FmtGccAsm(const ::std::string& s, bool escapePercent);
     };
 
-    class StringList {
+    struct StringList {
         ::std::vector<::std::string> cached;
         ::std::vector<const char*> strings;
 
-    public:
         StringList();
 
         StringList(const StringList&) = delete;
@@ -183,7 +182,7 @@ namespace {
         Xor
     };
 
-    class CodeGeneratorC: public CodeGenerator {
+    struct CodeGeneratorC: public CodeGenerator {
         Span sp;
 
         const HIRCrate& crate;
@@ -275,7 +274,6 @@ namespace {
 
         void closeLiteralBlob();
 
-    public:
         CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile);
 
         ~CodeGeneratorC();
@@ -483,7 +481,6 @@ namespace {
 
             const MIRLValue& output(size_t i) const;
 
-        private:
             /// Get a description of the parameter's important attributes
             static std::string getParamText(const MIRAsmParam& p);
 
@@ -496,7 +493,6 @@ namespace {
 
         void emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOptions& asmOptions, const std::vector<AsmLine>& asmLines, const std::vector<MIRAsmParam>& asmParams, bool asmGoto, MIRBasicBlockId retBlock, unsigned indentLevel);
 
-    private:
         const HIRFunction* resolveFunction(const HIRPath& path);
 
         bool pathTracksCaller(const HIRPath& path);
@@ -1116,8 +1112,7 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
         return;
     }
 
-    class LinkList: private StringList {
-    public:
+    struct LinkList: private StringList {
         enum class Ty {
             //Border,   // --{push,pop}-state
             Directory, // -L <value>
@@ -1125,10 +1120,8 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
             Implicit,  // -l <value>
         };
 
-    private:
         std::vector<Ty> ty_;
 
-    public:
         void pushDir(const char* s) {
             // Don't de-dup since there's the push/pop rules
             auto it = ::std::find_if(StringList::begin(), StringList::end(), [&](const char* es) {
@@ -1166,11 +1159,10 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
             // If the previous is also a marker, don't push
         }
 
-        class iterator {
+        struct iterator {
             const LinkList& parent;
             size_t idx;
 
-        public:
             iterator(const LinkList& parent, size_t idx)
                 : parent(parent)
                 , idx(idx)

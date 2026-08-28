@@ -63,27 +63,24 @@ namespace {
         return false;
     }
 
-    class MustUseVisitor: public HIRExprVisitorDef {
+    struct MustUseVisitor: public HIRExprVisitorDef {
         const HIRCrate& crate_;
         CfgLintLevel level_;
 
-    public:
         MustUseVisitor(const HIRCrate& crate, CfgLintLevel level);
 
         void visit(HIRExprNodeBlock& node) override;
 
-    private:
         void checkDiscarded(const HIRExprNode& statement);
 
         void report(const Span& sp, const char* what);
     };
 
-    class MustUseOuterVisitor: public HIRVisitor {
+    struct MustUseOuterVisitor: public HIRVisitor {
         const HIRCrate& crate_;
         const Settings& settings_;
         CfgLintLevel level_;
 
-    public:
         MustUseOuterVisitor(const WireBoard& wb, CfgLintLevel level);
 
         void visitModule(HIRItemPath p, HIRModule& module) override;

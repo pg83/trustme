@@ -171,12 +171,11 @@ namespace {
 
     // Arbitrary-precision unsigned integer, little-endian 64-bit limbs.
     // Only what decimal parsing and formatting need.
-    class BigUint {
+    struct BigUint {
         std::vector<u64> limbs_;
 
         void trim();
 
-    public:
         BigUint() = default;
 
         static BigUint fromU128(u128 v);

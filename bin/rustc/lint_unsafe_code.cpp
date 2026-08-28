@@ -39,23 +39,21 @@ namespace {
         }
     }
 
-    class UnsafeBlockVisitor: public HIRExprVisitorDef {
+    struct UnsafeBlockVisitor: public HIRExprVisitorDef {
         CfgLintLevel level_;
         const RcString& crateName_;
 
-    public:
         UnsafeBlockVisitor(HIRTypeInterner& types, CfgLintLevel level, const RcString& crateName);
 
         void visit(HIRExprNodeBlock& node) override;
     };
 
-    class UnsafeCodeVisitor: public HIRVisitor {
+    struct UnsafeCodeVisitor: public HIRVisitor {
         const HIRCrate& crate_;
         const Settings& settings_;
         CfgLintLevel level_;
         RcString crateName_;
 
-    public:
         UnsafeCodeVisitor(const WireBoard& wb);
 
         void visitModule(HIRItemPath p, HIRModule& module) override;

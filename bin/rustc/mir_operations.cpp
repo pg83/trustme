@@ -25,8 +25,7 @@
 
 using namespace stl;
 
-class MirOperationsContext {
-public:
+struct MirOperationsContext {
     const RcString vtableName = RcString::newInterned("vtable#");
     ::std::vector<bool> visitedBlocks;
     ::std::vector<MIRBasicBlockId> pendingBlocks;
@@ -116,13 +115,12 @@ namespace {
 
 // --------------------------------------------------------------------
 
-class MirMutator {
+struct MirMutator {
     MIRFunction& fcn;
     unsigned int curBlock;
     unsigned int curStmt;
     mutable ::std::vector<MIRStatement> newStatements;
 
-public:
     MirMutator(MIRFunction& fcn, unsigned int bb, unsigned int stmt);
 
     void updateState(MIRTypeResolve& state);
@@ -137,7 +135,6 @@ public:
 
     void flushBlock();
 
-private:
     decltype(newStatements.begin()) flush();
 };
 

@@ -1032,7 +1032,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             }
         }
 
-    private:
         void fillTo(size_t stmtIdx) {
             assert(!isBorrowed_);
             assert(bbHistory.size() > 0);

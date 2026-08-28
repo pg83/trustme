@@ -2846,7 +2846,7 @@ namespace {
         bool inhabited() const;
     };
 
-    class TransmuteLayoutBuilder {
+    struct TransmuteLayoutBuilder {
         struct Built {
             TransmuteNfa::Fragment fragment;
             size_t size;
@@ -2889,7 +2889,6 @@ namespace {
 
         ::std::vector<unsigned> epsilonClosure(::std::vector<unsigned> states) const;
 
-    public:
         TransmuteNfa nfa;
 
         TransmuteLayoutBuilder(const Span& sp, const StaticTraitResolve& resolve, bool destination, bool assumeSafety);
@@ -2897,9 +2896,9 @@ namespace {
         bool makeDfa(const HIRTypeData* ty, TransmuteDfa& out);
     };
 
-    class TransmuteRelation;
+    struct TransmuteRelation;
 
-    class TransmuteTypeChecker {
+    struct TransmuteTypeChecker {
         const Span& sp;
         const StaticTraitResolve& resolve;
         bool assumeAlignment;
@@ -2907,7 +2906,6 @@ namespace {
         bool assumeValidity;
         ::std::map<::std::pair<const HIRTypeData*, const HIRTypeData*>, int> cache;
 
-    public:
         TransmuteTypeChecker(const Span& sp, const StaticTraitResolve& resolve, bool assumeAlignment, bool assumeSafety, bool assumeValidity);
 
         bool check(const HIRTypeData* sourceType, const HIRTypeData* destinationType);
@@ -2917,7 +2915,7 @@ namespace {
         bool validityIsAssumed() const;
     };
 
-    class TransmuteRelation {
+    struct TransmuteRelation {
         const TransmuteDfa& source;
         const TransmuteDfa& destination;
         TransmuteTypeChecker& typeChecker;
@@ -2926,7 +2924,6 @@ namespace {
 
         bool check(unsigned sourceState, unsigned destinationState);
 
-    public:
         TransmuteRelation(const TransmuteDfa& source, const TransmuteDfa& destination, TransmuteTypeChecker& typeChecker);
 
         bool check();

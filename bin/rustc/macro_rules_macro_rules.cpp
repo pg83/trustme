@@ -51,7 +51,7 @@ inline ::std::ostream& operator<<(::std::ostream& os, const CaptureLayer& x) {
     return os;
 }
 
-class ParameterMappings {
+struct ParameterMappings {
     /// Represents the fragments captured for a name
     struct CapturedVar {
         CaptureLayer topLayer;
@@ -67,7 +67,6 @@ class ParameterMappings {
     ::std::vector<CapturedVar> mappings_;
     unsigned layerCount_;
 
-public:
     ParameterMappings();
 
     ParameterMappings(ParameterMappings&&) = default;
@@ -100,11 +99,10 @@ public:
     /// Decrement the number of times a particular fragment is used (returns true if there are still usages remaining)
     bool decCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
 
-private:
     CapturedVal& getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
 };
 
-class MacroPatternStream {
+struct MacroPatternStream {
     const ::std::vector<SimplePatEnt>& simpleEnts;
     SimplePatEnt endEnt;
     size_t curPos_;
@@ -126,7 +124,6 @@ class MacroPatternStream {
     bool peekCacheValid = false;
     const SimplePatEnt* peekCache;
 
-public:
     MacroPatternStream(const ::std::vector<SimplePatEnt>& ents, const ::std::vector<bool>* conditionReplay = nullptr);
 
     size_t curPos() const;
@@ -412,7 +409,7 @@ void MacroPatternStream::ifSucceeded() {
 
 // ----------------------------------------------------------------
 /// State for MacroExpander and Macro_InvokeRules_CountSubstUses
-class MacroExpandState {
+struct MacroExpandState {
     const ::std::vector<MacroExpansionEnt>& rootContents;
     const ParameterMappings& mappings_;
 
@@ -429,7 +426,6 @@ class MacroExpandState {
     /// Cached pointer to the current layer
     const ::std::vector<MacroExpansionEnt>* curEnts; // For faster lookup.
 
-public:
     MacroExpandState(const ::std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings);
 
     // Returns a pointer to the next entry to expand, or nullptr if the end is reached
@@ -447,13 +443,12 @@ public:
 
     unsigned int topPos() const;
 
-private:
     const MacroExpansionEnt& getCurLayerEnt() const;
     const ::std::vector<MacroExpansionEnt>* getCurLayer() const;
 };
 
 // ----------------------------------------------------------------
-class MacroExpander: public TokenStream {
+struct MacroExpander: public TokenStream {
     Span thisSpan;
     const RcString crateName;
     Span invocationSpan;
@@ -475,7 +470,6 @@ class MacroExpander: public TokenStream {
     Ident::Hygiene hygiene_;
     Ident::Hygiene lastHygiene;
 
-public:
     ObjPool& pool;
 
     MacroExpander(const MacroExpander& x) = delete;
@@ -620,7 +614,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
 // - Does very loose consuming
 namespace {
     // Class that provides read-only iteration over a TokenTree
-    class TokenStreamRO {
+    struct TokenStreamRO {
         const TokenTree& tt;
         ::std::vector<size_t> offsets;
         size_t activeOffset;
@@ -629,7 +623,6 @@ namespace {
         Token fakedNext;
         size_t consumeCount;
 
-    public:
         TokenStreamRO(const TokenTree& tt);
 
         TokenStreamRO clone() const;
@@ -2960,8 +2953,7 @@ namespace {
 }
 
 /// A partially-parsed rule within a macro_rules! blcok
-class MacroRule {
-public:
+struct MacroRule {
     ::std::vector<MacroPatEnt> pattern;
     Span patSpan;
     ::std::vector<MacroExpansionEnt> contents;
@@ -2984,7 +2976,6 @@ struct RuleParseState {
         Ident::Hygiene hygiene;
     };
 
-private:
     std::map<RcString, std::vector<NameState>> names;
     unsigned nextNameIndex;
 
@@ -2993,7 +2984,6 @@ private:
     // Stack of current loops (indexes)
     std::vector<unsigned> loopStack;
 
-public:
     RuleParseState();
 
     unsigned addName(const Ident& ident);

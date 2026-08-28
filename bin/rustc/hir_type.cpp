@@ -17,8 +17,7 @@ namespace {
         const TypeFmtRecursionNode* next;
     };
 
-    class TypeFmtStream final: public ::std::ostream {
-    public:
+    struct TypeFmtStream final: public ::std::ostream {
         const TypeFmtRecursionNode* recurseStack = nullptr;
 
         explicit TypeFmtStream(::std::ostream& output);

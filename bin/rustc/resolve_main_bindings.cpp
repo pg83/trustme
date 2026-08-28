@@ -107,14 +107,13 @@ namespace {
 
         void pop(const ASTModule& mod);
 
-        class RootBlockScope {
+        struct RootBlockScope {
             friend struct Context;
             Context& ctxt;
             unsigned int oldVarcount;
 
             RootBlockScope(Context& ctxt, unsigned int val);
 
-        public:
             ~RootBlockScope();
         };
 
