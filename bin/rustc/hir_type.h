@@ -52,7 +52,7 @@ enum class HIRCoreType {
     Char,
     Str,
 };
-extern std::ostream& operator<<(std::ostream& os, const HIRCoreType& ct);
+std::ostream& operator<<(std::ostream& os, const HIRCoreType& ct);
 
 bool isInteger(const HIRCoreType& v);
 
@@ -63,11 +63,11 @@ enum class HIRBorrowType {
     Unique,
     Owned,
 };
-extern std::ostream& operator<<(std::ostream& os, const HIRBorrowType& bt);
+std::ostream& operator<<(std::ostream& os, const HIRBorrowType& bt);
 
 #include "hir_type_binding_tu.h"
 
-extern std::ostream& operator<<(std::ostream& os, const HIRArraySize& x);
+std::ostream& operator<<(std::ostream& os, const HIRArraySize& x);
 
 struct HIRTypeDataPath {
     HIRPath path;
@@ -106,7 +106,7 @@ struct HIRTypeDataErasedTypeAliasInner {
 
 #include "hir_type_erased_tu.h"
 
-extern Ordering ord(const TypeDataErasedTypeInner& a, const TypeDataErasedTypeInner& b);
+Ordering ord(const TypeDataErasedTypeInner& a, const TypeDataErasedTypeInner& b);
 
 static inline bool operator==(const TypeDataErasedTypeInner& a, const TypeDataErasedTypeInner& b) {
     return ord(a, b) == OrdEqual;
@@ -237,4 +237,4 @@ inline bool operator!=(HIRTypeRef ty, HIRCoreType ct) {
     return !(ty == ct);
 }
 
-extern std::ostream& operator<<(std::ostream& os, const HIRTypeData* ty);
+std::ostream& operator<<(std::ostream& os, const HIRTypeData* ty);

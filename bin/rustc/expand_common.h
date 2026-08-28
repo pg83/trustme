@@ -78,8 +78,8 @@ public:
 };
 
 #include "expand_common_tu.h"
-extern MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTAttributeName& path);
-extern MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTPath& path);
+MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTAttributeName& path);
+MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTPath& path);
 
-extern ExpandProcMacro* ExpandFindProcMacro(const WireBoard& wb, const RcString& name);
-extern ExpandDecorator* ExpandFindDecorator(const WireBoard& wb, const RcString& name);
+ExpandProcMacro* ExpandFindProcMacro(const WireBoard& wb, const RcString& name);
+ExpandDecorator* ExpandFindDecorator(const WireBoard& wb, const RcString& name);

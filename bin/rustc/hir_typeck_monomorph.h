@@ -4,17 +4,17 @@
 #include "hir_item_path.h"
 #include "hir_generic_params.h"
 
-extern bool monomorphisePathparamsNeeded(const HIRPathParams& tpl);
+bool monomorphisePathparamsNeeded(const HIRPathParams& tpl);
 
 static inline bool monomorphiseGenericpathNeeded(const HIRGenericPath& tpl) {
     return monomorphisePathparamsNeeded(tpl.params);
 }
 
-extern bool monomorphisePathNeeded(const HIRPath& tpl);
+bool monomorphisePathNeeded(const HIRPath& tpl);
 struct WireBoard;
 
-extern bool monomorphiseTraitpathNeeded(const HIRTraitPath& tpl);
-extern bool monomorphiseTypeNeeded(const HIRTypeData* tpl);
+bool monomorphiseTraitpathNeeded(const HIRTraitPath& tpl);
+bool monomorphiseTypeNeeded(const HIRTypeData* tpl);
 
 class Monomorphiser {
 protected:
@@ -160,4 +160,4 @@ struct MonomorphState: public MonomorphiserPP {
     const HIRPathParams* getHrbParams() const override;
 };
 
-extern std::ostream& operator<<(std::ostream& os, const MonomorphState& ms);
+std::ostream& operator<<(std::ostream& os, const MonomorphState& ms);

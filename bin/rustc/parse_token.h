@@ -29,7 +29,7 @@ public:
     Position(RcString filename, unsigned int line, unsigned int ofs);
 };
 
-extern std::ostream& operator<<(std::ostream& os, const Position& p);
+std::ostream& operator<<(std::ostream& os, const Position& p);
 
 struct ASTType;
 class TokenTree;
@@ -195,8 +195,8 @@ public:
     friend std::ostream& operator<<(std::ostream& os, const Token& tok);
 };
 
-extern std::ostream& operator<<(std::ostream& os, const Token& tok);
+std::ostream& operator<<(std::ostream& os, const Token& tok);
 
-extern void printEscapedLiteral(std::ostream& os, eTokenType type, const u8* value, size_t size);
+void printEscapedLiteral(std::ostream& os, eTokenType type, const u8* value, size_t size);
 
-extern bool tokensNeedSpace(eTokenType prev, eTokenType cur);
+bool tokensNeedSpace(eTokenType prev, eTokenType cur);

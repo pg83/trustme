@@ -215,11 +215,11 @@ struct MIRLvalueCb final: MIRLvalueCallback {
     }
 };
 
-extern bool visitMirLvalueWith(const MIRLValue& lv, MIRValUsage u, const MIRLvalueCallback& cb);
-extern bool visitMirLvalueWith(const MIRParam& p, MIRValUsage u, const MIRLvalueCallback& cb);
-extern bool visitMirLvaluesWith(const MIRRValue& rval, const MIRLvalueCallback& cb);
-extern bool visitMirLvaluesWith(const MIRStatement& stmt, const MIRLvalueCallback& cb);
-extern bool visitMirLvaluesWith(const MIRTerminator& term, const MIRLvalueCallback& cb);
+bool visitMirLvalueWith(const MIRLValue& lv, MIRValUsage u, const MIRLvalueCallback& cb);
+bool visitMirLvalueWith(const MIRParam& p, MIRValUsage u, const MIRLvalueCallback& cb);
+bool visitMirLvaluesWith(const MIRRValue& rval, const MIRLvalueCallback& cb);
+bool visitMirLvaluesWith(const MIRStatement& stmt, const MIRLvalueCallback& cb);
+bool visitMirLvaluesWith(const MIRTerminator& term, const MIRLvalueCallback& cb);
 
 template <typename F>
 bool visitMirLvalue(const MIRLValue& lv, MIRValUsage u, F f) {
@@ -259,8 +259,8 @@ struct MIRTargetVisitor {
     virtual void visitTarget(const MIRBasicBlockId& target) = 0;
 };
 
-extern void visitTerminatorTargetMut(MIRTerminator& term, MIRTargetVisitorMut& cb);
-extern void visitTerminatorTarget(const MIRTerminator& term, MIRTargetVisitor& cb);
+void visitTerminatorTargetMut(MIRTerminator& term, MIRTargetVisitorMut& cb);
+void visitTerminatorTarget(const MIRTerminator& term, MIRTargetVisitor& cb);
 
 template <typename Inner>
 class MIRDecMut {
@@ -718,4 +718,4 @@ public:
     virtual bool visitLvalue(MIRLValue& lv, MIRValUsage u) override;
 };
 
-extern MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const std::vector<bool>* mask = nullptr);
+MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const std::vector<bool>* mask = nullptr);

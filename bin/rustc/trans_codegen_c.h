@@ -7,4 +7,4 @@ class CodeGenerator;
 class HIRCrate;
 struct WireBoard;
 
-extern std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile);
+std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile);

@@ -392,9 +392,9 @@ struct MIRLValue {
     Ordering ord(const MIRLValue::MRef& x) const;
 };
 
-extern std::ostream& operator<<(std::ostream& os, const MIRLValue& x);
-extern std::ostream& operator<<(std::ostream& os, const MIRLValue::Storage& x);
-extern std::ostream& operator<<(std::ostream& os, const MIRLValue::Wrapper& x);
+std::ostream& operator<<(std::ostream& os, const MIRLValue& x);
+std::ostream& operator<<(std::ostream& os, const MIRLValue::Storage& x);
+std::ostream& operator<<(std::ostream& os, const MIRLValue::Wrapper& x);
 
 static inline bool operator<(const MIRLValue& a, const MIRLValue::CRef& b) {
     return a.ord(b) == OrdLess;
@@ -500,24 +500,24 @@ enum class MIRDropKind {
 
 #include "mir_mir_tu.h"
 
-extern std::ostream& operator<<(std::ostream& os, const MIRRValue& x);
-extern bool operator==(const MIRRValue& a, const MIRRValue& b);
+std::ostream& operator<<(std::ostream& os, const MIRRValue& x);
+bool operator==(const MIRRValue& a, const MIRRValue& b);
 
 static inline bool operator!=(const MIRRValue& a, const MIRRValue& b) {
     return !(a == b);
 }
 
-extern bool operator==(const MIRAsmParam& a, const MIRAsmParam& b);
+bool operator==(const MIRAsmParam& a, const MIRAsmParam& b);
 
-extern std::ostream& operator<<(std::ostream& os, const MIRTerminator& x);
-extern bool operator==(const MIRTerminator& a, const MIRTerminator& b);
+std::ostream& operator<<(std::ostream& os, const MIRTerminator& x);
+bool operator==(const MIRTerminator& a, const MIRTerminator& b);
 
 static inline bool operator!=(const MIRTerminator& a, const MIRTerminator& b) {
     return !(a == b);
 }
 
-extern std::ostream& operator<<(std::ostream& os, const MIRStatement& x);
-extern bool operator==(const MIRStatement& a, const MIRStatement& b);
+std::ostream& operator<<(std::ostream& os, const MIRStatement& x);
+bool operator==(const MIRStatement& a, const MIRStatement& b);
 
 static inline bool operator!=(const MIRStatement& a, const MIRStatement& b) {
     return !(a == b);

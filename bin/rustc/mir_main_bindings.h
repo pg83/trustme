@@ -8,11 +8,11 @@ struct WireBoard;
 
 class TransList;
 
-extern void HIRGenerateMIR(const WireBoard& wb, HIRCrate& crate);
-extern void MIRDump(std::ostream& sink, const HIRCrate& crate);
+void HIRGenerateMIR(const WireBoard& wb, HIRCrate& crate);
+void MIRDump(std::ostream& sink, const HIRCrate& crate);
 
-extern void MIRCleanupCrate(const WireBoard& wb, HIRCrate& crate);
-extern void MIROptimiseCrate(const WireBoard& wb, HIRCrate& crate, unsigned optLevel, bool enableInlining);
-extern void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransList& list, bool postSave, unsigned optLevel, bool enableInlining);
+void MIRCleanupCrate(const WireBoard& wb, HIRCrate& crate);
+void MIROptimiseCrate(const WireBoard& wb, HIRCrate& crate, unsigned optLevel, bool enableInlining);
+void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransList& list, bool postSave, unsigned optLevel, bool enableInlining);
 
-extern void HIRGenerateMIRExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, const HIRFunction::argsT& args, const HIRTypeData* resTy);
+void HIRGenerateMIRExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, const HIRFunction::argsT& args, const HIRTypeData* resTy);

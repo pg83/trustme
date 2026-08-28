@@ -22,7 +22,7 @@ enum class HIRBoundConstness : u8 {
     Maybe,
 };
 
-extern const EncodedLiteral* freezeEncodedLiteral(stl::ObjPool& pool, EncodedLiteral e);
+const EncodedLiteral* freezeEncodedLiteral(stl::ObjPool& pool, EncodedLiteral e);
 struct HIRConstGenericUnevaluated;
 
 struct HIRInferData {

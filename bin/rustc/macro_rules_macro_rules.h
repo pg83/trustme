@@ -15,8 +15,8 @@ struct WireBoard;
 class SimplePatEnt;
 class MacroExpansionEnt;
 
-extern std::ostream& operator<<(std::ostream& os, const MacroExpansionEnt& x);
-extern void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansionEnt>& contents);
+std::ostream& operator<<(std::ostream& os, const MacroExpansionEnt& x);
+void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansionEnt>& contents);
 
 enum : unsigned int {
     NAMEDVALUE_VALMASK = (1 << 30) - 1,
@@ -97,7 +97,7 @@ struct SimplePatIfCheck {
 
 #include "macro_rules_macro_rules_tu.h"
 
-extern std::ostream& operator<<(std::ostream& os, const SimplePatEnt& x);
+std::ostream& operator<<(std::ostream& os, const SimplePatEnt& x);
 
 struct MacroRulesArm {
     std::vector<RcString> paramNames;
@@ -145,8 +145,8 @@ public:
     MacroRules(MacroRules&&) = default;
 };
 
-extern std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, const WireBoard& wb, TokenTree input, const ASTCrate& crate, ASTModule& mod);
+std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, const WireBoard& wb, TokenTree input, const ASTCrate& crate, ASTModule& mod);
 
-extern MacroRulesPtr ParseMacroRules(TokenStream& lex);
+MacroRulesPtr ParseMacroRules(TokenStream& lex);
 
-extern MacroRulesPtr ParseMacroRulesSingleArm(TokenStream& lex);
+MacroRulesPtr ParseMacroRulesSingleArm(TokenStream& lex);

@@ -233,29 +233,29 @@ struct ASTType {
     }
 };
 
-extern ASTType* mkType(stl::ObjPool& pool, Span sp, TypeData data);
-extern ASTType* mkType(stl::ObjPool& pool, Span sp);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Invalid, Span sp);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Macro, ASTMacroInvocation inv);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Unit, Span sp);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Primitive, Span sp, enum eCoreType type);
-extern ASTType* mkType(stl::ObjPool& pool, Span sp, enum eCoreType type);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, std::vector<ASTType*> innerTypes);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, std::vector<ASTType*> args, bool isVariadic, ASTType* ret);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType, bool isPin = false);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTType* innerType);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, std::shared_ptr<ASTExprNode> size);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::UnsizedArray, Span sp, ASTType* innerType);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Arg, Span sp, RcString name, unsigned int binding = ~0u);
-extern ASTType* mkType(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding = ~0u);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Path, Span sp, ASTPath path);
-extern ASTType* mkType(stl::ObjPool& pool, Span sp, ASTPath path);
-extern ASTType* mkType(stl::ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, std::vector<ASTLifetimeRef> lifetimes);
+ASTType* mkType(stl::ObjPool& pool, Span sp, TypeData data);
+ASTType* mkType(stl::ObjPool& pool, Span sp);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Invalid, Span sp);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Macro, ASTMacroInvocation inv);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Unit, Span sp);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Primitive, Span sp, enum eCoreType type);
+ASTType* mkType(stl::ObjPool& pool, Span sp, enum eCoreType type);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, std::vector<ASTType*> innerTypes);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, std::vector<ASTType*> args, bool isVariadic, ASTType* ret);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType, bool isPin = false);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTType* innerType);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, std::shared_ptr<ASTExprNode> size);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::UnsizedArray, Span sp, ASTType* innerType);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Arg, Span sp, RcString name, unsigned int binding = ~0u);
+ASTType* mkType(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding = ~0u);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Path, Span sp, ASTPath path);
+ASTType* mkType(stl::ObjPool& pool, Span sp, ASTPath path);
+ASTType* mkType(stl::ObjPool& pool, Span sp, std::vector<TypeTraitPath> traits, std::vector<ASTLifetimeRef> lifetimes);
 
-extern std::ostream& operator<<(std::ostream& os, const ASTType& tr);
+std::ostream& operator<<(std::ostream& os, const ASTType& tr);
 
 inline std::ostream& operator<<(std::ostream& os, const ASTType* tr) {
     return tr ? (os << *tr) : (os << "(null-type)");
 }
 
-extern Ordering ord(ASTType* a, ASTType* b);
+Ordering ord(ASTType* a, ASTType* b);

@@ -25,10 +25,10 @@ enum class FromASTPathClass {
     Macro,
 };
 
-extern HIRExprPtr LowerHIRExprNode(const ASTExprNode& e);
-extern HIRPath LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
-extern HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
-extern HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric = false);
-extern HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc);
-extern HIRTypeRef LowerHIRType(::ASTType* ty);
-extern HIRPattern LowerHIRPattern(const ASTPattern& pat);
+HIRExprPtr LowerHIRExprNode(const ASTExprNode& e);
+HIRPath LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
+HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
+HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric = false);
+HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc);
+HIRTypeRef LowerHIRType(::ASTType* ty);
+HIRPattern LowerHIRPattern(const ASTPattern& pat);

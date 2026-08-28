@@ -7,4 +7,4 @@
 struct WireBoard;
 class ASTCrate;
 
-extern void LintCheckForbid(const WireBoard& wb, ASTCrate& crate);
+void LintCheckForbid(const WireBoard& wb, ASTCrate& crate);

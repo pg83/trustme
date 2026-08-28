@@ -242,7 +242,7 @@ struct HIRStructField {
 
 typedef std::vector<HIRStructField> tStructFields;
 
-extern HIRTypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIRTypeRef retTy, const tTupleFields& types);
+HIRTypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIRTypeRef retTy, const tTupleFields& types);
 
 struct HIRTraitMarkings {
     bool hasADeref = false;
@@ -417,7 +417,7 @@ public:
     bool mustUse = false;
 };
 
-extern std::ostream& operator<<(std::ostream& os, const HIRStruct::Repr& x);
+std::ostream& operator<<(std::ostream& os, const HIRStruct::Repr& x);
 
 class HIRUnion {
 public:
