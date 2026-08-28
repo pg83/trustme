@@ -34,24 +34,6 @@ struct StaticImplCb final: StaticImplCallback {
     }
 };
 
-struct StaticImplMatchCallback {
-    virtual bool visit(HIRPathParams params, HIRCompare cmp) = 0;
-};
-
-template <typename F>
-struct StaticImplMatchCb final: StaticImplMatchCallback {
-    F f;
-
-    explicit StaticImplMatchCb(F f)
-        : f(f)
-    {
-    }
-
-    bool visit(HIRPathParams params, HIRCompare cmp) override {
-        return f(mv$(params), cmp);
-    }
-};
-
 struct StaticNamedTraitCallback {
     virtual bool visit(const HIRPathParams& params, HIRTraitPath::assocListT assoc) = 0;
 };
@@ -110,43 +92,6 @@ class StaticTraitResolve: public TraitResolveCommon {
     // Keyed by the interned UfcsKnown type itself (pointer identity).
     mutable HIRTypeRefMap<HIRTypeRef> atyCache;
 
-    /// Cache key for findImplCheckCrateRaw: the impl side is identified by
-    /// the addresses of its (immutable, pool-owned) definition parts, the
-    /// destination side by interned pointers. The variable-content part
-    /// (destination trait params) lives in the bucket entries.
-    struct ImplCheckKey {
-        const void* implParamsDef;
-        const void* implTraitParams;
-        const HIRTypeData* implType;
-        const void* desTraitPath;
-        const HIRTypeData* desType;
-
-        bool operator<(const ImplCheckKey& x) const {
-            if (implParamsDef != x.implParamsDef) {
-                return implParamsDef < x.implParamsDef;
-            }
-            if (implTraitParams != x.implTraitParams) {
-                return implTraitParams < x.implTraitParams;
-            }
-            if (implType != x.implType) {
-                return implType < x.implType;
-            }
-            if (desTraitPath != x.desTraitPath) {
-                return desTraitPath < x.desTraitPath;
-            }
-            return desType < x.desType;
-        }
-    };
-
-    struct ImplCheckEntry {
-        bool hasDesParams;
-        HIRPathParams desParams;
-        HIRPathParams implParams;
-        HIRCompare result;
-    };
-
-    /// Cache of the result of find_impl__check_crate_raw
-    mutable ::std::map<ImplCheckKey, ThinVector<ImplCheckEntry>> cachedImplChecks;
     mutable bool normalizingBoundType = false;
     /// Set at construction; never changes over the resolver's lifetime.
     OpaqueReveal reveal_ = OpaqueReveal::UserFacing;
@@ -216,13 +161,6 @@ public:
     }
 
 private:
-    bool findImplCheckCrateRawCb(const Span& sp, const HIRSimplePath& desTraitPath, const HIRPathParams* desTraitParams, const HIRTypeData* desType, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitParams, const HIRTypeData* implType, StaticImplMatchCallback& foundCb) const;
-
-    template <typename F>
-    bool findImplCheckCrateRaw(const Span& sp, const HIRSimplePath& desTraitPath, const HIRPathParams* desTraitParams, const HIRTypeData* desType, const HIRGenericParams& implParamsDef, const HIRPathParams& implTraitParams, const HIRTypeData* implType, F f) const {
-        StaticImplMatchCb<F> cb(f);
-        return findImplCheckCrateRawCb(sp, desTraitPath, desTraitParams, desType, implParamsDef, implTraitParams, implType, cb);
-    }
     bool typeNeedsAsyncDropInner(const Span& sp, const HIRTypeData* ty, HIRTypeRefSet& stack) const;
 
 public:

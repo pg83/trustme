@@ -8883,7 +8883,18 @@ default:
                                 continue;
                             }
                             const auto* resolved = table.getType(type);
-                            if (resolved == type) {
+                            if (resolved->is_Infer()) {
+                                // The impl parameter may have been unified
+                                // with an unresolved receiver variable rather
+                                // than remaining its own root.  Give every
+                                // impl parameter sharing that root the same
+                                // stable existential instead of leaking the
+                                // probe table's ivar through rollback.
+                                for (size_t j = 0; j < inference.types.size(); j++) {
+                                    if (table.getType(inference.types[j]) == resolved) {
+                                        return stable.types[j];
+                                    }
+                                }
                                 return stable.types[i];
                             }
                             return this->monomorphType(sp, resolved, allowInfer);
@@ -8900,7 +8911,12 @@ default:
                                 continue;
                             }
                             const auto& resolved = table.getValue(value);
-                            if (resolved == value) {
+                            if (resolved.is_Infer()) {
+                                for (size_t j = 0; j < inference.values.size(); j++) {
+                                    if (table.getValue(inference.values[j]) == resolved) {
+                                        return stable.values[j].clone();
+                                    }
+                                }
                                 return stable.values[i].clone();
                             }
                             return this->monomorphConstgeneric(sp, resolved, allowInfer);
@@ -9627,6 +9643,27 @@ default:
             return result;
         }
 
+        SolverCertainty TraitResolution::probeInherentImpl(
+            const Span& sp,
+            const HIRTypeImpl& impl,
+            const HIRTypeData* receiver,
+            HIRPathParams& implParams
+        ) const {
+            const auto snapshot = ivars.snapshot();
+            STD_DEFER {
+                ivars.rollbackTo(snapshot);
+            };
+
+            HIRTypeRef inferenceReceiver = receiver;
+            ivars.addIvars(inferenceReceiver);
+            HIRPathParams inferenceParams = implParams.clone();
+            const auto certainty = this->evaluateInherentImpl(sp, impl, inferenceReceiver, inferenceParams);
+            if (certainty != SolverCertainty::NoSolution) {
+                implParams = this->materializeImplParams(sp, impl.params, inferenceParams);
+            }
+            return certainty;
+        }
+
         bool TraitResolution::expandAssociatedTypesInplaceUfcsInherent(const Span& sp, HIRTypeRef& input, SolverResponseCallback* effects) const {
             ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsInherent(), input);
 
@@ -9666,18 +9703,10 @@ default:
                 return false;
             }
 
-            {
-                const auto snapshot = ivars.snapshot();
-                STD_DEFER {
-                    ivars.rollbackTo(snapshot);
-                };
-                HIRPathParams inferenceParams;
-                ASSERT_BUG(sp,
-                    this->evaluateInherentImpl(sp, *selectedImpl, pe.type, inferenceParams)
-                        != SolverCertainty::NoSolution,
-                    "Selected inherent associated-type impl no longer applies to " << pe.type);
-                implParams = this->materializeImplParams(sp, selectedImpl->params, inferenceParams);
-            }
+            ASSERT_BUG(sp,
+                this->probeInherentImpl(sp, *selectedImpl, pe.type, implParams)
+                    != SolverCertainty::NoSolution,
+                "Selected inherent associated-type impl no longer applies to " << pe.type);
 
             ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, implParamsDef, implParams);
             if (effects) {
@@ -10129,10 +10158,18 @@ default:
         case HIRTypeData::TAG_Generic: {
             auto& e = (*type).as_Generic();
             switch (e.group()) {
-                case 0:
+                case 0: {
+                    if (!this->implGenerics_ || e.idx() >= this->implGenerics_->types.size()) {
+                        return HIRCompare::Fuzzy;
+                    }
                     return this->implGenerics_->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
-                case 1:
+                }
+                case 1: {
+                    if (!this->itemGenerics_ || e.idx() >= this->itemGenerics_->types.size()) {
+                        return HIRCompare::Fuzzy;
+                    }
                     return this->itemGenerics_->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
+                }
                 default:
                     // Assume sized for anything else?
                     return HIRCompare::Equal;

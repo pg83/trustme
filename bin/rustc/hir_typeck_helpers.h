@@ -761,6 +761,15 @@ public:
         const HIRTypeData* receiver,
         HIRPathParams& implParams
     ) const;
+    /// Probe an inherent impl without leaking this resolver's inference
+    /// variables.  Any still-unconstrained impl parameters are returned as
+    /// typed solver existentials with stable binder identity.
+    SolverCertainty probeInherentImpl(
+        const Span& sp,
+        const HIRTypeImpl& impl,
+        const HIRTypeData* receiver,
+        HIRPathParams& implParams
+    ) const;
 
     /// Locate a named trait in the provied trait (either itself or as a parent trait)
     bool findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, TraitPathCallback& callback) const;
