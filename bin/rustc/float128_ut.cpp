@@ -47,7 +47,6 @@ namespace {
         const char* text;
     };
 
-// Generated into the build tree by the `float128_ut_vectors` node
 #include <float128_ut_vectors.inc>
 
     static bool sameBits(const Float128& value, u64 hi, u64 lo) {

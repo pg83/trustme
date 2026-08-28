@@ -66,8 +66,6 @@ void InherentCacheImpl::Lowest::iterate(const HIRTypeData* type, Callback& cb) c
     visit(this->generic);
 
     if (type->is_Infer() && !type->as_Infer().isLit()) {
-        // An unbound `Self` cannot select a named bucket yet. The full custom
-        // receiver shape is checked before any of these candidates is used.
         for (const auto& entry : this->named) {
             visit(entry.second);
         }

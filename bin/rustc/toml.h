@@ -19,7 +19,7 @@ struct TomlToken;
 
 class TomlLexer {
     friend class TomlFile;
-    /// Input file stream
+
     ::std::ifstream input;
 
     ::std::string filename;
@@ -34,19 +34,14 @@ public:
 };
 
 class TomlFile {
-    /// Input file stream
     TomlLexer lexer_;
 
-    /// Name of the current `[]` block
     ::std::vector<::std::string> currentBlock;
 
-    /// Path suffix of the current composite (none if empty)
     ::std::vector<std::vector<std::string>> currentComposite;
 
-    /// Index of the next array field (if zero, not parsing an array)
     unsigned int nextArrayIndex;
 
-    /// Next indexes if top-level defined arrays (e.g. `[[foo]]`)
     ::std::unordered_map<::std::string, unsigned> arrayCounts;
 
 public:
@@ -55,7 +50,6 @@ public:
     TomlFileIter begin();
     TomlFileIter end();
 
-    // Obtain the next value in the file
     TomlKeyValue getNextValue();
 
     const TomlLexer& lexer() const {
@@ -64,22 +58,18 @@ public:
 
 private:
     std::vector<std::string> getPath(std::vector<std::string> tail) const;
-    /// Consume a balanced `[...]` / `{...}` group (nested groups included),
-    /// discarding its contents. The opening bracket/brace must already have
-    /// been consumed. Used to skip nested arrays / inline tables that only
-    /// appear in sections the compiler never reads (e.g. `[package.metadata.*]`).
+
     void skipCompositeValue();
 };
 
 struct TomlValue {
     enum class Type {
-        // A true/false, 1/0, yes/no value
         Boolean,
-        // A double-quoted string
+
         String,
-        // Integer
+
         Integer,
-        // A list of other values
+
         List,
     };
 
@@ -88,8 +78,7 @@ struct TomlValue {
     struct TypeError: public ::std::exception {
         Type have;
         Type exp;
-        // Formatted in the constructor; what() needs stable storage and the
-        // two type names are short.
+
         char message[64];
 
         TypeError(Type h, Type e);
@@ -125,10 +114,10 @@ struct TomlValue {
 
 struct TomlKeyValue {
     typedef ::std::vector<::std::string> Path;
-    // Path to the value (last node is the value name)
+
     // TODO: How are things like `[[bin]]` handled?
     Path path;
-    // Relevant value
+
     TomlValue value;
 };
 

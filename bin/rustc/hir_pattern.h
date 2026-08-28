@@ -53,12 +53,10 @@ enum class HIRPatternDerefKind {
 
 struct HIRPattern;
 
-// Definitions generated from hir_pattern_value.tu.
 #include "hir_pattern_value_tu.h"
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRPatternValue& x);
 
-/// Struct-like enum/struct value pattern
 struct HIRPatternPathNamedData {
     HIRPath path;
     HIRPatternPathBinding binding;
@@ -69,7 +67,6 @@ struct HIRPatternPathNamedData {
     bool isWildcard() const;
 };
 
-// Definitions generated from hir_pattern.tu.
 #include "hir_pattern_tu.h"
 
 struct HIRPattern {

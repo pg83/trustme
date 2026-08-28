@@ -9,9 +9,9 @@
 #include "hir_expr_state.h"
 #include "hir_typeck_common.h"
 #include "mir_main_bindings.h"
-#include "hir_typeck_expr_visit.h" // for invoking typecheck
+#include "hir_typeck_expr_visit.h"
 #include "hir_conv_main_bindings.h"
-#include "macro_rules_macro_rules.h" // Used to update the crate name
+#include "macro_rules_macro_rules.h"
 #include "hir_expand_main_bindings.h"
 
 #include <std/alg/defer.h>
@@ -289,13 +289,12 @@ bool HIRConstGenericUnevaluated::equivalent(const HIRConstGenericUnevaluated& x)
 
 Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) const {
     if (this->expr.get() != x.expr.get()) {
-        // If only one has populated MIR, they can't be equal (sort populated MIR after)
         if (!this->expr->mir != !x.expr->mir) {
             return (this->expr->mir ? OrdGreater : OrdLess);
         }
 
         // HACK: If the inner is a const param on both, sort based on that.
-        // - Very similar to the ordering of ASTType*::Generic
+
         const auto* tn = cast<const HIRExprNodeConstParam>(&**this->expr);
         const auto* xn = cast<const HIRExprNodeConstParam>(&**x.expr);
         if (tn && xn) {
@@ -812,9 +811,6 @@ const HIRStatic& HIRCrate::getStaticByPath(const Span& sp, const HIRSimplePath& 
 
 void HIRCrate::postLoadUpdate(const RcString& name) {
     // TODO: Do a pass across m_hir that
-    // 1. Updates all absolute paths with the crate name
-    // 2. Sets binding pointers where required
-    // 3. Updates macros with the crate name
 }
 
 namespace {
@@ -854,9 +850,7 @@ namespace {
 }
 
 bool HIRTraitImpl::matchesType(const HIRTypeData* type, tCbResolveType tyRes, HIRImplMatcherScratch& scratch) const {
-    // NOTE: Don't return any impls when the type is an unbouned ivar. Wouldn't be able to pick anything anyway
     // TODO: For `Unbound`, it could be valid, if the target is a generic.
-    // - Pure infer could also be useful (for knowing if there's any other potential impls)
 
     // HACK: Assume an unbounded matches
     if (isUnboundedInfer(type)) {
@@ -926,8 +920,6 @@ namespace {
     ::Ordering typeOrdSpecific(TypeOrdContext& context, const Span& sp, const HIRTypeData* left, const HIRTypeData* right) {
         // TODO: What happens if you get `impl<T> Foo<T> for T` vs `impl<T,U> Foo<U> for T`
 
-        // A generic can't be more specific than any other type we can see
-        // - It's equally as specific as another Generic, so still false
         if (left->is_Generic()) {
             return right->is_Generic() ? ::OrdEqual : ::OrdLess;
         }
@@ -1249,12 +1241,6 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
         }
     }
 
-    // The syntax-only ordering above treats every generic as equally open.
-    // It therefore cannot see that `(T, T)` accepts a strict subset of the
-    // values accepted by `(T, U)`. Match both impl heads while preserving each
-    // pattern generic's assignments. A one-way match is a strict head
-    // relation; the parent's predicates are then compared after applying that
-    // assignment, so `T: Clone, U: Clone` correctly collapses to one bound.
     Vector<HIRTypeRef> parentMappings;
     ImplMatcher parentMatcher(parentMappings, other.params);
     const bool parentMatchesChild = matchImplHead(sp, other, *this, parentMatcher);
@@ -1272,13 +1258,10 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     }
     const bool stricterImplicitSized = !mappedImplicitSizedImplied(other, *this, childMatcher);
 
-    //}
-    // 3. Compare bound set, if there is a rule in oe that is missing from te; return false
     // TODO: Cache these lists (calculate after outer typecheck?)
     auto boundsT = flattenBounds(types, params.bounds);
     auto boundsO = flattenBounds(types, other.params.bounds);
 
-    // If there are less bounds in this impl, it can't be more specific.
     if (boundsT.size() < boundsO.size()) {
         return false;
     }
@@ -1541,7 +1524,6 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
         }
     };
 
-    // Quick Check: If the types are equal, they do overlap
     if (this->type == other.type && this->traitArgs == other.traitArgs) {
         return true;
     }
@@ -1563,8 +1545,7 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
     }
 
     // TODO: Detect `impl<T> Foo<T> for Bar<T>` vs `impl<T> Foo<&T> for Bar<T>`
-    // > Create values for impl params from the type, then check if the trait params are compatible
-    // > Requires two lists, and telling which one to use by the end
+
     auto cbIdent = HIRResolvePlaceholdersNop();
     ImplTyMatcher matcher(crate.types);
     matcher.reinit(this->params);
@@ -1782,7 +1763,6 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
                 ep.state->stage = HIRExprState::Stage::TypecheckRequest;
 
                 TypeckModuleState ms{wb};
-                //ms.prepare_from_path( ip );   // <- Ideally would use this, but it's a lot of code for one usage
                 ms.implGenerics = ep.state->implGenerics;
                 ms.itemGenerics = ep.state->itemGenerics;
                 ms.currentTrait = ep.state->currentTraitImpl ? &currentTrait : nullptr;
@@ -1942,7 +1922,7 @@ const tStructFields& patternGetNamed(const Span& sp, const HIRPath& path, const 
 
 EncodedLiteral EncodedLiteral::makeUsize(u64 v) {
     EncodedLiteral rv;
-    rv.bytes.resize(8); // 64-bit pointers only (32-bit targets are unsupported)
+    rv.bytes.resize(8);
     rv.writeUsize(0, v);
     return rv;
 }
@@ -1964,7 +1944,7 @@ EncodedLiteral EncodedLiteral::clone() const {
 void EncodedLiteral::writeUint(size_t ofs, size_t size, u64 v) {
     assert(ofs + size <= bytes.size());
     for (size_t i = 0; i < size; i++) {
-        size_t bit = i * 8; // little-endian only (big-endian targets are unsupported)
+        size_t bit = i * 8;
         if (bit < 64) {
             auto b = static_cast<u8>(v >> bit);
             bytes[ofs + i] = b;
@@ -1973,11 +1953,11 @@ void EncodedLiteral::writeUint(size_t ofs, size_t size, u64 v) {
 }
 
 void EncodedLiteral::writeUsize(size_t ofs, u64 v) {
-    this->writeUint(ofs, 8, v); // 64-bit pointers only
+    this->writeUint(ofs, 8, v);
 }
 
 u64 EncodedLiteral::readUsize(size_t ofs) const {
-    return EncodedLiteralSlice(*this).slice(ofs).readUint(8).truncateU64(); // 64-bit pointers only
+    return EncodedLiteralSlice(*this).slice(ofs).readUint(8).truncateU64();
 }
 
 U128 EncodedLiteralSlice::readUint(size_t size /*=0*/) const {
@@ -1987,7 +1967,7 @@ U128 EncodedLiteralSlice::readUint(size_t size /*=0*/) const {
     ASSERT_BUG(Span(), size <= this->size, "Over-large read (" << size << " > " << this->size << ")");
     U128 v(0);
     for (size_t i = 0; i < size; i++) {
-        size_t bit = i * 8; // little-endian only (big-endian targets are unsupported)
+        size_t bit = i * 8;
         if (bit < 128) {
             v |= U128(base.bytes[ofs + i]) << bit;
         }

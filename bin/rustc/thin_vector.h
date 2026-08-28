@@ -1,24 +1,15 @@
 #pragma once
 
-#include <cstdio>
+#include "common.h"
 
-// A thin vector type (single-pointer) that cannot resize past its capacity
-// without reallocating, and stores the length/capacity in the pointed-to
-// memory. Used for HIR structures to save significant amounts of memory.
-//
-// NOTE: `common.h` must NOT include this header; the dependency is one-way
-// (`thin_vector.h` -> `common.h`, for `Ordering`/`ord`). Include this header
-// directly from the (few) translation units that need `ThinVector`.
-
-#include "common.h" // Ordering, ::ord
-
-#include <vector>
-#include <ostream>
-#include <stdexcept>
-#include <cstdlib>
-#include <cassert>
 #include <new>
+#include <cstdio>
+#include <vector>
+#include <cassert>
+#include <cstdlib>
+#include <ostream>
 #include <utility>
+#include <stdexcept>
 
 template <typename T>
 class ThinVector {
@@ -168,7 +159,6 @@ public:
         }
     }
 
-    /// Destroys the elements but keeps the capacity.
     void clear() {
         auto* m = this->meta();
         if (m) {
@@ -291,7 +281,6 @@ public:
             }
         }
 
-        // Longer lists sort afer shorter ones
         if (this->size() < x.size()) {
             return OrdLess;
         } else if (this->size() > x.size()) {

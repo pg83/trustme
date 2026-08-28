@@ -28,7 +28,7 @@ struct TransOptions {
     OptimizationLevel optLevel = OptimizationLevel::None;
     DebugInfoLevel debugInfo = DebugInfoLevel::None;
     ::std::string buildCommandFile;
-    // Emit the generated C++ source and stop, without invoking the C compiler.
+
     bool emitCppOnly = false;
     ::std::vector<::std::string> linkerArgs;
 
@@ -40,17 +40,16 @@ struct TransOptions {
 };
 
 enum class CodegenOutput {
-    Object,         // .o
-    StaticLibrary,  // .a
-    DynamicLibrary, // .so
-    Executable,     // no suffix, includes main stub (TODO: Can't that just be added earlier?)
+    Object,
+    StaticLibrary,
+    DynamicLibrary,
+    Executable, // no suffix, includes main stub (TODO: Can't that just be added earlier?)
 };
 
 extern TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate);
-// NOTE: This also sets the saveout flags
+
 extern TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate);
 
-/// Re-run enumeration on monomorphised functions, removing now-unused items
 extern void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList& list);
 
 extern void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList);

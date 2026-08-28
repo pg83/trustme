@@ -9,7 +9,6 @@
 #include <string_view>
 #include <stdexcept>
 
-/// Path helper class (because I don't want to include boost)
 class FsPath {
     static const char SEP = '/';
 
@@ -46,10 +45,8 @@ public:
 
     FsPath operator/(const FsPath& p) const;
 
-    /// Append a relative path
     FsPath operator/(const char* o) const;
 
-    /// Add an arbitary string to the final component
     FsPath operator+(const char* o) const;
 
     bool popComponent();
@@ -98,7 +95,6 @@ public:
     }
 
     FsPath normalise() const;
-
 
     friend ::std::ostream& operator<<(::std::ostream& os, const FsPath& p) {
         return os << p.str_;

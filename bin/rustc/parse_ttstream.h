@@ -3,7 +3,6 @@
 #include "parse_tokentree.h"
 #include "parse_tokenstream.h"
 
-/// Borrowed TTStream
 class TTStream: public TokenStream {
     ::std::vector<::std::pair<unsigned int, const TokenTree*>> stack;
     Span parentSpan;
@@ -24,7 +23,6 @@ protected:
     Token realGetToken() override;
 };
 
-/// Owned TTStream
 class TTStreamO: public TokenStream {
     Span parentSpan;
     Position lastPos;

@@ -5,6 +5,7 @@
 #include "hir_generic_ref.h"
 
 #include <std/lib/vector.h>
+
 #include <string>
 #include <vector>
 #include <iostream>
@@ -32,7 +33,6 @@ enum class HIRGenericParamKind : u8 {
 
 class HIRGenericParams;
 
-// Definitions generated from hir_generic_params.tu.
 #include "hir_generic_params_tu.h"
 extern ::std::ostream& operator<<(::std::ostream& os, const HIRGenericBound& x);
 
@@ -40,13 +40,10 @@ class HIRGenericParams {
 public:
     ::std::vector<HIRTypeParamDef> types;
     ::std::vector<HIRValueParamDef> values;
-    // Declaration order after erasing lifetimes. `types` and `values` retain
-    // their separate indices; this supplies the kind of each source position.
+
     stl::Vector<HIRGenericParamKind> paramKinds;
 
     ::std::vector<HIRGenericBound> bounds;
-
-    //GenericParams() {}
 
     HIRGenericParams clone() const;
 
@@ -69,7 +66,6 @@ public:
         return index < types.size() ? HIRGenericParamKind::Type : HIRGenericParamKind::Value;
     }
 
-    /// Create a PathParams instance that doesn't monomorphise at all
     HIRPathParams makeNopParams(HIRTypeInterner& types, unsigned level) const;
 
     struct PrintArgs {

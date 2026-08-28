@@ -28,7 +28,6 @@ struct ASTAttributeIdentCb final: ASTAttributeIdentCallback {
 class ASTAttribute;
 ::std::ostream& operator<<(::std::ostream& os, const ASTAttribute& x);
 
-/// A list of attributes on an item (searchable by the attribute name)
 class ASTAttributeList {
 public:
     ::std::vector<ASTAttribute> items;
@@ -37,13 +36,12 @@ public:
     ASTAttributeList(::std::vector<ASTAttribute> items);
     ~ASTAttributeList();
 
-    // Move present
     ASTAttributeList(ASTAttributeList&&);
     ASTAttributeList& operator=(ASTAttributeList&&);
-    // No copy assign, but explicit copy
+
     explicit ASTAttributeList(const ASTAttributeList&);
     ASTAttributeList& operator=(const ASTAttributeList&) = delete;
-    // Explicit clone
+
     ASTAttributeList clone() const;
 
     void push_back(ASTAttribute i);
@@ -89,17 +87,11 @@ struct ASTAttributeName {
     friend std::ostream& operator<<(std::ostream& os, const ASTAttributeName& x);
 };
 
-// An attribute can has a name, and optional data:
-// Data can be:
-// - A parenthesised token tree
-//   > In 1.19 this was actually just sub-attributes
-// - an associated (string) literal
-
 class ASTAttribute {
     Span span_;
     ASTAttributeName name_;
     TokenTree data_;
-    /// @brief Indicates that this attribute has been used by a derive, and shouldn't be otherwise resolved
+
     mutable bool isInert_;
     // TODO: Parse as a TT then expand?
 public:
@@ -137,9 +129,8 @@ public:
         return data_;
     }
 
-    /// Parses the data as a `="string"` and returns the string
     std::string parseEqualsString(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod) const;
-    /// Parses the data as a `("string")` and returns the string
+
     std::string parseParenString() const;
 
     void parseParenIdentListCb(ASTAttributeIdentCallback& itemCb) const;
@@ -153,5 +144,4 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTAttribute& x);
 };
 
-// Definitions generated from ast_attrs.tu.
 #include "ast_attrs_tu.h"

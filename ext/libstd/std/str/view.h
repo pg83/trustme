@@ -11,25 +11,21 @@ namespace stl {
 
     public:
         StringView() noexcept
-            : StringView(nullptr, (size_t)0)
-        {
+            : StringView(nullptr, (size_t)0) {
         }
 
         template <size_t N>
         StringView(const u8 (&str)[N]) noexcept
-            : StringView(str, N - 1)
-        {
+            : StringView(str, N - 1) {
         }
 
         StringView(const u8* ptr, size_t len) noexcept
             : ptr_(ptr)
-            , len_(len)
-        {
+            , len_(len) {
         }
 
         StringView(const u8* b, const u8* e) noexcept
-            : StringView(b, e - b)
-        {
+            : StringView(b, e - b) {
         }
 
         StringView(const char* s) noexcept;
@@ -43,7 +39,6 @@ namespace stl {
             return len_;
         }
 
-        // iterator ops
         auto begin() const noexcept {
             return data();
         }
@@ -64,7 +59,6 @@ namespace stl {
             return *(end() - 1);
         }
 
-        // string ops
         StringView prefix(size_t len) const noexcept;
         StringView suffix(size_t len) const noexcept;
 
@@ -74,22 +68,17 @@ namespace stl {
         const u8* memChr(u8 ch) const noexcept;
         const u8* search(StringView substr) const noexcept;
 
-        // hash ops
         u32 hash32() const noexcept;
         u64 hash64() const noexcept;
 
         StringView stripSpace() const noexcept;
         StringView stripCr() const noexcept;
 
-        // split by delimiter; returns false if not found
         bool split(u8 delim, StringView& before, StringView& after) const noexcept;
 
-        // write ASCII-lowercased copy into buffer (must be >= length() bytes)
-        // returns view into buffer
         StringView lower(u8* buffer) const noexcept;
         StringView lower(Buffer& buffer) const noexcept;
 
-        // parse
         u64 stou() const noexcept;
         u64 stoh() const noexcept;
     };

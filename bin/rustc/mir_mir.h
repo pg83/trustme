@@ -3,10 +3,10 @@
 #include "floats.h"
 #include "int128.h"
 #include "hir_asm.h"
-#include "hir_encoded_literal.h"
 #include "hir_type.h"
+#include "hir_encoded_literal.h"
 
-#include <memory> // std::unique_ptr
+#include <memory>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -18,13 +18,11 @@ class MonomorphiserNop;
 typedef unsigned int MIRRegionId;
 typedef unsigned int MIRBasicBlockId;
 
-// Store LValues as:
-// - A packed root value (one word, using the low bits as an enum descriminator)
-// - A list of (inner to outer) wrappers
 struct MIRLValue {
     class Storage {
     public:
-        const static uintptr_t MAX_ARG = (1 << 30) - 1; // max value of 30 bits
+        const static uintptr_t MAX_ARG = (1 << 30) - 1;
+
     private:
         uintptr_t val;
 
@@ -145,17 +143,14 @@ struct MIRLValue {
             return (val & 3) == 0;
         }
 
-        // Stores the field index
         bool is_Field() const {
             return (val & 3) == 1;
         }
 
-        // Stores the variant index
         bool is_Downcast() const {
             return (val & 3) == 2;
         }
 
-        // Stores a Local index
         bool is_Index() const {
             return (val & 3) == 3;
         }
@@ -266,16 +261,12 @@ struct MIRLValue {
 
     MIRLValue cloneUnwrapped(unsigned count = 1) const;
 
-    // Returns true if this LValue is a subset of the other (e.g. `_1.0` is a subset of `_1.0*`)
     bool isSubsetOf(const MIRLValue& other) const {
         return root == other.root && other.wrappers.size() >= wrappers.size() && std::equal(wrappers.begin(), wrappers.end(), other.wrappers.begin());
     }
 
-    // Returns true if one lvalue is a subset of the other
-    // - Equivalent to `a.is_subset_of(b) || b.is_subset_of(a)` (but more efficient)
     bool isEitherSubset(const MIRLValue& other) const;
 
-    /// Helper class that represents a LValue unwrapped to a certain degree
     class RefCommon {
     protected:
         const MIRLValue* lv_;
@@ -296,7 +287,6 @@ struct MIRLValue {
             return wrapperCount_;
         }
 
-        /// Unwrap one level, returning false if already at the root
         bool tryUnwrap();
 
         enum Tag {
@@ -370,7 +360,6 @@ struct MIRLValue {
 
         CRef(const MIRLValue& lv, size_t wc);
 
-        /// Unwrap one level
         const CRef innerRef() const;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const CRef& x);
@@ -444,7 +433,7 @@ enum class MIRBinOp {
     MUL_OV,
     DIV,
     DIV_OV,
-    MOD, // MOD_OV,
+    MOD,
 
     BIT_OR,
     BIT_AND,
@@ -465,9 +454,6 @@ enum class MIRUniOp {
     NEG
 };
 
-// A compile-time pointer keeps allocation provenance separate from its byte
-// offset.  The path names the allocation; `offset` selects an address within
-// it.  A null path is reserved for the unresolved MakeDst metadata marker.
 struct ItemAddress {
     ::std::unique_ptr<HIRPath> p;
     U128 offset;
@@ -512,7 +498,6 @@ enum class MIRDropKind {
     DEEP,
 };
 
-// Definitions generated from mir_mir.tu.
 #include "mir_mir_tu.h"
 
 extern ::std::ostream& operator<<(::std::ostream& os, const MIRRValue& x);
@@ -544,7 +529,7 @@ struct MIRBasicBlock {
     bool isCleanup = false;
 };
 
-struct MIREnumCache; // Defined in trans/enumerate.cpp
+struct MIREnumCache;
 
 class MIREnumCachePtr {
     const MIREnumCache* p;
@@ -574,12 +559,11 @@ public:
 class MIRFunction {
 public:
     ::std::vector<HIRTypeRef> locals;
-    //::std::vector< RcString>   local_names;
+
     ::std::vector<bool> dropFlags;
 
     ::std::vector<MIRBasicBlock> blocks;
 
-    // Cache filled/used by enumerate
     mutable MIREnumCachePtr transEnumState;
 };
 
@@ -616,7 +600,6 @@ public:
     ::std::vector<MIRParam> cloneParamVec(const ::std::vector<MIRParam>& src) const;
     ::std::vector<MIRLValue> cloneLvalVec(const ::std::vector<MIRLValue>& src) const;
 
-    // -- Monomorphise various types
     HIRTypeRef monomorph(const HIRTypeData* x) const;
     HIRGenericPath monomorph(const HIRGenericPath& x) const;
     HIRPath monomorph(const HIRPath& x) const;

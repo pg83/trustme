@@ -1,7 +1,7 @@
 #include "parse_interpolated_fragment.h"
 
 #include "ast_ast.h"
-#include "ast_expr.h" // For definition of ExprNode
+#include "ast_expr.h"
 
 #include <iostream>
 

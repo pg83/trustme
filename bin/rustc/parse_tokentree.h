@@ -8,7 +8,7 @@
 enum class ASTEdition;
 
 class TokenTree {
-    ASTEdition edition = (ASTEdition)0; // 2015
+    ASTEdition edition = (ASTEdition)0;
     Ident::Hygiene hygiene_;
     Token tok_;
     ::std::vector<TokenTree> subtrees;

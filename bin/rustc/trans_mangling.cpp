@@ -1,6 +1,6 @@
 #include "trans_mangling.h"
 
-#include "hir_hir.h" // ABI_RUST
+#include "hir_hir.h"
 #include "hir_type.h"
 #include "wire_board.h"
 
@@ -10,10 +10,10 @@
 #include <std/str/builder.h>
 #include <std/mem/obj_pool.h>
 
-#include <cmath> // ceil/log10
+#include <cmath>
 #include <cctype>
 #include <cstring>
-#include <algorithm> // std::find
+#include <algorithm>
 #include <type_traits>
 
 #define XXH_INLINE_ALL
@@ -86,37 +86,8 @@ struct Mangler {
 
     void fmtPath(const HIRPath& p);
 
-    // Type
-    // - Tuple: 'T' <nelem> [<ASTType*> ...]
-    // - Slice: 'S' <ASTType*>
-    // - Array: 'A' <size> <ASTType*>
-    // - Path: 'N' <Path>
     // - TraitObject: 'D' <data:GenericPath> <nmarker> [markers: <GenericPath> ...] <naty> [<ASTType*> ...]    TODO: Does this need to include the ATY name?
-    // - Borrow: 'B' ('s'|'u'|'o') <ASTType*>
-    // - RawPointer: 'P' ('s'|'u'|'o') <ASTType*>
-    // - Named Function: 'f' <Path>
-    // - Function: 'F' (|'u') (| 'e' <abi:RcString>) <nargs> [args: <ASTType*> ...] <ret:ASTType*>
-    // - Primitives::
-    //   - u8  : 'C' 'a'
-    //   - i8  : 'C' 'b'
-    //   - u16 : 'C' 'c'
-    //   - i16 : 'C' 'd'
-    //   - u32 : 'C' 'e'
-    //   - i32 : 'C' 'f'
-    //   - u64 : 'C' 'g'
-    //   - i64 : 'C' 'h'
-    //   - u128: 'C' 'i'
-    //   - i128: 'C' 'j'
-    //   --
-    //   - f32  : 'C' 'n'
-    //   - f64  : 'C' 'o'
-    //   --
-    //   - usize: 'C' 'u'
-    //   - isize: 'C' 'v'
-    //   - bool : 'C' 'x'
-    //   - char : 'C' 'x'
-    //   - str  : 'C' 'y'
-    // - Diverge: 'C' 'z'
+
     void fmtType(const HIRTypeData* ty);
 };
 
@@ -258,10 +229,6 @@ auto Mangler::fmtName(const char* const s) -> void {
         needsByteEncoding |= !canEmitRaw;
     }
 
-    // The C backend needs an ASCII identifier, not the externally-visible
-    // Rust v0 symbol spelling. `U` marks a bytewise encoding for names that
-    // cannot be emitted raw. Escape ordinary names beginning with `U` as
-    // well, so the mapping stays injective.
     ::std::string encoded;
     if (needsByteEncoding) {
         static constexpr char HEX[] = "0123456789abcdef";
@@ -282,7 +249,7 @@ auto Mangler::fmtName(const char* const s) -> void {
         if (isalnum(static_cast<unsigned char>(*p))) {
         } else if (*p == '_') {
         } else if (*p == '#' || *p == '-') { // HACK: Treat '-' and '#' as the same in encoding
-            // Multiple hash characters? abort/error
+
             // HACK: Only treat the last one as special, previous ones are replaced by underscores
             hashPos = p;
         } else {
@@ -325,7 +292,7 @@ auto Mangler::fmtName(const char* const s) -> void {
 
 auto Mangler::fmtSimplePath(const HIRSimplePath& sp) -> void {
     os << sp.components().size();
-    os << "c"; // Needed to separate the component count from the crate name
+    os << "c";
     this->fmtName(sp.crateName());
     for (const auto& c : sp.components()) {
         this->fmtName(c);
@@ -473,7 +440,7 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
         case HIRTypeData::TAG_Function: {
             auto& e = (*ty).as_Function();
             os << "F";
-            os << (e.isUnsafe ? "u" : ""); // Optional allowed, next is a number
+            os << (e.isUnsafe ? "u" : "");
             os << (e.trackCaller ? "c" : "");
             if (e.abi != ABI_RUST) {
                 os << "e";

@@ -2,7 +2,6 @@
 
 #define CC_EXP(...) __VA_ARGS__
 
-// - Calls the passed function, expanding 'a' but leaving _1 as a single argument
 #define CC_CALL_A(__fcn, __args) __fcn __args
 #define CC_CALL_A1(f, a, _1) CC_CALL_A(f, (CC_EXP a, _1))
 #define CC_CALL_A2(f, a, _1, _2) CC_CALL_A(f, (CC_EXP a, _1)) CC_CALL_A(f, (CC_EXP a, _2))
@@ -20,8 +19,6 @@
 #define CC_CALL_A13(f, a, a1, a2, a3, a4, b1, b2, b3, c1, c2, c3, d1, d2, d3) CC_CALL_A4(f, a, a1, a2, a3, a4) CC_CALL_A3(f, a, b1, b2, b3) CC_CALL_A3(f, a, c1, c2, c3) CC_CALL_A3(f, a, d1, d2, d3)
 #define CC_CALL_A14(f, a, a1, a2, a3, a4, b1, b2, b3, b4, c1, c2, c3, d1, d2, d3) CC_CALL_A4(f, a, a1, a2, a3, a4) CC_CALL_A4(f, a, b1, b2, b3, b4) CC_CALL_A3(f, a, c1, c2, c3) CC_CALL_A3(f, a, d1, d2, d3)
 
-// Macro to obtain a numbered macro for argument counts
-// - Raw variant
 #define CC_GM_I(SUF, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, COUNT, ...) SUF##COUNT
 #define CC_GM(SUF, ...) CC_EXP(CC_GM_I(SUF, __VA_ARGS__, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1))
 

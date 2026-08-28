@@ -8,10 +8,6 @@ namespace stl {
     class ObjPool;
 }
 
-/// Cross-crate index of inherent (non-trait) methods: one instance per
-/// compilation, wired on the WireBoard. The HIR conversion pipeline fills it
-/// over the root crate and every extern crate; typeck method resolution
-/// reads it.
 class HIRInherentCache {
 public:
     struct Callback {
@@ -33,7 +29,7 @@ public:
     };
 
     virtual void insertAll(const Span& sp, const HIRTypeImpl& impl, const HIRSimplePath& langBox) = 0;
-    /// Locates methods matching the specified type
+
     virtual void findWith(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, Callback& cb) const = 0;
 
     template <typename F>

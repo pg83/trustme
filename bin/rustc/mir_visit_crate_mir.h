@@ -35,9 +35,6 @@ public:
     [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
     void visitConstgeneric(HIRConstGeneric& value) override;
 
-    // ------
-    // Code-containing items
-    // ------
     void visitFunction(HIRItemPath p, HIRFunction& item) override;
     void visitStatic(HIRItemPath p, HIRStatic& item) override;
     void visitConstant(HIRItemPath p, HIRConstant& item) override;
@@ -45,7 +42,6 @@ public:
     void visitUnion(HIRItemPath p, HIRUnion& item) override;
     void visitEnum(HIRItemPath p, HIREnum& item) override;
 
-    // Boilerplate
     void visitTrait(HIRItemPath p, HIRTrait& item) override;
     void visitTypeImpl(HIRTypeImpl& impl) override;
     void visitInherentType(HIRItemPath p, HIRTypeAlias& item) override;

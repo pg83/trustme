@@ -142,7 +142,6 @@ public:
         return std::make_pair(lower_bound(k), upper_bound(k));
     }
 
-    /// Lower bound: First item in the map not less than the provided key (equal, or first after)
     template <typename K2>
     const_iterator lower_bound(const K2& k) const {
         return const_iterator(std::lower_bound(data_.begin(), data_.end(), k, [&](const ::std::unique_ptr<itemT>& kv, const K2& k) {
@@ -150,7 +149,6 @@ public:
         }));
     }
 
-    /// Upper bound: First item in the map after the provided key
     template <typename K2>
     const_iterator upper_bound(const K2& k) const {
         return const_iterator(std::upper_bound(data_.begin(), data_.end(), k, [&](const K2& k, const ::std::unique_ptr<itemT>& kv) {
@@ -158,7 +156,6 @@ public:
         }));
     }
 
-    /// Iterator pair of first and after-last items equal to the given key
     template <typename K2>
     std::pair<const_iterator, const_iterator> equal_range(const K2& k) const {
         return std::make_pair(lower_bound(k), upper_bound(k));

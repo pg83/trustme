@@ -2,7 +2,7 @@
 
 #include "common.h"
 #include "ast_ast.h"
-#include "ast_expr.h" // A guard pattern holds an expression
+#include "ast_expr.h"
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::Value& val) {
     switch (val.tag()) {

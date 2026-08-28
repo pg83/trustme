@@ -16,8 +16,6 @@ namespace {
         }
     }
 
-    /// Reject the two ways a discriminant list can be invalid: two variants
-    /// sharing a value, and a value the tag cannot hold.
     template <typename Variants, typename GetValue>
     void checkEnumDiscriminants(const Span& sp, HIRCoreType ty, const Variants& variants, GetValue getValue) {
         const auto max = enumTagUnsignedMax(ty);
@@ -36,7 +34,7 @@ namespace {
 }
 
 #include "floats.h"
-#include "int128.h" // 128 bit integer support
+#include "int128.h"
 #include "hir_hir.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
@@ -44,10 +42,10 @@ namespace {
 #include "hir_visitor.h"
 #include "mir_helpers.h"
 #include "trans_target.h"
-#include "trans_codegen.h" // For encoding as part of transmute
+#include "trans_codegen.h"
 #include "hir_expr_state.h"
-#include "hir_typeck_common.h"  // Monomorph
-#include "trans_monomorphise.h" // For handling monomorph of MIR in provided associated constants
+#include "hir_typeck_common.h"
+#include "trans_monomorphise.h"
 #include "hir_typeck_expr_visit.h"
 #include "hir_conv_main_bindings.h"
 
@@ -280,7 +278,6 @@ namespace {
         HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override;
     };
 
-// Definitions generated from hir_conv_ent_ptr.tu.
 #include "hir_conv_ent_ptr_tu.h"
     enum class EntNS {
         Value
@@ -838,7 +835,7 @@ namespace {
 
     const unsigned TERM_RET_PUSHED = UINT_MAX - 1;
     const unsigned TERM_RET_RETURN = UINT_MAX;
-} // namespace <anon>
+}
 
 struct MIREvalPathCallback final: public MIRPathCallback {
     HIRItemPath path;
@@ -2044,9 +2041,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     MIR_ASSERT(state, vtablePtr.second, "Trait object has no vtable relocation");
                     if (auto* staticRef = vtablePtr.second.asStaticref()) {
                         if (const auto* path = staticRef->path().data.opt_UfcsKnown(); path && path->item == "vtable#") {
-                            // Vtables are generated after CTFE.  Their symbolic
-                            // path still identifies the concrete source type,
-                            // which determines both header values.
                             size_t size;
                             size_t align;
                             MIR_ASSERT(state, TargetGetSizeAndAlignOf(state.sp, this->resolve, path->type, size, align), "Invalid vtable source type " << path->type);
@@ -2143,10 +2137,10 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     const auto& caller = localState.callerLocation;
                     const auto* filename = caller.filename.c_str();
                     const auto filenameLen = caller.filename.size();
-                    rv.slice(repr->fields[0].offset + 0, pb).writePtr(state, EncodedLiteral::PTR_BASE, MIREvalConstantPtr::allocate(localState.valuePool, filename, filenameLen + 1)); // file.ptr, including trailing NUL
-                    rv.slice(repr->fields[0].offset + pb, pb).writeUint(state, TargetGetPointerBits(), filenameLen);                                                                   // file.len
-                    rv.slice(repr->fields[1].offset, 4).writeUint(state, 32, caller.line);                                                                                             // line: u32
-                    rv.slice(repr->fields[2].offset, 4).writeUint(state, 32, caller.column);                                                                                           // col: u32
+                    rv.slice(repr->fields[0].offset + 0, pb).writePtr(state, EncodedLiteral::PTR_BASE, MIREvalConstantPtr::allocate(localState.valuePool, filename, filenameLen + 1));
+                    rv.slice(repr->fields[0].offset + pb, pb).writeUint(state, TargetGetPointerBits(), filenameLen);
+                    rv.slice(repr->fields[1].offset, 4).writeUint(state, 32, caller.line);
+                    rv.slice(repr->fields[2].offset, 4).writeUint(state, 32, caller.column);
                 } else if (te->name == "ctpop") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), "ctpop with non-primitive " << ty);
@@ -3077,7 +3071,7 @@ void HIREvaluator::runConstDrop(MIREvalCallStackEntry& localState, HIRTypeRef ty
 }
 
 EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MIREvalAllocation& a) {
-    const auto* aBytes = a.getBytes(0, a.size(), false); // NOTE: Read the uninitialised bytes (they _should_ be zeroes)
+    const auto* aBytes = a.getBytes(0, a.size(), false);
     ASSERT_BUG(this->rootSpan, aBytes, "Unable to get entire allocation - " << FMT_CB(ss, a.fmt(ss, 0, a.size())));
     EncodedLiteral rv;
     rv.bytes.insert(rv.bytes.begin(), aBytes, aBytes + a.size());
@@ -3136,9 +3130,6 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
         }
     }
 
-    // Fill each missing generic layer independently.  An associated generic
-    // const arrives with the impl layer already set, but still needs its item
-    // parameters while evaluating the body.
     HIRPathParams nopParamsImpl;
     HIRPathParams nopParamsMethod;
     if (!ms.ppImpl || !ms.ppMethod) {
@@ -3151,7 +3142,6 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
     }
 
     if (mir) {
-        // Might want to have a fully-populated MonomorphState for expanding inside impl blocks
         // HACK: Generate a roughly-correct one
         const auto& topIp = ip.getTopIp();
         if (topIp.trait && !topIp.ty && !ms.selfTy) {
@@ -3197,9 +3187,7 @@ namespace {
         const HIRGenericParams* itemParams;
 
         GenericParamsCallback* getParams = nullptr;
-        // Set while visiting a method call before main typecheck: its
-        // parameter definitions do not exist yet, so parameter values are
-        // left Unevaluated for the post-typecheck demand sites.
+
         bool paramsUnresolved = false;
 
         enum class Pass {
@@ -3281,7 +3269,7 @@ namespace {
         exp.implParams = implParams;
         exp.visitFunction(ip, fcn);
     }
-} // namespace
+}
 
 namespace {
     struct EnumValueExpander: public HIRVisitor {
@@ -3478,7 +3466,6 @@ HIREvaluator::HIREvaluator(const Span& sp, const WireBoard& wb, Newval& nvs)
 {
 }
 
-// Bodies of the generated local unions (see hir_conv_ent_ptr.tu).
 #include "hir_conv_ent_ptr_tu.cpp"
 
 auto CtfeContext::capsOracle() const -> bool {
@@ -4276,12 +4263,12 @@ auto MIREvalValueRef::writeUint(const MIRTypeResolve& state, unsigned bits, u64 
 
 auto MIREvalValueRef::writeUint(const MIRTypeResolve& state, unsigned bits, U128 v) -> void {
     auto nBytes = (bits + 7) / 8;
-    v.toLeBytes(extWriteBytes(state, nBytes), nBytes); // little-endian only
+    v.toLeBytes(extWriteBytes(state, nBytes), nBytes);
 }
 
 auto MIREvalValueRef::writeSint(const MIRTypeResolve& state, unsigned bits, S128 v) -> void {
     auto nBytes = (bits + 7) / 8;
-    v.getInner().toLeBytes(extWriteBytes(state, nBytes), nBytes); // little-endian only
+    v.getInner().toLeBytes(extWriteBytes(state, nBytes), nBytes);
 }
 
 auto MIREvalValueRef::writePtr(const MIRTypeResolve& state, u64 val, MIREvalRelocPtr reloc) -> void {
@@ -4339,14 +4326,14 @@ auto MIREvalValueRef::readUint(const MIRTypeResolve& state, unsigned bits) const
     assert(bits <= 128);
     auto nBytes = (bits + 7) / 8;
     U128 rv;
-    rv.fromLeBytes(extReadBytes(state, nBytes), nBytes); // little-endian only
+    rv.fromLeBytes(extReadBytes(state, nBytes), nBytes);
     return rv;
 }
 
 auto MIREvalValueRef::readSint(const MIRTypeResolve& state, unsigned bits) const -> S128 {
     auto nBytes = (bits + 7) / 8;
     S128 rv;
-    rv.fromLeBytes(extReadBytes(state, nBytes), nBytes); // little-endian only
+    rv.fromLeBytes(extReadBytes(state, nBytes), nBytes);
     return rv;
 }
 
@@ -4707,7 +4694,6 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRTypeData* ty, MIREva
 }
 
 auto MIREvalCallStackEntry::getStaticrefMono(const HIRPath& p, HIRTypeRef* outTy) const -> MIREvalStaticRefPtr {
-    // NOTE: Value won't need to be monomorphed, as it shouldn't be generic
     return getStaticref(ms.monomorphPath(state.sp, p), outTy);
 }
 
@@ -4719,10 +4705,6 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
         BUG(state.sp, "Static " << p << " references a generic parameter after substitution");
     }
 
-    // A trait-object method function pointer names the generated vtable
-    // dispatch shim.  Resolving it as an ordinary trait item can only see
-    // the object bound (or a fuzzy blanket impl), but the symbolic path is
-    // exactly what translation needs in order to generate that shim.
     if (const auto* pe = p.data.opt_UfcsKnown()) {
         if (const auto* tyDyn = pe->type->opt_TraitObject()) {
             if (pe->item != "vtable#" && tyDyn->trait.traitPtr && tyDyn->trait.traitPtr->getVtableValueIndex(pe->trait, pe->item) > 0) {
@@ -5538,9 +5520,6 @@ auto Expander::visitPathParams(HIRPathParams& p) -> void {
                 auto idx = static_cast<size_t>(&v - &p.values.front());
                 ASSERT_BUG(sp, idx < paramsDef.values.size(), "");
                 const auto& ty = paramsDef.values[idx].type;
-                // A const parameter's own type may be generic
-                // (`const M: [T; N]`), and the value cannot be evaluated
-                // before the type is known. Leave it for monomorphisation.
                 if (monomorphiseTypeNeeded(ty)) {
                     continue;
                 }

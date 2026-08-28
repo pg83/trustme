@@ -57,7 +57,6 @@ struct ASTAbsolutePath {
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTAbsolutePath& x);
 
-    // Returns true if this path is a prefix of the other path (or equal)
     bool isParentOf(const ASTAbsolutePath& other) const;
 };
 
@@ -66,17 +65,12 @@ struct ASTPathBindingModuleHir {
     const HIRModule* mod;
 };
 
-// Definitions generated from ast_path_binding.tu.
 #include "ast_path_binding_tu.h"
 
 extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingValue& x);
 extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingType& x);
 extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingMacro& x);
 
-/// <summary>
-/// Wrapper for PathBinding_* that also includes an item path
-/// </summary>
-/// <typeparam name="T">PathBinding_*</typeparam>
 template <typename T>
 struct ASTPathBinding {
     ASTAbsolutePath path;
@@ -175,7 +169,6 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTPathNode& pn);
 };
 
-// Definitions generated from ast_path_class.tu.
 #include "ast_path_class_tu.h"
 
 class ASTPath {
@@ -206,7 +199,6 @@ public:
 
     ASTPath(Class c);
 
-    // INVALID
     ASTPath();
 
     ASTPath(ASTPath&&) = default;
@@ -215,7 +207,6 @@ public:
     /*explicit*/ ASTPath(const ASTPath& x);
     ASTPath& operator=(const ASTPath&) = delete;
 
-    // ABSOLUTE
     ASTPath(RcString crate, ::std::vector<ASTPathNode> nodes);
 
     ASTPath(const ASTAbsolutePath& p);
@@ -228,22 +219,18 @@ public:
 
     ASTPath(const ASTAbsolutePath& p, ASTPathParams pp);
 
-    // Local (variable/type param)
     ASTPath(RcString name)
         : cls(Class::make_Local({mv$(name)}))
     {
     }
 
-    // UFCS
     static ASTPath newUfcsTy(ASTType* type, ::std::vector<ASTPathNode> nodes = {});
     static ASTPath newUfcsTrait(ASTType* type, ASTPath trait, ::std::vector<ASTPathNode> nodes = {});
 
-    // VARIABLE
     static ASTPath newLocal(RcString name) {
         return ASTPath(mv$(name));
     }
 
-    // RELATIVE
     static ASTPath newRelative(Ident::Hygiene hygiene, ::std::vector<ASTPathNode> nodes) {
         return ASTPath(Class::make_Relative({mv$(hygiene), mv$(nodes)}));
     }
@@ -332,8 +319,6 @@ private:
     void checkParamCounts(const ASTGenericParams& params, bool expectParams, ASTPathNode& node);
 
 public:
-    //}
 };
 
-// Definitions generated from ast_path.tu.
 #include "ast_path_tu.h"

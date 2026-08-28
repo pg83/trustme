@@ -626,7 +626,6 @@ namespace {
         if (nself == u.selfType && !cimpl && !citem) {
             return false;
         }
-        // escape: the Unevaluated payload is an owning unique_ptr in today's representation
         out = HIRConstGeneric(::std::make_unique<HIRConstGenericUnevaluated>(u.clone()));
         auto& ou = *out.as_Unevaluated();
         ou.selfType = nself;

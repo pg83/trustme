@@ -119,7 +119,6 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTValueParam& p);
 };
 
-// Definitions generated from ast_generics.tu.
 #include "ast_generics_tu.h"
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTGenericBound& x);
@@ -128,10 +127,7 @@ class ASTGenericParams {
 public:
     ::std::vector<GenericParam> params;
     ::std::vector<ASTGenericBound> bounds;
-    // Types that appear in a `where` clause with an empty bound list (`T:`).
-    // These impose no constraint, but must still be expanded/resolved so that
-    // any side effects they carry (e.g. anon-const blocks with nested items)
-    // are processed consistently with how lowering later visits them.
+
     ::std::vector<ASTType*> bareBoundTypes;
 
     ASTGenericParams();

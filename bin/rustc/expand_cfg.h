@@ -2,16 +2,16 @@
 
 #include "settings.h"
 
+#include <std/mem/obj_pool.h>
+
 #include <iosfwd>
 #include <string>
 #include <vector>
-#include <std/mem/obj_pool.h>
 
 struct Span;
 struct CfgState;
 
 class TokenStream;
-
 
 class ASTAttribute;
 class ASTAttributeList;
@@ -60,7 +60,7 @@ extern void CfgSetLintLevel(Settings& settings, ::std::string name, CfgLintLevel
 extern void CfgSetLintCap(Settings& settings, CfgLintLevel level);
 extern bool checkCfgAttrs(const Settings& settings, const ASTAttributeList& attrs);
 extern bool checkCfg(const Settings& settings, const Span& sp, const ASTAttribute& mi);
-/// Check a parenthesised list of cfg rules (treated as `all()`)
+
 extern bool checkCfgStream(const Settings& settings, TokenStream& lex);
-/// Parse an attribute from a `cfg_attr()` attribute. Returns with an empty name if check failed
+
 extern std::vector<ASTAttribute> checkCfgAttr(const Settings& settings, const ASTAttribute& mi);

@@ -2,17 +2,17 @@
 
 #include <std/sys/types.h>
 
-#include <iostream>
-#include <vector>
 #include <map>
 #include <set>
+#include <memory>
+#include <vector>
 #include <cassert>
 #include <sstream>
-#include <memory>
 #include <utility>
+#include <iostream>
 
 #define FMT(ss) (static_cast<::std::ostringstream&&>(::std::ostringstream() << ss).str())
-// Project-wide shorthand retained for the pervasive move idiom.
+
 #define mv$(...) ::std::move(__VA_ARGS__)
 #define box$(...) ::makeUniquePtr(::std::move(__VA_ARGS__))
 #define rcNew$(...) ::makeSharedPtr(::std::move(__VA_ARGS__))
@@ -119,7 +119,6 @@ static inline Ordering ord(char8_t l, char8_t r) {
     return (l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess));
 }
 
-
 static inline Ordering ord(unsigned short l, unsigned short r) {
     return (l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess));
 }
@@ -166,20 +165,13 @@ static inline Ordering ord(double l, double r) {
 
 Ordering ord(const ::std::string& l, const ::std::string& r);
 
-// Bridge a lambda into a per-interface callback adapter: T is the adapter
-// template for one concrete callback interface (e.g. ExpandAttrCb), F the
-// lambda. Keeps call sites on lambdas while the API takes a plain virtual
-// interface reference, with no allocation.
 template <template <typename> class T, typename F>
 auto makeCallable(F f) {
     return T<F>(f);
 }
 
 class HIRTypeData;
-// Interned types order by the interner-assigned uid (creation order), never
-// by address: pointer order leaks the allocation layout into anything walked
-// in container order, including the emitted output. Declared before the
-// generic templates below so their qualified ::ord calls resolve to it.
+
 Ordering ord(const HIRTypeData* l, const HIRTypeData* r);
 
 template <typename T>
@@ -241,8 +233,8 @@ Ordering ord(const ::std::map<T, U>& l, const ::std::map<T, U>& r) {
     return OrdEqual;
 }
 
-#define ORD(a, b)                      \
-    do {                               \
+#define ORD(a, b)                     \
+    do {                              \
         Ordering ORDRv = ::ord(a, b); \
         if (ORDRv != ::OrdEqual)      \
             return ORDRv;             \
@@ -313,10 +305,6 @@ inline Join<T> join(const char* sep, const ::std::vector<T> v) {
 
 namespace std {
 
-    // The standard deletes streaming of char8_t; restore the pre-u8
-    // byte-as-char behaviour (u8 used to be unsigned char, which streams as
-    // a character). Lives in std so it is found ahead of the deleted
-    // overload everywhere, including the container printers below.
     inline ::std::ostream& operator<<(::std::ostream& os, char8_t v) {
         return os << static_cast<char>(v);
     }
@@ -407,7 +395,7 @@ namespace std {
         return os;
     }
 
-} // namespace std
+}
 
 class FmtEscaped {
     const char* s;
@@ -416,25 +404,22 @@ class FmtEscaped {
 public:
     FmtEscaped(const ::std::string& s);
 
-    // See main.cpp
     friend ::std::ostream& operator<<(::std::ostream& os, const FmtEscaped& x);
 };
 
-// -------------------------------------------------------------------
-// --- Reversed iterable
 template <typename T>
 struct reversionWrapper {
     T& iterable;
 };
 
 template <typename T>
-//auto begin (reversion_wrapper<T> w) { return ::std::rbegin(w.iterable); }
+
 auto begin(reversionWrapper<T> w) {
     return w.iterable.rbegin();
 }
 
 template <typename T>
-//auto end (reversion_wrapper<T> w) { return ::std::rend(w.iterable); }
+
 auto end(reversionWrapper<T> w) {
     return w.iterable.rend();
 }

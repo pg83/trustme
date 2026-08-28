@@ -41,8 +41,6 @@ public:
 struct ASTStructPatternEntry;
 class ASTPattern;
 
-/// True if `!` appears anywhere in the pattern, which makes the alternative it
-/// belongs to unmatchable.
 extern bool PatternContainsNever(const ASTPattern& pat);
 
 struct ASTPatternTuplePat {
@@ -51,7 +49,6 @@ struct ASTPatternTuplePat {
     ::std::vector<ASTPattern> end;
 };
 
-// Definitions generated from ast_pattern.tu.
 #include "ast_pattern_tu.h"
 
 class ASTPattern {
@@ -128,7 +125,6 @@ public:
 
     ASTPattern clone() const;
 
-    // Accessors
     std::vector<ASTPatternBinding>& bindings() {
         return bindings_;
     }

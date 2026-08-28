@@ -65,8 +65,7 @@ namespace {
 
             Worker(ThreadPoolImpl* p, ObjPool* opool) noexcept
                 : pool_(p)
-                , thread_(Thread::create(opool, *this))
-            {
+                , thread_(Thread::create(opool, *this)) {
             }
 
             auto key() const noexcept {
@@ -442,7 +441,6 @@ void WorkStealingThreadPool::Worker::loop() {
     while (true) {
         while (auto task = popNoLock()) {
             if (tasks_.empty()) {
-                // pass
             } else if (auto w = (Worker*)pool_->wq->dequeue(); w) {
                 w->push(popNoLock());
             }

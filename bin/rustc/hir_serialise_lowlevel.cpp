@@ -5,7 +5,7 @@
 #include <zlib.h>
 #include <fstream>
 #include <iomanip>
-#include <string.h> // memcpy
+#include <string.h>
 #include <algorithm>
 
 struct HIRSerialiseWriterInner {
@@ -311,20 +311,10 @@ void HIRSerialiseWriter::writeU64c(u64 v) {
     if (v < (1 << 7)) {
         writeU8(static_cast<u8>(v));
     } else if (v < (1 << (6 + 16))) {
-        u8 buf[] = {
-            static_cast<u8>(0x80 + (v >> 16)), // 0x80 -- 0xBF
-            static_cast<u8>(v >> 8),
-            static_cast<u8>(v & 0xFF)
-        };
+        u8 buf[] = {static_cast<u8>(0x80 + (v >> 16)), static_cast<u8>(v >> 8), static_cast<u8>(v & 0xFF)};
         this->write(buf, sizeof buf);
     } else if (v < (1ull << (5 + 32))) {
-        u8 buf[] = {
-            static_cast<u8>(0xC0 + (v >> 32)), // 0xC0 -- 0xDF
-            static_cast<u8>(v >> 24),
-            static_cast<u8>(v >> 16),
-            static_cast<u8>(v >> 8),
-            static_cast<u8>(v)
-        };
+        u8 buf[] = {static_cast<u8>(0xC0 + (v >> 32)), static_cast<u8>(v >> 24), static_cast<u8>(v >> 16), static_cast<u8>(v >> 8), static_cast<u8>(v)};
         this->write(buf, sizeof buf);
     } else {
         u8 buf[] = {0xFF, static_cast<u8>(v & 0xFF), static_cast<u8>(v >> 8), static_cast<u8>(v >> 16), static_cast<u8>(v >> 24), static_cast<u8>(v >> 32), static_cast<u8>(v >> 40), static_cast<u8>(v >> 48), static_cast<u8>(v >> 56)};

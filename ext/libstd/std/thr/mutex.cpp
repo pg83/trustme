@@ -18,8 +18,7 @@ namespace {
         char flag_ = 0;
 
         SpinMutexImpl(CoroExecutor* exec) noexcept
-            : exec_(exec)
-        {
+            : exec_(exec) {
         }
 
         void spin() noexcept {
@@ -55,7 +54,6 @@ namespace {
         }
     };
 
-    // pthread_mutex_t cannot be a base class: it is a union on glibc
     struct PosixMutexImpl: public Mutex {
         pthread_mutex_t mutex;
 

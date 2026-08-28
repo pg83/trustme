@@ -1,12 +1,12 @@
 #include "ast_crate.h"
 
 #include "ast_ast.h"
-#include "hir_hir.h" // HIR::Crate
+#include "hir_hir.h"
 #include "settings.h"
 #include "expand_cfg.h"
 #include "wire_board.h"
 #include "parse_parseerror.h"
-#include "hir_main_bindings.h" // HIR_Deserialise
+#include "hir_main_bindings.h"
 
 #include <fstream>
 #include <dirent.h>
@@ -48,8 +48,6 @@ namespace {
             }
         }
         // TODO: What about if an anon mod has been #[cfg]-d out?
-        // - For now, disable
-        //}
     }
 }
 
@@ -69,7 +67,6 @@ void ASTCrate::loadExterns(Settings& settings) {
             if (auto* c = it->data.opt_Crate()) {
                 if (checkItemCfg(settings, it->attrs)) {
                     if (c->name == "") {
-                        // Leave for now
                     } else {
                         c->name = loadExternCrate(settings, it->span, c->name);
                     }
@@ -130,7 +127,7 @@ void ASTCrate::loadExterns(Settings& settings) {
 }
 
 // TODO: Handle disambiguating crates with the same name (e.g. libc in std and crates.io libc)
-// - Crates recorded in rlibs should specify a hash/tag that's passed in to this function.
+
 RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& name, const ::std::string& basename /*=""*/) {
     ::std::string path;
     auto* entry = settings.findCrateOverride(name);

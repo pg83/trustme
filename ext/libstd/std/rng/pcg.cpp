@@ -15,19 +15,16 @@ namespace {
 }
 
 PCG32::PCG32(u64 seq) noexcept
-    : PCG32(splitMix64((size_t)this), seq)
-{
+    : PCG32(splitMix64((size_t)this), seq) {
 }
 
 PCG32::PCG32(const void* seq) noexcept
-    : PCG32(splitMix64((size_t)seq))
-{
+    : PCG32(splitMix64((size_t)seq)) {
 }
 
 PCG32::PCG32(u64 state, u64 seq) noexcept
     : state_(0)
-    , seq_(2ULL * seq + 1ULL)
-{
+    , seq_(2ULL * seq + 1ULL) {
     nextU32();
     state_ += state;
     nextU32();
@@ -42,7 +39,7 @@ u64 PCG32::nextU64() noexcept {
 }
 
 u32 PCG32::uniformUnbiased(u32 n) noexcept {
-    const u32 limit = -n % n; // 2^32 % n — число «лишних» значений сверху
+    const u32 limit = -n % n;
     u32 x;
 
     do {

@@ -7,7 +7,7 @@
 #include "ast_expr_ptr.h"
 #include "parse_tokentree.h"
 
-#include <memory> // unique_ptr
+#include <memory>
 #include <vector>
 #include <ostream>
 
@@ -60,7 +60,6 @@ struct ASTExprNodeBlock: public ASTExprNode {
 
     ASTExprNodeBlock(::std::vector<Line> nodes = {});
 
-    /// Shortcut for a block that returns a contained node
     ASTExprNodeBlock(ASTExprNodeP value);
 
     ASTExprNodeBlock(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<ASTModule> localMod);
@@ -83,7 +82,7 @@ struct ASTExprNodeBlock: public ASTExprNode {
 struct ASTExprNodeAsyncBlock: public ASTExprNode {
     ASTExprNodeP inner;
     bool isMove;
-    bool isUse;    //< The block copies, clones, or moves each captured value
+    bool isUse;
 
     ASTExprNodeAsyncBlock(ASTExprNodeP inner, bool isMove, bool isUse);
 
@@ -98,9 +97,9 @@ struct ASTExprNodeGeneratorBlock: public ASTExprNode {
     ASTExprNodeP inner;
     ASTType* returnType;
     bool isMove;
-    // The inner coroutine synthesized for a coroutine-closure (`iter!`).
+
     bool isCoroutineClosureBody;
-    /// `async gen`: the coroutine also awaits, and yields into an AsyncIterator.
+
     bool isAsync;
 
     ASTExprNodeGeneratorBlock(ASTExprNodeP inner, ASTType* returnType, bool isMove, bool isCoroutineClosureBody, bool isAsync = false);
@@ -140,7 +139,6 @@ struct ASTExprNodeMacro: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// llvm_asm! macro
 struct ASTExprNodeAsm: public ASTExprNode {
     struct ValRef {
         ::std::string name;
@@ -162,10 +160,8 @@ struct ASTExprNodeAsm: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Definitions generated from ast_expr.tu.
 #include "ast_expr_tu.h"
 
-// asm! macro
 struct ASTExprNodeAsm2: public ASTExprNode {
     using Param = ASTAsmParam;
 
@@ -182,7 +178,6 @@ struct ASTExprNodeAsm2: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Break/Continue/Return
 struct ASTExprNodeFlow: public ASTExprNode {
     enum Type {
         RETURN,
@@ -190,7 +185,7 @@ struct ASTExprNodeFlow: public ASTExprNode {
         YIELD,
         CONTINUE,
         BREAK,
-        // `do yeet value` - a failed `?`
+
         YEET,
     } type;
 
@@ -212,7 +207,7 @@ struct ASTExprNodeLetBinding: public ASTExprNode {
     ASTExprNodeP value;
     ASTExprNodeP elseNode;
     bool isSuper;
-    /// Allocated binding slots/indexes for the pattern in `let-else`
+
     ::std::pair<unsigned, unsigned> letelseSlots;
 
     ASTExprNodeLetBinding(ASTPattern pat, ASTType* type, ASTExprNodeP value, ASTExprNodeP elseArm = {}, bool isSuper = false);
@@ -280,7 +275,6 @@ struct ASTExprNodeCallMethod: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Call an object (Fn/FnMut/FnOnce)
 struct ASTExprNodeCallObject: public ASTExprNode {
     ASTExprNodeP val;
     ::std::vector<ASTExprNodeP> args;
@@ -314,7 +308,7 @@ struct ASTExprNodeFor: public ASTExprNode {
     ASTPattern pattern;
     ASTExprNodeP value;
     ASTExprNodeP code;
-    /// `for await`: the head is an async iterator, and each item is awaited.
+
     bool isAwait;
 
     ASTExprNodeFor(Ident label, ASTPattern pattern, ASTExprNodeP val, ASTExprNodeP code, bool isAwait = false);
@@ -388,7 +382,6 @@ struct ASTExprNodeIf: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-/// Represents `_` in expression position
 struct ASTExprNodeWildcardPattern: public ASTExprNode {
     static constexpr unsigned int kind = 19;
     unsigned int nodeKind() const override;
@@ -397,7 +390,6 @@ struct ASTExprNodeWildcardPattern: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Literal integer
 struct ASTExprNodeInteger: public ASTExprNode {
     enum eCoreType datatype;
     U128 value;
@@ -411,7 +403,6 @@ struct ASTExprNodeInteger: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Literal float
 struct ASTExprNodeFloat: public ASTExprNode {
     enum eCoreType datatype;
     FloatValue value;
@@ -425,7 +416,6 @@ struct ASTExprNodeFloat: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Literal boolean
 struct ASTExprNodeBool: public ASTExprNode {
     bool value;
 
@@ -438,10 +428,9 @@ struct ASTExprNodeBool: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Literal string
 struct ASTExprNodeString: public ASTExprNode {
     ::std::string value;
-    /// Hygiene for format strings
+
     Ident::Hygiene hygiene;
 
     ASTExprNodeString(::std::string value, Ident::Hygiene h = {});
@@ -453,7 +442,6 @@ struct ASTExprNodeString: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Literal byte string
 struct ASTExprNodeByteString: public ASTExprNode {
     ::std::string value;
 
@@ -466,7 +454,6 @@ struct ASTExprNodeByteString: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Literal C string
 struct ASTExprNodeCString: public ASTExprNode {
     ::std::string value;
 
@@ -479,9 +466,6 @@ struct ASTExprNodeCString: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// A literal carrying a suffix that names no type: `0invalidSuffix`, `2.0f80`.
-// The token is well-formed, so it parses; only lowering rejects it, which is
-// what lets it sit inside `#[cfg(false)]` code.
 struct ASTExprNodeSuffixedLiteral: public ASTExprNode {
     ::std::string text;
 
@@ -494,18 +478,17 @@ struct ASTExprNodeSuffixedLiteral: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Closure / Lambda
 struct ASTExprNodeClosure: public ASTExprNode {
     typedef ::std::vector<::std::pair<ASTPattern, ASTType*>> argsT;
 
     argsT args;
     ASTType* returnType;
     ASTExprNodeP code;
-    bool isMove;   //< The closure takes ownership of all values
-    bool isUse;    //< The closure copies, clones, or moves each captured value
-    bool isPinned; //< The closure cannot be moved (this is for generators)
+    bool isMove;
+    bool isUse;
+    bool isPinned;
     bool trackCaller;
-    /// `for<'a> |x: &'a u8| ...` — lifetimes bound by the closure itself
+
     ASTHigherRankedBounds hrbs;
 
     ASTExprNodeClosure(argsT args, ASTType* rv, ASTExprNodeP code, bool isMove, bool isUse, bool isPinned, bool trackCaller = false)
@@ -526,7 +509,6 @@ struct ASTExprNodeClosure: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Literal structure
 struct ASTExprNodeStructLiteral: public ASTExprNode {
     struct Ent {
         ASTAttributeList attrs;
@@ -548,8 +530,6 @@ struct ASTExprNodeStructLiteral: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Struct literal pattern only
-// This implicitly has a `..` in it
 struct ASTExprNodeStructLiteralPattern: public ASTExprNode {
     typedef ::std::vector<ASTExprNodeStructLiteral::Ent> tValues;
     ASTPath path;
@@ -564,9 +544,8 @@ struct ASTExprNodeStructLiteralPattern: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Array
 struct ASTExprNodeArray: public ASTExprNode {
-    ASTExprNodeP size; // if non-NULL, it's a sized array
+    ASTExprNodeP size;
     ::std::vector<ASTExprNodeP> values;
 
     ASTExprNodeArray(::std::vector<ASTExprNodeP> vals);
@@ -580,7 +559,6 @@ struct ASTExprNodeArray: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Tuple
 struct ASTExprNodeTuple: public ASTExprNode {
     ::std::vector<ASTExprNodeP> values;
 
@@ -593,7 +571,6 @@ struct ASTExprNodeTuple: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Variable / Constant
 struct ASTExprNodeNamedValue: public ASTExprNode {
     ASTPath path;
 
@@ -606,7 +583,6 @@ struct ASTExprNodeNamedValue: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Field dereference
 struct ASTExprNodeField: public ASTExprNode {
     ASTExprNodeP obj;
     RcString name;
@@ -633,7 +609,6 @@ struct ASTExprNodeIndex: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Pointer dereference
 struct ASTExprNodeDeref: public ASTExprNode {
     ASTExprNodeP value;
 
@@ -646,7 +621,6 @@ struct ASTExprNodeDeref: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Type cast ('as')
 struct ASTExprNodeCast: public ASTExprNode {
     ASTExprNodeP value;
     ASTType* type;
@@ -660,7 +634,6 @@ struct ASTExprNodeCast: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Type annotation (': _')
 struct ASTExprNodeTypeAnnotation: public ASTExprNode {
     ASTExprNodeP value;
     ASTType* type;
@@ -674,7 +647,6 @@ struct ASTExprNodeTypeAnnotation: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// Binary operation
 struct ASTExprNodeBinOp: public ASTExprNode {
     enum Type {
         CMPEQU,
@@ -702,15 +674,13 @@ struct ASTExprNodeBinOp: public ASTExprNode {
         ADD,
         SUB,
 
-        PLACE_IN, // `in PLACE { expr }` or `PLACE <- expr`
+        PLACE_IN,
     };
 
     Type type;
     ASTExprNodeP left;
     ASTExprNodeP right;
-    /// Set on a bound-less `RANGE` that was written as `(..)`. Parentheses are
-    /// otherwise dropped, but a destructuring assignment needs them: `(..)` is a
-    /// sub-pattern where a bare `..` is the enclosing pattern's rest.
+
     bool parenthesised = false;
 
     ASTExprNodeBinOp(Type type, ASTExprNodeP left, ASTExprNodeP right);
@@ -724,24 +694,21 @@ struct ASTExprNodeBinOp: public ASTExprNode {
 
 struct ASTExprNodeUniOp: public ASTExprNode {
     enum Type {
-        REF,    // '& <expr>'
-        REFMUT, // '&mut <expr>'
+        REF,
+        REFMUT,
         RawBorrow,
         RawBorrowMut,
-        /// `&pin const place` and `&pin mut place`, which pin the place:
-        /// `Pin<&T>` and `Pin<&mut T>`.
+
         PinBorrow,
         PinBorrowMut,
-        BOX,    // 'box <expr>'
-        INVERT, // '!<expr>'
-        NEGATE, // '-<expr>'
-        QMARK,  // '<expr>?'
-        AWait,  // `.await`
-        /// Await the next item of an async iterator: `Option<Item>`, or nothing
-        /// if the iterator is not ready. Only the `for await` desugaring makes
-        /// this; there is no syntax for it.
+        BOX,
+        INVERT,
+        NEGATE,
+        QMARK,
+        AWait,
+
         AWaitNext,
-        USE,    // `.use`
+        USE,
     };
 
     enum Type type;
@@ -756,9 +723,6 @@ struct ASTExprNodeUniOp: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
-// A lexical rib introduced by a block-local macro definition. Expansion
-// preserves it until local-variable and label resolution have crossed the
-// definition at the correct source position.
 struct ASTExprNodeMacroDefinition: public ASTExprNode {
     unsigned int definitionId;
     Ident::Hygiene tokenHygiene;

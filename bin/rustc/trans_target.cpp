@@ -1,6 +1,6 @@
 #include "trans_target.h"
 
-#include "toml.h" // tools/common
+#include "toml.h"
 #include "hir_hir.h"
 #include "settings.h"
 #include "expand_cfg.h"
@@ -9,7 +9,7 @@
 #include "hir_typeck_common.h"
 #include "hir_typeck_helpers.h"
 #include "hir_typeck_monomorph.h"
-#include "hir_conv_main_bindings.h" // ConvertHIR_ConstantEvaluate_Enum
+#include "hir_conv_main_bindings.h"
 
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
@@ -17,7 +17,7 @@
 #include <map>
 #include <array>
 #include <bitset>
-#include <climits> // UINT_MAX
+#include <climits>
 #include <fstream>
 #include <algorithm>
 #include <unordered_map>
@@ -37,23 +37,11 @@ namespace {
     }
 
     TargetArch archX32() {
-        return {
-            "x86_64",
-            32,
-            false,
-            archX86_64().atomics,
-            TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4) // x86_64 w/4-byte ptr
-        };
+        return {"x86_64", 32, false, archX86_64().atomics, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4)};
     }
 
     TargetArch archX86() {
-        return {
-            "x86",
-            32,
-            false,
-            {/*atomic(u8)=*/true, /*u16=*/true, /*u32=*/true, /*u64=*/true, /*ptr=*/true},
-            TargetArch::Alignments(2, 4, /*u64*/ 4, /*u128*/ 4, 4, 4, /*ptr*/ 4) // u128 has the same alignment as u64, which is u32's alignment. And f64 is 4 byte aligned
-        };
+        return {"x86", 32, false, {/*atomic(u8)=*/true, /*u16=*/true, /*u32=*/true, /*u64=*/true, /*ptr=*/true}, TargetArch::Alignments(2, 4, /*u64*/ 4, /*u128*/ 4, 4, 4, /*ptr*/ 4)};
     }
 
     TargetArch archArm64() {
@@ -61,13 +49,7 @@ namespace {
     }
 
     TargetArch archArm32() {
-        return {
-            "arm",
-            32,
-            false,
-            {/*atomic(u8)=*/true, false, true, false, true},
-            TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4) // Note, all types are natively aligned (but i128 will be emulated)
-        };
+        return {"arm", 32, false, {/*atomic(u8)=*/true, false, true, false, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4)};
     }
 
     TargetArch archM68k() {
@@ -336,7 +318,6 @@ namespace {
 
     TargetSpec initFromSpecName(const ::std::string& targetName) {
 #define BACKEND_C_OPTS_GNU {"-ffunction-sections", "-pthread"}, {"-Wl,--start-group"}, {"-Wl,--end-group", "-Wl,--gc-sections", "-l", "atomic"}
-        // If there's a '/' in the filename, open it as a path, otherwise assume it's a triple.
         if (targetName.find('/') != ::std::string::npos) {
             return loadSpecFromFile(targetName);
         } else if (targetName == "i586-linux-gnu" || targetName == "i586-unknown-linux-gnu") {
@@ -456,13 +437,13 @@ void TargetSetCfg(WireBoard& wb, const ::std::string& targetName) {
         CfgSetValue(settings, "target_vendor", "unknown");
     }
 
-    CfgSetValue(settings, "target_vendor", ""); // NOTE: Doesn't override a pre-set value
+    CfgSetValue(settings, "target_vendor", "");
     CfgSetValue(settings, "target_env", tgt.envName);
     CfgSetValue(settings, "target_os", tgt.osName);
     CfgSetValue(settings, "target_pointer_width", FMT(tgt.arch.pointerBits));
     CfgSetValue(settings, "target_endian", tgt.arch.bigEndian ? "big" : "little");
     CfgSetValue(settings, "target_arch", tgt.arch.name);
-    CfgSetValue(settings, "target_abi", "llvm"); // This is a lie, but hopefully works?
+    CfgSetValue(settings, "target_abi", "llvm");
     if (tgt.arch.atomics.u8) {
         CfgSetValue(settings, "target_has_atomic", "8");
         CfgSetValue(settings, "target_has_atomic_load_store", "8");
@@ -564,7 +545,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 case HIRCoreType::U8:
                 case HIRCoreType::I8:
                     outSize = 1;
-                    outAlign = 1; // u8 is always 1 aligned
+                    outAlign = 1;
                     return true;
                 case HIRCoreType::U16:
                 case HIRCoreType::I16:
@@ -599,7 +580,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     return true;
                 case HIRCoreType::F16:
                     outSize = 2;
-                    outAlign = 2; //g_target.m_arch.m_alignments.f32; //f16;
+                    outAlign = 2;
                     return true;
                 case HIRCoreType::F32:
                     outSize = 4;
@@ -691,7 +672,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         case HIRTypeData::TAG_Borrow: {
             auto& te = (*ty).as_Borrow();
             outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
-            // - Size depends on Sized-nes of the parameter
+
             // TODO: Handle different types of Unsized (ones with different pointer sizes)
             switch (resolve.metadataType(sp, te.inner)) {
                 case MetadataType::Unknown:
@@ -799,7 +780,6 @@ namespace {
     bool structEnumerateFields(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, ::std::vector<Ent>& ents) {
         const auto& te = ty->as_Path();
         const auto& str = *te.binding.as_Struct();
-        // TODO: Wipe lifetimes?
         auto monomorphCb = MonomorphStatePtr(resolve.hirCrate().types, ty, &te.path.data.as_Generic().params, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorphExpand(sp, tpl, monomorphCb);
@@ -932,9 +912,6 @@ namespace {
             return addAsyncDropFieldLayout(sp, resolve, outerTy, fieldTy, out);
         }
 
-        // Coroutine lowering overlaps mutually exclusive saved locals in a
-        // generated union. The union itself has no drop glue, but each of its
-        // variants can need suspension storage in the coroutine's drop future.
         const auto& generic = path->path.data.as_Generic();
         auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, fieldTy, &generic.params, nullptr);
         for (const auto& variant : path->binding.as_Union()->variants) {
@@ -1045,7 +1022,7 @@ namespace {
                 hasAsyncFields = true;
                 const size_t pointerSize = TargetGetPointerBits() / 8;
                 offset = alignTo(offset, pointerSize);
-                offset += pointerSize * 3; // slice data/length and the current index
+                offset += pointerSize * 3;
                 align = ::std::max(align, pointerSize);
                 offset = appendAsyncDropFields(offset, align, element, true);
             }
@@ -1217,7 +1194,6 @@ namespace {
         return box$(rv);
     }
 
-    // Returns NULL when the repr can't be determined
     ::std::unique_ptr<TypeRepr> makeTypeReprStruct(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         ::std::vector<Ent> ents;
         StructSorting sorting;
@@ -1233,7 +1209,7 @@ namespace {
 
             forcedAlignment = str.forcedAlignment;
             maxAlignment = str.maxFieldAlignment;
-            sorting = StructSorting::None; // Defensive default for if repr is invalid
+            sorting = StructSorting::None;
             switch (str.repr) {
                 case HIRStruct::Repr::C:
                 case HIRStruct::Repr::Simd:
@@ -1351,8 +1327,6 @@ namespace {
                 defaultMax = 0x10FFFF;
                 break;
             default:
-                // Signed ranges need signed ordering, and 128-bit scalars cannot
-                // be represented by TypeRepr's size_t niche value.
                 return false;
         }
 
@@ -1955,10 +1929,7 @@ namespace {
                                     }
                                 }
                             }
-                            // DISABLED: This doesn't work properly
-                            // - Downstream assumes `NonZero` means that one element is zero-sized
-                            // - Calling `Target_GetTypeRepr` generates the variant early - too lazy to reimplement logic
-                        } // non-zero
+                        }
 
                         if (rv.variants.is_None()) {
                             bool nicheBeforeData = false;
@@ -1975,7 +1946,7 @@ namespace {
                                 maxAlign = std::max(maxAlign, reprs.back()->align);
                                 size_t varSize = reprs.back()->size;
                                 if (varSize > maxVarSize) {
-                                    minOffset = maxVarSize; // Downgrade the previous to min_offset
+                                    minOffset = maxVarSize;
                                     maxVarSize = varSize;
                                     biggestVar = i;
                                     nMatch = 1;
@@ -2018,7 +1989,6 @@ namespace {
                                             ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
                                             nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
                                             if (nicheOffset != 0) {
-                                                // - For now, only accept zero offsets
                                                 continue;
                                             }
                                             ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
@@ -2037,7 +2007,6 @@ namespace {
                                 }
                             }
 
-                            // Fix overall size
                             size_t maxSize = maxVarSize;
                             while (maxSize % maxAlign != 0) {
                                 maxSize++;
@@ -2149,8 +2118,8 @@ namespace {
                                     ASSERT_BUG(sp, tagOffset >= minOffset, "Niche offset invalid: " << tagOffset << " < " << minOffset);
                                 }
                             }
-                        } // Niche optimisation
-                    } // All optimisations
+                        }
+                    }
 
                     if (rv.variants.is_None()) {
                         HIRTypeRef tagTy;
@@ -2264,7 +2233,6 @@ namespace {
                         break;
                 }
                 if (rv.fields.size() > 0) {
-                    // Can't return false or unsized
                     TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, rv.size, rv.align);
 
                     ::std::vector<U128> vals;
@@ -2303,7 +2271,6 @@ namespace {
             }
         }
 
-        // An enum inherits user-alignment from any variant, as in gcc; every variant repr is already cached here, so this cannot recurse.
         for (const auto& f : rv.fields) {
             if (TargetTypeHasUserAlignment(sp, resolve, f.ty)) {
                 rv.userAlign = true;
@@ -2416,7 +2383,7 @@ namespace {
 }
 
 bool TargetCapsMemberAlignment() {
-    return false; // Darwin/PowerPC "power" alignment: powerpc is unsupported (big-endian)
+    return false;
 }
 
 bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
@@ -2512,7 +2479,7 @@ size_t TypeRepr::getOffset(const Span& sp, const StaticTraitResolve& resolve, co
             continue;
         }
         r = TargetGetTypeRepr(sp, resolve, *ty);
-        assert(r); // We have an outer repr, so inner must exist
+        assert(r);
         assert(f < r->fields.size());
         ofs += r->fields[f].offset;
         ty = &r->fields[f].ty;

@@ -19,7 +19,6 @@ class CtfeContext;
 
 CtfeContext* CtfeCreateContext(stl::ObjPool& pool);
 
-// Thrown by constant evaluation for exactly one reason: the legacy trait
 struct HIREvaluator {
     class Newval {
     public:
@@ -51,15 +50,13 @@ struct HIREvaluator {
     };
 
     Span rootSpan;
-    // All values and relocations created by one constant evaluation form a
-    // single graph. Nothing in that graph escapes `evaluate_constant`:
-    // `allocation_to_encoded` deep-copies the result into an EncodedLiteral.
+
     stl::ObjPool::Ref valuePool;
     StaticTraitResolve resolve;
     Newval& nvs;
     unsigned int numFrames;
     bool requireConstCalls;
-    // Note: Pointer is needed to maintain internal reference stability
+
     ::std::vector<CsePtr> callStack;
 
 public:
@@ -84,7 +81,7 @@ private:
 
     MIREvalAllocationPtr runUntilStackEmpty();
     void runStatement(MIREvalCallStackEntry& localState, const MIRStatement& stmt);
-    // Returns UINT_MAX on return
+
     unsigned runTerminator(MIREvalCallStackEntry& localState, const MIRTerminator& stmt);
     bool callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, HIRPath* path, ::std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect);
     void callConstDestructor(MIREvalCallStackEntry& localState, HIRTypeRef ty, const MIRLValue& slot);

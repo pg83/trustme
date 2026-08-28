@@ -3,7 +3,7 @@
 #include "common.h"
 #include "synext.h"
 #include "ast_ast.h"
-#include "hir_hir.h" // ABI_RUST
+#include "hir_hir.h"
 #include "ast_dump.h"
 #include "ast_expr.h"
 #include "settings.h"
@@ -18,7 +18,7 @@
 #include <std/lib/vector.h>
 
 #include <spawn.h>
-#include <unistd.h> // read/write/pipe
+#include <unistd.h>
 #include <sys/wait.h>
 #include <unordered_set>
 
@@ -88,7 +88,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
 
     auto newmod = ASTModule{ASTAbsolutePath("", {"proc_macro#"})};
     // - TODO: These need to be loaded too.
-    //  > They don't actually need to exist here, just be loaded (and use absolute paths)
+
     auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
     newmod.addExtCrate(Span(), visPrivate, crate.extCratenameProcmacro, "proc_macro", {});
 
@@ -105,8 +105,8 @@ enum class TokenClass {
     Ident = 2,
     Lifetime = 3,
     String = 4,
-    ByteString = 5, // String
-    CharLit = 6,    // v128
+    ByteString = 5,
+    CharLit = 6,
     UnsignedInt = 7,
     SignedInt = 8,
     Float = 9,
@@ -146,7 +146,7 @@ struct ProcMacroInv: public TokenStream {
         Handles(const Handles&) = delete;
         Handles& operator=(Handles&&) = delete;
         Handles& operator=(const Handles&) = delete;
-        pid_t childPid = 0; // Questionably needed
+        pid_t childPid = 0;
         int childStdin = -1;
         int childStdout = -1;
     } handles;
@@ -407,12 +407,12 @@ ProcMacroInv::ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const ch
     if (pipe(stdinPipes) != 0) {
         BUG(sp, "Unable to create stdin pipe pair for proc macro, " << strerror(errno));
     }
-    this->handles.childStdin = stdinPipes[1]; // Write end
+    this->handles.childStdin = stdinPipes[1];
     int stdoutPipes[2];
     if (pipe(stdoutPipes) != 0) {
         BUG(sp, "Unable to create stdout pipe pair for proc macro, " << strerror(errno));
     }
-    this->handles.childStdout = stdoutPipes[0]; // Read end
+    this->handles.childStdout = stdoutPipes[0];
 
     posix_spawn_file_actions_t file_actions;
     posix_spawn_file_actions_init(&file_actions);
@@ -697,7 +697,7 @@ Token ProcMacroInv::realGetToken_() {
             }
             auto val = this->recvV128uU128();
             if (val.truncateU64() & 1) {
-                val = ~(val >> 1) + 1; // Negative (Is this even possible?)
+                val = ~(val >> 1) + 1;
                 TODO(this->parentSpan, "Negative literal from proc macro, what?");
             } else {
                 val = (val >> 1);
@@ -733,7 +733,7 @@ Token ProcMacroInv::realGetToken_() {
             token.setPos(this->getPosition());
             return token;
         }
-            //case TokenClass::Fragment:
+
             //    TODO(this->m_parent_span, "Handle ints/floats/fragments from child process");
     }
     BUG(this->parentSpan, "Invalid token class from child process - " << int(v));
@@ -980,14 +980,14 @@ auto ProcMacroInv::sendSpanDef(size_t index, const Span& sp) -> void {
     this->sendV128u(0); // TODO: Parent span
     if (const auto* spP = cast<const SpanInnerSource>(sp.get())) {
         this->sendBytes(spP->filename.c_str(), spP->filename.size());
-        this->sendU8(1); // path_is_real
+        this->sendU8(1);
         this->sendV128u(spP->startLine);
         this->sendV128u(spP->endLine);
         this->sendV128u(spP->startOfs);
         this->sendV128u(spP->endOfs);
     } else {
         this->sendBytes("MACRO", 5); // TODO: better filename?
-        this->sendU8(0);             // path_is_real
+        this->sendU8(0);
         this->sendV128u(0);
         this->sendV128u(0);
         this->sendV128u(0);
@@ -1733,7 +1733,7 @@ auto ProcMacroVisitor::visitPathNode(const ASTPathNode& e, bool isExpr) -> void 
         }
         if (e.args().isParen) {
             auto& t = e.args().entries.at(0).as_Type();
-            this->visitType(t); // Should be a tuple
+            this->visitType(t);
             auto& rv = e.args().entries.at(1).as_AssociatedTyEqual();
             pmi.sendSymbol("->");
             this->visitType(rv.second);
@@ -1959,7 +1959,7 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                                 }
                                 case ASTGenericBound::TAG_IsTrait: {
                                     auto& be = tuMatch.as_IsTrait();
-                                    assert(be.outerHrbs.empty()); // Shouldn't be possible in this position
+                                    assert(be.outerHrbs.empty());
                                     if (!be.innerHrbs.empty()) {
                                         TODO(sp, "be.inner_hrbs");
                                     }
@@ -2097,7 +2097,7 @@ auto ProcMacroVisitor::visitBounds(const ASTGenericParams& params) -> void {
 
 auto ProcMacroVisitor::visitNode(const ASTExprNode& e) -> void {
     // TODO: Dump to a string, then re-parse into a TT and then send that TT
-    // - Avoids needing to repeat logic
+
     ::std::stringstream ss;
     DumpASTNode(ss, e);
     ss << " ";

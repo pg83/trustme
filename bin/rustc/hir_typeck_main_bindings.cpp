@@ -251,7 +251,6 @@ auto Visitor::checkParameters(const Span& sp, const HIRSimplePath& usedPath, Pat
         if (paramVals.types[i] == HIRTypeRef()) {
             // TODO: Why is this pulling in the default? Why not just leave it as-is
 
-            //if( param_def.m_types[i].m_default == ::HIR::mkType() )
             // TODO: Monomorphise?
             paramVals.types[i] = ms.monomorphType(sp, paramDef.types[i].defaultValue);
         }
@@ -275,10 +274,6 @@ auto Visitor::checkParameters(const Span& sp, const HIRSimplePath& usedPath, Pat
                 }
                 if (const auto* actualGeneric = type->opt_Generic()) {
                     const auto* context = actualGeneric->group() == 0 ? resolve_.implGenericsPtr() : actualGeneric->group() == 1 ? resolve_.itemGenericsPtr() : nullptr;
-                    // Some lowered trait-impl associated types no
-                    // longer carry their own GAT parameter list. A
-                    // missing context cannot prove or disprove its
-                    // bound here.
                     if (!context || actualGeneric->idx() >= context->types.size()) {
                         break;
                     }
@@ -589,7 +584,6 @@ auto Visitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathC
     }
 
     if (const auto* te = e.type->opt_Generic()) {
-        // If processing a trait, and the type is 'Self', search for the type/method on the trait
         // - TODO: This could be encoded by a `Self: Trait` bound in the generics, but that may have knock-on issues?
         if (te->name == "Self" && currentTrait) {
             auto traitPath = this->getCurrentTraitGp();
@@ -646,7 +640,7 @@ auto Visitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathC
 
             // TODO: Search supertraits
             // TODO: Should impls be searched first, or item names?
-            // - Item names add complexity, but impls are slower
+
             if (this->locateInTraitImplAndSet(pc, mv$(traitPath), trait, p.data)) {
                 return;
             }
@@ -824,7 +818,7 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
     selfTypes.pop_back();
 
     // TODO: Check that the type+trait is valid
-    // - And fix bad elided liftimes (match annotations if they were elided)
+
     {
         const auto& trait = resolve_.hirCrate().getTraitByPath(sp, traitPath);
         for (auto& e : impl.methods) {
@@ -862,12 +856,10 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
                 failures.push_back(FMT("Mismatched argument count (expected " << traitFcn.args.size() << ", got " << implFcn.args.size() << ")"));
             }
             if (implFcn.receiver != traitFcn.receiver) {
-                failures.push_back(FMT("Receiver type")); //"(expected " << trait_fcn.m_receiver << ", got " << impl_fcn.m_receiver));
+                failures.push_back(FMT("Receiver type"));
             }
             for (size_t i = 0; i < std::min(implFcn.args.size(), traitFcn.args.size()); i++) {
                 if (!(i == 0 && (traitFcn.receiver == HIRFunction::Receiver::Free || implFcn.receiver == HIRFunction::Receiver::Free))) {
-                    // Check the type.
-                    // - Also, fix lifetime elision?
                     const auto& expTy = maybeMonomorph(traitFcn.args[i].second);
                     HIRTypeRef hasTy = implFcn.args[i].second;
                     resolve_.expandAssociatedTypes(sp, hasTy);
@@ -984,10 +976,7 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
                 );
             }
             // HACK: Replace all types (which should be functionally identical) so lifetimes match
-            // - This is needed for monomorphisation to work properly?
-            // REF: rustc-1.29.0/src/vendor/serde/src/private/de.rs:1379
-            // Counter-ref: rustc-1.54.0
-            // Update AFTER the checks
+
             // HACK: Clone the expected type, so the lifetimes match.
             if (!matchCb.rpitMapping.empty()) {
                 implFcn.traitReturnType = expRetTy1;

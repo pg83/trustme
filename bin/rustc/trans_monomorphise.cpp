@@ -4,7 +4,7 @@
 #include "mir_mir.h"
 #include "wire_board.h"
 #include "mir_helpers.h"
-#include "mir_operations.h" // Needed for post-monomorph checks and optimisations
+#include "mir_operations.h"
 #include "hir_typeck_static.h"
 #include "trans_main_bindings.h"
 #include "hir_conv_constant_evaluation.h"
@@ -207,9 +207,6 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
     bool changed;
     do {
         changed = false;
-        // A generated literal can relocate to a static that Newval has added
-        // to HIR but that the insertion loop below has not put in TransList
-        // yet. Defer relocation enumeration until those statics are present.
         Vector<const EncodedLiteral*> generatedLiterals;
 
         for (auto& ent : reverse(list.constants)) {
@@ -331,9 +328,6 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
                 generatedFunctions.pushBack(transFcn);
                 resolve.clearBothGenerics();
             } else {
-                // TransAutoImpls may have generated concrete MIR before this
-                // fixed point started.  Enumerate it again: the initial walk
-                // only saw the function path, not the generated body.
                 if (fcn.code.mir) {
                     generatedFunctions.pushBack(transFcn);
                 }
@@ -589,7 +583,7 @@ auto AsyncDropPollBuilder::buildFields(const HIRTypeData* ty, MIRLValue value, M
             return next;
         }
         auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, ty, &pathTy->path.data.as_Generic().params, nullptr);
-        auto targets = ::std::vector<MIRBasicBlockId>(); // escape: MIR enum-switch storage is a generated std::vector interface
+        auto targets = ::std::vector<MIRBasicBlockId>();
         targets.reserve(variants->size());
         for (size_t i = 0; i < variants->size(); i++) {
             auto variantTy = resolve.monomorphExpand(sp, variants->at(i).type, monomorph);

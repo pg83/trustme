@@ -139,7 +139,7 @@
     }
     if (x.isParen) {
         auto& t = x.entries.at(0).as_Type();
-        os << t; // Should be a tuple
+        os << t;
         auto& rv = x.entries.at(1).as_AssociatedTyEqual();
         os << "->";
         os << rv.second;

@@ -46,7 +46,6 @@ struct ASTNamed;
 
 class InterpolatedFragment;
 
-// Definitions generated from parse_token.tu.
 #include "parse_token_tu.h"
 
 class Token {
@@ -58,7 +57,7 @@ class Token {
     enum eTokenType type_;
     Data data_;
     Position pos;
-    Ident::Hygiene hygiene_; // Only for strings, for formatting
+    Ident::Hygiene hygiene_;
     bool isDocComment_ = false;
 
     Token(enum eTokenType t, Data d, Position p);
@@ -125,7 +124,8 @@ public:
                 assert(!"Getting datatype of invalid token type");
                 break;
             }
-        } UNREACHABLE();
+        }
+        UNREACHABLE();
     }
 
     U128 intval() const {
@@ -166,7 +166,6 @@ public:
         return !(*this == r);
     }
 
-    /// Return a re-parseable version of the token
     ::std::string toStr() const;
 
     void setPos(Position pos) {
@@ -197,10 +196,6 @@ public:
 
 extern ::std::ostream& operator<<(::std::ostream& os, const Token& tok);
 
-/// Print the decoded payload of a string-like token as a re-parseable literal.
 extern void printEscapedLiteral(::std::ostream& os, eTokenType type, const u8* value, size_t size);
 
-/// Whether re-printing `prev` then `cur` as source needs a space to keep the
-/// two tokens apart.  `stringify!` and the meta-fragment printer share the
-/// rule so a fragment prints the way the tokens around it do.
 extern bool tokensNeedSpace(eTokenType prev, eTokenType cur);

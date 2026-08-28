@@ -16,15 +16,12 @@ namespace stl {
         size_t writeDirect(const void* ptr, size_t len);
         size_t writeMultipart(const void* ptr, size_t len);
 
-        // state
         void flushImpl() override;
         void finishImpl() override;
 
-        // classic
         size_t writeImpl(const void* ptr, size_t len) override;
         size_t hintImpl() const noexcept override;
 
-        // zero-copy
         void* imbueImpl(size_t* len) override;
         void commitImpl(size_t len) override;
 
@@ -35,8 +32,7 @@ namespace stl {
         OutBuf(Output& out, size_t chunkSize) noexcept;
 
         OutBuf(OutBuf&& buf) noexcept
-            : OutBuf()
-        {
+            : OutBuf() {
             buf.xchg(*this);
         }
 

@@ -11,7 +11,7 @@ namespace {
 
     constexpr int significandBits = 112;
     constexpr int exponentBias = 16383;
-    constexpr int min_exponent = -16382; // of normal values
+    constexpr int min_exponent = -16382;
     constexpr int max_exponent = 16383;
 
     const u128 implicitBit = u128(1) << significandBits;
@@ -242,7 +242,7 @@ namespace {
             return 0;
         }
         if (result < targetImplicit) {
-            return result; // subnormal: biased exponent 0
+            return result;
         }
         const u64 biased = static_cast<u64>(exponent) + bias;
         return (biased << targetMantissaBits) | (result - targetImplicit);

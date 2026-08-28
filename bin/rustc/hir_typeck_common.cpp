@@ -241,14 +241,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         }
         case HIRTypeData::TAG_NamedFunction: {
             auto& e = (*tpl).as_NamedFunction();
-            return types.intern(
-                HIRTypeData::make_NamedFunction(
-                    HIRTypeData::Data_NamedFunction{
-                        this->monomorphPath(sp, e.path, allowInfer),
-                        e.def.clone() // Should this become `nullptr`? Or should the definition be fixed
-                    }
-                )
-            );
+            return types.intern(HIRTypeData::make_NamedFunction(HIRTypeData::Data_NamedFunction{this->monomorphPath(sp, e.path, allowInfer), e.def.clone()}));
         }
         case HIRTypeData::TAG_Function: {
             auto& e = (*tpl).as_Function();

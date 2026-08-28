@@ -5,7 +5,7 @@
 #include <sys/types.h>
 
 using i8 = int8_t;
-// yep
+
 using u8 = char8_t;
 
 using i16 = int16_t;

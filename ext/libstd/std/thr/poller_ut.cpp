@@ -118,7 +118,6 @@ STD_TEST_SUITE(Poller) {
         }, 100000);
         STD_INSIST(n == 1);
 
-        // after ONESHOT fires, second wait should time out
         n = 0;
         p->wait([&](PollFD*) {
             ++n;
@@ -146,7 +145,6 @@ STD_TEST_SUITE(Poller) {
 
             STD_INSIST(n == 1);
 
-            // drain
             r.read(&c, 1);
         }
     }
@@ -175,7 +173,6 @@ STD_TEST_SUITE(Poller) {
         ScopedFD r, w;
         createPipeFD(r, w);
 
-        // disarming an fd that was never armed should not crash
         p->disarm(r.get());
     }
 }

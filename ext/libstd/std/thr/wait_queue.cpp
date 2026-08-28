@@ -131,9 +131,6 @@ namespace {
         }
     };
 
-    // No ABA here: each Item is a Worker that re-enqueues itself only after being
-    // dequeued and completing a full condvar sleep/wake cycle.
-    // Uses CMPXCHG16B to atomically update head pointer and count together.
     struct alignas(64) PointerImpl: public WaitQueue {
         struct alignas(16) State {
             Item* head;
@@ -182,11 +179,8 @@ namespace {
         }
     };
 #elif __SIZEOF_POINTER__ == 8
-    // No ABA here: each Item is a Worker that re-enqueues itself only after being
-    // dequeued and completing a full condvar sleep/wake cycle. The tag would need
-    // to wrap 65536 times while a competing CAS spins — impossible in practice.
+
     struct alignas(64) PointerImpl: public WaitQueue {
-        // upper 16 bits: tag, lower 48 bits: pointer
         u64 head_ = 0;
         size_t count_ = 0;
 

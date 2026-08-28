@@ -328,7 +328,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
                 }
 
                 // TODO: Detect if the associated type bound above is from directly the bounded trait, and skip this if it's the case
-                //else
+
                 {
                     bool rv = false;
                     if (bTyMono->is_Generic() && bTyMono->as_Generic().isPlaceholder()) {
@@ -352,8 +352,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
                         return false;
                     }
                 }
-            } else // bound.opt_TraitBound()
-            {
+            } else {
             }
         }
     } while (placeholders != previousPlaceholders);
@@ -378,7 +377,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
     }
 
     // TODO: Can this be cached?
-    // - Needs to cache the result
+
     {
         cacheBucket.push_back(ImplCheckEntry{desTraitParams != nullptr, desTraitParams ? desTraitParams->clone() : HIRPathParams(), implParams.clone(), match});
     }
@@ -1011,9 +1010,6 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
     ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &trait.params, projection.trait.params);
     input = crate.types.intern(::std::move(data));
 
-    // A projection whose root is still an inference variable is retryable.
-    // Marking it opaque would turn a temporary lack of information into a
-    // permanent static-resolution decision.
     {
         const HIRTypeData* root = input;
         while (const auto* path = root->opt_Path()) {
@@ -1129,7 +1125,7 @@ bool StaticTraitResolve::findNamedTraitInTraitCb(const Span& sp, const HIRSimple
         this->expandAssociatedTypesTp(sp, ptMono);
 
         // TODO: When in pre-typecheck mode, this needs to be a fuzzy match (because there might be a UfcsUnknown in the
-        // monomorphed version) OR, there may be placeholders
+
         if (pt.path.path == des) {
             auto cmp = ptMono.path.params.compareWithPlaceholders(sp, desParams, HIRResolvePlaceholdersNop());
             if (cmp != HIRCompare::Unequal) {
@@ -1419,7 +1415,6 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
 
     if (const auto* de = dstTy->opt_TraitObject()) {
         // TODO: Check if src_ty is !Sized
-        // - Only allowed if the source is a trait object with the same data trait and lesser bounds
 
         if (const auto* se = srcTy->opt_TraitObject()) {
             if (de->trait.path.path != se->trait.path.path) {
@@ -1626,11 +1621,9 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             return HIRCompare::Fuzzy;
         }
         case HIRTypeData::TAG_TraitObject: {
-            // Can't know with a trait object
             return HIRCompare::Fuzzy;
         }
         case HIRTypeData::TAG_ErasedType: {
-            // Can't know with an erased type (effectively a generic)
             return HIRCompare::Fuzzy;
         }
         case HIRTypeData::TAG_Array: {
@@ -1815,7 +1808,6 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
             return MetadataType::None;
         }
         case HIRTypeData::TAG_Infer: {
-            // Shouldn't be hit? but can early on
             return MetadataType::Unknown;
         }
         case HIRTypeData::TAG_Diverge: {
@@ -1849,14 +1841,10 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
 }
 
 bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty) const {
-    // A crate without the Drop lang item cannot define a destructor.  In that
-    // language mode no type can require compiler-generated drop glue, and in
-    // particular the resolver must not try to look up an empty trait path.
     if (langDrop().components().empty()) {
         return false;
     }
 
-    // If `T: Copy`, then it can't need drop glue
     if (typeIsCopy(sp, ty)) {
         return false;
     }
@@ -2350,8 +2338,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                         return false;
                     }
                     if (certainty != SolverCertainty::Proven && lookupNeedsResolution) {
-                        // A body or associated constant from a merely possible
-                        // impl cannot be selected until the receiver is known.
                         hasAmbiguousImpl = true;
                         return false;
                     }

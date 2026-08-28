@@ -44,8 +44,6 @@ public:
 
     virtual bool runDuringIter() const;
 
-    // Whether `handle` should receive the item's full attribute list instead of only the
-    // attributes written after the invoking one (derive macros need the full set).
     virtual bool wantsAllAttrs() const;
 
     virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const;
@@ -56,21 +54,16 @@ public:
 
     virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const;
 
-    // NOTE: To delete, clear the name
     virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const;
 
-    // NOTE: To delete, make the type invalid
     virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const;
 
-    // NOTE: To delete, clear the name
     virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const;
 
     virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const;
 
-    // NOTE: To delete, clear the patterns vector
     virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const;
 
-    // NOTE: To delete, clear the value
     virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const;
 };
 

@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <unordered_map>
 
-// PLAN: Build up a set of conditions that are easier to solve
 struct Context {
     class Revisitor {
     public:
@@ -25,10 +24,8 @@ struct Context {
     struct Binding {
         RcString name;
         HIRTypeRef ty;
-        //unsigned int ivar;
     };
 
-    /// Inferrence variable equalities
     struct Coercion {
         unsigned ruleIdx;
         HIRTypeRef leftTy;
@@ -49,21 +46,16 @@ struct Context {
             CoerceTy(HIRTypeRef ty, bool isCoerce);
         };
 
-        // Strong disable (depends on a trait impl)
         bool forceDisable = false;
         bool forceNoTo = false;
         bool forceNoFrom = false;
 
-        // Target types for coercion/unsizing (these types are known to exist in the function)
         ::std::vector<CoerceTy> typesCoerceTo;
-        // Source types for coercion/unsizing (these types are known to exist in the function)
+
         ::std::vector<CoerceTy> typesCoerceFrom;
-        // Possible default types (from generic defaults)
+
         HIRTypeRefSet typesDefault;
-        // Raw-pointer casts do not constrain their source pointee, but an
-        // inferred cast endpoint still needs a last-resort type once every
-        // real coercion has settled.  These are not trait possibilities and
-        // never participate in normal coercion ordering.
+
         HIRTypeRefSet rawPointerFallbacks;
 
         void reset();
@@ -91,7 +83,7 @@ struct Context {
         HIRSimplePath trait;
         HIRPathParams params;
         HIRTypeRef implTy;
-        RcString name; // if "", no type is used (and left is ignored) - Just does trait selection
+        RcString name;
         HIRPathParams atyPp;
 
         // HACK: operators are special - the result when both types are primitives is ALWAYS the lefthand side
@@ -113,27 +105,25 @@ struct Context {
     TraitResolution resolve;
 
     unsigned nextRuleIdx;
-    // NOTE: unique_ptr used to reduce copy costs of the list
+
     ::std::vector<::std::unique_ptr<Coercion>> linkCoerce;
-    // Expected types are available while aggregate fields are enumerated,
-    // before the corresponding coercion rules are solved.
+
     ::std::unordered_map<const HIRExprNode*, HIRTypeRef> coercionHints;
     ::std::vector<Associated> linkAssoc;
     stl::ObjPool::Ref linkAssocIndexPool;
     stl::IntMap<stl::Vector<unsigned>> linkAssocIndex;
-    /// Nodes that need revisiting (e.g. method calls when the receiver isn't known)
+
     ::std::vector<HIRExprNode*> toVisit;
-    /// Callback-based revisits (e.g. for slice patterns handling slices/arrays)
+
     ::std::vector<::std::unique_ptr<Revisitor>> advRevisits;
 
     struct ClosureReturnObligation {
         const HIRExprNodeClosure* closure;
         HIRTypeRef expected;
     };
+
     stl::Vector<ClosureReturnObligation> closureReturnObligations;
 
-    // Keep track of if an ivar is used in a context where it has to be Sized
-    // - If it is, then we can discount any unsized possibilities
     HIRGenericParams emptyGenericParams;
     ::std::vector<bool> ivarsSized;
     ::std::vector<IVarPossible> possibleIvarVals;
@@ -175,9 +165,6 @@ struct Context {
         ivars.addIvars(ty);
     }
 
-    // - Equate two types, with no possibility of coercion
-    //  > Errors if the types are incompatible.
-    //  > Forces types if one side is an infer
     void equateTypes(const Span& sp, const HIRTypeData* l, const HIRTypeData* r);
     void equateTypesInner(const Span& sp, const HIRTypeData* l, const HIRTypeData* r);
 
@@ -189,16 +176,14 @@ struct Context {
     const HIRTypeData* expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp) const;
     void expandAssociatedTypesParams(const Span& sp, HIRPathParams& params) const;
     void compactIvars();
-    // - Equate two types, allowing inferrence
+
     void equateTypesCoerce(const Span& sp, const HIRTypeData* l, HIRExprNodeP& nodePtr);
     void recordCoercionHint(const HIRTypeData* type, HIRExprNodeP& nodePtr);
 
     const HIRTypeData* coercionHint(const HIRExprNode& node) const;
-    // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
+
     void equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSimplePath& trait, HIRPathParams params, const HIRTypeData* implTy, const char* name, const HIRPathParams& atyPp, bool isOp = false, TypeckPrimitiveOperator operatorKind = TypeckPrimitiveOperator::None);
 
-
-    // Equate const generics (values)
     void equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRConstGeneric& rr);
 
     static u64 associatedIndexKey(HIRTypeRef leftTy, const HIRSimplePath& trait, HIRTypeRef implTy, RcString name, bool isOperator, TypeckPrimitiveOperator operatorKind);
@@ -208,60 +193,41 @@ struct Context {
     void storeAssociated(unsigned index, Associated rule, u64 oldKey);
     void removeAssociated(unsigned index, u64 oldKey);
 
-    /// Adds a `ty: Sized` bound to the contained ivars.
     void requireSized(const Span& sp, const HIRTypeData* ty);
 
-    // - Add a trait bound (gets encoded as an associated type bound)
     void addTraitBound(const Span& sp, const HIRTypeData* implTy, const HIRSimplePath& trait, HIRPathParams params) {
         equateTypesAssoc(sp, crate.types.infer(), trait, mv$(params), implTy, "", {}, false);
     }
 
-    /// Apply the constraints available from proving projections in `type`
-    /// well-formed before fully-qualified path lookup.
     void selectWellFormed(const Span& sp, const HIRTypeData* type);
 
-    /// Get the `possible_ivar_vals` entry for the given ivar index
-    /// Returns `nullptr` if the ivar is already known
     IVarPossible* getIvarPossibilities(const Span& sp, unsigned int ivarIndex);
 
     enum class IvarUnknownType {
-        /// Coercion to an unknown type (disables
         To,
-        /// Coercion from an unknown type
+
         From,
-        /// Bounded to be an unknown type (a strong disable)
+
         Bound,
     };
-    /// Type is unknown (e.g. no used/results from a trait impl that can't be looked up)
+
     void possibleEquateTypeUnknown(const Span& sp, const HIRTypeData* ty, IvarUnknownType srcTy);
-    /// Type must be one of the provided set
+
     void possibleEquateTypeBounds(const Span& sp, const HIRTypeData* ty, ::std::vector<HIRTypeRef> t);
 
-    // ----
-    // IVar possibilties
-    // ----
-
     enum class PossibleTypeSource {
-        CoerceTo,   //!< IVar must coerce to this type
-        UnsizeTo,   //!< IVar must unsize to this type
-        CoerceFrom, //!< IVar must coerce from this type
-        UnsizeFrom, //!< IVar must unsize from this type
+        CoerceTo,
+        UnsizeTo,
+        CoerceFrom,
+        UnsizeFrom,
     };
 
-    /// Default type
-
-    /// Record that the IVar may be this type (and what the source is)
     void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const HIRTypeData* t, PossibleTypeSource srcTy);
-    /// Add a possible type for an ivar (which is used if only one possibility meets available bounds)
+
     void possibleEquateIvarRawPointerFallback(const Span& sp, unsigned int ivarIndex, const HIRTypeData* type);
-    /// Record that the IVar is equated to an unknown type
+
     void possibleEquateIvarUnknown(const Span& sp, unsigned int ivarIndex, IvarUnknownType srcTy);
 
-    // ----
-    // Patterns and bindings
-    // ----
-
-    // - Add a pattern binding (forcing the type to match)
     void handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* type, bool isIrrefutable = false);
     void handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HIRTypeData* type);
     void addBindingInner(const Span& sp, const HIRPatternBinding& pb, HIRTypeRef type);
@@ -269,7 +235,6 @@ struct Context {
     void addVar(const Span& sp, unsigned int index, const RcString& name, HIRTypeRef type);
     const HIRTypeData* getVar(const Span& sp, unsigned int idx) const;
 
-    // - Add a revisit entry
     void addRevisit(HIRExprNode& node);
     void addRevisitAdv(::std::unique_ptr<Revisitor> ent);
 
@@ -284,7 +249,6 @@ struct Context {
     void noteRpitSelfReferences(const HIRTypeData* type);
     bool fallbackUnresolvedRpitType(const Span& sp);
 
-    /// Create an autoderef operation from val_node->m_res_type to ty_dst (handling implicit unsizing)
     HIRExprNodeP createAutoderef(HIRExprNodeP valNode, HIRTypeRef tyDst) const;
 
 private:

@@ -37,7 +37,7 @@ struct SpanMessageCb final: SpanMessageCallback {
 struct Span {
 private:
     SpanInner* ptr;
-    //static SpanInner    s_empty_span;
+
 public:
     Span();
 
@@ -70,7 +70,6 @@ public:
         return ptr;
     }
 
-    //const SpanInner& operator*() const { return *m_ptr; }
     const SpanInner* operator->() const {
         return ptr;
     }
@@ -118,12 +117,14 @@ struct SourceLocation {
     unsigned int column = 0;
 
     SourceLocation() = default;
+
     SourceLocation(RcString filename, unsigned int line, unsigned int column)
         : filename(::std::move(filename))
         , line(line)
         , column(column)
     {
     }
+
     explicit SourceLocation(const Span& span);
 
     bool operator==(const SourceLocation& other) const {
@@ -136,7 +137,6 @@ struct SourceLocation {
 };
 
 struct ProtoSpan {
-    // If `span` is populated, then this `ProtoSpan` was from a macro expansion
     Span span;
     RcString filename;
 
@@ -197,7 +197,6 @@ private:
     static SpanInner* alloc(Span parent, RcString crate, RcString macro);
 };
 
-// Control reached a spot the surrounding logic rules out.
 [[noreturn]] void spanUnreachableAt(const char* file, int line);
 #define UNREACHABLE() ::spanUnreachableAt(__FILE__, __LINE__)
 
@@ -213,10 +212,10 @@ Spanned<T> makeSpanned(Span sp, T val) {
 }
 
 #define ERROR(span, code, msg)                             \
-    do {                                                    \
-        ::Span(span).error(code, [&](::std::ostream& os) {  \
-            os << msg;                                      \
-        });                                                 \
+    do {                                                   \
+        ::Span(span).error(code, [&](::std::ostream& os) { \
+            os << msg;                                     \
+        });                                                \
     } while (0)
 #define WARNING(span, code, msg)                             \
     do {                                                     \

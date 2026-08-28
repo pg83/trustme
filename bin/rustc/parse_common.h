@@ -8,27 +8,26 @@
 #define GET_TOK(tok, lex) ((tok = lex.getToken()).type())
 #define PUTBACK(tok, lex) lex.putback(::std::move(tok))
 #define LOOK_AHEAD(lex) (lex.lookahead(0))
-#define GET_CHECK_TOK(tok, lex, exp)                                \
-    do {                                                            \
-        if ((tok = lex.getToken()).type() != exp) {                 \
-            parseErrorUnexpected(lex, tok, Token(exp));             \
-        }                                                           \
+#define GET_CHECK_TOK(tok, lex, exp)                    \
+    do {                                                \
+        if ((tok = lex.getToken()).type() != exp) {     \
+            parseErrorUnexpected(lex, tok, Token(exp)); \
+        }                                               \
     } while (0)
-#define CHECK_TOK(tok, exp)                                     \
-    do {                                                        \
-        if (tok.type() != exp) {                                \
-            parseErrorUnexpected(lex, tok, Token(exp));         \
-        }                                                       \
+#define CHECK_TOK(tok, exp)                             \
+    do {                                                \
+        if (tok.type() != exp) {                        \
+            parseErrorUnexpected(lex, tok, Token(exp)); \
+        }                                               \
     } while (0)
 
-// --- path.cpp
 enum eParsePathGenericMode {
     PATH_GENERIC_NONE,
     PATH_GENERIC_EXPR,
     PATH_GENERIC_TYPE
 };
 
-extern ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode); // Auto-determines
+extern ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode);
 extern ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMode);
 extern ::std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode genericMode);
 extern ASTPathParams ParsePathGenericList(TokenStream& lex);
@@ -57,14 +56,13 @@ extern ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::strin
 extern ASTExpr ParseExpr(TokenStream& lex);
 extern ASTExpr ParseExprBlock(TokenStream& lex);
 extern ASTExprNodeP ParseExpr0(TokenStream& lex);
-extern ASTExprNodeP ParseExpr13(TokenStream& lex); // Unaries
+extern ASTExprNodeP ParseExpr13(TokenStream& lex);
 extern ASTExprNodeP ParseExprVal(TokenStream& lex);
 extern ASTExprNodeP ParseExprBlockNode(TokenStream& lex);
 extern ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence);
 extern ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<ASTModule>& localMod, bool& addSilenceIfEnd);
 extern ASTExprNodeP ParseStmt(TokenStream& lex);
 
-// unwrapped = Exclude the enclosing brackets (used by macro parse code)
 extern TokenTree ParseTT(TokenStream& lex, bool unwrapped);
 
 extern bool ParseIsTokValue(eTokenType tokType);

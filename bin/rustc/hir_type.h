@@ -65,7 +65,6 @@ enum class HIRBorrowType {
 };
 extern ::std::ostream& operator<<(::std::ostream& os, const HIRBorrowType& bt);
 
-// Definitions generated from hir_type_binding.tu.
 #include "hir_type_binding_tu.h"
 
 extern ::std::ostream& operator<<(::std::ostream& os, const HIRArraySize& x);
@@ -90,10 +89,9 @@ struct HIRTypeDataPath {
 struct HIRTypeDataTraitObject {
     HIRTraitPath trait;
     ::std::vector<HIRGenericPath> markers;
-    // Canonical shape of regions erased from the ordinary HIR paths.  Empty
-    // when the source type contains no region that can affect type identity.
+
     RcString lifetimeIdentity;
-    // Free lifetime parameters do not select separate machine-code instances.
+
     bool lifetimeIdentityHasFree = false;
 };
 
@@ -106,7 +104,6 @@ struct HIRTypeDataErasedTypeAliasInner {
     bool isLocalTo(const HIRSimplePath& p) const;
 };
 
-// Definitions generated from hir_type_erased.tu.
 #include "hir_type_erased_tu.h"
 
 extern Ordering ord(const TypeDataErasedTypeInner& a, const TypeDataErasedTypeInner& b);
@@ -123,15 +120,14 @@ struct HIRTypeDataErasedType {
     bool isSized;
     ::std::vector<HIRTraitPath> traits;
     TypeDataErasedTypeInner inner;
-    /// Contents of the `use<...>` annotation/bound
+
     HIRPathParams use;
-    /// Indicates if `use<...>` was present (and what edition)
+
     enum class Use {
-        /// @brief Omitted, but pre-2024 edition: Uses types/lifetimes present in bounds
         OmittedOld,
-        /// @brief Omitted, 2024 edition and later: Uses all in-scope types/lifetimes
+
         Omitted2024,
-        /// @brief `use<...>` was present
+
         Present,
     } usePresent;
 };
@@ -139,16 +135,12 @@ struct HIRTypeDataErasedType {
 struct HIRTypeDataFunctionPointer {
     bool isUnsafe;
     bool isVariadic;
-    RcString abi; // RcString is usually used for identifiers, but ABI names also form a small interned set.
+    RcString abi;
     HIRTypeRef rettype;
     ::std::vector<HIRTypeRef> argTypes;
-    // Internal ABI bit used by trait-object vtables. Ordinary Rust function
-    // pointers erase #[track_caller], but a tracked trait method keeps the
-    // implicit caller-location argument across dynamic dispatch.
+
     bool trackCaller = false;
-    // Region identity is deliberately separate from the lowered signature:
-    // type checking compares signatures with regions erased, while TypeId
-    // and metadata must distinguish e.g. fn(&'static T) from for<'a> fn(&'a T).
+
     RcString lifetimeIdentity;
     bool lifetimeIdentityHasFree = false;
 };
@@ -173,12 +165,10 @@ struct HIRTypePattern {
     void fmt(::std::ostream& os) const;
 };
 
-/// An inference variable
 struct HIRTypeDataInfer {
     unsigned int index;
     HIRInferClass tyClass;
 
-    /// Returns true if the ivar is a literal
     bool isLit() const {
         switch (this->tyClass) {
             case HIRInferClass::None: {
@@ -195,7 +185,6 @@ struct HIRTypeDataInfer {
 
 class HIRTypeInterner;
 
-/// A named function item (a distinct ZST per function)
 struct HIRTypeDataNamedFunction {
     HIRPath path;
     HIRTypeDataNamedFunctionTy def;
@@ -203,7 +192,6 @@ struct HIRTypeDataNamedFunction {
     HIRTypeDataFunctionPointer decay(HIRTypeInterner& types, const Span& sp) const;
 };
 
-// Definitions generated from hir_type.tu.
 #include "hir_type_tu.h"
 
 class HIRTypeInterner {

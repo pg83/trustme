@@ -9,12 +9,12 @@
 #include <std/str/view.h>
 
 #include <cctype>
-#include <limits> // std::numeric_limits
+#include <limits>
 #include <cassert>
-#include <cstdlib> // strtol
+#include <cstdlib>
 #include <iostream>
 #include <typeinfo>
-#include <algorithm> // std::count
+#include <algorithm>
 
 using namespace stl;
 
@@ -154,20 +154,20 @@ struct sRWORD {
 
 static const sRWORD RWORDS_2015[] = {
     TOKENT("_", TOK_UNDERSCORE),
-    TOKENT("abstract", TOK_RWORD_ABSTRACT), // Reserved 2015+
+    TOKENT("abstract", TOK_RWORD_ABSTRACT),
     TOKENT("as", TOK_RWORD_AS),
-    TOKENT("become", TOK_RWORD_BECOME), //  // Reserved 2015+
+    TOKENT("become", TOK_RWORD_BECOME),
     TOKENT("box", TOK_RWORD_BOX),
     TOKENT("break", TOK_RWORD_BREAK),
     TOKENT("const", TOK_RWORD_CONST),
     TOKENT("continue", TOK_RWORD_CONTINUE),
     TOKENT("crate", TOK_RWORD_CRATE),
-    TOKENT("do", TOK_RWORD_DO), // Reserved 2015+
+    TOKENT("do", TOK_RWORD_DO),
     TOKENT("else", TOK_RWORD_ELSE),
     TOKENT("enum", TOK_RWORD_ENUM),
     TOKENT("extern", TOK_RWORD_EXTERN),
     TOKENT("false", TOK_RWORD_FALSE),
-    TOKENT("final", TOK_RWORD_FINAL), // Reserved 2015+
+    TOKENT("final", TOK_RWORD_FINAL),
     TOKENT("fn", TOK_RWORD_FN),
     TOKENT("for", TOK_RWORD_FOR),
     TOKENT("if", TOK_RWORD_IF),
@@ -180,7 +180,7 @@ static const sRWORD RWORDS_2015[] = {
     TOKENT("mod", TOK_RWORD_MOD),
     TOKENT("move", TOK_RWORD_MOVE),
     TOKENT("mut", TOK_RWORD_MUT),
-    TOKENT("override", TOK_RWORD_OVERRIDE), // Reserved 2015+
+    TOKENT("override", TOK_RWORD_OVERRIDE),
     TOKENT("priv", TOK_RWORD_PRIV),
     TOKENT("pub", TOK_RWORD_PUB),
     TOKENT("ref", TOK_RWORD_REF),
@@ -192,35 +192,35 @@ static const sRWORD RWORDS_2015[] = {
     TOKENT("trait", TOK_RWORD_TRAIT),
     TOKENT("true", TOK_RWORD_TRUE),
     TOKENT("type", TOK_RWORD_TYPE),
-    TOKENT("typeof", TOK_RWORD_TYPEOF), // Reserved 2015+
+    TOKENT("typeof", TOK_RWORD_TYPEOF),
     TOKENT("unsafe", TOK_RWORD_UNSAFE),
-    TOKENT("unsized", TOK_RWORD_UNSIZED), // Reserved 2015+
+    TOKENT("unsized", TOK_RWORD_UNSIZED),
     TOKENT("use", TOK_RWORD_USE),
-    TOKENT("virtual", TOK_RWORD_VIRTUAL), // Reserved 2015+
+    TOKENT("virtual", TOK_RWORD_VIRTUAL),
     TOKENT("where", TOK_RWORD_WHERE),
     TOKENT("while", TOK_RWORD_WHILE),
-    TOKENT("yield", TOK_RWORD_YIELD), // Reserved 2015+
+    TOKENT("yield", TOK_RWORD_YIELD),
 };
 
 static const sRWORD RWORDS_2018[] = {
     TOKENT("_", TOK_UNDERSCORE),
-    TOKENT("abstract", TOK_RWORD_ABSTRACT), // Reserved 2015+
+    TOKENT("abstract", TOK_RWORD_ABSTRACT),
     TOKENT("as", TOK_RWORD_AS),
-    TOKENT("async", TOK_RWORD_ASYNC),   // Added 2018
-    TOKENT("await", TOK_RWORD_AWAIT),   // Added 2018
-    TOKENT("become", TOK_RWORD_BECOME), //  // Reserved 2015+
+    TOKENT("async", TOK_RWORD_ASYNC),
+    TOKENT("await", TOK_RWORD_AWAIT),
+    TOKENT("become", TOK_RWORD_BECOME),
     TOKENT("box", TOK_RWORD_BOX),
     TOKENT("break", TOK_RWORD_BREAK),
     TOKENT("const", TOK_RWORD_CONST),
     TOKENT("continue", TOK_RWORD_CONTINUE),
     TOKENT("crate", TOK_RWORD_CRATE),
-    TOKENT("do", TOK_RWORD_DO),   // Reserved 2015+
-    TOKENT("dyn", TOK_RWORD_DYN), // Added 2018
+    TOKENT("do", TOK_RWORD_DO),
+    TOKENT("dyn", TOK_RWORD_DYN),
     TOKENT("else", TOK_RWORD_ELSE),
     TOKENT("enum", TOK_RWORD_ENUM),
     TOKENT("extern", TOK_RWORD_EXTERN),
     TOKENT("false", TOK_RWORD_FALSE),
-    TOKENT("final", TOK_RWORD_FINAL), // Reserved 2015+
+    TOKENT("final", TOK_RWORD_FINAL),
     TOKENT("fn", TOK_RWORD_FN),
     TOKENT("for", TOK_RWORD_FOR),
     TOKENT("if", TOK_RWORD_IF),
@@ -233,7 +233,7 @@ static const sRWORD RWORDS_2018[] = {
     TOKENT("mod", TOK_RWORD_MOD),
     TOKENT("move", TOK_RWORD_MOVE),
     TOKENT("mut", TOK_RWORD_MUT),
-    TOKENT("override", TOK_RWORD_OVERRIDE), // Reserved 2015+
+    TOKENT("override", TOK_RWORD_OVERRIDE),
     TOKENT("priv", TOK_RWORD_PRIV),
     TOKENT("pub", TOK_RWORD_PUB),
     TOKENT("ref", TOK_RWORD_REF),
@@ -244,16 +244,16 @@ static const sRWORD RWORDS_2018[] = {
     TOKENT("super", TOK_RWORD_SUPER),
     TOKENT("trait", TOK_RWORD_TRAIT),
     TOKENT("true", TOK_RWORD_TRUE),
-    TOKENT("try", TOK_RWORD_TRY), // Reserved 2018+
+    TOKENT("try", TOK_RWORD_TRY),
     TOKENT("type", TOK_RWORD_TYPE),
-    TOKENT("typeof", TOK_RWORD_TYPEOF), // Reserved 2015+
+    TOKENT("typeof", TOK_RWORD_TYPEOF),
     TOKENT("unsafe", TOK_RWORD_UNSAFE),
-    TOKENT("unsized", TOK_RWORD_UNSIZED), // Reserved 2015+
+    TOKENT("unsized", TOK_RWORD_UNSIZED),
     TOKENT("use", TOK_RWORD_USE),
-    TOKENT("virtual", TOK_RWORD_VIRTUAL), // Reserved 2015+
+    TOKENT("virtual", TOK_RWORD_VIRTUAL),
     TOKENT("where", TOK_RWORD_WHERE),
     TOKENT("while", TOK_RWORD_WHILE),
-    TOKENT("yield", TOK_RWORD_YIELD), // Reserved 2015+
+    TOKENT("yield", TOK_RWORD_YIELD),
 };
 
 signed int Lexer::getSymbol() {
@@ -725,9 +725,6 @@ Token Lexer::getTokenInt() {
                                 return Token::makeFloat(fval, CORETYPE_ANY);
                             }
                         } else {
-                            // Digit, continue
-                            // NOTE: parseFloat assumes that the '.' has been consumed, and reads digits until it hits a non-digit and then parses exponents
-                            // - Thus, continuing here and letting the below 'ungetc' push a digit back is correct.
                         }
                     }
                     if (numMode != NumMode::DEC) {
@@ -1097,7 +1094,7 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
     }
     if (ch != '"') {
         if (hashes == 0) {
-            this->ungetc(); // Unget the not '"'
+            this->ungetc();
             if (isByte) {
                 return this->getTokenIntIdentifier('b', 'r');
             } else if (kind == TOK_CSTRING) {
@@ -1569,13 +1566,13 @@ bool Codepoint::isspace() const {
         case '\r':
         case '\n':
         case ' ':
-        case 0xB: // vertical tab
-        case 0xC: // ^L
+        case 0xB:
+        case 0xC:
         case 0x85:
         case 0x200E:
-        case 0x200F: // LTR / RTL markers
-        case 0x2028: // Line Separator
-        case 0x2029: // Paragrah Separator
+        case 0x200F:
+        case 0x2028:
+        case 0x2029:
             return true;
         default:
             return false;

@@ -2,15 +2,15 @@
 
 #include "hir_asm.h"
 #include "ast_item.h"
+#include "settings.h"
 #include "ast_attrs.h"
-#include "ast_macro.h" // MacroInvocation
+#include "ast_macro.h"
 #include "ast_types.h"
 #include "coretypes.h"
 #include "ast_pattern.h"
 #include "ast_expr_ptr.h"
 #include "ast_generics.h"
 #include "expand_common.h"
-#include "settings.h"
 #include "target_version.h"
 #include "parse_tokentree.h"
 #include "macro_rules_macro_rules_ptr.h"
@@ -36,10 +36,8 @@ struct ASTStructItem {
     ASTVisibility vis;
     RcString name;
     ASTType* type;
-    // RFC3681
-    ASTExpr defaultValue;
 
-    //StructItem() {}
+    ASTExpr defaultValue;
 
     ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExpr defaultValue);
 
@@ -55,8 +53,6 @@ struct ASTTupleItem {
     ASTVisibility vis;
     ASTType* type;
 
-    //TupleItem() {}
-
     ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, ASTType* ty);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTTupleItem& x) {
@@ -68,13 +64,11 @@ struct ASTTupleItem {
 
 class ASTTypeAlias {
 public:
-    /// Normal generic parameter definitions
     ASTGenericParams params_;
-    /// Holds bounds on this type, all bounds encoded as `Self: ...`
+
     ASTGenericParams selfBounds;
     ASTType* type_;
 
-    //TypeAlias() {}
     ASTTypeAlias(ASTGenericParams params, ASTType* type);
 
     static ASTTypeAlias newAssociatedType(ASTGenericParams params, ASTGenericParams typeBounds, ASTType* defaultType);
@@ -108,12 +102,10 @@ public:
 };
 
 enum class ASTLinkage {
-    // no `#[linkage]` specified
     Default,
-    // "weak" - allow multiple definitions
+
     Weak,
-    // "extern_weak" - This external symbol can be missing
-    // - Must be on a `static`
+
     ExternWeak,
 };
 
@@ -197,7 +189,7 @@ public:
         bool isConst;
         bool isUnsafe;
         bool isAsync;
-        /// `gen fn`: the body is a coroutine and the function returns an iterator.
+
         bool isGen;
 
         Flags();
@@ -221,8 +213,8 @@ private:
     ASTExpr code_;
     ASTType* rettype_;
     Arglist args_;
-    bool isVariadic_; // extern only
-    bool hasNamedVariadic_; // the last entry in args_ is the body-only VaList binding
+    bool isVariadic_;
+    bool hasNamedVariadic_;
 
     ::std::string abi_;
     Flags flags;
@@ -239,7 +231,7 @@ public:
 
         bool isCold = false;
         bool isNaked = false;
-        /// Requested function entry alignment from `#[rustc_align(N)]`.
+
         u64 alignment = 0;
         std::vector<unsigned> rustcLegacyConstGenerics;
 
@@ -247,9 +239,6 @@ public:
         std::string linkSection;
         ASTLinkage linkage = ASTLinkage::Default;
 
-        /// Lint levels set on this function by `#[allow]` and friends, by exact
-        /// name and by group. Only the crate being compiled is linted, so these
-        /// never leave it.
         LintLevelOverrides lintLevels;
     } markings;
 
@@ -260,7 +249,6 @@ public:
 
     ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic, bool hasNamedVariadic = false);
 
-    // Helper for derive, defines an ABI_RUST function with no generics
     ASTFunction(Span sp, ASTType* retType, Arglist args);
 
     void setCode(ASTExpr code) {
@@ -422,8 +410,6 @@ public:
     ASTTrait clone() const;
 };
 
-// Item classes some ASTItem variants name; ASTItem stores through a pointer,
-// so declarations are enough here and the classes follow below.
 class ASTEnum;
 class ASTStruct;
 class ASTUnion;
@@ -433,14 +419,13 @@ struct ASTUseItem;
 class ASTExternBlock;
 class ASTGlobalAsm;
 
-// Definitions generated from ast_ast.tu.
 #include "ast_ast_tu.h"
 
 struct ASTEnumVariant {
     ASTAttributeList attrs;
     RcString name;
     ASTEnumVariantData data;
-    /// Optional discriminant value
+
     ASTExpr discriminantValue;
 
     ASTEnumVariant();
@@ -518,10 +503,9 @@ public:
             Transparent,
         } repr = Repr::Rust;
         u64 alignValue = 0;
-        // Indicates packing
+
         u64 maxFieldAlign = 0;
 
-        // 1.39 nonzero etc
         bool scalarValidStartSet = false;
         U128 scalarValidStart;
         bool scalarValidEndSet = false;
@@ -558,9 +542,9 @@ public:
             C,
             Transparent,
         } repr = Repr::Rust;
-        /// `#[repr(align(N))]`
+
         u64 alignValue = 0;
-        /// `#[repr(packed(N))]`, which caps the alignment of every member
+
         u64 maxFieldAlign = 0;
     } markings;
 
@@ -638,7 +622,7 @@ public:
     struct ImplItem {
         Span sp;
         ASTAttributeList attrs;
-        ASTVisibility vis; // Ignored for trait impls
+        ASTVisibility vis;
         bool isSpecialisable;
         RcString name;
         RcString sourceName;
@@ -650,9 +634,6 @@ private:
     ASTImplDef def_;
 
     ::std::vector<ImplItem> items_;
-    //NamedList<ASTType*>   m_types;
-    //NamedList<Function>  m_functions;
-    //NamedList<Static>    m_statics;
 
 public:
     ASTImpl(ASTImpl&&) /*noexcept*/;
@@ -689,16 +670,14 @@ private:
 };
 
 struct ASTUseItem {
-    Span sp; // Span covering the entire `use foo;`
-    bool isPrelude = false; // Synthetic implicit prelude import
+    Span sp;
+    bool isPrelude = false;
 
     struct Ent {
-        Span sp; // Span covering just the path (final component)
+        Span sp;
         ASTPath path;
-        RcString name; // If "", this is a glob/wildcard use
-        /// Written as `self` in a use tree (`use m::foo::{self}`). Such an entry
-        /// names what the prefix resolved to -- a module, an enum or a trait --
-        /// and not a value of the same name beside it.
+        RcString name;
+
         bool isSelf = false;
         friend ::std::ostream& operator<<(::std::ostream& os, const ASTUseItem::Ent& x);
     };
@@ -730,7 +709,6 @@ public:
 
     void addItem(ASTNamed<ASTItem> namedItem);
 
-    // NOTE: Only Function and Static are valid.
     ::std::vector<ASTNamed<ASTItem>>& items() {
         return items_;
     }
@@ -753,17 +731,13 @@ public:
     ASTGlobalAsm clone() const;
 };
 
-/// Representation of a parsed (and being converted) function
 class ASTModule {
     ASTAbsolutePath myPath;
 
-    // Module-level items
-    /// General items
 public:
     ::std::vector<std::unique_ptr<ASTNamed<ASTItem>>> items;
 
 private:
-    // --- Runtime caches and state ---
     ::std::vector<::std::shared_ptr<ASTModule>> anonModules;
 
     ::std::vector<ASTNamed<MacroRulesPtr>> macros_;
@@ -771,44 +745,35 @@ private:
 public:
     struct FileInfo {
         bool controlsDir = false;
-        ////
-        // Is this module disabled (i.e. it's tagged with a failing `#[cfg]`)?
-        // Disables down-stream file loading (as that might fail)
+
         bool isDisabled = false;
-        // Is this a `mod foo { ... }` or `mod foo;` (changes how `#[path]` is processed inside)
+
         bool inModBlock = false;
-        // Path to this module
+
         ::std::string path = "!";
-        // Directory controlled by this module
+
         ::std::string dir = "";
     };
 
     FileInfo fileInfo;
 
-    bool insertPrelude = true; // Set to false by `#[no_prelude]` handler
-    char indexPopulated = 0;   // 0 = no, 1 = partial, 2 = complete
+    bool insertPrelude = true;
+    char indexPopulated = 0;
 
-    /// Lint levels written on the module item. They are lexical state for the
-    /// current crate and are copied to HIR, but never exported as metadata.
     LintLevelOverrides lintLevels;
 
     struct IndexEnt {
-        bool isImport; // Set if this item has a path that isn't `mod->path() + name`
-        bool fromPrelude; // Prelude names are local defaults, not module exports
+        bool isImport;
+        bool fromPrelude;
         ASTVisibility vis;
         ASTPath path;
-        /// A glob brought this name in. Two globs offering different items for
-        /// one name is not an error until the name is used, so which of them
-        /// won is not decided here.
+
         bool fromGlob = false;
-        /// The glob that brought it in was itself reached through another
-        /// module's glob, so what this module wrote does not decide it.
+
         bool fromNestedGlob = false;
-        /// A macro expansion wrote the item. rustc resolves imports before it
-        /// expands macros, so a name only two of them provide is a
-        /// future-compatibility lint there rather than an error.
+
         bool fromMacro = false;
-        /// Two globs offer this name, and neither shadows the other.
+
         bool ambiguous = false;
     };
 
@@ -818,14 +783,12 @@ public:
     ::std::unordered_map<RcString, IndexEnt> typeItems;
     ::std::unordered_map<RcString, IndexEnt> valueItems;
     ::std::unordered_map<RcString, IndexEnt> macroItems;
-    // Imported traits are in a different list, because collisions still apply for method lookup
+
     ::std::vector<ASTAbsolutePath> traits;
 
-    // List of macros imported from other modules (via #[macro_use], includes proc macros)
-    // - First value is an absolute path to the macro (including crate name)
     struct MacroImport {
         bool isPub;
-        RcString name; // Can be different, if `use foo as bar` is used
+        RcString name;
         ASTAbsolutePath path;
         MacroRef ref;
 
@@ -839,7 +802,7 @@ public:
     struct Import {
         bool isPub;
         RcString name;
-        ASTPath path; // If `name` is "", then this is a module/enum to glob
+        ASTPath path;
     };
 
     ::std::vector<Import> itemImports;
@@ -855,7 +818,6 @@ public:
         return myPath.nodes.size() > 0 && myPath.nodes.back().c_str()[0] == '#';
     }
 
-    /// Create an anon module (for use inside expressions)
     ::std::shared_ptr<ASTModule> addAnon();
 
     void addItem(ASTNamed<ASTItem> item);
@@ -868,9 +830,6 @@ public:
     const ASTAbsolutePath& path() const {
         return myPath;
     }
-
-    //      ::std::vector<Named<Item>>& items()       { return m_items; }
-    //const ::std::vector<Named<Item>>& items() const { return m_items; }
 
     ::std::vector<::std::shared_ptr<ASTModule>>& anonMods() {
         return anonModules;

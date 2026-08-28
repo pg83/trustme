@@ -411,9 +411,6 @@ namespace {
 
         void emitTermSwitchvalueCb(const MIRTypeResolve& localMirRes, const MIRLValue& val, const MIRSwitchValues& values, unsigned indentLevel, CSwitchArmCallback& cb);
 
-        /// The ABI of the function a call names, which decides whether a
-        /// zero-sized argument is passed at all. An intrinsic, or a target
-        /// this cannot resolve, is Rust's own.
         RcString calleeAbi(const MIRTypeResolve& localMirRes, const MIRCallTarget& fcn);
 
         RcString mangleResolvedValuePath(const HIRPath& path) const;
@@ -816,8 +813,7 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
     const bool createShims = (outTy == CodegenOutput::Executable);
 
     // TODO: Support dynamic libraries too
-    // - No main, but has the rest.
-    // - Well... for cdylibs that's the case, for rdylibs it's not
+
     if (outTy == CodegenOutput::Executable && !crate.noMain) {
         // TODO: Define this function in MIR?
         of << "}\n\n";
@@ -835,7 +831,7 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                 auto startGpath = HIRGenericPath(resolve_.hirCrate().getLangItemPath(Span(), "start"));
                 startGpath.params.types.push_back(mainFcn.returnType);
                 of << "\treturn " << TransMangleValue(startGpath) << "(" << TransMangleValue(HIRGenericPath(mainPath)) << ", argc, (u8**)argv";
-                of << ", 0"; // `sigpipe` setting
+                of << ", 0";
                 of << ");\n";
             }
         } else {
@@ -845,7 +841,6 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
         of << "extern \"C\" {\n";
     }
 
-    // Auto-generated code/items for the "root" rust binary (cdylib or executable)
     if (createShims) {
         {
             const auto allocatorIt = crate.langItems.find(GLOBAL_ALLOCATOR_LANG_ITEM);
@@ -856,13 +851,13 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                     static void tyArgs(::std::vector<const char*>& out, AllocatorDataTy t) {
                         switch (t) {
                             case AllocatorDataTy::Unit:
-                            case AllocatorDataTy::ResultPtr: // (..., *mut i8) + *mut u8
+                            case AllocatorDataTy::ResultPtr:
                                 UNREACHABLE();
-                            case AllocatorDataTy::Layout: // usize, usize
+                            case AllocatorDataTy::Layout:
                                 out.push_back("uintptr_t");
                                 out.push_back("uintptr_t");
                                 break;
-                            case AllocatorDataTy::Ptr: // *mut u8
+                            case AllocatorDataTy::Ptr:
                                 out.push_back("i8*");
                                 break;
                             case AllocatorDataTy::Usize:
@@ -875,10 +870,10 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
                         switch (t) {
                             case AllocatorDataTy::Unit:
                                 return "void";
-                            case AllocatorDataTy::ResultPtr: // (..., *mut i8) + *mut u8
+                            case AllocatorDataTy::ResultPtr:
                                 return "i8*";
-                            case AllocatorDataTy::Layout: // usize, usize
-                            case AllocatorDataTy::Ptr:    // *mut u8
+                            case AllocatorDataTy::Layout:
+                            case AllocatorDataTy::Ptr:
                             case AllocatorDataTy::Usize:
                                 UNREACHABLE();
                         }
@@ -1009,9 +1004,6 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
         }
 
         {
-            // Bind `panic_impl` only when this crate actually provides
-            // a panic implementation. A no_core binary without one can
-            // still be valid when no generated code uses it.
             const auto& panicImplPath = crate.getLangItemPathOpt("trustme-panic_implementation");
             if (panicImplPath != HIRSimplePath()) {
                 of << "u32 panic_impl(uintptr_t payload) {";
@@ -1037,9 +1029,9 @@ auto CodeGeneratorC::finalise(const TransOptions& opt, CodegenOutput outTy, cons
 
     struct LinkList: private StringList {
         enum class Ty {
-            Directory, // -L <value>
-            Explicit,  // <value>
-            Implicit,  // -l <value>
+            Directory,
+            Explicit,
+            Implicit,
         };
 
         std::vector<Ty> ty_;
@@ -1673,7 +1665,7 @@ auto CodeGeneratorC::emitStructInner(const HIRTypeData* ty, const TypeRepr* repr
     }
     ::std::sort(fields.begin(), fields.end(), [&](auto a, auto b) {
         if (repr->fields[a].offset == repr->fields[b].offset) {
-            return !zsts[a] < !zsts[b]; // Sort zero sized fields first (!zst means size is 1+)
+            return !zsts[a] < !zsts[b];
         }
         return repr->fields[a].offset < repr->fields[b].offset;
     });
@@ -1975,12 +1967,8 @@ auto CodeGeneratorC::emitEnum(const Span& sp, const HIRGenericPath& p, const HIR
     auto itemTy = crate.types.path(p.clone(), HIRTypePathBinding::make_Enum(&item));
     const auto* repr = TargetGetTypeRepr(sp, resolve_, itemTy);
 
-    // 1. Enumerate fields with the same offset as the first (these go into a union)
     // TODO: What if all data variants are zero-sized?
-    // A `repr(C)` (or `repr(iN)`) enum keeps its tag beside the data
-    // rather than in it, so the data fields are all of them but the
-    // last -- even when there is only one, which a single-variant
-    // enum with a payload has.
+
     const bool hasSeparateTag = repr->fields.size() >= 2 && isEnumTag(repr, repr->fields.size() - 1) && repr->fields.back().offset != repr->fields[0].offset;
     const size_t dataFieldCount = repr->fields.size() - (hasSeparateTag ? 1 : 0);
     ::std::vector<unsigned> unionFields;
@@ -2049,8 +2037,6 @@ auto CodeGeneratorC::emitEnum(const Span& sp, const HIRGenericPath& p, const HIR
             of << "\t} DATA;\n";
         }
     } else if (repr->fields.size() == 0) {
-        // Empty/un-constructable
-        // - Shouldn't be emitted really?
         if (options.disallowEmptyStructs) {
             of << "\tchar _d;\n";
         }
@@ -2119,7 +2105,7 @@ auto CodeGeneratorC::emitConstructorEnum(const Span& sp, const HIRGenericPath& p
         if (i != 0) {
             of << ", ";
         }
-        const auto& ty = args[i].second; // already monomorphised
+        const auto& ty = args[i].second;
         emitCtype(ty, FMT_CB(ss, ss << "arg" << i;));
     }
     of << ") {\n";
@@ -2178,9 +2164,6 @@ auto CodeGeneratorC::emitStaticTy(const HIRTypeData* type, const HIRPath& p, boo
     align = std::max(align, explicitAlignment);
     bool rv = (align * 8 >= TargetGetPointerBits());
     of << "union u_static_" << TransMangleValue(p);
-    // An `extern type` has no size here, and a value of one cannot be
-    // read: only its address is ever taken. The symbol still needs a
-    // declaration that stands on its own, so give it one byte.
     if (!sized || size == SIZE_MAX) {
         if (isProto) {
             of << "{ ";
@@ -2241,7 +2224,7 @@ auto CodeGeneratorC::emitStaticExt(const HIRPath& p, const HIRStatic& item, cons
     of << "extern ";
     emitStaticTy(type, p, /*is_proto=*/true, item.explicitAlignment);
     if (linkageName != "") {
-        if (TargetGetCurSpec(wb_).osName == "macos") { // Not macOS only, but all Apple platforms.
+        if (TargetGetCurSpec(wb_).osName == "macos") {
             of << " asm(\"_" << linkageName << "\")";
         } else {
             of << " asm(\"" << linkageName << "\")";
@@ -2405,7 +2388,6 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
             auto ptrSize = TargetGetPointerBits() / 8;
             for (size_t i = 0; i < encoded.bytes.size(); i += ptrSize) {
                 u64 v = 0;
-                // little-endian only (big-endian targets are unsupported)
                 for (size_t o = 0; o < ptrSize && i + o < encoded.bytes.size(); o++) {
                     v |= static_cast<u64>(encoded.bytes[i + o]) << (o * 8);
                 }
@@ -2449,7 +2431,7 @@ auto CodeGeneratorC::emitStaticLocal(const HIRPath& p, const HIRStatic& item, co
                 if (e) {
                     of << ",";
                 }
-                of << int(b); // Just leave it as decimal
+                of << int(b);
                 e = true;
             }
         }
@@ -2977,11 +2959,7 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
                << "\tu32 w19 = w[3] + ((w17 >> 17 | w17 << 15) ^ (w17 >> 19 | w17 << 13) ^ (w17 >> 10));\n"
                << "\tdst[0] = w16; dst[1] = w17; dst[2] = w18; dst[3] = w19;\n"
                << "\treturn rv;\n";
-        }
-        // Bit-manipulation intrinsics. Keep these portable: callers
-        // may use runtime feature detection, but the generated C++
-        // itself must not require BMI instructions.
-        else if (item.linkage.name == "llvm.x86.bmi.bextr.32") {
+        } else if (item.linkage.name == "llvm.x86.bmi.bextr.32") {
             of << "\tu32 start = arg1 & 0xff;\n"
                << "\tu32 length = (arg1 >> 8) & 0xff;\n"
                << "\tif(start >= 32 || length == 0) return 0;\n"
@@ -3088,7 +3066,7 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << "\tassert(!\"Unsupprorted LLVM x86 intrinsic: " << item.linkage.name << "\"); abort();\n";
         } else {
             // TODO: Hand off to compiler-specific intrinsics
-            //MIR_TODO(*m_mir_res, "LLVM extern linkage: " << item.m_linkage.name);
+
             of << "\tassert(!\"Extern LLVM: " << item.linkage.name << "\"); abort();\n";
         }
         of << "}\n\n";
@@ -3106,7 +3084,7 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
     }
     emitFunctionHeader(p, item, params);
     if (item.linkage.name != "") {
-        if (TargetGetCurSpec(wb_).osName == "macos") { // Not macOS only, but all Apple platforms.
+        if (TargetGetCurSpec(wb_).osName == "macos") {
             of << " asm(\"_" << item.linkage.name << "\")";
         } else {
             of << " asm(\"" << item.linkage.name << "\")";
@@ -5164,7 +5142,6 @@ auto CodeGeneratorC::emitRvalueCast(const MIRTypeResolve& localMirRes, const MIR
             emitTaglessEnumDiscriminant(ty);
         } else {
             emitLvalue(ve.val);
-            // NOTE: Embedded tag enums can't be cast
             of << ".TAG";
         }
         special = true;
@@ -6009,8 +5986,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
         of << ")";
         of << " );\n";
         return;
-    } else if (m.matchesTemplate({"mov {0:r}, rbx", "cpuid", "xchg {0:r}, rbx"}, {"out:reg", "inout=eax", "inout=ecx", "out=edx"})) // 1.74 libstd_detect
-    {
+    } else if (m.matchesTemplate({"mov {0:r}, rbx", "cpuid", "xchg {0:r}, rbx"}, {"out:reg", "inout=eax", "inout=ecx", "out=edx"})) {
         of << indent << "__asm__(\"cpuid\"";
         of << " : ";
         of << "\"=a\" (";
@@ -6199,7 +6175,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
 
         const bool emitAttSyntax = usesIntelCompilerAsmDialect() && asmOptions.attSyntax;
         of << indent << "__asm__ ";
-        of << "__volatile__"; // Default everything to volatile
+        of << "__volatile__";
         if (asmGoto) {
             of << " goto";
         }
@@ -6258,10 +6234,10 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                         break;
                     }
                     case 'l':
-                        of << 'b'; // x86: the low byte, `al`
+                        of << 'b';
                         break;
                     case 'h':
-                        of << 'h'; // x86: the second byte, `ah`
+                        of << 'h';
                         break;
                     case 'x': {
                         const auto* opClass = asmParams[f.index].as_Reg().spec.opt_Class();
@@ -6270,16 +6246,16 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                         break;
                     }
                     case 'y':
-                        of << 't'; // x86: the 256-bit `ymm`
+                        of << 't';
                         break;
                     case 'z':
-                        of << 'g'; // x86: the 512-bit `zmm`
+                        of << 'g';
                         break;
                     case 'e':
-                        of << 'k'; // x86: `k` selects eax instead of rax
+                        of << 'k';
                         break;
                     case 'r':
-                        of << 'q'; // x86: `q` selects rax explicitly
+                        of << 'q';
                         break;
                     default:
                         MIR_TODO(localMirRes, "Asm2 GCC: modifier " << f.modifier);
@@ -6955,12 +6931,12 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         emitParam(e.args.at(0));
         of << ", &";
         emitLvalue(e.retVal);
-        of << "._0"; // Expected (i.e. the check value)
+        of << "._0";
         of << ", ";
         if (emulatedI128) {
             of << "&trustme_atomic_desired";
         } else {
-            emitParam(e.args.at(2)); // `desired` (the new value for the slot if equal)
+            emitParam(e.args.at(2));
         }
         of << ", " << (isWeak ? "true" : "false");
         of << ", " << getAtomicTyGcc(oSucc) << ", " << getAtomicTyGcc(oFail) << ")";
@@ -7321,9 +7297,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
     } else if (name == "drop_in_place") {
         emitDestructorCall(MIRLValue::newDeref(e.args.at(0).as_LValue().clone()), params.types.at(0), true, /*indent_level=*/1 /* TODO: get from caller */);
     } else if (name == "needs_drop") {
-        // Returns `true` if the actual type given as `T` requires drop glue;
-        // returns `false` if the actual type provided for `T` implements `Copy`. (Either otherwise)
-        // NOTE: libarena assumes that this returns `true` iff T doesn't require drop glue.
         const auto& ty = params.types.at(0);
         emitLvalue(e.retVal);
         of << " = ";
@@ -7333,7 +7306,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             of << "false";
         }
     } else if (name == "uninit") {
-        // Do nothing, leaves the destination undefined
         // TODO: This makes the C compiler warn
     } else if (name == "init") {
         of << "memset(&";
@@ -7371,13 +7343,13 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         HIRTypeRef callerTypeTmp;
         emitCtype(localMirRes.getLvalueType(callerTypeTmp, e.retVal));
         of << ")trustme_caller";
-    } else if (name == "offset") { // addition, with the reqirement that the resultant pointer be in bounds
+    } else if (name == "offset") {
         emitLvalue(e.retVal);
         of << " = ";
         emitParam(e.args.at(0));
         of << " + ";
         emitParam(e.args.at(1));
-    } else if (name == "arith_offset") { // addition, with no requirements
+    } else if (name == "arith_offset") {
         emitLvalue(e.retVal);
         of << " = ";
         emitParam(e.args.at(0));
@@ -7395,7 +7367,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         of << " & (uintptr_t)";
         emitParam(e.args.at(1));
         of << ")";
-    } else if (name == "ptr_offset_from") { // effectively subtraction
+    } else if (name == "ptr_offset_from") {
         emitLvalue(e.retVal);
         of << " = ";
         emitParam(e.args.at(0));
@@ -7503,10 +7475,10 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                 }
                 MIR_BUG(localMirRes, "Generator passed to `discriminant_value` by constant: " << e.args.at(0));
             }();
-            state = MIRLValue::newField(mv$(state), 0);    // MaybeUninit<state>
-            state = MIRLValue::newDowncast(mv$(state), 1); // MaybeUninit::value
-            state = MIRLValue::newField(mv$(state), 0);    // ManuallyDrop::value
-            state = MIRLValue::newField(mv$(state), 0);    // state discriminant
+            state = MIRLValue::newField(mv$(state), 0);
+            state = MIRLValue::newDowncast(mv$(state), 1);
+            state = MIRLValue::newField(mv$(state), 0);
+            state = MIRLValue::newField(mv$(state), 0);
             emitLvalue(state);
             of << ".TAG";
         } else if (!(ty->is_Path() && ty->as_Path().binding.is_Enum())) {
@@ -7580,7 +7552,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         of << "__builtin_unreachable()";
 
     } else if (name == "assume") {
-        // I don't assume :)
     } else if (name == "likely" || name == "unlikely") {
         emitLvalue(e.retVal);
         of << "= (";
@@ -7690,8 +7661,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             emitLvalue(e.retVal);
             of << "._0)";
         }
-    } else if (name == "overflowing_add" || name == "wrapping_add" // Renamed in 1.39
-               || name == "saturating_add" || name == "unchecked_add") {
+    } else if (name == "overflowing_add" || name == "wrapping_add" || name == "saturating_add" || name == "unchecked_add") {
         const auto& ty = params.types.at(0);
         if (name == "saturating_add") {
             of << "if( ";
@@ -7735,7 +7705,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                 case HIRCoreType::U16:
                 case HIRCoreType::U32:
                 case HIRCoreType::U64:
-                    of << "-1"; // -1 should extend to MAX
+                    of << "-1";
                     break;
                 case HIRCoreType::U128:
                     if (options.emulatedI128) {
@@ -8075,7 +8045,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                     emitLvalue(e.retVal);
                     of << ".hi = v.lo;";
                     of << " } else {";
-                    of << " shift -= 64;"; // Swap order and reduce shift
+                    of << " shift -= 64;";
                     of << " ";
                     emitLvalue(e.retVal);
                     of << ".lo = (v.hi << shift) | (v.lo >> (64 - shift));";
@@ -8181,7 +8151,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                     emitLvalue(e.retVal);
                     of << ".hi = v.lo;";
                     of << " } else {";
-                    of << " shift -= 64;"; // Swap order and reduce shift
+                    of << " shift -= 64;";
                     of << " ";
                     emitLvalue(e.retVal);
                     of << ".lo = (v.hi >> shift) | (v.lo << (64 - shift));";
@@ -8579,7 +8549,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         of << " * " << elementSize << ")";
     } else if (name == "nontemporal_store") {
         // TODO: Actually do a non-temporal store
-        // GCC: _mm_stream_* (depending on input type, which must be `repr(simd)`)
+
         if (!this->typeIsBadZst(params.types.at(0))) {
             if (this->typeIsCScalar(params.types.at(0))) {
                 of << "*(volatile ";
@@ -8633,7 +8603,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         } else if (name == "atomic_max" || name.compare(0, 7 + 3 + 1, "atomic_max_") == 0 || name == "atomic_min" || name.compare(0, 7 + 3 + 1, "atomic_min_") == 0) {
             auto ordering = getAtomicOrdering(name, 7 + 3 + 1);
             const auto& ty = params.types.at(0);
-            const char* op = (name.c_str()[7 + 1] == 'a' ? "imax" : "imin"); // m'a'x vs m'i'n
+            const char* op = (name.c_str()[7 + 1] == 'a' ? "imax" : "imin");
             emitLvalue(e.retVal);
             of << " = ";
             emitAtomicRmwCast();
@@ -8648,7 +8618,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         } else if (name == "atomic_umax" || name.compare(0, 7 + 4 + 1, "atomic_umax_") == 0 || name == "atomic_umin" || name.compare(0, 7 + 4 + 1, "atomic_umin_") == 0) {
             auto ordering = getAtomicOrdering(name, 7 + 4 + 1);
             const auto& ty = params.types.at(0);
-            const char* op = (name.c_str()[7 + 2] == 'a' ? "umax" : "umin"); // m'a'x vs m'i'n
+            const char* op = (name.c_str()[7 + 2] == 'a' ? "umax" : "umin");
             emitLvalue(e.retVal);
             of << " = ";
             emitAtomicRmwCast();
@@ -8732,7 +8702,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
         } else {
             MIR_BUG(localMirRes, "Unknown atomic intrinsic '" << name << "'");
         }
-    } else if (name == "option_payload_ptr") { // 1.74 only, removed later
+    } else if (name == "option_payload_ptr") {
         emitLvalue(e.retVal);
         of << " = &(";
         emitParam(e.args.at(0));
@@ -9043,7 +9013,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             TargetGetSizeOf(sp, resolve_, vecTy, sizeVec);
             TargetGetSizeOf(sp, resolve_, mapTy, sizeMap);
             TargetGetSizeOf(sp, resolve_, retTy, sizeRet);
-            size_t div = sizeMap / 4; // map must be u32s
+            size_t div = sizeMap / 4;
             size_t sizeVal = sizeRet / div;
             size_t nIn = sizeVec / sizeVal;
             MIR_ASSERT(localMirRes, nIn > 0, "Zero-sized shuffle input");
@@ -9415,7 +9385,6 @@ auto CodeGeneratorC::emitDestructorCall(const MIRLValue& slot, const HIRTypeData
             break;
         }
         case HIRTypeData::TAG_Path: {
-            // Call drop glue
             // - TODO: If the destructor is known to do nothing, don't call it.
             auto p = HIRPath(ty, "#drop_glue");
             switch (metadataType(ty)) {
@@ -9436,11 +9405,6 @@ auto CodeGeneratorC::emitDestructorCall(const MIRLValue& slot, const HIRTypeData
                         emitBorrow(*mirRes, HIRBorrowType::Unique, slot);
                         of << ");\n";
                     } else if (this->typeIsBadZst(ty) && (slot.is_Field() || slot.is_Downcast())) {
-                        // Elided ZST projections can be nested through
-                        // tuples, generated coroutine storage unions,
-                        // and their downcasts. Back out to the first
-                        // materialized ancestor before taking an
-                        // address for drop glue.
                         auto v = MIRLValue::CRef(slot).innerRef();
                         HIRTypeRef tmp;
                         while (this->typeIsBadZst(mirRes->getLvalueType(tmp, v)) && (v.is_Field() || v.is_Downcast())) {
@@ -9806,7 +9770,7 @@ auto CodeGeneratorC::emitConstant(const MIRConstant& ve, const MIRLValue* dstPtr
             switch (c.t) {
                 // TODO: These should already have been truncated/reinterpreted, but just in case.
                 case HIRCoreType::I8:
-                    of << static_cast<int>(static_cast<i8>(c.v.truncateI64())); // cast to int, because `i8` is printed as a `char`
+                    of << static_cast<int>(static_cast<i8>(c.v.truncateI64()));
                     break;
                 case HIRCoreType::I16:
                     of << static_cast<i16>(c.v.truncateI64());

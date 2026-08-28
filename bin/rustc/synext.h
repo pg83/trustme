@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common.h" // for LList
+#include "common.h"
 #include "synext_macro.h"
 #include "synext_decorator.h"
 

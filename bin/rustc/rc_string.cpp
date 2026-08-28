@@ -2,7 +2,7 @@
 
 #include <string>
 #include <cstring>
-#include <algorithm> // std::min
+#include <algorithm>
 
 #define XXH_INLINE_ALL
 #include <xxhash.h>
@@ -24,7 +24,7 @@ namespace {
         ObjPool::Ref poolRef = ObjPool::fromMemory();
         ObjPool* pool = poolRef.mutPtr();
         Vector<InternedString> strs;
-        Vector<u32> slots; // values are ids; 0 = empty slot
+        Vector<u32> slots;
         size_t mask;
         size_t used = 0;
 
@@ -135,7 +135,7 @@ StrInterner::StrInterner() {
     empty[0] = '\0';
     strs.pushBack(InternedString{empty, empty, 0, 0});
 
-    const size_t initial = 1 << 19; // libcargo peaks at ~129k uniques
+    const size_t initial = 1 << 19;
     slots.zero(initial);
     mask = initial - 1;
 }

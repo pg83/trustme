@@ -2,7 +2,7 @@
 
 #include "common.h"
 #include "ast_ast.h"
-#include "ast_expr.h" // for reasons
+#include "ast_expr.h"
 #include "ast_types.h"
 #include "parse_parseerror.h"
 #include "parse_interpolated_fragment.h"

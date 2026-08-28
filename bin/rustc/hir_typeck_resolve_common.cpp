@@ -1,7 +1,7 @@
 #include "hir_typeck_resolve_common.h"
 
 #include "wire_board.h"
-#include "hir_typeck_monomorph.h" // MonomorphStatePtr
+#include "hir_typeck_monomorph.h"
 
 void TraitResolveCommon::prepIndexes(const Span& sp) {
     typeEqualities.clear();
@@ -115,10 +115,10 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, HIRTypeRef typ
 const HIRTypeData* TraitResolveCommon::getConstParamType(const Span& sp, unsigned binding) const {
     const HIRGenericParams* p;
     switch (binding >> 8) {
-        case 0: // impl level
+        case 0:
             p = implGenerics_;
             break;
-        case 1: // method level
+        case 1:
             p = itemGenerics_;
             break;
         default:

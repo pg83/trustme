@@ -29,15 +29,10 @@ struct HIRTypeVisitorCb final: HIRTypeVisitorCallback {
     }
 };
 
-/// Calls the provided callback on every type seen when recursing the type.
-/// If the callback returns `true`, no further types are visited and the function returns `true`.
 extern bool visitTyWithCb(const HIRTypeData*, HIRTypeVisitorCallback& callback);
 extern bool visitTraitPathTysWithCb(const HIRTraitPath&, HIRTypeVisitorCallback& callback);
 extern bool visitPathTysWithCb(const HIRPath&, HIRTypeVisitorCallback& callback);
 
-/// Returns true when the complete type/const-generic structure contains a
-/// reference from `group`. Unlike `visitTyWith`, this includes const-generic
-/// values captured by paths, arrays, patterns and unevaluated expressions.
 extern bool typeContainsGenericGroup(const HIRTypeData*, HIRGenericGroup group);
 extern bool pathParamsContainGenericGroup(const HIRPathParams&, HIRGenericGroup group);
 
@@ -110,9 +105,6 @@ struct HIRTypeCloneCb final: HIRTypeCloneCallback {
     }
 };
 
-/// Clones a type, calling the provided callback on every type (optionally providing a replacement)
-///
-/// Closure should return `true` if the passed output slot was populated.
 extern HIRTypeRef cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, HIRTypeCloneCallback& callback);
 extern HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, HIRTypeCloneCallback& callback);
 
@@ -129,14 +121,9 @@ HIRPathParams clonePathParamsWith(HIRTypeInterner& types, const Span& sp, const 
 }
 
 extern void checkTypeClassPrimitive(const Span& sp, const HIRTypeData* type, HIRInferClass ic, HIRCoreType ct);
-/// Non-fatal form of the same compatibility rule, for callers that report a
-/// mismatch as a result instead of a diagnostic.
+
 extern bool typeClassPrimitiveCompatible(HIRInferClass ic, HIRCoreType ct);
 
-// The primitive operation is a language candidate, separate from an
-// implementation of the operator trait.  Keeping this classification in
-// one place makes type checking, UFCS expansion, and validation agree on
-// which expressions may remain as MIR primitive operations.
 enum class TypeckPrimitiveOperator {
     None,
 
@@ -170,15 +157,8 @@ enum class TypeckPrimitiveOperator {
 
 bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRTypeData* left, const HIRTypeData* right);
 
-// For these binary language operations, once the left-hand type is known
-// it also fixes an otherwise untyped right-hand operand. Shifts are
-// deliberately excluded: their right-hand side need only be an integer
-// and may have a different type.
 bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const HIRTypeData* left);
 
-// A binary language candidate is available either when both operands are
-// already known to be valid primitive inputs, or when the known lhs
-// determines the still-inferred rhs.
 bool primitiveOperatorHasLanguageCandidate(TypeckPrimitiveOperator op, const HIRTypeData* left, const HIRTypeData* right);
 
 bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRTypeData* value);

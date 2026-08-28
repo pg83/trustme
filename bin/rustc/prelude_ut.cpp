@@ -25,8 +25,6 @@ namespace {
 #define TRUSTME_TARGET_U128_ALIGN 16
 #define TRUSTME_TARGET_HAS_NATIVE_F128 1
 #include "prelude.inc"
-    // The prelude opens an `extern "C"` block that the generated program closes
-    // after all the emitted code; nothing follows it here.
 }
 }
 

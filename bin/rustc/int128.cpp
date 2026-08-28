@@ -25,7 +25,7 @@ u64 U128::encodeFloat(int bits, int zeroExp) const {
     }
     U128 y = *this << n;
     u64 a = (y.hi >> ((128 - (bits + 1)) - 64));
-    int s = 64 - (bits + 1); // A shift required to move the bits removed in `a` into the low 64-bits
+    int s = 64 - (bits + 1);
     u64 b = (y >> s).lo | (y.lo & ((1ull << s) - 1));
     u64 m = a + ((b - (b >> 63 & ~a)) >> 63);
     u64 e = (*this == U128(0)) ? 0 : (127 - n) + zeroExp - 1;
@@ -275,7 +275,7 @@ bool U128::div128O(U128 a, U128 b, U128* q, U128* r) {
         b.lo <<= 1;
     }
     if (shift == 128) {
-        return true; // true = overflowed
+        return true;
     }
     U128 mask(/*lo=*/(shift >= 64 ? 0 : (1ull << shift)), /*hi=*/(shift < 64 ? 0 : 1ull << (shift - 64)));
     shift++;

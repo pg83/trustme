@@ -1,9 +1,9 @@
 #pragma once
 
 #include "common.h"
-#include "hir_type.h"
-#include "int128.h"
 #include "floats.h"
+#include "int128.h"
+#include "hir_type.h"
 
 struct Reloc {
     size_t ofs;
@@ -56,9 +56,6 @@ struct EncodedLiteralSlice {
     const EncodedLiteral& base;
     size_t ofs;
     size_t size;
-
-    //size_t  m_reloc_ofs;
-    //size_t  m_reloc_size;
 
     EncodedLiteralSlice(const EncodedLiteral& base);
 

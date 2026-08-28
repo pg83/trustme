@@ -10,7 +10,7 @@
 #include "main_bindings.h"
 #include "macro_rules_macro_rules.h"
 
-#include <span> // std::span
+#include <span>
 
 using namespace stl;
 
@@ -58,7 +58,6 @@ namespace {
         Val value;
     };
 
-// Definitions generated from resolve_ctx_ent.tu.
 #include "resolve_ctx_ent_tu.h"
 
     struct Context {
@@ -159,7 +158,7 @@ namespace {
 
         Context cloneMod() const;
     };
-} // Namespace
+}
 
 ::std::ostream& operator<<(::std::ostream& os, const Context::LookupMode& v) {
     switch (v) {
@@ -279,9 +278,6 @@ void ResolveAbsolutePathNodes(/*const*/ Context& context, const Span& sp, ::std:
 
 void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::LookupMode mode, ASTPath& path) {
     while (path.cls.as_UFCS().nodes.size() > 1) {
-        // More than one node, break into inner UFCS
-        // - Since traits can't be associated items, this will always be the same form
-
         auto span = path.cls.as_UFCS().type->span();
         auto nodes = mv$(path.cls.as_UFCS().nodes);
         auto innerPath = mv$(path);
@@ -368,8 +364,6 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
                 break;
         }
     } else {
-        // Trait is unknown or inherent, search for items on the type (if known) otherwise leave it until type resolution
-        // - Methods can't be known until typeck (after the impl map is created)
     }
 }
 
@@ -650,8 +644,6 @@ namespace {
                     ASTPath newPath;
                     const auto& nextNode = pathAbs.nodes[i + 1];
                     auto nextName = nextNode.hygienicName();
-                    // If the named item can't be found in the trait, fall back to it being a type binding
-                    // - What if this item is from a nested trait?
                     bool found = false;
                     switch (i + 1 < pathAbs.nodes.size() ? Context::LookupMode::Namespace : mode) {
                         case Context::LookupMode::Namespace:
@@ -703,8 +695,6 @@ namespace {
                     if (i + 1 < pathAbs.nodes.size()) {
                         auto& nextNode = pathAbs.nodes[i + 1];
                         auto nextName = nextNode.hygienicName();
-                        // If this refers to an enum variant, return the full path
-                        // - Otherwise, assume it's an associated type?
                         auto idx = e.findVariant(nextName);
                         if (idx == SIZE_MAX && nextName != nextNode.name()) {
                             nextName = nextNode.name();
@@ -981,7 +971,7 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                         }
                     }
                     // TODO: If the named item can't be found in the trait, fall back to it being a type binding
-                    // - What if this item is from a nested trait?
+
                     ASTPath newPath;
                     bool found = false;
                     assert(i + 1 < pathAbs.nodes.size());
@@ -1147,8 +1137,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
             if (e.nodes.size() > 1) {
                 auto p = context.lookup(sp, e.nodes[0].name(), e.hygiene, Context::LookupMode::Namespace);
                 // HACK: If this is a primitive name, and resolved to a module.
-                // - If the next component isn't found in the located module
-                //  > Instead use the type name.
+
                 if (!p.cls.is_Local() && coretypeFromstring(e.nodes[0].name().c_str()) != CORETYPE_INVAL) {
                     if (const auto* pep = p.bindings.type.binding.opt_Module()) {
                         const auto& pe = *pep;
@@ -1318,7 +1307,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                 e.crate = ecIt->second;
             }
             // HACK: If this is `crate::foo::bar`, and `foo` doesn't exist in the root, but it is an implicit crate, then resolve to that
-            // - This handles when a 2015 macro resolves to `::cratename::Bar` in a 2018+ crate
+
             else if (e.crate == "" && e.nodes.size() > 1 && context.crate.rootModule_.namespaceItems.count(e.nodes.front().name()) == 0) {
                 auto ecIt = context.settings.implicitCrates.find(e.nodes.front().name().c_str());
                 if (ecIt != context.settings.implicitCrates.end()) {
@@ -1343,8 +1332,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
     }
 
     // TODO: Should this be deferred until the HIR?
-    // - Doing it here so the HIR lowering has a bit more information
-    // - Also handles splitting "absolute" paths into UFCS
+
     switch (path.cls.tag()) {
         default:
             BUG(sp, "Path wasn't absolutised correctly");
@@ -1365,7 +1353,6 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
     }
 
     // TODO: Expand default type parameters?
-    // - Helps with cases like PartialOrd<Self>, but hinders when the default is a hint (in expressions)
 
     if (const auto* e = path.cls.opt_UFCS()) {
         if (!e->nodes.empty() && (!e->trait || !e->trait->isValid()) && e->type->data.is_Generic() && e->type->data.as_Generic().index == GENERICSelf) {
@@ -1661,8 +1648,7 @@ void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node) {
 
                 this->context.startPatbind();
                 // TODO: Save the context, ensure that each arm results in the same state.
-                // - Or just an equivalent state
-                // OR! Have a mode in the context that handles multiple bindings.
+
                 for (auto& pat : arm.patterns) {
                     ResolveAbsolutePattern(this->context, true, pat);
                     this->context.endPatbindArm(pat.span());
@@ -1884,7 +1870,6 @@ void ResolveAbsoluteGeneric(Context& context, ASTGenericParams& params) {
     }
 }
 
-// Locals shouldn't be possible, as they'd end up as MaybeBind. Will assert the path class.
 void ResolveAbsolutePatternValue(/*const*/ Context& context, const Span& sp, ASTPattern::Value& val) {
     if (val.is_Named()) {
         auto& e = val.as_Named();
@@ -1894,7 +1879,6 @@ void ResolveAbsolutePatternValue(/*const*/ Context& context, const Span& sp, AST
 
 void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& pat) {
     for (auto& pb : pat.bindings()) {
-        //if( !pat.data().is_Any() && ! allow_refutable )
         //    TODO(pat.span(), "Resolve_Absolute_Pattern - Encountered bound destructuring pattern");
         pb.slot = context.pushVar(pat.span(), pb.name);
     }
@@ -1945,11 +1929,9 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
         }
         case ASTPatternData::TAG_Value: {
             auto& e = pat.data().as_Value();
-            // Disabled check : Some code does `let (Foo | Bar);` where those are the only options
-            //if( ! allow_refutable )
-            //{
+
             //    // TODO: If this is a single value of a unit-like struct, accept
-            //}
+
             ResolveAbsolutePatternValue(context, pat.span(), e.start);
             ResolveAbsolutePatternValue(context, pat.span(), e.end);
             break;
@@ -1958,9 +1940,7 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
             auto& e = pat.data().as_ValueLeftInc();
             if (!allowRefutable) {
                 // TODO: If this is a single value of a unit-like struct, accept
-                // A range does not match every value, so it cannot stand where a
-                // pattern has to (a parameter, a `let` without an `else`). That
-                // is a program error, not a compiler one.
+
                 ERROR(pat.span(), E0000, "refutable pattern where an irrefutable one is required - " << pat);
             }
             ResolveAbsolutePatternValue(context, pat.span(), e.start);
@@ -3257,7 +3237,6 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
         }
     }
 
-    // - Run through the indexed items and fix up those paths
     Span sp;
     for (auto& i : mod.namespaceItems) {
         if (i.second.isImport) {
@@ -3343,7 +3322,7 @@ namespace {
         }
         return rv;
     }
-} // namespace
+}
 
 bool spanIsFromMacro(const Span& sp) {
     for (auto s = sp; s; s = s->parentSpan) {
@@ -3430,7 +3409,6 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
                 break;
             }
             case ASTItem::TAG_Use: {
-                // Skip for now
                 break;
             }
             case ASTItem::TAG_Module: {
@@ -3526,7 +3504,7 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
                 ASSERT_BUG(sp, iData.path.bindings.hasBinding(), "`use " << iData.path << "` left unbound in module " << mod.path());
                 const auto& pb = iData.path.bindings;
 
-                bool allowCollide = true; // Allow collisions (`use` can import mutliple namespaces, local gets priority)
+                bool allowCollide = true;
                 switch (pb.type.binding.tag()) {
                     case ASTPathBindingType::TAG_Unbound: {
                         break;
@@ -3679,7 +3657,6 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                 }
                 for (unsigned int i = 0; i < spath.components().size() - 1; i++) {
                     const auto& hit = hmod->modItems.at(spath.components()[i]);
-                    // Only support enums on the penultimate component
                     if (i == spath.components().size() - 2 && hit->ent.is_Enum()) {
                         pb.binding = ASTPathBindingType::make_EnumVar({nullptr, 0});
                         _add_item_type(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested);
@@ -3814,7 +3791,6 @@ void ResolveIndexModuleWildcardGlobInHirMod(
             if (const auto* ep = e.ent.opt_Import()) {
                 pb.path.crate = ep->path.crateName();
                 pb.path.nodes = ep->path.componentsVec();
-                // NOTE: This shouldn't ever be pointing at an import, and no other handling needed
             } else {
                 pb.path = modAp + it.first;
             }
@@ -4172,7 +4148,6 @@ bool ResolveIndexModuleNormalisePath(const ASTCrate& crate, const Span& sp, ASTP
                     return false;
                 }
                 case ASTPathBindingType::TAG_Enum: {
-                    // NOTE: Just assuming that if an Enum is hit, it's sane
                     return false;
                 }
                 case ASTPathBindingType::TAG_Trait: {
@@ -4211,7 +4186,6 @@ bool ResolveIndexModuleNormalisePath(const ASTCrate& crate, const Span& sp, ASTP
             if (it != mod->macroItems.end()) {
                 ieP = &it->second;
             } else {
-                // Workaround for `use` on an exporter macro
                 const ASTModule::MacroImport* found = nullptr;
                 for (const auto& a : mod->macroImports) {
                     if (a.name == nodeName || (nodeName != node.name() && a.name == node.name())) {
@@ -4291,10 +4265,10 @@ void ResolveIndex(ASTCrate& crate) {
 }
 
 enum class Lookup {
-    Any,    // Allow binding to anything
-    AnyOpt, // Allow binding to anything, but don't error on failure
-    Type,   // Allow only type bindings
-    Value,  // Allow only value bindings
+    Any,
+    AnyOpt,
+    Type,
+    Value,
 };
 
 namespace {
@@ -4523,10 +4497,6 @@ void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& setting
                 BUG(span, "Use path is not absolute after absolutisation");
             }
 
-            // NOTE: Use statements can refer to _three_ different items
-            // - types/modules ("type namespace")
-            // - values ("value namespace")
-            // - macros ("macro namespace")
             // TODO: Have Resolve_Use_GetBinding return the actual path
             ActiveUseResolution activeUse(resolveContext, useEnt.path);
             useEnt.path.bindings = ResolveUseGetBinding(resolveContext, span, settings, crate, mod.path(), useEnt.path, parentModules);
@@ -4593,7 +4563,7 @@ void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& setting
     } exprIter(resolveContext, settings, crate, mod, parentModules);
 
     // TODO: Check that all code blocks are covered by these
-    // - NOTE: Handle anon modules by iterating code (allowing correct item mappings)
+
     for (auto& ip : mod.items) {
         auto& i = *ip;
         switch (i.data.tag()) {
@@ -4701,18 +4671,7 @@ void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& setting
     }
 }
 
-ASTPath::Bindings ResolveUseGetBindingMod(
-    UseResolutionContext& resolveContext,
-    const Span& span,
-    const Settings& settings,
-    const ASTCrate& crate,
-    const ASTAbsolutePath& sourceModPath,
-    const ASTModule& mod,
-    const RcString& desItemName,
-    ::std::span<const ASTModule*> parentModules,
-    bool typesOnly,     // = false
-    bool requireVisible // = false
-) {
+ASTPath::Bindings ResolveUseGetBindingMod(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTModule& mod, const RcString& desItemName, ::std::span<const ASTModule*> parentModules, bool typesOnly, bool requireVisible) {
     ASTPath::Bindings rv;
 
     auto recurseEnt = std::make_pair(&mod, desItemName.c_str());
@@ -4722,7 +4681,7 @@ ASTPath::Bindings ResolveUseGetBindingMod(
     auto _ = pushAndPopAtEnd(resolveContext.moduleLookups, recurseEnt);
 
     // TODO: Catch and prevent recursion?
-    // If the desired item is an anon module (starts with #) then parse and index
+
     if (desItemName.size() > 0 && desItemName.c_str()[0] == '#') {
         unsigned int idx = 0;
         if (::std::sscanf(desItemName.c_str(), "#%u", &idx) != 1) {
@@ -4762,7 +4721,7 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                     break;
                 }
                 case ASTItem::TAG_Use: {
-                    break; // Skip for now
+                    break;
                     break;
                 }
                 case ASTItem::TAG_Impl: {
@@ -4847,9 +4806,6 @@ ASTPath::Bindings ResolveUseGetBindingMod(
             break;
         }
     }
-    // NOTE: `use macroname;` can refer to a macro already in-scope via a parent `#[macro_use]`
-    // - So, need to look upwards
-    // - Can't use `parent_modules`, as that's only for anon.
     if (rv.macro.is_Unbound() && mod.path() == sourceModPath) {
         ::std::vector<const ASTModule*> mods;
         mods.push_back(&crate.rootModule());
@@ -4966,7 +4922,6 @@ ASTPath::Bindings ResolveUseGetBindingMod(
 
             // TODO: Correct privacy rules (if the origin of this lookup can see this item)
             if ((canSeePrivate || imp->vis.isVisible(sourceModPath /*, mod.path()*/))) {
-                // INEFFICIENT! Resolves and throws away the result (because we can't/shouldn't mutate here)
                 ASTPath::Bindings bindings_;
                 const auto* bindings = &impE.path.bindings;
                 if (bindings->type.is_Unbound()) {
@@ -5342,7 +5297,7 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
                         break;
                     }
                     case HIRTypeItem::TAG_ExternType: {
-                        rv.type.set(ap, ASTPathBindingType::make_TypeAlias({nullptr})); // Lazy.
+                        rv.type.set(ap, ASTPathBindingType::make_TypeAlias({nullptr}));
                         break;
                     }
                     case HIRTypeItem::TAG_Enum: {
@@ -5393,7 +5348,7 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
                     assert(e.idx < enm.numVariants());
                     rv.value.set(ap, ASTPathBindingValue::make_EnumVar({nullptr, e.idx, &enm}));
                 } else {
-                    itemPtr = &ec.hir->getValitemByPath(span, e.path, true); // ignore_crate_name=true
+                    itemPtr = &ec.hir->getValitemByPath(span, e.path, true);
                 }
             }
             if (rv.value.is_Unbound()) {
@@ -5446,7 +5401,7 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
                     return rv;
                 }
                 ASSERT_BUG(span, crate.externCrates.count(imp->path.crateName()) > 0, "Unable to find crate for " << imp->path);
-                const auto& c = *crate.externCrates.at(imp->path.crateName()).hir; // Have to manually look up, AST doesn't have a `get_mod_by_path`
+                const auto& c = *crate.externCrates.at(imp->path.crateName()).hir;
                 const auto& mod = c.getModByPath(span, imp->path, /*ignore_last=*/true, /*ignore_crate=*/true);
                 itemPtr = &mod.macroItems.at(imp->path.components().back())->ent;
                 ap = ASTAbsolutePath(imp->path.crateName(), imp->path.componentsVec());
@@ -5719,7 +5674,6 @@ ASTPath::Bindings ResolveUseGetBinding(
     return binding;
 }
 
-// Bodies of the generated local unions (see resolve_ctx_ent.tu).
 #include "resolve_ctx_ent_tu.cpp"
 
 auto GenericSlot::toBinding() const -> unsigned int {
@@ -6153,7 +6107,7 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
     const auto itemName = srcContext.applyToItemName(name);
     auto resolvedItemName = itemName;
     auto lookupContext = srcContext;
-    // NOTE: src_context may provide a module to search
+
     // TODO: This should be checked AFTER locals
     if (srcContext.hasModPath()) {
         const auto& mp = srcContext.modPath();
@@ -6189,7 +6143,7 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                             if (imp.isVariant) {
                                 const auto& enm = crate.externCrates.at(imp.path.crateName()).hir->getEnumByPath(sp, imp.path, /*ignore_crate_name*/ true, /*ignore_last*/ true);
                                 bindings.value.set(itemPath, ASTPathBindingValue::make_EnumVar({nullptr, imp.idx, &enm}));
-                                break; // Break out of the switch
+                                break;
                             } else {
                                 item = &crate.externCrates.at(imp.path.crateName()).hir->getValitemByPath(sp, imp.path, true);
                             }
@@ -6224,7 +6178,7 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                             if (imp.isVariant) {
                                 const auto& enm = crate.externCrates.at(imp.path.crateName()).hir->getEnumByPath(sp, imp.path, /*ignore_crate_name*/ true, /*ignore_last*/ true);
                                 bindings.type.set(itemPath, ASTPathBindingType::make_EnumVar({nullptr, imp.idx, &enm}));
-                                break; // Break out of the switch
+                                break;
                             } else {
                                 item = &crate.externCrates.at(imp.path.crateName()).hir->getTypeitemByPath(sp, imp.path, true);
                             }
@@ -6336,7 +6290,7 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                             // TODO: Ensure validity? (I.e. that `Self` is a unit or tuple struct
                             if (const auto* p = (*e)->data.opt_Path()) {
                                 // HACK! If `Self` points to a `type`, look through it
-                                // - rustc-1.90.0-src/compiler/rustc_codegen_llvm/src/context.rs:675
+
                                 if (const auto* pbe = (**p).bindings.type.binding.opt_TypeAlias()) {
                                     assert(pbe->alias_);
                                     assert(pbe->alias_->type_->isPath());
@@ -6398,7 +6352,7 @@ auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygie
                         }
                         break;
                     default:
-                        // ignore.
+
                         // TODO: Integer generics
                         break;
                 }
@@ -6477,13 +6431,13 @@ auto Context::lookupLocal(const Span& sp, const RcString name, LookupMode mode) 
                         for (auto it2 = e.constants.rbegin(); it2 != e.constants.rend(); ++it2) {
                             if (it2->name.name == name) {
                                 //TODO(sp, "Return a reference to a constant generic '" << name << "'");
-                                // Need to disambiguate it... could set a high bit
+
                                 return it2->value.toBinding() | FLAG_CONST_GENERIC;
                             }
                         }
                         break;
                     default:
-                        // ignore.
+
                         // TODO: Integer generics
                         break;
                 }

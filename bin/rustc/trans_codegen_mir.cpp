@@ -1342,9 +1342,7 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                     }
                 }
                 // TODO: Values.
-                //if( e.values.size() > 0 )
-                //{
-                //}
+
                 of << "_ = " << e.defTarget;
                 of << " }\n";
 

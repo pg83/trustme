@@ -26,8 +26,7 @@
 using namespace stl;
 
 namespace {
-    struct Exc {
-    };
+    struct Exc {};
 
     struct BufferedExecContext: public ExecContext {
         mutable StringBuilder buf_;
@@ -48,27 +47,13 @@ namespace {
         try {
             func->execute(ctx);
 
-            outb << Color::bright(AnsiColor::Green)
-                 << StringView(u8"+ ")
-                 << *func
-                 << Color::reset()
-                 << endL;
+            outb << Color::bright(AnsiColor::Green) << StringView(u8"+ ") << *func << Color::reset() << endL;
         } catch (const Exc&) {
-            outb << Color::bright(AnsiColor::Red)
-                 << StringView(u8"- ")
-                 << *func
-                 << Color::reset()
-                 << endL;
+            outb << Color::bright(AnsiColor::Red) << StringView(u8"- ") << *func << Color::reset() << endL;
 
             return false;
         } catch (Exception& exc) {
-            outb << Color::bright(AnsiColor::Red)
-                 << exc.description()
-                 << endL
-                 << StringView(u8"- ")
-                 << *func
-                 << Color::reset()
-                 << endL;
+            outb << Color::bright(AnsiColor::Red) << exc.description() << endL << StringView(u8"- ") << *func << Color::reset() << endL;
 
             return false;
         }
@@ -132,7 +117,6 @@ namespace {
         static Tests& instance() noexcept;
 
         void handlePanic1() noexcept {
-            // outbuf->flush();
         }
 
         static void panicHandler1() noexcept {
@@ -221,52 +205,31 @@ void Tests::execute() {
             return a.timeUs > b.timeUs;
         });
 
-        outb << endL
-             << StringView(u8"Slowest tests:")
-             << endL;
+        outb << endL << StringView(u8"Slowest tests:") << endL;
 
         size_t n = ::min(topN, timings.length());
 
         for (size_t i = 0; i < n; ++i) {
             auto& t = timings[i];
 
-            outb << StringView(u8"  ")
-                 << t.timeUs
-                 << StringView(u8" us ")
-                 << *t.test
-                 << endL;
+            outb << StringView(u8"  ") << t.timeUs << StringView(u8" us ") << *t.test << endL;
         }
 
         outb << endL;
     }
 
-    outb << Color::bright(AnsiColor::Green)
-         << StringView(u8"OK: ")
-         << ok
-         << Color::reset();
+    outb << Color::bright(AnsiColor::Green) << StringView(u8"OK: ") << ok << Color::reset();
 
     if (err) {
-        outb << StringView(u8", ")
-             << Color::bright(AnsiColor::Red)
-             << StringView(u8"ERR: ")
-             << err
-             << Color::reset();
+        outb << StringView(u8", ") << Color::bright(AnsiColor::Red) << StringView(u8"ERR: ") << err << Color::reset();
     }
 
     if (skip) {
-        outb << StringView(u8", ")
-             << Color::bright(AnsiColor::Yellow)
-             << StringView(u8"SKIP: ")
-             << skip
-             << Color::reset();
+        outb << StringView(u8", ") << Color::bright(AnsiColor::Yellow) << StringView(u8"SKIP: ") << skip << Color::reset();
     }
 
     if (mute) {
-        outb << StringView(u8", ")
-             << Color::bright(AnsiColor::Blue)
-             << StringView(u8"MUTE: ")
-             << mute
-             << Color::reset();
+        outb << StringView(u8", ") << Color::bright(AnsiColor::Blue) << StringView(u8"MUTE: ") << mute << Color::reset();
     }
 
     outb << endL << flsH << finI;
@@ -323,22 +286,7 @@ void GetOpt::help() const noexcept {
 
     auto out = sysE;
 
-    out << StringView(u8"Usage: test-binary [FILTER...] [--OPTION[=VALUE]]") << endL
-        << endL
-        << StringView(u8"Filters:") << endL
-        << StringView(u8"  Suite::Test    run tests whose full name starts with the prefix") << endL
-        << StringView(u8"  -Suite::Test   exclude tests matching the prefix") << endL
-        << StringView(u8"  (tests prefixed with _ are muted unless explicitly included)") << endL
-        << endL
-        << StringView(u8"Options:") << endL
-        << StringView(u8"  --help         print this help") << endL
-        << StringView(u8"  --group=N      run shard N (zero based)") << endL
-        << StringView(u8"  --group-count=N  split tests into N shards") << endL
-        << StringView(u8"  --threads=N    run tests in parallel using N threads") << endL
-        << StringView(u8"  --top=N        show N slowest tests") << endL
-        << StringView(u8"  --OPT          equivalent to --OPT=1") << endL
-        << StringView(u8"  --OPT=VALUE    set option OPT to VALUE") << endL
-        << flsH;
+    out << StringView(u8"Usage: test-binary [FILTER...] [--OPTION[=VALUE]]") << endL << endL << StringView(u8"Filters:") << endL << StringView(u8"  Suite::Test    run tests whose full name starts with the prefix") << endL << StringView(u8"  -Suite::Test   exclude tests matching the prefix") << endL << StringView(u8"  (tests prefixed with _ are muted unless explicitly included)") << endL << endL << StringView(u8"Options:") << endL << StringView(u8"  --help         print this help") << endL << StringView(u8"  --group=N      run shard N (zero based)") << endL << StringView(u8"  --group-count=N  split tests into N shards") << endL << StringView(u8"  --threads=N    run tests in parallel using N threads") << endL << StringView(u8"  --top=N        show N slowest tests") << endL << StringView(u8"  --OPT          equivalent to --OPT=1") << endL << StringView(u8"  --OPT=VALUE    set option OPT to VALUE") << endL << flsH;
 
     exit(0);
 }
@@ -385,9 +333,7 @@ bool GetOpt::matchesExclude(StringView testName) const noexcept {
 
 template <>
 void stl::output<ZeroCopyOutput, TestFunc>(ZeroCopyOutput& buf, const TestFunc& test) {
-    buf << test.suite()
-        << StringView(u8"::")
-        << test.name();
+    buf << test.suite() << StringView(u8"::") << test.name();
 }
 
 void Ctx::run() {

@@ -62,12 +62,12 @@ struct CachedFunction {
 };
 
 struct TransListFunction {
-    const HIRPath* path; // Pointer into the list (std::map pointers are stable)
+    const HIRPath* path;
     const HIRFunction* ptr;
     TransParams pp;
-    // If `pp.has_types` is true, the below is valid
+
     CachedFunction monomorphised;
-    /// Forces the function to not be emited as code (just emit the signature)
+
     bool forcePrototype;
 
     TransListFunction(HIRTypeInterner& types, const HIRPath& path);
@@ -89,9 +89,7 @@ struct TransListConst {
 
 class TransList {
     const WireBoard* wb_ = nullptr;
-    // Keep the emitted value identity alongside the exact-path maps. C layout
-    // names erase regions, but addressable functions and statics do not: their
-    // bodies can observe a type through TypeId.
+
     ::std::unordered_map<::std::string, HIRPath> functionSymbols;
     ::std::unordered_map<::std::string, HIRPath> staticSymbols;
 
@@ -105,43 +103,42 @@ class TransList {
 
 public:
     TransList() = default;
+
     explicit TransList(const WireBoard& wb)
         : wb_(&wb)
     {
     }
+
     TransList(TransList&&) = default;
     TransList(const TransList&) = delete;
     TransList& operator=(TransList&&) = default;
     TransList& operator=(const TransList&) = delete;
 
-    /// Root-level items (exposed globals)
     ::std::vector<HIRPath> roots;
 
     ::std::map<HIRPath, ::std::unique_ptr<TransListFunction>> functions;
     ::std::map<HIRPath, ::std::unique_ptr<TransListStatic>> statics;
-    /// Constants that are still Defer
+
     ::std::map<HIRPath, ::std::unique_ptr<TransListConst>> constants;
     ::std::map<HIRPath, TransParams> vtables;
-    /// Required type_id values
+
     HIRTypeRefSet typeids;
-    // Required drop glue
+
     HIRTypeRefSet dropGlue;
-    /// Required struct/enum constructor impls
+
     ::std::set<HIRGenericPath> constructors;
-    // Automatic Clone impls
+
     HIRTypeRefSet autoCloneImpls;
-    /// Those of the above whose `clone_from` is called: the trait's default
-    /// body belongs to the impl, and a generated impl has to carry its own.
+
     HIRTypeRefSet autoCloneFromImpls;
-    // Automatic FnPtr impls
+
     HIRTypeRefSet autoFnptrImpls;
-    // Trait methods
+
     ::std::set<HIRPath> traitObjectMethods;
 
     ::std::vector<::std::unique_ptr<HIRStatic>> autoStatics;
     ::std::vector<::std::unique_ptr<HIRFunction>> autoFunctions;
 
-    // .second is `true` if this is a from a reference to the type
     ::std::vector<::std::pair<HIRTypeRef, bool>> types;
 
     TransListFunction* addFunction(HIRTypeInterner& types, HIRPath p);

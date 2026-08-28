@@ -1,7 +1,7 @@
 #include "ast_ast.h"
 
 #include "common.h"
-#include "synext.h" // Expand_ParseAndExpand_ExprVal
+#include "synext.h"
 #include "ast_expr.h"
 #include "ast_crate.h"
 #include "ast_types.h"

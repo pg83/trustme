@@ -30,7 +30,7 @@ Ordering HIRGenericRef::ord(const HIRGenericRef& x) const {
         if (rv || isSolverExistential()) {
             return rv;
         }
-        return ::ord(name, x.name); // names matter for legacy placeholders
+        return ::ord(name, x.name);
     }
     return rv;
 }

@@ -277,13 +277,11 @@ STD_TEST_SUITE(Channel) {
         auto& ch = *Channel::create(pool.mutPtr(), exec, (size_t)1);
         void* received = nullptr;
 
-        // sender: will block after first enqueue since cap=1
         exec->spawn([&] {
             ch.enqueue((void*)1);
-            ch.enqueue((void*)2); // blocks here
+            ch.enqueue((void*)2);
         });
 
-        // receiver: drains the channel
         exec->spawn([&] {
             void* v1;
             void* v2;
@@ -302,12 +300,10 @@ STD_TEST_SUITE(Channel) {
         auto& ch = *Channel::create(pool.mutPtr(), exec, (size_t)1);
         void* received = nullptr;
 
-        // receiver: blocks waiting for value
         exec->spawn([&] {
             ch.dequeue(&received);
         });
 
-        // sender: sends after receiver is waiting
         exec->spawn([&] {
             ch.enqueue((void*)99);
         });
@@ -327,8 +323,8 @@ STD_TEST_SUITE(Channel) {
             ch.close();
 
             void* v;
-            ch.dequeue(&v);       // gets 1
-            got = ch.dequeue(&v); // returns false
+            ch.dequeue(&v);
+            got = ch.dequeue(&v);
         });
 
         exec->join();
@@ -435,7 +431,7 @@ STD_TEST_SUITE(Channel) {
 
             STD_INSIST(ch.tryEnqueue((void*)1));
             STD_INSIST(ch.tryEnqueue((void*)2));
-            STD_INSIST(!ch.tryEnqueue((void*)3)); // full
+            STD_INSIST(!ch.tryEnqueue((void*)3));
 
             STD_INSIST(ch.tryDequeue(&v));
             STD_INSIST(v == (void*)1);

@@ -273,15 +273,16 @@ u32 ReactorState::poll(PollFD pfd, u64 deadlineUs) {
     queueMutex_->lock();
     queue_.insert(&req);
 
-    // clang-format off
-    exec_->parkWith(makeRunable([this, needsWakeup = (queue_.min() == &req)] {
+    exec_->parkWith(
+        makeRunable([this, needsWakeup = (queue_.min() == &req)] {
         queueMutex_->unlock();
 
         if (needsWakeup) {
             parker_.unpark();
         }
-    }), &common.task);
-    // clang-format on
+    }),
+        &common.task
+    );
 
     return req.result;
 }
@@ -293,8 +294,6 @@ PollerIface* ReactorState::createPoller(ObjPool* pool) {
 
     return pool->make<ReactorPoller>(pool, this);
 }
-
-// ReactorPoller
 
 ReactorPoller::ReactorPoller(ObjPool* pool, ReactorState* rs)
     : fds_(pool)
@@ -329,12 +328,13 @@ void ReactorPoller::waitImpl(VisitorFace& v, u32 timeoutUs) {
         rs->queue_.insert(&req);
     });
 
-    // clang-format off
-    rs->exec_->parkWith(makeRunable([rs] {
+    rs->exec_->parkWith(
+        makeRunable([rs] {
         rs->queueMutex_->unlock();
         rs->parker_.unpark();
-    }), &task);
-    // clang-format on
+    }),
+        &task
+    );
 
     fds_.visit([&v](InternalMultiReq& req) {
         if (auto res = req.result; res) {

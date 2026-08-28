@@ -1,7 +1,7 @@
 #include "hir_type.h"
 
 #include "span.h"
-#include "hir_expr.h" // ArraySize::Unevaluated cloning needs the complete expression definition.
+#include "hir_expr.h"
 
 #include <std/alg/defer.h>
 #include <std/mem/obj_pool.h>
@@ -2053,7 +2053,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         switch (xe.tyClass) {
             case HIRInferClass::None:
                 // TODO: Have another callback (optional?) that allows the caller to equate `v` somehow
-                // - Very niche?
+
                 return HIRCompare::Fuzzy;
             case HIRInferClass::Integer:
                 if (const auto* te = v->opt_Primitive()) {
@@ -2100,7 +2100,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         switch (te.tyClass) {
             case HIRInferClass::None:
                 // TODO: Have another callback (optional?) that allows the caller to equate `v` somehow
-                // - Very niche?
+
                 return HIRCompare::Fuzzy;
             case HIRInferClass::Integer:
                 if (const auto* xe = x->opt_Primitive()) {

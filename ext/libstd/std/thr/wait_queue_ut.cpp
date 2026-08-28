@@ -50,7 +50,6 @@ STD_TEST_SUITE(WaitQueue) {
         STD_INSIST(found == 3);
     }
 
-    // construct(65) даёт PointerImpl / MutexImpl вместо BitmaskImpl
     STD_TEST(LargeCapacity) {
         auto opool = ObjPool::fromMemory();
         auto wq = WaitQueue::construct(opool.mutPtr(), 65);

@@ -9,9 +9,6 @@
 #include <set>
 
 namespace {
-    /// The plain lint names listed in `(...)`. The list also carries entries
-    /// this compiler has no lint for -- tool lints (`clippy::foo`) and keyed
-    /// entries (`reason = "..."`) -- so the scan skips whatever it cannot read.
     template <typename F>
     void collectLintNames(const ASTAttribute& mi, const F& cb) {
         TTStream lex(mi.span(), ParseState(), mi.data());

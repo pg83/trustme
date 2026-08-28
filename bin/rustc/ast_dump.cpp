@@ -6,7 +6,7 @@
 #include "ast_crate.h"
 #include "cpp_unpack.h"
 
-#include <limits> // std::numeric_limits
+#include <limits>
 #include <fstream>
 #include <string_view>
 
@@ -25,7 +25,7 @@
 struct RustPrinter: public ASTNodeVisitor {
     ::std::ostream& os;
     int indentLevel;
-    bool exprRoot; //!< used to allow 'if' and 'match' to behave differently as standalone exprs
+    bool exprRoot;
 
     RustPrinter(::std::ostream& os);
 

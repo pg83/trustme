@@ -1,9 +1,9 @@
 #pragma once
 
 #include "mir_mir.h"
-#include "hir_expr.h" // for ExprNodeMatch
+#include "hir_expr.h"
 #include "hir_type.h"
-#include "hir_typeck_static.h" // StaticTraitResolve for Copy
+#include "hir_typeck_static.h"
 
 #include <map>
 
@@ -34,22 +34,19 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const ScopeHandle& x);
 };
 
-// Rust 1.90 only permits a Box dereference to form a move path. A future
-// DerefMove feature will need a corresponding state variant here.
 enum class InvalidType {
     Uninit,
     Moved,
     Descoped,
 };
-// NOTE: If there's a optional move and a partial merging, it becomes a partial?
-// Definitions generated from mir_from_hir.tu.
+
 #include "mir_from_hir_tu.h"
 extern ::std::ostream& operator<<(::std::ostream& os, const VarState& x);
 
 struct SplitArm {
     bool hasEarlyTerminated = false;
-    bool alwaysEarlyTerminated = false; // Populated on completion
-    //BasicBlockId  source_block;
+    bool alwaysEarlyTerminated = false;
+
     ::std::map<unsigned int, VarState> states;
     ::std::map<unsigned int, VarState> argStates;
 };
@@ -64,11 +61,10 @@ struct ScopeDropSlot {
     unsigned int index;
 };
 
-// Definitions generated from mir_from_hir_scope.tu.
 #include "mir_from_hir_scope_tu.h"
 
 #define FIELD_DEREF 0xFFFF
-#define FIELD_INDEX_MAX 0x8000 // Above this is a negative field offset
+#define FIELD_INDEX_MAX 0x8000
 
 struct fieldPathT {
     ::std::vector<u16> data;
@@ -100,7 +96,6 @@ struct fieldPathT {
     friend ::std::ostream& operator<<(::std::ostream& os, const fieldPathT& x);
 };
 
-/// Binding from an expanded pattern
 struct PatternBinding {
     fieldPathT field;
     unsigned rootIndex;
@@ -120,7 +115,6 @@ struct PatternBinding {
     friend ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x);
 };
 
-/// Helper class to construct MIR
 class MirBuilder {
     friend class ScopeHandle;
 
@@ -146,17 +140,12 @@ class MirBuilder {
     ::std::vector<VarState> slotStates;
     size_t firstTempIdx;
 
-    // A diverging match guard is generated once and then cloned for each
-    // alternative. Drops on that terminal path must update state for nested
-    // unwind cleanups without mutating the canonical state being cloned.
     bool frozenExitStateActive = false;
     ::std::map<unsigned int, VarState> frozenExitSlotStates;
     ::std::map<unsigned int, VarState> frozenExitArgStates;
 
-    /// Mapping between variable slots and MIR arguments (for when the argument is not destructuring)
     ::std::map<unsigned, unsigned> varArgMappings;
 
-    /// Re-mapped dropped flags (all flags in the vector are to be set when the key flag is set)
     ::std::map<unsigned, std::vector<unsigned>> dropFlagAliases;
 
     struct ScopeDef {
@@ -176,9 +165,6 @@ class MirBuilder {
     typedef std::pair<HIRPatternBinding::Type, MIRLValue> varAliasT;
     ::std::vector<varAliasT> variableAliases;
 
-    // LValue used only for the condition of `if`
-    // - Using a fixed temporary simplifies parts of lowering (scope related) and reduces load on
-    //   the optimiser.
     MIRLValue ifCondLval;
 
     MIRDropEmitter* dropEmitter = nullptr;
@@ -200,32 +186,26 @@ public:
         return resolve_;
     }
 
-    /// Check if the passed type is Box<T> and returns a pointer to the T type if so, otherwise nullptr
     const HIRTypeData* isTypeOwnedBox(const HIRTypeData* ty) const;
 
     class SavedAliases {
         friend class MirBuilder;
-        // Just remember which variables had aliases on them, as we want to clear anything added while saving.
+
         ::std::vector<bool> setAliases;
     };
 
-    /// Save the current state of aliases (see add_variable_alias)
     SavedAliases saveAliases() const;
 
     void restoreAliases(SavedAliases a);
 
-    // Variable aliases (used for match guards)
     void addVariableAlias(const Span& sp, unsigned idx, HIRPatternBinding::Type ty, MIRLValue lv);
 
     const varAliasT* getVariableAlias(const Span& sp, unsigned idx) const;
 
-    // - Values
     MIRLValue getVariable(const Span& sp, unsigned idx) const;
 
     MIRLValue newTemporary(const HIRTypeData* ty);
 
-    /// Emit a `for i in start..end { drop(arr[i]) }` loop (used when dropping the
-    /// shared remainder of a PartialArray state).
     void emitArrayElementDropLoop(const Span& sp, const MIRLValue& arrLv, size_t start, size_t end, unsigned int dropFlag);
     MIRLValue lvalueOrTemp(const Span& sp, const HIRTypeData* ty, MIRRValue val);
 
@@ -239,11 +219,11 @@ public:
 
     void setResult(const Span& sp, MIRRValue val);
     MIRRValue getResult(const Span& sp);
-    /// Obtains the result, unwrapping into a LValue (and erroring if not)
+
     MIRLValue getResultUnwrapLvalue(const Span& sp);
-    /// Obtains the result, copying into a temporary if required
+
     MIRLValue getResultInLvalue(const Span& sp, const HIRTypeData* ty, bool allowMissingValue = false);
-    /// Obtains a result in a param (or a lvalue)
+
     MIRParam getResultInParam(const Span& sp, const HIRTypeData* ty, bool allowMissingValue = false);
 
     MIRLValue getIfCond() const {
@@ -256,18 +236,16 @@ public:
         return getRvalInIfCond(sp, getResult(sp));
     }
 
-    // - Statements
-    // Push an assignment. NOTE: This also marks the rvalue as moved
     void pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bool updateDestState = true);
-    // Push a drop (likely only used by scope cleanup)
+
     void pushStmtDrop(const Span& sp, MIRLValue val, unsigned int dropFlag = ~0u);
-    // Push a drop without invoking the coroutine async-drop elaborator.
+
     void pushStmtDropRaw(const Span& sp, MIRLValue val, unsigned int dropFlag = ~0u);
-    // Push a shallow drop (for Box)
+
     void pushStmtDropShallow(const Span& sp, MIRLValue val, unsigned int dropFlag = ~0u);
-    // Push an inline assembly statement (NOTE: inputs aren't marked as moved)
+
     void pushStmtAsm(const Span& sp, MIRStatement::Data_Asm data);
-    // Push a setting/clearing of a drop flag
+
     void pushStmtSetDropflagVal(const Span& sp, unsigned int index, bool value);
     void pushStmtSetDropflagOther(const Span& sp, unsigned int index, unsigned int other);
     void pushStmtSetDropflagDefault(const Span& sp, unsigned int index);
@@ -278,7 +256,6 @@ public:
         dropEmitter = emitter;
     }
 
-    // - Block management
     bool blockActive() const {
         return blockActive_;
     }
@@ -288,10 +265,8 @@ public:
         return currentBlock;
     }
 
-    // Mark a value as initialised (used for Call, because it has to be done after the panic block is populated)
     void markValueAssigned(const Span& sp, const MIRLValue& val);
 
-    // Moves control of temporaries up to the specified scope (or to above it)
     void raiseTemporaries(const Span& sp, const MIRLValue& val, const ScopeHandle& scope, bool toAbove = false);
     void raiseTemporaries(const Span& sp, const MIRRValue& rval, const ScopeHandle& scope, bool toAbove = false);
 
@@ -300,8 +275,6 @@ public:
         size_t index;
     };
 
-    /// @brief Start saving code for later duplication (match guards)
-    /// @return Handle to the current save stack entry
     SaveCodeProto codeSaveStart();
 
     class SavedCode {
@@ -309,7 +282,6 @@ public:
         std::vector<unsigned> blocks;
     };
 
-    /// @brief Complete and finalise saved code
     SavedCode codeSaveEnd(SaveCodeProto h);
 
     class CloneMapper {
@@ -317,7 +289,6 @@ public:
         virtual MIRBasicBlockId updateBbRef(MIRBasicBlockId bbIdx) = 0;
     };
 
-    /// @brief Insert saved code, applying the supplied mapper
     void insertCloned(const Span& sp, const SavedCode& c, CloneMapper& mapper);
 
 private:
@@ -325,9 +296,8 @@ private:
     void markValueAssignedVariant(const Span& sp, const MIRLValue& val, unsigned int variantIndex);
 
     struct CodeSaveStackEnt {
-        /// Unique index to catch stack violations
         size_t index;
-        /// Basic blocks in the copied region
+
         std::vector<unsigned> blocks;
     };
 
@@ -346,64 +316,57 @@ public:
     unsigned int newDropFlag(bool defaultState);
     unsigned int newDropFlagAndSet(const Span& sp, bool setState);
     bool getDropFlagDefault(const Span& sp, unsigned int index);
-    /// Add a drop flag to be set when another is also set (used to rewrite drop flags after the fact)
+
     void dropFlagAlias(unsigned int oldIdx, unsigned int newIdx);
 
-    // --- Scopes ---
-    /// Scope controlling the state of defined variables
     ScopeHandle newScopeVar(const Span& sp);
-    /// Scope controlling the state of temporaries created within it
+
     ScopeHandle newScopeTemp(const Span& sp);
-    /// Scope for split code paths (e.g. `if`)
+
     ScopeHandle newScopeSplit(const Span& sp);
-    /// Scope for escapable code paths (e.g. `loop`)
+
     ScopeHandle newScopeLoop(const Span& sp);
-    /// Keep state changes made by an early exit out of saved guard code local
-    /// until `unfreezeScope` is called.
+
     ScopeHandle newScopeFreeze(const Span& sp);
 
-    /// Raises every variable defined in the source scope into the target scope
     void raiseAll(const Span& sp, ScopeHandle src, const ScopeHandle& target);
-    /// Drop all defined values in the scope (emits the drops if `cleanup` is set)
+
     void terminateScope(const Span& sp, ScopeHandle, bool cleanup = true);
-    /// Terminates a scope early (e.g. via return/break/...)
+
     void terminateScopeEarly(const Span& sp, const ScopeHandle&, bool loopExit = false);
-    /// Marks the end of a split arm (end match arm, if body, ...)
+
     void endSplitArm(const Span& sp, const ScopeHandle&, bool reachable, bool early = false);
     /// Terminates the current split early (TODO: What does this mean?)
     void endSplitArmEarly(const Span& sp);
-    /// Makes the exits merged by `condition` the entry state for the next arm
-    /// of `outer` (used for a failed match guard).
+
     void endSplitCondition(const Span& sp, const ScopeHandle& condition, const ScopeHandle& outer);
-    /// Stops isolating early exits through a freeze scope (see `newScopeFreeze`).
+
     void unfreezeScope(const Span& sp, const ScopeHandle&);
 
     const ScopeHandle& fcnScope() const {
         return fcnScope_;
     }
 
-    /// Schedule a local's value drop in the current variable scope.
     void scheduleVariableDrop(unsigned int idx);
-    /// Register a local's state in the current variable scope without scheduling its drop.
+
     void registerVariableState(unsigned int idx);
-    /// Schedule the drop of a local whose state is already registered.
+
     void scheduleRegisteredVariableDrop(unsigned int idx);
-    /// Schedule an argument's value drop in the current variable scope.
+
     void scheduleArgumentDrop(unsigned int idx);
-    /// Move a temporary's drop entry from `source` into the nearest variable scope.
+
     void moveTemporaryDropToVariableScope(const Span& sp, const MIRLValue& value, const ScopeHandle& source);
-    /// Move a local binding from its lexical block into the scope selected for a `super let`.
+
     void moveVariableToScope(const Span& sp, unsigned int idx, const ScopeHandle& target);
-    /// Drop a live value on the current control-flow path and mark it invalid.
+
     void dropLvalue(const Span& sp, const MIRLValue& value);
-    // Helper - Marks a variable/... as moved (and checks if the move is valid)
+
     void movedLvalue(const Span& sp, const MIRLValue& lv);
 
 private:
     enum class SlotType {
-        /// @brief Local variable (either a binding or a temporary, it matters not). Maps to `LValue::Local`
-        Local, // Local ~0u is return
-        /// Function argument. Maps to `LValue::Argument`
+        Local,
+
         Argument
     };
     const VarState& getSlotState(const Span& sp, unsigned int idx, SlotType type, const ScopeHandle* aboveScope = nullptr) const;
@@ -416,25 +379,19 @@ private:
     void terminateLoopEarly(const Span& sp, ScopeType::Data_Loop& sdLoop);
 
     void dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv);
-    /// Emit the drops a scope owns. `preserveStates` leaves the value states
-    /// alone, for a path that branches away: what it drops is dropped only on
-    /// that branch, so the states the fall-through sees must not change.
+
     void dropScopeValues(ScopeDef& sd, bool preserveStates = false);
     MIRUnwindAction makeUnwindAction(const Span& sp, const MIRLValue* consumedValue = nullptr);
     void pushDropTerminator(const Span& sp, MIRDropKind kind, MIRLValue val, unsigned int dropFlag);
-    /// Finalise a scope before it's fully destroyed. Doesn't emit destructors (already done by `drop_scope_values`)
+
     void completeScope(ScopeDef& sd);
 
 public:
-    // The type of an lvalue; with `stopWrapper`, the type at that wrapper.
-    // Types are interned, so the result is a plain persistent handle.
     HIRTypeRef valType(const Span& sp, const MIRLValue& val, const MIRLValue::Wrapper* stopWrapper = nullptr) const;
     bool lvalueIsCopy(const Span& sp, const MIRLValue& lv) const;
 
-    // Obtain the base fat poiner for a dst reference. Errors if it wasn't via a fat pointer
     MIRLValue getPtrToDst(const Span& sp, const MIRLValue& lv) const;
 
-    /// Get the set of currently valid (fully,optional,partial) variables
     class SavedActiveLocal {
         friend class MirBuilder;
         VarState state;
@@ -449,11 +406,8 @@ public:
 
     std::map<unsigned, SavedActiveLocal> getActiveLocals(const Span& sp, std::set<unsigned>& savedDropFlags) const;
 
-    // Calls `drop_value_from_state` on the value
     void dropActveLocal(const Span& sp, MIRLValue lv, const SavedActiveLocal& loc);
 
-    /// Emits the drops needed when unwinding from the current point without
-    /// changing the state used by the normal path.
     void emitUnwindCleanup(const Span& sp);
 };
 
@@ -481,7 +435,6 @@ SaveAndEditVal<T> saveAndEdit(T& dst, typename ::std::remove_reference<T&>::type
 
 using PatternDropOrder = HIRPatternBindingOrder;
 
-/// Wrapper interfae
 class MirConverter: public HIRExprVisitor {
 public:
     virtual void schedulePatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) = 0;
@@ -503,7 +456,7 @@ extern void MIRLowerHIRGetTypeValueForPath(
     MirBuilder& builder,
     const HIRTypeData* topTy,
     const MIRLValue& topVal,
-    const fieldPathT& fieldPath, // unsigned int field_path_ofs,
+    const fieldPathT& fieldPath,
     /*Out ->*/ HIRTypeRef& outTy,
     MIRLValue& outVal
 );

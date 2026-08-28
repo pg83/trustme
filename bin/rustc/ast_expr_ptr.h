@@ -18,7 +18,7 @@ public:
 
     ASTExprNodeP(ASTExprNode* node);
 
-    ASTExprNodeP(std::unique_ptr<ASTExprNode> node); //: m_ptr(node.release()) {}
+    ASTExprNodeP(std::unique_ptr<ASTExprNode> node);
 
     ASTExprNodeP(ASTExprNodeP&& x)
         : ptr(x.ptr)

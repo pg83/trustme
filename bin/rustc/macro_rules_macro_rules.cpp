@@ -2,7 +2,7 @@
 #include "macro_rules_macro_rules.h"
 
 #include "common.h"
-#include "hir_hir.h" // HIR::Crate
+#include "hir_hir.h"
 #include "ast_expr.h"
 #include "ast_crate.h"
 #include "wire_board.h"
@@ -20,12 +20,11 @@ using namespace stl;
 typedef std::map<unsigned, std::map<std::vector<unsigned>, unsigned>> loopCountsT;
 
 struct CapturedVal {
-    unsigned int numUses; // Number of times this var will be used
-    unsigned int numUsed; // Number of times it has been used
+    unsigned int numUses;
+    unsigned int numUsed;
     InterpolatedFragment frag;
 };
 
-// A single layer of the capture set; generated from macro_rules_capture.tu.
 #include "macro_rules_capture_tu.h"
 
 inline ::std::ostream& operator<<(::std::ostream& os, const CapturedVal& x) {
@@ -376,7 +375,7 @@ struct MacroExpandState {
     ::std::vector<tOffset> offsets;
     ::std::vector<unsigned int> iterations_;
 
-    const ::std::vector<MacroExpansionEnt>* curEnts; // For faster lookup.
+    const ::std::vector<MacroExpansionEnt>* curEnts;
 
     MacroExpandState(const ::std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings);
 
@@ -403,7 +402,7 @@ struct MacroExpander: public TokenStream {
     ParameterMappings mappings_;
     MacroExpandState state;
 
-    Token nextToken; // used for inserting a single token into the stream
+    Token nextToken;
     ::std::unique_ptr<TTStreamO> ttstream;
     ASTEdition sourceEdition;
     bool isMacroItem;
@@ -477,7 +476,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
             {
                 auto span = lex.tokenStartSpan(tok);
                 PUTBACK(tok, lex);
-                return InterpolatedFragment(ParsePath(lex, PATH_GENERIC_TYPE), std::move(span)); // non-expr mode
+                return InterpolatedFragment(ParsePath(lex, PATH_GENERIC_TYPE), std::move(span));
             }
         case MacroPatEnt::PAT_BLOCK:
             return InterpolatedFragment(InterpolatedFragment::BLOCK, ParseExprBlockNode(lex).release());
@@ -619,7 +618,7 @@ namespace {
 
     bool consumeTtAngle(TokenStreamRO& lex) {
         unsigned int level = (lex.next() == TOK_DOUBLE_LT ? 2 : 1);
-        // Seek until enouh matching '>'s are seen
+
         // TODO: Can expressions show up on this context?
         lex.consume();
         for (;;) {
@@ -655,9 +654,6 @@ namespace {
             } else {
             }
 
-            // Delimited token trees are opaque here. Operators inside them
-            // (notably `<<` in an array length) cannot close or open this
-            // generic argument list.
             if (lex.next() == TOK_PAREN_OPEN || lex.next() == TOK_SQUARE_OPEN || lex.next() == TOK_BRACE_OPEN) {
                 consumeTt(lex);
             } else {
@@ -1069,10 +1065,10 @@ namespace {
             do {
                 innerCont = true;
                 switch (lex.next()) {
-                    case TOK_STAR:      // Deref
-                    case TOK_DASH:      // Negate
-                    case TOK_EXCLAM:    // Invert
-                    case TOK_RWORD_BOX: // Box
+                    case TOK_STAR:
+                    case TOK_DASH:
+                    case TOK_EXCLAM:
+                    case TOK_RWORD_BOX:
                         lex.consume();
                         hasPrefix = true;
                         break;
@@ -1548,7 +1544,7 @@ namespace {
             lex.consume();
             return true;
         }
-        // Macro invocation
+
         // TODO: What about `union!` as a macro? Needs to be handled below
         if (mode == ItemConsumeMode::ItemFragment && ((lex.next() == TOK_IDENT && lex.nextTok().ident().name != "union") || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_DOUBLE_COLON)) {
             if (!consumePath(lex)) {
@@ -1740,8 +1736,7 @@ namespace {
                     return false;
                 }
                 break;
-            // const [unsafe] [extern] fn
-            // const FOO
+
             case TOK_RWORD_CONST:
                 lex.consume();
                 if (lex.next() == TOK_RWORD_UNSAFE) {
@@ -2039,7 +2034,6 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, c
     }
 
     if (matches.size() == 0) {
-        // ERROR!
         // TODO: Keep track of where each arm failed.
         TODO(sp, "No arm matched - " << failPos);
     } else {
@@ -2220,18 +2214,17 @@ Token MacroExpander::realGetToken() {
                 switch (e & ~NAMEDVALUE_VALMASK) {
                     default:
                         BUG(this->pointSpan(), "Unknown macro metavar - 0x" << std::hex << e);
-                    case NAMEDVALUE_TY_COUNT: { // `${count(VarName[, depth])}`
+                    case NAMEDVALUE_TY_COUNT: {
                         const auto value = e & NAMEDVALUE_VALMASK;
                         auto count = mappings_.getVariableCount(this->pointSpan(), state.iterations(), value & NAMEDVALUE_COUNT_IDXMASK, value >> NAMEDVALUE_COUNT_DEPTHSHIFT);
                         return Token(U128(count), CORETYPE_ANY);
                         break;
                     }
-                    case NAMEDVALUE_TY_IGNORE: { // `${ignore(VarName)}`
+                    case NAMEDVALUE_TY_IGNORE: {
                         break;
                     }
-                    case NAMEDVALUE_TY_MAGIC: // NAMEDVALUE_TY_MAGIC
+                    case NAMEDVALUE_TY_MAGIC:
                         switch (e) {
-                            // - XXX: Hack for $crate special name
                             case NAMEDVALUE_MAGIC_CRATE:
                                 if (crateName == "") {
                                     if (sourceEdition >= ASTEdition::Rust2018) {
@@ -2395,7 +2388,7 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
             offsets.pop_back();
             assert(offsets.size() == 0);
         }
-    } // while( m_offsets NONEMPTY )
+    }
 
     return nullptr;
 }
@@ -2485,13 +2478,13 @@ bool isTokenExpr(eTokenType tt) {
         return true;
     }
     switch (tt) {
-        case TOK_AMP:         // Borrow
-        case TOK_STAR:        // Deref
-        case TOK_DASH:        // Negate
-        case TOK_EXCLAM:      // Invert
-        case TOK_RWORD_BOX:   // Box
-        case TOK_PAREN_OPEN:  // Parenthesised
-        case TOK_SQUARE_OPEN: // Array
+        case TOK_AMP:
+        case TOK_STAR:
+        case TOK_DASH:
+        case TOK_EXCLAM:
+        case TOK_RWORD_BOX:
+        case TOK_PAREN_OPEN:
+        case TOK_SQUARE_OPEN:
 
         case TOK_RWORD_RETURN:
         case TOK_RWORD_BREAK:
@@ -2872,7 +2865,7 @@ struct RuleParseState {
                         ret.push_back(MacroPatEnt(lex.endSpan(ps), TOK_DOLLAR));
                         PUTBACK(tok, lex);
                         break;
-                    case TOK_RWORD_CRATE: // Not valid, as `$crate` already has meaning
+                    case TOK_RWORD_CRATE:
                         parseErrorUnexpected(lex, tok);
                     default:
                         if (!Token::typeIsRword(tok.type())) {
@@ -2896,7 +2889,7 @@ struct RuleParseState {
                             ty = MacroPatEnt::PAT_TT;
                         } else if (type == "pat") {
                             ty = lex.editionAfter(ASTEdition::Rust2021) ? MacroPatEnt::PAT_PAT : MacroPatEnt::PAT_PAT_PARAM;
-                        } else if (type == "pat_param") { // Added between 39 and 54, explicitly excludes or-patterns
+                        } else if (type == "pat_param") {
                             ty = MacroPatEnt::PAT_PAT_PARAM;
                         } else if (type == "ident") {
                             ty = MacroPatEnt::PAT_IDENT;
@@ -2935,8 +2928,7 @@ struct RuleParseState {
 
                         enum eTokenType joiner = TOK_NULL;
 
-                        GET_TOK(tok, lex); // Joiner or loop type
-                        // If the token is a loop type, then it can't be a joiner
+                        GET_TOK(tok, lex);
                         if (/*lex.edition_after(AST::Edition::Rust2018) &&*/ tok.type() == TOK_QMARK) {
                         } else if (tok.type() == TOK_PLUS || tok.type() == TOK_STAR) {
                         } else {
@@ -3221,7 +3213,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                             parseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
                         }
                 }
-                bool isOptional = (loopType != '+'); // Only '+' has to be entered
+                bool isOptional = (loopType != '+');
 
                 std::set<unsigned> controllingLoops;
                 for (const auto& v : varUsage) {
@@ -3234,9 +3226,6 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                     continue;
                 }
                 // TODO: Check that +/*/? matches for the controlling loops
-                //for(const auto& loop_idx : controlling_loops)
-                //{
-                //}
 
                 if (varUsagePtr) {
                     for (const auto& v : varUsage) {
@@ -3252,7 +3241,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                 auto ident = lex.getTokenCheck(TOK_IDENT).ident().name;
                 if (ident == "ignore") {
                     lex.getTokenCheck(TOK_PAREN_OPEN);
-                    lex.getTokenIf(TOK_DOLLAR); // 1.90 (2024 edition?) requires a $
+                    lex.getTokenIf(TOK_DOLLAR);
                     GET_TOK(tok, lex);
                     if (!(tok.type() == TOK_IDENT || Token::typeIsRword(tok.type()))) {
                         CHECK_TOK(tok, TOK_IDENT);
@@ -3271,7 +3260,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                     ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_IGNORE | ns->idx));
                 } else if (ident == "count") {
                     lex.getTokenCheck(TOK_PAREN_OPEN);
-                    lex.getTokenIf(TOK_DOLLAR); // 1.90 (2024 edition?) requires a $
+                    lex.getTokenIf(TOK_DOLLAR);
                     GET_TOK(tok, lex);
                     if (!(tok.type() == TOK_IDENT || Token::typeIsRword(tok.type()))) {
                         CHECK_TOK(tok, TOK_IDENT);
@@ -3695,7 +3684,6 @@ namespace {
                         }
                     }
                     if (ent.tok != TOK_NULL) {
-                        // NOTE: If the separator is also allowed after the list, then this can't just check for the separator
                         for (const auto& p : entryConds) {
                             auto v = ::makeVec1<SimplePatIfCheck>({MacroPatEnt::PAT_TOKEN, ent.tok});
                             v.insert(v.end(), p.begin(), p.end());
@@ -3907,7 +3895,6 @@ MacroRules::MacroRules(u32& id, RcString sourceCrate, ASTEdition edition)
     return os;
 }
 
-// Bodies of the generated local unions (see macro_rules_capture.tu).
 #include "macro_rules_capture_tu.cpp"
 
 ParameterMappings::ParameterMappings()
@@ -4154,7 +4141,7 @@ auto RuleParseState::openLoop() -> unsigned {
 }
 
 auto RuleParseState::closeLoop() -> void {
-    assert(!loopStack.empty()); // Impossible given that `()` must be matched in a token tree
+    assert(!loopStack.empty());
     loopStack.pop_back();
 }
 

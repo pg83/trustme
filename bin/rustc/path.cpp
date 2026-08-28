@@ -2,8 +2,8 @@
  * Generic representation of a filesystem path
  */
 #include "path.h"
-#include <unistd.h> // getcwd/chdir
-#include <limits.h> // PATH_MAX
+#include <unistd.h>
+#include <limits.h>
 
 FsPath::FsPath(const char* s)
     : str_(s)

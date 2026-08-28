@@ -2,13 +2,13 @@
 #include "synext_macro.h"
 
 #include "common.h"
-#include "synext.h" // for Expand_BareExpr
+#include "synext.h"
 #include "hir_asm.h"
 #include "hir_hir.h"
-#include "ast_expr.h" // for ExprNode_*
+#include "ast_expr.h"
 #include "settings.h"
 #include "ast_crate.h"
-#include "parse_lex.h" // For Codepoint
+#include "parse_lex.h"
 #include "expand_cfg.h"
 #include "wire_board.h"
 #include "parse_common.h"
@@ -521,7 +521,7 @@ namespace {
         const char* traitName;
 
         // TODO: Support case where this hasn't been edited (telling the formatter that it has nothing to apply)
-        /// Options
+
         FmtArgs args;
     };
 
@@ -574,7 +574,7 @@ namespace {
             u32 outval = ((v1 & 0x07) << 18) | ((e1 & 0x3F) << 12) | ((e2 & 0x3F) << 6) | ((e3 & 0x3F) << 0);
             return outval;
         } else {
-            UNREACHABLE(); // Should be impossible.
+            UNREACHABLE();
         }
     }
 
@@ -612,7 +612,7 @@ namespace {
                     s++;
                     if (*s != '}') {
                         // TODO: Error? Warning?
-                        s--; // Step backwards, just in case
+                        s--;
                     }
                     curLiteral += '}';
                 } else {
@@ -656,15 +656,12 @@ namespace {
                         index = getNamed(RcString::newInterned(start, s - start));
                     }
                 } else {
-                    // Leave (for now)
-                    // - If index is ~0u at the end of this block, it's set to the next arg
-                    // - This allows {:.*} to format correctly (taking <prec> then <arg>)
                 }
 
                 skipWhitespace();
 
                 if (*s == ':') {
-                    s++; // eat ':'
+                    s++;
 
                     {
                         int nextCI;
@@ -703,7 +700,7 @@ namespace {
                     } else {
                     }
 
-                    if (*s == '0' && s[1] != '$') { // Special case `0$` to be an argument index, instead of zero pad
+                    if (*s == '0' && s[1] != '$') {
                         args.zeroPad = true;
                         s++;
                     } else {
@@ -1068,8 +1065,7 @@ namespace {
                 H::argumentList(toks, fragments, crate);
             }
             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
-        } else // if(is_simple)
-        {
+        } else {
             pushPath(toks, crate, {"fmt", "Arguments", "new_v1_formatted"});
             toks.push_back(TokenTree(TOK_PAREN_OPEN));
             {
@@ -1078,7 +1074,7 @@ namespace {
                 toks.push_back(TokenTree(TOK_COMMA));
 
                 // TODO: Fragments to format
-                // - The format stored by trustme doesn't quite work with how rustc (and fmt::rt::v1) works
+
                 H::argumentList(toks, fragments, crate);
                 toks.push_back(TokenTree(TOK_COMMA));
 
@@ -1206,7 +1202,7 @@ namespace {
                 toks.push_back(TokenTree(TOK_SQUARE_CLOSE));
             }
             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
-        } // if(is_simple) else
+        }
 
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
@@ -2326,7 +2322,6 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
             toks.push_back(Token(TOK_EXCLAM));
             toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
             toks.push_back(Token(TOK_BRACE_OPEN));
-            // Auto-generated message
             toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
             toks.push_back(Token(TOK_EXCLAM));
             toks.push_back(Token(TOK_PAREN_OPEN));

@@ -6,7 +6,7 @@
 #include "trans_target.h"
 #include "hir_encoded_literal.h"
 
-#include <algorithm> // ::std::find
+#include <algorithm>
 
 void MIRTypeResolve::fmtPos(::std::ostream& os, bool includePath /*=false*/) const {
     if (includePath) {
@@ -563,8 +563,6 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::typeNameForSimplePath(const HIRSi
         if (!rv.empty()) {
             rv += "::";
         }
-        // A closure is a generated type named `closure#<item>_<n>`; rustc
-        // names it after the item that holds it instead.
         auto text = FMT(components[i]);
         if (text.compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0) {
             auto owner = text.substr(strlen(CLOSURE_PATH_PREFIX));
@@ -813,20 +811,10 @@ namespace {
     };
 }
 
-#if 1 // Alternate algorithm
+#if 1
 void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& state, const MIRFunction& fcn, size_t bbIdx, size_t stmtIdx, const MIRLValue& lv, const ::std::vector<size_t>& blockOffsets, const ::std::vector<bool>& useBitmap, ValueLifetime& vl);
 
-// ----------
 // TODO: Improved algorithm
-// 1. Locate loops (such that a block can be checked for if it's part of a loop, relative to another block)
-//  - This can also be used to determine if one bb is before another
-// 2. Locate assignment operations (and inline assembly outputs) of locals
-// 3. Run forwards until:
-// - a jump to a visited block (inner loop)
-// - a jump before the first known usage
-// - a jump after the last known usage
-// - an asignment of the value
-// - a use-by-move
 
 MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const ::std::vector<bool>* mask /*=nullptr*/) {
     size_t statementCount = 0;
@@ -834,9 +822,9 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
     blockOffsets.reserve(fcn.blocks.size());
     for (const auto& bb : fcn.blocks) {
         blockOffsets.push_back(statementCount);
-        statementCount += bb.statements.size() + 1; // +1 for the terminator
+        statementCount += bb.statements.size() + 1;
     }
-    blockOffsets.push_back(statementCount); // Store the final limit for later code to use.
+    blockOffsets.push_back(statementCount);
 
     ::std::vector<ValueLifetime> slotLifetimes(fcn.locals.size(), ValueLifetime(statementCount));
 
@@ -915,22 +903,13 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
     return rv;
 }
 
-void MIRHelperGetLifetimesDetermineValueLifetime(
-    MIRTypeResolve& localMirRes,
-    const MIRFunction& fcn,
-    size_t bbIdx,
-    size_t stmtIdx, // First statement in which the value is valid (after the assignment)
-    const MIRLValue& lv,
-    const ::std::vector<size_t>& blockOffsets,
-    const ::std::vector<bool>& useBitmap,
-    ValueLifetime& vl
-) {
+void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& localMirRes, const MIRFunction& fcn, size_t bbIdx, size_t stmtIdx, const MIRLValue& lv, const ::std::vector<size_t>& blockOffsets, const ::std::vector<bool>& useBitmap, ValueLifetime& vl) {
     struct State {
         const ::std::vector<size_t>& blockOffsets;
         ValueLifetime& outVl;
 
         ::std::vector<unsigned int> bbHistory;
-        size_t lastReadOfs; // Statement index
+        size_t lastReadOfs;
         bool isBorrowed_;
 
         State(const ::std::vector<size_t>& blockOffsets, ValueLifetime& vl, size_t initBbIdx, size_t initStmtIdx)
@@ -1303,7 +1282,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
     ::std::vector<::std::pair<size_t, State>> postCheckList;
 
     // TODO: Have a bitmap of visited statements. If a visted statement is hit, stop the current state
-    // - Use the same rules as loopback.
 
     runner.runBlock(bbIdx, stmtIdx, State(blockOffsets, vl, bbIdx, stmtIdx));
 
@@ -1363,13 +1341,11 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
 
 MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug) {
     // TODO: If a value is borrowed, assume it lives forevermore
-    // - Ideally there would be borrow tracking to determine its actual required lifetime.
-    // - NOTE: This doesn't impact the borrows themselves, just the borrowee
 
     // TODO: Add a statement type StorageDead (or similar?) that indicates the point where a values scope ends
 
     struct Position {
-        size_t pathIndex = 0; // index into the block path.
+        size_t pathIndex = 0;
         unsigned int stmtIdx = 0;
 
         bool operator==(const Position& x) const {
@@ -1421,7 +1397,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
     blockOffsets.reserve(fcn.blocks.size());
     for (const auto& bb : fcn.blocks) {
         blockOffsets.push_back(statementCount);
-        statementCount += bb.statements.size() + 1; // +1 for the terminator
+        statementCount += bb.statements.size() + 1;
     }
 
     ::std::vector<ValueLifetime> temporaryLifetimes(fcn.temporaries.size(), ValueLifetime(statementCount));
@@ -1446,8 +1422,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 
         bool tryMerge(const State& valState) const {
             // TODO: This logic isn't quite correct. Just becase a value's existing end is already marked as valid,
-            // doesn't mean that we have no new information.
-            // - Wait, doesn't it?
+
             auto tryMergeLft = [&](const ProtoLifetime& lft, const ::std::vector<unsigned int>& seen) -> bool {
                 if (lft.isEmpty()) {
                     return false;
@@ -1518,7 +1493,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         todoQueue.pop_back();
         state.setCurStmt(bbIdx, 0);
 
-        // Fill alive time in the bitmap
         // TODO: Maybe also store the range (as a sequence of {block,start,end})
         auto addLifetimeS = [&](State& valState, const MIRLValue& lv, const Position& start, const Position& end) {
             assert(start.pathIndex <= end.pathIndex);
@@ -1536,7 +1510,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                 return;
             }
 
-            // Fill lifetime map for this temporary in the indicated range
             bool didSet = false;
             unsigned int j = start.stmtIdx;
             unsigned int i = start.pathIndex;
@@ -1586,10 +1559,8 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
             if (!bbMemoryEnt.hasState()) {
             } else if (bbMemoryEnt.tryMerge(newState)) {
             } else {
-                // Skip
                 // TODO: Acquire from the target block the actual end of any active lifetimes, then apply them.
-                // - For all variables currently active, check if they're valid in the first statement of the target block.
-                // - If so, mark as valid at the end of the current block
+
                 auto bmIdx = blockOffsets[newBbIdx];
                 Position curPos;
                 curPos.pathIndex = valState.blockPath.size() - 1;

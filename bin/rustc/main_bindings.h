@@ -16,7 +16,6 @@ namespace stl {
 class HIRTypeInterner;
 class ExpandRegistry;
 
-/// Parse a crate from the given file
 extern ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, ::std::string mainfile, ASTEdition edition);
 
 extern void ExpandInit(ExpandRegistry& registry);

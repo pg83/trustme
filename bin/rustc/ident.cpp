@@ -1,6 +1,6 @@
 #include "ident.h"
 
-#include "common.h" // vector print
+#include "common.h"
 
 #include <std/mem/obj_pool.h>
 

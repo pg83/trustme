@@ -55,7 +55,6 @@ namespace {
             case Ent::PAT_PATH:
             case Ent::PAT_TYPE:
                 if (nextIsFragment) {
-                    // A block is delimited, so it cannot extend the type.
                     return next.type == Ent::PAT_BLOCK;
                 }
                 switch (tt) {

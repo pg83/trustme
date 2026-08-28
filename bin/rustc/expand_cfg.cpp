@@ -1,7 +1,7 @@
 #include "expand_cfg.h"
 
 #include "synext.h"
-#include "ast_expr.h" // Needed to clear a ExprNodeP
+#include "ast_expr.h"
 #include "settings.h"
 #include "ast_attrs.h"
 #include "ast_crate.h"
@@ -105,12 +105,10 @@ void CfgParseOption(const ::std::string& spec, ::std::string& name, bool& hasVal
 }
 
 bool CfgSetCheckSpec(Settings& settings, const ::std::string& spec, ::std::string& error) {
-    // Accepted for cargo compatibility; expectations are not checked.
     return true;
 }
 
 void CfgSetLintLevel(Settings& settings, ::std::string name, CfgLintLevel level) {
-    // `forbid` cannot be lifted later, and a cap never raises a level.
     auto it = settings.lintLevels.find(name);
     if (it != settings.lintLevels.end() && it->second == CfgLintLevel::Forbid) {
         return;
@@ -143,8 +141,6 @@ namespace {
     }
 
     bool checkCfgInner1(const CfgState& cfg, const RcString& name, TokenStream& lex) {
-        // Some compiler-generated cfg streams have no source parent.  They do
-        // not need a diagnostic span unless check-cfg is actually enabled.
         Token tok;
         switch (lex.lookahead(0)) {
             case TOK_EQUAL: {
@@ -535,7 +531,6 @@ auto CCfgHandler::stage() const -> AttrStage {
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
     if (!checkCfg(*wb.settings, sp, mi)) {
-        // Remove all items (can't remove the module)
         crate.rootModule_.items.clear();
     }
 }

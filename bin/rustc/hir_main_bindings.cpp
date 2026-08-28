@@ -5,7 +5,7 @@
 #include "hir_expr.h"
 #include "hir_visitor.h"
 #include "hir_expr_state.h"
-#include "hir_typeck_monomorph.h" // monomorphise_path_needed
+#include "hir_typeck_monomorph.h"
 #include "hir_serialise_lowlevel.h"
 #include "macro_rules_macro_rules.h"
 
@@ -1699,8 +1699,8 @@ auto HirDeserialiser::deserialiseMacropatent() -> ::MacroPatEnt {
                 return deserialiseMacropatent();
             });
             break;
-        case ::MacroPatEnt::PAT_TT:  // :tt
-        case ::MacroPatEnt::PAT_PAT: // :pat
+        case ::MacroPatEnt::PAT_TT:
+        case ::MacroPatEnt::PAT_PAT:
         case ::MacroPatEnt::PAT_PAT_PARAM:
         case ::MacroPatEnt::PAT_IDENT:
         case ::MacroPatEnt::PAT_PATH:
@@ -4531,8 +4531,6 @@ auto HirSerialiser::serialise(const HIRStatic& item) -> void {
     if (item.params.isGeneric()) {
         serialise(item.value);
     }
-    // NOTE: Value not stored (What if the static is generic? It can't be.)
-    // - Need to store if the item was from a const (special linkage?)
     if (item.saveLiteral) {
         serialise(item.valueRes);
     }
@@ -4689,8 +4687,6 @@ auto HirSerialiser::serialise(const HIRTrait& item) -> void {
     auto _ = out.openObject("HIR::Trait");
 
     serialiseGenerics(item.params);
-    // Kept as one byte for compatibility with metadata written before
-    // the fundamental bit was represented in HIR.
     out.writeU8((item.isMarker ? 1u : 0u) | (item.isFundamental ? 2u : 0u) | (item.isCoinductive ? 4u : 0u) | (item.isConst ? 8u : 0u) | (item.skipArrayDuringMethodDispatch ? 16u : 0u) | (item.skipBoxedSliceDuringMethodDispatch ? 32u : 0u) | (item.mustUse ? 64u : 0u));
     serialiseStrmap(item.types);
     serialiseStrmap(item.values);

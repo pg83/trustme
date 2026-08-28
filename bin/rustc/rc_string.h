@@ -1,15 +1,10 @@
 #pragma once
 
-#include <cstring>
-#include <ostream>
 #include "common.h"
 
-/// An interned string: a u32 id into the process-wide intern table.
-/// Construction interns (xxh128-keyed open-addressing table, data
-/// zero-terminated in the interner's ObjPool), so copies are trivial,
-/// equality is an id compare and c_str() is a pointer load. ord() reads
-/// the table and stays lexicographic: RcString keys ordered maps whose
-/// iteration order leaks into the output.
+#include <cstring>
+#include <ostream>
+
 class RcString {
     u32 id;
 
@@ -51,7 +46,6 @@ public:
 
     char back() const;
 
-    /// The first xxh128 half from the intern table; free to read, content-based.
     u64 contentHash() const;
 
     u32 rawId() const {

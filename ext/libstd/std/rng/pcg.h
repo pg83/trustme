@@ -16,7 +16,6 @@ namespace stl {
         u64 nextU64() noexcept;
 
         u32 uniformBiased(u32 n) noexcept {
-            // https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
             return ((u64)nextU32() * (u64)n) >> 32;
         }
 

@@ -12,14 +12,14 @@
 #include "trans_mangling.h"
 #include "trans_allocator.h"
 #include "trans_trans_list.h"
-#include "hir_typeck_common.h" // monomorph
-#include "hir_typeck_static.h" // StaticTraitResolve
+#include "hir_typeck_common.h"
+#include "hir_typeck_static.h"
 #include "hir_conv_main_bindings.h"
 
 #include <std/alg/defer.h>
 
 #include <deque>
-#include <algorithm> // find_if
+#include <algorithm>
 #include <unordered_set>
 
 using namespace stl;
@@ -42,8 +42,6 @@ namespace {
 }
 
 namespace {
-    /// The one place a generated body is handed to a function: the pointer
-    /// takes ownership of the `MIRFunction`, which outlives this scope.
     MIRFunctionPointer generatedBody(MIRFunction mir = MIRFunction()) {
         return MIRFunctionPointer(new MIRFunction(mv$(mir)));
     }
@@ -207,9 +205,6 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
     impl.type = ty;
     impl.methods.insert(::std::make_pair(RcString("clone"), HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fcn)}));
 
-    // `clone_from` is the trait's own default body -- clone the source, drop
-    // what the destination held, and move the clone in. A generated impl is
-    // named by the caller like any other, so it carries its own copy.
     if (state.transList.autoCloneFromImpls.count(ty)) {
         MIRFunction fromMir;
         auto dst = MIRLValue::newDeref(MIRLValue::newArgument(0));
@@ -471,9 +466,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             MIRLValue lvPtr;
             switch (fcnDef.receiver) {
                 case HIRFunction::Receiver::Value: {
-                    // By-value trait object dispatch
-                    // - Receiver should be a `&move` (BUT, does the caller know this?)
-                    // - MIR Cleanup should fix that (after monomoprh)
                     auto& selfTy = newFcn.args.front().second;
                     selfTy = crate.types.borrow(HIRBorrowType::Owned, selfTy);
                     lvPtr = builder.addLocal(crate.types.borrow(HIRBorrowType::Owned, crate.types.unit()));
@@ -489,8 +481,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 } break;
                 case HIRFunction::Receiver::Box: {
                     // TODO: What is the real reciver here? (for the MIR)
-                    // - the `self` type is `Box<dyn ThisTrait>`, so need to deref through that to the right type
-                    // - Need to make a new receiver (convert `Box<dyn ThisTrait>` into `Box<()>`)
+
                     auto gpath = newFcn.args.front().second->as_Path().path.data.as_Generic().clone();
                     gpath.params.types.at(0) = crate.types.unit();
                     auto ty = crate.types.path(mv$(gpath), newFcn.args.front().second->as_Path().binding.clone());
@@ -558,7 +549,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             } else if (traitPath.path == state.resolve.langFnOnce()) {
                 offset = 2;
             } else {
-                offset = 3; // Wait, is this reachable?
+                offset = 3;
             }
 
             if (const auto* te = type->opt_NamedFunction()) {
@@ -658,7 +649,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             ::std::vector<HIRTypeRef> tupleTys;
             tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize));
             tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize));
-            tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize)); // fn
+            tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize));
             auto vtableTy = crate.types.tuple(std::move(tupleTys));
 
             const auto* repr = TargetGetTypeRepr(sp, state.resolve, vtableTy);
@@ -1032,7 +1023,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                             builder.ensureOpen();
                                             targets.push_back(builder.mir.blocks.size() - 1);
                                             // TODO: Monomorphise and check
-                                            //if( state.resolve.type_needs_drop_glue(sp, repr->fields[i].ty) )
+
                                             {
                                                 builder.pushStmtDrop(fldLv.clone());
                                             }
@@ -1164,12 +1155,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 }
 
 namespace {
-    // Translation paths are assembled after inference and monomorphisation.
-    // A nominal type can therefore arrive through an older, structurally
-    // equivalent ASTType* whose path binding is still Unbound.  rustc's Ty
-    // carries the ADT DefId as part of the nominal type and cannot represent
-    // that state.  Restore the equivalent invariant at the translation
-    // boundary instead of teaching codegen to accept missing metadata.
     struct BindTranslationNominals final: public HIRVisitor {
         const HIRCrate& crate;
 
@@ -1452,8 +1437,6 @@ namespace {
             case HIRValueItem::TAG_Constant: {
                 const auto& e = *vi.as_Constant();
                 if (isVisible) {
-                    // Visible constants need their relocations added as roots
-                    // - Can't add this logic to `Trans_Enumerate_FillFrom_Literal` as it's used by non-public enumeration
                     for (const auto& r : e.valueRes.relocations) {
                         if (r.p) {
                             state.rv.roots.push_back(r.p->clone());
@@ -1474,8 +1457,7 @@ namespace {
                 }
                 if (isVisible && !e.params.isGeneric()) {
                     // HACK: Refuse to emit unused generated statics
-                    // - Needed because all items are visited (regardless of
-                    // visibility)
+
                     if (e.type->is_Infer()) {
                         break;
                     }
@@ -1605,9 +1587,6 @@ namespace {
             auto cbMonomorph2 = MonomorphStatePtr(state.crate.types, nullptr, &implParams, nullptr);
 
             // TODO: Only emit impls if the type is going to be visible to downstream crates
-            // - But how to tell that? What if the type is exposed via `-> impl Foo`?
-            // - Lazy (wrong) version would be to not emit if the type is private - but private types can be leaked
-            //   - Could flag leaked private types in a previous pass?
 
             const auto& trait = resolve.hirCrate().getTraitByPath(sp, traitPath);
             for (const auto& vi : trait.values) {
@@ -1928,7 +1907,6 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
         if (ty.second) {
             continue;
         }
-        // TraitObject and Slice flag as needing drop glue... but don't actually get it generated
         if (ty.first->is_TraitObject() || ty.first->is_Slice()) {
             continue;
         }
@@ -1960,10 +1938,6 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
         newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
     }
 
-    // Drop terminators enumerate their type, not a function path. Keep every
-    // exact region-bearing glue/method variant already generated for a value
-    // type or explicit MIR drop; its body may observe that exact type through
-    // TypeId. A type seen only behind a borrow does not need a drop body.
     for (const auto& entry : list.functions) {
         const auto* type = implicitDropType(entry.first, state.resolve.langDrop());
         if (type && (newList.hasType(type, false) || newList.dropGlue.count(type) != 0)) {
@@ -2165,8 +2139,8 @@ namespace {
         void visitType(const HIRTypeData* ty, Mode mode = Mode::Normal);
 
         void __attribute__((noinline)) visitFunction(const HIRPath& path, const HIRFunction& fcn, const TransParams& pp);
-    }; // struct TypeVisitor
-} // namespace <empty>
+    };
+}
 
 void TransEnumerateTypes(EnumState& state) {
     Span sp;
@@ -2194,7 +2168,7 @@ void TransEnumerateTypes(EnumState& state) {
         }
         state.fcnsToTypeVisit.clear();
         // TODO: Similarly restrict revisiting of statics.
-        // - Challenging, as they're stored as a std::map
+
         for (const auto& ent : state.rv.statics) {
             assert(ent.second->ptr);
             const auto& stat = *ent.second->ptr;
@@ -2216,7 +2190,7 @@ void TransEnumerateTypes(EnumState& state) {
                 ::std::vector<HIRTypeRef> tupleTys;
                 tupleTys.push_back(state.crate.types.primitive(HIRCoreType::Usize));
                 tupleTys.push_back(state.crate.types.primitive(HIRCoreType::Usize));
-                tupleTys.push_back(state.crate.types.primitive(HIRCoreType::Usize)); // fn
+                tupleTys.push_back(state.crate.types.primitive(HIRCoreType::Usize));
                 auto vtableTy = state.crate.types.tuple(std::move(tupleTys));
                 tv.visitType(ty);
                 tv.visitType(vtableTy);
@@ -2241,9 +2215,6 @@ void TransEnumerateTypes(EnumState& state) {
             tv.visitType(ty);
             tv.visitType(state.crate.types.path(HIRPath(HIRGenericPath(vtableTySpath, mv$(vtableParams))), &vtableRef));
 
-            // If this is for a function pointer, visit all arguments
-            // - `auto_impls.cpp` will generate a vtable shim for it (which requires argument types to be fully known)
-            // NOTE: Assumes that the trait is one of the Fn* traits (doesn't matter if it isn't here)
             if (const auto* te = ty->opt_Function()) {
                 for (const auto& t : te->argTypes) {
                     tv.visitType(t);
@@ -2262,10 +2233,6 @@ void TransEnumerateTypes(EnumState& state) {
         for (const auto& ty : state.rv.autoCloneImpls) {
             tv.visitType(ty);
         }
-        // A tuple struct or tuple variant used as a function value has its
-        // wrapper generated by codegen, so the type it builds is reachable only
-        // through this list. Without it the wrapper names a type that was never
-        // emitted.
         constructorsVisited = state.rv.constructors.size();
         for (const auto& path : state.rv.constructors) {
             if (path.path.components().size() > 1) {
@@ -2314,7 +2281,6 @@ void TransEnumerateTypes(EnumState& state) {
 }
 
 namespace {
-// Definitions generated from trans_ent_ptr.tu.
 #include "trans_ent_ptr_tu.h"
 
     bool pathAlreadyEnumerated(const EnumState& state, const HIRPath& path) {
@@ -2463,8 +2429,6 @@ namespace {
                 if (pe->item == "vtable#") {
                     return EntPtr::make_AutoGenerate({});
                 }
-                // - Auto-generated impl (the only trait impl was a bound)
-                //  > Need to check if the trait is impled bounded
                 bool foundBound = false;
                 bool foundImpl = false;
                 resolve.findImpl(sp, pe->trait.path, pe->trait.params, pe->type, [&](auto implRef, SolverCertainty) -> bool {
@@ -2482,7 +2446,7 @@ namespace {
             }
             case TypeckValuePtr::TAG_Function: {
                 auto& f = ent.as_Function();
-                // Check for trait provided bodies
+
                 // - They need a little hack to ensure that monomorph is run
                 if (const auto* pe = path.data.opt_UfcsKnown()) {
                     const auto& traitRef = crate.getTraitByPath(sp, pe->trait.path);
@@ -2589,7 +2553,6 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 return;
             }
             if (pathMono.data.is_Generic()) {
-                // Leave generation of struct/enum constructors to codgen
                 // TODO: Add to a list of required constructors
                 state.rv.constructors.insert(mv$(pathMono.data.as_Generic()));
             } else if (pathMono.data.is_UfcsInherent() && pathMono.data.as_UfcsInherent().item == "#type_id") {
@@ -2636,7 +2599,6 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                         BUG(sp, "Unhandled magic clone in enumerate - " << innerTy);
                     }
                 }
-                // Add this type to a list of types that will have the impl auto-generated
                 state.rv.autoCloneImpls.insert(innerTy);
                 if (pe.item == "clone_from") {
                     state.rv.autoCloneFromImpls.insert(innerTy);
@@ -3142,7 +3104,6 @@ void TransEnumerateFillFromStatic(EnumState& state, const HIRStatic& item, Trans
     outStat.pp = mv$(pp);
 }
 
-// Bodies of the generated local unions (see trans_ent_ptr.tu).
 #include "trans_ent_ptr_tu.cpp"
 
 State::State(const WireBoard& wb, HIRCrate& crate, const TransList& transList)

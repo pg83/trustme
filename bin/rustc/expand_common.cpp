@@ -2,13 +2,13 @@
 
 #include "synext.h"
 #include "ast_ast.h"
-#include "hir_hir.h" // For macro lookup
+#include "hir_hir.h"
 #include "ast_expr.h"
 #include "settings.h"
 #include "ast_crate.h"
 #include "expand_cfg.h"
 #include "wire_board.h"
-#include "parse_common.h" // For reparse from macros
+#include "parse_common.h"
 #include "main_bindings.h"
 #include "parse_ttstream.h"
 #include "resolve_common.h"
@@ -219,12 +219,6 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
                         auto lex = ProcMacroInvoke(sp, wb, crate, this->macPath, attr.data(), attrs, vis, path.nodes.back(), i);
                         if (lex) {
                             // TODO: `derive_where` returns its own attribute invocation in the output, between two other additions
-                            //   > This seems to so the derive (first attribute) can see the trait list? (does trustme handle that properly? I think so)
-                            // - Could parse, and the locate the first matching item (same name?) and merge/filter its attributes
-                            // - Should the rest of the attributes be applied
-                            // - Tag the item (or item-range?) to stop it being able to invoke this macro again?
-                            //  > OR, Should the derive macro be consuming the attribute?
-                            // QUERY: Is it valid for there to be multiple items generated from an attribute proc macro?
 
                             i = ASTItem::make_None({});
                             lex->parseState().module = &mod;
@@ -270,7 +264,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
     }
     if (!found) {
         // TODO: Create no-op handlers for a whole heap of attributes
-        // - There's a LOT
+
         //TODO(sp, "Unknown attribute #[" << a.name() << "]");
     }
 }
@@ -1144,7 +1138,7 @@ void Expand_Impl(const ExpandState& es, ASTPath modpath, ASTModule& mod, ASTImpl
         auto i = std::move(impl.items()[idx]);
 
         // TODO: Make a path from the impl definition? Requires having the impl def resolved to be correct
-        // - Does it? the namespace is essentially the same. There may be issues with wherever the path is used though
+
         // TODO: UFCS path, or different method
         ASTAbsolutePath path("", {"", i.name});
 
@@ -1258,10 +1252,9 @@ void Expand_ExternBlock(const ExpandState& es, ASTModule& mod, ASTExternBlock& b
                     auto ttl = ExpandMacro(es, mod, miOwned);
                     if (ttl) {
                         // TODO: What if this attribute adds new items? Or if it changes the type?
-                        // - AttrStage::Post doesn't
+
                         ExpandAttrs(es, attrs, AttrStage::Post, path, mod, idx, vis, dat);
 
-                        // Re-parse tt
                         // TODO: All new items should be placed just after this?
                         auto ipos = block.items().begin() + idx;
                         while (!ttl->getTokenIf(TOK_EOF)) {
@@ -1286,10 +1279,6 @@ void Expand_ExternBlock(const ExpandState& es, ASTModule& mod, ASTExternBlock& b
 }
 
 void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, unsigned int firstItem) {
-    // Item order cannot affect name resolution.  In particular, a `use`
-    // preceding an `extern crate` can be inspected while looking up a macro.
-    // Crates from the initial AST were normalised by ASTCrate::loadExterns;
-    // do the same up front for modules and items created by macro expansion.
     ExpandModExternCrates(es.wb, es.crate, modpath, mod, firstItem);
 
     // TODO: Pre-parse all macro_rules invocations into items?
@@ -1537,7 +1526,6 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
             case ASTItem::TAG_Crate: {
                 auto& e = dat.as_Crate();
                 if (e.name != "") {
-                    // Can't recurse into an `extern crate`
                     if (es.crate.externCrates.count(e.name) == 0) {
                         e.name = es.crate.loadExternCrate(*es.wb.settings, i.span, e.name);
                     }
@@ -1856,7 +1844,7 @@ void Expand_Mod_Early(const WireBoard& wb, ASTCrate& crate, ASTModule& mod, std:
 
             } else if (i->data.is_Macro()) {
                 // TODO: `#[macro_export] macro foo { ... }` DOESN'T move the item to the root
-                // - Instead, it should add an alias? Or just tag for export
+
                 i->data.as_Macro()->exported = true;
             } else {
                 ERROR(i->span, E0000, "#[macro_export] on non-macro_rules - " << i->data.tagStr());
@@ -1990,8 +1978,6 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
             }
         } while (mods.size() > 0);
 
-        // - Exported macros imported by the root (is this needed?)
-        // - Re-exported macros (ignore proc macros for now?)
         for (const auto& mac : crate.rootModule_.macroImports) {
             if (mac.isPub) {
                 if (!mac.ref.is_MacroRules()) {
@@ -2215,7 +2201,7 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
     }
 
     // TODO: macro_rules! invocations within the expression list influence this.
-    // > Solution: Defer creation of the local module until during expand.
+
     if (node.localMod) {
         ExpandMod(this->expandState, node.localMod->path(), *node.localMod);
         modItemCount = node.localMod->items.size();
@@ -2381,11 +2367,7 @@ auto CExpandExpr::visit(ASTExprNodeFlow& node) -> void {
         v->setSpan(node.span());
         v = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathFromResidualFromResidual), ::makeVec1(std::move(v))));
         v->setSpan(node.span());
-        replacement = ASTExprNodeP(new ASTExprNodeFlow(
-            (tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
-            (tryStack.empty() ? RcString("") : tryStack.back()),
-            std::move(v)
-        ));
+        replacement = ASTExprNodeP(new ASTExprNodeFlow((tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), (tryStack.empty() ? RcString("") : tryStack.back()), std::move(v)));
         replacement->setSpan(node.span());
     }
 }
@@ -2671,7 +2653,7 @@ auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
 
         auto pat = v.lower(node.slot);
         if (pat.bindings().size() > 0) {
-            assert(pat.bindings().size() == 1); // The above code shouldn't be making double bindings
+            assert(pat.bindings().size() == 1);
             assert(!node.slot);
             assert(v.slots.front().second);
             node.slot = std::move(v.slots.front().second);
@@ -2733,10 +2715,6 @@ auto CExpandExpr::visit(ASTExprNodeFor& node) -> void {
     auto intoIterCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIntoIterator, {ASTPathNode(node.isAwait ? rcstringIntoAsyncIter : rcstringIntoIter)}), ::makeVec1(mv$(node.value))));
     auto outerMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(intoIterCall), ::makeVec1(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), Ident(iteratorHygiene, rcstringIt))), {}, mv$(loop)))));
 
-    // rustc wraps the outer match in `DropTemps`: for always yields (), so
-    // a block containing the match as a statement provides the same
-    // terminating temporary scope without leaking head temporaries into a
-    // surrounding initializer or call expression.
     auto block = new ASTExprNodeBlock();
     block->nodes.push_back({true, mv$(outerMatch)});
     replacement.reset(block);
@@ -3111,15 +3089,7 @@ auto CExpandExpr::visit(ASTExprNodeUniOp& node) -> void {
 
             ::std::vector<ASTExprNodeMatchArm> arms;
             arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Continue, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringV)))), {}, ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(rcstringV)))));
-            arms.push_back(ASTExprNodeMatchArm(
-                ::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Break, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringR)))),
-                {},
-                ASTExprNodeP(new ASTExprNodeFlow(
-                    (tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
-                    (tryStack.empty() ? RcString("") : tryStack.back()),
-                    ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathFromResidualFromResidual), ::makeVec1(ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(rcstringR))))))
-                ))
-            ));
+            arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Break, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringR)))), {}, ASTExprNodeP(new ASTExprNodeFlow((tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), (tryStack.empty() ? RcString("") : tryStack.back()), ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathFromResidualFromResidual), ::makeVec1(ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(rcstringR))))))))));
 
             replacement.reset(new ASTExprNodeMatch(ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathTryBranch), ::makeVec1(mv$(node.value)))), mv$(arms)));
         }

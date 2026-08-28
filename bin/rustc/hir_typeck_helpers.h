@@ -1,19 +1,17 @@
 #pragma once
 
 #include "hir_hir.h"
-#include "hir_expr.h" // t_trait_list
+#include "hir_expr.h"
+#include "thin_vector.h"
 #include "hir_typeck_common.h"
 #include "hir_typeck_resolve_common.h"
-#include "thin_vector.h"
+
+#include <std/sym/i_map.h>
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
-#include <std/sym/i_map.h>
 
 bool typeIsUnboundedInfer(const HIRTypeData* ty);
 
-/// Owning description of the implementation selected by the solver.  The
-/// only pointers are to crate-lifetime HIR declarations; all response-shaped
-/// data (path, parameters and associated values) belongs to this object.
 struct SolverImpl {
     HIRPathParams implParams;
     const HIRTrait* trait = nullptr;
@@ -52,20 +50,12 @@ struct SolverValueEquality {
     HIRConstGeneric right;
 };
 
-/// Aggregate facts about the complete viable set for an operator-trait goal.
-/// Type checking may use these facts to decide whether language primitive
-/// equations are valid, but never observes or chooses individual impl heads.
 struct SolverOperatorSummary {
     bool hasSemanticImpl = false;
     bool sawCurrentImpl = false;
     bool currentImplHasBuiltinSignature = false;
 };
 
-/// A self-contained solver answer.  Slot values are positional with respect
-/// to the canonical input goal and can therefore be replayed into any caller
-/// with the same key.  Inference effects remain exclusively in slots,
-/// equalities and obligations.  A selected `impl` is already the materialised
-/// answer; ambiguity never exposes individual candidate heads.
 struct SolverResponse {
     SolverCertainty certainty = SolverCertainty::NoSolution;
     SolverSlotValues slots;
@@ -77,12 +67,6 @@ struct SolverResponse {
     SolverOperatorSummary operatorSummary;
 };
 
-// Crate-lifetime cache of solver answers for fully concrete goals (no
-// inference variables, no generics, no placeholders): those answers cannot
-// depend on any function's ParamEnv when the resolver carries no bounds, so
-// they are shared across every per-function resolver and every phase.  The
-// monomorphised phases (MIR inline, trans) query the same concrete goals
-// thousands of times; without this each one rebuilt the candidate graph.
 struct NextSolverCrateCache {
     struct Entry {
         Entry* next = nullptr;
@@ -151,10 +135,10 @@ public:
         friend ::std::ostream& operator<<(::std::ostream& os, const FmtPP& x);
     };
 
-public: // ?? - Needed once, anymore?
+public:
     struct IVar {
-        unsigned int alias; // If not ~0, this points to another ivar
-        HIRTypeRef type;    // Null only when alias != ~0
+        unsigned int alias;
+        HIRTypeRef type;
 
         explicit IVar(HIRTypeRef type);
 
@@ -180,8 +164,7 @@ public: // ?? - Needed once, anymore?
 
     HIRTypeInterner& types;
     bool hasChanged;
-    // Bumped on every inference-table mutation; the goal cache keys on it
-    // to stay warm across evaluations until the table actually changes.
+
     u64 mutationGeneration = 0;
     ::std::vector<HIRTypeRef> expandStack;
     stl::ObjPool::Ref aliasIvarPool;
@@ -214,10 +197,9 @@ public:
         return FmtPP(*this, v);
     }
 
-    /// Add (and bind) all '_' types in `type`
     void addIvars(HIRTypeRef& type);
     void addIvars(HIRConstGeneric& val);
-    // (helper) Add ivars to path parameters
+
     void addIvarsParams(HIRPathParams& params);
 
     struct ResolvePlaceholders: public HIRResolvePlaceholders {
@@ -234,7 +216,6 @@ public:
         return ResolvePlaceholders(*this);
     }
 
-    // Mutation
     unsigned int newIvar(HIRInferClass ic = HIRInferClass::None);
     HIRTypeRef newIvarTr(HIRInferClass ic = HIRInferClass::None);
     void setIvarTo(unsigned int slot, HIRTypeRef type);
@@ -244,11 +225,6 @@ public:
     void setIvarValTo(unsigned int slot, HIRConstGeneric val);
     void ivarValUnify(unsigned int leftSlot, unsigned int rightSlot);
 
-    // Transactional probes.  While at least one snapshot is active every
-    // table mutation is journaled; rollbackTo restores the exact
-    // pre-snapshot state.  mutationGeneration values are allocated by a
-    // monotonic counter that survives rollback, so a generation observed
-    // inside a rolled-back probe can never be mistaken for a live state.
     struct Snapshot {
         size_t journalLength;
         size_t ivarCount;
@@ -265,9 +241,6 @@ public:
         return snapshotDepth != 0;
     }
 
-
-    // Lookup
-    //::HIR::ASTType*& get_type(::HIR::ASTType*& type);
     const HIRTypeData* getType(const HIRTypeData* type) const;
     HIRTypeRef& getType(unsigned idx);
     const HIRTypeData* getType(unsigned idx) const;
@@ -280,7 +253,6 @@ public:
     void expandIvars(HIRConstGeneric& value);
     void expandIvarsParams(HIRPathParams& params);
 
-    // Helpers
     bool pathparamsContainIvars(const HIRPathParams& pps, bool onlyUnbound) const;
     bool typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound = false) const;
     bool pathparamsEqual(const HIRPathParams& ppsL, const HIRPathParams& ppsR) const;
@@ -289,18 +261,16 @@ public:
 private:
     struct JournalEntry {
         enum class Kind : u8 {
-            /// ivars[slot].type was overwritten; alias untouched.
             TypeSet,
-            /// ivars[slot] became an alias; alias was ~0 before.
+
             TypeAlias,
-            /// values[slot].val was overwritten; it was Infer{slot} before.
+
             ValSet,
-            /// values[slot] became an alias; its val is kept alive while a
-            /// snapshot is active, so undo only clears the alias.
+
             ValAlias,
-            /// aliasTypeIvars gained the key `slot`.
+
             AliasTypeMap,
-            /// aliasValueIvars gained the key `slot`.
+
             AliasValueMap,
         };
 
@@ -321,33 +291,20 @@ private:
     unsigned int rootIvarIndex(unsigned int slot) const;
     IVar& getPointedIvar(unsigned int slot) const;
 
-    /// Occurs check: whether `type`, fully resolved through the table,
-    /// reaches the live variable rooted at `rootIndex`.
     bool containsLiveIvar(const HIRTypeData* type, unsigned int rootIndex) const;
 
     friend class Unifier;
 };
 
-/// One structural-unification session over an inference table.  Bindings go
-/// through the table's journal (occurs check and literal-class rules
-/// included), so a caller controls wider transactionality with table
-/// snapshots.  Every equality the walk can neither prove nor refute
-/// structurally -- an unresolved projection, opaque, placeholder or
-/// canonical variable on either side -- is collected on the session as
-/// data, never dropped: the caller turns it into goals or reports
-/// ambiguity carrying it.
 class TraitResolution;
 
 class Unifier {
 public:
     enum class Outcome : u8 {
-        /// Equal under the recorded bindings, with no deferred relation.
         Proven,
-        /// Structurally compatible, but at least one type/value relation is
-        /// deferred.  The pending lists are the proof obligations.
+
         Ambiguous,
-        /// The types can never be equal; bindings made by the failed call
-        /// were rolled back and the pending lists are unchanged.
+
         Mismatch,
     };
 
@@ -386,14 +343,10 @@ private:
     bool opaqueCanReveal(const HIRTypeData* type) const;
     Outcome defer(const HIRTypeData* left, const HIRTypeData* right);
 
-    // Reserved for the diagnostics the goal-emission callers will need.
     [[maybe_unused]] const Span& sp_;
     HMTypeInferrence& table_;
     const TraitResolution* resolve_;
-    // Candidate impl parameters are existential variables.  While such a
-    // candidate is instantiated for a probe, a const ivar may legitimately
-    // capture the goal's rigid placeholder/canonical value.  Ordinary
-    // equality probes keep those relations pending instead.
+
     bool bindRigidValues_;
     stl::Vector<PendingEquality> pending_;
     ThinVector<PendingValueEquality> pendingValues_;
@@ -408,9 +361,8 @@ enum class SolverCoercionOp : u8 {
 
 struct SolverCoercionConstraint {
     enum class Direction : u8 {
-        /// `other` is coerced to the selected trait input.
         InputIsDestination,
-        /// The selected trait input is coerced to `other`.
+
         InputIsSource,
     };
 
@@ -418,13 +370,10 @@ struct SolverCoercionConstraint {
     HIRTypeRef other;
     Direction direction;
     SolverCoercionOp op;
-    /// Select `Self` instead of `traitParams.types[typeIndex]`.
+
     bool isSelf = false;
 };
 
-/// Extra relation requested by the operator type-checking rule.  Candidate
-/// classification is performed inside the solver over its final viable set;
-/// only the aggregate summary is returned.
 struct SolverOperatorGoal {
     TypeckPrimitiveOperator operation = TypeckPrimitiveOperator::None;
     const char* outputName = nullptr;
@@ -432,36 +381,21 @@ struct SolverOperatorGoal {
     const HIRTraitImpl* currentImpl = nullptr;
 };
 
-/// Options for a next-solver goal query.
 struct TraitGoalQuery {
-    /// With `assocName`/`assocType`/`assocParams`, an associated-type
-    /// equality is added to the goal; an empty (non-null) name requests the
-    /// canonical trait response itself.
     const char* assocName = nullptr;
     const HIRTypeData* assocType = nullptr;
     const HIRPathParams* assocParams = nullptr;
-    /// Ask specialization for the impl that provides this value item
-    /// (method, associated constant, or associated static).  This is not an
-    /// associated-type constraint: it changes response identity to the
-    /// nearest provider in the selected specialization chain.
+
     const char* valueName = nullptr;
-    /// Evaluate even when the inputs still hold unassigned inference
-    /// variables.
+
     bool allowInferInputs = false;
-    /// Omit this concrete impl from root candidate selection.  This is used
-    /// while checking the language-defined primitive semantics inside that
-    /// same operator impl; it is part of the goal, not a caller-side filter.
+
     const HIRTraitImpl* excludedImpl = nullptr;
-    /// Additional call-site coercion goals over trait type inputs.  These are
-    /// first-class solver relations: candidate filtering, ambiguity and
-    /// preference are all decided inside the evaluator.
+
     const ThinVector<SolverCoercionConstraint>* coercions = nullptr;
     const SolverOperatorGoal* operatorGoal = nullptr;
 };
 
-/// A projection-equality goal.  `output` is represented by a fresh canonical
-/// solver slot; the selected value and every inference effect travel back in
-/// the typed response instead of being recovered by a second impl lookup.
 struct NormalizesTo {
     HIRTypeRef projection;
 };
@@ -557,8 +491,6 @@ struct AssembledImplCb final: AssembledImplCallback {
     }
 
     bool visit(ImplRef impl, SolverCertainty certainty) override {
-        // ImplRef is a move-only solver response; the callable itself is still
-        // stored by an ordinary copy.
         return f(mv$(impl), certainty);
     }
 };
@@ -598,8 +530,7 @@ private:
 
     struct EatCacheEntry {
         u64 generation;
-        // An expansion touching inference variables is only valid until the
-        // table mutates.
+
         u64 ivarGeneration;
         HIRTypeRef type;
     };
@@ -609,20 +540,13 @@ private:
     mutable u64 eatCacheGeneration = 0;
     friend class NextTraitGoalEvaluator;
     mutable bool normalizingBoundType = false;
-    // Owned by the crate ObjPool.  TraitResolution only keeps a stable
-    // pointer into the compiler-lifetime arena.
+
     mutable NextTraitGoalEvaluator* nextSolver = nullptr;
-    // Coherence probes run on the caller's own inference table under a
-    // snapshot that is rolled back afterwards; a dedicated evaluator keeps
-    // the probe's goal bookkeeping out of any active evaluation session.
+
     mutable NextTraitGoalEvaluator* coherenceEvaluator = nullptr;
-    // Builtin predicates such as structural Sized/Copy/Clone must ask whether
-    // a declared impl or ParamEnv predicate exists without recursively adding
-    // the builtin candidate currently being assembled.  A separate evaluator
-    // keeps that root-candidate scope out of the ordinary response cache.
+
     mutable NextTraitGoalEvaluator* nonBuiltinSolver = nullptr;
-    // Bumped when the defining-opaque registrations change: they alter what
-    // containsDefiningOpaque answers, so cached goals must not outlive them.
+
     mutable u64 solverEnvGeneration = 0;
     ::std::vector<HIRSimplePath> opaqueAliasScopes;
     ::std::vector<HIRSimplePath> definingOpaqueAliases;
@@ -638,8 +562,6 @@ public:
 
     void addDefiningOpaqueAlias(const HIRSimplePath& path);
 
-    /// The current function's own return-position opaques: their goals are
-    /// defining uses, everywhere else a Fcn-origin opaque is rigid.
     void addDefiningFcnOrigin(const HIRPath& origin);
     bool isDefiningFcnOrigin(const HIRPath& origin) const;
 
@@ -671,7 +593,6 @@ public:
 
     bool hasAssociatedType(const HIRTypeData* ty) const;
 
-    /// Expand any located associated types in the input, operating in-place and returning the result
     HIRTypeRef expandAssociatedTypes(const Span& sp, HIRTypeRef input, SolverResponseCallback* effects = nullptr) const;
 
     const HIRTypeData* expandAssociatedTypes(const Span& sp, const HIRTypeData* input, HIRTypeRef& tmp, SolverResponseCallback* effects = nullptr) const;
@@ -707,9 +628,6 @@ public:
         return iterateAtyBoundsCb(sp, pe, cb);
     }
 
-    /// Return the complete next-solver answer.  Slot constraints and nested
-    /// obligations are data in the response; this is the API new consumers
-    /// use instead of observing inference effects through callbacks.
     bool solveTraitGoalCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, SolverResponseCallback& callback, const TraitGoalQuery& query = {}) const;
 
     template <typename F>
@@ -726,12 +644,8 @@ public:
         return solveNormalizesToCb(sp, goal, cb);
     }
 
-    /// Whether two concrete impl candidates may apply to one canonical goal.
-    /// With next-solver coherence enabled this unifies both headers and proves
-    /// both sets of where-clauses in an isolated inference context.
     bool implsOverlap(const Span& sp, const ImplRef& left, const ImplRef& right) const;
 
-    /// Locate a named trait in the provied trait (either itself or as a parent trait)
     bool findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, TraitPathCallback& callback) const;
 
     template <typename F>
@@ -739,6 +653,7 @@ public:
         TraitPathCb<F> cb(f);
         return findNamedTraitInTraitCb(sp, des, params, traitPtr, traitPath, pp, selfType, cb);
     }
+
 private:
     friend class NextTraitGoalEvaluator;
 
@@ -792,15 +707,13 @@ public:
         Shared,
         Unique,
         Owned,
-        /// Not a borrow: a `*mut T` receiver taken as the `*const T` a method
-        /// was written for.
+
         RawShared,
-        /// The pin-ergonomics reborrow from `Pin<&mut T>` to `Pin<&T>`.
+
         PinShared,
     };
     friend ::std::ostream& operator<<(::std::ostream& os, const AutoderefBorrow& x);
-    /// Locate the named method by applying auto-dereferencing.
-    /// \return Number of times deref was applied (or ~0 if _ was hit)
+
     unsigned int autoderefFindMethod(
         const Span& sp,
         const tTraitList& traits,
@@ -812,8 +725,7 @@ public:
         bool mustDecide,
         /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities
     ) const;
-    /// Locate the named field by applying auto-dereferencing.
-    /// \return Number of times deref was applied (or ~0 if _ was hit)
+
     unsigned int autoderefFindField(const Span& sp, const HIRTypeData* topTy, const RcString& name, /* Out -> */ HIRTypeRef& fieldType) const;
 
     enum class AutoderefResult {
@@ -822,12 +734,8 @@ public:
         Ambiguous,
     };
 
-    /// Probe one automatic-dereference step without changing inference state.
-    /// `impl_type` is populated for a trait-based step so that a caller which
-    /// actually selects this step can commit the impl response afterwards.
     AutoderefResult autoderefStep(const Span& sp, const HIRTypeData* ty, HIRTypeRef& target, ::std::optional<HIRTypeRef>* implType = nullptr) const;
 
-    /// Apply an automatic dereference
     const HIRTypeData* autoderef(const Span& sp, const HIRTypeData* ty, HIRTypeRef& tmpType) const;
 
     bool findField(const Span& sp, const HIRTypeData* ty, const RcString& name, /* Out -> */ HIRTypeRef& fieldType) const;
@@ -852,7 +760,6 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const AllowedReceivers& x);
     bool findMethod(const Span& sp, const tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
 
-    /// Locates a named method in a trait, and returns the path of the trait that contains it (with fixed parameters)
     const HIRFunction* traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const;
     bool traitContainsType(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const char* name, HIRGenericPath& outPath) const;
 
@@ -860,8 +767,6 @@ public:
     HIRCompare typeIsCopy(const Span& sp, const HIRTypeData* ty) const;
     HIRCompare typeIsClone(const Span& sp, const HIRTypeData* ty) const;
 
-    // If `new_type_callback` is populated, it will be called with the actual/possible dst_type
-    // If `infer_callback` is populated, it will be called when either side is an ivar
     template <typename F>
     HIRCompare canUnsize(const Span& sp, const HIRTypeData* dstTy, const HIRTypeData* srcTy, F f) const {
         UnsizeTypeCb<F> cb(f);

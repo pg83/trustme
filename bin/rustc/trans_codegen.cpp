@@ -176,7 +176,7 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
         if (fcn.code.mir && !ent.second->forcePrototype) {
         } else {
             // TODO: Why would an intrinsic be in the queue?
-            // - If it's exported it does.
+
             if (fcn.abi == "rust-intrinsic") {
             } else {
                 codegen->emitFunctionExt(ent.first, fcn, ent.second->pp);
@@ -222,7 +222,7 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
         bool isMonomorph = pp.hasTypes() || isMethod;
         if (function.monomorphised.code) {
             // TODO: Flag that this should be a weak (or weak-er) symbol?
-            // - If it's from an external crate, it should be weak, but what about local ones?
+
             codegen->emitFunctionCode(path, fcn, pp, isExtern, function.monomorphised.code, hasPrototype);
         } else {
             ASSERT_BUG(sp, !isMonomorph, "Function that required monomorphisation wasn't monomorphised");

@@ -3,35 +3,29 @@
 #include "span.h"
 #include "rc_string.h"
 
+#include <map>
+#include <set>
 #include <memory>
 #include <vector>
 #include <cstdint>
-#include <set> // escape: uid-ordered alias below, single declaration point
-#include <map> // escape: uid-ordered alias below, single declaration point
 
 class HIRTypeData;
 using HIRTypeRef = const HIRTypeData*;
 class HIRTypeInterner;
+
 namespace stl {
     class ObjPool;
 }
 
-// Interned types are ordered by the interner-assigned uid (creation order):
-// deterministic across runs and allocation-layout changes. The ordering
-// itself is the ord(const HIRTypeData*, const HIRTypeData*) overload in
-// common.h; it also drives HIRPath::ord and the pair/vector ord templates.
 struct HIRTypeUidOrder {
     bool operator()(const HIRTypeData* a, const HIRTypeData* b) const {
         return ord(a, b) == OrdLess;
     }
 };
 
-// The only sanctioned ordered containers over HIRTypeRef: iteration follows
-// type-creation order, never pointer order (pointer order leaks the
-// allocation layout into the emitted output).
-using HIRTypeRefSet = ::std::set<HIRTypeRef, HIRTypeUidOrder>; // escape: deterministic-order alias, replaces address-ordered sets across the codebase
+using HIRTypeRefSet = ::std::set<HIRTypeRef, HIRTypeUidOrder>;
 template <typename V>
-using HIRTypeRefMap = ::std::map<HIRTypeRef, V, HIRTypeUidOrder>; // escape: deterministic-order alias, replaces address-ordered maps across the codebase
+using HIRTypeRefMap = ::std::map<HIRTypeRef, V, HIRTypeUidOrder>;
 
 struct HIRGenericRef;
 struct HIRSimplePath;
@@ -66,7 +60,6 @@ using tCbResolveType = const HIRResolvePlaceholders&;
 
 class HIRMatchGenerics {
 protected:
-    /// Select this only when matchVal consumes its argument before returning.
     struct BorrowMatchedValues {};
 
     explicit HIRMatchGenerics(BorrowMatchedValues)
@@ -74,7 +67,6 @@ protected:
     {
     }
 
-    /// Values retained by matchVal are frozen in this compilation-lifetime pool.
     explicit HIRMatchGenerics(stl::ObjPool& retainedValuePool)
         : retainedValuePool(&retainedValuePool)
     {
@@ -97,23 +89,16 @@ enum class HIRInferClass {
     Float,
 };
 
-// Alias expansion happens before expression type checking has an inference
-// table. Tagged placeholders retain the identity of one alias argument until
-// HMTypeInferrence replaces every occurrence with the same body-local ivar.
 constexpr unsigned HIR_INFER_ALIAS_INPUT_MIN = 1u << 31;
+
 inline bool isAliasInputInfer(unsigned index) {
     return index >= HIR_INFER_ALIAS_INPUT_MIN && index != ~0u;
 }
 
-// The trait solver canonicalises unresolved inference variables into this
-// reserved sub-range so structurally identical goals share one cache key.
-// Nested inside the alias-input range, so the inference table passes these
-// through untouched; they never outlive one solver evaluation.
 constexpr unsigned HIR_INFER_SOLVER_CANONICAL_MIN = 0xF0000000u;
-// A rigid protocol variable used as the destination of NormalizesTo queries.
-// Unlike an HM ivar it does not grow the caller's inference table merely to
-// ask whether a projection has a useful normal form.
+
 constexpr unsigned HIR_INFER_SOLVER_NORMALIZES_TO_OUTPUT = ~1u;
+
 inline bool isSolverCanonicalInfer(unsigned index) {
     return index >= HIR_INFER_SOLVER_CANONICAL_MIN && index != ~0u;
 }

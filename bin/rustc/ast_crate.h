@@ -52,7 +52,7 @@ class ASTCrate {
 public:
     const WireBoard& wb;
     stl::ObjPool* pool;
-    // Loaded extern-crate HIR outlives the AST, so it allocates from here.
+
     stl::ObjPool* hirPool;
     HIRTypeInterner& types;
     ASTAttributeList attrs;
@@ -63,10 +63,9 @@ public:
 public:
     ASTModule rootModule_;
 
-    /// Loaded crates in load order
     ::std::vector<RcString> externCratesOrd;
     ::std::map<RcString, ASTExternCrate> externCrates;
-    // Mapping filled by searching for (?visible) macros with is_pub=true
+
     ::std::map<RcString, const MacroRules*> exportedMacros;
 
     RcString extCratenameCore;
@@ -74,15 +73,12 @@ public:
     RcString extCratenameProcmacro;
     RcString extCratenameTest;
 
-    // List of tests (populated in expand if --test is passed)
     bool testHarness = false;
     bool noMain = false;
     ::std::vector<ASTTestDesc> tests;
 
-    /// Files loaded using things like include! and include_str!
     mutable ::std::vector<::std::string> extraFiles;
 
-    // Procedural macros!
     ::std::vector<ASTProcMacroDef> procMacros;
 
     ASTEdition edition;
@@ -92,7 +88,7 @@ public:
         RustDylib,
         CDylib,
         Executable,
-        ProcMacro, // Procedural macro
+        ProcMacro,
     } crateType = Type::Unknown;
 
     enum LoadStd {
@@ -101,9 +97,9 @@ public:
         LOAD_NONE,
     } loadStd = LOAD_STD;
 
-    ::std::string crateNameSuffix; // Suffix (from command-line)
-    ::std::string crateNameSet;    // Crate name as set by the user (or auto-detected)
-    RcString crateNameReal;        // user name '-' suffix
+    ::std::string crateNameSuffix;
+    ::std::string crateNameSet;
+    RcString crateNameReal;
     ASTPath preludePath;
 
     ASTCrate(const WireBoard& wb, stl::ObjPool* pool, stl::ObjPool* hirPool, HIRTypeInterner& types);
@@ -118,30 +114,23 @@ public:
 
     void setCrateName(std::string name);
 
-    /// Load referenced crates
     void loadExterns(Settings& settings);
 
-    /// Load the named crate and returns the crate's unique name
-    /// If the parameter `file` is non-empty, only that particular filename will be loaded (from any of the search paths)
     RcString loadExternCrate(Settings& settings, Span sp, const RcString& name, const ::std::string& file = "");
 };
 
-/// Representation of an imported crate
 class ASTExternCrate {
 public:
     RcString name;
     RcString shortName;
-    // The metadata artifact is stable and target-independent.  Link objects
-    // and proc-macro executables are separate graph artifacts supplied by the
-    // driver that needs them.
+
     ::std::string filename;
     RcString objectFilename;
     RcString procMacroFilename;
     bool isProcMacro = false;
     HIRCrate* hir = nullptr;
 
-    ASTExternCrate(u32& id, stl::ObjPool* pool,
-        HIRTypeInterner& types, const RcString& name, const ::std::string& path);
+    ASTExternCrate(u32& id, stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name, const ::std::string& path);
 
     ASTExternCrate(ASTExternCrate&&) = default;
     ASTExternCrate& operator=(ASTExternCrate&&) = default;

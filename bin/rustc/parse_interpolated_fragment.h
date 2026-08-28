@@ -36,7 +36,6 @@ public:
         VIS,
     } type;
 
-    // Owned type-pruned pointer
     void* ptr;
     Span span;
 
@@ -52,7 +51,7 @@ public:
     InterpolatedFragment(Type, ASTNamed<ASTItem>);
     ~InterpolatedFragment();
     InterpolatedFragment(Type, ASTExprNode*);
-    InterpolatedFragment(ASTVisibility); // :vis
+    InterpolatedFragment(ASTVisibility);
 
     TokenTree& asTt();
 

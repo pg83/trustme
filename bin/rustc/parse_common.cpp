@@ -8,8 +8,8 @@
 #include "settings.h"
 #include "ast_crate.h"
 #include "ast_types.h"
-#include "parse_lex.h"  // New file lexer
-#include "expand_cfg.h" // check_cfg - for `mod nonexistant;`
+#include "parse_lex.h"
+#include "expand_cfg.h"
 #include "wire_board.h"
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"
@@ -19,7 +19,7 @@
 #include <std/mem/obj_pool.h>
 
 #include <cassert>
-#include <fstream> // Used by directory path
+#include <fstream>
 #include <iostream>
 
 using namespace stl;
@@ -36,7 +36,7 @@ ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty, Ide
 ASTExprNodeP ParseExprBlockLineStmt(TokenStream& lex, bool& hasSemicolon);
 ASTExprNodeP ParseStmtLet(TokenStream& lex, bool isSuper = false);
 ASTExprNodeP ParseExpr0(TokenStream& lex);
-ASTExprNodeP ParseExpr1e(TokenStream& lex); // Boolean OR
+ASTExprNodeP ParseExpr1e(TokenStream& lex);
 ASTExprNodeP ParseExpr3(TokenStream& lex);
 ASTExprNodeP ParseIfStmt(TokenStream& lex);
 ASTExprNodeP ParseWhileStmt(TokenStream& lex, Ident lifetime);
@@ -80,8 +80,7 @@ ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty /*=B
     if (LOOK_AHEAD(lex) == TOK_INTERPOLATED_BLOCK) {
         GET_TOK(tok, lex);
         auto node = tok.takeFragNode();
-        // The fragment is a bare block; a `const`/`unsafe` written before it
-        // applies to it, as it would to a block written out in full.
+
         if (ty != ASTExprNodeBlock::Type::Bare) {
             if (auto* b = cast<ASTExprNodeBlock>(node.get())) {
                 b->blockType = ty;
@@ -219,7 +218,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST
                 return ASTExprNodeP();
             }
             break;
-        // 'unsafe' - Check if the next token isn't a `{`, if so it's an item. Otherwise, fall through
+
         case TOK_RWORD_UNSAFE:
             if (LOOK_AHEAD(lex) != TOK_BRACE_OPEN) {
                 PUTBACK(tok, lex);
@@ -231,7 +230,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST
                 return ASTExprNodeP();
             }
         case TOK_IDENT:
-            // Reached by fallthrough from `unsafe` as well, so check the token.
+
             if (tok.type() == TOK_IDENT && tok.ident().name == "auto" && lex.lookahead(0) == TOK_RWORD_TRAIT) {
                 PUTBACK(tok, lex);
                 if (!localMod) {
@@ -251,7 +250,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST
         rv->setAttrs(mv$(itemAttrs));
     } else if (itemAttrs.items.size() > 0) {
         // TODO: Is this an error? - Attributes on a expression that didn't yeild a node.
-        // - They should have applied to the item that was parsed?
+
     } else {
     }
     return rv;
@@ -327,8 +326,6 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                 ret = ParseExprBlockNode(lex, /*is_unsafe*/ ASTExprNodeBlock::Type::Const, lifetime);
                 break;
                 // TODO: Can these have labels?
-                //case TOK_RWORD_IF:
-                //case TOK_RWORD_MATCH:
 
             default:
                 parseErrorUnexpected(lex, tok);
@@ -344,7 +341,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
         }
 
         // HACK: Parse a path and look for a `macro::path! { }`, so it can be parsed as a block (instead of as an expression)
-        // NOTE: This means that here is where the path parsing code ends up
+
         switch (tok.type()) {
             case TOK_IDENT:
             case TOK_RWORD_CRATE:
@@ -382,8 +379,6 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                 GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
                 return ret;
 
-            // Blocks that don't need semicolons
-            // NOTE: If these are followed by a small set of tokens (`.` and `?`) then they are actually the start of an expression
             // HACK: Parse here, but if the next token is one of the set store in a TOK_INTERPOLATED_EXPR and invoke the statement parser
             case TOK_RWORD_LOOP: {
                 ret = NEWNODE(ASTExprNodeLoop, "", ParseExprBlockNode(lex));
@@ -445,9 +440,8 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                 return ret;
             }
                 // TODO: if this expression captures a block, then treat it as a statement.
-                // Otherwise, interpret as normal expression
+
                 // HACK: Just treat a leading `:expr` as a statement (rust-lang/rust #78829) (ref: rustc-1.39.0-src\vendor\indexmap\src\map.rs:1139)
-                //case TOK_INTERPOLATED_EXPR:
 
             default:
                 PUTBACK(tok, lex);
@@ -487,9 +481,6 @@ ASTExprNodeP ParseExprBlockLineStmt(TokenStream& lex, bool& hasSemicolon) {
     return ret;
 }
 
-/// @param allowStructLiteral A match guard ends at `=>`, so a struct literal
-/// is unambiguous there; an `if`/`while` condition is followed by its body's
-/// `{` and cannot take one.
 std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStructLiteral /*=false*/) {
     Token tok;
     std::vector<ASTIfLetCondition> conditions;
@@ -504,7 +495,7 @@ std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStruc
                 val = ParseExpr3(lex);
             } else {
                 SET_PARSE_FLAG(lex, disallowStructLiteral);
-                val = ParseExpr3(lex); // This is just after `||` and `&&`
+                val = ParseExpr3(lex);
             }
             conditions.push_back(ASTIfLetCondition{box$(pat), std::move(val)});
             hadPat = true;
@@ -514,13 +505,9 @@ std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStruc
                 val = ParseExpr3(lex);
             } else {
                 SET_PARSE_FLAG(lex, disallowStructLiteral);
-                val = ParseExpr3(lex); // This is just after `||` and `&&`
+                val = ParseExpr3(lex);
             }
 
-            // Each `&&` operand is its own condition, and its own temporary
-            // scope: the left one's temporaries drop before the right one is
-            // evaluated. Chaining them into a single `&&` expression would keep
-            // them all to the end of the chain, and drop them in reverse.
             conditions.push_back(ASTIfLetCondition{std::unique_ptr<ASTPattern>(), std::move(val)});
         }
     } while (lex.getTokenIf(TOK_DOUBLE_AMP));
@@ -535,7 +522,7 @@ std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStruc
             }
             GET_CHECK_TOK(tok, lex, TOK_DOUBLE_PIPE);
             SET_PARSE_FLAG(lex, disallowStructLiteral);
-            auto n = ParseExpr1e(lex); // Boolean or
+            auto n = ParseExpr1e(lex);
             auto rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLOR, ::std::move(prev), ::std::move(n));
 
             conditions.clear();
@@ -677,7 +664,7 @@ ASTExprNodeP ParseFlowControl(TokenStream& lex, ASTExprNodeFlow::Type type) {
             lifetime = tok.ident();
         }
     }
-    // Return value
+
     // TODO: Should this prevent `continue value;`?
     ASTExprNodeP val;
     if (type == ASTExprNodeFlow::BREAK && LOOK_AHEAD(lex) == TOK_BRACE_OPEN && CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
@@ -775,7 +762,7 @@ ASTExprNodeP ParseStmt(TokenStream& lex) {
 
 ASTExprNodeP ParseStmtLet(TokenStream& lex, bool isSuper) {
     Token tok;
-    ASTPattern pat = ParsePattern(lex, AllowOrPattern::Yes); // irrefutable
+    ASTPattern pat = ParsePattern(lex, AllowOrPattern::Yes);
     ASTType* type = mkType(lex.typePool(), lex.pointSpan());
     if (lex.getTokenIf(TOK_COLON)) {
         type = ParseType(lex);
@@ -1229,7 +1216,7 @@ ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
 
     ASTExprNodeStructLiteral::tValues items;
     while (GET_TOK(tok, lex) == TOK_IDENT || tok.type() == TOK_HASH) {
-        ASTAttributeList attrs; // Note: Parse_ItemAttrs uses lookahead, so can't use it here.
+        ASTAttributeList attrs;
         if (tok.type() == TOK_HASH) {
             PUTBACK(tok, lex);
             attrs = ParseItemAttrs(lex);
@@ -1405,7 +1392,7 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                 return ParseExprValClosureBinder(lex);
             }
             return ParseForStmt(lex, Ident(""));
-        case TOK_RWORD_TRY: // Only emitted in 2018
+        case TOK_RWORD_TRY:
             return ParseExprTry(lex);
         case TOK_RWORD_DO:
             GET_TOK(tok, lex);
@@ -1477,10 +1464,8 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                     }
                     PUTBACK(tok, lex);
                     return NEWNODE(ASTExprNodeNamedValue, ::std::move(path));
-                // `builtin # <name>` - seems to be a 1.74 era hack to extend syntax
-                // - `offset_of` is translated to an intrinsic call with the fields as
-                //   string/integer arguments. `type_ascribe` maps directly to the
-                //   existing type-annotation expression.
+                    // `builtin # <name>` - seems to be a 1.74 era hack to extend syntax
+
                 case TOK_HASH:
                     if (path.isTrivial() && path.asTrivial() == "builtin") {
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
@@ -1554,16 +1539,11 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                             GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
                             // TODO: How to emit this, maybe as a hacky intrinsic?
-                            // ::"#intrinsics"::offset_of::<T>("field1",...)
-                            // - Fiddly
+
                             path = ASTPath(RcString::newInterned("#intrinsics"), {ASTPathNode("offset_of")});
                             path.nodes().back().args().entries.push_back(std::move(ty));
                             return NEWNODE(ASTExprNodeCallPath, std::move(path), std::move(args));
                         } else if (tok.ident() == "wrap_binder" || tok.ident() == "unwrap_binder") {
-                            // An unsafe binder only hides the lifetimes it
-                            // binds, which this compiler erases, so wrapping and
-                            // unwrapping a value leave the value alone. The
-                            // optional second argument is the binder type.
                             GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
                             auto value = ParseExpr0(lex);
                             if (lex.getTokenIf(TOK_COMMA)) {
@@ -1799,7 +1779,7 @@ ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode) {
         case TOK_DOUBLE_COLON:
             if (lex.lookahead(0) == TOK_STRING) {
             }
-            // QUIRK: `::crate::foo` is valid (semi-surprisingly)
+
             // TODO: Reference?
             else if (lex.lookahead(0) == TOK_RWORD_CRATE) {
             } else if (lex.editionAfter(ASTEdition::Rust2018)) {
@@ -1817,7 +1797,7 @@ ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode) {
         case TOK_DOUBLE_LT:
             lex.putback(Token(TOK_LT));
         case TOK_LT: {
-            ASTType* ty = ParseType(lex, true); // Allow trait objects without parens
+            ASTType* ty = ParseType(lex, true);
             if (GET_TOK(tok, lex) == TOK_RWORD_AS) {
                 ASTPath trait = ParsePath(lex, PATH_GENERIC_TYPE);
                 GET_CHECK_TOK(tok, lex, TOK_GT);
@@ -2172,10 +2152,10 @@ ASTPattern ParsePattern1(TokenStream& lex, AllowOrPattern allowOr) {
                 break;
             case TOK_AT:
                 binding = ASTPatternBinding(tok.ident(), bindType /*MOVE*/, isMut /*false*/);
-                GET_TOK(tok, lex); // '@'
+                GET_TOK(tok, lex);
                 pat = ParsePattern1(lex, allowOr);
                 break;
-            default: { // Maybe bind
+            default: {
                 auto name = tok.ident();
                 if (true /*is_refutable*/) {
                     assert(bindType == ASTPatternBinding::Type::MOVE);
@@ -2698,7 +2678,7 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                 }
             }
             auto path = ASTAbsolutePath("", {});
-            GET_TOK(tok, lex); // '('
+            GET_TOK(tok, lex);
 
             switch (GET_TOK(tok, lex)) {
                 case TOK_RWORD_CRATE:
@@ -2816,7 +2796,7 @@ ASTHigherRankedBounds ParseHRB(TokenStream& lex) {
 
 ASTHigherRankedBounds ParseHRBOpt(TokenStream& lex) {
     if (lex.lookahead(0) == TOK_RWORD_FOR) {
-        lex.getToken(); // Consume
+        lex.getToken();
         return ParseHRB(lex);
     } else {
         return ASTHigherRankedBounds();
@@ -2879,7 +2859,7 @@ void ParseTypeBound(TokenStream& lex, ASTGenericParams& ret, ASTType* checkedTyp
             }
         } else if (lex.getTokenIf(TOK_QMARK)) {
             auto hrbs = ParseHRBOpt(lex);
-            (void)hrbs; // The only valid ?Trait is Sized, which doesn't have any generics
+            (void)hrbs;
             ret.addBound(ASTGenericBound::make_MaybeTrait({checkedType->clone(), ParsePath(lex, PATH_GENERIC_TYPE)}));
         } else if (lex.getTokenIf(TOK_EXCLAM)) {
             ParsePath(lex, PATH_GENERIC_TYPE);
@@ -3038,10 +3018,6 @@ void ParseWhereClause(TokenStream& lex, ASTGenericParams& params) {
             ASTType* type = ParseType(lex);
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             if (bindsTypes) {
-                // `for<T> T: Trait` quantifies the predicate over a type that
-                // exists only inside it. Nothing here models that, so the
-                // predicate is parsed and dropped rather than left with a name
-                // that cannot resolve.
                 ASTGenericParams dropped;
                 ParseTypeBound(lex, dropped, mv$(type), mv$(hrbs), /*retainBareType=*/false);
             } else {
@@ -3309,7 +3285,7 @@ ASTStruct ParseStruct(TokenStream& lex, const ASTAttributeList& metaItems) {
             auto itemAttrs = ParseItemAttrs(lex);
             SET_ATTRS(lex, itemAttrs);
 
-            auto vis = ParsePublicity(lex, /*allow_restricted=*/false); // Disambiguate `pub (Type)` from tuple-field restricted visibility.
+            auto vis = ParsePublicity(lex, /*allow_restricted=*/false);
 
             refs.push_back(ASTTupleItem(mv$(itemAttrs), vis, ParseType(lex)));
             if (GET_TOK(tok, lex) != TOK_COMMA) {
@@ -3446,11 +3422,9 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
     }
 
     GET_TOK(tok, lex);
-    // A trait item is public by definition, but the grammar still accepts a
-    // visibility here — rustc rejects it after parsing, which matters because
-    // the item may be stripped by a `cfg` before that point.
+
     // TODO: reject a non-default visibility on a trait item that survives cfg.
-    // A `$vis` fragment stands here too, and expands to nothing when empty.
+
     if (tok.type() == TOK_RWORD_PUB || tok.type() == TOK_INTERPOLATED_VIS) {
         PUTBACK(tok, lex);
         (void)ParsePublicity(lex);
@@ -3542,7 +3516,6 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
             break;
         }
 
-        // Functions (possibly unsafe, async, or extern)
         case TOK_RWORD_FN: {
             auto definitionSpan = lex.tokenStartSpan(tok);
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
@@ -3592,8 +3565,6 @@ ASTTrait ParseTraitDef(TokenStream& lex, const ASTAttributeList& metaItems, ASTG
             } else {
                 PUTBACK(tok, lex);
                 if (lex.getTokenIf(TOK_EXCLAM)) {
-                    // `trait A: !B {}` states that `B` is not implemented, which
-                    // is not a requirement on the implementor.
                     ParsePath(lex, PATH_GENERIC_TYPE);
                     continue;
                 }
@@ -3658,11 +3629,6 @@ ASTEnum ParseEnumDef(TokenStream& lex, const ASTAttributeList& metaItems) {
         auto itemAttrs = ParseItemAttrs(lex);
         SET_ATTRS(lex, itemAttrs);
 
-        // An enum variant is as public as its enum, but the grammar still
-        // accepts a visibility here -- rustc rejects it after parsing, which
-        // matters because the variant may be stripped by a `cfg` before that
-        // point. A `$vis` fragment stands here too, and expands to nothing when
-        // empty.
         // TODO: reject a non-default visibility on a variant that survives cfg.
         if (lex.lookahead(0) == TOK_RWORD_PUB || lex.lookahead(0) == TOK_INTERPOLATED_VIS) {
             (void)ParsePublicity(lex);
@@ -3827,8 +3793,8 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
             attrData = TokenTree(lex.getEdition(), lex.getHygiene(), std::move(tt));
         } break;
         case TOK_PAREN_OPEN:
-        case TOK_SQUARE_OPEN: // 1.74 - openssl v0.10.57
-        case TOK_BRACE_OPEN:  // An attribute's arguments may use any delimiter.
+        case TOK_SQUARE_OPEN:
+        case TOK_BRACE_OPEN:
             PUTBACK(tok, lex);
             attrData = ParseTT(lex, false);
             break;
@@ -3856,9 +3822,6 @@ ASTItem ParseImpl(TokenStream& lex, ASTAttributeList& attrs, bool isUnsafe = fal
                 isParams = lex.lookahead(2) != TOK_PLUS;
                 break;
             case TOK_IDENT:
-                // `<Type as Trait>::Assoc`. A bare `<Type>::Assoc` cannot be
-                // told from `impl<T> ::path::Trait for ..` by lookahead, and
-                // the parameter list is the far more common spelling.
                 isParams = lex.lookahead(2) != TOK_RWORD_AS;
                 break;
             default:
@@ -3885,7 +3848,6 @@ ASTItem ParseImpl(TokenStream& lex, ASTAttributeList& attrs, bool isUnsafe = fal
             GET_TOK(tok, lex);
         }
         CHECK_TOK(tok, TOK_BRACE_OPEN);
-        // negative impls can't have any content
         GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
 
         return ASTItem::make_NegImpl(ASTImplDef(mv$(params), mv$(traitPath), mv$(implType)));
@@ -4009,8 +3971,7 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
         auto sourceName = tok.ident().name;
         auto name = tok.ident().hygienicName();
         auto atypeParams = ParseGenericParamsOpt(lex);
-        // Bounds are allowed by the grammar here and mean nothing; the aliased
-        // type may be absent in source that a `cfg` removes.
+
         // TODO: reject a bodyless impl type that survives cfg.
         if (lex.getTokenIf(TOK_COLON)) {
             ASTGenericParams dropped;
@@ -4043,9 +4004,7 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
         if (lex.getTokenIf(TOK_RWORD_WHERE)) {
             ParseWhereClause(lex, params);
         }
-        // An impl const needs a value, but the grammar allows it to be
-        // omitted — and an item stripped by `cfg` never reaches the check that
-        // says so.
+
         // TODO: reject a valueless impl const that survives cfg.
         ASTExpr val;
         if (lex.getTokenIf(TOK_EQUAL)) {
@@ -4065,7 +4024,6 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
     GET_CHECK_TOK(tok, lex, TOK_IDENT);
     auto sourceName = tok.ident().name;
     auto name = tok.ident().hygienicName();
-    // - Self allowed, can't be prototype-form
     auto fcn = ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/true, std::move(abi), fnFlags);
     impl.addFunction(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, mv$(name), mv$(fcn), mv$(sourceName));
 }
@@ -4111,16 +4069,14 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
     } else {
         PUTBACK(tok, lex);
     }
-    // The opposite of `safe`: everything in an extern block is already unsafe to
-    // use, so the marker only makes that explicit.
+
     lex.getTokenIf(TOK_RWORD_UNSAFE);
     switch (GET_TOK(tok, lex)) {
         case TOK_RWORD_FN: {
             auto definitionSpan = lex.tokenStartSpan(tok);
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             auto name = tok.ident().hygienicName();
-            // parse function as prototype
-            // - no self, is prototype, is unsafe and not const
+
             auto i = ASTItem(ParseFunctionDef(lex, std::move(definitionSpan), /*allow_self*/ false, /*can_be_prototype=*/true, abi, ASTFunction::Flags::makeUnsafe()));
             GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
 
@@ -4298,7 +4254,7 @@ void ParseUseRoot(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries) {
     Token tok;
     switch (GET_TOK(tok, lex)) {
         case TOK_RWORD_SELF:
-            path = ASTPath::newSelf({}); // relative path
+            path = ASTPath::newSelf({});
             GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
             break;
         case TOK_RWORD_SUPER: {
@@ -4557,7 +4513,6 @@ bool ParseMacroInvocationOpt(TokenStream& lex, ASTMacroInvocation& outInv) {
 ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& modFileinfo, const ASTAbsolutePath& modPath, ASTAttributeList metaItems) {
     Token tok;
 
-    // NOTE: This assigns into a parameter, so can't use Parse_ItemAttrs
     while (LOOKAHEAD2(lex, TOK_HASH, TOK_SQUARE_OPEN)) {
         GET_CHECK_TOK(tok, lex, TOK_HASH);
         GET_CHECK_TOK(tok, lex, TOK_SQUARE_OPEN);
@@ -4667,11 +4622,9 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             }
             break;
 
-        // `const NAME`
-        // `const [unsafe] fn`
         case TOK_RWORD_CONST:
             switch (GET_TOK(tok, lex)) {
-                case TOK_UNDERSCORE: // 1.39?
+                case TOK_UNDERSCORE:
                 case TOK_IDENT: {
                     PUTBACK(tok, lex);
                     itemName = getOptionalIdent(lex);
@@ -4682,8 +4635,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     if (lex.getTokenIf(TOK_RWORD_WHERE)) {
                         ParseWhereClause(lex, params);
                     }
-                    // As with a static, the value may be omitted in source
-                    // that a `cfg` removes before anything checks it.
+
                     // TODO: reject a valueless const that survives cfg.
                     ASTExpr val;
                     if (lex.getTokenIf(TOK_EQUAL)) {
@@ -4761,8 +4713,6 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             ASTType* type = ParseType(lex);
 
-            // A static needs a value, but the grammar allows it to be omitted;
-            // an item stripped by `cfg` never reaches the check that says so.
             // TODO: reject a valueless static that survives cfg.
             ASTExpr val;
             if (lex.getTokenIf(TOK_EQUAL)) {
@@ -4774,12 +4724,8 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             break;
         }
 
-        // `unsafe fn`
-        // `unsafe trait`
-        // `unsafe impl`
         case TOK_RWORD_UNSAFE:
             switch (GET_TOK(tok, lex)) {
-                // `unsafe extern fn`
                 case TOK_RWORD_EXTERN: {
                     ::std::string abi = "C";
                     getAbiStringOpt(lex, abi);
@@ -4795,7 +4741,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     }
                     break;
                 }
-                // `unsafe fn`
+
                 case TOK_RWORD_FN: {
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
@@ -4803,7 +4749,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags().setUnsafe()));
                     break;
                 }
-                // `unsafe trait`
+
                 case TOK_RWORD_TRAIT: {
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().hygienicName();
@@ -4812,7 +4758,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     itemData = ASTItem(::std::move(tr));
                     break;
                 }
-                // `unsafe impl`
+
                 case TOK_RWORD_IMPL: {
                     auto impl = ParseImpl(lex, metaItems, true);
                     if (impl.is_Impl()) {
@@ -4824,7 +4770,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     }
                     return ASTNamed<ASTItem>{Span(), mv$(metaItems), ASTVisibility::makeGlobal(), "", mv$(impl)};
                 }
-                // `unsafe auto trait`
+
                 case TOK_IDENT:
                     if (tok.ident().name == "auto") {
                         GET_CHECK_TOK(tok, lex, TOK_RWORD_TRAIT);
@@ -4904,8 +4850,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 tr.setIsMarker();
                 itemData = ASTItem(::std::move(tr));
             }
-            // `default impl`, and `default unsafe impl`: specialisation applied
-            // to every item in the block at once.
+
             else if (tok.ident().name == "default" && (lex.lookahead(0) == TOK_RWORD_IMPL || (lex.lookahead(0) == TOK_RWORD_UNSAFE && lex.lookahead(1) == TOK_RWORD_IMPL))) {
                 const bool implIsUnsafe = lex.getTokenIf(TOK_RWORD_UNSAFE);
                 GET_CHECK_TOK(tok, lex, TOK_RWORD_IMPL);
@@ -4927,8 +4872,6 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             itemName = tok.ident().hygienicName();
             ASTGenericParams params = ParseGenericParamsOpt(lex);
             if (lex.lookahead(0) == TOK_EQUAL) {
-                // Trait alias (can't be auto or unsafe?)
-
                 ASTTraitAlias rv;
                 rv.params = std::move(params);
                 lex.getToken();
@@ -5061,7 +5004,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     submod.fileInfo.inModBlock = true;
                     submod.fileInfo.isDisabled = !H::checkItemCfg(*lex.parseState().wb->settings, metaItems);
                     // TODO: If cfg fails, just eat the TT until a matching #[cfg]?
-                    // - Or, mark the file infor as not being valid (so child modules don't try to load)
+
                     ParseModRoot(lex, submod, metaItems);
                     GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
                     break;
@@ -5090,7 +5033,6 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             submod.fileInfo.path = newpathFileDirect;
                             submod.fileInfo.controlsDir = false;
                         } else {
-                            // Can't find file
                             ERROR(lex.pointSpan(), E0000, "Can't find file for '" << name << "' in '" << modFileinfo.path << "'");
                         }
                         Lexer subLex(lex.parseState().wb->id, lex.typePool(), submod.fileInfo.path, lex.getEdition(), lex.parseState());
@@ -5113,7 +5055,6 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         }
                         // TODO: If this is not a controlling file, look in `modname/` for the new module
                         else {
-                            // Can't find file
                             ERROR(lex.pointSpan(), E0000, "Can't find file for '" << name << "' in '" << modFileinfo.path << "'");
                         }
                         Lexer subLex(lex.parseState().wb->id, lex.typePool(), submod.fileInfo.path, lex.getEdition(), lex.parseState());
@@ -5237,10 +5178,8 @@ ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
         case TOK_UNDERSCORE:
             return mkType(lex.typePool(), lex.subSpan(tok.getPos()));
 
-        // 'unsafe' - An unsafe function type, or an unsafe binder
         case TOK_RWORD_UNSAFE:
-            // `unsafe<'a> &'a T` hides the lifetimes it binds. This compiler
-            // erases lifetimes, so the binder is its own inner type.
+
             if (LOOK_AHEAD(lex) == TOK_LT) {
                 const auto binder = ParseHRB(lex);
                 const auto savedErased = lex.parseState().erasedLifetimes;
@@ -5401,7 +5340,6 @@ ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs) {
 
     GET_TOK(tok, lex);
 
-    // `unsafe`
     if (tok.type() == TOK_RWORD_UNSAFE) {
         isUnsafe = true;
         GET_TOK(tok, lex);
@@ -5434,8 +5372,7 @@ ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs) {
             GET_TOK(tok, lex);
             GET_TOK(tok, lex);
         }
-        // A function type has no receiver, but the grammar still lets `self`
-        // appear as a parameter; rustc rejects it after parsing.
+
         // TODO: reject a `self` parameter in a function type.
         {
             unsigned selfOfs = 0;

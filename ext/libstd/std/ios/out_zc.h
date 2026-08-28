@@ -20,7 +20,6 @@ namespace stl {
 
         ZeroCopyOutput* upgrade() noexcept override;
 
-        // zero-copy interface
         UnboundBuffer imbue(size_t len) {
             return {imbueImpl(&len)};
         }
@@ -44,9 +43,10 @@ namespace stl {
     };
 
     template <typename O, typename T>
-        requires requires(O o) {
-            static_cast<ZeroCopyOutput*>(&o);
-        }
+    requires requires(O o) {
+        static_cast<ZeroCopyOutput*>(&o);
+    }
+
     O&& operator<<(O&& out, const T& t) {
         output<ZeroCopyOutput, T>(out, t);
 

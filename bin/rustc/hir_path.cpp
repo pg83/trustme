@@ -321,7 +321,6 @@ bool HIRSimplePath::startsWith(const HIRSimplePath& x, bool skipLast /*=false*/)
     }
     const auto& m = p->members;
     const auto& xm = x.p->members;
-    // This path can't start with `x` if it's shorter than `x`
     if (m.size() < xm.size() - (skipLast ? 1 : 0)) {
         return false;
     }

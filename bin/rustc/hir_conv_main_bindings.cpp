@@ -8,14 +8,14 @@
 #include "hir_visitor.h"
 #include "mir_helpers.h"
 #include "hir_expr_state.h"
-#include "hir_typeck_common.h" // monomorphise_type_with
+#include "hir_typeck_common.h"
 #include "hir_typeck_static.h"
 #include "hir_inherent_cache.h"
-#include "hir_typeck_expr_visit.h" // For ModuleState
+#include "hir_typeck_expr_visit.h"
 
 #include <std/mem/obj_pool.h>
 
-#include <algorithm> // std::find_if
+#include <algorithm>
 
 void ConvertHIRBind(HIRCrate& crate);
 
@@ -176,10 +176,6 @@ namespace {
 
         [[nodiscard]] HIRTypeRef visitTypeInner(HIRTypeRef ty, bool doBind = true);
 
-        /// Every type parameter of an impl has to be pinned down by a use: by
-        /// the type the impl is for, by the trait arguments, or by an
-        /// associated-type equality whose own inputs are already pinned down.
-        /// One that is not cannot be worked out at a use site.
         static void checkImplParamsConstrained(const HIRGenericParams& params, const HIRTypeData* selfTy, const HIRPathParams* traitArgs);
 
         void visitTypeImpl(HIRTypeImpl& impl) override;
@@ -625,7 +621,7 @@ namespace {
         void visitStruct(HIRItemPath ip, HIRStruct& str) override;
     };
 
-} // namespace
+}
 
 void ConvertHIRMarkings(const WireBoard& wb, HIRCrate& crate) {
     MarkingsVisitor exp{wb};
@@ -749,9 +745,8 @@ struct UfcsVisitor: public HIRVisitor {
 
     static bool locateItemInTrait(HIRVisitor::PathContext pc, const HIRTrait& trait, HIRPath::Data& pd);
 
-    // Locate the item in `pd` and set `pd` to UfcsResolved if found
     // TODO: This code may end up generating paths without the type information they should contain
-    // OR, generate paths with too much type information
+
     bool locateInTraitAndSet(HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
 
     bool setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, const HIRGenericPath& traitPath, const HIRTrait& trait, HIRPath::Data& pd);
@@ -778,7 +773,7 @@ struct UfcsVisitor: public HIRVisitor {
 template <typename T, typename F>
 void sortImplGroup(HIRCrate::ImplGroup<std::unique_ptr<T>>& ig, F fmt) {
     auto newEnd = ::std::remove_if(ig.generic.begin(), ig.generic.end(), [&ig, &fmt](::std::unique_ptr<T>& tyImpl) {
-        const auto& type = tyImpl->type; // Using field accesses in templates feels so dirty
+        const auto& type = tyImpl->type;
         const HIRSimplePath* path = type->getSortPath();
 
         if (path) {
@@ -1127,7 +1122,6 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                 switch (item.tag()) {
                     case HIRTypeItem::TAG_TypeAlias: {
                         BUG(sp, "TypeAlias encountered after `Resolve Type Aliases` - " << ty);
-                        // Assume it'll be filled out, with the correct binding
                         break;
                     }
                     case HIRTypeItem::TAG_ExternType: {
@@ -1183,7 +1177,6 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                     // - Generic type, opaque resut. (TODO: Sometimes these are known - via generic bounds)
                     e->binding = HIRTypePathBinding::make_Opaque({});
                 } else {
-                    //}
                     //TODO(sp, "Resolve known UfcsKnown - " << ty);
                 }
                 break;
@@ -1212,8 +1205,7 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                     case HIRPathData::TAG_UfcsInherent: {
                         auto& e2 = ee->origin.data.as_UfcsInherent();
                         e2.params = mv$(params);
-                        // Impl params, just directly references the parameters.
-                        // - Downstream monomorph will fix that
+
                         e2.implParams = ms.implGenerics->makeNopParams(crate.types, 0);
                         break;
                     }
@@ -1228,7 +1220,7 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                 }
                 ee->index = fcnErasedCount++;
             }
-            // If the function _pointer_ is set (but not the path), then we're in the function arguments
+
             // - Add a un-namable generic parameter (TODO: Prevent this from being explicitly set when called)
             else if (fcnPtr) {
                 visitTypeDataChildren(data);
@@ -1258,14 +1250,14 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
                     } m{crate.types, newTy};
 
                     // TODO: Monomorph the trait to replace `Self` with this generic?
-                    // - Except, that should it be?
+
                     fcnPtr->params.bounds.push_back(HIRGenericBound::make_TraitBound({newTy, m.monomorphTraitpath(sp, trait, false)}));
                 }
                 return newTy;
             } else if (inImplTraitBinding) {
             } else {
                 // TODO: If we're in a top-level `type`, then it must be used as the return type of a function.
-                // https://rust-lang.github.io/rfcs/2515-type_alias_impl_trait.html#type-alias
+
                 ERROR(sp, E0000, "Use of an erased type outside of a function return - " << ty);
             }
         }
@@ -1559,7 +1551,7 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
             HIRExprVisitorDef::visit(node);
 
             // #[rustc_legacy_const_generics] - A backwards compatability hack added between 1.39 and 1.54 to be backwards compatible with the x86 intrinsics
-            // - Rewrites some literal arguments into const generics
+
             if (auto* e = node.path.data.opt_Generic()) {
                 auto& fcn = upperVisitor.crate.getFunctionByPath(node.span(), e->path);
                 if (!fcn.markings.rustcLegacyConstGenerics.empty()) {
@@ -1569,8 +1561,7 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
                             auto& argNode = node.args.at(idx);
                             assert(argNode);
                             // TODO: Check that the expression is a valid const (no locals referenced, no function calls?)
-                            // - Allow: Arithmatic, casts, literals
-                            //if( !cast<const HIR::ExprNodeLiteral>(arg_node.get()) )
+
                             HIRExprPtr ep{std::move(argNode)};
                             e->params.values.push_back(HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(std::move(ep))));
                             upperVisitor.visitConstgeneric(e->params.values.back());
@@ -2571,11 +2562,6 @@ auto Expander::visitExpr(HIRExprPtr& expr) -> void {
 }
 
 auto Expander::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
-    // Argument-position `impl Trait` becomes a synthetic function type
-    // parameter in the following binding pass.  Preserve a trait alias's
-    // arbitrary where-clauses now, while the erased type still names the
-    // alias; its ordinary trait list alone cannot represent a bound such
-    // as `i32: PartialEq<Self>`.
     size_t erasedIndex = item.params.types.size();
     for (const auto& arg : item.args) {
         visitTyWith(arg.second, [&](const HIRTypeData* type) {
@@ -2703,9 +2689,6 @@ auto ExpanderSelf::visitEnum(HIRItemPath p, HIREnum& enm) -> void {
 
 auto ExpanderSelf::visitStruct(HIRItemPath p, HIRStruct& str) -> void {
     HIRTypeRef ty = crate.types.path(HIRGenericPath(p.getSimplePath(), str.params.makeNopParams(crate.types, 0)), &str);
-    // Data-carrying enum variants are stored as `Enum#Variant` structs.
-    // Other generated names also contain `#` (notably macro hygiene), so
-    // accept a separator only when its prefix names an actual enum.
     for (const auto* separator = p.name; *separator; separator++) {
         if (*separator != '#') {
             continue;
@@ -3262,8 +3245,7 @@ UfcsVisitor::UfcsVisitor(const WireBoard& wb, bool visitExprs)
     , crate(*wb.crate)
     , visitExprs_(visitExprs)
     , runEat(visitExprs)
-    , // Defaults to running when doing second-pass
-    resolve_(wb)
+    , resolve_(wb)
 {
 }
 
@@ -3438,8 +3420,7 @@ auto UfcsVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& i
     resolve_.updateImplSelfMetadata(impl.type);
 
     // TODO: Handle resolution of all items in m_resolve.m_type_equalities
-    // - params might reference each other, so `set_item_generics` has to have been called
-    // - But `m_type_equalities` can end up with non-resolved UFCS paths
+
     resolve_.forEachTypeEquality([&](HIRTypeRef& ty) {
         ty = visitType(ty);
     });
@@ -3614,8 +3595,6 @@ auto UfcsVisitor::locateTraitItemInBounds(HIRVisitor::PathContext pc, const HIRT
 auto UfcsVisitor::getUfcsKnown(HIRVisitor::PathContext pc, HIRPath::Data::Data_UfcsUnknown e, HIRGenericPath traitPathReal, const HIRTrait& trait) const -> HIRPath::Data {
     auto traitPath = traitPathReal.clone();
     if (pc == HIRVisitor::PathContext::TYPE) {
-        // If the trait has missing type argumenst, replace them with the defaults
-        // Get trait, check if the type has ATCs
         const auto& aty = trait.types.at(e.item);
     }
     // TODO: Only do this when there's multiple options?
@@ -3703,7 +3682,7 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
     const auto& type = e.type;
 
     // TODO: This is VERY arbitary and possibly nowhere near what rustc does.
-    // NOTE: `nullptr` passed for param count, as defaults are not yet expanded
+
     this->resolve_.findImpl(sp, traitPath.path, nullptr, type, [&](const auto& impl, SolverCertainty) -> bool {
         auto pp = impl.getTraitParams(crate.types);
         struct KillPlaceholders: public Monomorphiser {
@@ -3748,8 +3727,6 @@ auto UfcsVisitor::locateInTraitImplAndSet(const Span& sp, HIRVisitor::PathContex
         return setFromTraitImpl(sp, pc, traitPath, trait, pd);
     }
 
-    // Search supertraits (recursively)
-    // NOTE: This runs before "Resolve HIR Markings", so m_all_parent_traits can't be used exclusively
     for (const auto& pt : trait.parentTraits) {
         // TODO: Modify path parameters based on the current trait's params
         if (locateInTraitImplAndSet(sp, pc, pt.path, *pt.traitPtr, pd)) {
@@ -3837,7 +3814,7 @@ auto UfcsVisitor::resolve_UfcsUnknown_trait(const HIRPath& p, HIRVisitor::PathCo
 
         // TODO: Search supertraits
         // TODO: Should impls be searched first, or item names?
-        // - Item names add complexity, but impls are slower
+
         if (!collapseToSubtrait) {
             if (this->locateInTraitImplAndSet(sp, pc, mv$(traitPath), trait, pd)) {
                 return true;
@@ -3946,13 +3923,11 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
     Span sp;
 
     if (auto* pe = p.data.opt_UfcsKnown()) {
-        // If the trait has missing type argumenst, replace them with the defaults
         auto& tp = pe->trait;
         const auto& trait = resolve_.hirCrate().getTraitByPath(sp, tp.path);
 
         if (tp.params.types.size() < trait.params.types.size()) {
             //TODO(sp, "Defaults in UfcsKnown - " << p << " - " << tp.m_params << " vs " << trait.m_params.fmt_args());
-            // TOOD: Where does this usually get expanded then?
         }
     }
 
@@ -4010,14 +3985,13 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
         }
 
         // TODO: Control ordering with a flag in UfcsUnknown
-        // 1. Search for applicable inherent methods (COMES FIRST!)
+
         if (this->resolve_UfcsUnknown_inherent(curModPath, p, pc, p.data)) {
             assert(!p.data.is_UfcsUnknown());
             return;
         }
         assert(p.data.is_UfcsUnknown());
 
-        // If the type is the impl type, look for items AFTER generic lookup
         // TODO: Should this look up in-scope traits instead of hard-coding this hack?
         if (currentType_ && currentTrait && e.type == currentType_) {
             HIRGenericPath traitPath;

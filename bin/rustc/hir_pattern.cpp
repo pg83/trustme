@@ -465,7 +465,7 @@ namespace {
         }
         UNREACHABLE();
     }
-} // namespace
+}
 
 namespace {
     HIRPattern::Data clonePatternData(const HIRPattern::Data& data) {

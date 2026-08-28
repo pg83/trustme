@@ -6,7 +6,6 @@
 
 class HIRTraitImpl;
 
-// Definitions generated from hir_typeck_impl_ref.tu.
 #include "hir_typeck_impl_ref_tu.h"
 
 struct ImplRef {
@@ -19,7 +18,6 @@ struct ImplRef {
 
     ImplRef(HIRPathParams implParams, const HIRTrait& traitRef, const HIRSimplePath& trait, const HIRTraitImpl& impl);
 
-    /// Borrowed response; null args or assoc denote an empty set.
     ImplRef(const HIRTypeData* type, const HIRPathParams* args, const HIRTraitPath::assocListT* assoc, HIRBoundConstness constness = HIRBoundConstness::Never);
 
     ImplRef(HIRTypeRef type, HIRPathParams args, HIRTraitPath::assocListT assoc, HIRBoundConstness constness = HIRBoundConstness::Never);
@@ -43,7 +41,6 @@ struct ImplRef {
 
     bool hasMagicParams() const;
 
-    /// HELPER: Returns callback to monomorphise a type using parameters from Data::TraitImpl
     class Monomorph: public Monomorphiser {
         friend struct ImplRef;
         const ImplRef::Data::Data_TraitImpl& ti;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "trans_trans_list.h"
-#include "trans_main_bindings.h" // TransOptions
+#include "trans_main_bindings.h"
 
 class HIRTypeData;
 using HIRTypeRef = const HIRTypeData*;
@@ -20,15 +20,12 @@ public:
 
     virtual void finalise(const TransOptions& opt, CodegenOutput outTy, const ::std::string& hirFile);
 
-    // Called on all types directly mentioned (e.g. variables, arguments, and fields)
-    // - Inner-most types are visited first.
     virtual void emitTypeProto(const HIRTypeData*);
 
     virtual void emitType(const HIRTypeData*);
 
     virtual void emitTypeId(const HIRTypeData*);
 
-    // Called when a ASTType*::Path is encountered (after visiting inner types)
     virtual void emitStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) = 0;
     virtual void emitUnion(const Span& sp, const HIRGenericPath& p, const HIRUnion& item) = 0;
     virtual void emitEnum(const Span& sp, const HIRGenericPath& p, const HIREnum& item) = 0;

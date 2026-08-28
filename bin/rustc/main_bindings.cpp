@@ -1,7 +1,7 @@
 #include "main_bindings.h"
 
 #include "ast_ast.h"
-#include "hir_hir.h" // ABI_RUST
+#include "hir_hir.h"
 #include "version.h"
 #include "ast_dump.h"
 #include "ast_expr.h"
@@ -13,10 +13,10 @@
 #include "wire_board.h"
 #include "lint_forbid.h"
 #include "memory_dump.h"
-#include "parse_common.h" // For edition checks
+#include "parse_common.h"
 #include "trans_target.h"
 #include "lint_must_use.h"
-#include "target_detect.h" // tools/common/target_detect.h
+#include "target_detect.h"
 #include "lint_unsafe_code.h"
 #include "parse_parseerror.h"
 #include "hir_main_bindings.h"
@@ -202,8 +202,6 @@ struct ProgramParams {
         ::std::string codegenType;
         ::std::string emitBuildCommand;
         RcString emitLinkManifest;
-        // Emit the generated C++ source and stop, without invoking the C
-        // compiler (for profiling the trustme front/middle-end in isolation).
         bool emitCppOnly = false;
         ::std::string panicType;
         ::std::vector<::std::string> linkerArgs;
@@ -358,15 +356,10 @@ static int compile(int argc, char* argv[]) {
                 crateType = crate.crateType;
             }
             if (crateType == ASTCrate::Type::Unknown) {
-                // Assume to be executable
                 crateType = ASTCrate::Type::Executable;
             }
             crate.crateType = crateType;
 
-            // `module_path!` is expanded below and needs the name already, so
-            // the file-stem fallback is applied here rather than only once the
-            // expansion is done. A `#![crate_name]` attribute is seen during
-            // that expansion and overrides this.
             crate.setCrateName(params.crateName != "" ? params.crateName : CrateNameFromFile(params.infile));
             crate.crateType = ASTCrate::Type::Unknown;
         }
@@ -386,7 +379,6 @@ static int compile(int argc, char* argv[]) {
             crateType = crate.crateType;
         }
         if (crateType == ASTCrate::Type::Unknown) {
-            // Assume to be executable
             crateType = ASTCrate::Type::Executable;
         }
         crate.crateType = crateType;
@@ -486,7 +478,7 @@ static int compile(int argc, char* argv[]) {
                         out.push_back(mod.fileInfo.path);
                     }
                     // TODO: Should we check anon modules?
-                    //}
+
                     for (auto& i : mod.items) {
                         if (i->data.is_Module()) {
                             this->visitModule(i->data.as_Module());
@@ -513,13 +505,13 @@ static int compile(int argc, char* argv[]) {
         }
 
         {
-            ResolveUse(wb, crate); // - Absolutise and resolve use statements
+            ResolveUse(wb, crate);
         }
         {
-            ResolveIndex(crate); // - Build up a per-module index of avalable names (faster and simpler later resolve)
+            ResolveIndex(crate);
         }
         {
-            ResolveAbsolutise(wb, crate); // - Convert all paths to Absolute or UFCS, and resolve variables
+            ResolveAbsolutise(wb, crate);
         }
         memoryDump(memoryDumpSequence, "Resolved");
 
@@ -572,7 +564,7 @@ static int compile(int argc, char* argv[]) {
         {
             ConvertHIRResolveUFCSOuter(wb, *hirCrate);
         }
-        // Expand `Self` into the true type
+
         // - TODO: Move this later on, but that requires fixing some of the resolve logic around trait impl lookup
         {
             ConvertHIRExpandAliasesSelf(*hirCrate);
@@ -593,8 +585,7 @@ static int compile(int argc, char* argv[]) {
             }
         }
         // TODO: Expand vtables here?
-        // - Some parts of constant evaluate require it
-        // Basic constant evalulation (intergers/floats only)
+
         if (params.lastStage == ProgramParams::STAGE_HIR) {
             return 0;
         }
@@ -631,9 +622,9 @@ static int compile(int argc, char* argv[]) {
         {
             HIRExpandStaticBorrowConstants(wb, *hirCrate);
         }
-        // - Construct VTables for all traits and impls.
+
         //  TODO: How early can this be done?
-        //  > Requires consteval completed for types to be fully valid?
+
         //  TODO: Would prefer to have this done before consteval, as consteval might reference a vtable
         {
             HIRExpandVTables(wb, *hirCrate);
@@ -687,9 +678,7 @@ static int compile(int argc, char* argv[]) {
         memoryDump(memoryDumpSequence, "MIR Opt");
 
         // TODO: Pass to mark items that are..
-        // - Signature Exportable (public)
-        // - MIR Exportable (public generic, #[inline], or used by a either of those)
-        // - Require codegen (public or used by an exported function)
+
         TransOptions transOpt;
         transOpt.mode = params.codegen.codegenType == "" ? "c" : params.codegen.codegenType;
         transOpt.buildCommandFile = params.codegen.emitBuildCommand;
@@ -863,11 +852,6 @@ namespace {
     }
 }
 
-/// The compiler recurses over the syntax tree, so its stack depth follows how
-/// deeply the input nests -- generated code can nest very deeply. Run the work on
-/// a thread with a stack far larger than the usual 8MB default, which is what
-/// rustc does for the same reason. `TRUSTME_MIN_STACK` overrides the size, as
-/// `RUST_MIN_STACK` does there.
 int main(int argc, char* argv[]) {
     size_t stackSize = 1024u * 1024 * 1024;
     if (const char* text = ::std::getenv("TRUSTME_MIN_STACK")) {
@@ -966,7 +950,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 exit(1);
             }
         } else if (arg[1] != '-') {
-            arg++; // eat '-'
+            arg++;
 
             switch (*arg) {
                 case 'L':
@@ -1238,8 +1222,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             exit(1);
                         }
                     } else if (optname == "next-solver") {
-                        // The goal solver is the only solver; the flag is
-                        // accepted for compatibility but selects nothing.
                         if (!(eqPos == ::std::string::npos || optval == "globally" || optval == "coherence")) {
                             ::std::cerr << "Invalid value for -Z next-solver: '" << optval << "' (the legacy trait solver has been removed)" << ::std::endl;
                             exit(1);
@@ -1293,11 +1275,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     } else if (optname == "check-cfg-all-expected") {
                         noOptval();
                     } else {
-                        // Unstable rustc switches are routinely attached to
-                        // upstream tests to select a rustc pass, diagnostic,
-                        // or pretty-printer.  They are not language input and
-                        // an unsupported one must not make an otherwise valid
-                        // crate unusable by this compiler.
                     }
                 }
                     continue;
@@ -1403,10 +1380,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 }
                 auto name = RcString::newInterned(desc, pos - desc);
                 settings.crateOverride(name).target = pos + 1;
-            }
-            // --extern <alias>=<unique-name> >> Bind a source name to an exact crate entry.
-            // A path on the right remains accepted for compatibility with old callers.
-            else if (strcmp(arg, "--extern") == 0) {
+            } else if (strcmp(arg, "--extern") == 0) {
                 if (i == argc - 1) {
                     ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
                     exit(1);

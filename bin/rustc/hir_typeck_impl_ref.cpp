@@ -1,7 +1,7 @@
 #include "hir_typeck_impl_ref.h"
 
 #include "hir_hir.h"
-#include "hir_typeck_static.h" // for monomorphise_type_with
+#include "hir_typeck_static.h"
 
 namespace {
     bool pathParamsEqual(const HIRPathParams* left, const HIRPathParams* right) {
@@ -140,7 +140,6 @@ bool ImplRef::typeIsSpecialisable(const char* name) const {
             }
             auto it = e.impl->types.find(name);
             if (it == e.impl->types.end()) {
-                // If not present (which might happen during UFCS resolution), assume that it's not specialisable
                 return false;
             }
             return it->second.isSpecialisable;

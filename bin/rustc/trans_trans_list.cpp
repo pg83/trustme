@@ -1,7 +1,7 @@
 #include "trans_trans_list.h"
 
 #include "trans_mangling.h"
-#include "hir_typeck_static.h" // StaticTraitResolve
+#include "hir_typeck_static.h"
 
 TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
     assert(wb_);

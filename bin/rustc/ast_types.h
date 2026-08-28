@@ -3,13 +3,10 @@
 #include "span.h"
 #include "common.h"
 #include "coretypes.h"
+#include "ast_lifetime_ref.h"
 
 #include <memory>
 #include <cstdint>
-
-//#include "ast/macro.h"
-#include "ast_lifetime_ref.h"
-//#include "ast/path.h"
 
 namespace stl {
     class ObjPool;
@@ -31,13 +28,11 @@ enum class ASTBoundConstness : u8 {
     Maybe,
 };
 
-// Defined here for dependency reasons
 class ASTHigherRankedBounds {
 public:
     ::std::vector<ASTLifetimeParam> lifetimes;
-    /// Names bound by a `for<T>` type binder.
+
     ::std::vector<RcString> types;
-    //::std::vector<GenericBound>    m_bounds;
 
     ASTHigherRankedBounds();
     ~ASTHigherRankedBounds();
@@ -82,8 +77,7 @@ struct TypeTraitPath {
     ASTHigherRankedBounds hrbs;
     ::std::unique_ptr<ASTPath> path;
     ASTBoundConstness constness = ASTBoundConstness::Never;
-    /// `async Fn(..)`, which is the async callable trait of the same shape.
-    /// Expansion rewrites it, once the core crate is known.
+
     bool isAsync = false;
 
     TypeTraitPath();
@@ -100,34 +94,38 @@ struct TypeErasedType {
     ::std::vector<TypeTraitPath> maybeTraits;
     ::std::vector<ASTLifetimeRef> lifetimes;
     ::std::unique_ptr<ASTPathParams> use;
-    /// Was this `impl` from 2024 or later edition? This changes the behaviour if `use` is not present
+
     bool isEdition2024OrLater;
 };
 
-// The sum-type payload of a type. Now an ordinary inline tagged union: it holds
-// only pointers to `ASTType`, so it no longer needs the out-of-line macro
-// stack. Node metadata (span, owning pool) lives on `ASTType`.
-// Definitions generated from ast_types.tu.
 #include "ast_types_tu.h"
 
-// Tag markers for the type factories (mirror the old ASTType* constructors).
 namespace ASTTypeTags {
     struct Invalid {};
-    struct Macro {};
-    struct Unit {};
-    struct Primitive {};
-    struct Tuple {};
-    struct Function {};
-    struct Reference {};
-    struct Pointer {};
-    struct SizedArray {};
-    struct UnsizedArray {};
-    struct Arg {};
-    struct Path {};
-}  // namespace ASTTypeTags
 
-/// A pool-allocated type node. `ASTType*` is a pointer to one of these; the node
-/// records the pool it lives in so `clone()` is cheap and self-sufficient.
+    struct Macro {};
+
+    struct Unit {};
+
+    struct Primitive {};
+
+    struct Tuple {};
+
+    struct Function {};
+
+    struct Reference {};
+
+    struct Pointer {};
+
+    struct SizedArray {};
+
+    struct UnsizedArray {};
+
+    struct Arg {};
+
+    struct Path {};
+}
+
 struct ASTType {
     Span span_;
     TypeData data;
@@ -136,7 +134,8 @@ struct ASTType {
     ASTType(Span sp, TypeData data, stl::ObjPool* pool)
         : span_(::std::move(sp))
         , data(::std::move(data))
-        , pool(pool) {
+        , pool(pool)
+    {
     }
 
     const Span& span() const {
@@ -146,39 +145,51 @@ struct ASTType {
     bool isValid() const {
         return !data.is_None();
     }
+
     bool isUnbounded() const {
         return data.is_Any();
     }
+
     bool isWildcard() const {
         return data.is_Any();
     }
+
     bool isUnit() const {
         return data.is_Unit();
     }
+
     bool isPrimitive() const {
         return data.is_Primitive();
     }
+
     bool isPath() const {
         return data.is_Path();
     }
+
     const ASTPath& path() const {
         return *data.as_Path();
     }
+
     ASTPath& path() {
         return *data.as_Path();
     }
+
     bool isTypeParam() const {
         return data.is_Generic();
     }
+
     const RcString& typeParam() const {
         return data.as_Generic().name;
     }
+
     bool isReference() const {
         return data.is_Borrow();
     }
+
     bool isPointer() const {
         return data.is_Pointer();
     }
+
     bool isTuple() const {
         return data.is_Tuple();
     }
@@ -206,24 +217,24 @@ struct ASTType {
     }
 
     Ordering ord(const ASTType& x) const;
+
     bool operator==(const ASTType& x) const {
         return ord(x) == OrdEqual;
     }
+
     bool operator!=(const ASTType& x) const {
         return ord(x) != OrdEqual;
     }
 
     void print(::std::ostream& os, bool isDebug = false) const;
+
     PrettyPrintType printPretty() const {
         return PrettyPrintType(this);
     }
 };
 
-// Type factories - allocate a fresh node from the explicitly-passed `pool`.
-// The owning pool is threaded through the call site (parser TokenStream,
-// resolve/expand contexts, crate) rather than taken from any ambient global.
 extern ASTType* mkType(stl::ObjPool& pool, Span sp, TypeData data);
-extern ASTType* mkType(stl::ObjPool& pool, Span sp);  // wildcard / Any
+extern ASTType* mkType(stl::ObjPool& pool, Span sp);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Invalid, Span sp);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Macro, ASTMacroInvocation inv);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Unit, Span sp);
@@ -242,7 +253,9 @@ extern ASTType* mkType(stl::ObjPool& pool, Span sp, ASTPath path);
 extern ASTType* mkType(stl::ObjPool& pool, Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes);
 
 extern ::std::ostream& operator<<(::std::ostream& os, const ASTType& tr);
+
 inline ::std::ostream& operator<<(::std::ostream& os, const ASTType* tr) {
     return tr ? (os << *tr) : (os << "(null-type)");
 }
+
 extern Ordering ord(ASTType* a, ASTType* b);

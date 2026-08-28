@@ -271,9 +271,6 @@ auto OuterVisitor::visitGlobalAssembly(HIRGlobalAssembly& item) -> void {
             ASSERT_BUG(item.span, value->value.is_Unevaluated(), "global_asm const operand was evaluated before type checking");
             auto& expr = *value->value.as_Unevaluated()->expr;
             tArgs args;
-            // A global-assembly const accepts any integer type.  Give
-            // the expression an unconstrained result and let normal
-            // integer fallback select i32 for unsuffixed literals.
             TypecheckCode(ms, args, nullptr, expr);
             value->type = expr->resType;
             if (!value->type->is_Primitive() || !isInteger(value->type->as_Primitive())) {

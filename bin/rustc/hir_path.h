@@ -13,6 +13,7 @@ struct EncodedLiteral;
 class Monomorphiser;
 class HirSerialiser;
 class HirDeserialiser;
+
 namespace stl {
     class ObjPool;
 }
@@ -23,11 +24,9 @@ enum class HIRBoundConstness : u8 {
     Maybe,
 };
 
-/// Freeze an evaluated literal in storage whose lifetime is owned by the
-/// caller. The returned immutable pointer must not outlive that pool.
 extern const EncodedLiteral* freezeEncodedLiteral(stl::ObjPool& pool, EncodedLiteral e);
 struct HIRConstGenericUnevaluated;
-/// An inference placeholder for a const generic
+
 struct HIRInferData {
     unsigned index;
 
@@ -37,7 +36,6 @@ struct HIRInferData {
     }
 };
 
-// Definitions generated from hir_path.tu.
 #include "hir_path_tu.h"
 ::std::ostream& operator<<(::std::ostream& os, const HIRConstGeneric& x);
 
@@ -48,23 +46,12 @@ class HIRGenericParams;
 
 HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y);
 
-/// Interned storage for HIRSimplePath. Never constructed directly: entries
-/// live forever in the process-wide interner in hir_path.cpp.
 struct HIRSimplePathData {
-    // Two independent Zobrist hashes over (component, position). hash1 keys
-    // the interner table; hash2 is what lookups compare instead of the
-    // component content. Both support O(1) incremental update on
-    // append/pop/replace, which is what makes path mutation cheap.
     u64 hash1;
     u64 hash2;
-    ThinVector<RcString> members; // [0] = crate name; empty vector = empty path
+    ThinVector<RcString> members;
 };
 
-/// Simple path - Absolute with no generic parameters.
-/// De-duplicated: the object is a single pointer into the interner, so copies
-/// are trivial and equality is pointer identity. ord() stays lexicographic
-/// over the components: HIRSimplePath keys many std::map's whose iteration
-/// order leaks into the output, so it must not depend on interning order.
 struct HIRSimplePath {
     friend HirSerialiser;
     friend HirDeserialiser;
@@ -96,8 +83,6 @@ public:
         return *this;
     }
 
-    /// The interned identity: stable for the process lifetime, equal iff the
-    /// paths are equal. For pointer-keyed caches.
     const HIRSimplePathData* rawData() const {
         return p;
     }
@@ -169,7 +154,6 @@ struct HIRPathParams {
     HIRCompare matchTestGenericsFuzz(const Span& sp, const HIRPathParams& x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& match) const;
     bool equalsIgnoringRegions(const HIRPathParams& x) const;
 
-    /// Indicates that params exist (and thus the target requires monomorphisation)
     bool hasParams() const {
         return !types.empty() || !values.empty();
     }
@@ -191,7 +175,6 @@ struct HIRPathParams {
     friend ::std::ostream& operator<<(::std::ostream& os, const HIRPathParams& x);
 };
 
-/// Generic path - Simple path with one lot of generic params
 class HIRGenericPath {
 public:
     HIRSimplePath path;
@@ -239,7 +222,6 @@ public:
         friend ::std::ostream& operator<<(::std::ostream& os, const AtyEqual& x);
     };
 
-    /// Associated type trait bounds (`Type: Trait`)
     struct AtyBound {
         HIRGenericPath sourceTrait;
         HIRPathParams atyParams;
@@ -286,7 +268,6 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const HIRTraitPath& x);
 };
 
-// Definitions generated from hir_path_data.tu.
 #include "hir_path_data_tu.h"
 
 class HIRPath {
@@ -323,12 +304,11 @@ public:
 };
 
 struct HIRConstGenericUnevaluated {
-    /// `Self` captured by the expression, separate from impl parameters.
     HIRTypeRef selfType = nullptr;
-    /// Impl-level parameters to the expression
+
     HIRPathParams paramsImpl;
     HIRPathParams paramsItem;
-    /// HIR/MIR for this unevaluated parameter
+
     std::shared_ptr<HIRExprPtr> expr;
 
     HIRConstGenericUnevaluated(HIRExprPtr ep);

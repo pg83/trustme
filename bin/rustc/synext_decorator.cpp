@@ -3,17 +3,17 @@
 #include "common.h"
 #include "synext.h"
 #include "ast_ast.h"
-#include "hir_hir.h" // ABI_RUST
+#include "hir_hir.h"
 #include "ast_expr.h"
 #include "settings.h"
 #include "ast_crate.h"
 #include "expand_cfg.h"
 #include "wire_board.h"
 #include "ast_generics.h"
-#include "parse_common.h"  // Parse_ModRoot_Items
-#include "expand_common.h" // Expand_LookupMacro
+#include "parse_common.h"
+#include "expand_common.h"
 #include "parse_ttstream.h"
-#include "parse_parseerror.h" // ParseError
+#include "parse_parseerror.h"
 #include "expand_proc_macro.h"
 #include "parse_interpolated_fragment.h"
 
@@ -125,7 +125,6 @@ struct CHandlerTrackCaller: public ExpandDecorator {
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
 };
 
-/// @brief Various unsafe attributes, addded around 1.90
 struct CHandlerUnsafe: public ExpandDecorator {
     AttrStage stage() const override;
 
@@ -1238,9 +1237,9 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
     add("fn_once", Handler(ITEM_TRAIT, handleSave));
 
     add("eq", Handler(ITEM_TRAIT, handleSave));
-    add("ord", Handler(ITEM_TRAIT, handleSave)); // In 1.29 this is Ord, before it was PartialOrd
+    add("ord", Handler(ITEM_TRAIT, handleSave));
     {
-        add("partial_ord", Handler(ITEM_TRAIT, handleSave)); // New name for v1.29
+        add("partial_ord", Handler(ITEM_TRAIT, handleSave));
     }
 
     add("unsize", Handler(ITEM_TRAIT, handleSave));
@@ -1251,15 +1250,15 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
     add("debug_trait", Handler(ITEM_TRAIT, handleSave)); /* TODO: Poke derive() with this */
 
     {
-        add("termination", Handler(ITEM_TRAIT, handleSave)); // 1.29 - trait used for non-() main
+        add("termination", Handler(ITEM_TRAIT, handleSave));
     }
 
     {
-        add("pointee_trait", Handler(ITEM_TRAIT, handleSave));     // 1.54 - pointer metadata trait
-        add("dyn_metadata", Handler(ITEM_STRUCT, handleSave));     // 1.54 - `dyn Trait` metadata structure
-        add("structural_peq", Handler(ITEM_TRAIT, handleSave));    // 1.54 - Structural equality trait (partial)
-        add("structural_teq", Handler(ITEM_TRAIT, handleSave));    // 1.54 - Structural equality trait (total)
-        add("discriminant_kind", Handler(ITEM_TRAIT, handleSave)); // 1.54 - trait: used for the `discriminant_kind` intrinsic
+        add("pointee_trait", Handler(ITEM_TRAIT, handleSave));
+        add("dyn_metadata", Handler(ITEM_STRUCT, handleSave));
+        add("structural_peq", Handler(ITEM_TRAIT, handleSave));
+        add("structural_teq", Handler(ITEM_TRAIT, handleSave));
+        add("discriminant_kind", Handler(ITEM_TRAIT, handleSave));
     }
 
     add("non_zero", Handler(ITEM_STRUCT, handleSave));
@@ -1288,59 +1287,59 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
     }
 
     {
-        add("unwind_safe", Handler(ITEM_TRAIT, handleSave));     // 1.54 - UnwindSafe trait
-        add("ref_unwind_safe", Handler(ITEM_TRAIT, handleSave)); // 1.54 - RefUnwindSafe trait
+        add("unwind_safe", Handler(ITEM_TRAIT, handleSave));
+        add("ref_unwind_safe", Handler(ITEM_TRAIT, handleSave));
     }
     {
-        add("transmute_trait", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `BikeshedIntrinsicFrom` trait
-        add("destruct", Handler(ITEM_TRAIT, handleSave));        // 1.74 - `Destruct` trait
-        add("tuple_trait", Handler(ITEM_TRAIT, handleSave));     // 1.74 - `Tuple` trait (must be implemented for all tuples)
-        add("pointer_like", Handler(ITEM_TRAIT, handleSave));    // 1.74 - `PointerLike` trait
-        add("const_param_ty", Handler(ITEM_TRAIT, handleSave));  // 1.74 - `ConstParamTy` trait
-        add("fn_ptr_trait", Handler(ITEM_TRAIT, handleSave));    // 1.74 - `FnPtr` trait
+        add("transmute_trait", Handler(ITEM_TRAIT, handleSave));
+        add("destruct", Handler(ITEM_TRAIT, handleSave));
+        add("tuple_trait", Handler(ITEM_TRAIT, handleSave));
+        add("pointer_like", Handler(ITEM_TRAIT, handleSave));
+        add("const_param_ty", Handler(ITEM_TRAIT, handleSave));
+        add("fn_ptr_trait", Handler(ITEM_TRAIT, handleSave));
 
-        add("transmute_opts", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `Assume` struct
-        add("ptr_unique", Handler(ITEM_STRUCT, handleSave));     // 1.74 - `::core::ptr::Unique`
-        add("CStr", Handler(ITEM_STRUCT, handleSave));           // 1.74 - `::core::ffi::CStr` - Why? (miri?)
-        add("String", Handler(ITEM_STRUCT, handleSave));         // 1.74 - `::alloc::string::String` - Why? (miri?)
+        add("transmute_opts", Handler(ITEM_STRUCT, handleSave));
+        add("ptr_unique", Handler(ITEM_STRUCT, handleSave));
+        add("CStr", Handler(ITEM_STRUCT, handleSave));
+        add("String", Handler(ITEM_STRUCT, handleSave));
 
-        add("from_yeet", Handler(ITEM_FN, handleSave));                            // 1.74 - `::core::try_trait::from_yeet`
-        add("panic_nounwind", Handler(ITEM_FN, handleSave));                       // 1.74 - `::core::panicking::panic`
-        add("panic_display", Handler(ITEM_FN, handleSave));                        // 1.74 - `::core::panicking::panic_display`
-        add("panic_bounds_check", Handler(ITEM_FN, handleSave));                   // 1.74 - `::core::panicking::panic_bounds_check`
-        add("panic_misaligned_pointer_dereference", Handler(ITEM_FN, handleSave)); // 1.74 - `::core::panicking::panic_misaligned_pointer_dereference`
-        add("panic_cannot_unwind", Handler(ITEM_FN, handleSave));                  // 1.74 - `::core::panicking::panic_cannot_unwind`
-        add("panic_in_cleanup", Handler(ITEM_FN, handleSave));                     // 1.74 - `::core::panicking::panic_in_cleanup `
-        add("const_panic_fmt", Handler(ITEM_FN, handleSave));                      // 1.74 - `::core::panicking::const_panic_fmt`
+        add("from_yeet", Handler(ITEM_FN, handleSave));
+        add("panic_nounwind", Handler(ITEM_FN, handleSave));
+        add("panic_display", Handler(ITEM_FN, handleSave));
+        add("panic_bounds_check", Handler(ITEM_FN, handleSave));
+        add("panic_misaligned_pointer_dereference", Handler(ITEM_FN, handleSave));
+        add("panic_cannot_unwind", Handler(ITEM_FN, handleSave));
+        add("panic_in_cleanup", Handler(ITEM_FN, handleSave));
+        add("const_panic_fmt", Handler(ITEM_FN, handleSave));
 
-        add("c_void", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::ffi::c_void` - Why? (miri?)
-        add("Option", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::option::Option`
+        add("c_void", Handler(ITEM_ENUM, handleSave));
+        add("Option", Handler(ITEM_ENUM, handleSave));
 
-        add("format_arguments", Handler(ITEM_STRUCT, handleSave));   // 1.74 - `::core::fmt::Arguments`
-        add("format_placeholder", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::fmt::rt::Placeholder`
-        add("format_argument", Handler(ITEM_STRUCT, handleSave));    // 1.74 - `::core::fmt::rt::Argument`
-        add("format_unsafe_arg", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::fmt::rt::UnsafeArg`
-        add("format_alignment", Handler(ITEM_ENUM, handleSave));     // 1.74 - `::core::fmt::rt::Alignment`
-        add("format_count", Handler(ITEM_ENUM, handleSave));         // 1.74 - `::core::fmt::rt::Count`
+        add("format_arguments", Handler(ITEM_STRUCT, handleSave));
+        add("format_placeholder", Handler(ITEM_STRUCT, handleSave));
+        add("format_argument", Handler(ITEM_STRUCT, handleSave));
+        add("format_unsafe_arg", Handler(ITEM_STRUCT, handleSave));
+        add("format_alignment", Handler(ITEM_ENUM, handleSave));
+        add("format_count", Handler(ITEM_ENUM, handleSave));
 
-        add("ResumeTy", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::future::ResumeTy`
-        add("Poll", Handler(ITEM_ENUM, handleSave));       // 1.74 - `::core::task::poll::Poll`
-        add("Context", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::task::wake::Context`
+        add("ResumeTy", Handler(ITEM_STRUCT, handleSave));
+        add("Poll", Handler(ITEM_ENUM, handleSave));
+        add("Context", Handler(ITEM_STRUCT, handleSave));
     }
     {
-        add("contract_build_check_ensures", Handler(ITEM_FN, handleSave)); // 1.90 - `::core::contracts::build_check_ensures`
-        add("contract_check_requires", Handler(ITEM_FN, handleSave));      // 1.90 - `::core::intrinsics::contract_check_requires`
-        add("contract_check_ensures", Handler(ITEM_FN, handleSave));       // 1.90 - `::core::intrinsics::contract_check_ensures`
-        add("use_cloned", Handler(ITEM_TRAIT, handleSave));                // 1.90 - `::core::clone::use_cloned` - for the `.use` syntax
+        add("contract_build_check_ensures", Handler(ITEM_FN, handleSave));
+        add("contract_check_requires", Handler(ITEM_FN, handleSave));
+        add("contract_check_ensures", Handler(ITEM_FN, handleSave));
+        add("use_cloned", Handler(ITEM_TRAIT, handleSave));
 
-        add("Ordering", Handler(ITEM_ENUM, handleSave)); // comparison ordering
+        add("Ordering", Handler(ITEM_ENUM, handleSave));
 
-        add("meta_sized", Handler(ITEM_TRAIT, handleSave));                  // ::core::marker::MetaSized
-        add("pointee_sized", Handler(ITEM_TRAIT, handleSave));               // ::core::marker::PointeeSized
-        add("bikeshed_guaranteed_no_drop", Handler(ITEM_TRAIT, handleSave)); // ::core::marker::BikeshedGuaranteedNoDrop
-        add("unsafe_unpin", Handler(ITEM_TRAIT, handleSave));                // ::core::marker::UnsafeUnpin
-        add("unsized_const_param_ty", Handler(ITEM_TRAIT, handleSave));      // ::core::marker::UnsizedConstParamTy
-        add("coerce_pointee_validated", Handler(ITEM_TRAIT, handleSave));    // ::core::marker::CoercePointeeValidated
+        add("meta_sized", Handler(ITEM_TRAIT, handleSave));
+        add("pointee_sized", Handler(ITEM_TRAIT, handleSave));
+        add("bikeshed_guaranteed_no_drop", Handler(ITEM_TRAIT, handleSave));
+        add("unsafe_unpin", Handler(ITEM_TRAIT, handleSave));
+        add("unsized_const_param_ty", Handler(ITEM_TRAIT, handleSave));
+        add("coerce_pointee_validated", Handler(ITEM_TRAIT, handleSave));
         add("default_trait1", Handler(ITEM_TRAIT, handleSave));
         add("default_trait2", Handler(ITEM_TRAIT, handleSave));
         add("default_trait3", Handler(ITEM_TRAIT, handleSave));
@@ -1350,16 +1349,16 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
         add("async_fn_mut", Handler(ITEM_TRAIT, handleSave));
         add("async_fn_once", Handler(ITEM_TRAIT, handleSave));
 
-        add("async_fn_kind_helper", Handler(ITEM_TRAIT, handleSave)); // ::core::ops::async_function::internal_implementation_detail::AsyncFnKindHelper
-        add("coroutine_state", Handler(ITEM_ENUM, handleSave));       // ::core::ops::coroutine::CoroutineState
-        add("coroutine", Handler(ITEM_TRAIT, handleSave));            // ::core::ops::coroutine::Coroutine
-        add("deref_pure", Handler(ITEM_TRAIT, handleSave));           // ::core::ops::deref::DerefPure
-        add("legacy_receiver", Handler(ITEM_TRAIT, handleSave));      // ::core::ops::deref::LegacyReceiver
+        add("async_fn_kind_helper", Handler(ITEM_TRAIT, handleSave));
+        add("coroutine_state", Handler(ITEM_ENUM, handleSave));
+        add("coroutine", Handler(ITEM_TRAIT, handleSave));
+        add("deref_pure", Handler(ITEM_TRAIT, handleSave));
+        add("legacy_receiver", Handler(ITEM_TRAIT, handleSave));
 
-        add("type_id", Handler(ITEM_STRUCT, handleSave)); // ::core::any::TypeId
+        add("type_id", Handler(ITEM_STRUCT, handleSave));
 
-        add("async_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::async_iter::async_iter::AsyncIterator
-        add("fused_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::iter::traits::marker::FusedIterator
+        add("async_iterator", Handler(ITEM_TRAIT, handleSave));
+        add("fused_iterator", Handler(ITEM_TRAIT, handleSave));
 
         add("panic_const_add_overflow", Handler(ITEM_FN, handleSave));
         add("panic_const_sub_overflow", Handler(ITEM_FN, handleSave));
@@ -1388,23 +1387,23 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
         add("panic_null_pointer_dereference", Handler(ITEM_FN, handleSave));
         add("panic_invalid_enum_construction", Handler(ITEM_FN, handleSave));
 
-        add("unsafe_pinned", Handler(ITEM_STRUCT, handleSave)); // ::core::pin::unsafe_pinned::UnsafePinned
+        add("unsafe_pinned", Handler(ITEM_STRUCT, handleSave));
 
-        add("RangeCopy", Handler(ITEM_STRUCT, handleSave));          // ::core::range::Range
-        add("RangeInclusiveCopy", Handler(ITEM_STRUCT, handleSave)); // ::core::range::RangeInclusive
-        add("RangeFromCopy", Handler(ITEM_STRUCT, handleSave));      // ::core::range::RangeFrom
+        add("RangeCopy", Handler(ITEM_STRUCT, handleSave));
+        add("RangeInclusiveCopy", Handler(ITEM_STRUCT, handleSave));
+        add("RangeFromCopy", Handler(ITEM_STRUCT, handleSave));
 
-        add("async_drop", Handler(ITEM_TRAIT, handleSave));       // ::core::future::async_drop::AsyncDrop
-        add("async_drop_in_place", Handler(ITEM_FN, handleSave)); // ::core::future::async_drop::async_drop_in_place
+        add("async_drop", Handler(ITEM_TRAIT, handleSave));
+        add("async_drop_in_place", Handler(ITEM_FN, handleSave));
 
-        add("into_future", Handler(ITEM_FN, handleSave)); // ::core::future::IntoFuture::into_future
+        add("into_future", Handler(ITEM_FN, handleSave));
 
-        add("global_alloc_ty", Handler(ITEM_STRUCT, handleSave)); // ::alloc::alloc::Global
+        add("global_alloc_ty", Handler(ITEM_STRUCT, handleSave));
     }
 }
 
 void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path, const ::std::string& name, eItemType type, ASTItem& item) {
-    const char* realName = nullptr; // For when lang items have their name changed
+    const char* realName = nullptr;
     if (const auto* handler = registry.find(name.c_str())) {
         if (type != handler->type) {
             ERROR(sp, E0000, "Language item '" << name << "' " << path << " - on incorrect item type " << type << " != " << handler->type);
@@ -1415,43 +1414,34 @@ void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& 
 
     else if (name == "alloc_layout") {
     } else if (name == "panic_info") {
-    } // Struct
-    else if (name == "panic_location") {
-    } // Struct
-    else if (name == "manually_drop") {
-    } // Struct
+    } else if (name == "panic_location") {
+    } else if (name == "manually_drop") {
+    }
 
     else if (name == "arc") {
-    } // Struct
-    else if (name == "rc") {
-    } // Struct
+    } else if (name == "rc") {
+    }
 
     else if (name == "maybe_uninit") {
-    } // Union
+    }
 
     else if (name == "unpin") {
-    } // Trait
-    else if (name == "pin") {
-    } // Struct
-    else if (name == "future_trait") {
-    } // Trait
-    else if (name == "from_generator") {
-    } // Function
-    else if (name == "get_context") {
-    } // Function
+    } else if (name == "pin") {
+    } else if (name == "future_trait") {
+    } else if (name == "from_generator") {
+    } else if (name == "get_context") {
+    }
 
     else if (name == "va_list") {
-    } // Struct
+    }
 
     else if (name == "receiver") {
-    } // Trait
-    else if (name == "dispatch_from_dyn") {
-    } // Trait
+    } else if (name == "dispatch_from_dyn") {
+    }
 
     else if (name == "generator") {
-    } // - Trait
-    else if (name == "generator_state") {
-    } // - State enum
+    } else if (name == "generator_state") {
+    }
 
     else if (name == "Try") {
         realName = "try";
@@ -1472,8 +1462,7 @@ void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& 
     } else if (name == "drop_in_place") {
     } else if (name == "align_offset") {
     } else if (name == "begin_panic") {
-    } // Function
-    else if (name == "panic_str") {
+    } else if (name == "panic_str") {
     } else if (name == "exchange_malloc") {
     } else if (name == "exchange_free") {
     } else if (name == "box_free") {
@@ -1590,10 +1579,6 @@ struct CMultiHandlerLint: public ExpandDecorator {
 
     AttrStage stage() const override;
 
-    /// Report the plain lint names in `(...)`. The list also carries entries
-    /// this compiler has no lint for — tool lints (`clippy::foo`) and keyed
-    /// entries (`reason = "..."`) — so the scan skips whatever it cannot read
-    /// instead of rejecting the attribute.
     template <typename F>
     static void collectLintNames(const ASTAttribute& mi, const F& cb);
 
@@ -1757,7 +1742,7 @@ struct DecoratorPreludeImport: public ExpandDecorator {
 };
 
 struct CTestHandler: public ExpandDecorator {
-    AttrStage stage() const override; // Expand early so tests are removed before inner expansion
+    AttrStage stage() const override;
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
@@ -2050,7 +2035,7 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
             } else if (reprType == "Rust") {
             } else if (reprType == "no_niche") {
                 // TODO: rust-lang/rust#68303 happens with UnsafeCell and niche optionisations
-                // - Would trustme also have this?
+
             } else {
                 TODO(sp, "Handle struct repr '" << reprType << "'");
             }
@@ -2130,15 +2115,10 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
             } else if (reprStr == "transparent") {
                 e->markings.repr = ASTUnion::Markings::Repr::Transparent;
             } else if (reprStr == "packed") {
-                //switch( e->m_markings.repr )
-                //{
-                //case AST::Struct::Markings::Repr::C:
-                //case AST::Struct::Markings::Repr::Rust:
-                //default:
                 //    // TODO: Error
-                //}
+
                 //    // TODO: Error
-                //}
+
                 if (lex.getTokenIf(TOK_PAREN_OPEN)) {
                     auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
                     auto* val = cast<ASTExprNodeInteger>(&*n);
@@ -2460,8 +2440,6 @@ auto CHandlerUnsafe::handleItem(const Span& sp, const ASTAttribute& mi, const Wi
             lex.getTokenCheck(TOK_EQUAL);
             auto s = lex.getTokenCheck(TOK_STRING).str();
 
-            // The last name given wins, as it does in rustc: `#[unsafe(no_mangle)]`
-            // alongside this one is a lint, not an error.
             if (auto* e = i.opt_Function()) {
                 e->markings.linkName = s;
             } else if (auto* e = i.opt_Static()) {
@@ -2637,8 +2615,6 @@ auto Deriver::getParamsWithBounds(ObjPool& pool, const Span& sp, const ASTGeneri
     ASTGenericParams params = p.clone();
 
     // TODO: Get bounds based on generic (or similar) types used within the type.
-    // - How would this code (that runs before resolve) know what's a generic and what's a local type?
-    // - Searches within the type for a Path that starts with that param.
 
     unsigned int i = 0;
     for (const auto& arg : params.params) {
@@ -3492,7 +3468,7 @@ auto DeriverClone::makeCopyClone(Span sp, const DeriveOpts& opts, const ASTGener
     auto ret = this->makeRet(sp, opts.coreName, p, type, ::std::move(fieldBounds), NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(RcString("self")))));
 
     // TODO: What if the type is only conditionally copy? (generic over something)
-    // - Could abuse specialisation support...
+
     // TODO: Are these bounds needed?
     for (auto& b : ret.def().params().bounds) {
         auto& be = b.as_IsTrait();
@@ -4350,14 +4326,10 @@ auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& attr, const W
             } else if (name == "str") {
             } else if (name == "slice") {
             } else if (name == "slice_u8") {
-            } // libcore now, `impl [u8]`
-            else if (name == "slice_alloc") {
-            } // liballoc's impls on [T]
-            else if (name == "slice_u8_alloc") {
-            } // liballoc's impls on [u8]
-            else if (name == "str_alloc") {
-            } // liballoc's impls on str
-            else if (name == "f32") {
+            } else if (name == "slice_alloc") {
+            } else if (name == "slice_u8_alloc") {
+            } else if (name == "str_alloc") {
+            } else if (name == "f32") {
             } else if (name == "f64") {
             } else if (name == "f32_runtime") {
             } else if (name == "f64_runtime") {
@@ -4366,7 +4338,7 @@ auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& attr, const W
             }
 
             // TODO: Somehow annotate these impls to allow them to provide inherents?
-            // - trustme is lazy and inefficient, so these don't matter :)
+
             break;
         }
         case ASTItem::TAG_Function: {

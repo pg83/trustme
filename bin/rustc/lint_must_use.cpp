@@ -10,8 +10,6 @@
 namespace {
     const char* const LINT_NAME = "unused_must_use";
 
-    /// Peel the wrappers rustc's lint looks through: a block that only yields a
-    /// value is the value, `unsafe` block included.
     const HIRExprNode* peelBlocks(const HIRExprNode* node) {
         while (const auto* block = cast<const HIRExprNodeBlock>(node)) {
             if (!block->valueNode || !block->nodes.empty()) {

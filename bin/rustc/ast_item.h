@@ -11,17 +11,17 @@ class ASTVisibility {
 public:
     enum class Ty {
         Private,
-        Pub,      // pub
-        Crate,    // crate
-        PubCrate, // pub(crate)
-        PubSuper, // pub(super)
-        PubSelf,  // pub(self)
-        PubIn,    // pub(in ...)
+        Pub,
+        Crate,
+        PubCrate,
+        PubSuper,
+        PubSelf,
+        PubIn,
     };
 
 private:
-    ::std::shared_ptr<ASTPath> inPath_;          // Only valid when
-    ::std::shared_ptr<ASTAbsolutePath> visPath_; // if null, then global
+    ::std::shared_ptr<ASTPath> inPath_;
+    ::std::shared_ptr<ASTAbsolutePath> visPath_;
     Ty ty_;
 
     ASTVisibility();
@@ -49,10 +49,9 @@ public:
     const ASTAbsolutePath& visPath() const;
 
     bool isVisible(const ASTAbsolutePath& fromMod) const;
-    /// Returns true if this visibility is "more" than `x`
+
     bool contains(const ASTVisibility& x) const;
 
-    /// Updates this visibility such that `contains(x)` returns true
     void inplaceUnion(const ASTVisibility& x);
 };
 

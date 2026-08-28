@@ -1,10 +1,10 @@
 #include "mir_mir.h"
 
-#include "trans_target.h" // Target_GetPointerBits
+#include "trans_target.h"
 #include "hir_encoded_literal.h"
 #include "hir_typeck_monomorph.h"
 
-#include <algorithm> // std::min
+#include <algorithm>
 
 ::std::ostream& operator<<(::std::ostream& os, const MIRConstant& v) {
     switch (v.tag()) {
@@ -86,7 +86,7 @@
                     os << "+0x" << std::hex << e.offset << std::dec;
                 }
             } else {
-                os << "#UNSIZE_PLACEHOLDER"; // A `Const` with `nullptr` is a placeholder for MakeDst `Unsize`
+                os << "#UNSIZE_PLACEHOLDER";
             }
             break;
         }

@@ -2,7 +2,7 @@
 #include "synext.h"
 
 #include "ast_ast.h"
-#include "hir_hir.h" // for HIR::Crate
+#include "hir_hir.h"
 #include "ast_expr.h"
 #include "ast_crate.h"
 #include "wire_board.h"

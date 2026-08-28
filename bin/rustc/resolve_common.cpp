@@ -11,7 +11,7 @@
 
 #include <std/alg/defer.h>
 
-#include <span> // std::span
+#include <span>
 
 ::std::ostream& operator<<(::std::ostream& os, ResolveNamespace ns) {
     switch (ns) {
@@ -67,8 +67,7 @@ namespace {
 }
 
 // TODO: Function that turns a relative path into a canonical absolute path to the containing module
-// - This should check if the index has been populated, and use it if present.
-// - NOTE: Can only go to the containing module, not to the item itself - `use` can end up importing disparate paths for all three namespaces.
+
 ResolveModuleRef ResolveLookupGetModule(const Span& sp, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, bool ignoreLast, ASTAbsolutePath* outPath) {
     ResolveState rs(sp, settings, crate);
 
@@ -627,7 +626,6 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                                 return ResolveItemRefMacro(rv);
                             }
                             // HACK: Ignore, as there's references to the `Debug` macro... but trustme doesn't do things that way
-                            // - Probably should have derives be in the same namespace as macros
                         }
                         return ResolveItemRefMacro(&**mac);
                     }
@@ -720,7 +718,6 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                             break;
                         }
                         case ResolveModuleRef::TAG_None: {
-                            // Ignore for now?
                             break;
                         }
                     }
@@ -860,8 +857,7 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                                 return ResolveItemRefMacro(pm);
                             }
                             //    TODO(sp, "Resolve HIR import to decorator");
-                            //    //return ResolveItemRef_Macro(pm);
-                            //}
+
                             return {};
                         }
                     };

@@ -10,9 +10,6 @@
 namespace {
     const char* const LINT_NAME = "unsafe_code";
 
-    /// Code that a macro from another crate expanded to is not the caller's to
-    /// fix, and the standard library relies on that: `thread_local!` is unsafe
-    /// inside while its users may forbid unsafe code.
     bool spanIsNotUserCode(const Span& sp, const RcString& crateName) {
         for (Span frame = sp; frame; frame = frame->parentSpan) {
             if (const auto* macro = cast<const SpanInnerMacro>(frame.get())) {
