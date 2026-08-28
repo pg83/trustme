@@ -2216,11 +2216,17 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             }
         }
 
-        Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve, bool bindRigidValues)
+        Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve)
+            : Unifier(sp, table, resolve, {})
+        {
+        }
+
+        Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve, Options options)
             : sp_(sp)
             , table_(table)
             , resolve_(resolve)
-            , bindRigidValues_(bindRigidValues)
+            , bindRigidValues_(options.bindRigidValues)
+            , relateProjectionInputs_(options.relateProjectionInputs)
         {
         }
 
@@ -2359,6 +2365,28 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return Outcome::Mismatch;
                 }
                 return this->defer(left, right);
+            }
+
+            if (relateProjectionInputs_) {
+                const auto* leftPath = left->opt_Path();
+                const auto* rightPath = right->opt_Path();
+                const auto* leftProjection = leftPath ? leftPath->path.data.opt_UfcsKnown() : nullptr;
+                const auto* rightProjection = rightPath ? rightPath->path.data.opt_UfcsKnown() : nullptr;
+                if (leftProjection || rightProjection) {
+                    if (!leftProjection || !rightProjection) {
+                        return this->defer(left, right);
+                    }
+                    if (leftProjection->trait.path != rightProjection->trait.path
+                        || leftProjection->item != rightProjection->item) {
+                        return Outcome::Mismatch;
+                    }
+                    if (this->unifyResolved(leftProjection->type, rightProjection->type) == Outcome::Mismatch
+                        || this->unifyParams(leftProjection->trait.params, rightProjection->trait.params) == Outcome::Mismatch
+                        || this->unifyParams(leftProjection->params, rightProjection->params) == Outcome::Mismatch) {
+                        return Outcome::Mismatch;
+                    }
+                    return Outcome::Proven;
+                }
             }
             if (typeIsRigidUnknown(left) || typeIsRigidUnknown(right)) {
                 return this->defer(left, right);
@@ -4852,7 +4880,7 @@ default:
                     return result;
                 }
 
-                Unifier unifier(span(), table, nullptr, true);
+                Unifier unifier(span(), table, nullptr, {.bindRigidValues = true});
                 bool responseMismatch = false;
                 // Ordinary unification treats unresolved projections as
                 // opaque. Response extraction has a narrower job: matching
@@ -5495,7 +5523,7 @@ default:
                 const auto candidateType = typeHasHrtb ? instantiatedType : originalCandidateType;
                 const HIRPathParams& candidateParams = paramsHaveHrtb ? instantiatedParams : originalCandidateParams;
 
-                Unifier unifier(span(), resolve_.ivars, &resolve_, headHasHrtb);
+                Unifier unifier(span(), resolve_.ivars, &resolve_, {.bindRigidValues = headHasHrtb});
                 auto relation = unifier.unify(goalType, candidateType);
                 if (relation == Unifier::Outcome::Mismatch) {
                     return Certainty::NoSolution;
@@ -6071,7 +6099,7 @@ default:
 
                 InstantiateCandidate instantiate(crate.types, typeBindings, valueBindings);
                 const auto probeParams = instantiate.monomorphPathParams(span(), params, true);
-                Unifier unifier(span(), resolve_.ivars, &resolve_, true);
+                Unifier unifier(span(), resolve_.ivars, &resolve_, {.bindRigidValues = true});
 
                 class Relations {
                     const Span& span_;

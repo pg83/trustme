@@ -374,6 +374,47 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(unifier.pendingValues().empty());
     }
 
+    STD_TEST(testImplHeaderRelationMatchesProjectionInputs) {
+        auto pool = stl::ObjPool::fromMemory();
+        u32 id = 0;
+        HIRTypeInterner types(*pool.mutPtr(), id);
+        HMTypeInferrence table(types);
+        Span sp;
+
+        const auto projection = [&](const HIRTypeData* input) {
+            HIRGenericPath trait;
+            trait.params.types.push_back(input);
+            return types.path(
+                HIRPath(
+                    types.primitive(HIRCoreType::U8),
+                    ::std::move(trait),
+                    RcString::newInterned("Output")
+                ),
+                HIRTypePathBinding::make_Opaque({})
+            );
+        };
+
+        const auto rigidInput = types.generic(RcString::newInterned("T"), 0);
+        const auto ordinarySlot = table.newIvarTr();
+        Unifier ordinary(sp, table);
+        STD_INSIST(ordinary.unify(projection(rigidInput), projection(ordinarySlot)) == Unifier::Outcome::Ambiguous);
+        STD_INSIST(table.getType(ordinarySlot) == ordinarySlot);
+
+        const auto candidateSlot = table.newIvarTr();
+        Unifier candidate(sp, table, nullptr, {.relateProjectionInputs = true});
+        STD_INSIST(candidate.unify(projection(rigidInput), projection(candidateSlot)) == Unifier::Outcome::Proven);
+        STD_INSIST(table.getType(candidateSlot) == rigidInput);
+
+        STD_INSIST(candidate.unify(
+            projection(rigidInput),
+            projection(types.primitive(HIRCoreType::U16))
+        ) == Unifier::Outcome::Mismatch);
+        STD_INSIST(candidate.unify(
+            rigidInput,
+            projection(types.primitive(HIRCoreType::U16))
+        ) == Unifier::Outcome::Ambiguous);
+    }
+
     STD_TEST(testCandidateConstExistentialCapturesRigidPlaceholder) {
         auto pool = stl::ObjPool::fromMemory();
         u32 id = 0;
@@ -390,7 +431,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(ordinary.pendingValues().size() == 1);
         STD_INSIST(table.getValue(ordinarySlot).is_Infer());
 
-        Unifier candidate(sp, table, nullptr, true);
+        Unifier candidate(sp, table, nullptr, {.bindRigidValues = true});
         STD_INSIST(candidate.unifyValues(placeholder, HIRConstGeneric::make_Infer({candidateSlot})) == Unifier::Outcome::Proven);
         STD_INSIST(candidate.pendingValues().empty());
         STD_INSIST(table.getValue(candidateSlot) == placeholder);

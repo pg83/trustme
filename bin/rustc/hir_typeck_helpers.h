@@ -340,6 +340,11 @@ class TraitResolution;
 
 class Unifier {
 public:
+    struct Options {
+        bool bindRigidValues = false;
+        bool relateProjectionInputs = false;
+    };
+
     enum class Outcome : u8 {
         /// Equal under the recorded bindings, with no deferred relation.
         Proven,
@@ -361,7 +366,8 @@ public:
         HIRConstGeneric right;
     };
 
-    Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve = nullptr, bool bindRigidValues = false);
+    Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve = nullptr);
+    Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve, Options options);
 
     Outcome unify(const HIRTypeData* left, const HIRTypeData* right);
     Outcome unifyValues(const HIRConstGeneric& left, const HIRConstGeneric& right);
@@ -395,6 +401,10 @@ private:
     // capture the goal's rigid placeholder/canonical value.  Ordinary
     // equality probes keep those relations pending instead.
     bool bindRigidValues_;
+    // In an impl head an associated projection is a declared rigid
+    // constructor. Matching two occurrences of that constructor relates its
+    // Self and generic inputs instead of treating the whole alias as opaque.
+    bool relateProjectionInputs_;
     stl::Vector<PendingEquality> pending_;
     ThinVector<PendingValueEquality> pendingValues_;
 };

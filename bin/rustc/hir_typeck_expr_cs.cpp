@@ -10228,158 +10228,63 @@ namespace {
 bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) __attribute__((warn_unused_result));
 bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr);
 
-class OwnedImplMatcher: public HIRMatchGenerics {
-    HIRPathParams& implParams;
-
-public:
-    OwnedImplMatcher(HIRTypeInterner& types, HIRPathParams& implParams)
-        : HIRMatchGenerics(types.objectPool())
-        , implParams(implParams)
-    {
+Unifier::Outcome relateInherentImplHeader(
+    Context& context,
+    const Span& sp,
+    const HIRTypeImpl& impl,
+    const HIRTypeData* receiver,
+    HIRPathParams& implParams
+) {
+    ASSERT_BUG(sp, implParams.types.size() <= impl.params.types.size(),
+        "Too many inherent impl type parameters");
+    implParams.types.reserve(impl.params.types.size());
+    while (implParams.types.size() < impl.params.types.size()) {
+        implParams.types.push_back(context.ivars.newIvarTr());
     }
-
-    HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override {
-        assert(g.binding < implParams.types.size());
-        auto& slot = implParams.types[g.binding];
-        if (!(slot->is_Infer() && slot->as_Infer().index == ~0u)) {
-            return slot->compareWithPlaceholders(Span(), ty, _resolve_cb);
+    for (auto& type : implParams.types) {
+        if (const auto* infer = type->opt_Infer(); infer && infer->index == ~0u) {
+            type = context.ivars.newIvarTr(infer->tyClass);
         }
-        slot = ty;
-        return HIRCompare::Equal;
     }
 
-    HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
-        assert(g.binding < implParams.values.size());
-        ASSERT_BUG(Span(), implParams.values[g.binding] == HIRConstGeneric(), "TODO: Multiple values? " << implParams.values[g.binding] << " and " << sz);
-        implParams.values[g.binding] = sz.clone();
-        return HIRCompare::Equal;
+    ASSERT_BUG(sp, implParams.values.size() <= impl.params.values.size(),
+        "Too many inherent impl const parameters");
+    implParams.values.reserve(impl.params.values.size());
+    while (implParams.values.size() < impl.params.values.size()) {
+        implParams.values.push_back(HIRConstGeneric::make_Infer({context.ivars.newIvarVal()}));
     }
-};
+    for (auto& value : implParams.values) {
+        if (const auto* infer = value.opt_Infer(); infer && infer->index == ~0u) {
+            value = HIRConstGeneric::make_Infer({context.ivars.newIvarVal()});
+        }
+    }
+
+    auto monomorph = MonomorphStatePtr(
+        context.crate.types, receiver, &implParams, nullptr
+    );
+    monomorph.setConstevalState(context.resolve.board(), HIRItemPath(""));
+    const auto candidate = monomorph.monomorphType(sp, impl.type, true);
+    Unifier relation(sp, context.ivars, &context.resolve, {
+        .bindRigidValues = true,
+        .relateProjectionInputs = true,
+    });
+    return relation.unify(receiver, candidate);
+}
 
 bool inherentImplMatchesReceiver(
     Context& context,
     const Span& sp,
     const HIRTypeImpl& impl,
-    const HIRTypeData* receiver,
-    ThinVector<SolverTypeEquality>* equalities = nullptr
+    const HIRTypeData* receiver
 ) {
-    HIRPathParams implParams;
-    while (implParams.types.size() < impl.params.types.size()) {
-        implParams.types.push_back(context.crate.types.infer());
-    }
-    implParams.values.resize(impl.params.values.size());
-
-    OwnedImplMatcher matcher(context.crate.types, implParams);
-    const auto match = impl.type->matchTestGenericsFuzz(
-        sp, receiver, context.ivars.callbackResolveInfer(), matcher);
-    if (match != HIRCompare::Fuzzy) {
-        return match == HIRCompare::Equal;
-    }
-
-    const auto candidate = MonomorphStatePtr(
-        context.crate.types, receiver, &implParams, nullptr
-    ).monomorphType(sp, impl.type, false);
-
-    // A defining opaque is an inference target in its defining scope.  Let
-    // the selected inherent method constrain it (for example,
-    // `Wrapper<Hidden>` selecting an impl for `Wrapper<u32>`).  Treating the
-    // erased alias as a rigid constructor here rejects that valid candidate
-    // before its signature can reveal the hidden type.
-    const bool hasDefiningOpaque = visitTyWith(receiver, [&](const HIRTypeData* type) {
-        const auto* erased = type->opt_ErasedType();
-        const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
-        return alias && context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
-    });
-    if (hasDefiningOpaque) {
-        return true;
-    }
-
-    // Impl-header projections are rigid aliases.  When both sides contain
-    // the same projection constructor, compare that declared form
-    // structurally instead of letting the opaque path act as a wildcard.
-    // Any caller-ivar relations are committed only after this impl is the
-    // sole surviving inherent candidate.
-    const auto matchRigid = [&](auto&& self, const HIRTypeData* left, const HIRTypeData* right) -> HIRCompare {
-        const auto resolveCallerInfer = [&](const HIRTypeData* type) {
-            const auto* infer = type->opt_Infer();
-            return infer && infer->index == ~0u ? type : context.getType(type);
-        };
-        left = resolveCallerInfer(left);
-        right = resolveCallerInfer(right);
-        if (left == right) {
-            return HIRCompare::Equal;
-        }
-        if (left->is_Infer() || right->is_Infer()) {
-            const auto containsCandidateInfer = [](const HIRTypeData* type) {
-                return visitTyWith(type, [](const HIRTypeData* inner) {
-                    const auto* infer = inner->opt_Infer();
-                    return infer && infer->index == ~0u;
-                });
-            };
-            if (containsCandidateInfer(left) || containsCandidateInfer(right)) {
-                return HIRCompare::Fuzzy;
-            }
-            if (equalities) {
-                equalities->push_back(SolverTypeEquality{left, right});
-            }
-            return HIRCompare::Fuzzy;
-        }
-        const auto* leftPath = left->opt_Path();
-        const auto* rightPath = right->opt_Path();
-        if (!leftPath || !rightPath || leftPath->path.data.tag() != rightPath->path.data.tag()) {
-            return left->compareWithPlaceholders(sp, right, context.ivars.callbackResolveInfer());
-        }
-        const auto matchParams = [&](const HIRPathParams& leftParams, const HIRPathParams& rightParams) {
-            if (leftParams.types.size() != rightParams.types.size() || leftParams.values.size() != rightParams.values.size()) {
-                return HIRCompare::Unequal;
-            }
-            auto result = HIRCompare::Equal;
-            for (size_t i = 0; i < leftParams.types.size(); i++) {
-                result &= self(self, leftParams.types[i], rightParams.types[i]);
-                if (result == HIRCompare::Unequal) {
-                    return result;
-                }
-            }
-            for (size_t i = 0; i < leftParams.values.size(); i++) {
-                if (leftParams.values[i] != rightParams.values[i]) {
-                    result = HIRCompare::Fuzzy;
-                }
-            }
-            return result;
-        };
-        if (const auto* leftGeneric = leftPath->path.data.opt_Generic()) {
-            const auto& rightGeneric = rightPath->path.data.as_Generic();
-            return leftGeneric->path == rightGeneric.path
-                ? matchParams(leftGeneric->params, rightGeneric.params)
-                : HIRCompare::Unequal;
-        }
-        if (const auto* leftProjection = leftPath->path.data.opt_UfcsKnown()) {
-            const auto& rightProjection = rightPath->path.data.as_UfcsKnown();
-            if (leftProjection->trait.path != rightProjection.trait.path || leftProjection->item != rightProjection.item) {
-                return HIRCompare::Unequal;
-            }
-            auto result = self(self, leftProjection->type, rightProjection.type);
-            result &= matchParams(leftProjection->trait.params, rightProjection.trait.params);
-            result &= matchParams(leftProjection->params, rightProjection.params);
-            return result;
-        }
-        return left->compareWithPlaceholders(sp, right, context.ivars.callbackResolveInfer());
+    const auto snapshot = context.ivars.snapshot();
+    STD_DEFER {
+        context.ivars.rollbackTo(snapshot);
     };
-    if (matchRigid(matchRigid, candidate, receiver) == HIRCompare::Unequal) {
-        return false;
-    }
 
-    const bool hasRigidOpaque = visitTyWith(receiver, [&](const HIRTypeData* type) {
-        const auto* erased = type->opt_ErasedType();
-        const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
-        return alias && !context.resolve.isOpaqueAliasDefiningScope(*alias->inner);
-    });
-    if (!hasRigidOpaque) {
-        return true;
-    }
-
-    return candidate->compareWithPlaceholders(
-        sp, receiver, context.ivars.callbackResolveInfer()) != HIRCompare::Unequal;
+    HIRPathParams implParams;
+    return relateInherentImplHeader(context, sp, impl, receiver, implParams)
+        != Unifier::Outcome::Mismatch;
 }
 
 void populateDefaults(const Span& sp, Context& context, const MonomorphStatePtr& ms, const HIRGenericParams& paramDefs, HIRPathParams& params) {
@@ -10688,13 +10593,10 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
     e.type = lookupType;
 
     const HIRTypeImpl* implPtr = nullptr;
-    ThinVector<SolverTypeEquality> implEqualities;
     // Detect multiple applicable methods and get the caller to try again later if there are multiple
     unsigned int count = 0;
     context.crate.findTypeImpls(lookupType, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
-        ThinVector<SolverTypeEquality> candidateEqualities;
-        const bool matches = inherentImplMatchesReceiver(context, sp, impl, lookupType, &candidateEqualities);
-        if (!matches) {
+        if (!inherentImplMatchesReceiver(context, sp, impl, lookupType)) {
             return false;
         }
         auto it = impl.methods.find(e.item);
@@ -10703,7 +10605,6 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
         }
         fcnPtr = &it->second.data;
         implPtr = &impl;
-        implEqualities = ::std::move(candidateEqualities);
         count++;
         return false;
     });
@@ -10715,54 +10616,17 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
         return false;
     }
     assert(implPtr);
-    for (const auto& equality : implEqualities) {
-        context.equateTypes(sp, equality.left, equality.right);
-    }
     fixParamCount(sp, context, e.type, false, path, fcnPtr->params, e.params);
     cache.fcnParams = &fcnPtr->params;
 
-    // If the impl block has parameters, figure out what types they map to
-    // - The function params are already mapped (from fix_param_count)
+    // The probe above was rolled back. Instantiate the selected impl once in
+    // the caller's table and commit the same structural relation, so every
+    // type/const parameter is represented by a real inference variable.
     auto& implParams = e.implParams;
-    if (implPtr->params.isGeneric()) {
-        while (implParams.types.size() < implPtr->params.types.size()) {
-            implParams.types.push_back(context.crate.types.infer());
-        }
-        implParams.values.resize(implPtr->params.values.size());
-        OwnedImplMatcher matcher(context.crate.types, implParams);
-
-        auto cmp = implPtr->type->matchTestGenericsFuzz(sp, lookupType, context.ivars.callbackResolveInfer(), matcher);
-        if (cmp == HIRCompare::Fuzzy) {
-            // If the match was fuzzy, it could be due to a compound being matched against an ivar
-            for (auto& ty : implParams.types) {
-                if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
-                    // Allocate a new ivar for the param
-                    ty = context.ivars.newIvarTr();
-                }
-            }
-
-            context.ivars.addIvarsParams(implParams);
-
-            // Monomorphise the impl type with the new ivars, and equate to e.type
-            // TODO: Use a copy of `MonomorphStatePtr` that calls `context.get_type`
-            auto implMonomorphCb = MonomorphStatePtr(context.crate.types, e.type, &implParams, nullptr);
-            auto implTyMono = implMonomorphCb.monomorphType(sp, implPtr->type, false);
-
-            context.equateTypes(sp, implTyMono, e.type);
-        } else if (cmp == HIRCompare::Unequal) {
-            BUG(sp, "Failed to match inherent impl?!");
-        } else {
-            context.ivars.addIvarsParams(implParams);
-        }
-
-        // Fill unknown parametrs with ivars
-        for (auto& ty : implParams.types) {
-            if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
-                // Allocate a new ivar for the param
-                ty = context.ivars.newIvarTr();
-            }
-        }
-    }
+    ASSERT_BUG(sp,
+        relateInherentImplHeader(context, sp, *implPtr, lookupType, implParams)
+            != Unifier::Outcome::Mismatch,
+        "Selected inherent impl no longer matches " << lookupType);
 
     // Create monomorphise callback
     const auto& fcnParams = e.params;
@@ -12661,28 +12525,11 @@ public:
                         fixParamCount(sp, this->context, e.type, false, node.path, constPtr->params, e.params);
                     }
 
-                    // If the impl block has parameters, figure out what types they map to
-                    // - The function params are already mapped (from fix_param_count)
                     auto& implParams = e.implParams;
-                    if (implPtr->params.isGeneric()) {
-                        while (implParams.types.size() < implPtr->params.types.size()) {
-                            implParams.types.push_back(this->context.crate.types.infer());
-                        }
-                        implParams.values.resize(implPtr->params.values.size());
-                        OwnedImplMatcher matcher(context.crate.types, implParams);
-                        // NOTE: Could be fuzzy.
-                        bool r = implPtr->type->matchTestGenerics(sp, lookupType, this->context.ivars.callbackResolveInfer(), matcher);
-                        for (auto& ty : implParams.types) {
-                            // Create new ivars if there's holes
-                            if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
-                                this->context.addIvars(ty);
-                            }
-                        }
-                        if (!r) {
-                            auto t = MonomorphStatePtr(this->context.crate.types, nullptr, &implParams, nullptr).monomorphType(sp, implPtr->type);
-                            this->context.equateTypes(node.span(), t, e.type);
-                        }
-                    }
+                    ASSERT_BUG(sp,
+                        relateInherentImplHeader(this->context, sp, *implPtr, lookupType, implParams)
+                            != Unifier::Outcome::Mismatch,
+                        "Selected inherent value impl no longer matches " << lookupType);
 
                     {
                         auto implType = MonomorphStatePtr(this->context.crate.types, e.type, &implParams, nullptr).monomorphType(sp, implPtr->type);
