@@ -15,8 +15,10 @@
 
 using namespace stl;
 
+namespace {
 template <typename T>
 struct D {};
+}
 
 struct HirDeserialiser {
     RcString crateName;
@@ -209,6 +211,7 @@ struct HirDeserialiser {
     HIRAssociatedType deserialiseAssociatedtype();
 };
 
+namespace {
 #define DEF_D(ty, ...)                      \
     struct D<ty> {                          \
         static ty des(HirDeserialiser& d) { \
@@ -314,6 +317,8 @@ template <typename T>
 DEF_D(HIRCrate::ImplGroup<std::unique_ptr<T>>, HIRCrate::ImplGroup<std::unique_ptr<T>> rv; rv.named = d.deserialisePathmap<std::vector<std::unique_ptr<T>>>(); rv.nonNamed = d.deserialiseVec<std::unique_ptr<T>>(); rv.generic = d.deserialiseVec<std::unique_ptr<T>>(); return rv;)
 template <>
 DEF_D(HIRExternLibrary, return d.deserialiseExtlib();)
+
+}
 
 namespace {
     struct TreeVisitor: public HIRVisitor, public HIRExprVisitor {

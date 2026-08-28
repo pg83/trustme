@@ -352,11 +352,13 @@ std::ostream& operator<<(std::ostream& os, const ASTPathNode& pn) {
     return os;
 }
 
+namespace {
 template <typename T>
 typename std::vector<ASTNamed<T>>::const_iterator findNamed(const std::vector<ASTNamed<T>>& vec, const std::string& name) {
     return std::find_if(vec.begin(), vec.end(), [&name](const ASTNamed<T>& x) {
         return x.name == name;
     });
+}
 }
 
 ASTPath::~ASTPath() {

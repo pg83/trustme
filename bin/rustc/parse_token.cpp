@@ -14,6 +14,7 @@
 
 using namespace stl;
 
+namespace {
 struct EscapedString {
     StringView s;
 
@@ -98,6 +99,7 @@ struct EscapedByteString {
         return os;
     }
 };
+}
 
 Token::~Token() {
     switch (type_) {
@@ -461,8 +463,10 @@ enum eTokenType Token::typefromstr(const std::string& s) {
     return TOK_NULL;
 }
 
+namespace {
 static StringView literalBytes(const std::string& s) {
     return StringView(reinterpret_cast<const u8*>(s.data()), s.size());
+}
 }
 
 void printEscapedLiteral(std::ostream& os, eTokenType type, const u8* value, size_t size) {

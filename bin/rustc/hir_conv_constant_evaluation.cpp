@@ -231,6 +231,8 @@ struct CtfeContext {
 };
 
 struct MIREvalAllocation;
+
+namespace {
 struct MIREvalConstant;
 struct MIREvalStaticRef;
 struct MIREvalRelocPtr;
@@ -258,6 +260,8 @@ struct MIREvalConstantPtr final: public MIREvalPtr<MIREvalConstant> {
     static MIREvalConstantPtr allocate(ObjPool* pool, const void* data, size_t len);
 };
 
+}
+
 struct MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
     static MIREvalAllocationPtr allocate(ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty);
     static MIREvalAllocationPtr allocateScratch(ObjPool* pool, size_t size);
@@ -265,6 +269,7 @@ struct MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
     static MIREvalAllocationPtr allocateRo(ObjPool* pool, const void* data, size_t len);
 };
 
+namespace {
 struct MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
     static MIREvalStaticRefPtr allocate(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending = false);
 };
@@ -368,6 +373,8 @@ struct MIREvalConstant final: public IValue {
     void setReloc(size_t ofs, MIREvalRelocPtr ptr) override;
 };
 
+}
+
 struct MIREvalAllocation final: public IValue {
     friend struct Embed<MIREvalAllocation>;
     friend struct MIREvalAllocationPtr;
@@ -433,6 +440,7 @@ struct MIREvalAllocation final: public IValue {
     const u8* getMask() const;
 };
 
+namespace {
 struct MIREvalStaticRef final: public IValue {
     friend struct Embed<MIREvalStaticRef>;
     friend struct MIREvalStaticRefPtr;
@@ -539,6 +547,8 @@ struct MIREvalPathCallback final: public MIRPathCallback {
 
     void write(std::ostream& os) const override;
 };
+
+}
 
 struct MIREvalCallStackEntry {
     ObjPool* const valuePool;
@@ -797,12 +807,14 @@ namespace {
     };
 }
 
+namespace {
 void putbHex(std::ostream& os, u8 v) {
     char tmp[3];
     tmp[0] = "0123456789ABCDEF"[v >> 4];
     tmp[1] = "0123456789ABCDEF"[v & 0xF];
     tmp[2] = '\0';
     os << tmp;
+}
 }
 
 namespace {
@@ -842,6 +854,7 @@ namespace {
     }
 }
 
+namespace {
 std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr) {
     if (!vr.storage) {
         os << "ValueRef(null)";
@@ -856,6 +869,7 @@ std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr) {
 std::ostream& operator<<(std::ostream& os, const MIREvalAllocationPtr& ap) {
     os << MIREvalValueRef(ap);
     return os;
+}
 }
 
 MIREvalConstantPtr MIREvalConstantPtr::allocate(ObjPool* pool, const void* data, size_t len) {
@@ -1513,6 +1527,7 @@ MIREvalAllocationPtr HIREvaluator::runUntilStackEmpty() {
     ERROR(this->rootSpan, E0000, "Constant evaluation ran for too long - " << numStmtsRun << " statements, " << idx << " blocks");
 }
 
+namespace {
 static void writeCtfeUnsizeMetadata(MIREvalCallStackEntry& localState, MIREvalValueRef dst, const HIRTypeData* dynamicTypeD, const HIRTypeData* dynamicTypeS) {
     const auto& state = localState.state;
     while (const auto* pathD = dynamicTypeD->opt_Path()) {
@@ -1606,6 +1621,8 @@ static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallS
             break;
         }
     }
+}
+
 }
 
 void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStatement& stmt) {

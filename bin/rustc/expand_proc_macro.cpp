@@ -30,6 +30,36 @@ extern char** environ;
 
 #define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
 
+namespace {
+enum class TokenClass {
+    EndOfStream = 0,
+    Symbol = 1,
+    Ident = 2,
+    Lifetime = 3,
+    String = 4,
+    ByteString = 5,
+    CharLit = 6,
+    UnsignedInt = 7,
+    SignedInt = 8,
+    Float = 9,
+    SpanRef = 10,
+    SpanDef = 11,
+    RawLiteral = 12,
+};
+
+enum class FragType {
+    Ident = 0,
+    Tt = 1,
+
+    Path = 2,
+    Type = 3,
+
+    Expr = 4,
+    Statement = 5,
+    Block = 6,
+    Pattern = 7,
+};
+
 struct DecoratorProcMacroDerive: public ExpandDecorator {
     AttrStage stage() const override;
 
@@ -134,6 +164,7 @@ struct ProcMacroInv: public TokenStream {
     u64 recvV128u();
     U128 recvV128uU128();
 };
+}
 
 namespace {
     struct ProcMacroVisitor {
@@ -263,34 +294,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     crate.langItems["trustme-main"] = ASTAbsolutePath("", {"proc_macro#", "main"});
 }
 
-enum class TokenClass {
-    EndOfStream = 0,
-    Symbol = 1,
-    Ident = 2,
-    Lifetime = 3,
-    String = 4,
-    ByteString = 5,
-    CharLit = 6,
-    UnsignedInt = 7,
-    SignedInt = 8,
-    Float = 9,
-    SpanRef = 10,
-    SpanDef = 11,
-    RawLiteral = 12,
-};
-enum class FragType {
-    Ident = 0,
-    Tt = 1,
-
-    Path = 2,
-    Type = 3,
-
-    Expr = 4,
-    Statement = 5,
-    Block = 6,
-    Pattern = 7,
-};
-
+namespace {
 ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath) {
     const auto& crateName = macPath.front();
     ASSERT_BUG(sp, crate.externCrates.count(crateName), "Crate not loaded for macro: [" << macPath << "]");
@@ -349,6 +353,7 @@ std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb
     cb(v);
     pmi.sendDone();
     return box$(pmi);
+}
 }
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {

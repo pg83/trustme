@@ -22,6 +22,7 @@
         }                                                               \
     } while (0)
 
+namespace {
 struct RustPrinter: public ASTNodeVisitor {
     std::ostream& os;
     int indentLevel;
@@ -138,6 +139,7 @@ struct RustPrinter: public ASTNodeVisitor {
     RepeatLitStr indent();
     void decIndent();
 };
+}
 
 void RustPrinter::printAttrs(const ASTAttributeList& attrs) {
     for (const auto& a : attrs.items) {

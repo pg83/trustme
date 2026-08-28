@@ -9,6 +9,7 @@
 
 using namespace stl;
 
+namespace {
 static const struct {
     const char* name;
     enum eCoreType type;
@@ -34,6 +35,7 @@ static const struct {
     {"u8", CORETYPE_U8},
     {"usize", CORETYPE_UINT},
 };
+}
 
 ASTHigherRankedBounds::ASTHigherRankedBounds() = default;
 ASTHigherRankedBounds::~ASTHigherRankedBounds() = default;

@@ -462,6 +462,7 @@ namespace {
 
 }
 
+namespace {
 struct OwnedImplMatcher: public HIRMatchGenerics {
     HIRPathParams& implParams;
 
@@ -669,6 +670,7 @@ struct ExprVisitorEnum: public HIRExprVisitor {
 
     void equateTypesInnerCoerce(const Span& sp, const HIRTypeData* target, HIRExprNodeP& node);
 };
+}
 
 namespace {
 
@@ -728,7 +730,9 @@ namespace {
 
 #define NEWNODE(TY, SP, CLASS, ...) mkExprnodep(context.crate.pool->make<HIRExprNode##CLASS>(SP, ##__VA_ARGS__), TY)
 
+namespace {
 void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams& paramsDef, const Monomorphiser& ms, bool isImplLevel);
+}
 
 namespace {
 
@@ -7042,7 +7046,7 @@ namespace {
     }
 }
 
-bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) __attribute__((warn_unused_result));
+namespace {
 bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr);
 
 bool inherentImplMatchesReceiver(Context& context, const Span& sp, const HIRTypeImpl& impl, const HIRTypeData* receiver, ThinVector<SolverTypeEquality>* equalities = nullptr) {
@@ -7258,6 +7262,8 @@ void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams
     }
 }
 
+}
+
 /// TODO: If the function has multiple mismatched options, tell the caller to try again later?
 bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) {
     assert(cache.argTypes.size() == 0);
@@ -7431,6 +7437,7 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
     return true;
 }
 
+namespace {
 bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr) {
     auto& e = path.data.as_UfcsInherent();
     context.selectWellFormed(sp, e.type);
@@ -7521,6 +7528,8 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
     e.type = context.revealOpaqueTypes(e.type);
 
     return true;
+}
+
 }
 
 void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr, HIRExprNodeP& rootPtr) {

@@ -33,6 +33,7 @@ struct MirOperationsContext {
     bool visitingBlocks = false;
 };
 
+namespace {
 struct MirMutator {
     MIRFunction& fcn;
     unsigned int curBlock;
@@ -55,6 +56,7 @@ struct MirMutator {
 
     decltype(newStatements.begin()) flush();
 };
+}
 
 namespace {
     struct LvalueVisitor {
@@ -242,6 +244,7 @@ namespace {
     }
 }
 
+namespace {
 void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& lval);
 
 namespace {
@@ -1153,12 +1156,14 @@ void MIRCleanupConstant(const MIRTypeResolve& state, MirMutator& mutator, MIRCon
 
 void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam& p);
 
+namespace {
 static void MIRCleanupAsmConst(const MIRTypeResolve& state, MirMutator& mutator, MIRAsmParam& p) {
     auto param = MIRParam(std::move(p.as_Const()));
     MIRCleanupParam(state, mutator, param);
     if (param.is_Constant()) {
         p = MIRAsmParam::make_Const(std::move(param.as_Constant()));
     }
+}
 }
 
 void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam& p) {
@@ -1199,6 +1204,8 @@ void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam&
         } else {
         }
     }
+}
+
 }
 
 void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
@@ -1721,6 +1728,7 @@ void MIRCleanupCrate(const WireBoard& wb, HIRCrate& crate) {
     ov.visitCrate(crate);
 }
 
+namespace {
 bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, const TransList* list = nullptr);
 bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn);
@@ -1738,6 +1746,7 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseUselessReborrows(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseGarbageCollectPartial(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn);
+}
 
 void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
     Span sp;
@@ -1759,6 +1768,7 @@ void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, 
     return;
 }
 
+namespace {
 bool MIROptimiseInline(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType, const TransList& list, unsigned optLevel) {
     Span sp;
     bool rv = false;
@@ -1777,6 +1787,7 @@ bool MIROptimiseInline(const StaticTraitResolve& resolve, const HIRItemPath& pat
     }
 
     return rv;
+}
 }
 
 void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType, unsigned optLevel, bool doInline /*=true*/, bool validate /*=true*/) {
@@ -2339,6 +2350,7 @@ namespace {
     }
 }
 
+namespace {
 bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
@@ -7185,6 +7197,8 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
 
     // TODO: Detect if any optimisations happened, and return true in that case
     return false;
+}
+
 }
 
 void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn) {

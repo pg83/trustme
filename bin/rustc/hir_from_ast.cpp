@@ -29,6 +29,7 @@
 
 using namespace stl;
 
+namespace {
 struct ImplTraitSource {
     const HIRItemPath* path;
     const HIRGenericParams* paramsOuter;
@@ -99,7 +100,6 @@ struct AST2HIR {
     HIRCrate* lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crate);
 };
 
-namespace {
     template <typename Cb>
     void collectTypeLifetimes(const ASTType* ty, const Cb& cb);
 
@@ -253,8 +253,6 @@ namespace {
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
     };
 
-}
-
 struct IndexVisitor: public HIRVisitor {
     const HIRCrate& crate;
     Span nullSpan;
@@ -400,6 +398,7 @@ namespace {
         }
         UNREACHABLE();
     }
+}
 }
 
 HIRPublicity AST2HIR::LowerHIRVis(const HIRSimplePath& modPath, const ASTVisibility& vis) {
@@ -2774,6 +2773,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     return rv;
 }
 
+namespace {
 void _add_mod_ns_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRTypeItem ti) {
     mod.modItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{isPub, mv$(ti)})));
 }
@@ -2784,6 +2784,7 @@ void _add_mod_val_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicit
 
 void _add_mod_mac_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRMacroItem ti) {
     mod.macroItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{isPub, mv$(ti)})));
+}
 }
 
 HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attrs, const ASTStatic& e, const Span& sp, const RcString& name) {

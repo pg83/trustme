@@ -211,6 +211,7 @@ namespace {
 
 }
 
+namespace {
 struct Expander: public HIRVisitor {
     const WireBoard& wb;
     const HIRCrate& crate;
@@ -432,6 +433,7 @@ struct UfcsVisitor: public HIRVisitor {
 
     void visitPatternValue(const Span& sp, const HIRPattern& pat, HIRPattern::Value& val);
 };
+}
 
 namespace {
 
@@ -621,6 +623,7 @@ HIRTypeRef ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, cons
     return crate.types.infer();
 }
 
+namespace {
 HIRTypeRef ConvertHIRExpandAliasesGetExpansion(const HIRCrate& crate, const HIRPath& path, bool isExpr) {
     Span sp;
     switch (path.data.tag()) {
@@ -708,6 +711,7 @@ std::vector<HIRTraitPath> ConvertHIRExpandAliasesGetTraitExpansion(const Span& s
     }
     return rv;
 }
+}
 
 void ConvertHIRExpandAliases(const WireBoard& wb, HIRCrate& crate) {
     AliasConstGenericParamBinder(crate.types).visitCrate(crate);
@@ -742,6 +746,7 @@ void ConvertHIRMarkings(const WireBoard& wb, HIRCrate& crate) {
     exp2.visitCrate(crate);
 }
 
+namespace {
 void expandTraitImplDefaults(const HIRCrate& crate, const HIRSimplePath& traitPath, HIRTraitImpl& impl) {
     Span sp;
     const auto& trait = crate.getTraitByPath(sp, traitPath);
@@ -826,6 +831,7 @@ void pushIndexInherentMethods(HIRInherentCache& icache, const HIRSimplePath& lan
     }
     pushIndexInherentMethodsList(icache, langBox, src.typeImpls.nonNamed);
     pushIndexInherentMethodsList(icache, langBox, src.typeImpls.generic);
+}
 }
 
 void ConvertHIRResolveUFCSOuter(const WireBoard& wb, HIRCrate& crate) {

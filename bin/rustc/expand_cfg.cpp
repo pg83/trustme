@@ -35,6 +35,7 @@ struct CfgState {
     explicit CfgState(ObjPool& pool);
 };
 
+namespace {
 struct CCfgExpander: public ExpandProcMacro {
     std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
@@ -67,7 +68,6 @@ struct CCfgHandler: public ExpandDecorator {
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& i) const override;
 };
 
-namespace {
     struct CfgSpecParser {
         const std::string& input;
         size_t pos = 0;

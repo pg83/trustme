@@ -750,6 +750,7 @@ namespace {
 
 }
 
+namespace {
 struct StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
     const StaticTraitResolve& resolve_;
     const HIRTypeData* selfType;
@@ -958,6 +959,7 @@ struct StaticBorrowOuterVisitor: public HIRVisitor, public NewStaticCallback {
 
     void visitEnum(HIRItemPath p, HIREnum& item) override;
 };
+}
 
 namespace {
 
@@ -1215,6 +1217,7 @@ namespace {
 
 #define NEWNODE(TY, CLASS, ...) mkExprnodep(resolve_.hirCrate().pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
 
+namespace {
 static void checkConstFinalBorrow(const StaticTraitResolve& resolve, HIRExprNode& root) {
     HIRExprNode* node = &root;
     while (auto* block = cast<HIRExprNodeBlock>(node)) {
@@ -1261,6 +1264,7 @@ static HIRExprNodeP* staticBorrowPromotionRoot(HIRExprNodeP& value) {
         }
         return root;
     }
+}
 }
 
 void HIRExpandStaticBorrowConstantsMarkExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp) {

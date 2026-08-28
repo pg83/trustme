@@ -21,6 +21,7 @@
 
 using namespace stl;
 
+namespace {
 enum eItemType {
     ITEM_TRAIT,
     ITEM_STRUCT,
@@ -778,6 +779,7 @@ struct CTestHandlerIgnore: public ExpandDecorator {
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
+}
 
 namespace {
 
@@ -786,6 +788,7 @@ namespace {
     }
 }
 
+namespace {
 template <typename T>
 static inline std::vector<T> vec$(T v1) {
     std::vector<T> tmp;
@@ -1430,6 +1433,8 @@ void handleSave(const Span& sp, ASTCrate& crate, const std::string& name, const 
     }
 }
 
+}
+
 LangItemRegistry::LangItemRegistry(ObjPool* pool)
     : handlers(pool)
 {
@@ -1646,6 +1651,7 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
     }
 }
 
+namespace {
 void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path, const std::string& name, eItemType type, ASTItem& item) {
     const char* realName = nullptr;
     if (const auto* handler = registry.find(name.c_str())) {
@@ -1758,6 +1764,8 @@ void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& 
             ERROR(sp, E0000, "Duplicate definition of language item '" << name << "' - " << otherPath << " and " << path);
         }
     }
+}
+
 }
 
 void RegisterBuiltinDecorators(ExpandRegistry& registry) {

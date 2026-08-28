@@ -24,10 +24,12 @@
 
 using namespace stl;
 
+namespace {
 // TODO: Use a ProtoSpan instead of a point span?
 static inline ASTExprNodeP mkExprnodep(const TokenStream& lex, ASTExprNode* en) {
     en->setSpan(lex.pointSpan());
     return ASTExprNodeP(en);
+}
 }
 
 #define NEWNODE(type, ...) mkExprnodep(lex, new type(__VA_ARGS__))
@@ -45,7 +47,9 @@ std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStruc
 RcString getOptionalIdent(TokenStream& lex, RcString* sourceName = nullptr);
 ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs = {});
 bool ParseParamAttrsKeep(TokenStream& lex, ASTAttributeList* attrsOut = nullptr);
+namespace {
 static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex);
+}
 ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee = ASTExprNodeP());
 ASTExprNodeP ParseExpr1(TokenStream& lex);
 ASTExprNodeP ParseExprFC(TokenStream& lex);
@@ -256,6 +260,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
     return rv;
 }
 
+namespace {
 static void normaliseAbiFragment(TokenStream& lex) {
     if (lex.lookahead(0) != TOK_INTERPOLATED_EXPR) {
         return;
@@ -279,6 +284,7 @@ static bool getAbiStringOpt(TokenStream& lex, std::string& out) {
 }
 
 static bool exprIsBlockHeaded(ASTExprNode& node);
+}
 
 ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
     Token tok;
@@ -686,8 +692,10 @@ ASTExprNodeP ParseFlowControl(TokenStream& lex, ASTExprNodeFlow::Type type) {
     return NEWNODE(ASTExprNodeFlow, type, std::move(lifetime), std::move(val));
 }
 
+namespace {
 static bool exprIsBlockHeaded(ASTExprNode& node) {
     return cast<ASTExprNodeBlock>(&node) || cast<ASTExprNodeAsyncBlock>(&node) || cast<ASTExprNodeGeneratorBlock>(&node) || cast<ASTExprNodeTry>(&node) || cast<ASTExprNodeLoop>(&node) || cast<ASTExprNodeFor>(&node) || cast<ASTExprNodeWhile>(&node) || cast<ASTExprNodeMatch>(&node) || cast<ASTExprNodeIf>(&node);
+}
 }
 
 ASTExprNodeP ParseStmt(TokenStream& lex) {
@@ -1254,6 +1262,7 @@ ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
     return NEWNODE(ASTExprNodeStructLiteral, path, std::move(baseVal), std::move(items));
 }
 
+namespace {
 static bool isClosureStart(TokenStream& lex) {
     unsigned int ofs = 0;
     if (lex.lookahead(ofs) == TOK_RWORD_STATIC) {
@@ -1269,6 +1278,7 @@ static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex) {
     auto hrbs = ParseHRBOpt(lex);
     const bool isAsync = lex.getTokenIf(TOK_RWORD_ASYNC);
     return ParseExprValClosure(lex, isAsync, std::move(hrbs));
+}
 }
 
 ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs) {
@@ -2645,12 +2655,14 @@ ASTAttribute ParseMetaItem(TokenStream& lex);
 void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs);
 bool ParseMacroInvocationOpt(TokenStream& lex, ASTMacroInvocation& outInv);
 
+namespace {
 static ASTAbsolutePath VisibilityModulePath(TokenStream& lex) {
     auto path = lex.parseState().getCurrentMod().path();
     while (!path.nodes.empty() && path.nodes.back().c_str()[0] == '#') {
         path.nodes.pop_back();
     }
     return path;
+}
 }
 
 ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
@@ -3335,6 +3347,7 @@ ASTStruct ParseStruct(TokenStream& lex, const ASTAttributeList& metaItems) {
     }
 }
 
+namespace {
 static void ParseFunctionQualifiers(TokenStream& lex, Token& tok, ASTFunction::Flags& flags, std::string& abi) {
     if (tok.type() == TOK_RWORD_CONST) {
         switch (lex.lookahead(0)) {
@@ -3381,6 +3394,7 @@ static void ParseFunctionQualifiers(TokenStream& lex, Token& tok, ASTFunction::F
                 return;
         }
     }
+}
 }
 
 ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {

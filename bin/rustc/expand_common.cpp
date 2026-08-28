@@ -19,6 +19,7 @@ void RegisterSynextBuiltins(ExpandRegistry& registry);
 void RegisterCfgBuiltins(ExpandRegistry& registry);
 void RegisterProcMacroBuiltins(ExpandRegistry& registry);
 
+namespace {
 enum class ExpandMode {
     FirstPass,
     Iterate,
@@ -169,6 +170,7 @@ struct CExpandExpr: public ASTNodeVisitor {
 
     void visit(ASTExprNodeMacroDefinition&) override;
 };
+}
 
 void ExpandRegistry::addDecorator(const char* name, ExpandDecorator* handler) {
     decorators = pool->make<DecoratorEntry>(DecoratorEntry{name, handler, decorators});
@@ -216,13 +218,16 @@ ExpandDecorator* ExpandFindDecorator(const WireBoard& wb, const RcString& name) 
     return wb.expandRegistry->findDecorator(name);
 }
 
+namespace {
 void ParseModRootItemsInto(ASTModule& mod, size_t idx, TokenStream& lex) {
     auto oldItems = std::move(mod.items);
     ParseModRootItems(lex, mod);
     oldItems.insert(oldItems.begin() + idx + 1, std::make_move_iterator(mod.items.begin()), std::make_move_iterator(mod.items.end()));
     mod.items = std::move(oldItems);
 }
+}
 
+namespace {
 void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, AttrStage stage, const ExpandAttrCallback& f) {
     bool found = false;
     if (a.name().elems.empty()) {
@@ -377,7 +382,9 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
         //TODO(sp, "Unknown attribute #[" << a.name() << "]");
     }
 }
+}
 
+namespace {
 void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f) {
     for (auto& a : attrs.items) {
         const RcString rcstringCfg = RcString::newInterned("cfg");
@@ -462,7 +469,9 @@ void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage
         }
     }));
 }
+}
 
+namespace {
 bool ExpandAttrsCfgOnly(const ExpandState& es, ASTAttributeList& attrs) {
     bool remove = false;
     ExpandAttrsCfgAttr(*es.wb.settings, attrs);
@@ -479,6 +488,7 @@ bool ExpandAttrsCfgOnly(const ExpandState& es, ASTAttributeList& attrs) {
         }
     }));
     return !remove;
+}
 }
 
 MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTAttributeName& path) {
@@ -561,6 +571,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
     return MacroRef();
 }
 
+namespace {
 std::unique_ptr<TokenStream> ExpandMacroInner(const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, ASTModule& mod, Span miSpan, const ASTPath& path, const RcString& inputIdent, TokenTree& inputTt) {
     ASSERT_BUG(miSpan, path.isValid(), "Macro invocation with invalid path");
 
@@ -610,7 +621,9 @@ std::unique_ptr<TokenStream> ExpandMacroInner(const WireBoard& wb, const ASTCrat
     ASSERT_BUG(miSpan, rv, "Macro invocation returned null tokentree");
     return rv;
 }
+}
 
+namespace {
 std::unique_ptr<TokenStream> ExpandMacro(const ExpandState& es, ASTModule& mod, Span miSpan, const ASTPath& path, const RcString& inputIdent, TokenTree& inputTt) {
     auto rv = ExpandMacroInner(es.wb, es.crate, es.modstack, mod, miSpan, path, inputIdent, inputTt);
     if (rv) {
@@ -1090,6 +1103,8 @@ void ExpandGenericParams(const ExpandState& es, ASTModule& mod, ASTGenericParams
     }
 }
 
+}
+
 void ExpandBareExpr(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, ASTExprNodeP& node) {
     ExpandState es{wb, const_cast<ASTCrate&>(crate), LList<const ASTModule*>(nullptr, &mod), ExpandMode::FirstPass, const_cast<ASTModule*>(&mod)};
     ExpandExpr(es, node);
@@ -1103,6 +1118,8 @@ ASTExprNodeP ExpandParseAndExpandExprVal(const ASTCrate& crate, const ASTModule&
     ExpandBareExpr(*lex.parseState().wb, crate, mod, n);
     return n;
 }
+
+namespace {
 
 void ExpandFunction(const ExpandState& es, ASTModule& mod, ASTFunction& e) {
     if (auto* delegation = e.delegation()) {
@@ -1882,6 +1899,8 @@ void Expand_Mod_Early(const WireBoard& wb, ASTCrate& crate, ASTModule& mod, std:
             }
         }
     }
+}
+
 }
 
 void Expand(const WireBoard& wb, ASTCrate& crate) {

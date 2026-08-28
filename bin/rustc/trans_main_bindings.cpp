@@ -42,10 +42,6 @@ namespace {
 }
 
 namespace {
-    MIRFunctionPointer generatedBody(MIRFunction mir = MIRFunction()) {
-        return MIRFunctionPointer(new MIRFunction(mv$(mir)));
-    }
-
     struct CloneCleanupState {
         std::vector<MIRBasicBlockId> calls;
         std::vector<std::pair<MIRLValue, unsigned>> values;
@@ -168,6 +164,10 @@ namespace {
 
         void __attribute__((noinline)) visitFunction(const HIRPath& path, const HIRFunction& fcn, const TransParams& pp);
     };
+
+    MIRFunctionPointer generatedBody(MIRFunction mir = MIRFunction()) {
+        return MIRFunctionPointer(new MIRFunction(mv$(mir)));
+    }
 
 }
 
@@ -1286,7 +1286,9 @@ void TransEnumerateFillFromFunction(EnumState& state, const HIRPath& path, const
 void TransEnumerateFillFromStatic(EnumState& state, const HIRStatic& stat, TransListStatic& statOut, TransParams pp);
 void TransEnumerateFillFromVTable(EnumState& state, HIRPath vtablePath, const TransParams& pp);
 void TransEnumerateFillFromLiteral(EnumState& state, const EncodedLiteral& lit, const TransParams& pp);
-void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code);
+namespace {
+    void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code);
+}
 
 namespace {
 
@@ -2658,6 +2660,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
     }
 }
 
+namespace {
 void TransEnumerateFillFromMIRLValue(MIREnumCache& state, const MIRLValue& lv) {
     if (lv.root.is_Static()) {
         state.insertPath(lv.root.as_Static());
@@ -3015,6 +3018,8 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
             }
         }
     }
+}
+
 }
 
 void TransEnumerateFillFromVTable(EnumState& state, HIRPath vtablePath, const TransParams& pp) {

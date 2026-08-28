@@ -17,6 +17,7 @@
 
 using namespace stl;
 
+namespace {
 typedef std::map<unsigned, std::map<std::vector<unsigned>, unsigned>> loopCountsT;
 
 struct CapturedVal {
@@ -136,6 +137,7 @@ struct MacroExpandState {
     const MacroExpansionEnt& getCurLayerEnt() const;
     const std::vector<MacroExpansionEnt>* getCurLayer() const;
 };
+}
 
 struct MacroExpander: public TokenStream {
     Span thisSpan;
@@ -169,6 +171,7 @@ struct MacroExpander: public TokenStream {
     Token realGetToken() override;
 };
 
+namespace {
 struct MacroRule {
     std::vector<MacroPatEnt> pattern;
     Span patSpan;
@@ -214,6 +217,7 @@ struct ContentLoopVariableUse {
         return os << "[" << x.loopStack << "] " << (x.isOptional ? "optional" : "required");
     }
 };
+}
 
 namespace {
     struct TokenStreamRO {
@@ -256,6 +260,7 @@ namespace {
     };
 }
 
+namespace {
 inline std::ostream& operator<<(std::ostream& os, const CapturedVal& x) {
     os << x.frag;
     return os;
@@ -276,9 +281,12 @@ inline std::ostream& operator<<(std::ostream& os, const CaptureLayer& x) {
     }
     return os;
 }
+}
 
+namespace {
 unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts);
 void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const std::vector<MacroExpansionEnt>& contents);
+}
 
 void ParameterMappings::insert(unsigned int nameIndex, const std::vector<unsigned int>& iterations, InterpolatedFragment data) {
     if (nameIndex >= mappings_.size()) {
@@ -516,6 +524,7 @@ void MacroPatternStream::ifSucceeded() {
     conditionMet = true;
 }
 
+namespace {
 void MacroInitDefaults() {
 }
 
@@ -623,6 +632,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
             return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
     }
     UNREACHABLE();
+}
 }
 
 std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, const WireBoard& wb, TokenTree input, const ASTCrate& crate, ASTModule& mod) {
@@ -2021,6 +2031,7 @@ namespace {
     }
 }
 
+namespace {
 unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts) {
     ASSERT_BUG(sp, rules.rules.size() > 0, "Empty macro_rules set");
 
@@ -2209,6 +2220,8 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const std::vect
             }
         }
     }
+}
+
 }
 
 Position MacroExpander::getPosition() const {
@@ -2862,6 +2875,7 @@ namespace {
     std::vector<SimplePatEnt> macroPatternToSimple(const Span& sp, const std::vector<MacroPatEnt>& pattern);
 }
 
+namespace {
 std::vector<MacroPatEnt> ParseMacroRulesPat(TokenStream& lex, enum eTokenType open, enum eTokenType close, RuleParseState& state) {
     Token tok;
 
@@ -3006,6 +3020,8 @@ std::vector<MacroPatEnt> ParseMacroRulesPat(TokenStream& lex, enum eTokenType op
     }
 
     return ret;
+}
+
 }
 
 void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansionEnt>& contents) {
@@ -3170,6 +3186,8 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, std::vector<MacroExpansio
         }
     }
 }
+
+namespace {
 
 std::vector<MacroExpansionEnt> ParseMacroRulesCont(TokenStream& lex, enum eTokenType open, enum eTokenType close, const RuleParseState& state, unsigned loopDepth = 0, std::map<unsigned int, ContentLoopVariableUse>* varUsagePtr = nullptr) {
     Token tok;
@@ -3435,7 +3453,10 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
     return rule;
 }
 
+}
+
 // TODO: Also count the number of times each variable is used?
+namespace {
 void enumerateNames(const std::vector<MacroPatEnt>& pats, std::vector<RcString>& names) {
     for (const auto& pat : pats) {
         if (pat.type == MacroPatEnt::PAT_LOOP) {
@@ -3456,6 +3477,7 @@ MacroRulesArm ParseMacroRulesMakeArm(Span patSp, std::vector<MacroPatEnt> patter
     auto arm = MacroRulesArm(mv$(ruleSequence), mv$(contents));
     enumerateNames(pattern, arm.paramNames);
     return arm;
+}
 }
 
 namespace {

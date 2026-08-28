@@ -17,6 +17,20 @@ using namespace stl;
 #define FLAG_CONST_GENERIC (1u << 31)
 
 namespace {
+    enum class IndexName {
+        Namespace,
+        Type,
+        Value,
+        Macro,
+    };
+
+    enum class Lookup {
+        Any,
+        AnyOpt,
+        Type,
+        Value,
+    };
+
     struct GenericSlot {
         enum class Level {
             Top,
@@ -163,6 +177,7 @@ namespace {
 
 }
 
+namespace {
 struct DelegationSignatureSource {
     const ASTFunction* ast = nullptr;
     const HIRFunction* hir = nullptr;
@@ -172,6 +187,7 @@ struct WildcardRecursionNode {
     const ASTModule* module;
     const WildcardRecursionNode* next;
 };
+}
 
 namespace {
 
@@ -193,6 +209,7 @@ namespace {
     }
 }
 
+namespace {
 std::ostream& operator<<(std::ostream& os, const Context::LookupMode& v) {
     switch (v) {
         case Context::LookupMode::Namespace:
@@ -3283,19 +3300,15 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
     }
 }
 
+}
+
 void ResolveAbsolutise(const WireBoard& wb, ASTCrate& crate) {
     ResolveAbsoluteMod(*wb.settings, crate, crate.rootModule());
 }
 
 #undef FLAG_CONST_GENERIC
 
-enum class IndexName {
-    Namespace,
-    Type,
-    Value,
-    Macro,
-};
-
+namespace {
 bool WildcardRecursionContains(const WildcardRecursionNode* node, const ASTModule& module) {
     for (; node; node = node->next) {
         if (node->module == &module) {
@@ -4278,6 +4291,8 @@ void ResolveIndexModuleExportedMacros(ASTCrate& crate, const Span& modSpan, ASTM
     }
 }
 
+}
+
 void ResolveIndex(ASTCrate& crate) {
     ResolveIndexModuleBase(crate, crate.rootModule_);
     ResolveIndexModuleWildcard(crate, crate.rootModule_, nullptr);
@@ -4287,13 +4302,7 @@ void ResolveIndex(ASTCrate& crate) {
     ResolveIndexModuleNormalise(crate, Span(), crate.rootModule_);
 }
 
-enum class Lookup {
-    Any,
-    AnyOpt,
-    Type,
-    Value,
-};
-
+namespace {
 namespace {
     RcString crateBuiltinsName() {
         return RcString::newInterned(CRATE_BUILTINS);
@@ -4316,11 +4325,14 @@ ASTPath::Bindings ResolveUseGetBindingMod(UseResolutionContext& resolveContext, 
 ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& ec, const HIRModule& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap = {});
 ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTPath& path, const ASTExternCrate& ec, unsigned int start);
 
+}
+
 void ResolveUse(const WireBoard& wb, ASTCrate& crate) {
     UseResolutionContext resolveContext;
     ResolveUseMod(resolveContext, *wb.settings, crate, crate.rootModule_, ASTPath("", {}));
 }
 
+namespace {
 ASTPath ResolveUseAbsolutisePath(UseResolutionContext& resolveContext, const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path) {
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
@@ -5676,6 +5688,8 @@ ASTPath::Bindings ResolveUseGetBinding(
         binding = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceModPath, *mod, node.name(), parentModules, typesOnly);
     }
     return binding;
+}
+
 }
 
 #include "resolve_ctx_ent_tu.cpp"

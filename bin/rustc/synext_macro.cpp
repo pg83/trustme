@@ -118,6 +118,7 @@ namespace {
 
 }
 
+namespace {
 struct CTraceMacrosExpander: public ExpandProcMacro {
     std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override;
 };
@@ -336,6 +337,7 @@ struct CExpanderBuildDiagnosticArray: public ExpandProcMacro {
 struct CExpander: public ExpandProcMacro {
     std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
+}
 
 namespace {
 

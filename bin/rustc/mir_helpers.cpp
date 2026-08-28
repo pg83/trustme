@@ -8,6 +8,7 @@
 
 #include <algorithm>
 
+namespace {
 struct LValueCbVisitor: public MIRVisitor {
     const MIRLvalueCallback& cb;
 
@@ -15,6 +16,7 @@ struct LValueCbVisitor: public MIRVisitor {
 
     bool visitLvalue(const MIRLValue& lv, MIRValUsage u) override;
 };
+}
 
 namespace {
     struct ValueLifetime {
@@ -812,7 +814,9 @@ void visitTerminatorTarget(const MIRTerminator& term, MIRTargetVisitor& cb) {
 }
 
 #if 1
+namespace {
 void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& state, const MIRFunction& fcn, size_t bbIdx, size_t stmtIdx, const MIRLValue& lv, const std::vector<size_t>& blockOffsets, const std::vector<bool>& useBitmap, ValueLifetime& vl);
+}
 
 // TODO: Improved algorithm
 
@@ -903,6 +907,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
     return rv;
 }
 
+namespace {
 void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& localMirRes, const MIRFunction& fcn, size_t bbIdx, size_t stmtIdx, const MIRLValue& lv, const std::vector<size_t>& blockOffsets, const std::vector<bool>& useBitmap, ValueLifetime& vl) {
     struct State {
         const std::vector<size_t>& blockOffsets;
@@ -1335,6 +1340,8 @@ void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& localMirRes, co
             break;
         }
     }
+}
+
 }
 
 #else

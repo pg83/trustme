@@ -44,6 +44,7 @@ using namespace stl;
 
 #define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
 
+namespace {
 struct ProgramParams {
     enum eLastStage {
         STAGE_PARSE,
@@ -126,7 +127,6 @@ struct ProgramParams {
     void showHelp() const;
 };
 
-namespace {
     struct CompileArgs {
         int argc;
         char** argv;
@@ -253,6 +253,7 @@ namespace {
     }
 }
 
+namespace {
 static int compile(int argc, char* argv[]) {
 #if TRUSTME_SANITIZER_BUILD
     auto poolOwner = ObjPool::fromMemory();
@@ -841,6 +842,7 @@ static int compile(int argc, char* argv[]) {
 
     return 0;
 }
+}
 
 namespace {
 
@@ -877,6 +879,7 @@ int main(int argc, char* argv[]) {
     return args.result;
 }
 
+namespace {
 static void printRustcVersion(bool verbose) {
     const char* rustcTarget = RUSTC_TARGET_VERSION;
 
@@ -890,6 +893,7 @@ static void printRustcVersion(bool verbose) {
     std::cout << "build-date: " << VersionGetBuildTime() << std::endl;
     std::cout << "host: UNKNOWN" << std::endl;
     std::cout << "release: " << rustcTarget << ".100" << std::endl;
+}
 }
 
 ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {

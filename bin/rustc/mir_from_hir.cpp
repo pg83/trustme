@@ -1,9 +1,5 @@
 #include "mir_from_hir.h"
 
-using namespace stl;
-
-static const size_t PARTIAL_ARRAY_MIN = 32;
-
 #include "hir_hir.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
@@ -33,7 +29,11 @@ static const size_t PARTIAL_ARRAY_MIN = 32;
 
 #include "mir_from_hir_pattern_tu.h"
 
+using namespace stl;
+
 namespace {
+    const size_t PARTIAL_ARRAY_MIN = 32;
+
     struct ExprVisitorConv: public MirConverter, public MIRDropEmitter {
         MirBuilder& builder;
 
@@ -271,6 +271,7 @@ namespace {
     };
 }
 
+namespace {
 struct PatternRuleset {
     struct Deref {
         unsigned rootIndex;
@@ -491,6 +492,7 @@ struct MatchGenGrouped {
 
     MIRLValue pushCompare(MIRLValue left, MIRBinOp op, MIRParam right);
 };
+}
 
 namespace {
 
@@ -533,6 +535,7 @@ namespace {
     }
 }
 
+namespace {
 MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath& path, const HIRExprPtr& ptr, const HIRTypeData* retTy, const HIRFunction::argsT& args) {
     HIRExprNode& rootNode = const_cast<HIRExprNode&>(*ptr);
     if (auto* generator = cast<HIRExprNodeGeneratorWrapper>(&rootNode)) {
@@ -804,6 +807,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
     }
 
     return MIRFunctionPointer(new MIRFunction(mv$(fcn)));
+}
 }
 
 void HIRGenerateMIRExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& path, HIRExprPtr& exprPtr, const HIRFunction::argsT& args, const HIRTypeData* resTy) {

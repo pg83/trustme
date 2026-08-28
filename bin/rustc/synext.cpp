@@ -11,6 +11,7 @@
 #include "parse_ttstream.h"
 #include "macro_rules_macro_rules.h"
 
+namespace {
 struct CMacroRulesExpander: public ExpandProcMacro {
     std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 
@@ -44,6 +45,7 @@ struct CBuiltinMacroHandler: public ExpandDecorator {
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& /*mod*/, size_t /*mod_idx*/, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
+}
 
 namespace {
 

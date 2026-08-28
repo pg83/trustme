@@ -783,6 +783,7 @@ NODE(ASTExprNodeByteString, { printEscapedLiteral(os, TOK_BYTESTRING, reinterpre
 NODE(ASTExprNodeCString, { printEscapedLiteral(os, TOK_CSTRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, { return NEWNODE(ASTExprNodeCString, value); })
 NODE(ASTExprNodeSuffixedLiteral, { os << text; }, { return NEWNODE(ASTExprNodeSuffixedLiteral, text); })
 
+namespace {
 static void printClosureParameterPattern(std::ostream& os, const ASTPattern& pattern) {
     if (pattern.bindings().empty() && pattern.data().is_MaybeBind()) {
         const auto& ident = pattern.data().as_MaybeBind().name;
@@ -793,6 +794,7 @@ static void printClosureParameterPattern(std::ostream& os, const ASTPattern& pat
         return;
     }
     os << pattern;
+}
 }
 
 NODE(

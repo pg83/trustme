@@ -30,6 +30,7 @@ struct ManglingContext {
     explicit ManglingContext(ObjPool& pool);
 };
 
+namespace {
 enum class LifetimeIdentityMode {
     Erased,
     Closed,
@@ -66,6 +67,7 @@ struct Mangler {
 
     void fmtType(const HIRTypeData* ty);
 };
+}
 
 ManglingContext* TransCreateManglingContext(ObjPool& pool) {
     return pool.make<ManglingContext>(pool);

@@ -28,6 +28,7 @@ using namespace stl;
 
 #define LEN(arr) (sizeof(arr) / sizeof(arr[0]))
 
+namespace {
 static const struct {
     unsigned char len;
     const char* chars;
@@ -99,6 +100,7 @@ struct sRWORD {
     const char* chars;
     signed int type;
 };
+}
 
 Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edition, ParseState ps)
     : TokenStream(ps)
@@ -152,6 +154,7 @@ Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition,
 {
 }
 
+namespace {
 static const sRWORD RWORDS_2015[] = {
     TOKENT("_", TOK_UNDERSCORE),
     TOKENT("abstract", TOK_RWORD_ABSTRACT),
@@ -256,6 +259,8 @@ static const sRWORD RWORDS_2018[] = {
     TOKENT("yield", TOK_RWORD_YIELD),
 };
 
+}
+
 signed int Lexer::getSymbol() {
     Codepoint ch = this->getc();
     unsigned ofs = 0;
@@ -289,6 +294,7 @@ signed int Lexer::getSymbol() {
     return best;
 }
 
+namespace {
 bool issym(Codepoint ch) {
     if ('0' <= ch.v && ch.v <= '9') {
         return true;
@@ -303,6 +309,7 @@ bool issym(Codepoint ch) {
         return !ch.isspace();
     }
     return false;
+}
 }
 
 Token Lexer::withLiteralSuffix(Token tok) {
