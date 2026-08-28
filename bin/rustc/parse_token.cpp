@@ -7,10 +7,10 @@
 #include "parse_parseerror.h"
 #include "parse_interpolated_fragment.h"
 
-#include <iomanip>
-
 #include <std/str/view.h>
 #include <std/str/builder.h>
+
+#include <iomanip>
 
 using namespace stl;
 
@@ -272,7 +272,8 @@ Token Token::clone() const {
         }
         case Data::TAG_Fragment: {
             auto& e = data_.as_Fragment();
-            assert(e); switch (type_) {
+            assert(e);
+            switch (type_) {
                 case TOK_INTERPOLATED_TYPE:
                     rv.data_ = new ASTType*((*reinterpret_cast<ASTType**>(e))->clone());
                     break;
@@ -304,7 +305,8 @@ Token Token::clone() const {
                 default:
                     BUG(Span(Span(), pos), "Fragment with invalid token type (" << *this << ")");
                     break;
-            } assert(rv.data_.is_Fragment());
+            }
+            assert(rv.data_.is_Fragment());
             break;
         }
     }
@@ -382,26 +384,11 @@ static StringView literalBytes(const ::std::string& s) {
 struct EscapedString {
     StringView s;
 
-    EscapedString(StringView s)
-        : s(s)
-    {
-    }
+    EscapedString(StringView s);
 
     /// How many bytes the UTF-8 sequence starting at `i` runs for, or zero
     /// when the bytes there are not one.
-    static size_t utf8Run(StringView s, size_t i) {
-        const u8 lead = s[i];
-        const size_t len = (lead & 0xE0) == 0xC0 ? 2 : (lead & 0xF0) == 0xE0 ? 3 : (lead & 0xF8) == 0xF0 ? 4 : 0;
-        if (len == 0 || i + len > s.length()) {
-            return 0;
-        }
-        for (size_t k = 1; k < len; k++) {
-            if ((s[i + k] & 0xC0) != 0x80) {
-                return 0;
-            }
-        }
-        return len;
-    }
+    static size_t utf8Run(StringView s, size_t i);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const EscapedString& x) {
         for (size_t i = 0; i < x.s.length(); i++) {
@@ -454,10 +441,7 @@ struct EscapedString {
 struct EscapedByteString {
     StringView s;
 
-    EscapedByteString(StringView s)
-        : s(s)
-    {
-    }
+    EscapedByteString(StringView s);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const EscapedByteString& x) {
         for (size_t i = 0; i < x.s.length(); i++) {
@@ -485,8 +469,7 @@ struct EscapedByteString {
                 os << static_cast<char>(b);
                 continue;
             }
-            os << "\\x" << ::std::hex << ::std::uppercase << ::std::setw(2) << ::std::setfill('0') << static_cast<unsigned int>(b)
-               << ::std::nouppercase << ::std::dec << ::std::setfill(' ');
+            os << "\\x" << ::std::hex << ::std::uppercase << ::std::setw(2) << ::std::setfill('0') << static_cast<unsigned int>(b) << ::std::nouppercase << ::std::dec << ::std::setfill(' ');
         }
         return os;
     }
@@ -588,8 +571,7 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         return false;
     }
     // As does a call or an index.
-    if ((cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN)
-        && (prev == TOK_IDENT || prev == TOK_PAREN_CLOSE || prev == TOK_SQUARE_CLOSE)) {
+    if ((cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN) && (prev == TOK_IDENT || prev == TOK_PAREN_CLOSE || prev == TOK_SQUARE_CLOSE)) {
         return false;
     }
     return true;
@@ -1114,4 +1096,28 @@ bool Token::operator==(const Token& r) const {
         }
     }
     UNREACHABLE();
+}
+
+EscapedString::EscapedString(StringView s)
+    : s(s)
+{
+}
+
+auto EscapedString::utf8Run(StringView s, size_t i) -> size_t {
+    const u8 lead = s[i];
+    const size_t len = (lead & 0xE0) == 0xC0 ? 2 : (lead & 0xF0) == 0xE0 ? 3 : (lead & 0xF8) == 0xF0 ? 4 : 0;
+    if (len == 0 || i + len > s.length()) {
+        return 0;
+    }
+    for (size_t k = 1; k < len; k++) {
+        if ((s[i + k] & 0xC0) != 0x80) {
+            return 0;
+        }
+    }
+    return len;
+}
+
+EscapedByteString::EscapedByteString(StringView s)
+    : s(s)
+{
 }

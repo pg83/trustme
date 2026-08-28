@@ -32,30 +32,16 @@ struct TomlToken {
     ::std::string data;
     i64 intval = 0;
 
-    TomlToken(Type ty)
-        : type(ty)
-    {
-    }
+    TomlToken(Type ty);
 
-    TomlToken(Type ty, ::std::string s)
-        : type(ty)
-        , data(s)
-    {
-    }
+    TomlToken(Type ty, ::std::string s);
 
-    TomlToken(Type ty, i64 i)
-        : type(ty)
-        , intval(i)
-    {
-    }
+    TomlToken(Type ty, i64 i);
 
     static TomlToken lexFrom(::std::ifstream& is, unsigned& line);
     static TomlToken lexFromInner(::std::ifstream& is, unsigned& line);
 
-    const ::std::string& asString() const {
-        assert(type == Type::Ident || type == Type::String);
-        return data;
-    }
+    const ::std::string& asString() const;
 
     friend ::std::ostream& operator<<(::std::ostream& os, const TomlToken& x) {
         switch (x.type) {
@@ -800,4 +786,26 @@ TomlValue::TypeError::TypeError(TomlValue::Type h, TomlValue::Type e)
 
 const char* TomlValue::TypeError::what() const noexcept {
     return message;
+}
+
+TomlToken::TomlToken(Type ty)
+    : type(ty)
+{
+}
+
+TomlToken::TomlToken(Type ty, ::std::string s)
+    : type(ty)
+    , data(s)
+{
+}
+
+TomlToken::TomlToken(Type ty, i64 i)
+    : type(ty)
+    , intval(i)
+{
+}
+
+auto TomlToken::asString() const -> const ::std::string& {
+    assert(type == Type::Ident || type == Type::String);
+    return data;
 }

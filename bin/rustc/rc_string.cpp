@@ -1,7 +1,7 @@
 #include "rc_string.h"
 
-#include <cstring>
 #include <string>
+#include <cstring>
 #include <algorithm> // std::min
 
 #define XXH_INLINE_ALL
@@ -33,58 +33,11 @@ namespace {
         size_t mask;
         size_t used = 0;
 
-        StrInterner() {
-            auto* empty = static_cast<char*>(pool->allocate(1));
-            empty[0] = '\0';
-            strs.pushBack(InternedString{empty, empty, 0, 0});
+        StrInterner();
 
-            const size_t initial = 1 << 19; // libcargo peaks at ~129k uniques
-            slots.zero(initial);
-            mask = initial - 1;
-        }
+        void grow();
 
-        void grow() {
-            Vector<u32> next;
-            next.zero((mask + 1) * 2);
-            const size_t nextMask = (mask + 1) * 2 - 1;
-            for (u32 id = 1; id < strs.length(); id++) {
-                size_t i = strs[id].hash1 & nextMask;
-                while (next[i]) {
-                    i = (i + 1) & nextMask;
-                }
-                next.mut(i) = id;
-            }
-            slots.xchg(next);
-            mask = nextMask;
-        }
-
-        u32 intern(const char* s, size_t len) {
-            if (len == 0) {
-                return 0;
-            }
-            const auto h = XXH3_128bits(s, len);
-            size_t i = h.high64 & mask;
-            while (u32 id = slots[i]) {
-                const auto& e = strs[id];
-                if (e.hash1 == h.high64 && e.hash2 == h.low64) {
-                    return id;
-                }
-                i = (i + 1) & mask;
-            }
-
-            auto* data = static_cast<char*>(pool->allocate(len + 1));
-            ::std::memcpy(data, s, len);
-            data[len] = '\0';
-
-            const auto id = static_cast<u32>(strs.length());
-            strs.pushBack(InternedString{data, data + len, h.high64, h.low64});
-            slots.mut(i) = id;
-            used += 1;
-            if (used * 10 > (mask + 1) * 7) {
-                grow();
-            }
-            return id;
-        }
+        u32 intern(const char* s, size_t len);
     };
 
     StrInterner& interner() {
@@ -181,4 +134,57 @@ int RcString::compare(size_t o, size_t l, const char* s) const {
         }
         return -1;
     }
+}
+
+StrInterner::StrInterner() {
+    auto* empty = static_cast<char*>(pool->allocate(1));
+    empty[0] = '\0';
+    strs.pushBack(InternedString{empty, empty, 0, 0});
+
+    const size_t initial = 1 << 19; // libcargo peaks at ~129k uniques
+    slots.zero(initial);
+    mask = initial - 1;
+}
+
+auto StrInterner::grow() -> void {
+    Vector<u32> next;
+    next.zero((mask + 1) * 2);
+    const size_t nextMask = (mask + 1) * 2 - 1;
+    for (u32 id = 1; id < strs.length(); id++) {
+        size_t i = strs[id].hash1 & nextMask;
+        while (next[i]) {
+            i = (i + 1) & nextMask;
+        }
+        next.mut(i) = id;
+    }
+    slots.xchg(next);
+    mask = nextMask;
+}
+
+auto StrInterner::intern(const char* s, size_t len) -> u32 {
+    if (len == 0) {
+        return 0;
+    }
+    const auto h = XXH3_128bits(s, len);
+    size_t i = h.high64 & mask;
+    while (u32 id = slots[i]) {
+        const auto& e = strs[id];
+        if (e.hash1 == h.high64 && e.hash2 == h.low64) {
+            return id;
+        }
+        i = (i + 1) & mask;
+    }
+
+    auto* data = static_cast<char*>(pool->allocate(len + 1));
+    ::std::memcpy(data, s, len);
+    data[len] = '\0';
+
+    const auto id = static_cast<u32>(strs.length());
+    strs.pushBack(InternedString{data, data + len, h.high64, h.low64});
+    slots.mut(i) = id;
+    used += 1;
+    if (used * 10 > (mask + 1) * 7) {
+        grow();
+    }
+    return id;
 }

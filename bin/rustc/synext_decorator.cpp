@@ -26,837 +26,175 @@ namespace {
     public:
         virtual void handle(const ASTAttribute& mi, ASTFunction& fcn) const = 0;
 
-        AttrStage stage() const override {
-            return AttrStage::Pre;
-        }
+        AttrStage stage() const override;
 
-        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-            if (i.is_None()) {
-            } else if (i.is_Function()) {
-                this->handle(mi, i.as_Function());
-            } else {
-                // TODO: Error
-            }
-        }
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-            if (i.is_None()) {
-            } else if (i.is_Function()) {
-                this->handle(mi, i.as_Function());
-            } else {
-                // TODO: Error
-            }
-        }
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
-            if (i.is_None()) {
-            } else if (i.is_Function()) {
-                this->handle(mi, i.as_Function());
-            } else {
-                // TODO: Error
-            }
-        }
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
     };
 }
 
 class CHandlerInline: public CommonFunction {
 public:
-    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override {
-        TTStream lex(mi.span(), ParseState(), mi.data());
-        if (lex.getTokenIf(TOK_PAREN_OPEN)) {
-            auto attr = lex.getTokenCheck(TOK_IDENT).ident().name;
-            if (attr == "never") {
-                fcn.markings.inlineType = ASTFunction::Markings::Inline::Never;
-            } else if (attr == "always") {
-                fcn.markings.inlineType = ASTFunction::Markings::Inline::Always;
-            } else {
-                ERROR(lex.pointSpan(), E0000, "Unknown inline type #[inline(" << attr << ")]");
-            }
-            lex.getTokenCheck(TOK_PAREN_CLOSE);
-            lex.getTokenCheck(TOK_EOF);
-        } else {
-            fcn.markings.inlineType = ASTFunction::Markings::Inline::Normal;
-        }
-    }
+    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
 };
-
 
 class CHandlerCold: public CommonFunction {
 public:
-    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override {
-        TTStream lex(mi.span(), ParseState(), mi.data());
-        lex.getTokenCheck(TOK_EOF);
-        fcn.markings.isCold = true;
-    }
+    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
 };
-
 
 class CHandlerRustcAlign: public CommonFunction {
 public:
-    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override {
-        TTStream lex(mi.span(), ParseState(), mi.data());
-        lex.getTokenCheck(TOK_PAREN_OPEN);
-        auto value = lex.getTokenCheck(TOK_INTEGER).intval();
-        ASSERT_BUG(lex.pointSpan(), value > U128(0), "#[rustc_align(" << value << ")] - alignment must be non-zero");
-        ASSERT_BUG(lex.pointSpan(), (value & (value - 1)) == U128(0), "#[rustc_align(" << value << ")] - alignment must be a power of two");
-        ASSERT_BUG(lex.pointSpan(), value < U128(UINT64_MAX), "#[rustc_align(" << value << ")] - alignment is too large");
-        fcn.markings.alignment = value.truncateU64();
-        lex.getTokenCheck(TOK_PAREN_CLOSE);
-        lex.getTokenCheck(TOK_EOF);
-    }
+    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
 };
-
 
 class CHandlerRustcLegacyConstGenerics: public CommonFunction {
-    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override {
-        TTStream lex(mi.span(), ParseState(), mi.data());
-        lex.getTokenCheck(TOK_PAREN_OPEN);
-
-        auto& list = fcn.markings.rustcLegacyConstGenerics;
-        do {
-            auto idxRaw = lex.getTokenCheck(TOK_INTEGER).intval();
-            ASSERT_BUG(lex.pointSpan(), idxRaw < U128(UINT_MAX), "#[rustc_legacy_const_generics(" << idxRaw << ")] too large");
-            auto idx = static_cast<unsigned>(idxRaw.truncateU64());
-            ASSERT_BUG(lex.pointSpan(), std::find(list.begin(), list.end(), idx) == list.end(), "#[rustc_legacy_const_generics(" << idx << ")] duplicate index");
-            list.push_back(idx);
-        } while (lex.getTokenIf(TOK_COMMA));
-
-        lex.getTokenCheck(TOK_PAREN_CLOSE);
-        lex.getTokenCheck(TOK_EOF);
-    }
+    void handle(const ASTAttribute& mi, ASTFunction& fcn) const override;
 };
 
-
 class CHandlerRepr: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
     /// The name of one representation. `#[repr($t)]` with a `ty` fragment names
     /// it through an interpolated type, which is a plain path.
-    static RcString getReprName(TokenStream& lex) {
-        Token tok;
-        if (lex.getTokenIf(TOK_INTERPOLATED_TYPE, tok)) {
-            const auto* ty = tok.fragType();
-            if (ty && ty->isPath() && ty->path().nodes().size() == 1) {
-                return ty->path().nodes().back().name();
-            }
-            ERROR(lex.pointSpan(), E0000, "#[repr(...)] with a type that does not name a representation");
-        }
-        return lex.getTokenCheck(TOK_IDENT).ident().name;
-    }
+    static RcString getReprName(TokenStream& lex);
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (i.is_None()) {
-        }
-        // --- struct ---
-        else if (auto* s = i.opt_Struct()) {
-            TTStream lex(sp, ParseState(), mi.data());
-            lex.parseState().wb = &wb;
-            lex.getTokenCheck(TOK_PAREN_OPEN);
-            // `#[repr()]` names no representation at all, which is allowed.
-            if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
-                lex.getTokenCheck(TOK_PAREN_CLOSE);
-                return;
-            }
-            do {
-                auto reprType = getReprName(lex);
-                if (reprType == "C") {
-                    switch (s->markings.repr) {
-                        case ASTStruct::Markings::Repr::Rust:
-                            s->markings.repr = ASTStruct::Markings::Repr::C;
-                            break;
-                        default:
-                            // TODO: Error
-                            break;
-                    }
-                } else if (reprType == "packed") {
-                    switch (s->markings.repr) {
-                        case ASTStruct::Markings::Repr::C:
-                        case ASTStruct::Markings::Repr::Rust:
-                            break;
-                        default:
-                            // TODO: Error
-                            break;
-                    }
-                    if (s->markings.maxFieldAlign != 0) {
-                        // TODO: Error
-                    }
-                    if (lex.getTokenIf(TOK_PAREN_OPEN)) {
-                        auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
-                        auto* val = cast<ASTExprNodeInteger>(&*n);
-                        ASSERT_BUG(n->span(), val, "#[repr(packed(...))] - alignment must be an integer");
-                        auto v = val->value;
-                        ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(packed(" << v << "))] - alignment must be non-zero");
-                        ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(packed(" << v << "))] - alignment must be a power of two");
-                        ASSERT_BUG(lex.pointSpan(), s->markings.alignValue == 0, "#[repr(packed(" << v << "))] - conflicts with previous alignment");
-                        // TODO: I believe this should change the internal aligment too?
-                        s->markings.maxFieldAlign = v.truncateU64();
-                        lex.getTokenCheck(TOK_PAREN_CLOSE);
-                    } else {
-                        s->markings.maxFieldAlign = 1;
-                    }
-                } else if (reprType == "simd") {
-                    s->markings.repr = ASTStruct::Markings::Repr::Simd;
-                } else if (reprType == "transparent") {
-                    s->markings.repr = ASTStruct::Markings::Repr::Transparent;
-                } else if (reprType == "align") {
-                    lex.getTokenCheck(TOK_PAREN_OPEN);
-                    auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
-                    auto* val = cast<ASTExprNodeInteger>(&*n);
-                    ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
-                    auto v = val->value;
-                    ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
-                    ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
-                    s->markings.alignValue = std::max(s->markings.alignValue, v.truncateU64());
-                    lex.getTokenCheck(TOK_PAREN_CLOSE);
-                } else if (reprType == "Rust") {
-                    // The default representation, which is what a struct with
-                    // no `repr` already has.
-                } else if (reprType == "no_niche") {
-                    // TODO: rust-lang/rust#68303 happens with UnsafeCell and niche optionisations
-                    // - Would trustme also have this?
-                } else {
-                    TODO(sp, "Handle struct repr '" << reprType << "'");
-                }
-            } while (lex.getTokenIf(TOK_COMMA));
-            lex.getTokenCheck(TOK_PAREN_CLOSE);
-            lex.getTokenCheck(TOK_EOF);
-        }
-        // --- enum ---
-        else if (auto* e = i.opt_Enum()) {
-            TTStream lex(sp, ParseState(), mi.data());
-            lex.parseState().wb = &wb;
-            lex.getTokenCheck(TOK_PAREN_OPEN);
-
-            // Loop, so `repr(C, u8)` is valid
-            while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-                auto setRepr = [&](ASTEnum::Markings::Repr r) {
-                    ASSERT_BUG(lex.pointSpan(), e->markings.repr == ASTEnum::Markings::Repr::Rust, "Multiple enum reprs set");
-                    e->markings.repr = r;
-                };
-                auto reprStr = getReprName(lex);
-                if (reprStr == "C") {
-                    // Repeated is OK
-                    e->markings.isReprC = true;
-                } else if (reprStr == "u8") {
-                    setRepr(ASTEnum::Markings::Repr::U8);
-                } else if (reprStr == "u16") {
-                    setRepr(ASTEnum::Markings::Repr::U16);
-                } else if (reprStr == "u32") {
-                    setRepr(ASTEnum::Markings::Repr::U32);
-                } else if (reprStr == "u64") {
-                    setRepr(ASTEnum::Markings::Repr::U64);
-                } else if (reprStr == "u128") {
-                    setRepr(ASTEnum::Markings::Repr::U128);
-                } else if (reprStr == "usize") {
-                    setRepr(ASTEnum::Markings::Repr::Usize);
-                } else if (reprStr == "i8") {
-                    setRepr(ASTEnum::Markings::Repr::I8);
-                } else if (reprStr == "i16") {
-                    setRepr(ASTEnum::Markings::Repr::I16);
-                } else if (reprStr == "i32") {
-                    setRepr(ASTEnum::Markings::Repr::I32);
-                } else if (reprStr == "i64") {
-                    setRepr(ASTEnum::Markings::Repr::I64);
-                } else if (reprStr == "i128") {
-                    setRepr(ASTEnum::Markings::Repr::I128);
-                } else if (reprStr == "isize") {
-                    setRepr(ASTEnum::Markings::Repr::Isize);
-                } else if (reprStr == "align") {
-                    lex.getTokenCheck(TOK_PAREN_OPEN);
-                    auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
-                    auto* val = cast<ASTExprNodeInteger>(&*n);
-                    ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
-                    auto v = val->value;
-                    ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
-                    ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
-                    e->markings.alignValue = std::max(e->markings.alignValue, v.truncateU64());
-                    lex.getTokenCheck(TOK_PAREN_CLOSE);
-                } else if (reprStr == "Rust") {
-                    // The default representation.
-                } else if (reprStr == "transparent") {
-                    // The enum lays out as its one variant, which is what a
-                    // single-variant enum already does here.
-                    ASSERT_BUG(lex.pointSpan(), e->variants().size() == 1, "#[repr(transparent)] needs exactly one variant");
-                } else {
-                    ERROR(lex.pointSpan(), E0000, "Unknown enum repr '" << reprStr << "'");
-                }
-                if (!lex.getTokenIf(TOK_COMMA)) {
-                    break;
-                }
-            }
-
-            lex.getTokenCheck(TOK_PAREN_CLOSE);
-            lex.getTokenCheck(TOK_EOF);
-        }
-        // --- union ---
-        else if (auto* e = i.opt_Union()) {
-            TTStream lex(sp, ParseState(), mi.data());
-            lex.parseState().wb = &wb;
-            lex.getTokenCheck(TOK_PAREN_OPEN);
-
-            do {
-                auto reprStr = getReprName(lex);
-                if (reprStr == "C") {
-                    e->markings.repr = ASTUnion::Markings::Repr::C;
-                } else if (reprStr == "Rust") {
-                    // The default representation.
-                } else if (reprStr == "transparent") {
-                    e->markings.repr = ASTUnion::Markings::Repr::Transparent;
-                } else if (reprStr == "packed") {
-                    //switch( e->m_markings.repr )
-                    //{
-                    //case AST::Struct::Markings::Repr::C:
-                    //case AST::Struct::Markings::Repr::Rust:
-                    //default:
-                    //    // TODO: Error
-                    //}
-                    //    // TODO: Error
-                    //}
-                    if (lex.getTokenIf(TOK_PAREN_OPEN)) {
-                        auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
-                        auto* val = cast<ASTExprNodeInteger>(&*n);
-                        ASSERT_BUG(n->span(), val, "#[repr(packed(...))] - alignment must be an integer");
-                        auto v = val->value;
-                        ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(packed(" << v << "))] - alignment must be non-zero");
-                        ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(packed(" << v << "))] - alignment must be a power of two");
-                        e->markings.maxFieldAlign = v.truncateU64();
-                        lex.getTokenCheck(TOK_PAREN_CLOSE);
-                    } else {
-                        e->markings.maxFieldAlign = 1;
-                    }
-                } else if (reprStr == "align") {
-                    lex.getTokenCheck(TOK_PAREN_OPEN);
-                    auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
-                    auto* val = cast<ASTExprNodeInteger>(&*n);
-                    ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
-                    auto v = val->value;
-                    ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
-                    ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
-                    e->markings.alignValue = std::max(e->markings.alignValue, v.truncateU64());
-                    lex.getTokenCheck(TOK_PAREN_CLOSE);
-                } else {
-                    ERROR(lex.pointSpan(), E0000, "Unknown union repr '" << reprStr << "'");
-                }
-            } while (lex.getTokenIf(TOK_COMMA));
-
-            lex.getTokenCheck(TOK_PAREN_CLOSE);
-            lex.getTokenCheck(TOK_EOF);
-        } else {
-            ERROR(mi.span(), E0000, "Unexpected attribute #[repr] on " << i.tagStr());
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 class CHandlerRustcNonnullOptimizationGuaranteed: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // TODO: Types only
-        if (i.is_Struct()) {
-        } else {
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 // 1.39
 class CHandlerRustcLayoutScalarValidRangeStart: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // TODO: Types only
-        if (auto* s = i.opt_Struct()) {
-            TTStream lex(sp, ParseState(), mi.data());
-            lex.parseState().wb = &wb;
-            lex.getTokenCheck(TOK_PAREN_OPEN);
-            auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
-            auto* np = cast<ASTExprNodeInteger>(n.get());
-            ASSERT_BUG(n->span(), np, "#[rustc_layout_scalar_valid_range_start] requires an integer - got " << FMT_CB(ss, n->print(ss)));
-            lex.getTokenCheck(TOK_PAREN_CLOSE);
-            lex.getTokenCheck(TOK_EOF);
-
-            s->markings.scalarValidStartSet = true;
-            s->markings.scalarValidStart = np->value;
-        } else {
-            TODO(sp, "#[rustc_layout_scalar_valid_range_start] on " << i.tagStr());
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 class CHandlerRustcLayoutScalarValidRangeEnd: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // TODO: Types only
-        if (auto* s = i.opt_Struct()) {
-            TTStream lex(sp, ParseState(), mi.data());
-            lex.parseState().wb = &wb;
-            lex.getTokenCheck(TOK_PAREN_OPEN);
-            auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
-            auto* np = cast<ASTExprNodeInteger>(n.get());
-            ASSERT_BUG(n->span(), np, "#[rustc_layout_scalar_valid_range_end] requires an integer - got " << FMT_CB(ss, n->print(ss)));
-            lex.getTokenCheck(TOK_PAREN_CLOSE);
-            lex.getTokenCheck(TOK_EOF);
-            s->markings.scalarValidEndSet = true;
-            s->markings.scalarValidEnd = np->value;
-        } else {
-            TODO(sp, "#[rustc_layout_scalar_valid_range_end] on " << i.tagStr());
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 class CHandlerLinkName: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        auto linkName = mi.parseEqualsString(wb, crate, mod);
-        ASSERT_BUG(sp, linkName != "", "Empty #[link_name] attribute");
-
-        if (i.is_None()) {
-        } else if (auto* fcn = i.opt_Function()) {
-            ASSERT_BUG(sp, fcn->markings.linkName == "", "Duplicate #[link_name] attributes");
-            fcn->markings.linkName = linkName;
-        } else if (auto* st = i.opt_Static()) {
-            ASSERT_BUG(sp, st->sClass() != ASTStatic::CONST, "#[link_name] on `const`");
-            ASSERT_BUG(sp, st->markings.linkName == "", "Duplicate #[link_name] attributes");
-            st->markings.linkName = linkName;
-        } else {
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 class CHandlerLinkSection: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        auto linkSection = mi.parseEqualsString(wb, crate, mod);
-        ASSERT_BUG(sp, linkSection != "", "Empty #[link_section] attribute");
-
-        if (i.is_None()) {
-        } else if (auto* fcn = i.opt_Function()) {
-            ASSERT_BUG(sp, fcn->markings.linkSection == "", "Duplicate #[link_section] attributes");
-            fcn->markings.linkSection = linkSection;
-        } else if (auto* st = i.opt_Static()) {
-            ASSERT_BUG(sp, st->sClass() != ASTStatic::CONST, "#[link_section] on `const`");
-            ASSERT_BUG(sp, st->markings.linkSection == "", "Duplicate #[link_section] attributes");
-            st->markings.linkSection = linkSection;
-        } else {
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 class CHandlerLink: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (i.is_None()) {
-        } else if (auto* b = i.opt_ExternBlock()) {
-            TTStream lex(sp, ParseState(), mi.data());
-            lex.parseState().wb = &wb;
-            lex.getTokenCheck(TOK_PAREN_OPEN);
-            std::string libName;
-            bool emit = true;
-            ASTExternBlock::Link link;
-
-            while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-                auto key = lex.getTokenCheck(TOK_IDENT).ident().name;
-                if (key == "name") {
-                    lex.getTokenCheck(TOK_EQUAL);
-                    auto v = lex.getTokenCheck(TOK_STRING).str();
-                    if (v == "") {
-                        ERROR(sp, E0000, "Empty name on extern block");
-                    }
-                    link.libName = v;
-                } else if (key == "kind") {
-                    lex.getTokenCheck(TOK_EQUAL);
-                    auto v = lex.getTokenCheck(TOK_STRING).str();
-                    if (v == "") {
-                        ERROR(sp, E0000, "Empty `kind` on extern block #[link]");
-                    }
-                    // TODO: save and use the kind
-                } else if (key == "cfg") {
-                    emit &= checkCfgStream(*wb.settings, lex);
-                } else if (key == "modifiers") {
-                    lex.getTokenCheck(TOK_EQUAL);
-                    auto v = lex.getTokenCheck(TOK_STRING).str();
-                    if (v == "") {
-                        ERROR(sp, E0000, "Empty `modifiers` on extern block #[link]");
-                    }
-                    // TODO: save and use the `modifiers` value
-                } else {
-                    TODO(sp, "Unknown attribute `#[link(" << key << ")]`");
-                }
-                if (!lex.getTokenIf(TOK_COMMA)) {
-                    break;
-                }
-            }
-            if (link.libName == "") {
-                ERROR(sp, E0000, "No name in `#[link]`");
-            }
-            if (emit && wb.settings->linkDirectives) {
-                b->libraries.push_back(std::move(link));
-            }
-            lex.getTokenCheck(TOK_PAREN_CLOSE);
-            lex.getTokenCheck(TOK_EOF);
-        } else {
-            TODO(sp, "#[link] on " << i.tagStr());
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 class CHandlerLinkage: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        TTStream lex(sp, ParseState(), mi.data());
-        lex.parseState().wb = &wb;
-        lex.getTokenCheck(TOK_EQUAL);
-        auto tok = lex.getTokenCheck(TOK_STRING);
-        auto linkageStr = tok.str();
-        lex.getTokenCheck(TOK_EOF);
-
-        auto linkage = ASTLinkage::Default;
-        if (linkageStr == "extern_weak") {
-            linkage = ASTLinkage::ExternWeak;
-        } else if (linkageStr == "weak") {
-            linkage = ASTLinkage::Weak;
-        } else if (linkageStr == "linkonce" || linkageStr == "linkonce_odr" || linkageStr == "weak_odr") {
-            // One definition is kept and the rest discarded, which is what a
-            // weak definition already does here.
-            linkage = ASTLinkage::Weak;
-        } else if (linkageStr == "external") {
-        } else if (linkageStr == "internal" || linkageStr == "private") {
-            // The symbol is local to the object it is emitted in. Nothing here
-            // exports a definition that was not asked for, so an ordinary
-            // definition is what this means.
-        } else {
-            TODO(sp, "#[linkage=\"" << linkageStr << "\"]");
-        }
-
-        if (auto* f = i.opt_Function()) {
-            switch (linkage) {
-                case ASTLinkage::Default:
-                case ASTLinkage::Weak:
-                    break;
-                default:
-                    TODO(sp, "#[linkage=\"" << linkageStr << "\"] on " << i.tagStr());
-            }
-            f->markings.linkage = linkage;
-        } else if (auto* f = i.opt_Static()) {
-            switch (linkage) {
-                case ASTLinkage::Default:
-                case ASTLinkage::Weak:
-                case ASTLinkage::ExternWeak:
-                    break;
-                default:
-                    TODO(sp, "#[linkage=\"" << linkageStr << "\"] on " << i.tagStr());
-            }
-            f->markings.linkage = linkage;
-        } else {
-            TODO(sp, "#[linkage] - " << i.tagStr() << " " << path << ": " << mi);
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 class CHandlerTargetFeature: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // TODO: Only valid on functions?
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 class CHandlerRustcIntrinsic: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (auto* e = i.opt_Function()) {
-            if (e->abi() != ABI_RUST) {
-                ERROR(sp, E0000, "#[rustc_intrinsic] on function with ABI already set (`" << e->abi() << "`)");
-            }
-            // Only add if there's no body
-            if (!e->code()) {
-                e->setAbi("rust-intrinsic");
-            }
-        } else {
-            ERROR(sp, E0000, "#[rustc_intrinsic] on non-function");
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 class CHandlerTrackCaller: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (/*auto* e =*/i.opt_Function()) {
-            // Handled by HIR lower
-        } else if (i.opt_Macro()) {
-            // Accepted and ignored, matching rustc.
-        } else if (const auto* invocation = i.opt_MacroInv(); invocation && invocation->path().isTrivial() && invocation->path().asTrivial() == "macro_rules") {
-            // macro_rules! is still an invocation at the pre-expansion stage.
-        } else {
-            ERROR(sp, E0000, "#[track_caller] on non-function");
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (/*auto* e =*/i.opt_Function()) {
-            // Handled by HIR lower
-        } else {
-            ERROR(sp, E0000, "#[track_caller] on non-function");
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
-        if (/*auto* e =*/i.opt_Function()) {
-            // Handled by HIR lower
-        } else {
-            ERROR(sp, E0000, "#[track_caller] on non-function");
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override {
-        if (auto* n = cast<ASTExprNodeClosure>(expr.get())) {
-            n->trackCaller = true;
-        } else {
-            ERROR(sp, E0000, "#[track_caller] on non-function");
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
 };
-
 
 /// @brief Various unsafe attributes, addded around 1.90
 class CHandlerUnsafe: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handleItem(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, const RcString& name, ASTItem& i) const {
-        TTStream lex(mi.span(), ParseState(), mi.data());
-        lex.parseState().wb = &wb;
-        lex.getTokenCheck(TOK_PAREN_OPEN);
-        while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-            auto ident = lex.getTokenCheck(TOK_IDENT).ident().name;
+    void handleItem(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, const RcString& name, ASTItem& i) const;
 
-            if (ident == "no_mangle") {
-                if (auto* e = i.opt_Function()) {
-                    e->markings.linkName = name.c_str();
-                } else if (auto* e = i.opt_Static()) {
-                    e->markings.linkName = name.c_str();
-                } else {
-                    ERROR(sp, E0000, "#[unsafe(" << ident << ")] on bad item: " << i.tagStr());
-                }
-            } else if (ident == "export_name") {
-                lex.getTokenCheck(TOK_EQUAL);
-                auto s = lex.getTokenCheck(TOK_STRING).str();
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& i) const override;
 
-                // The last name given wins, as it does in rustc: `#[unsafe(no_mangle)]`
-                // alongside this one is a lint, not an error.
-                if (auto* e = i.opt_Function()) {
-                    e->markings.linkName = s;
-                } else if (auto* e = i.opt_Static()) {
-                    e->markings.linkName = s;
-                } else {
-                    ERROR(sp, E0000, "#[unsafe(" << ident << ")] on bad item: " << i.tagStr());
-                }
-            } else if (ident == "link_section") {
-                lex.getTokenCheck(TOK_EQUAL);
-                auto s = lex.getTokenCheck(TOK_STRING).str();
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, ASTImpl&, const RcString& name, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& i) const override;
 
-                if (auto* e = i.opt_Function()) {
-                    e->markings.linkSection = s;
-                } else if (auto* e = i.opt_Static()) {
-                    e->markings.linkSection = s;
-                } else {
-                    ERROR(sp, E0000, "#[unsafe(" << ident << ")] on bad item: " << i.tagStr());
-                }
-            } else if (ident == "ffi_const") {
-                if (/*auto* e =*/i.opt_Function()) {
-                    // A hint to the optimiser that a FFI function always returns the same value
-                    // - Don't care here
-                } else {
-                    ERROR(sp, E0000, "#[unsafe(" << ident << ")] on non-function");
-                }
-            } else if (ident == "naked") {
-                if (auto* e = i.opt_Function()) {
-                    // Flag this function as being a bare symbol (no prologue/epilogue)
-                    e->markings.isNaked = true;
-                } else {
-                    ERROR(sp, E0000, "#[unsafe(" << ident << ")] on non-function");
-                }
-            } else {
-                ERROR(sp, E0000, "Unknown #[unsafe(" << ident << ")]");
-            }
-
-            if (lex.lookahead(0) != TOK_COMMA) {
-                break;
-            }
-            lex.getTokenCheck(TOK_COMMA);
-        }
-        lex.getTokenCheck(TOK_PAREN_CLOSE);
-    }
-
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& i) const override {
-        handleItem(sp, mi, wb, path.nodes.back(), i);
-    }
-
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, ASTImpl&, const RcString& name, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& i) const override {
-        handleItem(sp, mi, wb, name, i);
-    }
-
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, const ASTAbsolutePath& path, ASTTrait&, slice<const ASTAttribute>, ASTItem& i) const override {
-        handleItem(sp, mi, wb, path.nodes.back(), i);
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, const ASTAbsolutePath& path, ASTTrait&, slice<const ASTAttribute>, ASTItem& i) const override;
 };
-
 
 class DecoratorCrateType: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        auto name = mi.parseEqualsString(wb, crate, crate.rootModule_);
-        if (name == "rlib" || name == "lib") {
-            crate.crateType = ASTCrate::Type::RustLib;
-        } else if (name == "dylib" || name == "rdylib") {
-            crate.crateType = ASTCrate::Type::RustDylib;
-        } else if (name == "cdylib") {
-            crate.crateType = ASTCrate::Type::CDylib;
-        } else if (name == "proc-macro") {
-            crate.crateType = ASTCrate::Type::ProcMacro;
-        } else if (name == "bin") {
-            crate.crateType = ASTCrate::Type::Executable;
-        } else if (name == "staticlib") {
-            // A static library holds the same items as an rlib; what differs is
-            // how it is linked, which the driver decides.
-            crate.crateType = ASTCrate::Type::RustLib;
-        } else {
-            ERROR(sp, E0000, "Unknown crate type '" << name << "'");
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 };
 
 class DecoratorCrateName: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        auto name = mi.parseEqualsString(wb, crate, crate.rootModule_);
-        crate.setCrateName(name);
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 };
 
 class DecoratorRecursionLimit: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        const auto text = mi.parseEqualsString(wb, crate, crate.rootModule_);
-        char* end = nullptr;
-        const auto value = ::std::strtoul(text.c_str(), &end, 10);
-        // Zero is allowed: it forbids recursion outright rather than being an
-        // error in itself.
-        if (text.empty() || *end != '\0') {
-            ERROR(sp, E0000, "#![recursion_limit] needs a number, got `" << text << "`");
-        }
-        wb.settings->recursionLimit = static_cast<unsigned int>(value);
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 };
 
 class DecoratorFeature: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        mi.parseParenIdentList([&](const Span&, RcString feature) {
-            crate.features.insert(feature);
-        });
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 };
 
 class DecoratorAllocator: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        // TODO: Check for an existing allocator crate
-        crate.langItems.insert(::std::make_pair("trustme-allocator", ASTAbsolutePath()));
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (!i.is_Function()) {
-            ERROR(sp, E0000, "#[allocator] can only be put on functions and the crate - found on " << i.tagStr());
-        }
-        // TODO: Ensure that this is an extern { fn }
-        // TODO: Does this need to do anything?
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
 class DecoratorPanicRuntime: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        // TODO: Check for an existing panic_runtime crate
-        crate.langItems.insert(::std::make_pair("trustme-panic_runtime", ASTAbsolutePath()));
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 };
 
 class DecoratorNeedsPanicRuntime: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        crate.langItems.insert(::std::make_pair("trustme-needs_panic_runtime", ASTAbsolutePath()));
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 };
-
-
 
 namespace {
     ASTType* mktypeSelf(ObjPool& pool, const Span& sp) {
@@ -996,437 +334,44 @@ struct Deriver {
     virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const = 0;
     virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const = 0;
 
-    virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const {
-        ERROR(sp, E0000, "Cannot derive(" << traitName() << ") on union");
-    }
+    virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const;
 
     template <typename F>
-    void iterateStructFields(const ASTStruct& str, F cb) const {
-        switch (str.data.tag()) {
-            case ASTStructData::TAG_Unit: {
-                break;
-            }
-            case ASTStructData::TAG_Struct: {
-                auto& e = str.data.as_Struct();
-                for (const auto& fld : e.ents) {
-                    cb(fld.name);
-                }
-                break;
-            }
-            case ASTStructData::TAG_Tuple: {
-                auto& e = str.data.as_Tuple();
-                for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
-                    auto fldName = RcString::newInterned(FMT(idx));
-                    cb(fldName);
-                }
-                break;
-            }
-        }
-    }
+    void iterateStructFields(const ASTStruct& str, F cb) const;
 
-    ASTGenericParams getParamsWithBounds(ObjPool& pool, const Span& sp, const ASTGenericParams& p, const ASTPath& traitPath, ::std::vector<ASTType*> additionalBoundedTypes, bool boundTypeParams = true) const {
-        ASTGenericParams params = p.clone();
+    ASTGenericParams getParamsWithBounds(ObjPool& pool, const Span& sp, const ASTGenericParams& p, const ASTPath& traitPath, ::std::vector<ASTType*> additionalBoundedTypes, bool boundTypeParams = true) const;
 
-        // TODO: Get bounds based on generic (or similar) types used within the type.
-        // - How would this code (that runs before resolve) know what's a generic and what's a local type?
-        // - Searches within the type for a Path that starts with that param.
+    ::std::vector<ASTType*> getFieldBounds(const ASTStruct& str) const;
 
-        unsigned int i = 0;
-        for (const auto& arg : params.params) {
-            if (const auto* e = arg.opt_Type()) {
-                if (boundTypeParams) {
-                    params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(pool, sp, e->name(), i), {}, traitPath}));
-                }
-                i++;
-            }
-        }
+    ::std::vector<ASTType*> getFieldBounds(const ASTEnum& enm) const;
 
-        // For each field type
-        // - Locate used generic parameters in the type (and sub-types that directly use said parameter)
-        for (auto& ty : additionalBoundedTypes) {
-            params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mv$(ty), {}, traitPath}));
-        }
+    ::std::vector<ASTType*> getFieldBounds(const ASTUnion& unn) const;
 
-        return params;
-    }
+    void addFieldBoundFromTy(const ASTGenericParams& params, ::std::vector<ASTType*>& outList, ASTType* ty) const;
 
-    ::std::vector<ASTType*> getFieldBounds(const ASTStruct& str) const {
-        ::std::vector<ASTType*> ret;
-        switch (str.data.tag()) {
-            case ASTStructData::TAG_Unit: {
-                break;
-            }
-            case ASTStructData::TAG_Struct: {
-                auto& e = str.data.as_Struct();
-                for (const auto& fld : e.ents) { addFieldBoundFromTy(str.params(), ret, fld.type); }
-                break;
-            }
-            case ASTStructData::TAG_Tuple: {
-                auto& e = str.data.as_Tuple();
-                for (const auto& ent : e.ents) { addFieldBoundFromTy(str.params(), ret, ent.type); }
-                break;
-            }
-        }
-        return ret;
-    }
-
-    ::std::vector<ASTType*> getFieldBounds(const ASTEnum& enm) const {
-        ::std::vector<ASTType*> ret;
-
-        for (const auto& v : enm.variants()) {
-            switch (v.data.tag()) {
-                case ASTEnumVariantData::TAG_Unit: {
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Tuple: {
-                    auto& e = v.data.as_Tuple();
-                    for (const auto& ent : e.items) { addFieldBoundFromTy(enm.params(), ret, ent.type); }
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Struct: {
-                    auto& e = v.data.as_Struct();
-                    for (const auto& fld : e.fields) { addFieldBoundFromTy(enm.params(), ret, fld.type); }
-                    break;
-                }
-            }
-        }
-
-        return ret;
-    }
-
-    ::std::vector<ASTType*> getFieldBounds(const ASTUnion& unn) const {
-        ::std::vector<ASTType*> ret;
-        for (const auto& fld : unn.variants) {
-            addFieldBoundFromTy(unn.params(), ret, fld.type);
-        }
-        return ret;
-    }
-
-    void addFieldBoundFromTy(const ASTGenericParams& params, ::std::vector<ASTType*>& outList, ASTType* ty) const {
-        struct H {
-            static void visitNodes(const Deriver& self, const ASTGenericParams& params, ::std::vector<ASTType*>& outList, const ::std::vector<ASTPathNode>& nodes) {
-                for (const auto& node : nodes) {
-                    for (const auto& e : node.args().entries) {
-                        switch (e.tag()) {
-default:
-                            break;
-                            case ASTPathParamEnt::TAG_Type: {
-                                auto& ty = e.as_Type();
-                                self.addFieldBoundFromTy(params, outList, ty);
-                                break;
-                            }
-                            case ASTPathParamEnt::TAG_AssociatedTyEqual: {
-                                auto& aty = e.as_AssociatedTyEqual();
-                                self.addFieldBoundFromTy(params, outList, aty.second);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
-        // TODO: Locate type that is directly related to the type param.
-        switch (ty->data.tag()) {
-            case TypeData::TAG_None: {
-                // Wat?
-                break;
-            }
-            case TypeData::TAG_Any: {
-                // Nope.
-                break;
-            }
-            case TypeData::TAG_Unit: {
-                break;
-            }
-            case TypeData::TAG_Bang: {
-                break;
-            }
-            case TypeData::TAG_Macro: {
-                // not allowed
-                break;
-            }
-            case TypeData::TAG_Primitive: {
-                break;
-            }
-            case TypeData::TAG_Function: {
-                // TODO? Well... function types don't tend to depend on the trait?
-                break;
-            }
-            case TypeData::TAG_Tuple: {
-                auto& e = ty->data.as_Tuple();
-                for (const auto& sty : e.innerTypes) {
-                    addFieldBoundFromTy(params, outList, sty);
-                }
-                break;
-            }
-            case TypeData::TAG_Borrow: {
-                auto& e = ty->data.as_Borrow();
-                addFieldBoundFromTy(params, outList, e.inner);
-                break;
-            }
-            case TypeData::TAG_Pointer: {
-                auto& e = ty->data.as_Pointer();
-                addFieldBoundFromTy(params, outList, e.inner);
-                break;
-            }
-            case TypeData::TAG_Array: {
-                auto& e = ty->data.as_Array();
-                addFieldBoundFromTy(params, outList, e.inner);
-                break;
-            }
-            case TypeData::TAG_Slice: {
-                auto& e = ty->data.as_Slice();
-                addFieldBoundFromTy(params, outList, e.inner);
-                break;
-            }
-            case TypeData::TAG_Pattern: {
-                auto& e = ty->data.as_Pattern();
-                addFieldBoundFromTy(params, outList, e.inner);
-                break;
-            }
-            case TypeData::TAG_Generic: {
-                // Although this is what we're looking for, it's already handled.
-                break;
-            }
-            case TypeData::TAG_Path: {
-                auto& e = ty->data.as_Path();
-                switch (e->cls.tag()) {
-                    case ASTPathClass::TAG_Invalid: {
-                        // wut.
-                        break;
-                    }
-                    case ASTPathClass::TAG_Local: {
-                        break;
-                    }
-                    case ASTPathClass::TAG_Relative: {
-                        auto& pe = e->cls.as_Relative();
-                        if (pe.nodes.size() > 1) {
-                            // Check if the first node of a relative is a generic param.
-                            for (const auto& param : params.params) {
-                                if ((param.is_Type() && (param.as_Type().name() == pe.nodes.front().name()))) {
-                                    addFieldBound(outList, ty);
-                                    break;
-                                }
-                            }
-                        }
-                        H::visitNodes(*this, params, outList, pe.nodes);
-                        break;
-                    }
-                    case ASTPathClass::TAG_Self: {
-                        break;
-                    }
-                    case ASTPathClass::TAG_Super: {
-                        break;
-                    }
-                    case ASTPathClass::TAG_Absolute: {
-                        break;
-                    }
-                    case ASTPathClass::TAG_UFCS: {
-                        break;
-                    }
-                }
-                break;
-            }
-            case TypeData::TAG_TraitObject: {
-                // TODO: Should this be recursed?
-                break;
-            }
-            case TypeData::TAG_ErasedType: {
-                // TODO: Should this be recursed?
-                break;
-            }
-        }
-    }
-
-    void addFieldBound(::std::vector<ASTType*>& outList, ASTType* type) const {
-        for (const auto& ty : outList) {
-            if (ty == type) {
-                return;
-            }
-        }
-
-        outList.push_back(type->clone());
-    }
+    void addFieldBound(::std::vector<ASTType*>& outList, ASTType* type) const;
 };
 
 /// 'Debug' derive handler
 class DeriverDebug: public Deriver {
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
-        const ASTPath debugTrait = getPath(coreName, "fmt", "Debug");
-
-        ASTFunction fcn(sp, mkType(*type->pool, sp, getPath(coreName, "fmt", "Result")), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("f")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, getPath(coreName, "fmt", "Formatter"))))));
-        fcn.setCode(NEWNODE(Block, mv$(node)));
-
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, debugTrait, mv$(typesToBound));
-
-        ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, debugTrait), type->clone()));
-        rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString("fmt"), mv$(fcn));
-        return mv$(rv);
-    }
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
 public:
-    const char* traitName() const override {
-        return "Debug";
-    }
+    const char* traitName() const override;
 
     // The derived code calls the formatter helpers by path rather than as
     // methods. A method call is resolved against whatever is in scope, so a
     // user trait with a `field`, `finish` or `debug_struct` method on a blanket
     // impl would capture the call.
-    static ASTExprNodeP callPath(ASTPath path, const char* method, ::std::vector<ASTExprNodeP> args) {
-        return NEWNODE(CallPath, path + RcString::newInterned(method), mv$(args));
-    }
+    static ASTExprNodeP callPath(ASTPath path, const char* method, ::std::vector<ASTExprNodeP> args);
 
-    static ASTExprNodeP builderRef() {
-        return NEWNODE(UniOp, ASTExprNodeUniOp::REFMUT, NEWNODE(NamedValue, ASTPath(RcString::newInterned("s"))));
-    }
+    static ASTExprNodeP builderRef();
 
-    static ASTPattern builderPattern(const Span& sp) {
-        return ASTPattern(ASTPattern::TagBind(), sp, RcString::newInterned("s"), ASTPatternBinding::Type::MOVE, /*isMut=*/true);
-    }
+    static ASTPattern builderPattern(const Span& sp);
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
-        ::std::string name = type->path().nodes().back().name().c_str();
-        const ASTPath pathFormatter = getPath(opts.coreName, "fmt", "Formatter");
-        const ASTPath pathDebugStruct = getPath(opts.coreName, "fmt", "DebugStruct");
-        const ASTPath pathDebugTuple = getPath(opts.coreName, "fmt", "DebugTuple");
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-        // Generate code for Debug
-        ASTExprNodeP node;
-        // `-Zfmt-debug` cuts the output down: `shallow` keeps only the name,
-        // `none` prints nothing at all.
-        if (opts.fmtDebug != Settings::FmtDebug::Full) {
-            const char* text = opts.fmtDebug == Settings::FmtDebug::Shallow ? name.c_str() : "";
-            return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str),
-                callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, ::std::string(text)))));
-        }
-        switch (str.data.tag()) {
-            case ASTStructData::TAG_Unit: {
-                node = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, name)));
-                break;
-            }
-            case ASTStructData::TAG_Struct: {
-                auto& e = str.data.as_Struct();
-                std::vector<ASTExprNodeBlock::Line> nodes;
-                nodes.push_back({true, NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_struct", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, name))))});
-                for (const auto& fld : e.ents) {
-                    nodes.push_back({true, callPath(pathDebugStruct, "field", vec$(builderRef(), NEWNODE(String, fld.name.c_str()), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), fld.name)))))});
-                }
-                nodes.push_back({false, callPath(pathDebugStruct, "finish", vec$(builderRef()))});
-                node = NEWNODE(Block, mv$(nodes));
-                break;
-            }
-            case ASTStructData::TAG_Tuple: {
-                auto& e = str.data.as_Tuple();
-                std::vector<ASTExprNodeBlock::Line> nodes;
-                nodes.push_back({true, NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_tuple", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, name))))});
-                for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
-                    nodes.push_back({true, callPath(pathDebugTuple, "field", vec$(builderRef(), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(FMT(idx)))))))});
-                }
-                nodes.push_back({false, callPath(pathDebugTuple, "finish", vec$(builderRef()))});
-                node = NEWNODE(Block, mv$(nodes));
-                break;
-            }
-        }
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));
-    }
-
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
-        ASTPath basePath = *type->data.as_Path();
-        basePath.nodes().back() = basePath.nodes().back().name();
-        const ASTPath pathFormatter = getPath(opts.coreName, "fmt", "Formatter");
-        const ASTPath pathDebugStruct = getPath(opts.coreName, "fmt", "DebugStruct");
-        const ASTPath pathDebugTuple = getPath(opts.coreName, "fmt", "DebugTuple");
-
-        // `-Zfmt-debug=none` prints nothing, so the variant does not matter.
-        if (opts.fmtDebug == Settings::FmtDebug::None) {
-            return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm),
-                callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, ::std::string()))));
-        }
-
-        ::std::vector<ASTExprNodeMatchArm> arms;
-        for (const auto& v : enm.variants()) {
-            ASTExprNodeP code;
-            ASTPattern patA;
-
-            ASTPath variantPath = basePath + v.name;
-
-            // `-Zfmt-debug=shallow` keeps only the variant name, so the fields
-            // are not bound at all.
-            if (opts.fmtDebug == Settings::FmtDebug::Shallow) {
-                code = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, v.name.c_str())));
-                switch (v.data.tag()) {
-                    case ASTEnumVariantData::TAG_Unit: {
-                        patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
-                        break;
-                    }
-                    case ASTEnumVariantData::TAG_Tuple: {
-                        patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, ASTPattern::TuplePat{{}, true, {}});
-                        break;
-                    }
-                    case ASTEnumVariantData::TAG_Struct: {
-                        patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, {}, false);
-                        break;
-                    }
-                }
-                ::std::vector<ASTPattern> pats;
-                pats.push_back(ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)));
-                arms.push_back(ASTExprNodeMatchArm(mv$(pats), {}, mv$(code)));
-                continue;
-            }
-
-            switch (v.data.tag()) {
-                case ASTEnumVariantData::TAG_Unit: {
-                    code = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, v.name.c_str())));
-                    patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Tuple: {
-                    auto& e = v.data.as_Tuple();
-                    ::std::vector<ASTPattern> patsA;
-                    auto block = newBlock(sp);
-                    block->pushStmt(NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_tuple", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, v.name.c_str())))));
-
-                    makeRefpatA(sp, *block, patsA, e.items, [&](size_t idx, auto a) {
-                        return callPath(pathDebugTuple, "field", vec$(builderRef(), mv$(a)));
-                    });
-                    block->pushTailExpr(callPath(pathDebugTuple, "finish", vec$(builderRef())));
-                    code = mkExprnodep(block.release());
-                    patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Struct: {
-                    auto& e = v.data.as_Struct();
-                    ::std::vector<ASTStructPatternEntry> patsA;
-                    auto block = newBlock(sp);
-                    block->pushStmt(NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_struct", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, v.name.c_str())))));
-
-                    makeRefpatA(sp, *block, patsA, e.fields, [&](size_t idx, auto a) {
-                        return callPath(pathDebugStruct, "field", vec$(builderRef(), NEWNODE(String, e.fields[idx].name.c_str()), mv$(a)));
-                    });
-                    block->pushTailExpr(callPath(pathDebugStruct, "finish", vec$(builderRef())));
-
-                    code = mkExprnodep(block.release());
-                    patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsA), true);
-                    break;
-                }
-            }
-
-            ::std::vector< ASTPattern>    pats;
-            pats.push_back( ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)) );
-
-            arms.push_back(ASTExprNodeMatchArm(
-                mv$(pats),
-                {},
-                mv$(code)
-                ));
-        }
-        ASTExprNodeP node = NEWNODE(Match, NEWNODE(NamedValue, ASTPath(RcString("self"))), mv$(arms));
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), mv$(node));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 };
 
 // ---- Comparisons
@@ -1442,1296 +387,246 @@ protected:
     /// Get the return value for a mismatch in enum variants
     virtual ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const = 0;
     /// Compare an enum whose variants carry no fields.
-    virtual ASTExprNodeP compareFieldlessEnum(Span sp, const RcString& coreName) const {
-        return this->enumMismatch(sp, coreName);
-    }
+    virtual ASTExprNodeP compareFieldlessEnum(Span sp, const RcString& coreName) const;
 
 public:
     // Struct
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
-        auto block = newBlock(sp);
-
-        this->iterateStructFields(str, [&](RcString fldName) {
-            auto lhs = NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), fldName);
-            auto rhs = NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("v"))), fldName);
-
-            // Comparing a field normally autoref-borrows it. A packed field
-            // may not satisfy that reference's alignment, so rustc first
-            // evaluates the field in its own block. This makes a Copy field a
-            // value before the comparison takes references to the operands.
-            if (str.markings.maxFieldAlign != 0) {
-                auto lhsBlock = newBlock(sp);
-                lhsBlock->pushTailExpr(mv$(lhs));
-                lhs = mkExprnodep(lhsBlock.release());
-
-                auto rhsBlock = newBlock(sp);
-                rhsBlock->pushTailExpr(mv$(rhs));
-                rhs = mkExprnodep(rhsBlock.release());
-            }
-
-            block->pushStmt(this->compareAndRet(sp, opts.coreName, mv$(lhs), mv$(rhs)));
-        });
-        block->pushTailExpr(this->equalValue(sp, opts.coreName));
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mkExprnodep(block.release()));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
     // Enum
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
-        bool fieldless = true;
-        for (const auto& variant : enm.variants()) {
-            if (variant.data.tag() != ASTEnumVariantData::TAG_Unit) {
-                fieldless = false;
-                break;
-            }
-        }
-        if (fieldless) {
-            return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm),
-                this->compareFieldlessEnum(sp, opts.coreName));
-        }
-
-        ASTPath basePath = *type->data.as_Path();
-        basePath.nodes().back().args() = ASTPathParams();
-        ::std::vector<ASTExprNodeMatchArm> arms;
-
-        for (const auto& v : enm.variants()) {
-            ASTExprNodeP code;
-            ASTPattern patA;
-            ASTPattern patB;
-            auto variantPath = basePath + v.name;
-
-            switch (v.data.tag()) {
-                case ASTEnumVariantData::TAG_Unit: {
-                    code = this->equalValue(sp, opts.coreName);
-                    patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
-                    patB = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Tuple: {
-                    auto& e = v.data.as_Tuple();
-                    auto block = newBlock(sp);
-                    ::std::vector<ASTPattern> patsA;
-                    ::std::vector<ASTPattern> patsB;
-
-                    makeRefpatAb(sp, *block, patsA, patsB, e.items, [&](auto idx, auto a, auto b) {
-                        return this->compareAndRet(sp, opts.coreName, mv$(a), mv$(b));
-                    });
-                    block->pushTailExpr(this->equalValue(sp, opts.coreName));
-
-                    patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
-                    patB = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsB));
-                    code = mkExprnodep(block.release());
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Struct: {
-                    auto& e = v.data.as_Struct();
-                    auto block = newBlock(sp);
-                    ::std::vector<ASTStructPatternEntry> patsA;
-                    ::std::vector<ASTStructPatternEntry> patsB;
-
-                    makeRefpatAb(sp, *block, patsA, patsB, e.fields, [&](const auto& name, auto a, auto b) {
-                        return this->compareAndRet(sp, opts.coreName, mv$(a), mv$(b));
-                    });
-                    block->pushTailExpr(this->equalValue(sp, opts.coreName));
-
-                    patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsA), true);
-                    patB = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsB), true);
-                    code = mkExprnodep(block.release());
-                    break;
-                }
-            }
-
-            ::std::vector< ASTPattern>    pats;
-            {
-                ::std::vector<ASTPattern> tuplePats;
-                tuplePats.push_back(ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)));
-                tuplePats.push_back(ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patB)));
-                pats.push_back(ASTPattern(ASTPattern::TagTuple(), sp, mv$(tuplePats)));
-            }
-
-            arms.push_back(ASTExprNodeMatchArm(
-                mv$(pats),
-                {},
-                mv$(code)
-                ));
-        }
-
-        // Default arm
-        {
-            arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern()), {}, this->enumMismatch(sp, opts.coreName)));
-        }
-
-        ::std::vector<ASTExprNodeP> vals;
-        vals.push_back(NEWNODE(NamedValue, ASTPath(RcString("self"))));
-        vals.push_back(NEWNODE(NamedValue, ASTPath(RcString("v"))));
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(Tuple, mv$(vals)), mv$(arms)));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 };
 
 class DeriverPartialEq: public DeriverInnerCompare {
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override {
-        const ASTPath traitPath = getPath(coreName, "cmp", "PartialEq");
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override;
 
-        ASTFunction fcn(sp, mkType(*type->pool, sp, CORETYPE_BOOL), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("v")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
-        fcn.setCode(NEWNODE(Block, mv$(node)));
+    ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override;
 
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+    ASTExprNodeP equalValue(Span sp, const RcString& coreName) const override;
 
-        ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
-        rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString::newInterned("eq"), mv$(fcn));
-        return mv$(rv);
-    }
+    ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override;
 
-    ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override {
-        std::vector<ASTExprNodeIf::Arm> arms;
-        arms.push_back(ASTExprNodeIf::Arm{makeVec1(ASTIfLetCondition{{}, NEWNODE(BinOp, ASTExprNodeBinOp::CMPNEQU, mv$(v1), mv$(v2))}), NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(Bool, false))});
-        return NEWNODE(If, std::move(arms), nullptr);
-    }
-
-    ASTExprNodeP equalValue(Span sp, const RcString& coreName) const override {
-        return NEWNODE(Bool, true);
-    }
-
-    ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override {
-        return NEWNODE(Bool, false);
-    }
-
-    ASTExprNodeP compareFieldlessEnum(Span sp, const RcString& coreName) const override {
-        auto discriminant = [&](const RcString& value) {
-            return NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"),
-                makeVec1(NEWNODE(NamedValue, ASTPath(value))));
-        };
-        return NEWNODE(BinOp, ASTExprNodeBinOp::CMPEQU,
-            discriminant(RcString("self")), discriminant(RcString("v")));
-    }
+    ASTExprNodeP compareFieldlessEnum(Span sp, const RcString& coreName) const override;
 
 public:
-    const char* traitName() const override {
-        return "PartialEq";
-    }
+    const char* traitName() const override;
 };
 
 class DeriverPartialOrd: public DeriverInnerCompare {
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override {
-        const ASTPath traitPath = getPath(coreName, "cmp", "PartialOrd");
-        const ASTPath pathOrdering = getPath(coreName, "cmp", "Ordering");
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override;
 
-        ASTPath pathOptionOrdering = getPath(coreName, "option", "Option");
-        pathOptionOrdering.nodes().back().args().entries.push_back(mkType(*type->pool, sp, pathOrdering));
+    ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override;
 
-        ASTFunction fcn(sp, mkType(*type->pool, sp, pathOptionOrdering), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("v")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
-        fcn.setCode(NEWNODE(Block, mv$(node)));
+    ASTExprNodeP equalValue(Span sp, const RcString& coreName) const override;
 
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
-
-        ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
-        rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString::newInterned("partial_cmp"), mv$(fcn));
-        return mv$(rv);
-    }
-
-    ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override {
-        return NEWNODE(Match, NEWNODE(CallPath, getPath(coreName, "cmp", "PartialOrd", "partial_cmp"), ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v1)), NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v2)))), ::makeVec3(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), sp, getPath(coreName, "option", "Option", "None"))), {}, NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(NamedValue, getPath(coreName, "option", "Option", "None")))), ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), sp, getPath(coreName, "option", "Option", "Some"), ::makeVec1(ASTPattern(ASTPattern::TagValue(), sp, getPath(coreName, "cmp", "Ordering", "Equal"))))), {}, NEWNODE(Tuple, ::std::vector<ASTExprNodeP>())), ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), sp, RcString("res"))), {}, NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(NamedValue, ASTPath(RcString("res")))))));
-    }
-
-    ASTExprNodeP equalValue(Span sp, const RcString& coreName) const override {
-        return NEWNODE(CallPath, getPath(coreName, "option", "Option", "Some"), ::makeVec1(NEWNODE(NamedValue, getPath(coreName, "cmp", "Ordering", "Equal"))));
-    }
-
-    ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override {
-        return NEWNODE(CallPath, getPath(coreName, "cmp", "PartialOrd", "partial_cmp"), ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(RcString("self")))))), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(RcString("v"))))))));
-    }
+    ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override;
 
 public:
-    const char* traitName() const override {
-        return "PartialOrd";
-    }
+    const char* traitName() const override;
 };
 
 class DeriverEq: public Deriver {
-    ASTPath getTraitPath(const RcString& coreName) const {
-        return getPath(coreName, "cmp", "Eq");
-    }
+    ASTPath getTraitPath(const RcString& coreName) const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
-        const ASTPath traitPath = this->getTraitPath(coreName);
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
-        ASTFunction fcn(sp, mkType(*type->pool, ASTTypeTags::Unit(), sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
-        fcn.setCode(NEWNODE(Block, mv$(node)));
+    ASTExprNodeP assertIsEq(const ASTPath& methodPath, ASTExprNodeP val) const;
 
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+    ASTExprNodeP field(const ::std::string& name) const;
 
-        ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
-        rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString("assert_receiver_is_total_eq"), mv$(fcn));
-        return mv$(rv);
-    }
-
-    ASTExprNodeP assertIsEq(const ASTPath& methodPath, ASTExprNodeP val) const {
-        return NEWNODE(CallPath, ASTPath(methodPath), vec$(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(val))));
-    }
-
-    ASTExprNodeP field(const ::std::string& name) const {
-        return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(name));
-    }
-
-    ASTExprNodeP field(const RcString& name) const {
-        return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), name);
-    }
+    ASTExprNodeP field(const RcString& name) const;
 
 public:
-    const char* traitName() const override {
-        return "Eq";
-    }
+    const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
-        const ASTPath assertMethodPath = this->getTraitPath(opts.coreName) + RcString("assert_receiver_is_total_eq");
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-        auto block = newBlock(sp);
-        this->iterateStructFields(str, [&](RcString name) {
-            block->pushStmt(this->assertIsEq(assertMethodPath, this->field(name)));
-        });
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mkExprnodep(block.release()));
-    }
-
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
-        const ASTPath assertMethodPath = this->getTraitPath(opts.coreName) + RcString("assert_receiver_is_total_eq");
-
-        ASTPath basePath = *type->data.as_Path();
-        basePath.nodes().back().args() = ASTPathParams();
-        ::std::vector<ASTExprNodeMatchArm> arms;
-
-        for (const auto& v : enm.variants()) {
-            ASTExprNodeP code;
-            ASTPattern patA;
-            auto variantPath = basePath + v.name;
-
-            switch (v.data.tag()) {
-                case ASTEnumVariantData::TAG_Unit: {
-                    code = NEWNODE(Block);
-                    patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Tuple: {
-                    auto& e = v.data.as_Tuple();
-                    auto block = newBlock(sp);
-                    ::std::vector<ASTPattern> patsA;
-                    makeRefpatA(sp, *block, patsA, e.items, [&](size_t idx, auto a) {
-                        return this->assertIsEq(assertMethodPath, mv$(a));
-                    });
-
-                    patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
-                    code = mkExprnodep(block.release());
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Struct: {
-                    auto& e = v.data.as_Struct();
-                    auto block = newBlock(sp);
-                    ::std::vector<ASTStructPatternEntry> patsA;
-                    makeRefpatA(sp, *block, patsA, e.fields, [&](size_t idx, auto a) {
-                        return this->assertIsEq(assertMethodPath, mv$(a));
-                    });
-
-                    patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsA), true);
-                    code = mkExprnodep(block.release());
-                    break;
-                }
-            }
-
-            ::std::vector< ASTPattern>    pats;
-            pats.push_back( ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)) );
-
-            arms.push_back(ASTExprNodeMatchArm(
-                mv$(pats),
-                {},
-                mv$(code)
-                ));
-        }
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(NamedValue, ASTPath(RcString("self"))), mv$(arms)));
-    }
-
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override {
-        // Eq is just a marker, so it's valid to derive for union
-        const ASTPath assertMethodPath = this->getTraitPath(opts.coreName) + RcString("assert_receiver_is_total_eq");
-        auto block = newBlock(sp);
-
-        for (const auto& fld : unn.variants) {
-            block->pushStmt(this->assertIsEq(assertMethodPath, this->field(fld.name)));
-        }
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(unn), mkExprnodep(block.release()));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override;
 };
 
 class DeriverOrd: public DeriverInnerCompare {
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override {
-        const ASTPath traitPath = getPath(coreName, "cmp", "Ord");
-        const ASTPath pathOrdering = getPath(coreName, "cmp", "Ordering");
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override;
 
-        ASTFunction fcn(sp, mkType(*type->pool, sp, pathOrdering), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("v")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
-        fcn.setCode(NEWNODE(Block, mv$(node)));
+    ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override;
 
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+    ASTExprNodeP equalValue(Span sp, const RcString& coreName) const override;
 
-        ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
-        rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString::newInterned("cmp"), mv$(fcn));
-        return mv$(rv);
-    }
-
-    ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const override {
-        return NEWNODE(
-            Match,
-            NEWNODE(
-                CallPath,
-                getPath(coreName, "cmp", "Ord", "cmp"),
-                // TODO: Optional Ref?
-                ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v1)), NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v2)))
-            ),
-            ::makeVec2(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), sp, getPath(coreName, "cmp", "Ordering", "Equal"))), {}, NEWNODE(Tuple, ::std::vector<ASTExprNodeP>())), ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), sp, RcString("res"))), {}, NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(NamedValue, ASTPath(RcString("res"))))))
-        );
-    }
-
-    ASTExprNodeP equalValue(Span sp, const RcString& coreName) const override {
-        return NEWNODE(NamedValue, getPath(coreName, "cmp", "Ordering", "Equal"));
-    }
-
-    ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override {
-        return NEWNODE(CallPath, getPath(coreName, "cmp", "Ord", "cmp"), ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(RcString("self")))))), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(RcString("v"))))))));
-    }
+    ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const override;
 
 public:
-    const char* traitName() const override {
-        return "Ord";
-    }
+    const char* traitName() const override;
 };
 
 class DeriverClone: public Deriver {
-    ASTPath getTraitPath(const RcString& coreName) const {
-        return ASTPath(coreName, {ASTPathNode(RcString("clone"), {}), ASTPathNode(RcString("Clone"), {})});
-    }
+    ASTPath getTraitPath(const RcString& coreName) const;
 
-    ASTPath getMethodPath(const RcString& coreName) const {
-        return getTraitPath(coreName) + RcString("clone");
-    }
+    ASTPath getMethodPath(const RcString& coreName) const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
-        const ASTPath traitPath = this->getTraitPath(coreName);
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
-        ASTFunction fcn(sp, mktypeSelf(*type->pool, sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
-        fcn.setCode(NEWNODE(Block, mv$(node)));
+    ASTExprNodeP cloneValRef(const RcString& coreName, ASTExprNodeP val) const;
 
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+    ASTExprNodeP cloneValDirect(const RcString& coreName, ASTExprNodeP val) const;
 
-        ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
-        rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString("clone"), mv$(fcn));
-        return mv$(rv);
-    }
+    ASTExprNodeP field(const RcString& name) const;
 
-    ASTExprNodeP cloneValRef(const RcString& coreName, ASTExprNodeP val) const {
-        // TODO: Hack for zero-sized arrays? (Not a 1.19 feature)
-        return NEWNODE(CallPath, this->getMethodPath(coreName), vec$(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(val))));
-    }
-
-    ASTExprNodeP cloneValDirect(const RcString& coreName, ASTExprNodeP val) const {
-        return NEWNODE(CallPath, this->getMethodPath(coreName), vec$(mv$(val)));
-    }
-
-    ASTExprNodeP field(const RcString& name) const {
-        return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), name);
-    }
-
-    ASTExprNodeP field(const ::std::string& name) const {
-        return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(name));
-    }
+    ASTExprNodeP field(const ::std::string& name) const;
 
 public:
-    const char* traitName() const override {
-        return "Clone";
-    }
+    const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
-        const ASTPath& tyPath = *type->data.as_Path();
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-        // A `Copy` type clones by copying. Cloning field by field would call a
-        // field's own `Clone` impl, which is observable when it does more than
-        // copy. A generic type is left alone: `*self` needs `Self: Copy`, which
-        // the derived `Clone` bounds do not give.
-        if (opts.derivesCopy && p.params.empty()) {
-            return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(RcString("self"))))));
-        }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 
-        ASTExprNodeP node;
-        switch (str.data.tag()) {
-            case ASTStructData::TAG_Unit: {
-                node = NEWNODE(NamedValue, ASTPath(tyPath));
-                break;
-            }
-            case ASTStructData::TAG_Struct: {
-                auto& e = str.data.as_Struct();
-                ASTExprNodeStructLiteral::tValues vals;
-                for (const auto& fld : e.ents) {
-                    vals.push_back({{}, fld.name, this->cloneValRef(opts.coreName, this->field(fld.name))});
-                }
-                node = NEWNODE(StructLiteral, tyPath, nullptr, mv$(vals));
-                break;
-            }
-            case ASTStructData::TAG_Tuple: {
-                auto& e = str.data.as_Tuple();
-                ::std::vector<ASTExprNodeP> vals;
-                for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
-                    vals.push_back(this->cloneValRef(opts.coreName, this->field(FMT(idx))));
-                }
-                node = NEWNODE(CallPath, ASTPath(tyPath), mv$(vals));
-                break;
-            }
-        }
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, mv$(node)));
-    }
-
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
-        if (opts.derivesCopy && p.params.empty()) {
-            return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Block, NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(RcString("self"))))));
-        }
-        ASTPath basePath = *type->data.as_Path();
-        basePath.nodes().back().args() = ASTPathParams();
-        ::std::vector<ASTExprNodeMatchArm> arms;
-
-        for (const auto& v : enm.variants()) {
-            ASTExprNodeP code;
-            ASTPattern patA;
-
-            switch (v.data.tag()) {
-                case ASTEnumVariantData::TAG_Unit: {
-                    code = NEWNODE(NamedValue, basePath + v.name);
-                    patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(basePath + v.name));
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Tuple: {
-                    auto& e = v.data.as_Tuple();
-                    ::std::vector<ASTPattern> patsA;
-                    ::std::vector<ASTExprNodeP> nodes;
-
-                    for (size_t idx = 0; idx < e.items.size(); idx++) {
-                        auto nameA = RcString::newInterned(FMT("a" << idx));
-                        patsA.push_back(ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF));
-                        nodes.push_back(this->cloneValDirect(opts.coreName, NEWNODE(NamedValue, ASTPath(nameA))));
-                    }
-
-                    patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, basePath + v.name, mv$(patsA));
-                    code = NEWNODE(CallPath, basePath + v.name, mv$(nodes));
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Struct: {
-                    auto& e = v.data.as_Struct();
-                    ::std::vector<ASTStructPatternEntry> patsA;
-                    ASTExprNodeStructLiteral::tValues vals;
-
-                    for (const auto& fld : e.fields) {
-                        auto nameA = RcString::newInterned(FMT("a" << fld.name));
-                        patsA.push_back(ASTStructPatternEntry{ASTAttributeList(), fld.name, ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF)});
-                        vals.push_back({{}, fld.name, this->cloneValDirect(opts.coreName, NEWNODE(NamedValue, ASTPath(nameA)))});
-                    }
-
-                    patA = ASTPattern(ASTPattern::TagStruct(), sp, basePath + v.name, mv$(patsA), true);
-                    code = NEWNODE(StructLiteral, basePath + v.name, nullptr, mv$(vals));
-                    break;
-                }
-            }
-
-            ::std::vector< ASTPattern>    pats;
-            pats.push_back( ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)) );
-
-            arms.push_back(ASTExprNodeMatchArm(
-                mv$(pats),
-                {},
-                mv$(code)
-                ));
-        }
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(NamedValue, ASTPath(RcString("self"))), mv$(arms)));
-    }
-
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override {
-        return makeCopyClone(sp, opts, p, type, this->getFieldBounds(unn));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override;
 
 private:
-    ASTImpl makeCopyClone(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> fieldBounds) const {
-        // Clone on a union can only be a bitwise copy.
-        // - This requires a Copy impl. That's up to the user
-        auto ret = this->makeRet(sp, opts.coreName, p, type, ::std::move(fieldBounds), NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(RcString("self")))));
-
-        // TODO: What if the type is only conditionally copy? (generic over something)
-        // - Could abuse specialisation support...
-        // TODO: Are these bounds needed?
-        for (auto& b : ret.def().params().bounds) {
-            auto& be = b.as_IsTrait();
-            be.trait = getPath(opts.coreName, "marker", "Copy");
-        }
-
-        return ret;
-    }
+    ASTImpl makeCopyClone(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> fieldBounds) const;
 };
 
 class DeriverCopy: public Deriver {
-    ASTPath getTraitPath(const RcString& coreName) const {
-        return getPath(coreName, "marker", "Copy");
-    }
+    ASTPath getTraitPath(const RcString& coreName) const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
-        const ASTPath traitPath = this->getTraitPath(coreName);
-
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
-
-        ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
-        return mv$(rv);
-    }
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
 public:
-    const char* traitName() const override {
-        return "Copy";
-    }
+    const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), nullptr);
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), nullptr);
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override {
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(unn), nullptr);
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override;
 };
 
 class DeriverDefault: public Deriver {
-    ASTPath getTraitPath(const RcString& coreName) const {
-        return getPath(coreName, "default", "Default");
-    }
+    ASTPath getTraitPath(const RcString& coreName) const;
 
-    ASTPath getMethodPath(ObjPool& pool, const RcString& coreName) const {
-        return ASTPath::newUfcsTrait(::mkType(pool, Span()), getTraitPath(coreName), {ASTPathNode(RcString::newInterned("default"), {})});
-    }
+    ASTPath getMethodPath(ObjPool& pool, const RcString& coreName) const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node, bool boundTypeParams = true) const {
-        const ASTPath traitPath = this->getTraitPath(coreName);
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node, bool boundTypeParams = true) const;
 
-        ASTFunction fcn(sp, mktypeSelf(*type->pool, sp), {});
-        fcn.setCode(NEWNODE(Block, mv$(node)));
-
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound), boundTypeParams);
-
-        ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
-        rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString::newInterned("default"), mv$(fcn));
-        return mv$(rv);
-    }
-
-    ASTExprNodeP defaultCall(ObjPool& pool, const RcString& coreName) const {
-        return NEWNODE(CallPath, this->getMethodPath(pool, coreName), {});
-    }
+    ASTExprNodeP defaultCall(ObjPool& pool, const RcString& coreName) const;
 
 public:
-    const char* traitName() const override {
-        return "Default";
-    }
+    const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
-        const ASTPath& tyPath = *type->data.as_Path();
-        ASTExprNodeP node;
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-        switch (str.data.tag()) {
-            case ASTStructData::TAG_Unit: {
-                node = NEWNODE(NamedValue, ASTPath(tyPath));
-                break;
-            }
-            case ASTStructData::TAG_Struct: {
-                auto& e = str.data.as_Struct();
-                ASTExprNodeStructLiteral::tValues vals;
-                bool hasDefault = false;
-                for (const auto& fld : e.ents) {
-                    if (fld.defaultValue) {
-                        hasDefault = true;
-                    } else {
-                        vals.push_back({{}, fld.name, this->defaultCall(*type->pool, opts.coreName)});
-                    }
-                }
-                if (hasDefault) {
-                    node = NEWNODE(StructLiteralPattern, tyPath, mv$(vals));
-                } else {
-                    node = NEWNODE(StructLiteral, tyPath, nullptr, mv$(vals));
-                }
-                break;
-            }
-            case ASTStructData::TAG_Tuple: {
-                auto& e = str.data.as_Tuple();
-                ::std::vector<ASTExprNodeP> vals;
-                for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
-                    vals.push_back(this->defaultCall(*type->pool, opts.coreName));
-                }
-                node = NEWNODE(CallPath, ASTPath(tyPath), mv$(vals));
-                break;
-            }
-        }
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, mv$(node)));
-    }
-
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
-        // 1.74: #[default]
-        const ASTEnumVariant* defaultVar = nullptr;
-        for (const auto& v : enm.variants()) {
-            if (v.attrs.has("default")) {
-                if (defaultVar) {
-                    ERROR(sp, E0000, "Multiple #[default] attributes");
-                }
-                defaultVar = &v;
-            }
-        }
-        if (!defaultVar) {
-            ERROR(sp, E0000, "No #[default] attribute on enum with derive(Default)");
-        }
-
-        ASTPath varPath = *type->data.as_Path() + ASTPathNode(defaultVar->name);
-
-        ::std::vector<ASTType*> boundTys;
-        ASTExprNodeP node;
-        switch (defaultVar->data.tag()) {
-            case ASTEnumVariantData::TAG_Unit: {
-                node = NEWNODE(NamedValue, std::move(varPath));
-                break;
-            }
-            case ASTEnumVariantData::TAG_Tuple: {
-                auto& e = defaultVar->data.as_Tuple();
-                ::std::vector<ASTExprNodeP> vals;
-                for (const auto& fld : e.items) {
-                    addFieldBoundFromTy(enm.params(), boundTys, fld.type);
-                    vals.push_back(this->defaultCall(*type->pool, opts.coreName));
-                }
-                node = NEWNODE(CallPath, std::move(varPath), mv$(vals));
-                break;
-            }
-            case ASTEnumVariantData::TAG_Struct: {
-                auto& e = defaultVar->data.as_Struct();
-                ASTExprNodeStructLiteral::tValues vals;
-                for (const auto& fld : e.fields) {
-                    if (fld.defaultValue) {
-                    } else {
-                        addFieldBoundFromTy(enm.params(), boundTys, fld.type);
-                        vals.push_back({{}, fld.name, this->defaultCall(*type->pool, opts.coreName)});
-                    }
-                }
-                node = NEWNODE(StructLiteralPattern, std::move(varPath), mv$(vals));
-                break;
-            }
-        }
-        // Only the `#[default]` variant is constructed, so the other variants'
-        // types need no bound -- `MyOption<NotDefault>::default()` is fine when
-        // the default variant carries nothing.
-        return this->makeRet(sp, opts.coreName, p, type, std::move(boundTys), std::move(node), /*boundTypeParams=*/false);
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 };
 
 class DeriverHash: public Deriver {
-    ASTPath getTraitPath(const RcString& coreName) const {
-        return getPath(coreName, "hash", "Hash");
-    }
+    ASTPath getTraitPath(const RcString& coreName) const;
 
-    ASTPath getTraitPathHasher(const RcString& coreName) const {
-        return getPath(coreName, "hash", "Hasher");
-    }
+    ASTPath getTraitPathHasher(const RcString& coreName) const;
 
-    ASTPath getMethodPath(const RcString& coreName) const {
-        return getTraitPath(coreName) + RcString::newInterned("hash");
-    }
+    ASTPath getMethodPath(const RcString& coreName) const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
-        const ASTPath traitPath = this->getTraitPath(coreName);
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
-        ASTFunction fcn(sp, mkType(*type->pool, ASTTypeTags::Unit(), sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("state")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, RcString("#H"), 0x100 | 0)))));
-        fcn.params().addTyParam(ASTTypeParam(*type->pool, sp, {}, RcString("#H")));
-        fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, RcString("#H"), 0x100 | 0), {}, this->getTraitPathHasher(coreName)}));
-        fcn.setCode(NEWNODE(Block, mv$(node)));
+    ASTExprNodeP hashValRef(const RcString& coreName, ASTExprNodeP val) const;
 
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+    ASTExprNodeP hashValDirect(const RcString& coreName, ASTExprNodeP val) const;
 
-        ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
-        rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString::newInterned("hash"), mv$(fcn));
-        return mv$(rv);
-    }
+    ASTExprNodeP field(const RcString& name) const;
 
-    ASTExprNodeP hashValRef(const RcString& coreName, ASTExprNodeP val) const {
-        return this->hashValDirect(coreName, NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(val)));
-    }
-
-    ASTExprNodeP hashValDirect(const RcString& coreName, ASTExprNodeP val) const {
-        return NEWNODE(CallPath, this->getMethodPath(coreName), vec$(mv$(val), NEWNODE(NamedValue, ASTPath(RcString("state")))));
-    }
-
-    ASTExprNodeP field(const RcString& name) const {
-        return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), name);
-    }
-
-    ASTExprNodeP field(const std::string& name) const {
-        return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(name));
-    }
+    ASTExprNodeP field(const std::string& name) const;
 
 public:
-    const char* traitName() const override {
-        return "Hash";
-    }
+    const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
-        auto block = newBlock(sp);
-
-        switch (str.data.tag()) {
-            case ASTStructData::TAG_Unit: {
-                break;
-            }
-            case ASTStructData::TAG_Struct: {
-                auto& e = str.data.as_Struct();
-                for (const auto& fld : e.ents) {
-                    block->pushStmt(this->hashValRef(opts.coreName, this->field(fld.name)));
-                }
-                break;
-            }
-            case ASTStructData::TAG_Tuple: {
-                auto& e = str.data.as_Tuple();
-                for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
-                    block->pushStmt(this->hashValRef(opts.coreName, this->field(FMT(idx))));
-                }
-                break;
-            }
-        }
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mkExprnodep(block.release()));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
     /// The type of an enum's discriminant: whatever `#[repr]` names, or `isize`.
-    static eCoreType discriminantCoreType(const ASTEnum& enm) {
-        switch (enm.markings.repr) {
-            case ASTEnum::Markings::Repr::Rust:
-                return CORETYPE_INT;
-            case ASTEnum::Markings::Repr::U8:
-                return CORETYPE_U8;
-            case ASTEnum::Markings::Repr::U16:
-                return CORETYPE_U16;
-            case ASTEnum::Markings::Repr::U32:
-                return CORETYPE_U32;
-            case ASTEnum::Markings::Repr::U64:
-                return CORETYPE_U64;
-            case ASTEnum::Markings::Repr::U128:
-                return CORETYPE_U128;
-            case ASTEnum::Markings::Repr::Usize:
-                return CORETYPE_UINT;
-            case ASTEnum::Markings::Repr::I8:
-                return CORETYPE_I8;
-            case ASTEnum::Markings::Repr::I16:
-                return CORETYPE_I16;
-            case ASTEnum::Markings::Repr::I32:
-                return CORETYPE_I32;
-            case ASTEnum::Markings::Repr::I64:
-                return CORETYPE_I64;
-            case ASTEnum::Markings::Repr::I128:
-                return CORETYPE_I128;
-            case ASTEnum::Markings::Repr::Isize:
-                return CORETYPE_INT;
-        }
-        return CORETYPE_INT;
-    }
+    static eCoreType discriminantCoreType(const ASTEnum& enm);
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
-        ASTPath basePath = *type->data.as_Path();
-        basePath.nodes().back().args() = ASTPathParams();
-        ::std::vector<ASTExprNodeMatchArm> arms;
-
-        for (unsigned int varIdx = 0; varIdx < enm.variants().size(); varIdx++) {
-            const auto& v = enm.variants()[varIdx];
-            ASTPattern patA;
-
-            auto varPath = basePath + v.name;
-            // The discriminant is hashed at its own width: an `#[repr(u8)]` enum
-            // writes one byte, not a whole `isize`.
-            auto varIdxHash = enm.variants().size() > 1 ? this->hashValRef(opts.coreName, NEWNODE(Integer, U128(varIdx), discriminantCoreType(enm))) : NEWNODE(Tuple, {});
-
-            auto block = newBlock(sp);
-            block->pushStmt(mv$(varIdxHash));
-            switch (v.data.tag()) {
-                case ASTEnumVariantData::TAG_Unit: {
-                    patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(varPath));
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Tuple: {
-                    auto& e = v.data.as_Tuple();
-                    ::std::vector<ASTPattern> patsA;
-                    makeRefpatA(sp, *block, patsA, e.items, [&](size_t, auto a) {
-                        return this->hashValDirect(opts.coreName, mv$(a));
-                    });
-                    patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, varPath, mv$(patsA));
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Struct: {
-                    auto& e = v.data.as_Struct();
-                    ::std::vector<ASTStructPatternEntry> patsA;
-                    makeRefpatA(sp, *block, patsA, e.fields, [&](size_t, auto a) {
-                        return this->hashValDirect(opts.coreName, mv$(a));
-                    });
-                    patA = ASTPattern(ASTPattern::TagStruct(), sp, varPath, mv$(patsA), true);
-                    break;
-                }
-            }
-
-            ::std::vector< ASTPattern>    pats;
-            pats.push_back( ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)) );
-
-            arms.push_back(ASTExprNodeMatchArm(
-                mv$(pats),
-                {},
-                mkExprnodep(block.release())
-                ));
-        }
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(NamedValue, ASTPath(RcString("self"))), mv$(arms)));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 };
 
 class DeriverRustcEncodable: public Deriver {
     // NOTE: This emits paths like `::rustc_serialize::Encodable` - rustc and crates.io have subtly different crate names
-    ASTPath getTraitPath() const {
-        return ASTPath(RcString::newInterned("=rustc_serialize"), {ASTPathNode(RcString::newInterned("Encodable"), {})});
-    }
+    ASTPath getTraitPath() const;
 
-    ASTPath getTraitPathEncoder() const {
-        return ASTPath(RcString::newInterned("=rustc_serialize"), {ASTPathNode(RcString::newInterned("Encoder"), {})});
-    }
+    ASTPath getTraitPathEncoder() const;
 
-    ASTPath getMethodPath() const {
-        return getTraitPath() + "encode";
-    }
+    ASTPath getMethodPath() const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
-        const ASTPath traitPath = this->getTraitPath();
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
-        ASTPath resultPath = getPath(coreName, "result", "Result");
-        resultPath.nodes()[1].args().entries.push_back(mkType(*type->pool, ASTTypeTags::Unit(), sp));
-        resultPath.nodes()[1].args().entries.push_back(mkType(*type->pool, sp, ASTPath::newUfcsTrait(mkType(*type->pool, sp, "S", 0x100 | 0), this->getTraitPathEncoder(), {ASTPathNode("Error", {})})));
+    ASTExprNodeP encValDirect(ASTExprNodeP val) const;
 
-        ASTFunction fcn(sp, mkType(*type->pool, sp, mv$(resultPath)), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("s")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, RcString::newInterned("S"), 0x100 | 0)))));
-        fcn.params().addTyParam(ASTTypeParam(*type->pool, sp, {}, "S"));
-        fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, "S", 0x100 | 0), {}, this->getTraitPathEncoder()}));
-        fcn.setCode(NEWNODE(Block, mv$(node)));
+    ASTExprNodeP encValRef(ASTExprNodeP val) const;
 
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+    ASTExprNodeP field(const RcString& name) const;
 
-        ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
-        rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, "encode", mv$(fcn));
-        return mv$(rv);
-    }
+    ASTExprNodeP field(::std::string name) const;
 
-    ASTExprNodeP encValDirect(ASTExprNodeP val) const {
-        return NEWNODE(CallPath, this->getMethodPath(), vec$(mv$(val), NEWNODE(NamedValue, ASTPath(RcString("s")))));
-    }
+    ASTExprNodeP encClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const;
 
-    ASTExprNodeP encValRef(ASTExprNodeP val) const {
-        return this->encValDirect(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(val)));
-    }
-
-    ASTExprNodeP field(const RcString& name) const {
-        return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), name);
-    }
-
-    ASTExprNodeP field(::std::string name) const {
-        return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(name));
-    }
-
-    ASTExprNodeP encClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const {
-        return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, RcString("s")), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false, false);
-    }
-
-    ASTExprNodeP getValOk(const RcString& coreName) const {
-        return NEWNODE(CallPath, getPath(coreName, "result", "Result", "Ok"), vec$(NEWNODE(Tuple, {})));
-    }
+    ASTExprNodeP getValOk(const RcString& coreName) const;
 
 public:
-    const char* traitName() const override {
-        return "RustcEncodable";
-    }
+    const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
-        ::std::string structName = type->data.as_Path()->nodes().back().name().c_str();
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-        auto block = newBlock(sp);
-        switch (str.data.tag()) {
-            case ASTStructData::TAG_Unit: {
-                break;
-            }
-            case ASTStructData::TAG_Struct: {
-                auto& e = str.data.as_Struct();
-                unsigned int idx = 0;
-                for (const auto& fld : e.ents) {
-                    block->pushStmt(NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_struct_field", vec$(NEWNODE(NamedValue, ASTPath(RcString("s"))), NEWNODE(String, fld.name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValRef(this->field(fld.name))))));
-                    idx++;
-                }
-                break;
-            }
-            case ASTStructData::TAG_Tuple: {
-                auto& e = str.data.as_Tuple();
-                for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
-                    block->pushStmt(NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_tuple_struct_arg", vec$(NEWNODE(NamedValue, ASTPath(RcString("s"))), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValRef(this->field(FMT(idx)))))));
-                }
-                break;
-            }
-        }
-
-        block->pushTailExpr( this->getValOk(opts.coreName) );
-        auto closure = this->encClosure(*type->pool,  sp, mkExprnodep(block.release()) );
-
-        ASTExprNodeP    node;
-        switch (str.data.tag()) {
-            case ASTStructData::TAG_Unit: {
-                node = getValOk(opts.coreName);
-                break;
-            }
-            case ASTStructData::TAG_Struct: {
-                auto& e = str.data.as_Struct();
-                node = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_struct", vec$(NEWNODE(NamedValue, ASTPath(RcString("s"))), NEWNODE(String, structName), NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT), mv$(closure)));
-                break;
-            }
-            case ASTStructData::TAG_Tuple: {
-                auto& e = str.data.as_Tuple();
-                node = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_tuple_struct", vec$(NEWNODE(NamedValue, ASTPath(RcString("s"))), NEWNODE(String, structName), NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT), mv$(closure)));
-                break;
-            }
-        }
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));
-    }
-
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
-        ASTPath basePath = *type->data.as_Path();
-        basePath.nodes().back().args() = ASTPathParams();
-        ::std::vector<ASTExprNodeMatchArm> arms;
-
-        auto sEnt = NEWNODE(NamedValue, ASTPath(RcString("s")));
-
-        for (unsigned int varIdx = 0; varIdx < enm.variants().size(); varIdx++) {
-            const auto& v = enm.variants()[varIdx];
-            ASTExprNodeP code;
-            ASTPattern patA;
-
-            switch (v.data.tag()) {
-                case ASTEnumVariantData::TAG_Unit: {
-                    code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(sEnt->clone(), NEWNODE(String, v.name.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(0), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->getValOk(opts.coreName))));
-                    patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(basePath + v.name));
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Tuple: {
-                    auto& e = v.data.as_Tuple();
-                    auto block = newBlock(sp);
-                    ::std::vector<ASTPattern> patsA;
-                    makeRefpatA(sp, *block, patsA, e.items, [&](size_t idx, auto a) {
-                        return NEWNODE(CallPath, this->getTraitPathEncoder() + RcString::newInterned("emit_enum_variant_arg"), vec$(sEnt->clone(), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValDirect(mv$(a)))));
-                    });
-                    block->pushTailExpr(this->getValOk(opts.coreName));
-
-                    code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(sEnt->clone(), NEWNODE(String, v.name.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(e.items.size()), CORETYPE_UINT), this->encClosure(*type->pool, sp, mkExprnodep(block.release()))));
-                    patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, basePath + v.name, mv$(patsA));
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Struct: {
-                    auto& e = v.data.as_Struct();
-                    auto block = newBlock(sp);
-                    ::std::vector<ASTStructPatternEntry> patsA;
-                    makeRefpatA(sp, *block, patsA, e.fields, [&](size_t idx, auto a) {
-                        return NEWNODE(CallPath, this->getTraitPathEncoder() + RcString::newInterned("emit_enum_struct_variant_field"), vec$(sEnt->clone(), NEWNODE(String, e.fields[idx].name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValDirect(mv$(a)))));
-                    });
-                    block->pushTailExpr(this->getValOk(opts.coreName));
-
-                    patA = ASTPattern(ASTPattern::TagStruct(), sp, basePath + v.name, mv$(patsA), true);
-                    code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_struct_variant", vec$(sEnt->clone(), NEWNODE(String, v.name.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(e.fields.size()), CORETYPE_UINT), this->encClosure(*type->pool, sp, mkExprnodep(block.release()))));
-                    break;
-                }
-            }
-
-            ::std::vector< ASTPattern>    pats;
-            pats.push_back( ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)) );
-
-            arms.push_back(ASTExprNodeMatchArm(
-                mv$(pats),
-                {},
-                mv$(code)
-                ));
-        }
-
-        auto nodeMatch = NEWNODE(Match, NEWNODE(NamedValue, ASTPath(RcString("self"))), mv$(arms));
-
-        ::std::string enumName = type->data.as_Path()->nodes().back().name().c_str();
-        auto node = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum", vec$(mv$(sEnt), NEWNODE(String, enumName), this->encClosure(*type->pool, sp, mv$(nodeMatch))));
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), mv$(node));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 };
 
 class DeriverRustcDecodable: public Deriver {
     // NOTE: This emits paths like `::rustc_serialize::Encodable` - rustc and crates.io have subtly different crate names
-    ASTPath getTraitPath() const {
-        return ASTPath(RcString::newInterned("=rustc_serialize"), {ASTPathNode(RcString::newInterned("Decodable"), {})});
-    }
+    ASTPath getTraitPath() const;
 
-    ASTPath getTraitPathDecoder() const {
-        return ASTPath(RcString::newInterned("=rustc_serialize"), {ASTPathNode(RcString::newInterned("Decoder"), {})});
-    }
+    ASTPath getTraitPathDecoder() const;
 
-    ASTPath getMethodPath() const {
-        return getTraitPath() + "decode";
-    }
+    ASTPath getMethodPath() const;
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
-        const ASTPath traitPath = this->getTraitPath();
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
-        ASTPath resultPath = getPath(coreName, "result", "Result");
-        resultPath.nodes()[1].args().entries.push_back(mktypeSelf(*type->pool, sp));
-        resultPath.nodes()[1].args().entries.push_back(mkType(*type->pool, sp, ASTPath::newUfcsTrait(mkType(*type->pool, sp, "D", 0x100 | 0), this->getTraitPathDecoder(), {ASTPathNode("Error", {})})));
+    ASTExprNodeP decVal() const;
 
-        ASTFunction fcn(
-            sp,
-            mkType(*type->pool, sp, resultPath),
-            vec$(
-                //AST::Function::Arg( AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), mkType(*type->pool, ASTTypeTags::Reference(), sp, false, AST::LifetimeRef(), mktype_Self(sp)) ),
-                ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, "d"), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, "D", 0x100 | 0)))
-            )
-        );
-        fcn.params().addTyParam(ASTTypeParam(*type->pool, sp, {}, "D"));
-        fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, "D", 0x100 | 0), {}, this->getTraitPathDecoder()}));
-        fcn.setCode(NEWNODE(Block, mv$(node)));
+    ASTExprNodeP field(const ::std::string& name) const;
 
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+    ASTExprNodeP decClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const;
 
-        ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
-        rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, "decode", mv$(fcn));
-        return mv$(rv);
-    }
+    ASTExprNodeP getValErrStr(const RcString& coreName, ::std::string errStr) const;
 
-    ASTExprNodeP decVal() const {
-        return NEWNODE(CallPath, this->getMethodPath(), vec$(NEWNODE(NamedValue, ASTPath("d"))));
-    }
+    ASTExprNodeP getValOk(const RcString& coreName, ASTExprNodeP inner) const;
 
-    ASTExprNodeP field(const ::std::string& name) const {
-        return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(name));
-    }
-
-    ASTExprNodeP decClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const {
-        return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false, false);
-    }
-
-    ASTExprNodeP getValErrStr(const RcString& coreName, ::std::string errStr) const {
-        return NEWNODE(CallPath, getPath(coreName, "result", "Result", "Err"), vec$(NEWNODE(CallMethod, NEWNODE(NamedValue, ASTPath("d")), ASTPathNode("error"), vec$(NEWNODE(String, errStr)))));
-    }
-
-    ASTExprNodeP getValOk(const RcString& coreName, ASTExprNodeP inner) const {
-        return NEWNODE(CallPath, getPath(coreName, "result", "Result", "Ok"), vec$(mv$(inner)));
-    }
-
-    ASTExprNodeP getValOkUnit(const RcString& coreName) const {
-        return getValOk(coreName, NEWNODE(Tuple, {}));
-    }
+    ASTExprNodeP getValOkUnit(const RcString& coreName) const;
 
 public:
-    const char* traitName() const override {
-        return "RustcDecodable";
-    }
+    const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
-        ASTPath basePath = *type->data.as_Path();
-        ::std::string structName = basePath.nodes().back().name().c_str();
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-        ASTExprNodeP nodeV;
-        switch (str.data.tag()) {
-            case ASTStructData::TAG_Unit: {
-                break;
-            }
-            case ASTStructData::TAG_Struct: {
-                auto& e = str.data.as_Struct();
-                ASTExprNodeStructLiteral::tValues vals;
-                unsigned int idx = 0;
-                for (const auto& fld : e.ents) {
-                    vals.push_back({{}, fld.name, NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathDecoder() + "read_struct_field", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, fld.name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->decClosure(*type->pool, sp, this->decVal()))))});
-                    idx++;
-                }
-                nodeV = NEWNODE(StructLiteral, basePath, nullptr, mv$(vals));
-                break;
-            }
-            case ASTStructData::TAG_Tuple: {
-                auto& e = str.data.as_Tuple();
-                ::std::vector<ASTExprNodeP> vals;
-                for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
-                    vals.push_back(NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathDecoder() + "read_tuple_struct_arg", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->decClosure(*type->pool, sp, this->decVal())))));
-                }
-                nodeV = NEWNODE(CallPath, mv$(basePath), mv$(vals));
-                break;
-            }
-        }
-
-        auto closure = this->decClosure(*type->pool,  sp, this->getValOk(opts.coreName, mv$(nodeV)) );
-
-        auto args = vec$( NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, structName), ASTExprNodeP(), mv$(closure) );
-
-        ASTExprNodeP    node;
-        switch (str.data.tag()) {
-            case ASTStructData::TAG_Unit: {
-                node = this->getValOk(opts.coreName, NEWNODE(NamedValue, mv$(basePath)));
-                break;
-            }
-            case ASTStructData::TAG_Struct: {
-                auto& e = str.data.as_Struct();
-                assert(!args[2]);
-                args[2] = NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT);
-                node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_struct", mv$(args));
-                break;
-            }
-            case ASTStructData::TAG_Tuple: {
-                auto& e = str.data.as_Tuple();
-                assert(!args[2]);
-                args[2] = NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT);
-                node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_tuple_struct", mv$(args));
-                break;
-            }
-        }
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));
-    }
-
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
-        ASTPath basePath = *type->data.as_Path();
-        basePath.nodes().back().args() = ASTPathParams();
-        ::std::vector<ASTExprNodeMatchArm> arms;
-
-        // 1. Variant names
-        ::std::vector<ASTExprNodeP> varNameStrs;
-
-        // 2. Decoding arms
-        for (unsigned int varIdx = 0; varIdx < enm.variants().size(); varIdx++) {
-            const auto& v = enm.variants()[varIdx];
-            ASTExprNodeP code;
-
-            switch (v.data.tag()) {
-                case ASTEnumVariantData::TAG_Unit: {
-                    code = NEWNODE(NamedValue, basePath + v.name);
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Tuple: {
-                    auto& e = v.data.as_Tuple();
-                    ::std::vector<ASTExprNodeP> args;
-
-                    for (unsigned int idx = 0; idx < e.items.size(); idx++) {
-                        args.push_back(NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum_variant_arg", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->decClosure(*type->pool, sp, this->decVal())))));
-                    }
-                    code = NEWNODE(CallPath, basePath + v.name, mv$(args));
-                    break;
-                }
-                case ASTEnumVariantData::TAG_Struct: {
-                    auto& e = v.data.as_Struct();
-                    ASTExprNodeStructLiteral::tValues vals;
-
-                    unsigned int idx = 0;
-                    for (const auto& fld : e.fields) {
-                        vals.push_back({{}, fld.name, NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum_struct_variant_field", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, fld.name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->decClosure(*type->pool, sp, this->decVal()))))});
-                        idx++;
-                    }
-
-                    code = NEWNODE(StructLiteral, basePath + v.name, nullptr, mv$(vals));
-                    break;
-                }
-            }
-
-            ::std::vector< ASTPattern>    pats;
-            pats.push_back( ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Integer({CORETYPE_UINT, U128(varIdx)})) );
-
-            arms.push_back(ASTExprNodeMatchArm(
-                mv$(pats),
-                {},
-                this->getValOk(opts.coreName, mv$(code))
-                ));
-            varNameStrs.push_back( NEWNODE(String, v.name.c_str()) );
-        }
-
-        // Default arm
-        {
-            arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern()), {}, this->getValErrStr(opts.coreName, "enum value unknown")));
-        }
-
-        auto nodeMatch = NEWNODE(Match, NEWNODE(NamedValue, ASTPath("idx")), mv$(arms));
-        auto nodeVarClosure = NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mkType(*type->pool, sp)), ::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "idx"), ::mkType(*type->pool, sp))), ::mkType(*type->pool, sp), mv$(nodeMatch), false, false, false);
-        ::std::string enumName = type->data.as_Path()->nodes().back().name().c_str();
-
-        auto nodeRev = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum_variant", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Array, mv$(varNameStrs))), mv$(nodeVarClosure)));
-
-        auto node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, enumName), this->decClosure(*type->pool, sp, mv$(nodeRev))));
-
-        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), mv$(node));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 };
 
 class DeriverConstParamTy: public Deriver {
-    ASTImpl handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound) const {
-        const ASTPath traitPath = getPath(opts.coreName, "marker", "StructuralPartialEq");
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
-        ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
-        return mv$(rv);
-    }
+    ASTImpl handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound) const;
 
 public:
-    const char* traitName() const override {
-        return "ConstParamTy";
-    }
+    const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
-        return handleGeneric(sp, opts, p, type, this->getFieldBounds(str));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
-        return handleGeneric(sp, opts, p, type, this->getFieldBounds(enm));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 };
 
 class DeriverUnsizedConstParamTy: public Deriver {
-    ASTImpl handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound) const {
-        const ASTPath traitPath = getPath(opts.coreName, "marker", "UnsizedConstParamTy");
-        const ASTPath eqPath = getPath(opts.coreName, "cmp", "Eq");
-
-        ::std::vector<ASTType*> typesToBoundByEq;
-        for (const auto* boundedType : typesToBound) {
-            typesToBoundByEq.push_back(boundedType->clone());
-        }
-
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
-        unsigned int typeIndex = 0;
-        for (const auto& param : p.params) {
-            if (const auto* typeParam = param.opt_Type()) {
-                params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, typeParam->name(), typeIndex), {}, eqPath}));
-                typeIndex++;
-            }
-        }
-        for (auto*& boundedType : typesToBoundByEq) {
-            params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mv$(boundedType), {}, eqPath}));
-        }
-
-        return ASTImpl(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
-    }
+    ASTImpl handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound) const;
 
 public:
-    const char* traitName() const override {
-        return "UnsizedConstParamTy";
-    }
+    const char* traitName() const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
-        return handleGeneric(sp, opts, p, type, this->getFieldBounds(str));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
-        return handleGeneric(sp, opts, p, type, this->getFieldBounds(enm));
-    }
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 };
 
 // --------------------------------------------------------------------
@@ -2752,26 +647,7 @@ struct DeriveRegistry {
     DeriverConstParamTy constParamTy;
     DeriverUnsizedConstParamTy unsizedConstParamTy;
 
-    const Deriver* find(const RcString& traitName) const {
-#define _(obj)                        \
-        if (traitName == obj.traitName()) \
-            return &obj;
-        _(debug)
-        _(partialEq)
-        _(partialOrd)
-        _(eq)
-        _(ord)
-        _(clone)
-        _(copy)
-        _(default_)
-        _(hash)
-        _(rustcEncodable)
-        _(rustcDecodable)
-        _(constParamTy)
-        _(unsizedConstParamTy)
-#undef _
-        return nullptr;
-    }
+    const Deriver* find(const RcString& traitName) const;
 };
 
 static const Deriver* findBuiltinDerive(const DeriveRegistry& registry, const ASTPath& traitPath) {
@@ -3080,16 +956,10 @@ namespace {
             return traitPath.asTrivial() == "CoercePointee";
         }
         if (const auto* path = traitPath.cls.opt_Relative()) {
-            return path->nodes.size() == 3
-                && (path->nodes[0].name() == "core" || path->nodes[0].name() == "std")
-                && path->nodes[1].name() == "marker"
-                && path->nodes[2].name() == "CoercePointee";
+            return path->nodes.size() == 3 && (path->nodes[0].name() == "core" || path->nodes[0].name() == "std") && path->nodes[1].name() == "marker" && path->nodes[2].name() == "CoercePointee";
         }
         if (const auto* path = traitPath.cls.opt_Absolute()) {
-            return (path->crate == "=core" || path->crate == "=std")
-                && path->nodes.size() == 2
-                && path->nodes[0].name() == "marker"
-                && path->nodes[1].name() == "CoercePointee";
+            return (path->crate == "=core" || path->crate == "=std") && path->nodes.size() == 2 && path->nodes[0].name() == "marker" && path->nodes[1].name() == "CoercePointee";
         }
         return false;
     }
@@ -3191,8 +1061,8 @@ namespace {
             for (const auto& macImport : mod.macroImports) {
                 if (macImport.name == macName) {
                     switch (macImport.ref.tag()) {
-default:
-                        break;
+                        default:
+                            break;
                         case MacroRef::TAG_ExternalProcMacro: {
                             auto& pm = macImport.ref.as_ExternalProcMacro();
                             macPath.push_back(pm->path.crateName());
@@ -3200,7 +1070,7 @@ default:
                             break;
                         }
                     }
-                    if( !macPath.empty() ) {
+                    if (!macPath.empty()) {
                         break;
                     }
                 }
@@ -3235,16 +1105,12 @@ default:
 }
 
 template <typename T>
-static void deriveItem(const DeriveRegistry& registry, const Span& sp,
-    const WireBoard& wb, const ASTCrate& crate, ASTModule& mod,
-    const ASTAttribute& attr, const ASTAbsolutePath& path,
-    slice<const ASTAttribute> attrs, const ASTVisibility& vis, const T& item) {
+static void deriveItem(const DeriveRegistry& registry, const Span& sp, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const ASTAttribute& attr, const ASTAbsolutePath& path, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const T& item) {
     auto deriveItems = getDeriveItems(attr);
     if (deriveItems.empty()) {
         return;
     }
     const bool isConstDerive = attr.name() == "derive_const";
-
 
     auto type = makeType(*crate.pool, sp, path, item.params());
 
@@ -3265,7 +1131,6 @@ static void deriveItem(const DeriveRegistry& registry, const Span& sp,
 
     ::std::vector<ASTPath> missingHandlers;
     for (const auto& traitPath : deriveItems) {
-
         if (isCoercePointee(traitPath)) {
             deriveCoercePointee(sp, opts, mod, item.params(), type, item);
             continue;
@@ -3311,51 +1176,17 @@ class DecoratorDerive: public ExpandDecorator {
     const DeriveRegistry& registry;
 
 public:
-    explicit DecoratorDerive(const DeriveRegistry& registry)
-        : registry(registry)
-    {
-    }
+    explicit DecoratorDerive(const DeriveRegistry& registry);
 
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
     // A derive macro must see every attribute on the item (e.g. a `#[repr(C)]` written
     // above the derive, which bytemuck's `Pod` checks for); the input serialiser strips
     // `derive` attributes themselves.
-    bool wantsAllAttrs() const override {
-        return true;
-    }
+    bool wantsAllAttrs() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        switch (i.tag()) {
-            case ASTItem::TAG_None: {
-                // Ignore, it's been deleted
-                break;
-            }
-            case ASTItem::TAG_Union: {
-                auto& e = i.as_Union();
-                deriveItem(registry, sp, wb, crate, mod, attr, path, attrs, vis, e);
-                break;
-            }
-            case ASTItem::TAG_Enum: {
-                auto& e = i.as_Enum();
-                deriveItem(registry, sp, wb, crate, mod, attr, path, attrs, vis, e);
-                break;
-            }
-            case ASTItem::TAG_Struct: {
-                auto& e = i.as_Struct();
-                deriveItem(registry, sp, wb, crate, mod, attr, path, attrs, vis, e);
-                break;
-            }
-            default: {
-                TODO(sp, "Handle #[derive] for other item types - " << i.tagStr());
-                break;
-            }
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 class DecoratorDeriveConst: public DecoratorDerive {
 public:
@@ -3363,35 +1194,24 @@ public:
 };
 
 class CDocHandler: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override;
 };
-
 
 enum eItemType {
     ITEM_TRAIT,
@@ -3409,11 +1229,7 @@ struct Handler {
     eItemType type;
     cbT cb;
 
-    Handler(eItemType type, cbT cb)
-        : type(type)
-        , cb(cb)
-    {
-    }
+    Handler(eItemType type, cbT cb);
 };
 
 class LangItemRegistry {
@@ -3422,9 +1238,7 @@ class LangItemRegistry {
 public:
     explicit LangItemRegistry(ObjPool* pool);
 
-    const Handler* find(const char* name) const {
-        return handlers.find(name);
-    }
+    const Handler* find(const char* name) const;
 };
 
 void handleSave(const Span& sp, ASTCrate& crate, const std::string& name, const ASTAbsolutePath& path) {
@@ -3446,228 +1260,226 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
         handlers.insert(name, mv$(handler));
     };
 
-        add("phantom_fn", Handler(ITEM_FN, handleSave));
-        add("send", Handler(ITEM_TRAIT, handleSave));
-        add("sync", Handler(ITEM_TRAIT, handleSave));
-        add("sized", Handler(ITEM_TRAIT, handleSave));
-        add("copy", Handler(ITEM_TRAIT, handleSave));
-        {
-            add("clone", Handler(ITEM_TRAIT, handleSave));
-        }
-        // ops traits
-        add("drop", Handler(ITEM_TRAIT, handleSave));
-        add("add", Handler(ITEM_TRAIT, handleSave));
-        add("sub", Handler(ITEM_TRAIT, handleSave));
-        add("mul", Handler(ITEM_TRAIT, handleSave));
-        add("div", Handler(ITEM_TRAIT, handleSave));
-        add("rem", Handler(ITEM_TRAIT, handleSave));
+    add("phantom_fn", Handler(ITEM_FN, handleSave));
+    add("send", Handler(ITEM_TRAIT, handleSave));
+    add("sync", Handler(ITEM_TRAIT, handleSave));
+    add("sized", Handler(ITEM_TRAIT, handleSave));
+    add("copy", Handler(ITEM_TRAIT, handleSave));
+    {
+        add("clone", Handler(ITEM_TRAIT, handleSave));
+    }
+    // ops traits
+    add("drop", Handler(ITEM_TRAIT, handleSave));
+    add("add", Handler(ITEM_TRAIT, handleSave));
+    add("sub", Handler(ITEM_TRAIT, handleSave));
+    add("mul", Handler(ITEM_TRAIT, handleSave));
+    add("div", Handler(ITEM_TRAIT, handleSave));
+    add("rem", Handler(ITEM_TRAIT, handleSave));
 
-        add("neg", Handler(ITEM_TRAIT, handleSave));
-        add("not", Handler(ITEM_TRAIT, handleSave));
+    add("neg", Handler(ITEM_TRAIT, handleSave));
+    add("not", Handler(ITEM_TRAIT, handleSave));
 
-        add("bitand", Handler(ITEM_TRAIT, handleSave));
-        add("bitor", Handler(ITEM_TRAIT, handleSave));
-        add("bitxor", Handler(ITEM_TRAIT, handleSave));
-        add("shl", Handler(ITEM_TRAIT, handleSave));
-        add("shr", Handler(ITEM_TRAIT, handleSave));
+    add("bitand", Handler(ITEM_TRAIT, handleSave));
+    add("bitor", Handler(ITEM_TRAIT, handleSave));
+    add("bitxor", Handler(ITEM_TRAIT, handleSave));
+    add("shl", Handler(ITEM_TRAIT, handleSave));
+    add("shr", Handler(ITEM_TRAIT, handleSave));
 
-        add("add_assign", Handler(ITEM_TRAIT, handleSave));
-        add("sub_assign", Handler(ITEM_TRAIT, handleSave));
-        add("div_assign", Handler(ITEM_TRAIT, handleSave));
-        add("rem_assign", Handler(ITEM_TRAIT, handleSave));
-        add("mul_assign", Handler(ITEM_TRAIT, handleSave));
-        add("bitand_assign", Handler(ITEM_TRAIT, handleSave));
-        add("bitor_assign", Handler(ITEM_TRAIT, handleSave));
-        add("bitxor_assign", Handler(ITEM_TRAIT, handleSave));
-        add("shl_assign", Handler(ITEM_TRAIT, handleSave));
-        add("shr_assign", Handler(ITEM_TRAIT, handleSave));
+    add("add_assign", Handler(ITEM_TRAIT, handleSave));
+    add("sub_assign", Handler(ITEM_TRAIT, handleSave));
+    add("div_assign", Handler(ITEM_TRAIT, handleSave));
+    add("rem_assign", Handler(ITEM_TRAIT, handleSave));
+    add("mul_assign", Handler(ITEM_TRAIT, handleSave));
+    add("bitand_assign", Handler(ITEM_TRAIT, handleSave));
+    add("bitor_assign", Handler(ITEM_TRAIT, handleSave));
+    add("bitxor_assign", Handler(ITEM_TRAIT, handleSave));
+    add("shl_assign", Handler(ITEM_TRAIT, handleSave));
+    add("shr_assign", Handler(ITEM_TRAIT, handleSave));
 
-        add("index", Handler(ITEM_TRAIT, handleSave));
-        add("deref", Handler(ITEM_TRAIT, handleSave));
-        add("index_mut", Handler(ITEM_TRAIT, handleSave));
-        add("deref_mut", Handler(ITEM_TRAIT, handleSave));
-        add("fn", Handler(ITEM_TRAIT, handleSave));
-        add("fn_mut", Handler(ITEM_TRAIT, handleSave));
-        add("fn_once", Handler(ITEM_TRAIT, handleSave));
+    add("index", Handler(ITEM_TRAIT, handleSave));
+    add("deref", Handler(ITEM_TRAIT, handleSave));
+    add("index_mut", Handler(ITEM_TRAIT, handleSave));
+    add("deref_mut", Handler(ITEM_TRAIT, handleSave));
+    add("fn", Handler(ITEM_TRAIT, handleSave));
+    add("fn_mut", Handler(ITEM_TRAIT, handleSave));
+    add("fn_once", Handler(ITEM_TRAIT, handleSave));
 
-        add("eq", Handler(ITEM_TRAIT, handleSave));
-        add("ord", Handler(ITEM_TRAIT, handleSave)); // In 1.29 this is Ord, before it was PartialOrd
-        {
-            add("partial_ord", Handler(ITEM_TRAIT, handleSave)); // New name for v1.29
-        }
+    add("eq", Handler(ITEM_TRAIT, handleSave));
+    add("ord", Handler(ITEM_TRAIT, handleSave)); // In 1.29 this is Ord, before it was PartialOrd
+    {
+        add("partial_ord", Handler(ITEM_TRAIT, handleSave)); // New name for v1.29
+    }
 
-        add("unsize", Handler(ITEM_TRAIT, handleSave));
-        add("coerce_unsized", Handler(ITEM_TRAIT, handleSave));
-        add("freeze", Handler(ITEM_TRAIT, handleSave)); // TODO: What version?
+    add("unsize", Handler(ITEM_TRAIT, handleSave));
+    add("coerce_unsized", Handler(ITEM_TRAIT, handleSave));
+    add("freeze", Handler(ITEM_TRAIT, handleSave)); // TODO: What version?
 
-        add("iterator", Handler(ITEM_TRAIT, handleSave));    /* trustme just desugars? */
-        add("debug_trait", Handler(ITEM_TRAIT, handleSave)); /* TODO: Poke derive() with this */
+    add("iterator", Handler(ITEM_TRAIT, handleSave));    /* trustme just desugars? */
+    add("debug_trait", Handler(ITEM_TRAIT, handleSave)); /* TODO: Poke derive() with this */
 
-        {
-            add("termination", Handler(ITEM_TRAIT, handleSave)); // 1.29 - trait used for non-() main
-        }
+    {
+        add("termination", Handler(ITEM_TRAIT, handleSave)); // 1.29 - trait used for non-() main
+    }
 
-        {
-            add("pointee_trait", Handler(ITEM_TRAIT, handleSave));     // 1.54 - pointer metadata trait
-            add("dyn_metadata", Handler(ITEM_STRUCT, handleSave));     // 1.54 - `dyn Trait` metadata structure
-            add("structural_peq", Handler(ITEM_TRAIT, handleSave));    // 1.54 - Structural equality trait (partial)
-            add("structural_teq", Handler(ITEM_TRAIT, handleSave));    // 1.54 - Structural equality trait (total)
-            add("discriminant_kind", Handler(ITEM_TRAIT, handleSave)); // 1.54 - trait: used for the `discriminant_kind` intrinsic
-        }
+    {
+        add("pointee_trait", Handler(ITEM_TRAIT, handleSave));     // 1.54 - pointer metadata trait
+        add("dyn_metadata", Handler(ITEM_STRUCT, handleSave));     // 1.54 - `dyn Trait` metadata structure
+        add("structural_peq", Handler(ITEM_TRAIT, handleSave));    // 1.54 - Structural equality trait (partial)
+        add("structural_teq", Handler(ITEM_TRAIT, handleSave));    // 1.54 - Structural equality trait (total)
+        add("discriminant_kind", Handler(ITEM_TRAIT, handleSave)); // 1.54 - trait: used for the `discriminant_kind` intrinsic
+    }
 
-        add("non_zero", Handler(ITEM_STRUCT, handleSave));
-        add("phantom_data", Handler(ITEM_STRUCT, handleSave));
-        add("unsafe_cell", Handler(ITEM_STRUCT, handleSave));
+    add("non_zero", Handler(ITEM_STRUCT, handleSave));
+    add("phantom_data", Handler(ITEM_STRUCT, handleSave));
+    add("unsafe_cell", Handler(ITEM_STRUCT, handleSave));
 
-        {
-            add("RangeFull", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
-                handleSave(sp, crate, "range_full", p);
-            }));
-            add("Range", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
-                handleSave(sp, crate, "range", p);
-            }));
-            add("RangeFrom", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
-                handleSave(sp, crate, "range_from", p);
-            }));
-            add("RangeTo", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
-                handleSave(sp, crate, "range_to", p);
-            }));
-            add("RangeInclusive", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
-                handleSave(sp, crate, "range_inclusive", p);
-            }));
-            add("RangeToInclusive", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
-                handleSave(sp, crate, "range_to_inclusive", p);
-            }));
-        }
+    {
+        add("RangeFull", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
+            handleSave(sp, crate, "range_full", p);
+        }));
+        add("Range", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
+            handleSave(sp, crate, "range", p);
+        }));
+        add("RangeFrom", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
+            handleSave(sp, crate, "range_from", p);
+        }));
+        add("RangeTo", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
+            handleSave(sp, crate, "range_to", p);
+        }));
+        add("RangeInclusive", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
+            handleSave(sp, crate, "range_inclusive", p);
+        }));
+        add("RangeToInclusive", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
+            handleSave(sp, crate, "range_to_inclusive", p);
+        }));
+    }
 
-        {
-            add("unwind_safe", Handler(ITEM_TRAIT, handleSave));     // 1.54 - UnwindSafe trait
-            add("ref_unwind_safe", Handler(ITEM_TRAIT, handleSave)); // 1.54 - RefUnwindSafe trait
-        }
-        {
-            add("transmute_trait", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `BikeshedIntrinsicFrom` trait
-            // - Markers
-            add("destruct", Handler(ITEM_TRAIT, handleSave));       // 1.74 - `Destruct` trait
-            add("tuple_trait", Handler(ITEM_TRAIT, handleSave));    // 1.74 - `Tuple` trait (must be implemented for all tuples)
-            add("pointer_like", Handler(ITEM_TRAIT, handleSave));   // 1.74 - `PointerLike` trait
-            add("const_param_ty", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `ConstParamTy` trait
-            add("fn_ptr_trait", Handler(ITEM_TRAIT, handleSave));   // 1.74 - `FnPtr` trait
+    {
+        add("unwind_safe", Handler(ITEM_TRAIT, handleSave));     // 1.54 - UnwindSafe trait
+        add("ref_unwind_safe", Handler(ITEM_TRAIT, handleSave)); // 1.54 - RefUnwindSafe trait
+    }
+    {
+        add("transmute_trait", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `BikeshedIntrinsicFrom` trait
+        // - Markers
+        add("destruct", Handler(ITEM_TRAIT, handleSave));       // 1.74 - `Destruct` trait
+        add("tuple_trait", Handler(ITEM_TRAIT, handleSave));    // 1.74 - `Tuple` trait (must be implemented for all tuples)
+        add("pointer_like", Handler(ITEM_TRAIT, handleSave));   // 1.74 - `PointerLike` trait
+        add("const_param_ty", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `ConstParamTy` trait
+        add("fn_ptr_trait", Handler(ITEM_TRAIT, handleSave));   // 1.74 - `FnPtr` trait
 
-            // Structs
-            add("transmute_opts", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `Assume` struct
-            add("ptr_unique", Handler(ITEM_STRUCT, handleSave));     // 1.74 - `::core::ptr::Unique`
-            add("CStr", Handler(ITEM_STRUCT, handleSave));           // 1.74 - `::core::ffi::CStr` - Why? (miri?)
-            add("String", Handler(ITEM_STRUCT, handleSave));         // 1.74 - `::alloc::string::String` - Why? (miri?)
+        // Structs
+        add("transmute_opts", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `Assume` struct
+        add("ptr_unique", Handler(ITEM_STRUCT, handleSave));     // 1.74 - `::core::ptr::Unique`
+        add("CStr", Handler(ITEM_STRUCT, handleSave));           // 1.74 - `::core::ffi::CStr` - Why? (miri?)
+        add("String", Handler(ITEM_STRUCT, handleSave));         // 1.74 - `::alloc::string::String` - Why? (miri?)
 
-            add("from_yeet", Handler(ITEM_FN, handleSave));                            // 1.74 - `::core::try_trait::from_yeet`
-            add("panic_nounwind", Handler(ITEM_FN, handleSave));                       // 1.74 - `::core::panicking::panic`
-            add("panic_display", Handler(ITEM_FN, handleSave));                        // 1.74 - `::core::panicking::panic_display`
-            add("panic_bounds_check", Handler(ITEM_FN, handleSave));                   // 1.74 - `::core::panicking::panic_bounds_check`
-            add("panic_misaligned_pointer_dereference", Handler(ITEM_FN, handleSave)); // 1.74 - `::core::panicking::panic_misaligned_pointer_dereference`
-            add("panic_cannot_unwind", Handler(ITEM_FN, handleSave));                  // 1.74 - `::core::panicking::panic_cannot_unwind`
-            add("panic_in_cleanup", Handler(ITEM_FN, handleSave));                     // 1.74 - `::core::panicking::panic_in_cleanup `
-            add("const_panic_fmt", Handler(ITEM_FN, handleSave));                      // 1.74 - `::core::panicking::const_panic_fmt`
+        add("from_yeet", Handler(ITEM_FN, handleSave));                            // 1.74 - `::core::try_trait::from_yeet`
+        add("panic_nounwind", Handler(ITEM_FN, handleSave));                       // 1.74 - `::core::panicking::panic`
+        add("panic_display", Handler(ITEM_FN, handleSave));                        // 1.74 - `::core::panicking::panic_display`
+        add("panic_bounds_check", Handler(ITEM_FN, handleSave));                   // 1.74 - `::core::panicking::panic_bounds_check`
+        add("panic_misaligned_pointer_dereference", Handler(ITEM_FN, handleSave)); // 1.74 - `::core::panicking::panic_misaligned_pointer_dereference`
+        add("panic_cannot_unwind", Handler(ITEM_FN, handleSave));                  // 1.74 - `::core::panicking::panic_cannot_unwind`
+        add("panic_in_cleanup", Handler(ITEM_FN, handleSave));                     // 1.74 - `::core::panicking::panic_in_cleanup `
+        add("const_panic_fmt", Handler(ITEM_FN, handleSave));                      // 1.74 - `::core::panicking::const_panic_fmt`
 
-            // Enums
-            add("c_void", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::ffi::c_void` - Why? (miri?)
-            add("Option", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::option::Option`
+        // Enums
+        add("c_void", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::ffi::c_void` - Why? (miri?)
+        add("Option", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::option::Option`
 
-            // - Formatting
-            add("format_arguments", Handler(ITEM_STRUCT, handleSave));   // 1.74 - `::core::fmt::Arguments`
-            add("format_placeholder", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::fmt::rt::Placeholder`
-            add("format_argument", Handler(ITEM_STRUCT, handleSave));    // 1.74 - `::core::fmt::rt::Argument`
-            add("format_unsafe_arg", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::fmt::rt::UnsafeArg`
-            add("format_alignment", Handler(ITEM_ENUM, handleSave));     // 1.74 - `::core::fmt::rt::Alignment`
-            add("format_count", Handler(ITEM_ENUM, handleSave));         // 1.74 - `::core::fmt::rt::Count`
+        // - Formatting
+        add("format_arguments", Handler(ITEM_STRUCT, handleSave));   // 1.74 - `::core::fmt::Arguments`
+        add("format_placeholder", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::fmt::rt::Placeholder`
+        add("format_argument", Handler(ITEM_STRUCT, handleSave));    // 1.74 - `::core::fmt::rt::Argument`
+        add("format_unsafe_arg", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::fmt::rt::UnsafeArg`
+        add("format_alignment", Handler(ITEM_ENUM, handleSave));     // 1.74 - `::core::fmt::rt::Alignment`
+        add("format_count", Handler(ITEM_ENUM, handleSave));         // 1.74 - `::core::fmt::rt::Count`
 
-            // - Futures
-            add("ResumeTy", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::future::ResumeTy`
-            add("Poll", Handler(ITEM_ENUM, handleSave));       // 1.74 - `::core::task::poll::Poll`
-            add("Context", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::task::wake::Context`
-        }
-        {
-            add("contract_build_check_ensures", Handler(ITEM_FN, handleSave)); // 1.90 - `::core::contracts::build_check_ensures`
-            add("contract_check_requires", Handler(ITEM_FN, handleSave));      // 1.90 - `::core::intrinsics::contract_check_requires`
-            add("contract_check_ensures", Handler(ITEM_FN, handleSave));       // 1.90 - `::core::intrinsics::contract_check_ensures`
-            add("use_cloned", Handler(ITEM_TRAIT, handleSave));                // 1.90 - `::core::clone::use_cloned` - for the `.use` syntax
+        // - Futures
+        add("ResumeTy", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::future::ResumeTy`
+        add("Poll", Handler(ITEM_ENUM, handleSave));       // 1.74 - `::core::task::poll::Poll`
+        add("Context", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::task::wake::Context`
+    }
+    {
+        add("contract_build_check_ensures", Handler(ITEM_FN, handleSave)); // 1.90 - `::core::contracts::build_check_ensures`
+        add("contract_check_requires", Handler(ITEM_FN, handleSave));      // 1.90 - `::core::intrinsics::contract_check_requires`
+        add("contract_check_ensures", Handler(ITEM_FN, handleSave));       // 1.90 - `::core::intrinsics::contract_check_ensures`
+        add("use_cloned", Handler(ITEM_TRAIT, handleSave));                // 1.90 - `::core::clone::use_cloned` - for the `.use` syntax
 
-            add("Ordering", Handler(ITEM_ENUM, handleSave)); // comparison ordering
+        add("Ordering", Handler(ITEM_ENUM, handleSave)); // comparison ordering
 
-            add("meta_sized", Handler(ITEM_TRAIT, handleSave));                  // ::core::marker::MetaSized
-            add("pointee_sized", Handler(ITEM_TRAIT, handleSave));               // ::core::marker::PointeeSized
-            add("bikeshed_guaranteed_no_drop", Handler(ITEM_TRAIT, handleSave)); // ::core::marker::BikeshedGuaranteedNoDrop
-            add("unsafe_unpin", Handler(ITEM_TRAIT, handleSave));                // ::core::marker::UnsafeUnpin
-            add("unsized_const_param_ty", Handler(ITEM_TRAIT, handleSave));      // ::core::marker::UnsizedConstParamTy
-            add("coerce_pointee_validated", Handler(ITEM_TRAIT, handleSave));    // ::core::marker::CoercePointeeValidated
-            // `-Zexperimental-default-bounds` names auto traits that every type
-            // is bounded by. Nothing here adds those bounds; the names are known
-            // so that a crate declaring them still compiles.
-            add("default_trait1", Handler(ITEM_TRAIT, handleSave));
-            add("default_trait2", Handler(ITEM_TRAIT, handleSave));
-            add("default_trait3", Handler(ITEM_TRAIT, handleSave));
-            add("default_trait4", Handler(ITEM_TRAIT, handleSave));
+        add("meta_sized", Handler(ITEM_TRAIT, handleSave));                  // ::core::marker::MetaSized
+        add("pointee_sized", Handler(ITEM_TRAIT, handleSave));               // ::core::marker::PointeeSized
+        add("bikeshed_guaranteed_no_drop", Handler(ITEM_TRAIT, handleSave)); // ::core::marker::BikeshedGuaranteedNoDrop
+        add("unsafe_unpin", Handler(ITEM_TRAIT, handleSave));                // ::core::marker::UnsafeUnpin
+        add("unsized_const_param_ty", Handler(ITEM_TRAIT, handleSave));      // ::core::marker::UnsizedConstParamTy
+        add("coerce_pointee_validated", Handler(ITEM_TRAIT, handleSave));    // ::core::marker::CoercePointeeValidated
+        // `-Zexperimental-default-bounds` names auto traits that every type
+        // is bounded by. Nothing here adds those bounds; the names are known
+        // so that a crate declaring them still compiles.
+        add("default_trait1", Handler(ITEM_TRAIT, handleSave));
+        add("default_trait2", Handler(ITEM_TRAIT, handleSave));
+        add("default_trait3", Handler(ITEM_TRAIT, handleSave));
+        add("default_trait4", Handler(ITEM_TRAIT, handleSave));
 
-            add("async_fn", Handler(ITEM_TRAIT, handleSave));
-            add("async_fn_mut", Handler(ITEM_TRAIT, handleSave));
-            add("async_fn_once", Handler(ITEM_TRAIT, handleSave));
+        add("async_fn", Handler(ITEM_TRAIT, handleSave));
+        add("async_fn_mut", Handler(ITEM_TRAIT, handleSave));
+        add("async_fn_once", Handler(ITEM_TRAIT, handleSave));
 
-            add("async_fn_kind_helper", Handler(ITEM_TRAIT, handleSave)); // ::core::ops::async_function::internal_implementation_detail::AsyncFnKindHelper
-            add("coroutine_state", Handler(ITEM_ENUM, handleSave));       // ::core::ops::coroutine::CoroutineState
-            add("coroutine", Handler(ITEM_TRAIT, handleSave));            // ::core::ops::coroutine::Coroutine
-            add("deref_pure", Handler(ITEM_TRAIT, handleSave));           // ::core::ops::deref::DerefPure
-            add("legacy_receiver", Handler(ITEM_TRAIT, handleSave));      // ::core::ops::deref::LegacyReceiver
+        add("async_fn_kind_helper", Handler(ITEM_TRAIT, handleSave)); // ::core::ops::async_function::internal_implementation_detail::AsyncFnKindHelper
+        add("coroutine_state", Handler(ITEM_ENUM, handleSave));       // ::core::ops::coroutine::CoroutineState
+        add("coroutine", Handler(ITEM_TRAIT, handleSave));            // ::core::ops::coroutine::Coroutine
+        add("deref_pure", Handler(ITEM_TRAIT, handleSave));           // ::core::ops::deref::DerefPure
+        add("legacy_receiver", Handler(ITEM_TRAIT, handleSave));      // ::core::ops::deref::LegacyReceiver
 
-            add("type_id", Handler(ITEM_STRUCT, handleSave)); // ::core::any::TypeId
+        add("type_id", Handler(ITEM_STRUCT, handleSave)); // ::core::any::TypeId
 
-            add("async_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::async_iter::async_iter::AsyncIterator
-            add("fused_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::iter::traits::marker::FusedIterator
+        add("async_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::async_iter::async_iter::AsyncIterator
+        add("fused_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::iter::traits::marker::FusedIterator
 
-            // Various panic handlers
-            add("panic_const_add_overflow", Handler(ITEM_FN, handleSave));
-            add("panic_const_sub_overflow", Handler(ITEM_FN, handleSave));
-            add("panic_const_mul_overflow", Handler(ITEM_FN, handleSave));
-            add("panic_const_div_overflow", Handler(ITEM_FN, handleSave));
-            add("panic_const_rem_overflow", Handler(ITEM_FN, handleSave));
-            add("panic_const_neg_overflow", Handler(ITEM_FN, handleSave));
-            add("panic_const_shr_overflow", Handler(ITEM_FN, handleSave));
-            add("panic_const_shl_overflow", Handler(ITEM_FN, handleSave));
-            add("panic_const_div_by_zero", Handler(ITEM_FN, handleSave));
-            add("panic_const_rem_by_zero", Handler(ITEM_FN, handleSave));
-            add("panic_const_coroutine_resumed", Handler(ITEM_FN, handleSave));
-            add("panic_const_async_fn_resumed", Handler(ITEM_FN, handleSave));
-            add("panic_const_async_gen_fn_resumed", Handler(ITEM_FN, handleSave));
-            add("panic_const_gen_fn_none", Handler(ITEM_FN, handleSave));
-            add("panic_const_coroutine_resumed_panic", Handler(ITEM_FN, handleSave));
-            add("panic_const_async_fn_resumed_panic", Handler(ITEM_FN, handleSave));
-            add("panic_const_async_gen_fn_resumed_panic", Handler(ITEM_FN, handleSave));
-            add("panic_const_gen_fn_none_panic", Handler(ITEM_FN, handleSave));
+        // Various panic handlers
+        add("panic_const_add_overflow", Handler(ITEM_FN, handleSave));
+        add("panic_const_sub_overflow", Handler(ITEM_FN, handleSave));
+        add("panic_const_mul_overflow", Handler(ITEM_FN, handleSave));
+        add("panic_const_div_overflow", Handler(ITEM_FN, handleSave));
+        add("panic_const_rem_overflow", Handler(ITEM_FN, handleSave));
+        add("panic_const_neg_overflow", Handler(ITEM_FN, handleSave));
+        add("panic_const_shr_overflow", Handler(ITEM_FN, handleSave));
+        add("panic_const_shl_overflow", Handler(ITEM_FN, handleSave));
+        add("panic_const_div_by_zero", Handler(ITEM_FN, handleSave));
+        add("panic_const_rem_by_zero", Handler(ITEM_FN, handleSave));
+        add("panic_const_coroutine_resumed", Handler(ITEM_FN, handleSave));
+        add("panic_const_async_fn_resumed", Handler(ITEM_FN, handleSave));
+        add("panic_const_async_gen_fn_resumed", Handler(ITEM_FN, handleSave));
+        add("panic_const_gen_fn_none", Handler(ITEM_FN, handleSave));
+        add("panic_const_coroutine_resumed_panic", Handler(ITEM_FN, handleSave));
+        add("panic_const_async_fn_resumed_panic", Handler(ITEM_FN, handleSave));
+        add("panic_const_async_gen_fn_resumed_panic", Handler(ITEM_FN, handleSave));
+        add("panic_const_gen_fn_none_panic", Handler(ITEM_FN, handleSave));
 
-            add("panic_const_coroutine_resumed_drop", Handler(ITEM_FN, handleSave));
-            add("panic_const_async_fn_resumed_drop", Handler(ITEM_FN, handleSave));
-            add("panic_const_async_gen_fn_resumed_drop", Handler(ITEM_FN, handleSave));
-            add("panic_const_gen_fn_none_drop", Handler(ITEM_FN, handleSave));
+        add("panic_const_coroutine_resumed_drop", Handler(ITEM_FN, handleSave));
+        add("panic_const_async_fn_resumed_drop", Handler(ITEM_FN, handleSave));
+        add("panic_const_async_gen_fn_resumed_drop", Handler(ITEM_FN, handleSave));
+        add("panic_const_gen_fn_none_drop", Handler(ITEM_FN, handleSave));
 
-            add("panic_null_pointer_dereference", Handler(ITEM_FN, handleSave));
-            add("panic_invalid_enum_construction", Handler(ITEM_FN, handleSave));
+        add("panic_null_pointer_dereference", Handler(ITEM_FN, handleSave));
+        add("panic_invalid_enum_construction", Handler(ITEM_FN, handleSave));
 
-            add("unsafe_pinned", Handler(ITEM_STRUCT, handleSave)); // ::core::pin::unsafe_pinned::UnsafePinned
+        add("unsafe_pinned", Handler(ITEM_STRUCT, handleSave)); // ::core::pin::unsafe_pinned::UnsafePinned
 
-            add("RangeCopy", Handler(ITEM_STRUCT, handleSave));          // ::core::range::Range
-            add("RangeInclusiveCopy", Handler(ITEM_STRUCT, handleSave)); // ::core::range::RangeInclusive
-            add("RangeFromCopy", Handler(ITEM_STRUCT, handleSave));      // ::core::range::RangeFrom
+        add("RangeCopy", Handler(ITEM_STRUCT, handleSave));          // ::core::range::Range
+        add("RangeInclusiveCopy", Handler(ITEM_STRUCT, handleSave)); // ::core::range::RangeInclusive
+        add("RangeFromCopy", Handler(ITEM_STRUCT, handleSave));      // ::core::range::RangeFrom
 
-            add("async_drop", Handler(ITEM_TRAIT, handleSave));       // ::core::future::async_drop::AsyncDrop
-            add("async_drop_in_place", Handler(ITEM_FN, handleSave)); // ::core::future::async_drop::async_drop_in_place
+        add("async_drop", Handler(ITEM_TRAIT, handleSave));       // ::core::future::async_drop::AsyncDrop
+        add("async_drop_in_place", Handler(ITEM_FN, handleSave)); // ::core::future::async_drop::async_drop_in_place
 
-            add("into_future", Handler(ITEM_FN, handleSave)); // ::core::future::IntoFuture::into_future
+        add("into_future", Handler(ITEM_FN, handleSave)); // ::core::future::IntoFuture::into_future
 
-            add("global_alloc_ty", Handler(ITEM_STRUCT, handleSave)); // ::alloc::alloc::Global
-        }
+        add("global_alloc_ty", Handler(ITEM_STRUCT, handleSave)); // ::alloc::alloc::Global
+    }
 }
 
-void handleLangItem(const LangItemRegistry& registry, const Span& sp,
-    ASTCrate& crate, const ASTAbsolutePath& path, const ::std::string& name,
-    eItemType type, ASTItem& item) {
+void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path, const ::std::string& name, eItemType type, ASTItem& item) {
     const char* realName = nullptr; // For when lang items have their name changed
     if (const auto* handler = registry.find(name.c_str())) {
         if (type != handler->type) {
@@ -3811,586 +1623,239 @@ class DecoratorLangItem: public ExpandDecorator {
     const LangItemRegistry& registry;
 
 public:
-    explicit DecoratorLangItem(const LangItemRegistry& registry)
-        : registry(registry)
-    {
-    }
+    explicit DecoratorLangItem(const LangItemRegistry& registry);
 
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        auto name = attr.parseEqualsString(wb, crate, mod);
-        switch (i.tag()) {
-default:
-            TODO(sp, "Unknown item type " << i.tagStr() << " with #["<<attr<<"] attached at " << path);
-            break;
-            case ASTItem::TAG_None: {
-                // NOTE: Can happen when #[cfg] removed this
-                break;
-            }
-            case ASTItem::TAG_Impl: {
-                if (name == "i8") {
-                } else if (name == "u8") {
-                } else if (name == "i16") {
-                } else if (name == "u16") {
-                } else if (name == "i32") {
-                } else if (name == "u32") {
-                } else if (name == "i64") {
-                } else if (name == "u64") {
-                } else if (name == "i128") {
-                } else if (name == "u128") {
-                } else if (name == "isize") {
-                } else if (name == "usize") {
-                } else if (name == "const_ptr") {
-                } else if (name == "mut_ptr") {
-                } else if (name == "const_slice_ptr") {
-                } else if (name == "mut_slice_ptr") {
-                } else if (name == "array") {
-                } else if (name == "bool") {
-                }
-                // rustc_unicode
-                else if (name == "char") {
-                }
-                // collections
-                else if (name == "str") {
-                } else if (name == "slice") {
-                } else if (name == "slice_u8") {
-                } // libcore now, `impl [u8]`
-                else if (name == "slice_alloc") {
-                } // liballoc's impls on [T]
-                else if (name == "slice_u8_alloc") {
-                } // liballoc's impls on [u8]
-                else if (name == "str_alloc") {
-                } // liballoc's impls on str
-                // std - interestingly
-                else if (name == "f32") {
-                } else if (name == "f64") {
-                } else if (name == "f32_runtime") {
-                } else if (name == "f64_runtime") {
-                } else {
-                    ERROR(sp, E0000, "Unknown lang item '" << name << "' on impl");
-                }
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-                // TODO: Somehow annotate these impls to allow them to provide inherents?
-                // - trustme is lazy and inefficient, so these don't matter :)
-                break;
-            }
-            case ASTItem::TAG_Function: {
-                auto& e = i.as_Function();
-                if (e.code().isValid()) {
-                    handleLangItem(registry, sp, crate, path, name, ITEM_FN, i);
-                } else {
-                    handleLangItem(registry, sp, crate, path, name, ITEM_EXTERN_FN, i);
-                }
-                break;
-            }
-            case ASTItem::TAG_Type: {
-                handleLangItem(registry, sp, crate, path, name, ITEM_TYPE_ALIAS, i);
-                break;
-            }
-            case ASTItem::TAG_Static: {
-                handleLangItem(registry, sp, crate, path, name, ITEM_STATIC, i);
-                break;
-            }
-            case ASTItem::TAG_Struct: {
-                handleLangItem(registry, sp, crate, path, name, ITEM_STRUCT, i);
-                break;
-            }
-            case ASTItem::TAG_Enum: {
-                handleLangItem(registry, sp, crate, path, name, ITEM_ENUM, i);
-                break;
-            }
-            case ASTItem::TAG_Union: {
-                handleLangItem(registry, sp, crate, path, name, ITEM_UNION, i);
-                break;
-            }
-            case ASTItem::TAG_Trait: {
-                handleLangItem(registry, sp, crate, path, name, ITEM_TRAIT, i);
-                break;
-            }
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
-        auto name = mi.parseEqualsString(wb, crate, crate.rootModule_);
-        if (name == "into_future") {
-            ASSERT_BUG(sp, i.is_Function(), "#[lang = \"into_future\"] on non-function trait item " << path);
-            handleLangItem(registry, sp, crate, path, name, ITEM_FN, i);
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override {
-        // TODO: Enum variants (sub-item of other lang items)
-    }
-
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // TODO: lang items on associated items (e.g. functions - `RangeFull::new`)
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
 class DecoratorMain: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (i.is_None()) {
-            // Ignore.
-        } else if (/*const auto* e =*/i.opt_Function()) {
-            auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-main"), path));
-            if (!rv.second) {
-                const auto& otherPath = rv.first->second;
-                ERROR(sp, E0000, "Duplicate definition of #[main] - " << otherPath << " and " << path);
-            }
-        } else {
-            ERROR(sp, E0000, "#[main] on non-function " << path);
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
 class DecoratorStart: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (i.is_None()) {
-        } else if (i.is_Function()) {
-            auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-start"), path));
-            if (!rv.second) {
-                const auto& otherPath = rv.first->second;
-                ERROR(sp, E0000, "Duplicate definition of #[start] - " << otherPath << " and " << path);
-            }
-        } else {
-            ERROR(sp, E0000, "#[start] on non-function " << path);
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
 class DecoratorPanicImplementation: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (i.is_Function()) {
-            auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-panic_implementation"), path));
-            if (!rv.second) {
-                const auto& otherPath = rv.first->second;
-                ERROR(sp, E0000, "Duplicate definition of #[panic_implementation] - " << otherPath << " and " << path);
-            }
-        } else {
-            ERROR(sp, E0000, "#[panic_implementation] on non-function " << path);
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
 class DecoratorPanicHandler: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (i.is_Function()) {
-            auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-panic_implementation"), path));
-            if (!rv.second) {
-                const auto& otherPath = rv.first->second;
-                ERROR(sp, E0000, "Duplicate definition of #[panic_handler] - " << otherPath << " and " << path);
-            }
-        } else {
-            ERROR(sp, E0000, "#[panic_handler] on non-function " << path);
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
 class DecoratorRustcStdInternalSymbol: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // Attribute that acts as like `#[no_mangle]` `#[linkage="external"]`
-    }
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
 class DecoratorAllocErrorHandler: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (i.is_Function()) {
-            auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-alloc_error_handler"), path));
-            if (!rv.second) {
-                const auto& otherPath = rv.first->second;
-                ERROR(sp, E0000, "Duplicate definition of #[alloc_error_handler] - " << otherPath << " and " << path);
-            }
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
 class DecoratorGlobalAllocator: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute&, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& item) const override {
-        if (!item.is_Static()) {
-            ERROR(sp, E0000, "#[global_allocator] on non-static " << path);
-        }
-        auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-global_allocator"), path));
-        if (!rv.second && rv.first->second != path) {
-            ERROR(sp, E0000, "Duplicate definition of #[global_allocator] - " << rv.first->second << " and " << path);
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute&, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& item) const override;
 };
-
 
 class CMultiHandlerLint: public ExpandDecorator {
     /// The level this attribute sets.
     virtual CfgLintLevel level() const = 0;
 
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
     /// Report the plain lint names in `(...)`. The list also carries entries
     /// this compiler has no lint for — tool lints (`clippy::foo`) and keyed
     /// entries (`reason = "..."`) — so the scan skips whatever it cannot read
     /// instead of rejecting the attribute.
     template <typename F>
-    static void collectLintNames(const ASTAttribute& mi, const F& cb) {
-        TTStream lex(mi.span(), ParseState(), mi.data());
-        if (!lex.getTokenIf(TOK_PAREN_OPEN)) {
-            return;
-        }
-        unsigned depth = 1;
-        bool atName = true;
-        while (depth > 0) {
-            auto tok = lex.getToken();
-            if (tok == TOK_EOF) {
-                break;
-            }
-            if (tok == TOK_PAREN_OPEN) {
-                depth += 1;
-                atName = false;
-                continue;
-            }
-            if (tok == TOK_PAREN_CLOSE) {
-                depth -= 1;
-                atName = true;
-                continue;
-            }
-            if (tok == TOK_COMMA) {
-                atName = (depth == 1);
-                continue;
-            }
-            if (depth == 1 && atName && tok == TOK_IDENT) {
-                const auto next = lex.lookahead(0);
-                if (next == TOK_COMMA || next == TOK_PAREN_CLOSE) {
-                    cb(tok.ident().name);
-                }
-            }
-            atName = false;
-        }
-    }
+    static void collectLintNames(const ASTAttribute& mi, const F& cb);
 
-    void recordItemLevel(const ASTAttribute& mi, ASTItem& item) const {
-        LintLevelOverrides* overrides = nullptr;
-        if (auto* function = item.opt_Function()) {
-            overrides = &function->markings.lintLevels;
-        } else if (auto* module = item.opt_Module()) {
-            overrides = &module->lintLevels;
-        }
-        if (!overrides) {
-            return;
-        }
-        collectLintNames(mi, [&](const RcString& name) {
-            const bool isGroup = name == "warnings" || name == "unused";
-            overrides->set(name, isGroup, this->level());
-        });
-    }
+    void recordItemLevel(const ASTAttribute& mi, ASTItem& item) const;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        collectLintNames(mi, [&](const RcString& name) {
-            CfgSetLintLevel(*wb.settings, name.c_str(), this->level());
-        });
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 
     /// A lint attribute on a module is inherited by its contents; one on a
     /// function applies to that function and its body.
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        recordItemLevel(mi, i);
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        recordItemLevel(mi, i);
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
-        recordItemLevel(mi, i);
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const override;
 };
 
 class CHandlerAllow: public CMultiHandlerLint {
-    CfgLintLevel level() const override {
-        return CfgLintLevel::Allow;
-    }
+    CfgLintLevel level() const override;
 };
-
 
 class CHandlerWarn: public CMultiHandlerLint {
-    CfgLintLevel level() const override {
-        return CfgLintLevel::Warn;
-    }
+    CfgLintLevel level() const override;
 };
-
 
 class CHandlerDeny: public CMultiHandlerLint {
-    CfgLintLevel level() const override {
-        return CfgLintLevel::Deny;
-    }
+    CfgLintLevel level() const override;
 };
-
 
 class CHandlerForbid: public CMultiHandlerLint {
-    CfgLintLevel level() const override {
-        return CfgLintLevel::Forbid;
-    }
+    CfgLintLevel level() const override;
 };
-
 
 // #[must_use] - Marks a type needing to be consumed
 class CHandlerMustUse: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // TODO: only allowed on types
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // TODO: only allowed on associated types
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
-        // TODO: only allowed on associated types
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 };
-
 
 // #[non_exhaustive] - Tag an enum as being extensible
 class CHandlerNonExhaustive: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // TODO: only allowed on types
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 // #[path] - Already used by this stage
 class CHandlerPath: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // TODO: only allowed on modules
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 // #[rustc_promotable] - ?
 class CHandlerRustcPromotable: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // TODO: only allowed on functions?
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
-        // TODO: only allowed on functions?
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 };
-
 
 // #[rustc_inherit_overflow_checks]
 class CHandlerRustcInheritOverflowChecks: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
 };
-
 
 // #[rustc_on_unimplemented]
 class CHandlerRustcOnUnimiplemented: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // Trait only.
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 // #[rustc_box] - Marks the `Box::new` inner constructor
 class CHandlerRustBox: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override {
-        auto* n = cast<ASTExprNodeCallPath>(expr.get());
-        ASSERT_BUG(expr->span(), n, "");
-        ASSERT_BUG(expr->span(), n->args.size() == 1, "");
-        auto val = std::move(n->args[0]);
-        auto span = n->span();
-        expr.reset(new ASTExprNodeUniOp(ASTExprNodeUniOp::BOX, std::move(val)));
-        expr->setSpan(span);
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
 };
 
-
 class CMultiHandlerStability: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override;
 };
 
 class CHandlerStable: public CMultiHandlerStability {};
 
-
 class CHandlerUnstable: public CMultiHandlerStability {};
 
-
 class CHandlerRustcDeprecated: public CMultiHandlerStability {};
-
 
 // #[rustc_const_unstable] - Unstable in const context
 class CHandlerRustcConstUnstable: public CMultiHandlerStability {};
 
-
 class CHandlerDeprecated: public CMultiHandlerStability {};
 
-
 class CHandlerAllowInternalUnstable: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 class DecoratorNoStd: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        if (crate.loadStd != ASTCrate::LOAD_STD && crate.loadStd != ASTCrate::LOAD_CORE) {
-            WARNING(sp, W0000, "Use of #![no_std] with itself or #![no_core]");
-            return;
-        }
-        crate.loadStd = ASTCrate::LOAD_CORE;
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 };
 
 class DecoratorNoCore: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        if (crate.loadStd != ASTCrate::LOAD_STD && crate.loadStd != ASTCrate::LOAD_NONE) {
-            WARNING(sp, W0000, "Use of #![no_core] with itself or #![no_std]");
-        }
-        crate.loadStd = ASTCrate::LOAD_NONE;
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 };
 
 class DecoratorNoMain: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span&, const ASTAttribute&, const WireBoard&, ASTCrate& crate) const override {
-        crate.noMain = true;
-    }
+    void handle(const Span&, const ASTAttribute&, const WireBoard&, ASTCrate& crate) const override;
 };
 
 //class Decorator_Prelude:
@@ -4401,162 +1866,35 @@ public:
 
 class DecoratorNoPrelude: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (i.is_Module()) {
-            i.as_Module().insertPrelude = false;
-        } else {
-            ERROR(sp, E0000, "Invalid use of #[no_prelude] on non-module");
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
 class DecoratorPreludeImport: public ExpandDecorator {
 public:
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (const auto* e = i.opt_Use()) {
-            if (e->entries.size() != 1) {
-                ERROR(sp, E0000, "#[prelude_import] should be on a single-entry use");
-            }
-            ASSERT_BUG(sp, path.nodes.size() > 0, path);
-            ASSERT_BUG(sp, path.nodes.back() == "", path);
-            if (e->entries.front().name != "") {
-                ERROR(sp, E0000, "#[prelude_import] should be on a glob");
-            }
-            const auto& p = e->entries.front().path;
-            // TODO: Ensure that this statement is a glob (has a name of "")
-            if (p.isRelative()) {
-                crate.preludePath = ASTPath(path);
-                crate.preludePath.nodes().pop_back();
-                crate.preludePath += p;
-            } else {
-                crate.preludePath = ASTPath(p);
-            }
-        } else {
-            ERROR(sp, E0000, "Invalid use of #[prelude_import] on non-use");
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
 class CTestHandler: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    } // Expand early so tests are removed before inner expansion
+    AttrStage stage() const override; // Expand early so tests are removed before inner expansion
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (!i.is_Function()) {
-            ERROR(sp, E0000, "#[test] can only be put on functions - found on " << i.tagStr());
-        }
-
-        if (crate.testHarness) {
-            ASTTestDesc td;
-            td.span = sp;
-            for (const auto& node : path.nodes) {
-                if (!td.name.empty()) {
-                    td.name += "::";
-                }
-                td.name += node.c_str();
-            }
-            td.path = path;
-
-            crate.tests.push_back(mv$(td));
-        } else {
-            i = ASTItem::make_None({});
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
 class CTestHandlerSP: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (!i.is_Function()) {
-            ERROR(sp, E0000, "#[should_panic] can only be put on functions - found on " << i.tagStr());
-        }
-
-        if (crate.testHarness) {
-            // TODO: If this test doesn't yet exist, create it (but as disabled)?
-            for (auto& td : crate.tests) {
-                if (td.path != path) {
-                    continue;
-                }
-
-                if (mi.data().size() != 0) {
-                    td.panicType = ASTTestDesc::ShouldPanic::YesWithMessage;
-
-                    TTStream lex(sp, ParseState(), mi.data());
-                    lex.parseState().wb = &wb;
-                    auto parseMessage = [&]() {
-                        auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
-                        if (auto* v = cast<ASTExprNodeString>(&*n)) {
-                            td.expectedPanicMessage = v->value;
-                        } else {
-                            parseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
-                        }
-                    };
-                    if (lex.getTokenIf(TOK_EQUAL)) {
-                        parseMessage();
-                    } else {
-                        // Anything other than exactly `expected = "..."` is a
-                        // lint in rustc, and the attribute still means "this
-                        // test panics" -- just without a message to match.
-                        bool gotMessage = false;
-                        if (lex.getTokenIf(TOK_PAREN_OPEN) && lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_EQUAL) {
-                            auto n = lex.getTokenCheck(TOK_IDENT).ident().name;
-                            lex.getTokenCheck(TOK_EQUAL);
-                            if (n == "expected" && lex.lookahead(0) == TOK_STRING) {
-                                parseMessage();
-                                gotMessage = lex.lookahead(0) == TOK_PAREN_CLOSE;
-                            }
-                        }
-                        if (!gotMessage) {
-                            td.panicType = ASTTestDesc::ShouldPanic::Yes;
-                            td.expectedPanicMessage = "";
-                        }
-                    }
-                } else {
-                    td.panicType = ASTTestDesc::ShouldPanic::Yes;
-                }
-                return;
-            }
-            //ERROR()
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
 class CTestHandlerIgnore: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (!i.is_Function()) {
-            ERROR(sp, E0000, "#[ignore] can only be put on functions - found on " << i.tagStr());
-        }
-
-        if (crate.testHarness) {
-            for (auto& td : crate.tests) {
-                if (td.path != path) {
-                    continue;
-                }
-
-                td.ignore = true;
-                return;
-            }
-            //ERROR()
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
-
 
 void RegisterBuiltinDecorators(ExpandRegistry& registry) {
     auto& derives = *registry.make<DeriveRegistry>();
@@ -4675,4 +2013,3127 @@ void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireB
 // NOTE: To delete, clear the value
 void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const {
     unexpected(sp, mi, "struct literal ent");
+}
+
+auto CommonFunction::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CommonFunction::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (i.is_None()) {
+    } else if (i.is_Function()) {
+        this->handle(mi, i.as_Function());
+    } else {
+        // TODO: Error
+    }
+}
+
+auto CommonFunction::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (i.is_None()) {
+    } else if (i.is_Function()) {
+        this->handle(mi, i.as_Function());
+    } else {
+        // TODO: Error
+    }
+}
+
+auto CommonFunction::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
+    if (i.is_None()) {
+    } else if (i.is_Function()) {
+        this->handle(mi, i.as_Function());
+    } else {
+        // TODO: Error
+    }
+}
+
+auto CHandlerInline::handle(const ASTAttribute& mi, ASTFunction& fcn) const -> void {
+    TTStream lex(mi.span(), ParseState(), mi.data());
+    if (lex.getTokenIf(TOK_PAREN_OPEN)) {
+        auto attr = lex.getTokenCheck(TOK_IDENT).ident().name;
+        if (attr == "never") {
+            fcn.markings.inlineType = ASTFunction::Markings::Inline::Never;
+        } else if (attr == "always") {
+            fcn.markings.inlineType = ASTFunction::Markings::Inline::Always;
+        } else {
+            ERROR(lex.pointSpan(), E0000, "Unknown inline type #[inline(" << attr << ")]");
+        }
+        lex.getTokenCheck(TOK_PAREN_CLOSE);
+        lex.getTokenCheck(TOK_EOF);
+    } else {
+        fcn.markings.inlineType = ASTFunction::Markings::Inline::Normal;
+    }
+}
+
+auto CHandlerCold::handle(const ASTAttribute& mi, ASTFunction& fcn) const -> void {
+    TTStream lex(mi.span(), ParseState(), mi.data());
+    lex.getTokenCheck(TOK_EOF);
+    fcn.markings.isCold = true;
+}
+
+auto CHandlerRustcAlign::handle(const ASTAttribute& mi, ASTFunction& fcn) const -> void {
+    TTStream lex(mi.span(), ParseState(), mi.data());
+    lex.getTokenCheck(TOK_PAREN_OPEN);
+    auto value = lex.getTokenCheck(TOK_INTEGER).intval();
+    ASSERT_BUG(lex.pointSpan(), value > U128(0), "#[rustc_align(" << value << ")] - alignment must be non-zero");
+    ASSERT_BUG(lex.pointSpan(), (value & (value - 1)) == U128(0), "#[rustc_align(" << value << ")] - alignment must be a power of two");
+    ASSERT_BUG(lex.pointSpan(), value < U128(UINT64_MAX), "#[rustc_align(" << value << ")] - alignment is too large");
+    fcn.markings.alignment = value.truncateU64();
+    lex.getTokenCheck(TOK_PAREN_CLOSE);
+    lex.getTokenCheck(TOK_EOF);
+}
+
+auto CHandlerRustcLegacyConstGenerics::handle(const ASTAttribute& mi, ASTFunction& fcn) const -> void {
+    TTStream lex(mi.span(), ParseState(), mi.data());
+    lex.getTokenCheck(TOK_PAREN_OPEN);
+
+    auto& list = fcn.markings.rustcLegacyConstGenerics;
+    do {
+        auto idxRaw = lex.getTokenCheck(TOK_INTEGER).intval();
+        ASSERT_BUG(lex.pointSpan(), idxRaw < U128(UINT_MAX), "#[rustc_legacy_const_generics(" << idxRaw << ")] too large");
+        auto idx = static_cast<unsigned>(idxRaw.truncateU64());
+        ASSERT_BUG(lex.pointSpan(), std::find(list.begin(), list.end(), idx) == list.end(), "#[rustc_legacy_const_generics(" << idx << ")] duplicate index");
+        list.push_back(idx);
+    } while (lex.getTokenIf(TOK_COMMA));
+
+    lex.getTokenCheck(TOK_PAREN_CLOSE);
+    lex.getTokenCheck(TOK_EOF);
+}
+
+auto CHandlerRepr::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerRepr::getReprName(TokenStream& lex) -> RcString {
+    Token tok;
+    if (lex.getTokenIf(TOK_INTERPOLATED_TYPE, tok)) {
+        const auto* ty = tok.fragType();
+        if (ty && ty->isPath() && ty->path().nodes().size() == 1) {
+            return ty->path().nodes().back().name();
+        }
+        ERROR(lex.pointSpan(), E0000, "#[repr(...)] with a type that does not name a representation");
+    }
+    return lex.getTokenCheck(TOK_IDENT).ident().name;
+}
+
+auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (i.is_None()) {
+    }
+    // --- struct ---
+    else if (auto* s = i.opt_Struct()) {
+        TTStream lex(sp, ParseState(), mi.data());
+        lex.parseState().wb = &wb;
+        lex.getTokenCheck(TOK_PAREN_OPEN);
+        // `#[repr()]` names no representation at all, which is allowed.
+        if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
+            lex.getTokenCheck(TOK_PAREN_CLOSE);
+            return;
+        }
+        do {
+            auto reprType = getReprName(lex);
+            if (reprType == "C") {
+                switch (s->markings.repr) {
+                    case ASTStruct::Markings::Repr::Rust:
+                        s->markings.repr = ASTStruct::Markings::Repr::C;
+                        break;
+                    default:
+                        // TODO: Error
+                        break;
+                }
+            } else if (reprType == "packed") {
+                switch (s->markings.repr) {
+                    case ASTStruct::Markings::Repr::C:
+                    case ASTStruct::Markings::Repr::Rust:
+                        break;
+                    default:
+                        // TODO: Error
+                        break;
+                }
+                if (s->markings.maxFieldAlign != 0) {
+                    // TODO: Error
+                }
+                if (lex.getTokenIf(TOK_PAREN_OPEN)) {
+                    auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
+                    auto* val = cast<ASTExprNodeInteger>(&*n);
+                    ASSERT_BUG(n->span(), val, "#[repr(packed(...))] - alignment must be an integer");
+                    auto v = val->value;
+                    ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(packed(" << v << "))] - alignment must be non-zero");
+                    ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(packed(" << v << "))] - alignment must be a power of two");
+                    ASSERT_BUG(lex.pointSpan(), s->markings.alignValue == 0, "#[repr(packed(" << v << "))] - conflicts with previous alignment");
+                    // TODO: I believe this should change the internal aligment too?
+                    s->markings.maxFieldAlign = v.truncateU64();
+                    lex.getTokenCheck(TOK_PAREN_CLOSE);
+                } else {
+                    s->markings.maxFieldAlign = 1;
+                }
+            } else if (reprType == "simd") {
+                s->markings.repr = ASTStruct::Markings::Repr::Simd;
+            } else if (reprType == "transparent") {
+                s->markings.repr = ASTStruct::Markings::Repr::Transparent;
+            } else if (reprType == "align") {
+                lex.getTokenCheck(TOK_PAREN_OPEN);
+                auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
+                auto* val = cast<ASTExprNodeInteger>(&*n);
+                ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
+                auto v = val->value;
+                ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
+                ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
+                s->markings.alignValue = std::max(s->markings.alignValue, v.truncateU64());
+                lex.getTokenCheck(TOK_PAREN_CLOSE);
+            } else if (reprType == "Rust") {
+                // The default representation, which is what a struct with
+                // no `repr` already has.
+            } else if (reprType == "no_niche") {
+                // TODO: rust-lang/rust#68303 happens with UnsafeCell and niche optionisations
+                // - Would trustme also have this?
+            } else {
+                TODO(sp, "Handle struct repr '" << reprType << "'");
+            }
+        } while (lex.getTokenIf(TOK_COMMA));
+        lex.getTokenCheck(TOK_PAREN_CLOSE);
+        lex.getTokenCheck(TOK_EOF);
+    }
+    // --- enum ---
+    else if (auto* e = i.opt_Enum()) {
+        TTStream lex(sp, ParseState(), mi.data());
+        lex.parseState().wb = &wb;
+        lex.getTokenCheck(TOK_PAREN_OPEN);
+
+        // Loop, so `repr(C, u8)` is valid
+        while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
+            auto setRepr = [&](ASTEnum::Markings::Repr r) {
+                ASSERT_BUG(lex.pointSpan(), e->markings.repr == ASTEnum::Markings::Repr::Rust, "Multiple enum reprs set");
+                e->markings.repr = r;
+            };
+            auto reprStr = getReprName(lex);
+            if (reprStr == "C") {
+                // Repeated is OK
+                e->markings.isReprC = true;
+            } else if (reprStr == "u8") {
+                setRepr(ASTEnum::Markings::Repr::U8);
+            } else if (reprStr == "u16") {
+                setRepr(ASTEnum::Markings::Repr::U16);
+            } else if (reprStr == "u32") {
+                setRepr(ASTEnum::Markings::Repr::U32);
+            } else if (reprStr == "u64") {
+                setRepr(ASTEnum::Markings::Repr::U64);
+            } else if (reprStr == "u128") {
+                setRepr(ASTEnum::Markings::Repr::U128);
+            } else if (reprStr == "usize") {
+                setRepr(ASTEnum::Markings::Repr::Usize);
+            } else if (reprStr == "i8") {
+                setRepr(ASTEnum::Markings::Repr::I8);
+            } else if (reprStr == "i16") {
+                setRepr(ASTEnum::Markings::Repr::I16);
+            } else if (reprStr == "i32") {
+                setRepr(ASTEnum::Markings::Repr::I32);
+            } else if (reprStr == "i64") {
+                setRepr(ASTEnum::Markings::Repr::I64);
+            } else if (reprStr == "i128") {
+                setRepr(ASTEnum::Markings::Repr::I128);
+            } else if (reprStr == "isize") {
+                setRepr(ASTEnum::Markings::Repr::Isize);
+            } else if (reprStr == "align") {
+                lex.getTokenCheck(TOK_PAREN_OPEN);
+                auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
+                auto* val = cast<ASTExprNodeInteger>(&*n);
+                ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
+                auto v = val->value;
+                ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
+                ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
+                e->markings.alignValue = std::max(e->markings.alignValue, v.truncateU64());
+                lex.getTokenCheck(TOK_PAREN_CLOSE);
+            } else if (reprStr == "Rust") {
+                // The default representation.
+            } else if (reprStr == "transparent") {
+                // The enum lays out as its one variant, which is what a
+                // single-variant enum already does here.
+                ASSERT_BUG(lex.pointSpan(), e->variants().size() == 1, "#[repr(transparent)] needs exactly one variant");
+            } else {
+                ERROR(lex.pointSpan(), E0000, "Unknown enum repr '" << reprStr << "'");
+            }
+            if (!lex.getTokenIf(TOK_COMMA)) {
+                break;
+            }
+        }
+
+        lex.getTokenCheck(TOK_PAREN_CLOSE);
+        lex.getTokenCheck(TOK_EOF);
+    }
+    // --- union ---
+    else if (auto* e = i.opt_Union()) {
+        TTStream lex(sp, ParseState(), mi.data());
+        lex.parseState().wb = &wb;
+        lex.getTokenCheck(TOK_PAREN_OPEN);
+
+        do {
+            auto reprStr = getReprName(lex);
+            if (reprStr == "C") {
+                e->markings.repr = ASTUnion::Markings::Repr::C;
+            } else if (reprStr == "Rust") {
+                // The default representation.
+            } else if (reprStr == "transparent") {
+                e->markings.repr = ASTUnion::Markings::Repr::Transparent;
+            } else if (reprStr == "packed") {
+                //switch( e->m_markings.repr )
+                //{
+                //case AST::Struct::Markings::Repr::C:
+                //case AST::Struct::Markings::Repr::Rust:
+                //default:
+                //    // TODO: Error
+                //}
+                //    // TODO: Error
+                //}
+                if (lex.getTokenIf(TOK_PAREN_OPEN)) {
+                    auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
+                    auto* val = cast<ASTExprNodeInteger>(&*n);
+                    ASSERT_BUG(n->span(), val, "#[repr(packed(...))] - alignment must be an integer");
+                    auto v = val->value;
+                    ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(packed(" << v << "))] - alignment must be non-zero");
+                    ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(packed(" << v << "))] - alignment must be a power of two");
+                    e->markings.maxFieldAlign = v.truncateU64();
+                    lex.getTokenCheck(TOK_PAREN_CLOSE);
+                } else {
+                    e->markings.maxFieldAlign = 1;
+                }
+            } else if (reprStr == "align") {
+                lex.getTokenCheck(TOK_PAREN_OPEN);
+                auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
+                auto* val = cast<ASTExprNodeInteger>(&*n);
+                ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
+                auto v = val->value;
+                ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
+                ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
+                e->markings.alignValue = std::max(e->markings.alignValue, v.truncateU64());
+                lex.getTokenCheck(TOK_PAREN_CLOSE);
+            } else {
+                ERROR(lex.pointSpan(), E0000, "Unknown union repr '" << reprStr << "'");
+            }
+        } while (lex.getTokenIf(TOK_COMMA));
+
+        lex.getTokenCheck(TOK_PAREN_CLOSE);
+        lex.getTokenCheck(TOK_EOF);
+    } else {
+        ERROR(mi.span(), E0000, "Unexpected attribute #[repr] on " << i.tagStr());
+    }
+}
+
+auto CHandlerRustcNonnullOptimizationGuaranteed::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerRustcNonnullOptimizationGuaranteed::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    // TODO: Types only
+    if (i.is_Struct()) {
+    } else {
+    }
+}
+
+auto CHandlerRustcLayoutScalarValidRangeStart::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerRustcLayoutScalarValidRangeStart::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    // TODO: Types only
+    if (auto* s = i.opt_Struct()) {
+        TTStream lex(sp, ParseState(), mi.data());
+        lex.parseState().wb = &wb;
+        lex.getTokenCheck(TOK_PAREN_OPEN);
+        auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
+        auto* np = cast<ASTExprNodeInteger>(n.get());
+        ASSERT_BUG(n->span(), np, "#[rustc_layout_scalar_valid_range_start] requires an integer - got " << FMT_CB(ss, n->print(ss)));
+        lex.getTokenCheck(TOK_PAREN_CLOSE);
+        lex.getTokenCheck(TOK_EOF);
+
+        s->markings.scalarValidStartSet = true;
+        s->markings.scalarValidStart = np->value;
+    } else {
+        TODO(sp, "#[rustc_layout_scalar_valid_range_start] on " << i.tagStr());
+    }
+}
+
+auto CHandlerRustcLayoutScalarValidRangeEnd::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerRustcLayoutScalarValidRangeEnd::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    // TODO: Types only
+    if (auto* s = i.opt_Struct()) {
+        TTStream lex(sp, ParseState(), mi.data());
+        lex.parseState().wb = &wb;
+        lex.getTokenCheck(TOK_PAREN_OPEN);
+        auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
+        auto* np = cast<ASTExprNodeInteger>(n.get());
+        ASSERT_BUG(n->span(), np, "#[rustc_layout_scalar_valid_range_end] requires an integer - got " << FMT_CB(ss, n->print(ss)));
+        lex.getTokenCheck(TOK_PAREN_CLOSE);
+        lex.getTokenCheck(TOK_EOF);
+        s->markings.scalarValidEndSet = true;
+        s->markings.scalarValidEnd = np->value;
+    } else {
+        TODO(sp, "#[rustc_layout_scalar_valid_range_end] on " << i.tagStr());
+    }
+}
+
+auto CHandlerLinkName::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerLinkName::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    auto linkName = mi.parseEqualsString(wb, crate, mod);
+    ASSERT_BUG(sp, linkName != "", "Empty #[link_name] attribute");
+
+    if (i.is_None()) {
+    } else if (auto* fcn = i.opt_Function()) {
+        ASSERT_BUG(sp, fcn->markings.linkName == "", "Duplicate #[link_name] attributes");
+        fcn->markings.linkName = linkName;
+    } else if (auto* st = i.opt_Static()) {
+        ASSERT_BUG(sp, st->sClass() != ASTStatic::CONST, "#[link_name] on `const`");
+        ASSERT_BUG(sp, st->markings.linkName == "", "Duplicate #[link_name] attributes");
+        st->markings.linkName = linkName;
+    } else {
+    }
+}
+
+auto CHandlerLinkSection::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerLinkSection::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    auto linkSection = mi.parseEqualsString(wb, crate, mod);
+    ASSERT_BUG(sp, linkSection != "", "Empty #[link_section] attribute");
+
+    if (i.is_None()) {
+    } else if (auto* fcn = i.opt_Function()) {
+        ASSERT_BUG(sp, fcn->markings.linkSection == "", "Duplicate #[link_section] attributes");
+        fcn->markings.linkSection = linkSection;
+    } else if (auto* st = i.opt_Static()) {
+        ASSERT_BUG(sp, st->sClass() != ASTStatic::CONST, "#[link_section] on `const`");
+        ASSERT_BUG(sp, st->markings.linkSection == "", "Duplicate #[link_section] attributes");
+        st->markings.linkSection = linkSection;
+    } else {
+    }
+}
+
+auto CHandlerLink::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerLink::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (i.is_None()) {
+    } else if (auto* b = i.opt_ExternBlock()) {
+        TTStream lex(sp, ParseState(), mi.data());
+        lex.parseState().wb = &wb;
+        lex.getTokenCheck(TOK_PAREN_OPEN);
+        std::string libName;
+        bool emit = true;
+        ASTExternBlock::Link link;
+
+        while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
+            auto key = lex.getTokenCheck(TOK_IDENT).ident().name;
+            if (key == "name") {
+                lex.getTokenCheck(TOK_EQUAL);
+                auto v = lex.getTokenCheck(TOK_STRING).str();
+                if (v == "") {
+                    ERROR(sp, E0000, "Empty name on extern block");
+                }
+                link.libName = v;
+            } else if (key == "kind") {
+                lex.getTokenCheck(TOK_EQUAL);
+                auto v = lex.getTokenCheck(TOK_STRING).str();
+                if (v == "") {
+                    ERROR(sp, E0000, "Empty `kind` on extern block #[link]");
+                }
+                // TODO: save and use the kind
+            } else if (key == "cfg") {
+                emit &= checkCfgStream(*wb.settings, lex);
+            } else if (key == "modifiers") {
+                lex.getTokenCheck(TOK_EQUAL);
+                auto v = lex.getTokenCheck(TOK_STRING).str();
+                if (v == "") {
+                    ERROR(sp, E0000, "Empty `modifiers` on extern block #[link]");
+                }
+                // TODO: save and use the `modifiers` value
+            } else {
+                TODO(sp, "Unknown attribute `#[link(" << key << ")]`");
+            }
+            if (!lex.getTokenIf(TOK_COMMA)) {
+                break;
+            }
+        }
+        if (link.libName == "") {
+            ERROR(sp, E0000, "No name in `#[link]`");
+        }
+        if (emit && wb.settings->linkDirectives) {
+            b->libraries.push_back(std::move(link));
+        }
+        lex.getTokenCheck(TOK_PAREN_CLOSE);
+        lex.getTokenCheck(TOK_EOF);
+    } else {
+        TODO(sp, "#[link] on " << i.tagStr());
+    }
+}
+
+auto CHandlerLinkage::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerLinkage::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    TTStream lex(sp, ParseState(), mi.data());
+    lex.parseState().wb = &wb;
+    lex.getTokenCheck(TOK_EQUAL);
+    auto tok = lex.getTokenCheck(TOK_STRING);
+    auto linkageStr = tok.str();
+    lex.getTokenCheck(TOK_EOF);
+
+    auto linkage = ASTLinkage::Default;
+    if (linkageStr == "extern_weak") {
+        linkage = ASTLinkage::ExternWeak;
+    } else if (linkageStr == "weak") {
+        linkage = ASTLinkage::Weak;
+    } else if (linkageStr == "linkonce" || linkageStr == "linkonce_odr" || linkageStr == "weak_odr") {
+        // One definition is kept and the rest discarded, which is what a
+        // weak definition already does here.
+        linkage = ASTLinkage::Weak;
+    } else if (linkageStr == "external") {
+    } else if (linkageStr == "internal" || linkageStr == "private") {
+        // The symbol is local to the object it is emitted in. Nothing here
+        // exports a definition that was not asked for, so an ordinary
+        // definition is what this means.
+    } else {
+        TODO(sp, "#[linkage=\"" << linkageStr << "\"]");
+    }
+
+    if (auto* f = i.opt_Function()) {
+        switch (linkage) {
+            case ASTLinkage::Default:
+            case ASTLinkage::Weak:
+                break;
+            default:
+                TODO(sp, "#[linkage=\"" << linkageStr << "\"] on " << i.tagStr());
+        }
+        f->markings.linkage = linkage;
+    } else if (auto* f = i.opt_Static()) {
+        switch (linkage) {
+            case ASTLinkage::Default:
+            case ASTLinkage::Weak:
+            case ASTLinkage::ExternWeak:
+                break;
+            default:
+                TODO(sp, "#[linkage=\"" << linkageStr << "\"] on " << i.tagStr());
+        }
+        f->markings.linkage = linkage;
+    } else {
+        TODO(sp, "#[linkage] - " << i.tagStr() << " " << path << ": " << mi);
+    }
+}
+
+auto CHandlerTargetFeature::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerTargetFeature::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    // TODO: Only valid on functions?
+}
+
+auto CHandlerRustcIntrinsic::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto CHandlerRustcIntrinsic::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (auto* e = i.opt_Function()) {
+        if (e->abi() != ABI_RUST) {
+            ERROR(sp, E0000, "#[rustc_intrinsic] on function with ABI already set (`" << e->abi() << "`)");
+        }
+        // Only add if there's no body
+        if (!e->code()) {
+            e->setAbi("rust-intrinsic");
+        }
+    } else {
+        ERROR(sp, E0000, "#[rustc_intrinsic] on non-function");
+    }
+}
+
+auto CHandlerTrackCaller::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (/*auto* e =*/i.opt_Function()) {
+        // Handled by HIR lower
+    } else if (i.opt_Macro()) {
+        // Accepted and ignored, matching rustc.
+    } else if (const auto* invocation = i.opt_MacroInv(); invocation && invocation->path().isTrivial() && invocation->path().asTrivial() == "macro_rules") {
+        // macro_rules! is still an invocation at the pre-expansion stage.
+    } else {
+        ERROR(sp, E0000, "#[track_caller] on non-function");
+    }
+}
+
+auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (/*auto* e =*/i.opt_Function()) {
+        // Handled by HIR lower
+    } else {
+        ERROR(sp, E0000, "#[track_caller] on non-function");
+    }
+}
+
+auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
+    if (/*auto* e =*/i.opt_Function()) {
+        // Handled by HIR lower
+    } else {
+        ERROR(sp, E0000, "#[track_caller] on non-function");
+    }
+}
+
+auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
+    if (auto* n = cast<ASTExprNodeClosure>(expr.get())) {
+        n->trackCaller = true;
+    } else {
+        ERROR(sp, E0000, "#[track_caller] on non-function");
+    }
+}
+
+auto CHandlerUnsafe::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto CHandlerUnsafe::handleItem(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, const RcString& name, ASTItem& i) const -> void {
+    TTStream lex(mi.span(), ParseState(), mi.data());
+    lex.parseState().wb = &wb;
+    lex.getTokenCheck(TOK_PAREN_OPEN);
+    while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
+        auto ident = lex.getTokenCheck(TOK_IDENT).ident().name;
+
+        if (ident == "no_mangle") {
+            if (auto* e = i.opt_Function()) {
+                e->markings.linkName = name.c_str();
+            } else if (auto* e = i.opt_Static()) {
+                e->markings.linkName = name.c_str();
+            } else {
+                ERROR(sp, E0000, "#[unsafe(" << ident << ")] on bad item: " << i.tagStr());
+            }
+        } else if (ident == "export_name") {
+            lex.getTokenCheck(TOK_EQUAL);
+            auto s = lex.getTokenCheck(TOK_STRING).str();
+
+            // The last name given wins, as it does in rustc: `#[unsafe(no_mangle)]`
+            // alongside this one is a lint, not an error.
+            if (auto* e = i.opt_Function()) {
+                e->markings.linkName = s;
+            } else if (auto* e = i.opt_Static()) {
+                e->markings.linkName = s;
+            } else {
+                ERROR(sp, E0000, "#[unsafe(" << ident << ")] on bad item: " << i.tagStr());
+            }
+        } else if (ident == "link_section") {
+            lex.getTokenCheck(TOK_EQUAL);
+            auto s = lex.getTokenCheck(TOK_STRING).str();
+
+            if (auto* e = i.opt_Function()) {
+                e->markings.linkSection = s;
+            } else if (auto* e = i.opt_Static()) {
+                e->markings.linkSection = s;
+            } else {
+                ERROR(sp, E0000, "#[unsafe(" << ident << ")] on bad item: " << i.tagStr());
+            }
+        } else if (ident == "ffi_const") {
+            if (/*auto* e =*/i.opt_Function()) {
+                // A hint to the optimiser that a FFI function always returns the same value
+                // - Don't care here
+            } else {
+                ERROR(sp, E0000, "#[unsafe(" << ident << ")] on non-function");
+            }
+        } else if (ident == "naked") {
+            if (auto* e = i.opt_Function()) {
+                // Flag this function as being a bare symbol (no prologue/epilogue)
+                e->markings.isNaked = true;
+            } else {
+                ERROR(sp, E0000, "#[unsafe(" << ident << ")] on non-function");
+            }
+        } else {
+            ERROR(sp, E0000, "Unknown #[unsafe(" << ident << ")]");
+        }
+
+        if (lex.lookahead(0) != TOK_COMMA) {
+            break;
+        }
+        lex.getTokenCheck(TOK_COMMA);
+    }
+    lex.getTokenCheck(TOK_PAREN_CLOSE);
+}
+
+auto CHandlerUnsafe::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& i) const -> void {
+    handleItem(sp, mi, wb, path.nodes.back(), i);
+}
+
+auto CHandlerUnsafe::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, ASTImpl&, const RcString& name, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& i) const -> void {
+    handleItem(sp, mi, wb, name, i);
+}
+
+auto CHandlerUnsafe::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, const ASTAbsolutePath& path, ASTTrait&, slice<const ASTAttribute>, ASTItem& i) const -> void {
+    handleItem(sp, mi, wb, path.nodes.back(), i);
+}
+
+auto DecoratorCrateType::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorCrateType::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+    auto name = mi.parseEqualsString(wb, crate, crate.rootModule_);
+    if (name == "rlib" || name == "lib") {
+        crate.crateType = ASTCrate::Type::RustLib;
+    } else if (name == "dylib" || name == "rdylib") {
+        crate.crateType = ASTCrate::Type::RustDylib;
+    } else if (name == "cdylib") {
+        crate.crateType = ASTCrate::Type::CDylib;
+    } else if (name == "proc-macro") {
+        crate.crateType = ASTCrate::Type::ProcMacro;
+    } else if (name == "bin") {
+        crate.crateType = ASTCrate::Type::Executable;
+    } else if (name == "staticlib") {
+        // A static library holds the same items as an rlib; what differs is
+        // how it is linked, which the driver decides.
+        crate.crateType = ASTCrate::Type::RustLib;
+    } else {
+        ERROR(sp, E0000, "Unknown crate type '" << name << "'");
+    }
+}
+
+auto DecoratorCrateName::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorCrateName::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+    auto name = mi.parseEqualsString(wb, crate, crate.rootModule_);
+    crate.setCrateName(name);
+}
+
+auto DecoratorRecursionLimit::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorRecursionLimit::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+    const auto text = mi.parseEqualsString(wb, crate, crate.rootModule_);
+    char* end = nullptr;
+    const auto value = ::std::strtoul(text.c_str(), &end, 10);
+    // Zero is allowed: it forbids recursion outright rather than being an
+    // error in itself.
+    if (text.empty() || *end != '\0') {
+        ERROR(sp, E0000, "#![recursion_limit] needs a number, got `" << text << "`");
+    }
+    wb.settings->recursionLimit = static_cast<unsigned int>(value);
+}
+
+auto DecoratorFeature::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorFeature::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+    mi.parseParenIdentList([&](const Span&, RcString feature) {
+        crate.features.insert(feature);
+    });
+}
+
+auto DecoratorAllocator::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorAllocator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+    // TODO: Check for an existing allocator crate
+    crate.langItems.insert(::std::make_pair("trustme-allocator", ASTAbsolutePath()));
+}
+
+auto DecoratorAllocator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (!i.is_Function()) {
+        ERROR(sp, E0000, "#[allocator] can only be put on functions and the crate - found on " << i.tagStr());
+    }
+    // TODO: Ensure that this is an extern { fn }
+    // TODO: Does this need to do anything?
+}
+
+auto DecoratorPanicRuntime::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorPanicRuntime::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+    // TODO: Check for an existing panic_runtime crate
+    crate.langItems.insert(::std::make_pair("trustme-panic_runtime", ASTAbsolutePath()));
+}
+
+auto DecoratorNeedsPanicRuntime::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorNeedsPanicRuntime::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+    crate.langItems.insert(::std::make_pair("trustme-needs_panic_runtime", ASTAbsolutePath()));
+}
+
+auto Deriver::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const -> ASTImpl {
+    ERROR(sp, E0000, "Cannot derive(" << traitName() << ") on union");
+}
+
+template <typename F>
+auto Deriver::iterateStructFields(const ASTStruct& str, F cb) const -> void {
+    switch (str.data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            break;
+        }
+        case ASTStructData::TAG_Struct: {
+            auto& e = str.data.as_Struct();
+            for (const auto& fld : e.ents) {
+                cb(fld.name);
+            }
+            break;
+        }
+        case ASTStructData::TAG_Tuple: {
+            auto& e = str.data.as_Tuple();
+            for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
+                auto fldName = RcString::newInterned(FMT(idx));
+                cb(fldName);
+            }
+            break;
+        }
+    }
+}
+
+auto Deriver::getParamsWithBounds(ObjPool& pool, const Span& sp, const ASTGenericParams& p, const ASTPath& traitPath, ::std::vector<ASTType*> additionalBoundedTypes, bool boundTypeParams) const -> ASTGenericParams {
+    ASTGenericParams params = p.clone();
+
+    // TODO: Get bounds based on generic (or similar) types used within the type.
+    // - How would this code (that runs before resolve) know what's a generic and what's a local type?
+    // - Searches within the type for a Path that starts with that param.
+
+    unsigned int i = 0;
+    for (const auto& arg : params.params) {
+        if (const auto* e = arg.opt_Type()) {
+            if (boundTypeParams) {
+                params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(pool, sp, e->name(), i), {}, traitPath}));
+            }
+            i++;
+        }
+    }
+
+    // For each field type
+    // - Locate used generic parameters in the type (and sub-types that directly use said parameter)
+    for (auto& ty : additionalBoundedTypes) {
+        params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mv$(ty), {}, traitPath}));
+    }
+
+    return params;
+}
+
+auto Deriver::getFieldBounds(const ASTStruct& str) const -> ::std::vector<ASTType*> {
+    ::std::vector<ASTType*> ret;
+    switch (str.data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            break;
+        }
+        case ASTStructData::TAG_Struct: {
+            auto& e = str.data.as_Struct();
+            for (const auto& fld : e.ents) {
+                addFieldBoundFromTy(str.params(), ret, fld.type);
+            }
+            break;
+        }
+        case ASTStructData::TAG_Tuple: {
+            auto& e = str.data.as_Tuple();
+            for (const auto& ent : e.ents) {
+                addFieldBoundFromTy(str.params(), ret, ent.type);
+            }
+            break;
+        }
+    }
+    return ret;
+}
+
+auto Deriver::getFieldBounds(const ASTEnum& enm) const -> ::std::vector<ASTType*> {
+    ::std::vector<ASTType*> ret;
+
+    for (const auto& v : enm.variants()) {
+        switch (v.data.tag()) {
+            case ASTEnumVariantData::TAG_Unit: {
+                break;
+            }
+            case ASTEnumVariantData::TAG_Tuple: {
+                auto& e = v.data.as_Tuple();
+                for (const auto& ent : e.items) {
+                    addFieldBoundFromTy(enm.params(), ret, ent.type);
+                }
+                break;
+            }
+            case ASTEnumVariantData::TAG_Struct: {
+                auto& e = v.data.as_Struct();
+                for (const auto& fld : e.fields) {
+                    addFieldBoundFromTy(enm.params(), ret, fld.type);
+                }
+                break;
+            }
+        }
+    }
+
+    return ret;
+}
+
+auto Deriver::getFieldBounds(const ASTUnion& unn) const -> ::std::vector<ASTType*> {
+    ::std::vector<ASTType*> ret;
+    for (const auto& fld : unn.variants) {
+        addFieldBoundFromTy(unn.params(), ret, fld.type);
+    }
+    return ret;
+}
+
+auto Deriver::addFieldBoundFromTy(const ASTGenericParams& params, ::std::vector<ASTType*>& outList, ASTType* ty) const -> void {
+    struct H {
+        static void visitNodes(const Deriver& self, const ASTGenericParams& params, ::std::vector<ASTType*>& outList, const ::std::vector<ASTPathNode>& nodes) {
+            for (const auto& node : nodes) {
+                for (const auto& e : node.args().entries) {
+                    switch (e.tag()) {
+                        default:
+                            break;
+                        case ASTPathParamEnt::TAG_Type: {
+                            auto& ty = e.as_Type();
+                            self.addFieldBoundFromTy(params, outList, ty);
+                            break;
+                        }
+                        case ASTPathParamEnt::TAG_AssociatedTyEqual: {
+                            auto& aty = e.as_AssociatedTyEqual();
+                            self.addFieldBoundFromTy(params, outList, aty.second);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    // TODO: Locate type that is directly related to the type param.
+    switch (ty->data.tag()) {
+        case TypeData::TAG_None: {
+            // Wat?
+            break;
+        }
+        case TypeData::TAG_Any: {
+            // Nope.
+            break;
+        }
+        case TypeData::TAG_Unit: {
+            break;
+        }
+        case TypeData::TAG_Bang: {
+            break;
+        }
+        case TypeData::TAG_Macro: {
+            // not allowed
+            break;
+        }
+        case TypeData::TAG_Primitive: {
+            break;
+        }
+        case TypeData::TAG_Function: {
+            // TODO? Well... function types don't tend to depend on the trait?
+            break;
+        }
+        case TypeData::TAG_Tuple: {
+            auto& e = ty->data.as_Tuple();
+            for (const auto& sty : e.innerTypes) {
+                addFieldBoundFromTy(params, outList, sty);
+            }
+            break;
+        }
+        case TypeData::TAG_Borrow: {
+            auto& e = ty->data.as_Borrow();
+            addFieldBoundFromTy(params, outList, e.inner);
+            break;
+        }
+        case TypeData::TAG_Pointer: {
+            auto& e = ty->data.as_Pointer();
+            addFieldBoundFromTy(params, outList, e.inner);
+            break;
+        }
+        case TypeData::TAG_Array: {
+            auto& e = ty->data.as_Array();
+            addFieldBoundFromTy(params, outList, e.inner);
+            break;
+        }
+        case TypeData::TAG_Slice: {
+            auto& e = ty->data.as_Slice();
+            addFieldBoundFromTy(params, outList, e.inner);
+            break;
+        }
+        case TypeData::TAG_Pattern: {
+            auto& e = ty->data.as_Pattern();
+            addFieldBoundFromTy(params, outList, e.inner);
+            break;
+        }
+        case TypeData::TAG_Generic: {
+            // Although this is what we're looking for, it's already handled.
+            break;
+        }
+        case TypeData::TAG_Path: {
+            auto& e = ty->data.as_Path();
+            switch (e->cls.tag()) {
+                case ASTPathClass::TAG_Invalid: {
+                    // wut.
+                    break;
+                }
+                case ASTPathClass::TAG_Local: {
+                    break;
+                }
+                case ASTPathClass::TAG_Relative: {
+                    auto& pe = e->cls.as_Relative();
+                    if (pe.nodes.size() > 1) {
+                        // Check if the first node of a relative is a generic param.
+                        for (const auto& param : params.params) {
+                            if ((param.is_Type() && (param.as_Type().name() == pe.nodes.front().name()))) {
+                                addFieldBound(outList, ty);
+                                break;
+                            }
+                        }
+                    }
+                    H::visitNodes(*this, params, outList, pe.nodes);
+                    break;
+                }
+                case ASTPathClass::TAG_Self: {
+                    break;
+                }
+                case ASTPathClass::TAG_Super: {
+                    break;
+                }
+                case ASTPathClass::TAG_Absolute: {
+                    break;
+                }
+                case ASTPathClass::TAG_UFCS: {
+                    break;
+                }
+            }
+            break;
+        }
+        case TypeData::TAG_TraitObject: {
+            // TODO: Should this be recursed?
+            break;
+        }
+        case TypeData::TAG_ErasedType: {
+            // TODO: Should this be recursed?
+            break;
+        }
+    }
+}
+
+auto Deriver::addFieldBound(::std::vector<ASTType*>& outList, ASTType* type) const -> void {
+    for (const auto& ty : outList) {
+        if (ty == type) {
+            return;
+        }
+    }
+
+    outList.push_back(type->clone());
+}
+
+auto DeriverDebug::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+    const ASTPath debugTrait = getPath(coreName, "fmt", "Debug");
+
+    ASTFunction fcn(sp, mkType(*type->pool, sp, getPath(coreName, "fmt", "Result")), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("f")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, getPath(coreName, "fmt", "Formatter"))))));
+    fcn.setCode(NEWNODE(Block, mv$(node)));
+
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, debugTrait, mv$(typesToBound));
+
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, debugTrait), type->clone()));
+    rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString("fmt"), mv$(fcn));
+    return mv$(rv);
+}
+
+auto DeriverDebug::traitName() const -> const char* {
+    return "Debug";
+}
+
+auto DeriverDebug::callPath(ASTPath path, const char* method, ::std::vector<ASTExprNodeP> args) -> ASTExprNodeP {
+    return NEWNODE(CallPath, path + RcString::newInterned(method), mv$(args));
+}
+
+auto DeriverDebug::builderRef() -> ASTExprNodeP {
+    return NEWNODE(UniOp, ASTExprNodeUniOp::REFMUT, NEWNODE(NamedValue, ASTPath(RcString::newInterned("s"))));
+}
+
+auto DeriverDebug::builderPattern(const Span& sp) -> ASTPattern {
+    return ASTPattern(ASTPattern::TagBind(), sp, RcString::newInterned("s"), ASTPatternBinding::Type::MOVE, /*isMut=*/true);
+}
+
+auto DeriverDebug::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
+    ::std::string name = type->path().nodes().back().name().c_str();
+    const ASTPath pathFormatter = getPath(opts.coreName, "fmt", "Formatter");
+    const ASTPath pathDebugStruct = getPath(opts.coreName, "fmt", "DebugStruct");
+    const ASTPath pathDebugTuple = getPath(opts.coreName, "fmt", "DebugTuple");
+
+    // Generate code for Debug
+    ASTExprNodeP node;
+    // `-Zfmt-debug` cuts the output down: `shallow` keeps only the name,
+    // `none` prints nothing at all.
+    if (opts.fmtDebug != Settings::FmtDebug::Full) {
+        const char* text = opts.fmtDebug == Settings::FmtDebug::Shallow ? name.c_str() : "";
+        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, ::std::string(text)))));
+    }
+    switch (str.data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            node = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, name)));
+            break;
+        }
+        case ASTStructData::TAG_Struct: {
+            auto& e = str.data.as_Struct();
+            std::vector<ASTExprNodeBlock::Line> nodes;
+            nodes.push_back({true, NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_struct", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, name))))});
+            for (const auto& fld : e.ents) {
+                nodes.push_back({true, callPath(pathDebugStruct, "field", vec$(builderRef(), NEWNODE(String, fld.name.c_str()), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), fld.name)))))});
+            }
+            nodes.push_back({false, callPath(pathDebugStruct, "finish", vec$(builderRef()))});
+            node = NEWNODE(Block, mv$(nodes));
+            break;
+        }
+        case ASTStructData::TAG_Tuple: {
+            auto& e = str.data.as_Tuple();
+            std::vector<ASTExprNodeBlock::Line> nodes;
+            nodes.push_back({true, NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_tuple", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, name))))});
+            for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
+                nodes.push_back({true, callPath(pathDebugTuple, "field", vec$(builderRef(), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(FMT(idx)))))))});
+            }
+            nodes.push_back({false, callPath(pathDebugTuple, "finish", vec$(builderRef()))});
+            node = NEWNODE(Block, mv$(nodes));
+            break;
+        }
+    }
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));
+}
+
+auto DeriverDebug::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
+    ASTPath basePath = *type->data.as_Path();
+    basePath.nodes().back() = basePath.nodes().back().name();
+    const ASTPath pathFormatter = getPath(opts.coreName, "fmt", "Formatter");
+    const ASTPath pathDebugStruct = getPath(opts.coreName, "fmt", "DebugStruct");
+    const ASTPath pathDebugTuple = getPath(opts.coreName, "fmt", "DebugTuple");
+
+    // `-Zfmt-debug=none` prints nothing, so the variant does not matter.
+    if (opts.fmtDebug == Settings::FmtDebug::None) {
+        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, ::std::string()))));
+    }
+
+    ::std::vector<ASTExprNodeMatchArm> arms;
+    for (const auto& v : enm.variants()) {
+        ASTExprNodeP code;
+        ASTPattern patA;
+
+        ASTPath variantPath = basePath + v.name;
+
+        // `-Zfmt-debug=shallow` keeps only the variant name, so the fields
+        // are not bound at all.
+        if (opts.fmtDebug == Settings::FmtDebug::Shallow) {
+            code = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, v.name.c_str())));
+            switch (v.data.tag()) {
+                case ASTEnumVariantData::TAG_Unit: {
+                    patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
+                    break;
+                }
+                case ASTEnumVariantData::TAG_Tuple: {
+                    patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, ASTPattern::TuplePat{{}, true, {}});
+                    break;
+                }
+                case ASTEnumVariantData::TAG_Struct: {
+                    patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, {}, false);
+                    break;
+                }
+            }
+            ::std::vector<ASTPattern> pats;
+            pats.push_back(ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)));
+            arms.push_back(ASTExprNodeMatchArm(mv$(pats), {}, mv$(code)));
+            continue;
+        }
+
+        switch (v.data.tag()) {
+            case ASTEnumVariantData::TAG_Unit: {
+                code = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, v.name.c_str())));
+                patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Tuple: {
+                auto& e = v.data.as_Tuple();
+                ::std::vector<ASTPattern> patsA;
+                auto block = newBlock(sp);
+                block->pushStmt(NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_tuple", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, v.name.c_str())))));
+
+                makeRefpatA(sp, *block, patsA, e.items, [&](size_t idx, auto a) {
+                    return callPath(pathDebugTuple, "field", vec$(builderRef(), mv$(a)));
+                });
+                block->pushTailExpr(callPath(pathDebugTuple, "finish", vec$(builderRef())));
+                code = mkExprnodep(block.release());
+                patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Struct: {
+                auto& e = v.data.as_Struct();
+                ::std::vector<ASTStructPatternEntry> patsA;
+                auto block = newBlock(sp);
+                block->pushStmt(NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_struct", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, v.name.c_str())))));
+
+                makeRefpatA(sp, *block, patsA, e.fields, [&](size_t idx, auto a) {
+                    return callPath(pathDebugStruct, "field", vec$(builderRef(), NEWNODE(String, e.fields[idx].name.c_str()), mv$(a)));
+                });
+                block->pushTailExpr(callPath(pathDebugStruct, "finish", vec$(builderRef())));
+
+                code = mkExprnodep(block.release());
+                patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsA), true);
+                break;
+            }
+        }
+
+        ::std::vector<ASTPattern> pats;
+        pats.push_back(ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)));
+
+        arms.push_back(ASTExprNodeMatchArm(mv$(pats), {}, mv$(code)));
+    }
+    ASTExprNodeP node = NEWNODE(Match, NEWNODE(NamedValue, ASTPath(RcString("self"))), mv$(arms));
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), mv$(node));
+}
+
+auto DeriverInnerCompare::compareFieldlessEnum(Span sp, const RcString& coreName) const -> ASTExprNodeP {
+    return this->enumMismatch(sp, coreName);
+}
+
+auto DeriverInnerCompare::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
+    auto block = newBlock(sp);
+
+    this->iterateStructFields(str, [&](RcString fldName) {
+        auto lhs = NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), fldName);
+        auto rhs = NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("v"))), fldName);
+
+        // Comparing a field normally autoref-borrows it. A packed field
+        // may not satisfy that reference's alignment, so rustc first
+        // evaluates the field in its own block. This makes a Copy field a
+        // value before the comparison takes references to the operands.
+        if (str.markings.maxFieldAlign != 0) {
+            auto lhsBlock = newBlock(sp);
+            lhsBlock->pushTailExpr(mv$(lhs));
+            lhs = mkExprnodep(lhsBlock.release());
+
+            auto rhsBlock = newBlock(sp);
+            rhsBlock->pushTailExpr(mv$(rhs));
+            rhs = mkExprnodep(rhsBlock.release());
+        }
+
+        block->pushStmt(this->compareAndRet(sp, opts.coreName, mv$(lhs), mv$(rhs)));
+    });
+    block->pushTailExpr(this->equalValue(sp, opts.coreName));
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mkExprnodep(block.release()));
+}
+
+auto DeriverInnerCompare::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
+    bool fieldless = true;
+    for (const auto& variant : enm.variants()) {
+        if (variant.data.tag() != ASTEnumVariantData::TAG_Unit) {
+            fieldless = false;
+            break;
+        }
+    }
+    if (fieldless) {
+        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), this->compareFieldlessEnum(sp, opts.coreName));
+    }
+
+    ASTPath basePath = *type->data.as_Path();
+    basePath.nodes().back().args() = ASTPathParams();
+    ::std::vector<ASTExprNodeMatchArm> arms;
+
+    for (const auto& v : enm.variants()) {
+        ASTExprNodeP code;
+        ASTPattern patA;
+        ASTPattern patB;
+        auto variantPath = basePath + v.name;
+
+        switch (v.data.tag()) {
+            case ASTEnumVariantData::TAG_Unit: {
+                code = this->equalValue(sp, opts.coreName);
+                patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
+                patB = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Tuple: {
+                auto& e = v.data.as_Tuple();
+                auto block = newBlock(sp);
+                ::std::vector<ASTPattern> patsA;
+                ::std::vector<ASTPattern> patsB;
+
+                makeRefpatAb(sp, *block, patsA, patsB, e.items, [&](auto idx, auto a, auto b) {
+                    return this->compareAndRet(sp, opts.coreName, mv$(a), mv$(b));
+                });
+                block->pushTailExpr(this->equalValue(sp, opts.coreName));
+
+                patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
+                patB = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsB));
+                code = mkExprnodep(block.release());
+                break;
+            }
+            case ASTEnumVariantData::TAG_Struct: {
+                auto& e = v.data.as_Struct();
+                auto block = newBlock(sp);
+                ::std::vector<ASTStructPatternEntry> patsA;
+                ::std::vector<ASTStructPatternEntry> patsB;
+
+                makeRefpatAb(sp, *block, patsA, patsB, e.fields, [&](const auto& name, auto a, auto b) {
+                    return this->compareAndRet(sp, opts.coreName, mv$(a), mv$(b));
+                });
+                block->pushTailExpr(this->equalValue(sp, opts.coreName));
+
+                patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsA), true);
+                patB = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsB), true);
+                code = mkExprnodep(block.release());
+                break;
+            }
+        }
+
+        ::std::vector<ASTPattern> pats;
+        {
+            ::std::vector<ASTPattern> tuplePats;
+            tuplePats.push_back(ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)));
+            tuplePats.push_back(ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patB)));
+            pats.push_back(ASTPattern(ASTPattern::TagTuple(), sp, mv$(tuplePats)));
+        }
+
+        arms.push_back(ASTExprNodeMatchArm(mv$(pats), {}, mv$(code)));
+    }
+
+    // Default arm
+    {
+        arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern()), {}, this->enumMismatch(sp, opts.coreName)));
+    }
+
+    ::std::vector<ASTExprNodeP> vals;
+    vals.push_back(NEWNODE(NamedValue, ASTPath(RcString("self"))));
+    vals.push_back(NEWNODE(NamedValue, ASTPath(RcString("v"))));
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(Tuple, mv$(vals)), mv$(arms)));
+}
+
+auto DeriverPartialEq::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+    const ASTPath traitPath = getPath(coreName, "cmp", "PartialEq");
+
+    ASTFunction fcn(sp, mkType(*type->pool, sp, CORETYPE_BOOL), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("v")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
+    fcn.setCode(NEWNODE(Block, mv$(node)));
+
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+    rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString::newInterned("eq"), mv$(fcn));
+    return mv$(rv);
+}
+
+auto DeriverPartialEq::compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const -> ASTExprNodeP {
+    std::vector<ASTExprNodeIf::Arm> arms;
+    arms.push_back(ASTExprNodeIf::Arm{makeVec1(ASTIfLetCondition{{}, NEWNODE(BinOp, ASTExprNodeBinOp::CMPNEQU, mv$(v1), mv$(v2))}), NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(Bool, false))});
+    return NEWNODE(If, std::move(arms), nullptr);
+}
+
+auto DeriverPartialEq::equalValue(Span sp, const RcString& coreName) const -> ASTExprNodeP {
+    return NEWNODE(Bool, true);
+}
+
+auto DeriverPartialEq::enumMismatch(Span sp, const RcString& coreName) const -> ASTExprNodeP {
+    return NEWNODE(Bool, false);
+}
+
+auto DeriverPartialEq::compareFieldlessEnum(Span sp, const RcString& coreName) const -> ASTExprNodeP {
+    auto discriminant = [&](const RcString& value) {
+        return NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(value))));
+    };
+    return NEWNODE(BinOp, ASTExprNodeBinOp::CMPEQU, discriminant(RcString("self")), discriminant(RcString("v")));
+}
+
+auto DeriverPartialEq::traitName() const -> const char* {
+    return "PartialEq";
+}
+
+auto DeriverPartialOrd::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+    const ASTPath traitPath = getPath(coreName, "cmp", "PartialOrd");
+    const ASTPath pathOrdering = getPath(coreName, "cmp", "Ordering");
+
+    ASTPath pathOptionOrdering = getPath(coreName, "option", "Option");
+    pathOptionOrdering.nodes().back().args().entries.push_back(mkType(*type->pool, sp, pathOrdering));
+
+    ASTFunction fcn(sp, mkType(*type->pool, sp, pathOptionOrdering), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("v")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
+    fcn.setCode(NEWNODE(Block, mv$(node)));
+
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+    rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString::newInterned("partial_cmp"), mv$(fcn));
+    return mv$(rv);
+}
+
+auto DeriverPartialOrd::compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const -> ASTExprNodeP {
+    return NEWNODE(Match, NEWNODE(CallPath, getPath(coreName, "cmp", "PartialOrd", "partial_cmp"), ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v1)), NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v2)))), ::makeVec3(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), sp, getPath(coreName, "option", "Option", "None"))), {}, NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(NamedValue, getPath(coreName, "option", "Option", "None")))), ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), sp, getPath(coreName, "option", "Option", "Some"), ::makeVec1(ASTPattern(ASTPattern::TagValue(), sp, getPath(coreName, "cmp", "Ordering", "Equal"))))), {}, NEWNODE(Tuple, ::std::vector<ASTExprNodeP>())), ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), sp, RcString("res"))), {}, NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(NamedValue, ASTPath(RcString("res")))))));
+}
+
+auto DeriverPartialOrd::equalValue(Span sp, const RcString& coreName) const -> ASTExprNodeP {
+    return NEWNODE(CallPath, getPath(coreName, "option", "Option", "Some"), ::makeVec1(NEWNODE(NamedValue, getPath(coreName, "cmp", "Ordering", "Equal"))));
+}
+
+auto DeriverPartialOrd::enumMismatch(Span sp, const RcString& coreName) const -> ASTExprNodeP {
+    return NEWNODE(CallPath, getPath(coreName, "cmp", "PartialOrd", "partial_cmp"), ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(RcString("self")))))), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(RcString("v"))))))));
+}
+
+auto DeriverPartialOrd::traitName() const -> const char* {
+    return "PartialOrd";
+}
+
+auto DeriverEq::getTraitPath(const RcString& coreName) const -> ASTPath {
+    return getPath(coreName, "cmp", "Eq");
+}
+
+auto DeriverEq::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+    const ASTPath traitPath = this->getTraitPath(coreName);
+
+    ASTFunction fcn(sp, mkType(*type->pool, ASTTypeTags::Unit(), sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
+    fcn.setCode(NEWNODE(Block, mv$(node)));
+
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+    rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString("assert_receiver_is_total_eq"), mv$(fcn));
+    return mv$(rv);
+}
+
+auto DeriverEq::assertIsEq(const ASTPath& methodPath, ASTExprNodeP val) const -> ASTExprNodeP {
+    return NEWNODE(CallPath, ASTPath(methodPath), vec$(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(val))));
+}
+
+auto DeriverEq::field(const ::std::string& name) const -> ASTExprNodeP {
+    return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(name));
+}
+
+auto DeriverEq::field(const RcString& name) const -> ASTExprNodeP {
+    return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), name);
+}
+
+auto DeriverEq::traitName() const -> const char* {
+    return "Eq";
+}
+
+auto DeriverEq::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
+    const ASTPath assertMethodPath = this->getTraitPath(opts.coreName) + RcString("assert_receiver_is_total_eq");
+
+    auto block = newBlock(sp);
+    this->iterateStructFields(str, [&](RcString name) {
+        block->pushStmt(this->assertIsEq(assertMethodPath, this->field(name)));
+    });
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mkExprnodep(block.release()));
+}
+
+auto DeriverEq::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
+    const ASTPath assertMethodPath = this->getTraitPath(opts.coreName) + RcString("assert_receiver_is_total_eq");
+
+    ASTPath basePath = *type->data.as_Path();
+    basePath.nodes().back().args() = ASTPathParams();
+    ::std::vector<ASTExprNodeMatchArm> arms;
+
+    for (const auto& v : enm.variants()) {
+        ASTExprNodeP code;
+        ASTPattern patA;
+        auto variantPath = basePath + v.name;
+
+        switch (v.data.tag()) {
+            case ASTEnumVariantData::TAG_Unit: {
+                code = NEWNODE(Block);
+                patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Tuple: {
+                auto& e = v.data.as_Tuple();
+                auto block = newBlock(sp);
+                ::std::vector<ASTPattern> patsA;
+                makeRefpatA(sp, *block, patsA, e.items, [&](size_t idx, auto a) {
+                    return this->assertIsEq(assertMethodPath, mv$(a));
+                });
+
+                patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
+                code = mkExprnodep(block.release());
+                break;
+            }
+            case ASTEnumVariantData::TAG_Struct: {
+                auto& e = v.data.as_Struct();
+                auto block = newBlock(sp);
+                ::std::vector<ASTStructPatternEntry> patsA;
+                makeRefpatA(sp, *block, patsA, e.fields, [&](size_t idx, auto a) {
+                    return this->assertIsEq(assertMethodPath, mv$(a));
+                });
+
+                patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsA), true);
+                code = mkExprnodep(block.release());
+                break;
+            }
+        }
+
+        ::std::vector<ASTPattern> pats;
+        pats.push_back(ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)));
+
+        arms.push_back(ASTExprNodeMatchArm(mv$(pats), {}, mv$(code)));
+    }
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(NamedValue, ASTPath(RcString("self"))), mv$(arms)));
+}
+
+auto DeriverEq::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const -> ASTImpl {
+    // Eq is just a marker, so it's valid to derive for union
+    const ASTPath assertMethodPath = this->getTraitPath(opts.coreName) + RcString("assert_receiver_is_total_eq");
+    auto block = newBlock(sp);
+
+    for (const auto& fld : unn.variants) {
+        block->pushStmt(this->assertIsEq(assertMethodPath, this->field(fld.name)));
+    }
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(unn), mkExprnodep(block.release()));
+}
+
+auto DeriverOrd::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+    const ASTPath traitPath = getPath(coreName, "cmp", "Ord");
+    const ASTPath pathOrdering = getPath(coreName, "cmp", "Ordering");
+
+    ASTFunction fcn(sp, mkType(*type->pool, sp, pathOrdering), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("v")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
+    fcn.setCode(NEWNODE(Block, mv$(node)));
+
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+    rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString::newInterned("cmp"), mv$(fcn));
+    return mv$(rv);
+}
+
+auto DeriverOrd::compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const -> ASTExprNodeP {
+    return NEWNODE(
+        Match,
+        NEWNODE(
+            CallPath,
+            getPath(coreName, "cmp", "Ord", "cmp"),
+            // TODO: Optional Ref?
+            ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v1)), NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(v2)))
+        ),
+        ::makeVec2(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), sp, getPath(coreName, "cmp", "Ordering", "Equal"))), {}, NEWNODE(Tuple, ::std::vector<ASTExprNodeP>())), ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), sp, RcString("res"))), {}, NEWNODE(Flow, ASTExprNodeFlow::RETURN, "", NEWNODE(NamedValue, ASTPath(RcString("res"))))))
+    );
+}
+
+auto DeriverOrd::equalValue(Span sp, const RcString& coreName) const -> ASTExprNodeP {
+    return NEWNODE(NamedValue, getPath(coreName, "cmp", "Ordering", "Equal"));
+}
+
+auto DeriverOrd::enumMismatch(Span sp, const RcString& coreName) const -> ASTExprNodeP {
+    return NEWNODE(CallPath, getPath(coreName, "cmp", "Ord", "cmp"), ::makeVec2(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(RcString("self")))))), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), makeVec1(NEWNODE(NamedValue, ASTPath(RcString("v"))))))));
+}
+
+auto DeriverOrd::traitName() const -> const char* {
+    return "Ord";
+}
+
+auto DeriverClone::getTraitPath(const RcString& coreName) const -> ASTPath {
+    return ASTPath(coreName, {ASTPathNode(RcString("clone"), {}), ASTPathNode(RcString("Clone"), {})});
+}
+
+auto DeriverClone::getMethodPath(const RcString& coreName) const -> ASTPath {
+    return getTraitPath(coreName) + RcString("clone");
+}
+
+auto DeriverClone::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+    const ASTPath traitPath = this->getTraitPath(coreName);
+
+    ASTFunction fcn(sp, mktypeSelf(*type->pool, sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
+    fcn.setCode(NEWNODE(Block, mv$(node)));
+
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+    rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString("clone"), mv$(fcn));
+    return mv$(rv);
+}
+
+auto DeriverClone::cloneValRef(const RcString& coreName, ASTExprNodeP val) const -> ASTExprNodeP {
+    // TODO: Hack for zero-sized arrays? (Not a 1.19 feature)
+    return NEWNODE(CallPath, this->getMethodPath(coreName), vec$(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(val))));
+}
+
+auto DeriverClone::cloneValDirect(const RcString& coreName, ASTExprNodeP val) const -> ASTExprNodeP {
+    return NEWNODE(CallPath, this->getMethodPath(coreName), vec$(mv$(val)));
+}
+
+auto DeriverClone::field(const RcString& name) const -> ASTExprNodeP {
+    return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), name);
+}
+
+auto DeriverClone::field(const ::std::string& name) const -> ASTExprNodeP {
+    return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(name));
+}
+
+auto DeriverClone::traitName() const -> const char* {
+    return "Clone";
+}
+
+auto DeriverClone::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
+    const ASTPath& tyPath = *type->data.as_Path();
+
+    // A `Copy` type clones by copying. Cloning field by field would call a
+    // field's own `Clone` impl, which is observable when it does more than
+    // copy. A generic type is left alone: `*self` needs `Self: Copy`, which
+    // the derived `Clone` bounds do not give.
+    if (opts.derivesCopy && p.params.empty()) {
+        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(RcString("self"))))));
+    }
+
+    ASTExprNodeP node;
+    switch (str.data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            node = NEWNODE(NamedValue, ASTPath(tyPath));
+            break;
+        }
+        case ASTStructData::TAG_Struct: {
+            auto& e = str.data.as_Struct();
+            ASTExprNodeStructLiteral::tValues vals;
+            for (const auto& fld : e.ents) {
+                vals.push_back({{}, fld.name, this->cloneValRef(opts.coreName, this->field(fld.name))});
+            }
+            node = NEWNODE(StructLiteral, tyPath, nullptr, mv$(vals));
+            break;
+        }
+        case ASTStructData::TAG_Tuple: {
+            auto& e = str.data.as_Tuple();
+            ::std::vector<ASTExprNodeP> vals;
+            for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
+                vals.push_back(this->cloneValRef(opts.coreName, this->field(FMT(idx))));
+            }
+            node = NEWNODE(CallPath, ASTPath(tyPath), mv$(vals));
+            break;
+        }
+    }
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, mv$(node)));
+}
+
+auto DeriverClone::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
+    if (opts.derivesCopy && p.params.empty()) {
+        return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Block, NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(RcString("self"))))));
+    }
+    ASTPath basePath = *type->data.as_Path();
+    basePath.nodes().back().args() = ASTPathParams();
+    ::std::vector<ASTExprNodeMatchArm> arms;
+
+    for (const auto& v : enm.variants()) {
+        ASTExprNodeP code;
+        ASTPattern patA;
+
+        switch (v.data.tag()) {
+            case ASTEnumVariantData::TAG_Unit: {
+                code = NEWNODE(NamedValue, basePath + v.name);
+                patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(basePath + v.name));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Tuple: {
+                auto& e = v.data.as_Tuple();
+                ::std::vector<ASTPattern> patsA;
+                ::std::vector<ASTExprNodeP> nodes;
+
+                for (size_t idx = 0; idx < e.items.size(); idx++) {
+                    auto nameA = RcString::newInterned(FMT("a" << idx));
+                    patsA.push_back(ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF));
+                    nodes.push_back(this->cloneValDirect(opts.coreName, NEWNODE(NamedValue, ASTPath(nameA))));
+                }
+
+                patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, basePath + v.name, mv$(patsA));
+                code = NEWNODE(CallPath, basePath + v.name, mv$(nodes));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Struct: {
+                auto& e = v.data.as_Struct();
+                ::std::vector<ASTStructPatternEntry> patsA;
+                ASTExprNodeStructLiteral::tValues vals;
+
+                for (const auto& fld : e.fields) {
+                    auto nameA = RcString::newInterned(FMT("a" << fld.name));
+                    patsA.push_back(ASTStructPatternEntry{ASTAttributeList(), fld.name, ASTPattern(ASTPattern::TagBind(), sp, nameA, ASTPatternBinding::Type::REF)});
+                    vals.push_back({{}, fld.name, this->cloneValDirect(opts.coreName, NEWNODE(NamedValue, ASTPath(nameA)))});
+                }
+
+                patA = ASTPattern(ASTPattern::TagStruct(), sp, basePath + v.name, mv$(patsA), true);
+                code = NEWNODE(StructLiteral, basePath + v.name, nullptr, mv$(vals));
+                break;
+            }
+        }
+
+        ::std::vector<ASTPattern> pats;
+        pats.push_back(ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)));
+
+        arms.push_back(ASTExprNodeMatchArm(mv$(pats), {}, mv$(code)));
+    }
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(NamedValue, ASTPath(RcString("self"))), mv$(arms)));
+}
+
+auto DeriverClone::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const -> ASTImpl {
+    return makeCopyClone(sp, opts, p, type, this->getFieldBounds(unn));
+}
+
+auto DeriverClone::makeCopyClone(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> fieldBounds) const -> ASTImpl {
+    // Clone on a union can only be a bitwise copy.
+    // - This requires a Copy impl. That's up to the user
+    auto ret = this->makeRet(sp, opts.coreName, p, type, ::std::move(fieldBounds), NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(RcString("self")))));
+
+    // TODO: What if the type is only conditionally copy? (generic over something)
+    // - Could abuse specialisation support...
+    // TODO: Are these bounds needed?
+    for (auto& b : ret.def().params().bounds) {
+        auto& be = b.as_IsTrait();
+        be.trait = getPath(opts.coreName, "marker", "Copy");
+    }
+
+    return ret;
+}
+
+auto DeriverCopy::getTraitPath(const RcString& coreName) const -> ASTPath {
+    return getPath(coreName, "marker", "Copy");
+}
+
+auto DeriverCopy::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+    const ASTPath traitPath = this->getTraitPath(coreName);
+
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+    return mv$(rv);
+}
+
+auto DeriverCopy::traitName() const -> const char* {
+    return "Copy";
+}
+
+auto DeriverCopy::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), nullptr);
+}
+
+auto DeriverCopy::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), nullptr);
+}
+
+auto DeriverCopy::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const -> ASTImpl {
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(unn), nullptr);
+}
+
+auto DeriverDefault::getTraitPath(const RcString& coreName) const -> ASTPath {
+    return getPath(coreName, "default", "Default");
+}
+
+auto DeriverDefault::getMethodPath(ObjPool& pool, const RcString& coreName) const -> ASTPath {
+    return ASTPath::newUfcsTrait(::mkType(pool, Span()), getTraitPath(coreName), {ASTPathNode(RcString::newInterned("default"), {})});
+}
+
+auto DeriverDefault::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node, bool boundTypeParams) const -> ASTImpl {
+    const ASTPath traitPath = this->getTraitPath(coreName);
+
+    ASTFunction fcn(sp, mktypeSelf(*type->pool, sp), {});
+    fcn.setCode(NEWNODE(Block, mv$(node)));
+
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound), boundTypeParams);
+
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+    rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString::newInterned("default"), mv$(fcn));
+    return mv$(rv);
+}
+
+auto DeriverDefault::defaultCall(ObjPool& pool, const RcString& coreName) const -> ASTExprNodeP {
+    return NEWNODE(CallPath, this->getMethodPath(pool, coreName), {});
+}
+
+auto DeriverDefault::traitName() const -> const char* {
+    return "Default";
+}
+
+auto DeriverDefault::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
+    const ASTPath& tyPath = *type->data.as_Path();
+    ASTExprNodeP node;
+
+    switch (str.data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            node = NEWNODE(NamedValue, ASTPath(tyPath));
+            break;
+        }
+        case ASTStructData::TAG_Struct: {
+            auto& e = str.data.as_Struct();
+            ASTExprNodeStructLiteral::tValues vals;
+            bool hasDefault = false;
+            for (const auto& fld : e.ents) {
+                if (fld.defaultValue) {
+                    hasDefault = true;
+                } else {
+                    vals.push_back({{}, fld.name, this->defaultCall(*type->pool, opts.coreName)});
+                }
+            }
+            if (hasDefault) {
+                node = NEWNODE(StructLiteralPattern, tyPath, mv$(vals));
+            } else {
+                node = NEWNODE(StructLiteral, tyPath, nullptr, mv$(vals));
+            }
+            break;
+        }
+        case ASTStructData::TAG_Tuple: {
+            auto& e = str.data.as_Tuple();
+            ::std::vector<ASTExprNodeP> vals;
+            for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
+                vals.push_back(this->defaultCall(*type->pool, opts.coreName));
+            }
+            node = NEWNODE(CallPath, ASTPath(tyPath), mv$(vals));
+            break;
+        }
+    }
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, mv$(node)));
+}
+
+auto DeriverDefault::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
+    // 1.74: #[default]
+    const ASTEnumVariant* defaultVar = nullptr;
+    for (const auto& v : enm.variants()) {
+        if (v.attrs.has("default")) {
+            if (defaultVar) {
+                ERROR(sp, E0000, "Multiple #[default] attributes");
+            }
+            defaultVar = &v;
+        }
+    }
+    if (!defaultVar) {
+        ERROR(sp, E0000, "No #[default] attribute on enum with derive(Default)");
+    }
+
+    ASTPath varPath = *type->data.as_Path() + ASTPathNode(defaultVar->name);
+
+    ::std::vector<ASTType*> boundTys;
+    ASTExprNodeP node;
+    switch (defaultVar->data.tag()) {
+        case ASTEnumVariantData::TAG_Unit: {
+            node = NEWNODE(NamedValue, std::move(varPath));
+            break;
+        }
+        case ASTEnumVariantData::TAG_Tuple: {
+            auto& e = defaultVar->data.as_Tuple();
+            ::std::vector<ASTExprNodeP> vals;
+            for (const auto& fld : e.items) {
+                addFieldBoundFromTy(enm.params(), boundTys, fld.type);
+                vals.push_back(this->defaultCall(*type->pool, opts.coreName));
+            }
+            node = NEWNODE(CallPath, std::move(varPath), mv$(vals));
+            break;
+        }
+        case ASTEnumVariantData::TAG_Struct: {
+            auto& e = defaultVar->data.as_Struct();
+            ASTExprNodeStructLiteral::tValues vals;
+            for (const auto& fld : e.fields) {
+                if (fld.defaultValue) {
+                } else {
+                    addFieldBoundFromTy(enm.params(), boundTys, fld.type);
+                    vals.push_back({{}, fld.name, this->defaultCall(*type->pool, opts.coreName)});
+                }
+            }
+            node = NEWNODE(StructLiteralPattern, std::move(varPath), mv$(vals));
+            break;
+        }
+    }
+    // Only the `#[default]` variant is constructed, so the other variants'
+    // types need no bound -- `MyOption<NotDefault>::default()` is fine when
+    // the default variant carries nothing.
+    return this->makeRet(sp, opts.coreName, p, type, std::move(boundTys), std::move(node), /*boundTypeParams=*/false);
+}
+
+auto DeriverHash::getTraitPath(const RcString& coreName) const -> ASTPath {
+    return getPath(coreName, "hash", "Hash");
+}
+
+auto DeriverHash::getTraitPathHasher(const RcString& coreName) const -> ASTPath {
+    return getPath(coreName, "hash", "Hasher");
+}
+
+auto DeriverHash::getMethodPath(const RcString& coreName) const -> ASTPath {
+    return getTraitPath(coreName) + RcString::newInterned("hash");
+}
+
+auto DeriverHash::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+    const ASTPath traitPath = this->getTraitPath(coreName);
+
+    ASTFunction fcn(sp, mkType(*type->pool, ASTTypeTags::Unit(), sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("state")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, RcString("#H"), 0x100 | 0)))));
+    fcn.params().addTyParam(ASTTypeParam(*type->pool, sp, {}, RcString("#H")));
+    fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, RcString("#H"), 0x100 | 0), {}, this->getTraitPathHasher(coreName)}));
+    fcn.setCode(NEWNODE(Block, mv$(node)));
+
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+    rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString::newInterned("hash"), mv$(fcn));
+    return mv$(rv);
+}
+
+auto DeriverHash::hashValRef(const RcString& coreName, ASTExprNodeP val) const -> ASTExprNodeP {
+    return this->hashValDirect(coreName, NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(val)));
+}
+
+auto DeriverHash::hashValDirect(const RcString& coreName, ASTExprNodeP val) const -> ASTExprNodeP {
+    return NEWNODE(CallPath, this->getMethodPath(coreName), vec$(mv$(val), NEWNODE(NamedValue, ASTPath(RcString("state")))));
+}
+
+auto DeriverHash::field(const RcString& name) const -> ASTExprNodeP {
+    return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), name);
+}
+
+auto DeriverHash::field(const std::string& name) const -> ASTExprNodeP {
+    return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(name));
+}
+
+auto DeriverHash::traitName() const -> const char* {
+    return "Hash";
+}
+
+auto DeriverHash::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
+    auto block = newBlock(sp);
+
+    switch (str.data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            break;
+        }
+        case ASTStructData::TAG_Struct: {
+            auto& e = str.data.as_Struct();
+            for (const auto& fld : e.ents) {
+                block->pushStmt(this->hashValRef(opts.coreName, this->field(fld.name)));
+            }
+            break;
+        }
+        case ASTStructData::TAG_Tuple: {
+            auto& e = str.data.as_Tuple();
+            for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
+                block->pushStmt(this->hashValRef(opts.coreName, this->field(FMT(idx))));
+            }
+            break;
+        }
+    }
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mkExprnodep(block.release()));
+}
+
+auto DeriverHash::discriminantCoreType(const ASTEnum& enm) -> eCoreType {
+    switch (enm.markings.repr) {
+        case ASTEnum::Markings::Repr::Rust:
+            return CORETYPE_INT;
+        case ASTEnum::Markings::Repr::U8:
+            return CORETYPE_U8;
+        case ASTEnum::Markings::Repr::U16:
+            return CORETYPE_U16;
+        case ASTEnum::Markings::Repr::U32:
+            return CORETYPE_U32;
+        case ASTEnum::Markings::Repr::U64:
+            return CORETYPE_U64;
+        case ASTEnum::Markings::Repr::U128:
+            return CORETYPE_U128;
+        case ASTEnum::Markings::Repr::Usize:
+            return CORETYPE_UINT;
+        case ASTEnum::Markings::Repr::I8:
+            return CORETYPE_I8;
+        case ASTEnum::Markings::Repr::I16:
+            return CORETYPE_I16;
+        case ASTEnum::Markings::Repr::I32:
+            return CORETYPE_I32;
+        case ASTEnum::Markings::Repr::I64:
+            return CORETYPE_I64;
+        case ASTEnum::Markings::Repr::I128:
+            return CORETYPE_I128;
+        case ASTEnum::Markings::Repr::Isize:
+            return CORETYPE_INT;
+    }
+    return CORETYPE_INT;
+}
+
+auto DeriverHash::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
+    ASTPath basePath = *type->data.as_Path();
+    basePath.nodes().back().args() = ASTPathParams();
+    ::std::vector<ASTExprNodeMatchArm> arms;
+
+    for (unsigned int varIdx = 0; varIdx < enm.variants().size(); varIdx++) {
+        const auto& v = enm.variants()[varIdx];
+        ASTPattern patA;
+
+        auto varPath = basePath + v.name;
+        // The discriminant is hashed at its own width: an `#[repr(u8)]` enum
+        // writes one byte, not a whole `isize`.
+        auto varIdxHash = enm.variants().size() > 1 ? this->hashValRef(opts.coreName, NEWNODE(Integer, U128(varIdx), discriminantCoreType(enm))) : NEWNODE(Tuple, {});
+
+        auto block = newBlock(sp);
+        block->pushStmt(mv$(varIdxHash));
+        switch (v.data.tag()) {
+            case ASTEnumVariantData::TAG_Unit: {
+                patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(varPath));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Tuple: {
+                auto& e = v.data.as_Tuple();
+                ::std::vector<ASTPattern> patsA;
+                makeRefpatA(sp, *block, patsA, e.items, [&](size_t, auto a) {
+                    return this->hashValDirect(opts.coreName, mv$(a));
+                });
+                patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, varPath, mv$(patsA));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Struct: {
+                auto& e = v.data.as_Struct();
+                ::std::vector<ASTStructPatternEntry> patsA;
+                makeRefpatA(sp, *block, patsA, e.fields, [&](size_t, auto a) {
+                    return this->hashValDirect(opts.coreName, mv$(a));
+                });
+                patA = ASTPattern(ASTPattern::TagStruct(), sp, varPath, mv$(patsA), true);
+                break;
+            }
+        }
+
+        ::std::vector<ASTPattern> pats;
+        pats.push_back(ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)));
+
+        arms.push_back(ASTExprNodeMatchArm(mv$(pats), {}, mkExprnodep(block.release())));
+    }
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(NamedValue, ASTPath(RcString("self"))), mv$(arms)));
+}
+
+auto DeriverRustcEncodable::getTraitPath() const -> ASTPath {
+    return ASTPath(RcString::newInterned("=rustc_serialize"), {ASTPathNode(RcString::newInterned("Encodable"), {})});
+}
+
+auto DeriverRustcEncodable::getTraitPathEncoder() const -> ASTPath {
+    return ASTPath(RcString::newInterned("=rustc_serialize"), {ASTPathNode(RcString::newInterned("Encoder"), {})});
+}
+
+auto DeriverRustcEncodable::getMethodPath() const -> ASTPath {
+    return getTraitPath() + "encode";
+}
+
+auto DeriverRustcEncodable::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+    const ASTPath traitPath = this->getTraitPath();
+
+    ASTPath resultPath = getPath(coreName, "result", "Result");
+    resultPath.nodes()[1].args().entries.push_back(mkType(*type->pool, ASTTypeTags::Unit(), sp));
+    resultPath.nodes()[1].args().entries.push_back(mkType(*type->pool, sp, ASTPath::newUfcsTrait(mkType(*type->pool, sp, "S", 0x100 | 0), this->getTraitPathEncoder(), {ASTPathNode("Error", {})})));
+
+    ASTFunction fcn(sp, mkType(*type->pool, sp, mv$(resultPath)), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("self")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, RcString("s")), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, RcString::newInterned("S"), 0x100 | 0)))));
+    fcn.params().addTyParam(ASTTypeParam(*type->pool, sp, {}, "S"));
+    fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, "S", 0x100 | 0), {}, this->getTraitPathEncoder()}));
+    fcn.setCode(NEWNODE(Block, mv$(node)));
+
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+    rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, "encode", mv$(fcn));
+    return mv$(rv);
+}
+
+auto DeriverRustcEncodable::encValDirect(ASTExprNodeP val) const -> ASTExprNodeP {
+    return NEWNODE(CallPath, this->getMethodPath(), vec$(mv$(val), NEWNODE(NamedValue, ASTPath(RcString("s")))));
+}
+
+auto DeriverRustcEncodable::encValRef(ASTExprNodeP val) const -> ASTExprNodeP {
+    return this->encValDirect(NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(val)));
+}
+
+auto DeriverRustcEncodable::field(const RcString& name) const -> ASTExprNodeP {
+    return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), name);
+}
+
+auto DeriverRustcEncodable::field(::std::string name) const -> ASTExprNodeP {
+    return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(name));
+}
+
+auto DeriverRustcEncodable::encClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const -> ASTExprNodeP {
+    return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, RcString("s")), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false, false);
+}
+
+auto DeriverRustcEncodable::getValOk(const RcString& coreName) const -> ASTExprNodeP {
+    return NEWNODE(CallPath, getPath(coreName, "result", "Result", "Ok"), vec$(NEWNODE(Tuple, {})));
+}
+
+auto DeriverRustcEncodable::traitName() const -> const char* {
+    return "RustcEncodable";
+}
+
+auto DeriverRustcEncodable::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
+    ::std::string structName = type->data.as_Path()->nodes().back().name().c_str();
+
+    auto block = newBlock(sp);
+    switch (str.data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            break;
+        }
+        case ASTStructData::TAG_Struct: {
+            auto& e = str.data.as_Struct();
+            unsigned int idx = 0;
+            for (const auto& fld : e.ents) {
+                block->pushStmt(NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_struct_field", vec$(NEWNODE(NamedValue, ASTPath(RcString("s"))), NEWNODE(String, fld.name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValRef(this->field(fld.name))))));
+                idx++;
+            }
+            break;
+        }
+        case ASTStructData::TAG_Tuple: {
+            auto& e = str.data.as_Tuple();
+            for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
+                block->pushStmt(NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_tuple_struct_arg", vec$(NEWNODE(NamedValue, ASTPath(RcString("s"))), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValRef(this->field(FMT(idx)))))));
+            }
+            break;
+        }
+    }
+
+    block->pushTailExpr(this->getValOk(opts.coreName));
+    auto closure = this->encClosure(*type->pool, sp, mkExprnodep(block.release()));
+
+    ASTExprNodeP node;
+    switch (str.data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            node = getValOk(opts.coreName);
+            break;
+        }
+        case ASTStructData::TAG_Struct: {
+            auto& e = str.data.as_Struct();
+            node = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_struct", vec$(NEWNODE(NamedValue, ASTPath(RcString("s"))), NEWNODE(String, structName), NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT), mv$(closure)));
+            break;
+        }
+        case ASTStructData::TAG_Tuple: {
+            auto& e = str.data.as_Tuple();
+            node = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_tuple_struct", vec$(NEWNODE(NamedValue, ASTPath(RcString("s"))), NEWNODE(String, structName), NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT), mv$(closure)));
+            break;
+        }
+    }
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));
+}
+
+auto DeriverRustcEncodable::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
+    ASTPath basePath = *type->data.as_Path();
+    basePath.nodes().back().args() = ASTPathParams();
+    ::std::vector<ASTExprNodeMatchArm> arms;
+
+    auto sEnt = NEWNODE(NamedValue, ASTPath(RcString("s")));
+
+    for (unsigned int varIdx = 0; varIdx < enm.variants().size(); varIdx++) {
+        const auto& v = enm.variants()[varIdx];
+        ASTExprNodeP code;
+        ASTPattern patA;
+
+        switch (v.data.tag()) {
+            case ASTEnumVariantData::TAG_Unit: {
+                code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(sEnt->clone(), NEWNODE(String, v.name.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(0), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->getValOk(opts.coreName))));
+                patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(basePath + v.name));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Tuple: {
+                auto& e = v.data.as_Tuple();
+                auto block = newBlock(sp);
+                ::std::vector<ASTPattern> patsA;
+                makeRefpatA(sp, *block, patsA, e.items, [&](size_t idx, auto a) {
+                    return NEWNODE(CallPath, this->getTraitPathEncoder() + RcString::newInterned("emit_enum_variant_arg"), vec$(sEnt->clone(), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValDirect(mv$(a)))));
+                });
+                block->pushTailExpr(this->getValOk(opts.coreName));
+
+                code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(sEnt->clone(), NEWNODE(String, v.name.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(e.items.size()), CORETYPE_UINT), this->encClosure(*type->pool, sp, mkExprnodep(block.release()))));
+                patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, basePath + v.name, mv$(patsA));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Struct: {
+                auto& e = v.data.as_Struct();
+                auto block = newBlock(sp);
+                ::std::vector<ASTStructPatternEntry> patsA;
+                makeRefpatA(sp, *block, patsA, e.fields, [&](size_t idx, auto a) {
+                    return NEWNODE(CallPath, this->getTraitPathEncoder() + RcString::newInterned("emit_enum_struct_variant_field"), vec$(sEnt->clone(), NEWNODE(String, e.fields[idx].name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->encValDirect(mv$(a)))));
+                });
+                block->pushTailExpr(this->getValOk(opts.coreName));
+
+                patA = ASTPattern(ASTPattern::TagStruct(), sp, basePath + v.name, mv$(patsA), true);
+                code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_struct_variant", vec$(sEnt->clone(), NEWNODE(String, v.name.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(e.fields.size()), CORETYPE_UINT), this->encClosure(*type->pool, sp, mkExprnodep(block.release()))));
+                break;
+            }
+        }
+
+        ::std::vector<ASTPattern> pats;
+        pats.push_back(ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)));
+
+        arms.push_back(ASTExprNodeMatchArm(mv$(pats), {}, mv$(code)));
+    }
+
+    auto nodeMatch = NEWNODE(Match, NEWNODE(NamedValue, ASTPath(RcString("self"))), mv$(arms));
+
+    ::std::string enumName = type->data.as_Path()->nodes().back().name().c_str();
+    auto node = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum", vec$(mv$(sEnt), NEWNODE(String, enumName), this->encClosure(*type->pool, sp, mv$(nodeMatch))));
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), mv$(node));
+}
+
+auto DeriverRustcDecodable::getTraitPath() const -> ASTPath {
+    return ASTPath(RcString::newInterned("=rustc_serialize"), {ASTPathNode(RcString::newInterned("Decodable"), {})});
+}
+
+auto DeriverRustcDecodable::getTraitPathDecoder() const -> ASTPath {
+    return ASTPath(RcString::newInterned("=rustc_serialize"), {ASTPathNode(RcString::newInterned("Decoder"), {})});
+}
+
+auto DeriverRustcDecodable::getMethodPath() const -> ASTPath {
+    return getTraitPath() + "decode";
+}
+
+auto DeriverRustcDecodable::makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const -> ASTImpl {
+    const ASTPath traitPath = this->getTraitPath();
+
+    ASTPath resultPath = getPath(coreName, "result", "Result");
+    resultPath.nodes()[1].args().entries.push_back(mktypeSelf(*type->pool, sp));
+    resultPath.nodes()[1].args().entries.push_back(mkType(*type->pool, sp, ASTPath::newUfcsTrait(mkType(*type->pool, sp, "D", 0x100 | 0), this->getTraitPathDecoder(), {ASTPathNode("Error", {})})));
+
+    ASTFunction fcn(
+        sp,
+        mkType(*type->pool, sp, resultPath),
+        vec$(
+            //AST::Function::Arg( AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), mkType(*type->pool, ASTTypeTags::Reference(), sp, false, AST::LifetimeRef(), mktype_Self(sp)) ),
+            ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, "d"), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, "D", 0x100 | 0)))
+        )
+    );
+    fcn.params().addTyParam(ASTTypeParam(*type->pool, sp, {}, "D"));
+    fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, "D", 0x100 | 0), {}, this->getTraitPathDecoder()}));
+    fcn.setCode(NEWNODE(Block, mv$(node)));
+
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+    rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, "decode", mv$(fcn));
+    return mv$(rv);
+}
+
+auto DeriverRustcDecodable::decVal() const -> ASTExprNodeP {
+    return NEWNODE(CallPath, this->getMethodPath(), vec$(NEWNODE(NamedValue, ASTPath("d"))));
+}
+
+auto DeriverRustcDecodable::field(const ::std::string& name) const -> ASTExprNodeP {
+    return NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), RcString::newInterned(name));
+}
+
+auto DeriverRustcDecodable::decClosure(ObjPool& pool, Span sp, ASTExprNodeP code) const -> ASTExprNodeP {
+    return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false, false);
+}
+
+auto DeriverRustcDecodable::getValErrStr(const RcString& coreName, ::std::string errStr) const -> ASTExprNodeP {
+    return NEWNODE(CallPath, getPath(coreName, "result", "Result", "Err"), vec$(NEWNODE(CallMethod, NEWNODE(NamedValue, ASTPath("d")), ASTPathNode("error"), vec$(NEWNODE(String, errStr)))));
+}
+
+auto DeriverRustcDecodable::getValOk(const RcString& coreName, ASTExprNodeP inner) const -> ASTExprNodeP {
+    return NEWNODE(CallPath, getPath(coreName, "result", "Result", "Ok"), vec$(mv$(inner)));
+}
+
+auto DeriverRustcDecodable::getValOkUnit(const RcString& coreName) const -> ASTExprNodeP {
+    return getValOk(coreName, NEWNODE(Tuple, {}));
+}
+
+auto DeriverRustcDecodable::traitName() const -> const char* {
+    return "RustcDecodable";
+}
+
+auto DeriverRustcDecodable::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
+    ASTPath basePath = *type->data.as_Path();
+    ::std::string structName = basePath.nodes().back().name().c_str();
+
+    ASTExprNodeP nodeV;
+    switch (str.data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            break;
+        }
+        case ASTStructData::TAG_Struct: {
+            auto& e = str.data.as_Struct();
+            ASTExprNodeStructLiteral::tValues vals;
+            unsigned int idx = 0;
+            for (const auto& fld : e.ents) {
+                vals.push_back({{}, fld.name, NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathDecoder() + "read_struct_field", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, fld.name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->decClosure(*type->pool, sp, this->decVal()))))});
+                idx++;
+            }
+            nodeV = NEWNODE(StructLiteral, basePath, nullptr, mv$(vals));
+            break;
+        }
+        case ASTStructData::TAG_Tuple: {
+            auto& e = str.data.as_Tuple();
+            ::std::vector<ASTExprNodeP> vals;
+            for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
+                vals.push_back(NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathDecoder() + "read_tuple_struct_arg", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->decClosure(*type->pool, sp, this->decVal())))));
+            }
+            nodeV = NEWNODE(CallPath, mv$(basePath), mv$(vals));
+            break;
+        }
+    }
+
+    auto closure = this->decClosure(*type->pool, sp, this->getValOk(opts.coreName, mv$(nodeV)));
+
+    auto args = vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, structName), ASTExprNodeP(), mv$(closure));
+
+    ASTExprNodeP node;
+    switch (str.data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            node = this->getValOk(opts.coreName, NEWNODE(NamedValue, mv$(basePath)));
+            break;
+        }
+        case ASTStructData::TAG_Struct: {
+            auto& e = str.data.as_Struct();
+            assert(!args[2]);
+            args[2] = NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT);
+            node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_struct", mv$(args));
+            break;
+        }
+        case ASTStructData::TAG_Tuple: {
+            auto& e = str.data.as_Tuple();
+            assert(!args[2]);
+            args[2] = NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT);
+            node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_tuple_struct", mv$(args));
+            break;
+        }
+    }
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));
+}
+
+auto DeriverRustcDecodable::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
+    ASTPath basePath = *type->data.as_Path();
+    basePath.nodes().back().args() = ASTPathParams();
+    ::std::vector<ASTExprNodeMatchArm> arms;
+
+    // 1. Variant names
+    ::std::vector<ASTExprNodeP> varNameStrs;
+
+    // 2. Decoding arms
+    for (unsigned int varIdx = 0; varIdx < enm.variants().size(); varIdx++) {
+        const auto& v = enm.variants()[varIdx];
+        ASTExprNodeP code;
+
+        switch (v.data.tag()) {
+            case ASTEnumVariantData::TAG_Unit: {
+                code = NEWNODE(NamedValue, basePath + v.name);
+                break;
+            }
+            case ASTEnumVariantData::TAG_Tuple: {
+                auto& e = v.data.as_Tuple();
+                ::std::vector<ASTExprNodeP> args;
+
+                for (unsigned int idx = 0; idx < e.items.size(); idx++) {
+                    args.push_back(NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum_variant_arg", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->decClosure(*type->pool, sp, this->decVal())))));
+                }
+                code = NEWNODE(CallPath, basePath + v.name, mv$(args));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Struct: {
+                auto& e = v.data.as_Struct();
+                ASTExprNodeStructLiteral::tValues vals;
+
+                unsigned int idx = 0;
+                for (const auto& fld : e.fields) {
+                    vals.push_back({{}, fld.name, NEWNODE(UniOp, ASTExprNodeUniOp::QMARK, NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum_struct_variant_field", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, fld.name.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->decClosure(*type->pool, sp, this->decVal()))))});
+                    idx++;
+                }
+
+                code = NEWNODE(StructLiteral, basePath + v.name, nullptr, mv$(vals));
+                break;
+            }
+        }
+
+        ::std::vector<ASTPattern> pats;
+        pats.push_back(ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Integer({CORETYPE_UINT, U128(varIdx)})));
+
+        arms.push_back(ASTExprNodeMatchArm(mv$(pats), {}, this->getValOk(opts.coreName, mv$(code))));
+        varNameStrs.push_back(NEWNODE(String, v.name.c_str()));
+    }
+
+    // Default arm
+    {
+        arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern()), {}, this->getValErrStr(opts.coreName, "enum value unknown")));
+    }
+
+    auto nodeMatch = NEWNODE(Match, NEWNODE(NamedValue, ASTPath("idx")), mv$(arms));
+    auto nodeVarClosure = NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mkType(*type->pool, sp)), ::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "idx"), ::mkType(*type->pool, sp))), ::mkType(*type->pool, sp), mv$(nodeMatch), false, false, false);
+    ::std::string enumName = type->data.as_Path()->nodes().back().name().c_str();
+
+    auto nodeRev = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum_variant", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Array, mv$(varNameStrs))), mv$(nodeVarClosure)));
+
+    auto node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(String, enumName), this->decClosure(*type->pool, sp, mv$(nodeRev))));
+
+    return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), mv$(node));
+}
+
+auto DeriverConstParamTy::handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound) const -> ASTImpl {
+    const ASTPath traitPath = getPath(opts.coreName, "marker", "StructuralPartialEq");
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+    ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+    return mv$(rv);
+}
+
+auto DeriverConstParamTy::traitName() const -> const char* {
+    return "ConstParamTy";
+}
+
+auto DeriverConstParamTy::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
+    return handleGeneric(sp, opts, p, type, this->getFieldBounds(str));
+}
+
+auto DeriverConstParamTy::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
+    return handleGeneric(sp, opts, p, type, this->getFieldBounds(enm));
+}
+
+auto DeriverUnsizedConstParamTy::handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound) const -> ASTImpl {
+    const ASTPath traitPath = getPath(opts.coreName, "marker", "UnsizedConstParamTy");
+    const ASTPath eqPath = getPath(opts.coreName, "cmp", "Eq");
+
+    ::std::vector<ASTType*> typesToBoundByEq;
+    for (const auto* boundedType : typesToBound) {
+        typesToBoundByEq.push_back(boundedType->clone());
+    }
+
+    ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+    unsigned int typeIndex = 0;
+    for (const auto& param : p.params) {
+        if (const auto* typeParam = param.opt_Type()) {
+            params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, typeParam->name(), typeIndex), {}, eqPath}));
+            typeIndex++;
+        }
+    }
+    for (auto*& boundedType : typesToBoundByEq) {
+        params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mv$(boundedType), {}, eqPath}));
+    }
+
+    return ASTImpl(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+}
+
+auto DeriverUnsizedConstParamTy::traitName() const -> const char* {
+    return "UnsizedConstParamTy";
+}
+
+auto DeriverUnsizedConstParamTy::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
+    return handleGeneric(sp, opts, p, type, this->getFieldBounds(str));
+}
+
+auto DeriverUnsizedConstParamTy::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
+    return handleGeneric(sp, opts, p, type, this->getFieldBounds(enm));
+}
+
+auto DeriveRegistry::find(const RcString& traitName) const -> const Deriver* {
+#define _(obj)                        \
+    if (traitName == obj.traitName()) \
+        return &obj;
+    _(debug)
+    _(partialEq)
+    _(partialOrd)
+    _(eq)
+    _(ord)
+    _(clone)
+    _(copy)
+    _(default_)
+    _(hash)
+    _(rustcEncodable)
+    _(rustcDecodable)
+    _(constParamTy)
+    _(unsizedConstParamTy)
+#undef _
+    return nullptr;
+}
+
+DecoratorDerive::DecoratorDerive(const DeriveRegistry& registry)
+    : registry(registry)
+{
+}
+
+auto DecoratorDerive::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorDerive::wantsAllAttrs() const -> bool {
+    return true;
+}
+
+auto DecoratorDerive::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    switch (i.tag()) {
+        case ASTItem::TAG_None: {
+            // Ignore, it's been deleted
+            break;
+        }
+        case ASTItem::TAG_Union: {
+            auto& e = i.as_Union();
+            deriveItem(registry, sp, wb, crate, mod, attr, path, attrs, vis, e);
+            break;
+        }
+        case ASTItem::TAG_Enum: {
+            auto& e = i.as_Enum();
+            deriveItem(registry, sp, wb, crate, mod, attr, path, attrs, vis, e);
+            break;
+        }
+        case ASTItem::TAG_Struct: {
+            auto& e = i.as_Struct();
+            deriveItem(registry, sp, wb, crate, mod, attr, path, attrs, vis, e);
+            break;
+        }
+        default: {
+            TODO(sp, "Handle #[derive] for other item types - " << i.tagStr());
+            break;
+        }
+    }
+}
+
+auto CDocHandler::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CDocHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+}
+
+auto CDocHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+}
+
+auto CDocHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+}
+
+auto CDocHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
+}
+
+auto CDocHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const -> void {
+}
+
+auto CDocHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const -> void {
+}
+
+auto CDocHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const -> void {
+}
+
+auto CDocHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const -> void {
+}
+
+Handler::Handler(eItemType type, cbT cb)
+    : type(type)
+    , cb(cb)
+{
+}
+
+auto LangItemRegistry::find(const char* name) const -> const Handler* {
+    return handlers.find(name);
+}
+
+DecoratorLangItem::DecoratorLangItem(const LangItemRegistry& registry)
+    : registry(registry)
+{
+}
+
+auto DecoratorLangItem::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    auto name = attr.parseEqualsString(wb, crate, mod);
+    switch (i.tag()) {
+        default:
+            TODO(sp, "Unknown item type " << i.tagStr() << " with #[" << attr << "] attached at " << path);
+            break;
+        case ASTItem::TAG_None: {
+            // NOTE: Can happen when #[cfg] removed this
+            break;
+        }
+        case ASTItem::TAG_Impl: {
+            if (name == "i8") {
+            } else if (name == "u8") {
+            } else if (name == "i16") {
+            } else if (name == "u16") {
+            } else if (name == "i32") {
+            } else if (name == "u32") {
+            } else if (name == "i64") {
+            } else if (name == "u64") {
+            } else if (name == "i128") {
+            } else if (name == "u128") {
+            } else if (name == "isize") {
+            } else if (name == "usize") {
+            } else if (name == "const_ptr") {
+            } else if (name == "mut_ptr") {
+            } else if (name == "const_slice_ptr") {
+            } else if (name == "mut_slice_ptr") {
+            } else if (name == "array") {
+            } else if (name == "bool") {
+            }
+            // rustc_unicode
+            else if (name == "char") {
+            }
+            // collections
+            else if (name == "str") {
+            } else if (name == "slice") {
+            } else if (name == "slice_u8") {
+            } // libcore now, `impl [u8]`
+            else if (name == "slice_alloc") {
+            } // liballoc's impls on [T]
+            else if (name == "slice_u8_alloc") {
+            } // liballoc's impls on [u8]
+            else if (name == "str_alloc") {
+            } // liballoc's impls on str
+            // std - interestingly
+            else if (name == "f32") {
+            } else if (name == "f64") {
+            } else if (name == "f32_runtime") {
+            } else if (name == "f64_runtime") {
+            } else {
+                ERROR(sp, E0000, "Unknown lang item '" << name << "' on impl");
+            }
+
+            // TODO: Somehow annotate these impls to allow them to provide inherents?
+            // - trustme is lazy and inefficient, so these don't matter :)
+            break;
+        }
+        case ASTItem::TAG_Function: {
+            auto& e = i.as_Function();
+            if (e.code().isValid()) {
+                handleLangItem(registry, sp, crate, path, name, ITEM_FN, i);
+            } else {
+                handleLangItem(registry, sp, crate, path, name, ITEM_EXTERN_FN, i);
+            }
+            break;
+        }
+        case ASTItem::TAG_Type: {
+            handleLangItem(registry, sp, crate, path, name, ITEM_TYPE_ALIAS, i);
+            break;
+        }
+        case ASTItem::TAG_Static: {
+            handleLangItem(registry, sp, crate, path, name, ITEM_STATIC, i);
+            break;
+        }
+        case ASTItem::TAG_Struct: {
+            handleLangItem(registry, sp, crate, path, name, ITEM_STRUCT, i);
+            break;
+        }
+        case ASTItem::TAG_Enum: {
+            handleLangItem(registry, sp, crate, path, name, ITEM_ENUM, i);
+            break;
+        }
+        case ASTItem::TAG_Union: {
+            handleLangItem(registry, sp, crate, path, name, ITEM_UNION, i);
+            break;
+        }
+        case ASTItem::TAG_Trait: {
+            handleLangItem(registry, sp, crate, path, name, ITEM_TRAIT, i);
+            break;
+        }
+    }
+}
+
+auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
+    auto name = mi.parseEqualsString(wb, crate, crate.rootModule_);
+    if (name == "into_future") {
+        ASSERT_BUG(sp, i.is_Function(), "#[lang = \"into_future\"] on non-function trait item " << path);
+        handleLangItem(registry, sp, crate, path, name, ITEM_FN, i);
+    }
+}
+
+auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const -> void {
+    // TODO: Enum variants (sub-item of other lang items)
+}
+
+auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    // TODO: lang items on associated items (e.g. functions - `RangeFull::new`)
+}
+
+auto DecoratorMain::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto DecoratorMain::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (i.is_None()) {
+        // Ignore.
+    } else if (/*const auto* e =*/i.opt_Function()) {
+        auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-main"), path));
+        if (!rv.second) {
+            const auto& otherPath = rv.first->second;
+            ERROR(sp, E0000, "Duplicate definition of #[main] - " << otherPath << " and " << path);
+        }
+    } else {
+        ERROR(sp, E0000, "#[main] on non-function " << path);
+    }
+}
+
+auto DecoratorStart::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto DecoratorStart::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (i.is_None()) {
+    } else if (i.is_Function()) {
+        auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-start"), path));
+        if (!rv.second) {
+            const auto& otherPath = rv.first->second;
+            ERROR(sp, E0000, "Duplicate definition of #[start] - " << otherPath << " and " << path);
+        }
+    } else {
+        ERROR(sp, E0000, "#[start] on non-function " << path);
+    }
+}
+
+auto DecoratorPanicImplementation::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto DecoratorPanicImplementation::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (i.is_Function()) {
+        auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-panic_implementation"), path));
+        if (!rv.second) {
+            const auto& otherPath = rv.first->second;
+            ERROR(sp, E0000, "Duplicate definition of #[panic_implementation] - " << otherPath << " and " << path);
+        }
+    } else {
+        ERROR(sp, E0000, "#[panic_implementation] on non-function " << path);
+    }
+}
+
+auto DecoratorPanicHandler::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto DecoratorPanicHandler::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (i.is_Function()) {
+        auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-panic_implementation"), path));
+        if (!rv.second) {
+            const auto& otherPath = rv.first->second;
+            ERROR(sp, E0000, "Duplicate definition of #[panic_handler] - " << otherPath << " and " << path);
+        }
+    } else {
+        ERROR(sp, E0000, "#[panic_handler] on non-function " << path);
+    }
+}
+
+auto DecoratorRustcStdInternalSymbol::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto DecoratorRustcStdInternalSymbol::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    // Attribute that acts as like `#[no_mangle]` `#[linkage="external"]`
+}
+
+auto DecoratorAllocErrorHandler::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto DecoratorAllocErrorHandler::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (i.is_Function()) {
+        auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-alloc_error_handler"), path));
+        if (!rv.second) {
+            const auto& otherPath = rv.first->second;
+            ERROR(sp, E0000, "Duplicate definition of #[alloc_error_handler] - " << otherPath << " and " << path);
+        }
+    }
+}
+
+auto DecoratorGlobalAllocator::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto DecoratorGlobalAllocator::handle(const Span& sp, const ASTAttribute&, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& item) const -> void {
+    if (!item.is_Static()) {
+        ERROR(sp, E0000, "#[global_allocator] on non-static " << path);
+    }
+    auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-global_allocator"), path));
+    if (!rv.second && rv.first->second != path) {
+        ERROR(sp, E0000, "Duplicate definition of #[global_allocator] - " << rv.first->second << " and " << path);
+    }
+}
+
+auto CMultiHandlerLint::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+template <typename F>
+auto CMultiHandlerLint::collectLintNames(const ASTAttribute& mi, const F& cb) -> void {
+    TTStream lex(mi.span(), ParseState(), mi.data());
+    if (!lex.getTokenIf(TOK_PAREN_OPEN)) {
+        return;
+    }
+    unsigned depth = 1;
+    bool atName = true;
+    while (depth > 0) {
+        auto tok = lex.getToken();
+        if (tok == TOK_EOF) {
+            break;
+        }
+        if (tok == TOK_PAREN_OPEN) {
+            depth += 1;
+            atName = false;
+            continue;
+        }
+        if (tok == TOK_PAREN_CLOSE) {
+            depth -= 1;
+            atName = true;
+            continue;
+        }
+        if (tok == TOK_COMMA) {
+            atName = (depth == 1);
+            continue;
+        }
+        if (depth == 1 && atName && tok == TOK_IDENT) {
+            const auto next = lex.lookahead(0);
+            if (next == TOK_COMMA || next == TOK_PAREN_CLOSE) {
+                cb(tok.ident().name);
+            }
+        }
+        atName = false;
+    }
+}
+
+auto CMultiHandlerLint::recordItemLevel(const ASTAttribute& mi, ASTItem& item) const -> void {
+    LintLevelOverrides* overrides = nullptr;
+    if (auto* function = item.opt_Function()) {
+        overrides = &function->markings.lintLevels;
+    } else if (auto* module = item.opt_Module()) {
+        overrides = &module->lintLevels;
+    }
+    if (!overrides) {
+        return;
+    }
+    collectLintNames(mi, [&](const RcString& name) {
+        const bool isGroup = name == "warnings" || name == "unused";
+        overrides->set(name, isGroup, this->level());
+    });
+}
+
+auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+    collectLintNames(mi, [&](const RcString& name) {
+        CfgSetLintLevel(*wb.settings, name.c_str(), this->level());
+    });
+}
+
+auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    recordItemLevel(mi, i);
+}
+
+auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    recordItemLevel(mi, i);
+}
+
+auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
+    recordItemLevel(mi, i);
+}
+
+auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const -> void {
+}
+
+auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const -> void {
+}
+
+auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const -> void {
+}
+
+auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
+}
+
+auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const -> void {
+}
+
+auto CMultiHandlerLint::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const -> void {
+}
+
+auto CHandlerAllow::level() const -> CfgLintLevel {
+    return CfgLintLevel::Allow;
+}
+
+auto CHandlerWarn::level() const -> CfgLintLevel {
+    return CfgLintLevel::Warn;
+}
+
+auto CHandlerDeny::level() const -> CfgLintLevel {
+    return CfgLintLevel::Deny;
+}
+
+auto CHandlerForbid::level() const -> CfgLintLevel {
+    return CfgLintLevel::Forbid;
+}
+
+auto CHandlerMustUse::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerMustUse::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    // TODO: only allowed on types
+}
+
+auto CHandlerMustUse::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    // TODO: only allowed on associated types
+}
+
+auto CHandlerMustUse::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
+    // TODO: only allowed on associated types
+}
+
+auto CHandlerNonExhaustive::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerNonExhaustive::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    // TODO: only allowed on types
+}
+
+auto CHandlerPath::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerPath::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    // TODO: only allowed on modules
+}
+
+auto CHandlerRustcPromotable::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerRustcPromotable::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+}
+
+auto CHandlerRustcPromotable::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    // TODO: only allowed on functions?
+}
+
+auto CHandlerRustcPromotable::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
+    // TODO: only allowed on functions?
+}
+
+auto CHandlerRustcInheritOverflowChecks::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerRustcInheritOverflowChecks::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+}
+
+auto CHandlerRustcInheritOverflowChecks::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+}
+
+auto CHandlerRustcInheritOverflowChecks::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
+}
+
+auto CHandlerRustcInheritOverflowChecks::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
+}
+
+auto CHandlerRustcOnUnimiplemented::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerRustcOnUnimiplemented::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    // Trait only.
+}
+
+auto CHandlerRustBox::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto CHandlerRustBox::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
+    auto* n = cast<ASTExprNodeCallPath>(expr.get());
+    ASSERT_BUG(expr->span(), n, "");
+    ASSERT_BUG(expr->span(), n->args.size() == 1, "");
+    auto val = std::move(n->args[0]);
+    auto span = n->span();
+    expr.reset(new ASTExprNodeUniOp(ASTExprNodeUniOp::BOX, std::move(val)));
+    expr->setSpan(span);
+}
+
+auto CMultiHandlerStability::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CMultiHandlerStability::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+}
+
+auto CMultiHandlerStability::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+}
+
+auto CMultiHandlerStability::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+}
+
+auto CMultiHandlerStability::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
+}
+
+auto CMultiHandlerStability::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const -> void {
+}
+
+auto CMultiHandlerStability::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const -> void {
+}
+
+auto CMultiHandlerStability::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const -> void {
+}
+
+auto CHandlerAllowInternalUnstable::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CHandlerAllowInternalUnstable::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+}
+
+auto DecoratorNoStd::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorNoStd::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+    if (crate.loadStd != ASTCrate::LOAD_STD && crate.loadStd != ASTCrate::LOAD_CORE) {
+        WARNING(sp, W0000, "Use of #![no_std] with itself or #![no_core]");
+        return;
+    }
+    crate.loadStd = ASTCrate::LOAD_CORE;
+}
+
+auto DecoratorNoCore::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorNoCore::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+    if (crate.loadStd != ASTCrate::LOAD_STD && crate.loadStd != ASTCrate::LOAD_NONE) {
+        WARNING(sp, W0000, "Use of #![no_core] with itself or #![no_std]");
+    }
+    crate.loadStd = ASTCrate::LOAD_NONE;
+}
+
+auto DecoratorNoMain::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorNoMain::handle(const Span&, const ASTAttribute&, const WireBoard&, ASTCrate& crate) const -> void {
+    crate.noMain = true;
+}
+
+auto DecoratorNoPrelude::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorNoPrelude::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (i.is_Module()) {
+        i.as_Module().insertPrelude = false;
+    } else {
+        ERROR(sp, E0000, "Invalid use of #[no_prelude] on non-module");
+    }
+}
+
+auto DecoratorPreludeImport::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto DecoratorPreludeImport::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (const auto* e = i.opt_Use()) {
+        if (e->entries.size() != 1) {
+            ERROR(sp, E0000, "#[prelude_import] should be on a single-entry use");
+        }
+        ASSERT_BUG(sp, path.nodes.size() > 0, path);
+        ASSERT_BUG(sp, path.nodes.back() == "", path);
+        if (e->entries.front().name != "") {
+            ERROR(sp, E0000, "#[prelude_import] should be on a glob");
+        }
+        const auto& p = e->entries.front().path;
+        // TODO: Ensure that this statement is a glob (has a name of "")
+        if (p.isRelative()) {
+            crate.preludePath = ASTPath(path);
+            crate.preludePath.nodes().pop_back();
+            crate.preludePath += p;
+        } else {
+            crate.preludePath = ASTPath(p);
+        }
+    } else {
+        ERROR(sp, E0000, "Invalid use of #[prelude_import] on non-use");
+    }
+}
+
+auto CTestHandler::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CTestHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (!i.is_Function()) {
+        ERROR(sp, E0000, "#[test] can only be put on functions - found on " << i.tagStr());
+    }
+
+    if (crate.testHarness) {
+        ASTTestDesc td;
+        td.span = sp;
+        for (const auto& node : path.nodes) {
+            if (!td.name.empty()) {
+                td.name += "::";
+            }
+            td.name += node.c_str();
+        }
+        td.path = path;
+
+        crate.tests.push_back(mv$(td));
+    } else {
+        i = ASTItem::make_None({});
+    }
+}
+
+auto CTestHandlerSP::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto CTestHandlerSP::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (!i.is_Function()) {
+        ERROR(sp, E0000, "#[should_panic] can only be put on functions - found on " << i.tagStr());
+    }
+
+    if (crate.testHarness) {
+        // TODO: If this test doesn't yet exist, create it (but as disabled)?
+        for (auto& td : crate.tests) {
+            if (td.path != path) {
+                continue;
+            }
+
+            if (mi.data().size() != 0) {
+                td.panicType = ASTTestDesc::ShouldPanic::YesWithMessage;
+
+                TTStream lex(sp, ParseState(), mi.data());
+                lex.parseState().wb = &wb;
+                auto parseMessage = [&]() {
+                    auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
+                    if (auto* v = cast<ASTExprNodeString>(&*n)) {
+                        td.expectedPanicMessage = v->value;
+                    } else {
+                        parseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
+                    }
+                };
+                if (lex.getTokenIf(TOK_EQUAL)) {
+                    parseMessage();
+                } else {
+                    // Anything other than exactly `expected = "..."` is a
+                    // lint in rustc, and the attribute still means "this
+                    // test panics" -- just without a message to match.
+                    bool gotMessage = false;
+                    if (lex.getTokenIf(TOK_PAREN_OPEN) && lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_EQUAL) {
+                        auto n = lex.getTokenCheck(TOK_IDENT).ident().name;
+                        lex.getTokenCheck(TOK_EQUAL);
+                        if (n == "expected" && lex.lookahead(0) == TOK_STRING) {
+                            parseMessage();
+                            gotMessage = lex.lookahead(0) == TOK_PAREN_CLOSE;
+                        }
+                    }
+                    if (!gotMessage) {
+                        td.panicType = ASTTestDesc::ShouldPanic::Yes;
+                        td.expectedPanicMessage = "";
+                    }
+                }
+            } else {
+                td.panicType = ASTTestDesc::ShouldPanic::Yes;
+            }
+            return;
+        }
+        //ERROR()
+    }
+}
+
+auto CTestHandlerIgnore::stage() const -> AttrStage {
+    return AttrStage::Post;
+}
+
+auto CTestHandlerIgnore::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (!i.is_Function()) {
+        ERROR(sp, E0000, "#[ignore] can only be put on functions - found on " << i.tagStr());
+    }
+
+    if (crate.testHarness) {
+        for (auto& td : crate.tests) {
+            if (td.path != path) {
+                continue;
+            }
+
+            td.ignore = true;
+            return;
+        }
+        //ERROR()
+    }
 }

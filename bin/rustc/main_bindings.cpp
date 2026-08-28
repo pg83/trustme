@@ -1,7 +1,5 @@
 #include "main_bindings.h"
 
-#include <pthread.h>
-
 #include "ast_ast.h"
 #include "hir_hir.h" // ABI_RUST
 #include "version.h"
@@ -11,35 +9,36 @@
 #include "ast_crate.h"
 #include "parse_lex.h"
 #include "expand_cfg.h"
+#include "lang_items.h"
 #include "wire_board.h"
+#include "lint_forbid.h"
 #include "memory_dump.h"
 #include "parse_common.h" // For edition checks
 #include "trans_target.h"
+#include "lint_must_use.h"
 #include "target_detect.h" // tools/common/target_detect.h
+#include "lint_unsafe_code.h"
 #include "parse_parseerror.h"
 #include "hir_main_bindings.h"
 #include "mir_main_bindings.h"
-#include "lang_items.h"
 #include "hir_inherent_cache.h"
 #include "trans_main_bindings.h"
 #include "resolve_main_bindings.h"
 #include "hir_conv_main_bindings.h"
 #include "hir_expand_main_bindings.h"
-#include "lint_forbid.h"
-#include "lint_must_use.h"
-#include "lint_unsafe_code.h"
 #include "hir_typeck_main_bindings.h"
 
 #include <std/mem/obj_pool.h>
 
-#include <climits>
-#include <fstream>
-#include <cstdlib>
-#include <cstring>
-#include <iomanip>
-#include <iostream>
 #include <set>
 #include <string>
+#include <climits>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <pthread.h>
 
 using namespace stl;
 
@@ -244,26 +243,15 @@ struct ProgramParams {
 
     ProgramParams(Settings& settings, int argc, char* argv[]);
 
-    unsigned effectiveMirOptLevel() const {
-        return mirOptLevelExplicit ? mirOptLevel : (optLevel == OptimizationLevel::None ? 1 : 2);
-    }
+    unsigned effectiveMirOptLevel() const;
 
-    bool enableMirInlining() const {
-        const auto level = effectiveMirOptLevel();
-        return level >= 3 || (level == 2 && optLevel != OptimizationLevel::None && optLevel != OptimizationLevel::Less);
-    }
+    bool enableMirInlining() const;
 
-    bool debugAssertionsEnabled() const {
-        return debugAssertionsExplicit ? debugAssertions : optLevel == OptimizationLevel::None;
-    }
+    bool debugAssertionsEnabled() const;
 
-    bool ubChecksEnabled() const {
-        return ubChecksExplicit ? ubChecks : debugAssertionsEnabled();
-    }
+    bool ubChecksEnabled() const;
 
-    bool overflowChecksEnabled() const {
-        return overflowChecksExplicit ? overflowChecks : debugAssertionsEnabled();
-    }
+    bool overflowChecksEnabled() const;
 
     void showHelp() const;
 };
@@ -338,10 +326,7 @@ static int compile(int argc, char* argv[]) {
         if (params.ubChecksEnabled()) {
             CfgSetFlag(*wb.settings, "ub_checks");
         }
-        CfgSetValue(*wb.settings, "fmt_debug",
-            params.fmtDebug == Settings::FmtDebug::Shallow ? "shallow"
-                : params.fmtDebug == Settings::FmtDebug::None ? "none"
-                                                             : "full");
+        CfgSetValue(*wb.settings, "fmt_debug", params.fmtDebug == Settings::FmtDebug::Shallow ? "shallow" : params.fmtDebug == Settings::FmtDebug::None ? "none" : "full");
         CfgSetValueCb(*wb.settings, "feature", [&params](const ::std::string& s) {
             return params.features.count(s) != 0;
         });
@@ -564,6 +549,7 @@ static int compile(int argc, char* argv[]) {
                     }
                 }
             };
+
             PathEnumerator pe;
             pe.visitModule(crate.rootModule_);
 
@@ -837,8 +823,7 @@ static int compile(int argc, char* argv[]) {
                 if (ext.objectPath == "" || ext.isProcMacro) {
                     continue;
                 }
-                if (ext.data->langItems.count("trustme-panic_runtime")
-                    && strncmp(crateName.c_str(), transOpt.panicCrate.c_str(), transOpt.panicCrate.size()) != 0) {
+                if (ext.data->langItems.count("trustme-panic_runtime") && strncmp(crateName.c_str(), transOpt.panicCrate.c_str(), transOpt.panicCrate.size()) != 0) {
                     continue;
                 }
                 manifest << "object\t" << ext.objectPath << "\n";
@@ -877,7 +862,9 @@ static int compile(int argc, char* argv[]) {
                 HIRSerialise(params.outfile, *hirCrate);
             } else {
                 // Non-library metadata-only invocations have no loadable rlib.
-                { ::std::ofstream marker(params.outfile); }
+                {
+                    ::std::ofstream marker(params.outfile);
+                }
             }
             return 0;
         }
@@ -970,11 +957,9 @@ static int compile(int argc, char* argv[]) {
                 }
                 break;
             }
-            case ASTCrate::Type::Executable:
-                {
-                    TransCodegen(wb, params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), "");
-                }
-                break;
+            case ASTCrate::Type::Executable: {
+                TransCodegen(wb, params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), "");
+            } break;
         }
     }
 
@@ -1021,8 +1006,7 @@ int main(int argc, char* argv[]) {
     pthread_attr_t attr;
     CompileArgs args{argc, argv, 1};
     pthread_t thread;
-    if (pthread_attr_init(&attr) != 0 || pthread_attr_setstacksize(&attr, stackSize) != 0
-        || pthread_create(&thread, &attr, compileOnThread, &args) != 0) {
+    if (pthread_attr_init(&attr) != 0 || pthread_attr_setstacksize(&attr, stackSize) != 0 || pthread_create(&thread, &attr, compileOnThread, &args) != 0) {
         // No thread to be had: the work still has to happen, just with whatever
         // stack this one has.
         return compile(argc, argv);
@@ -1266,8 +1250,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             const auto end = optval.find(',', start);
                             const auto feature = optval.substr(start, end == ::std::string::npos ? ::std::string::npos : end - start);
                             if (feature != "-crt-static") {
-                                ::std::cerr << "unsupported value for -C target-feature: '" << feature
-                                            << "' (trustme only supports -crt-static)" << ::std::endl;
+                                ::std::cerr << "unsupported value for -C target-feature: '" << feature << "' (trustme only supports -crt-static)" << ::std::endl;
                                 exit(1);
                             }
                             if (end == ::std::string::npos) {
@@ -1774,4 +1757,25 @@ void ProgramParams::showHelp() const {
                    "--test             : Generate a unit test executable\n"
                    "-C <option>        : Code-generation options\n"
                    "-Z <option>        : Debugging/experimental options\n";
+}
+
+auto ProgramParams::effectiveMirOptLevel() const -> unsigned {
+    return mirOptLevelExplicit ? mirOptLevel : (optLevel == OptimizationLevel::None ? 1 : 2);
+}
+
+auto ProgramParams::enableMirInlining() const -> bool {
+    const auto level = effectiveMirOptLevel();
+    return level >= 3 || (level == 2 && optLevel != OptimizationLevel::None && optLevel != OptimizationLevel::Less);
+}
+
+auto ProgramParams::debugAssertionsEnabled() const -> bool {
+    return debugAssertionsExplicit ? debugAssertions : optLevel == OptimizationLevel::None;
+}
+
+auto ProgramParams::ubChecksEnabled() const -> bool {
+    return ubChecksExplicit ? ubChecks : debugAssertionsEnabled();
+}
+
+auto ProgramParams::overflowChecksEnabled() const -> bool {
+    return overflowChecksExplicit ? overflowChecks : debugAssertionsEnabled();
 }

@@ -1,10 +1,10 @@
 #include "mir_helpers.h"
-#include "hir_encoded_literal.h"
 
 #include "hir_hir.h"
 #include "mir_mir.h"
 #include "hir_type.h"
 #include "trans_target.h"
+#include "hir_encoded_literal.h"
 
 #include <algorithm> // ::std::find
 
@@ -72,12 +72,14 @@ const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValu
         }
         case MIRLValue::Storage::TAG_Argument: {
             decltype(val.root.as_Argument()) e = val.root.as_Argument();
-            MIR_ASSERT(*this, e < args.size(), "Argument " << val << " out of range (" << args.size() << ")"); rv = args.at(e).second;
+            MIR_ASSERT(*this, e < args.size(), "Argument " << val << " out of range (" << args.size() << ")");
+            rv = args.at(e).second;
             break;
         }
         case MIRLValue::Storage::TAG_Local: {
             decltype(val.root.as_Local()) e = val.root.as_Local();
-            MIR_ASSERT(*this, e < fcn.locals.size(), "Local " << val << " out of range (" << fcn.locals.size() << ")"); rv = monomorphedLocals ? monomorphedLocals->at(e) : fcn.locals.at(e);
+            MIR_ASSERT(*this, e < fcn.locals.size(), "Local " << val << " out of range (" << fcn.locals.size() << ")");
+            rv = monomorphedLocals ? monomorphedLocals->at(e) : fcn.locals.at(e);
             break;
         }
         case MIRLValue::Storage::TAG_Static: {
@@ -106,10 +108,10 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
         case MIRLValue::Wrapper::TAG_Field: {
             decltype(w.as_Field()) fieldIndex = w.as_Field();
             switch ((*ty).tag()) {
-default:
-                MIR_BUG(*this, "Field access on unexpected type - " << ty);
+                default:
+                    MIR_BUG(*this, "Field access on unexpected type - " << ty);
                     // Array and Slice use LValue::Field when the index is constant and known-good
-                break;
+                    break;
                 case HIRTypeData::TAG_Array: {
                     auto& te = (*ty).as_Array();
                     return te.inner;
@@ -138,12 +140,14 @@ default:
                             }
                             case HIRStructData::TAG_Tuple: {
                                 auto& se = str.data.as_Tuple();
-                                MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in tuple-struct " << te.path); return maybeMonomorph(se[fieldIndex].ent);
+                                MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in tuple-struct " << te.path);
+                                return maybeMonomorph(se[fieldIndex].ent);
                                 break;
                             }
                             case HIRStructData::TAG_Named: {
                                 auto& se = str.data.as_Named();
-                                MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in struct " << te.path); return maybeMonomorph(se[fieldIndex].ty);
+                                MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in struct " << te.path);
+                                return maybeMonomorph(se[fieldIndex].ty);
                                 break;
                             }
                         }
@@ -164,9 +168,9 @@ default:
         }
         case MIRLValue::Wrapper::TAG_Deref: {
             switch ((*ty).tag()) {
-default:
-                MIR_BUG(*this, "Deref on unexpected type - " << ty);
-                break;
+                default:
+                    MIR_BUG(*this, "Deref on unexpected type - " << ty);
+                    break;
                 case HIRTypeData::TAG_Path: {
                     if (const auto* innerPtr = this->isTypeOwnedBox(ty)) {
                         return innerPtr;
@@ -188,9 +192,9 @@ default:
         }
         case MIRLValue::Wrapper::TAG_Index: {
             switch ((*ty).tag()) {
-default:
-                MIR_BUG(*this, "Index on unexpected type - " << ty);
-                break;
+                default:
+                    MIR_BUG(*this, "Index on unexpected type - " << ty);
+                    break;
                 case HIRTypeData::TAG_Slice: {
                     auto& te = (*ty).as_Slice();
                     return te.inner;
@@ -205,9 +209,9 @@ default:
         case MIRLValue::Wrapper::TAG_Downcast: {
             decltype(w.as_Downcast()) variantIndex = w.as_Downcast();
             switch ((*ty).tag()) {
-default:
-                MIR_BUG(*this, "Downcast on unexpected type - " << ty);
-                break;
+                default:
+                    MIR_BUG(*this, "Downcast on unexpected type - " << ty);
+                    break;
                 case HIRTypeData::TAG_Path: {
                     auto& te = (*ty).as_Path();
                     MIR_ASSERT(*this, te.binding.is_Enum() || te.binding.is_Union(), "Downcast on non-Enum");
@@ -309,11 +313,11 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
         case MIRConstant::TAG_Function: {
             auto& e = c.as_Function();
             MonomorphState p(crate.types);
-                auto v = resolve.getValue(this->sp, *e.p, p, /*signature_only=*/true);
+            auto v = resolve.getValue(this->sp, *e.p, p, /*signature_only=*/true);
             switch (v.tag()) {
-default:
-                MIR_BUG(*this, "get_const_type - Function points to bad type: " << v.tagStr() << " - " << c);
-                break;
+                default:
+                    MIR_BUG(*this, "get_const_type - Function points to bad type: " << v.tagStr() << " - " << c);
+                    break;
                 case TypeckValuePtr::TAG_NotFound: {
                     MIR_BUG(*this, "get_const_type - ItemAddr points to unknown value - " << c);
                     break;
@@ -336,8 +340,8 @@ default:
         case MIRConstant::TAG_ItemAddr: {
             auto& e = c.as_ItemAddr();
             MonomorphState p(crate.types);
-                ASSERT_BUG(sp, e, "get_const_type - " << c);
-                auto v = resolve.getValue(this->sp, *e, p, /*signature_only=*/true);
+            ASSERT_BUG(sp, e, "get_const_type - " << c);
+            auto v = resolve.getValue(this->sp, *e, p, /*signature_only=*/true);
             switch (v.tag()) {
                 case TypeckValuePtr::TAG_NotFound: {
                     MIR_BUG(*this, "get_const_type - ItemAddr points to unknown value - " << c);
@@ -432,9 +436,9 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vec
         {
             auto& tuMatch = values[i].as_Constant();
             switch (tuMatch.tag()) {
-default:
-            MIR_TODO(*this, "offset_of: field " << values[i]);
-                break;
+                default:
+                    MIR_TODO(*this, "offset_of: field " << values[i]);
+                    break;
                 case MIRConstant::TAG_Int: {
                     auto& fieldIdx = tuMatch.as_Int();
                     MIR_ASSERT(*this, fieldIdx.v.isI64() && fieldIdx.v >= S128(0), "Invalid tuple field index " << fieldIdx.v);
@@ -457,24 +461,24 @@ default:
                     } else if (const auto* tyPath = curTy->opt_Path()) {
                         if (const auto* bep = tyPath->binding.opt_Struct()) {
                             const auto& str = **bep;
-                        switch (str.data.tag()) {
-                            case HIRStructData::TAG_Named: {
-                                auto& fields = str.data.as_Named();
-                                idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
-                                    return x.name == fieldName;
-                                }) - fields.begin();
-                                break;
+                            switch (str.data.tag()) {
+                                case HIRStructData::TAG_Named: {
+                                    auto& fields = str.data.as_Named();
+                                    idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
+                                        return x.name == fieldName;
+                                    }) - fields.begin();
+                                    break;
+                                }
+                                case HIRStructData::TAG_Tuple: {
+                                    MIR_BUG(*this, "Named field on tuple struct: " << curTy << " ." << fieldName);
+                                    break;
+                                }
+                                case HIRStructData::TAG_Unit: {
+                                    auto& _ = str.data.as_Unit();
+                                    MIR_BUG(*this, "Empty struct: " << curTy << " ." << fieldName);
+                                    break;
+                                }
                             }
-                            case HIRStructData::TAG_Tuple: {
-                                MIR_BUG(*this, "Named field on tuple struct: " << curTy << " ." << fieldName);
-                                break;
-                            }
-                            case HIRStructData::TAG_Unit: {
-                                auto& _ = str.data.as_Unit();
-                                MIR_BUG(*this, "Empty struct: " << curTy << " ." << fieldName);
-                                break;
-                            }
-                        }
                         } else if (const auto* bep = tyPath->binding.opt_Union()) {
                             const auto& unm = **bep;
                             const auto& fields = unm.variants;
@@ -499,7 +503,7 @@ default:
             }
         }
         auto* repr = TargetGetTypeRepr(this->sp, resolve, curTy);
-        if(!repr) {
+        if (!repr) {
             MIR_BUG(*this, "Calling `offset_of!` on type with non-defined repr: " << curTy);
         }
         MIR_ASSERT(*this, idx < repr->fields.size(), "Field index " << idx << " out of range for " << curTy);
@@ -526,9 +530,7 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::typeNameForSimplePath(const HIRSi
         const auto components = path.components();
         for (const auto* candidate = pathCrate->localItemTypeNamePaths; candidate; candidate = candidate->next) {
             const auto moduleComponents = candidate->modulePath.components();
-            if (candidate->modulePath.crateName() != path.crateName()
-                || moduleComponents.size() <= localModuleSize
-                || moduleComponents.size() > components.size()) {
+            if (candidate->modulePath.crateName() != path.crateName() || moduleComponents.size() <= localModuleSize || moduleComponents.size() > components.size()) {
                 continue;
             }
             size_t i = 0;
@@ -749,17 +751,9 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTy
 struct LValueCbVisitor: public MIRVisitor {
     const MIRLvalueCallback& cb;
 
-    explicit LValueCbVisitor(const MIRLvalueCallback& cb)
-        : cb(cb)
-    {
-    }
+    explicit LValueCbVisitor(const MIRLvalueCallback& cb);
 
-    bool visitLvalue(const MIRLValue& lv, MIRValUsage u) override {
-        if (cb.visitLvalue(lv, u)) {
-            return true;
-        }
-        return MIRVisitor::visitLvalue(lv, u);
-    }
+    bool visitLvalue(const MIRLValue& lv, MIRValUsage u) override;
 };
 
 bool visitMirLvalueWith(const MIRLValue& lv, MIRValUsage u, const MIRLvalueCallback& cb) {
@@ -830,26 +824,11 @@ namespace {
         /// Bitmap of locations where the variable is valid
         ::std::vector<bool> stmtBitmap;
 
-        ValueLifetime(size_t stmtCount)
-            : stmtBitmap(stmtCount)
-        {
-        }
+        ValueLifetime(size_t stmtCount);
 
-        void fill(const ::std::vector<size_t>& blockOffsets, size_t bb, size_t firstStmt, size_t lastStmt) {
-            size_t limit = blockOffsets[bb + 1] - blockOffsets[bb] - 1;
-            assert(firstStmt <= limit);
-            assert(lastStmt <= limit);
-            for (size_t stmt = firstStmt; stmt <= lastStmt; stmt++) {
-                stmtBitmap[blockOffsets[bb] + stmt] = true;
-            }
-        }
+        void fill(const ::std::vector<size_t>& blockOffsets, size_t bb, size_t firstStmt, size_t lastStmt);
 
-        void dumpDebug(const char* suffix, unsigned i, const ::std::vector<size_t>& blockOffsets) {
-            ::std::string name = FMT(suffix << "$" << i);
-            while (name.size() < 3 + 1 + 3) {
-                name += " ";
-            }
-        }
+        void dumpDebug(const char* suffix, unsigned i, const ::std::vector<size_t>& blockOffsets);
     };
 }
 
@@ -869,7 +848,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& state, const MI
 // - a use-by-move
 
 MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const ::std::vector<bool>* mask /*=nullptr*/) {
-
     size_t statementCount = 0;
     ::std::vector<size_t> blockOffsets;
     blockOffsets.reserve(fcn.blocks.size());
@@ -972,7 +950,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
     const ::std::vector<bool>& useBitmap,
     ValueLifetime& vl
 ) {
-
     // Walk the BB tree until:
     // - Loopback
     // - Assignment
@@ -1201,28 +1178,28 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     case MIRStatement::TAG_Asm2: {
                         auto& se = stmt.as_Asm2();
                         for (const auto& p : se.params) {
-                        switch (p.tag()) {
-                            case MIRAsmParam::TAG_Const: {
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Sym: {
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Reg: {
-                                auto& v = p.as_Reg();
-                                if (v.output) {
-                                    if (*v.output == lv) {
-                                        // Assigned, just apply
-                                        state.finalise(stmtIdx);
-                                        return;
-                                    }
+                            switch (p.tag()) {
+                                case MIRAsmParam::TAG_Const: {
+                                    break;
                                 }
-                                break;
+                                case MIRAsmParam::TAG_Sym: {
+                                    break;
+                                }
+                                case MIRAsmParam::TAG_Reg: {
+                                    auto& v = p.as_Reg();
+                                    if (v.output) {
+                                        if (*v.output == lv) {
+                                            // Assigned, just apply
+                                            state.finalise(stmtIdx);
+                                            return;
+                                        }
+                                    }
+                                    break;
+                                }
+                                case MIRAsmParam::TAG_Label: {
+                                    break;
+                                }
                             }
-                            case MIRAsmParam::TAG_Label: {
-                                break;
-                            }
-                        }
                         }
                         break;
                     }
@@ -1440,7 +1417,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
 #else
 
 MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug) {
-
     // New algorithm notes:
     // ---
     // The lifetime of a value starts when it is written, and ends the last time it is read
@@ -1859,7 +1835,11 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
             }
             case MIRTerminator::TAG_Switch: {
                 auto& e = fcn.blocks[bbIdx].terminator.as_Switch();
-                visitMirLvalue(e.val, ValUsage::Read, visitLvalCb); ::std::set<unsigned int> tgts; for (const auto& tgt : e.targets) tgts.insert(tgt);
+                visitMirLvalue(e.val, ValUsage::Read, visitLvalCb);
+                ::std::set<unsigned int> tgts;
+                for (const auto& tgt : e.targets) {
+                    tgts.insert(tgt);
+                }
 
                 for (const auto& tgt : tgts) {
                     auto vs = (tgt == *tgts.rbegin() ? mv$(valState) : valState.clone());
@@ -1869,15 +1849,24 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
             }
             case MIRTerminator::TAG_Drop: {
                 auto& e = fcn.blocks[bbIdx].terminator.as_Drop();
-                visitMirLvalue(e.slot, ValUsage::Move, visitLvalCb); if (e.unwind.is_Cleanup()) {
+                visitMirLvalue(e.slot, ValUsage::Move, visitLvalCb);
+                if (e.unwind.is_Cleanup()) {
                     auto& target = e.unwind.as_Cleanup();
                     addToVisit(target, valState.clone());
-                } addToVisit(e.target, mv$(valState));
+                }
+                addToVisit(e.target, mv$(valState));
                 break;
             }
             case MIRTerminator::TAG_Call: {
                 auto& e = fcn.blocks[bbIdx].terminator.as_Call();
-                if (const auto* f = e.fcn.opt_Value()) visitMirLvalue(*f, ValUsage::Read, visitLvalCb); for (const auto& arg : e.args) if (const auto* e = arg.opt_LValue()) visitMirLvalue(*e, ValUsage::Read, visitLvalCb);
+                if (const auto* f = e.fcn.opt_Value()) {
+                    visitMirLvalue(*f, ValUsage::Read, visitLvalCb);
+                }
+                for (const auto& arg : e.args) {
+                    if (const auto* e = arg.opt_LValue()) {
+                        visitMirLvalue(*e, ValUsage::Read, visitLvalCb);
+                    }
+                }
 
                 // Push blocks (with return valid only in one)
                 if (e.unwind.is_Cleanup()) {
@@ -2033,4 +2022,37 @@ bool MIRVisitorMut::visitLvalue(MIRLValue& lv, MIRValUsage u) {
 ::std::ostream& operator<<(::std::ostream& os, const MIRTypeResolve& x) {
     x.fmtPos(os);
     return os;
+}
+
+LValueCbVisitor::LValueCbVisitor(const MIRLvalueCallback& cb)
+    : cb(cb)
+{
+}
+
+auto LValueCbVisitor::visitLvalue(const MIRLValue& lv, MIRValUsage u) -> bool {
+    if (cb.visitLvalue(lv, u)) {
+        return true;
+    }
+    return MIRVisitor::visitLvalue(lv, u);
+}
+
+ValueLifetime::ValueLifetime(size_t stmtCount)
+    : stmtBitmap(stmtCount)
+{
+}
+
+auto ValueLifetime::fill(const ::std::vector<size_t>& blockOffsets, size_t bb, size_t firstStmt, size_t lastStmt) -> void {
+    size_t limit = blockOffsets[bb + 1] - blockOffsets[bb] - 1;
+    assert(firstStmt <= limit);
+    assert(lastStmt <= limit);
+    for (size_t stmt = firstStmt; stmt <= lastStmt; stmt++) {
+        stmtBitmap[blockOffsets[bb] + stmt] = true;
+    }
+}
+
+auto ValueLifetime::dumpDebug(const char* suffix, unsigned i, const ::std::vector<size_t>& blockOffsets) -> void {
+    ::std::string name = FMT(suffix << "$" << i);
+    while (name.size() < 3 + 1 + 3) {
+        name += " ";
+    }
 }

@@ -9,8 +9,8 @@
 #include "trans_mangling.h"
 #include "trans_codegen_c.h"
 #include "trans_trans_list.h"
-#include "hir_typeck_static.h"
 #include "hir_typeck_common.h"
+#include "hir_typeck_static.h"
 #include "trans_codegen_mir.h"
 #include "trans_monomorphise.h"
 #include "trans_main_bindings.h"
@@ -60,212 +60,20 @@ namespace {
         Vector<FunctionOrderNode*> tarjanStack;
         unsigned nextIndex = 0;
 
-        FunctionOrderNode* findNode(const HIRPath& path) const {
-            size_t begin = 0;
-            size_t end = nodes.length();
-            while (begin < end) {
-                const auto middle = begin + (end - begin) / 2;
-                const auto& candidate = *nodes[middle]->function->path;
-                if (candidate < path) {
-                    begin = middle + 1;
-                } else {
-                    end = middle;
-                }
-            }
-            if (begin < nodes.length() && !(*nodes[begin]->function->path < path) && !(path < *nodes[begin]->function->path)) {
-                return nodes[begin];
-            }
-            return nullptr;
-        }
+        FunctionOrderNode* findNode(const HIRPath& path) const;
 
-        void addDependency(FunctionOrderNode& source, const HIRPath& path) {
-            const auto* function = list.findFunction(path);
-            if (!function && path.data.is_UfcsKnown()) {
-                MonomorphState params(resolve.hirCrate().types);
-                StaticTraitResolve::ResolvedTraitImplPath implPath;
-                resolve.getValue(sp, path, params, false, nullptr, &implPath);
-                if (implPath.type) {
-                    auto canonical = path.clone();
-                    auto& data = canonical.data.as_UfcsKnown();
-                    data.type = implPath.type;
-                    data.trait.params = implPath.traitParams.clone();
-                    function = list.findFunction(canonical);
-                }
-            }
-            if (!function) {
-                return;
-            }
-            auto* target = findNode(*function->path);
-            if (!target) {
-                return;
-            }
-            source.dependencies = pool->make<FunctionOrderEdge>(FunctionOrderEdge{target, source.dependencies});
-            source.selfEdge = source.selfEdge || target == &source;
-        }
+        void addDependency(FunctionOrderNode& source, const HIRPath& path);
 
-        void addDropDependency(FunctionOrderNode& source, HIRTypeRef type) {
-            if (!resolve.typeNeedsDropGlue(sp, type)) {
-                return;
-            }
-            switch (type->tag()) {
-                case HIRTypeData::TAG_Borrow: {
-                    const auto& borrow = type->as_Borrow();
-                    if (borrow.type == HIRBorrowType::Owned) {
-                        addDropDependency(source, borrow.inner);
-                    }
-                    break;
-                }
-                case HIRTypeData::TAG_Path:
-                    addDependency(source, HIRPath(type, "#drop_glue"));
-                    break;
-                case HIRTypeData::TAG_Array:
-                    addDropDependency(source, type->as_Array().inner);
-                    break;
-                case HIRTypeData::TAG_Tuple:
-                    for (const auto& field : type->as_Tuple()) {
-                        addDropDependency(source, field);
-                    }
-                    break;
-                case HIRTypeData::TAG_Slice:
-                    addDropDependency(source, type->as_Slice().inner);
-                    break;
-                case HIRTypeData::TAG_Pattern:
-                    addDropDependency(source, type->as_Pattern().inner);
-                    break;
-                case HIRTypeData::TAG_Diverge:
-                case HIRTypeData::TAG_Infer:
-                case HIRTypeData::TAG_ErasedType:
-                case HIRTypeData::TAG_NodeType:
-                case HIRTypeData::TAG_Generic:
-                case HIRTypeData::TAG_Primitive:
-                case HIRTypeData::TAG_Pointer:
-                case HIRTypeData::TAG_NamedFunction:
-                case HIRTypeData::TAG_Function:
-                case HIRTypeData::TAG_TraitObject:
-                    break;
-            }
-        }
+        void addDropDependency(FunctionOrderNode& source, HIRTypeRef type);
 
-        void collectDependencies(FunctionOrderNode& source) {
-            const auto& function = *source.function;
-            const auto& mir = *functionCode(function);
-            const auto& returnType = function.monomorphised.code ? function.monomorphised.retTy : function.ptr->returnType;
-            const auto& args = function.monomorphised.code ? function.monomorphised.argTys : function.ptr->args;
-            auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << *function.path; });
-            MIRTypeResolve mirResolve{sp, resolve, pathCallback, returnType, args, mir};
+        void collectDependencies(FunctionOrderNode& source);
 
-            struct DependencyVisitor final: public MIRVisitor {
-                FunctionOrder& order;
-                FunctionOrderNode& source;
-                MIRTypeResolve& mirResolve;
-
-                DependencyVisitor(FunctionOrder& order, FunctionOrderNode& source, MIRTypeResolve& mirResolve)
-                    : order(order)
-                    , source(source)
-                    , mirResolve(mirResolve)
-                {
-                }
-
-                void visitType(HIRTypeRef type) override {
-                    visitTyWith(type, [&](HIRTypeRef nested) {
-                        if (const auto* function = nested->opt_NamedFunction()) {
-                            order.addDependency(source, function->path);
-                        }
-                        return false;
-                    });
-                }
-
-                void visitPath(const HIRPath& path) override {
-                    order.addDependency(source, path);
-                    MIRVisitor::visitPath(path);
-                }
-
-                bool visitTerminator(const MIRTerminator& terminator) override {
-                    if (const auto* drop = terminator.opt_Drop()) {
-                        HIRTypeRef tmp;
-                        order.addDropDependency(source, mirResolve.getLvalueType(tmp, drop->slot));
-                    }
-                    const MIRCallTarget* callTarget = nullptr;
-                    if (const auto* call = terminator.opt_Call()) {
-                        callTarget = &call->fcn;
-                    } else if (const auto* call = terminator.opt_TailCall()) {
-                        callTarget = &call->fcn;
-                    }
-                    if (callTarget) {
-                        if (const auto* intrinsic = callTarget->opt_Intrinsic()) {
-                            if (intrinsic->name == "drop_in_place") {
-                                order.addDropDependency(source, intrinsic->params.types.at(0));
-                            }
-                        }
-                    }
-                    return MIRVisitor::visitTerminator(terminator);
-                }
-            } visitor{*this, source, mirResolve};
-
-            visitor.visitFunction(mirResolve, mir);
-        }
-
-        void visit(FunctionOrderNode& node) {
-            node.index = nextIndex;
-            node.lowLink = nextIndex;
-            nextIndex++;
-            node.onStack = true;
-            tarjanStack.pushBack(&node);
-
-            for (auto* edge = node.dependencies; edge; edge = edge->next) {
-                auto& target = *edge->target;
-                if (target.index == ~0u) {
-                    visit(target);
-                    node.lowLink = ::std::min(node.lowLink, target.lowLink);
-                } else if (target.onStack) {
-                    node.lowLink = ::std::min(node.lowLink, target.index);
-                }
-            }
-
-            if (node.lowLink != node.index) {
-                return;
-            }
-            const auto componentStart = ordered.length();
-            FunctionOrderNode* member;
-            do {
-                member = tarjanStack.popBack();
-                member->onStack = false;
-                ordered.pushBack(member);
-            } while (member != &node);
-            const auto componentSize = ordered.length() - componentStart;
-            if (componentSize > 1 || node.selfEdge) {
-                for (size_t i = componentStart; i < ordered.length(); i++) {
-                    ordered[i]->needsPrototype = true;
-                }
-            }
-        }
+        void visit(FunctionOrderNode& node);
 
     public:
         Vector<FunctionOrderNode*> ordered;
 
-        FunctionOrder(const WireBoard& wb, TransList& list, const Span& sp)
-            : list(list)
-            , sp(sp)
-            , resolve(wb, OpaqueReveal::All)
-        {
-            for (const auto& entry : list.functions) {
-                if (!functionHasDefinition(*entry.second)) {
-                    continue;
-                }
-                auto* node = pool->make<FunctionOrderNode>(FunctionOrderNode{
-                    entry.second.get(), nullptr, ~0u, ~0u, false, false, false
-                });
-                nodes.pushBack(node);
-            }
-            for (auto* node : nodes) {
-                collectDependencies(*node);
-            }
-            for (auto* node : nodes) {
-                if (node->index == ~0u) {
-                    visit(*node);
-                }
-            }
-        }
+        FunctionOrder(const WireBoard& wb, TransList& list, const Span& sp);
     };
 }
 
@@ -501,4 +309,208 @@ void CodeGenerator::emitFunctionExt(const HIRPath& p, const HIRFunction& item, c
 }
 
 void CodeGenerator::emitFunctionProto(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool isExternDef) {
+}
+
+auto FunctionOrder::findNode(const HIRPath& path) const -> FunctionOrderNode* {
+    size_t begin = 0;
+    size_t end = nodes.length();
+    while (begin < end) {
+        const auto middle = begin + (end - begin) / 2;
+        const auto& candidate = *nodes[middle]->function->path;
+        if (candidate < path) {
+            begin = middle + 1;
+        } else {
+            end = middle;
+        }
+    }
+    if (begin < nodes.length() && !(*nodes[begin]->function->path < path) && !(path < *nodes[begin]->function->path)) {
+        return nodes[begin];
+    }
+    return nullptr;
+}
+
+auto FunctionOrder::addDependency(FunctionOrderNode& source, const HIRPath& path) -> void {
+    const auto* function = list.findFunction(path);
+    if (!function && path.data.is_UfcsKnown()) {
+        MonomorphState params(resolve.hirCrate().types);
+        StaticTraitResolve::ResolvedTraitImplPath implPath;
+        resolve.getValue(sp, path, params, false, nullptr, &implPath);
+        if (implPath.type) {
+            auto canonical = path.clone();
+            auto& data = canonical.data.as_UfcsKnown();
+            data.type = implPath.type;
+            data.trait.params = implPath.traitParams.clone();
+            function = list.findFunction(canonical);
+        }
+    }
+    if (!function) {
+        return;
+    }
+    auto* target = findNode(*function->path);
+    if (!target) {
+        return;
+    }
+    source.dependencies = pool->make<FunctionOrderEdge>(FunctionOrderEdge{target, source.dependencies});
+    source.selfEdge = source.selfEdge || target == &source;
+}
+
+auto FunctionOrder::addDropDependency(FunctionOrderNode& source, HIRTypeRef type) -> void {
+    if (!resolve.typeNeedsDropGlue(sp, type)) {
+        return;
+    }
+    switch (type->tag()) {
+        case HIRTypeData::TAG_Borrow: {
+            const auto& borrow = type->as_Borrow();
+            if (borrow.type == HIRBorrowType::Owned) {
+                addDropDependency(source, borrow.inner);
+            }
+            break;
+        }
+        case HIRTypeData::TAG_Path:
+            addDependency(source, HIRPath(type, "#drop_glue"));
+            break;
+        case HIRTypeData::TAG_Array:
+            addDropDependency(source, type->as_Array().inner);
+            break;
+        case HIRTypeData::TAG_Tuple:
+            for (const auto& field : type->as_Tuple()) {
+                addDropDependency(source, field);
+            }
+            break;
+        case HIRTypeData::TAG_Slice:
+            addDropDependency(source, type->as_Slice().inner);
+            break;
+        case HIRTypeData::TAG_Pattern:
+            addDropDependency(source, type->as_Pattern().inner);
+            break;
+        case HIRTypeData::TAG_Diverge:
+        case HIRTypeData::TAG_Infer:
+        case HIRTypeData::TAG_ErasedType:
+        case HIRTypeData::TAG_NodeType:
+        case HIRTypeData::TAG_Generic:
+        case HIRTypeData::TAG_Primitive:
+        case HIRTypeData::TAG_Pointer:
+        case HIRTypeData::TAG_NamedFunction:
+        case HIRTypeData::TAG_Function:
+        case HIRTypeData::TAG_TraitObject:
+            break;
+    }
+}
+
+auto FunctionOrder::collectDependencies(FunctionOrderNode& source) -> void {
+    const auto& function = *source.function;
+    const auto& mir = *functionCode(function);
+    const auto& returnType = function.monomorphised.code ? function.monomorphised.retTy : function.ptr->returnType;
+    const auto& args = function.monomorphised.code ? function.monomorphised.argTys : function.ptr->args;
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
+        os << *function.path;
+    });
+    MIRTypeResolve mirResolve{sp, resolve, pathCallback, returnType, args, mir};
+
+    struct DependencyVisitor final: public MIRVisitor {
+        FunctionOrder& order;
+        FunctionOrderNode& source;
+        MIRTypeResolve& mirResolve;
+
+        DependencyVisitor(FunctionOrder& order, FunctionOrderNode& source, MIRTypeResolve& mirResolve)
+            : order(order)
+            , source(source)
+            , mirResolve(mirResolve)
+        {
+        }
+
+        void visitType(HIRTypeRef type) override {
+            visitTyWith(type, [&](HIRTypeRef nested) {
+                if (const auto* function = nested->opt_NamedFunction()) {
+                    order.addDependency(source, function->path);
+                }
+                return false;
+            });
+        }
+
+        void visitPath(const HIRPath& path) override {
+            order.addDependency(source, path);
+            MIRVisitor::visitPath(path);
+        }
+
+        bool visitTerminator(const MIRTerminator& terminator) override {
+            if (const auto* drop = terminator.opt_Drop()) {
+                HIRTypeRef tmp;
+                order.addDropDependency(source, mirResolve.getLvalueType(tmp, drop->slot));
+            }
+            const MIRCallTarget* callTarget = nullptr;
+            if (const auto* call = terminator.opt_Call()) {
+                callTarget = &call->fcn;
+            } else if (const auto* call = terminator.opt_TailCall()) {
+                callTarget = &call->fcn;
+            }
+            if (callTarget) {
+                if (const auto* intrinsic = callTarget->opt_Intrinsic()) {
+                    if (intrinsic->name == "drop_in_place") {
+                        order.addDropDependency(source, intrinsic->params.types.at(0));
+                    }
+                }
+            }
+            return MIRVisitor::visitTerminator(terminator);
+        }
+    } visitor{*this, source, mirResolve};
+
+    visitor.visitFunction(mirResolve, mir);
+}
+
+auto FunctionOrder::visit(FunctionOrderNode& node) -> void {
+    node.index = nextIndex;
+    node.lowLink = nextIndex;
+    nextIndex++;
+    node.onStack = true;
+    tarjanStack.pushBack(&node);
+
+    for (auto* edge = node.dependencies; edge; edge = edge->next) {
+        auto& target = *edge->target;
+        if (target.index == ~0u) {
+            visit(target);
+            node.lowLink = ::std::min(node.lowLink, target.lowLink);
+        } else if (target.onStack) {
+            node.lowLink = ::std::min(node.lowLink, target.index);
+        }
+    }
+
+    if (node.lowLink != node.index) {
+        return;
+    }
+    const auto componentStart = ordered.length();
+    FunctionOrderNode* member;
+    do {
+        member = tarjanStack.popBack();
+        member->onStack = false;
+        ordered.pushBack(member);
+    } while (member != &node);
+    const auto componentSize = ordered.length() - componentStart;
+    if (componentSize > 1 || node.selfEdge) {
+        for (size_t i = componentStart; i < ordered.length(); i++) {
+            ordered[i]->needsPrototype = true;
+        }
+    }
+}
+
+FunctionOrder::FunctionOrder(const WireBoard& wb, TransList& list, const Span& sp)
+    : list(list)
+    , sp(sp)
+    , resolve(wb, OpaqueReveal::All)
+{
+    for (const auto& entry : list.functions) {
+        if (!functionHasDefinition(*entry.second)) {
+            continue;
+        }
+        auto* node = pool->make<FunctionOrderNode>(FunctionOrderNode{entry.second.get(), nullptr, ~0u, ~0u, false, false, false});
+        nodes.pushBack(node);
+    }
+    for (auto* node : nodes) {
+        collectDependencies(*node);
+    }
+    for (auto* node : nodes) {
+        if (node->index == ~0u) {
+            visit(*node);
+        }
+    }
 }

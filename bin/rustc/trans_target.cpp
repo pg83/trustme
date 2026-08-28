@@ -1,17 +1,18 @@
 #include "trans_target.h"
-#include "hir_typeck_common.h"
-#include "wire_board.h"
-#include "settings.h"
-#include <std/mem/obj_pool.h>
-#include <std/lib/vector.h>
 
 #include "toml.h" // tools/common
 #include "hir_hir.h"
+#include "settings.h"
 #include "expand_cfg.h"
+#include "wire_board.h"
 #include "trans_mangling.h"
+#include "hir_typeck_common.h"
 #include "hir_typeck_helpers.h"
 #include "hir_typeck_monomorph.h"
 #include "hir_conv_main_bindings.h" // ConvertHIR_ConstantEvaluate_Enum
+
+#include <std/lib/vector.h>
+#include <std/mem/obj_pool.h>
 
 #include <map>
 #include <array>
@@ -34,6 +35,7 @@ namespace {
             //TargetArch::Alignments(2, 4, 8, 8, 4, 8, 8) // TODO: Alignment of u128 is 8 with rustc, but gcc uses 16
         };
     }
+
     TargetArch archX32() {
         return {
             "x86_64",
@@ -43,6 +45,7 @@ namespace {
             TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4) // x86_64 w/4-byte ptr
         };
     }
+
     TargetArch archX86() {
         return {
             "x86",
@@ -53,9 +56,11 @@ namespace {
             TargetArch::Alignments(2, 4, /*u64*/ 4, /*u128*/ 4, 4, 4, /*ptr*/ 4) // u128 has the same alignment as u64, which is u32's alignment. And f64 is 4 byte aligned
         };
     }
+
     TargetArch archArm64() {
         return {"aarch64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
     }
+
     TargetArch archArm32() {
         return {
             "arm",
@@ -65,15 +70,19 @@ namespace {
             TargetArch::Alignments(2, 4, 8, 16, 4, 8, 4) // Note, all types are natively aligned (but i128 will be emulated)
         };
     }
+
     TargetArch archM68k() {
         return {"m68k", 32, true, {/*atomic(u8)=*/true, false, true, false, true}, TargetArch::Alignments(2, 2, 2, 2, 2, 2, 2)};
     }
+
     TargetArch archPowerpc64() {
         return {"powerpc64", 64, true, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
     }
+
     TargetArch archPowerpc64le() {
         return {"powerpc64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
     }
+
     TargetArch archPowerpc() {
         return {
             "powerpc",
@@ -84,6 +93,7 @@ namespace {
             TargetArch::Alignments(2, 4, 8, 8, 4, 8, 4)
         };
     }
+
     TargetArch archRiscv64() {
         return {"riscv64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
     }
@@ -432,8 +442,7 @@ void TargetSetCfg(WireBoard& wb, const ::std::string& targetName) {
     auto* spec = wb.pool->make<TargetSpec>(initFromSpecName(targetName));
     wb.target = spec;
     if (spec->arch.pointerBits != 64 || spec->arch.bigEndian) {
-        ::std::cerr << "error: unsupported target `" << targetName
-                    << "`: only 64-bit little-endian targets are supported" << ::std::endl;
+        ::std::cerr << "error: unsupported target `" << targetName << "`: only 64-bit little-endian targets are supported" << ::std::endl;
         abort();
     }
     const TargetSpec& tgt = *spec;
@@ -891,9 +900,7 @@ namespace {
 
         Vector<Future> futures;
 
-        bool empty() const {
-            return futures.empty();
-        }
+        bool empty() const;
     };
 
     size_t alignTo(size_t offset, size_t align) {
@@ -1018,8 +1025,7 @@ namespace {
 
     bool asyncDropCoroutineFieldsLayout(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* outerTy, const HIRTypeData* ty, AsyncDropFieldLayout& out) {
         const auto& pathTy = ty->as_Path();
-        ASSERT_BUG(sp, (pathTy.isFuture() || pathTy.isGenerator()) && pathTy.binding.is_Struct() && pathTy.path.data.is_Generic(),
-            "invalid coroutine type " << ty);
+        ASSERT_BUG(sp, (pathTy.isFuture() || pathTy.isGenerator()) && pathTy.binding.is_Struct() && pathTy.path.data.is_Generic(), "invalid coroutine type " << ty);
         const auto* fields = pathTy.binding.as_Struct()->data.opt_Tuple();
         ASSERT_BUG(sp, fields && !fields->empty(), "coroutine without its state field: " << ty);
         auto monomorph = MonomorphStatePtr(resolve.hirCrate().types, ty, &pathTy.path.data.as_Generic().params, nullptr);
@@ -1027,10 +1033,7 @@ namespace {
             auto fieldTy = resolve.monomorphExpand(sp, fields->at(i).ent, monomorph);
             if (i == 0) {
                 const auto* fieldPath = fieldTy->opt_Path();
-                ASSERT_BUG(sp, fieldPath && fieldPath->path.data.is_Generic()
-                    && fieldPath->path.data.as_Generic().path == resolve.hirCrate().getLangItemPath(sp, "maybe_uninit")
-                    && fieldPath->path.data.as_Generic().params.types.size() == 1,
-                    "coroutine state is not MaybeUninit<State>: " << fieldTy);
+                ASSERT_BUG(sp, fieldPath && fieldPath->path.data.is_Generic() && fieldPath->path.data.as_Generic().path == resolve.hirCrate().getLangItemPath(sp, "maybe_uninit") && fieldPath->path.data.as_Generic().params.types.size() == 1, "coroutine state is not MaybeUninit<State>: " << fieldTy);
                 if (!asyncDropCoroutineStateLayout(sp, resolve, outerTy, fieldPath->path.data.as_Generic().params.types[0], out)) {
                     return false;
                 }
@@ -1130,9 +1133,7 @@ namespace {
         } else {
             AsyncDropFieldLayout fields;
             const auto* coroutinePath = dropeeTy->opt_Path();
-            const bool ok = coroutinePath && (coroutinePath->isFuture() || coroutinePath->isGenerator())
-                ? asyncDropCoroutineFieldsLayout(sp, resolve, ty, dropeeTy, fields)
-                : asyncDropStructFieldsLayout(sp, resolve, ty, dropeeTy, fields);
+            const bool ok = coroutinePath && (coroutinePath->isFuture() || coroutinePath->isGenerator()) ? asyncDropCoroutineFieldsLayout(sp, resolve, ty, dropeeTy, fields) : asyncDropStructFieldsLayout(sp, resolve, ty, dropeeTy, fields);
             if (!ok) {
                 return false;
             }
@@ -1330,9 +1331,7 @@ namespace {
             // A tuple's last element may be unsized, and the layout has to
             // leave it there: what a pointer to the tuple carries is the
             // metadata of that element.
-            sorting = (!ents.empty() && ents.back().size == SIZE_MAX)
-                ? StructSorting::AllButFinal
-                : StructSorting::All;
+            sorting = (!ents.empty() && ents.back().size == SIZE_MAX) ? StructSorting::AllButFinal : StructSorting::All;
         } else {
             BUG(sp, "Unexpected type in creating type repr - " << ty);
         }
@@ -1341,8 +1340,7 @@ namespace {
         if (ty->is_Path() && ty->as_Path().binding.is_Struct()) {
             const auto& te = ty->as_Path();
             const auto& str = *te.binding.as_Struct();
-            if (str.structMarkings.isAsyncDropGlue && !monomorphiseTypeNeeded(ty)
-                && !extendAsyncDropGlueRepr(sp, resolve, ty, *repr)) {
+            if (str.structMarkings.isAsyncDropGlue && !monomorphiseTypeNeeded(ty) && !extendAsyncDropGlueRepr(sp, resolve, ty, *repr)) {
                 return nullptr;
             }
         }
@@ -1405,13 +1403,17 @@ namespace {
                 defaultMax = UINT32_MAX;
                 break;
             case HIRCoreType::U64:
-                if (sizeof(size_t) < 8) return false;
+                if (sizeof(size_t) < 8) {
+                    return false;
+                }
                 scalarSize = 8;
                 defaultMax = SIZE_MAX;
                 break;
             case HIRCoreType::Usize:
                 scalarSize = TargetGetPointerBits() / 8;
-                if (scalarSize > sizeof(size_t)) return false;
+                if (scalarSize > sizeof(size_t)) {
+                    return false;
+                }
                 defaultMax = scalarSize == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (scalarSize * 8)) - 1;
                 break;
             case HIRCoreType::Char:
@@ -1431,26 +1433,40 @@ namespace {
             size_t end = defaultMax;
             if (range.hasStart) {
                 const auto* value = range.start.opt_Evaluated();
-                if (!value) return false;
+                if (!value) {
+                    return false;
+                }
                 const auto encoded = EncodedLiteralSlice(**value).readUint();
-                if (!encoded.isU64() || encoded.truncateU64() > SIZE_MAX) return false;
+                if (!encoded.isU64() || encoded.truncateU64() > SIZE_MAX) {
+                    return false;
+                }
                 start = static_cast<size_t>(encoded.truncateU64());
             }
             if (range.hasEnd) {
                 const auto* value = range.end.opt_Evaluated();
-                if (!value) return false;
+                if (!value) {
+                    return false;
+                }
                 const auto encoded = EncodedLiteralSlice(**value).readUint();
-                if (!encoded.isU64() || encoded.truncateU64() > SIZE_MAX) return false;
+                if (!encoded.isU64() || encoded.truncateU64() > SIZE_MAX) {
+                    return false;
+                }
                 end = static_cast<size_t>(encoded.truncateU64());
                 if (!range.endInclusive) {
-                    if (end == 0) return false;
+                    if (end == 0) {
+                        return false;
+                    }
                     end--;
                 }
             }
-            if (start > end || end > defaultMax) return false;
+            if (start > end || end > defaultMax) {
+                return false;
+            }
             ranges.push_back({start, end});
         }
-        if (ranges.empty()) return false;
+        if (ranges.empty()) {
+            return false;
+        }
 
         ::std::sort(ranges.begin(), ranges.end());
         size_t out = 0;
@@ -1480,9 +1496,8 @@ namespace {
                     }
                 }
 
-            }
-            break;
-            break;
+            } break;
+                break;
             case HIRTypeData::TAG_Array: {
                 auto& te = (*ty).as_Array();
                 if (te.size.is_Known() && te.size.as_Known() > 0 && getNonzeroPath(sp, resolve, te.inner, outPath)) {
@@ -1490,9 +1505,8 @@ namespace {
                     return true;
                 }
 
-            }
-            break;
-            break;
+            } break;
+                break;
             case HIRTypeData::TAG_Path: {
                 auto& te = (*ty).as_Path();
                 // rustc deliberately hides every validity niche inside a
@@ -1550,24 +1564,22 @@ namespace {
                     }
                 }
 
-            }
-            break;
-            break;
+            } break;
+                break;
             case HIRTypeData::TAG_Borrow: {
                 // TODO: Only return a single-pointer size
                 outPath.size = TargetGetPointerBits() / 8;
                 return true;
 
-            }
-            break;
-            break;
+            } break;
+                break;
             case HIRTypeData::TAG_Function: {
                 auto& _te = (*ty).as_Function();
-                (void) _te;
+                (void)_te;
             }
-            TargetGetSizeOf(sp, resolve, ty, outPath.size);
-            return true;
-            break;
+                TargetGetSizeOf(sp, resolve, ty, outPath.size);
+                return true;
+                break;
             case HIRTypeData::TAG_Pattern: {
                 auto& te = (*ty).as_Pattern();
                 ::std::vector<::std::pair<size_t, size_t>> ranges;
@@ -1575,8 +1587,7 @@ namespace {
                     return true;
                 }
 
-            }
-            break;
+            } break;
             default:
                 break;
         }
@@ -1641,8 +1652,7 @@ namespace {
                     }
                 }
 
-            }
-            break;
+            } break;
             case HIRTypeData::TAG_Array: {
                 auto& te = (*ty).as_Array();
                 if (te.size.is_Known() && te.size.as_Known() > 0 && getVariantNichePath(sp, resolve, te.inner, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
@@ -1650,8 +1660,7 @@ namespace {
                     return true;
                 }
 
-            }
-            break;
+            } break;
             case HIRTypeData::TAG_Path: {
                 auto& te = (*ty).as_Path();
                 // Coroutines do not expose the niches of their captures or
@@ -1720,141 +1729,132 @@ namespace {
                         return false;
                     }
 
-                switch (r->variants.tag()) {
-                    case TypeReprVariantMode::TAG_None: {
-                        // If there is no discriminator, recurse into the only field
-                        if (r->fields.empty()) {
-                            return false;
-                        } else {
-                            if (getVariantNichePath(sp, resolve, r->fields[0].ty, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
-                                outPath.subFields.push_back(0);
-                                return true;
-                            }
-                            return false;
-                        }
-                        break;
-                    }
-                    case TypeReprVariantMode::TAG_Linear: {
-                        auto& ve = r->variants.as_Linear();
-                        if (ve.usesNiche()) {
-                            // The inner enum made its niche values valid,
-                            // but the scalar carrying the tag can still
-                            // have another invalid range.  Search the
-                            // populated variant again while reserving the
-                            // values consumed by this enum.  For example,
-                            // Option<Scalar<1..=100>> consumes zero and
-                            // Option<Option<Scalar<1..=100>>> uses 101.
-                            const auto& field = r->fields.at(ve.field.index);
-                            const size_t fieldSize = getSizeOrZero(sp, resolve, field.ty);
-                            if (field.offset < maxOffset && field.offset + fieldSize > minOffset) {
-                                const size_t occupiedCount = ve.nicheVariantCount();
-                                if (requiredCount <= SIZE_MAX - occupiedCount) {
-                                    TypeRepr::FieldPath candidate;
-                                    size_t candidateStart = 0;
-                                    if (getVariantNichePath(
-                                            sp,
-                                            resolve,
-                                            field.ty,
-                                            field.offset < minOffset ? minOffset - field.offset : 0,
-                                            maxOffset - field.offset,
-                                            requiredCount + occupiedCount,
-                                            candidate,
-                                            candidateStart)) {
-                                        auto candidateSubFields = candidate.subFields;
-                                        ::std::reverse(candidateSubFields.begin(), candidateSubFields.end());
-                                        const bool sameScalar = candidate.size == ve.field.size && candidateSubFields == ve.field.subFields;
-                                        if (!sameScalar) {
-                                            return false;
-                                        }
-                                        const size_t candidateEnd = candidateStart + requiredCount + occupiedCount - 1;
-                                        const size_t occupiedStart = ve.offset;
-                                        const size_t occupiedEnd = occupiedStart + occupiedCount - 1;
-                                        if (!(candidateEnd < occupiedStart || occupiedEnd < candidateStart)) {
-                                            const size_t beforeCount = occupiedStart > candidateStart ? occupiedStart - candidateStart : 0;
-                                            const size_t afterStart = occupiedEnd == SIZE_MAX ? SIZE_MAX : ::std::max(candidateStart, occupiedEnd + 1);
-                                            const size_t afterCount = occupiedEnd == SIZE_MAX || candidateEnd < afterStart ? 0 : candidateEnd - afterStart + 1;
-                                            if (requiredCount <= beforeCount) {
-                                                // The requested values fit before the
-                                                // range used by the inner enum.
-                                            } else if (requiredCount <= afterCount) {
-                                                candidateStart = afterStart;
-                                            } else {
-                                                return false;
-                                            }
-                                        }
-                                        candidate.subFields.push_back(ve.field.index);
-                                        outPath = ::std::move(candidate);
-                                        nicheStart = candidateStart;
-                                        return true;
-                                    }
+                    switch (r->variants.tag()) {
+                        case TypeReprVariantMode::TAG_None: {
+                            // If there is no discriminator, recurse into the only field
+                            if (r->fields.empty()) {
+                                return false;
+                            } else {
+                                if (getVariantNichePath(sp, resolve, r->fields[0].ty, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
+                                    outPath.subFields.push_back(0);
+                                    return true;
                                 }
-                            }
-                            return false;
-                        }
-                        // Check that the offset of this tag field is >= min_offset
-                        auto ofs = getOffset(sp, resolve, r, ve.field);
-                        if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t)) {
-                            const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
-                            const size_t validEnd = ve.offset + ve.numVariants - 1;
-                            if (validEnd >= scalarMax || requiredCount > scalarMax - validEnd) {
                                 return false;
                             }
-                            outPath.size = ve.field.size;
-                            outPath.subFields.clear();
-                            outPath.subFields.insert(outPath.subFields.begin(), ve.field.subFields.rbegin(), ve.field.subFields.rend());
-                            outPath.subFields.push_back(ve.field.index);
-                            nicheStart = validEnd + 1;
-                            return true;
+                            break;
                         }
-                        break;
-                    }
-                    case TypeReprVariantMode::TAG_Values: {
-                        auto& ve = r->variants.as_Values();
-                        auto ofs = getOffset(sp, resolve, r, ve.field);
-                        if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t) && !ve.values.empty()) {
-                            const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
-                            std::vector<size_t> values;
-                            values.reserve(ve.values.size());
-                            for (const auto& value : ve.values) {
-                                values.push_back(value.truncateU64() & scalarMax);
-                            }
-                            std::sort(values.begin(), values.end());
-                            values.erase(std::unique(values.begin(), values.end()), values.end());
-
-                            size_t bestStart = 0;
-                            size_t bestCount = values.front();
-                            for (size_t i = 1; i < values.size(); i++) {
-                                const size_t count = values[i] - values[i - 1] - 1;
-                                if (count > bestCount) {
-                                    bestStart = values[i - 1] + 1;
-                                    bestCount = count;
+                        case TypeReprVariantMode::TAG_Linear: {
+                            auto& ve = r->variants.as_Linear();
+                            if (ve.usesNiche()) {
+                                // The inner enum made its niche values valid,
+                                // but the scalar carrying the tag can still
+                                // have another invalid range.  Search the
+                                // populated variant again while reserving the
+                                // values consumed by this enum.  For example,
+                                // Option<Scalar<1..=100>> consumes zero and
+                                // Option<Option<Scalar<1..=100>>> uses 101.
+                                const auto& field = r->fields.at(ve.field.index);
+                                const size_t fieldSize = getSizeOrZero(sp, resolve, field.ty);
+                                if (field.offset < maxOffset && field.offset + fieldSize > minOffset) {
+                                    const size_t occupiedCount = ve.nicheVariantCount();
+                                    if (requiredCount <= SIZE_MAX - occupiedCount) {
+                                        TypeRepr::FieldPath candidate;
+                                        size_t candidateStart = 0;
+                                        if (getVariantNichePath(sp, resolve, field.ty, field.offset < minOffset ? minOffset - field.offset : 0, maxOffset - field.offset, requiredCount + occupiedCount, candidate, candidateStart)) {
+                                            auto candidateSubFields = candidate.subFields;
+                                            ::std::reverse(candidateSubFields.begin(), candidateSubFields.end());
+                                            const bool sameScalar = candidate.size == ve.field.size && candidateSubFields == ve.field.subFields;
+                                            if (!sameScalar) {
+                                                return false;
+                                            }
+                                            const size_t candidateEnd = candidateStart + requiredCount + occupiedCount - 1;
+                                            const size_t occupiedStart = ve.offset;
+                                            const size_t occupiedEnd = occupiedStart + occupiedCount - 1;
+                                            if (!(candidateEnd < occupiedStart || occupiedEnd < candidateStart)) {
+                                                const size_t beforeCount = occupiedStart > candidateStart ? occupiedStart - candidateStart : 0;
+                                                const size_t afterStart = occupiedEnd == SIZE_MAX ? SIZE_MAX : ::std::max(candidateStart, occupiedEnd + 1);
+                                                const size_t afterCount = occupiedEnd == SIZE_MAX || candidateEnd < afterStart ? 0 : candidateEnd - afterStart + 1;
+                                                if (requiredCount <= beforeCount) {
+                                                    // The requested values fit before the
+                                                    // range used by the inner enum.
+                                                } else if (requiredCount <= afterCount) {
+                                                    candidateStart = afterStart;
+                                                } else {
+                                                    return false;
+                                                }
+                                            }
+                                            candidate.subFields.push_back(ve.field.index);
+                                            outPath = ::std::move(candidate);
+                                            nicheStart = candidateStart;
+                                            return true;
+                                        }
+                                    }
                                 }
+                                return false;
                             }
-                            const size_t trailingCount = scalarMax - values.back();
-                            if (trailingCount > bestCount) {
-                                bestStart = values.back() + 1;
-                                bestCount = trailingCount;
-                            }
-                            if (requiredCount <= bestCount) {
+                            // Check that the offset of this tag field is >= min_offset
+                            auto ofs = getOffset(sp, resolve, r, ve.field);
+                            if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t)) {
+                                const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
+                                const size_t validEnd = ve.offset + ve.numVariants - 1;
+                                if (validEnd >= scalarMax || requiredCount > scalarMax - validEnd) {
+                                    return false;
+                                }
                                 outPath.size = ve.field.size;
                                 outPath.subFields.clear();
                                 outPath.subFields.insert(outPath.subFields.begin(), ve.field.subFields.rbegin(), ve.field.subFields.rend());
                                 outPath.subFields.push_back(ve.field.index);
-                                nicheStart = bestStart;
+                                nicheStart = validEnd + 1;
                                 return true;
                             }
+                            break;
                         }
-                        return false;
+                        case TypeReprVariantMode::TAG_Values: {
+                            auto& ve = r->variants.as_Values();
+                            auto ofs = getOffset(sp, resolve, r, ve.field);
+                            if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t) && !ve.values.empty()) {
+                                const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
+                                std::vector<size_t> values;
+                                values.reserve(ve.values.size());
+                                for (const auto& value : ve.values) {
+                                    values.push_back(value.truncateU64() & scalarMax);
+                                }
+                                std::sort(values.begin(), values.end());
+                                values.erase(std::unique(values.begin(), values.end()), values.end());
+
+                                size_t bestStart = 0;
+                                size_t bestCount = values.front();
+                                for (size_t i = 1; i < values.size(); i++) {
+                                    const size_t count = values[i] - values[i - 1] - 1;
+                                    if (count > bestCount) {
+                                        bestStart = values[i - 1] + 1;
+                                        bestCount = count;
+                                    }
+                                }
+                                const size_t trailingCount = scalarMax - values.back();
+                                if (trailingCount > bestCount) {
+                                    bestStart = values.back() + 1;
+                                    bestCount = trailingCount;
+                                }
+                                if (requiredCount <= bestCount) {
+                                    outPath.size = ve.field.size;
+                                    outPath.subFields.clear();
+                                    outPath.subFields.insert(outPath.subFields.begin(), ve.field.subFields.rbegin(), ve.field.subFields.rend());
+                                    outPath.subFields.push_back(ve.field.index);
+                                    nicheStart = bestStart;
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }
+                        case TypeReprVariantMode::TAG_NonZero: {
+                            return false;
+                        }
                     }
-                    case TypeReprVariantMode::TAG_NonZero: {
-                        return false;
-                    }
-                }
                 }
 
-            }
-            break;
-            break;
+            } break;
+                break;
             case HIRTypeData::TAG_Primitive: {
                 auto& te = (*ty).as_Primitive();
                 switch (te) {
@@ -1877,8 +1877,7 @@ namespace {
                         break;
                 }
 
-            }
-            break;
+            } break;
             case HIRTypeData::TAG_Pattern: {
                 auto& te = (*ty).as_Pattern();
                 size_t scalarSize;
@@ -1909,8 +1908,7 @@ namespace {
                 }
                 return false;
 
-            }
-            break;
+            } break;
             case HIRTypeData::TAG_Borrow: {
                 if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
                     outPath.size = TargetGetPointerBits() / 8;
@@ -1918,15 +1916,13 @@ namespace {
                     return true;
                 }
 
-            }
-            break;
+            } break;
             case HIRTypeData::TAG_Function: {
                 if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
                     outPath.size = TargetGetPointerBits() / 8;
                     nicheStart = 0;
                     return true;
                 }
-
             }
             default:
                 break;
@@ -1950,506 +1946,503 @@ namespace {
 
         TypeRepr rv;
         switch (enm.data.tag()) {
-                break;
-                case HIREnumClass::TAG_Data: {
-                    auto& e = enm.data.as_Data();
-                    // repr(C) enums - they have different rules
-                    // - A data enum with `repr(C)` puts the tag before the data
-                    if (enm.isCRepr) {
-                        size_t maxSize = 0;
-                        size_t maxAlign = 0;
-                        for (const auto& var : e) {
-                            auto t = monomorph(var.type);
-                            size_t size, align;
-                            if (!TargetGetSizeAndAlignOf(sp, resolve, t, size, align)) {
-                                return nullptr;
-                            }
-                            if (size == SIZE_MAX) {
-                                BUG(sp, "Unsized type in enum - " << t);
-                            }
-                            maxSize = ::std::max(maxSize, size);
-                            maxAlign = ::std::max(maxAlign, align);
-                            rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
+            break;
+            case HIREnumClass::TAG_Data: {
+                auto& e = enm.data.as_Data();
+                // repr(C) enums - they have different rules
+                // - A data enum with `repr(C)` puts the tag before the data
+                if (enm.isCRepr) {
+                    size_t maxSize = 0;
+                    size_t maxAlign = 0;
+                    for (const auto& var : e) {
+                        auto t = monomorph(var.type);
+                        size_t size, align;
+                        if (!TargetGetSizeAndAlignOf(sp, resolve, t, size, align)) {
+                            return nullptr;
+                        }
+                        if (size == SIZE_MAX) {
+                            BUG(sp, "Unsized type in enum - " << t);
+                        }
+                        maxSize = ::std::max(maxSize, size);
+                        maxAlign = ::std::max(maxAlign, align);
+                        rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
 
-                            ASSERT_BUG(sp, !var.discriminantExpr, "TODO: Handle explicit discriminants with repr(C) data");
-                        }
+                        ASSERT_BUG(sp, !var.discriminantExpr, "TODO: Handle explicit discriminants with repr(C) data");
+                    }
 
-                        auto tagTy = enm.tagRepr == HIREnum::Repr::Auto ? HIRCoreType::U32 : enm.getReprType(enm.tagRepr);
-                        rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(tagTy)});
-                        size_t tagSize, tagAlign;
-                        TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tagSize, tagAlign);
-                        size_t dataOfs = tagSize;
+                    auto tagTy = enm.tagRepr == HIREnum::Repr::Auto ? HIRCoreType::U32 : enm.getReprType(enm.tagRepr);
+                    rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(tagTy)});
+                    size_t tagSize, tagAlign;
+                    TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tagSize, tagAlign);
+                    size_t dataOfs = tagSize;
 
-                        while (dataOfs % maxAlign != 0) {
-                            dataOfs++;
-                        }
+                    while (dataOfs % maxAlign != 0) {
+                        dataOfs++;
+                    }
 
-                        for (size_t i = 0; i < e.size(); i++) {
-                            rv.fields[i].offset = dataOfs;
+                    for (size_t i = 0; i < e.size(); i++) {
+                        rv.fields[i].offset = dataOfs;
+                    }
+                    rv.size = dataOfs + maxSize;
+                    rv.align = std::max(tagAlign, maxAlign);
+                    while (rv.size % rv.align != 0) {
+                        rv.size++;
+                    }
+                    rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
+                } else if (enm.tagRepr == HIREnum::Repr::Auto && e.size() <= 1) {
+                    // If there are not multiple variants, then only include the one body
+                    if (e.size() == 1) {
+                        auto t = monomorph(e[0].type);
+                        const auto* innerRepr = TargetGetTypeRepr(sp, resolve, t);
+                        if (!innerRepr) {
+                            return nullptr;
                         }
-                        rv.size = dataOfs + maxSize;
-                        rv.align = std::max(tagAlign, maxAlign);
-                        while (rv.size % rv.align != 0) {
-                            rv.size++;
-                        }
-                        rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
-                    } else if (enm.tagRepr == HIREnum::Repr::Auto && e.size() <= 1) {
-                        // If there are not multiple variants, then only include the one body
-                        if (e.size() == 1) {
-                            auto t = monomorph(e[0].type);
-                            const auto* innerRepr = TargetGetTypeRepr(sp, resolve, t);
-                            if (!innerRepr) {
-                                return nullptr;
-                            }
-                            rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
-                            rv.size = innerRepr->size;
-                            rv.align = innerRepr->align;
-                        } else {
-                            rv.size = 0;
-                            rv.align = 0;
-                        }
-                        // Just leave it as None
+                        rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
+                        rv.size = innerRepr->size;
+                        rv.align = innerRepr->align;
                     } else {
+                        rv.size = 0;
+                        rv.align = 0;
+                    }
+                    // Just leave it as None
+                } else {
+                    // repr(Rust) - allows interesting optimisations
+                    struct Variant {
+                        HIRTypeRef type;
+                        ::std::vector<Ent> ents;
+                        unsigned forcedAlignment;
+                    };
 
-                        // repr(Rust) - allows interesting optimisations
-                        struct Variant {
-                            HIRTypeRef type;
-                            ::std::vector<Ent> ents;
-                            unsigned forcedAlignment;
-                        };
-
-                        /// Is there an explicitly specified discriminant value provided?
-                        bool hasExplcitValue = false;
-                        std::vector<Variant> variants;
-                        variants.reserve(e.size());
-                        for (const auto& var : e) {
-                            if (var.discriminantExpr) {
-                                hasExplcitValue = true;
-                            }
-
-                            auto variantType = monomorph(var.type);
-                            auto forcedAlignment = variantType->is_Path() && variantType->as_Path().binding.is_Struct() ? variantType->as_Path().binding.as_Struct()->forcedAlignment : 0;
-                            variants.push_back({mv$(variantType), {}, forcedAlignment});
-                            if (var.type == resolve.hirCrate().types.unit()) {
-                                continue;
-                            }
-                            if (!structEnumerateFields(sp, resolve, variants.back().type, variants.back().ents)) {
-                                return nullptr;
-                            }
+                    /// Is there an explicitly specified discriminant value provided?
+                    bool hasExplcitValue = false;
+                    std::vector<Variant> variants;
+                    variants.reserve(e.size());
+                    for (const auto& var : e) {
+                        if (var.discriminantExpr) {
+                            hasExplcitValue = true;
                         }
 
-                        if (enm.tagRepr == HIREnum::Repr::Auto) {
-                            ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
-                            // Non-zero optimisation
-                            if (rv.variants.is_None() && variants.size() == 2) {
-                                // If only one variant has a size of 0, then look for a nonzero in the variant list
-                                size_t sizes[2] = {0, 0};
-                                for (size_t i = 0; i < 2; i++) {
-                                    for (const auto& ent : variants[i].ents) {
-                                        sizes[i] += ent.size;
+                        auto variantType = monomorph(var.type);
+                        auto forcedAlignment = variantType->is_Path() && variantType->as_Path().binding.is_Struct() ? variantType->as_Path().binding.as_Struct()->forcedAlignment : 0;
+                        variants.push_back({mv$(variantType), {}, forcedAlignment});
+                        if (var.type == resolve.hirCrate().types.unit()) {
+                            continue;
+                        }
+                        if (!structEnumerateFields(sp, resolve, variants.back().type, variants.back().ents)) {
+                            return nullptr;
+                        }
+                    }
+
+                    if (enm.tagRepr == HIREnum::Repr::Auto) {
+                        ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
+                        // Non-zero optimisation
+                        if (rv.variants.is_None() && variants.size() == 2) {
+                            // If only one variant has a size of 0, then look for a nonzero in the variant list
+                            size_t sizes[2] = {0, 0};
+                            for (size_t i = 0; i < 2; i++) {
+                                for (const auto& ent : variants[i].ents) {
+                                    sizes[i] += ent.size;
+                                }
+                            }
+                            auto minSize = ::std::min(sizes[0], sizes[1]);
+                            auto maxSize = ::std::max(sizes[0], sizes[1]);
+                            // If one is zero and one is non-zero
+                            if (minSize == 0 && maxSize > 0) {
+                                // Check for a non-zero path in any of those
+                                unsigned nzVar = (sizes[0] == 0 ? 1 : 0);
+                                for (size_t i = 0; i < variants[nzVar].ents.size(); i++) {
+                                    TypeRepr::FieldPath nzPath;
+                                    if (getNonzeroPath(sp, resolve, variants[nzVar].ents[i].ty, nzPath)) {
+                                        nzPath.subFields.push_back(i);
+                                        nzPath.index = nzVar;
+                                        ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+
+                                        size_t size0, size1;
+                                        size_t align0, align1;
+                                        TargetGetSizeAndAlignOf(sp, resolve, variants[0].type, size0, align0);
+                                        TargetGetSizeAndAlignOf(sp, resolve, variants[1].type, size1, align1);
+                                        rv.size = std::max(size0, size1);
+                                        rv.align = std::max(align0, align1);
+                                        rv.fields.push_back({0, std::move(variants[0].type)});
+                                        rv.fields.push_back({0, std::move(variants[1].type)});
+                                        rv.variants = TypeRepr::VariantMode::make_NonZero({nzPath, 1 - nzVar});
+                                        break;
                                     }
                                 }
-                                auto minSize = ::std::min(sizes[0], sizes[1]);
-                                auto maxSize = ::std::max(sizes[0], sizes[1]);
-                                // If one is zero and one is non-zero
-                                if (minSize == 0 && maxSize > 0) {
-                                    // Check for a non-zero path in any of those
-                                    unsigned nzVar = (sizes[0] == 0 ? 1 : 0);
-                                    for (size_t i = 0; i < variants[nzVar].ents.size(); i++) {
-                                        TypeRepr::FieldPath nzPath;
-                                        if (getNonzeroPath(sp, resolve, variants[nzVar].ents[i].ty, nzPath)) {
-                                            nzPath.subFields.push_back(i);
-                                            nzPath.index = nzVar;
-                                            ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                            }
+                            // DISABLED: This doesn't work properly
+                            // - Downstream assumes `NonZero` means that one element is zero-sized
+                            // - Calling `Target_GetTypeRepr` generates the variant early - too lazy to reimplement logic
+                        } // non-zero
 
-                                            size_t size0, size1;
-                                            size_t align0, align1;
-                                            TargetGetSizeAndAlignOf(sp, resolve, variants[0].type, size0, align0);
-                                            TargetGetSizeAndAlignOf(sp, resolve, variants[1].type, size1, align1);
-                                            rv.size = std::max(size0, size1);
-                                            rv.align = std::max(align0, align1);
-                                            rv.fields.push_back({0, std::move(variants[0].type)});
-                                            rv.fields.push_back({0, std::move(variants[1].type)});
-                                            rv.variants = TypeRepr::VariantMode::make_NonZero({nzPath, 1 - nzVar});
-                                            break;
-                                        }
-                                    }
+                        // Niche optimisation
+                        // - Find an inner enum or char, and use high values for the variant
+                        if (rv.variants.is_None()) {
+                            bool nicheBeforeData = false;
+                            size_t nicheOffset = 0;
+                            size_t nonNicheOffset = 0;
+                            // Find the largest variant
+                            // - Also get the next-largest size to use as the minimum tag offset
+                            unsigned nMatch = 0;
+                            size_t biggestVar = variants.size();
+                            size_t maxVarSize = 0;
+                            size_t minOffset = 0;
+                            size_t maxAlign = 1;
+                            std::vector<std::unique_ptr<TypeRepr>> reprs;
+                            for (size_t i = 0; i < variants.size(); i++) {
+                                reprs.push_back(makeTypeReprStructInner(sp, e[i].type, variants[i].ents, StructSorting::All, variants[i].forcedAlignment, 0));
+                                maxAlign = std::max(maxAlign, reprs.back()->align);
+                                size_t varSize = reprs.back()->size;
+                                // If larger than current max, update current max and reset
+                                if (varSize > maxVarSize) {
+                                    minOffset = maxVarSize; // Downgrade the previous to min_offset
+                                    maxVarSize = varSize;
+                                    biggestVar = i;
+                                    nMatch = 1;
                                 }
-                                // DISABLED: This doesn't work properly
-                                // - Downstream assumes `NonZero` means that one element is zero-sized
-                                // - Calling `Target_GetTypeRepr` generates the variant early - too lazy to reimplement logic
-                            } // non-zero
-
-                            // Niche optimisation
-                            // - Find an inner enum or char, and use high values for the variant
-                            if (rv.variants.is_None()) {
-                                bool nicheBeforeData = false;
-                                size_t nicheOffset = 0;
-                                size_t nonNicheOffset = 0;
-                                // Find the largest variant
-                                // - Also get the next-largest size to use as the minimum tag offset
-                                unsigned nMatch = 0;
-                                size_t biggestVar = variants.size();
-                                size_t maxVarSize = 0;
-                                size_t minOffset = 0;
-                                size_t maxAlign = 1;
-                                std::vector<std::unique_ptr<TypeRepr>> reprs;
-                                for (size_t i = 0; i < variants.size(); i++) {
-                                    reprs.push_back(makeTypeReprStructInner(sp, e[i].type, variants[i].ents, StructSorting::All, variants[i].forcedAlignment, 0));
-                                    maxAlign = std::max(maxAlign, reprs.back()->align);
-                                    size_t varSize = reprs.back()->size;
-                                    // If larger than current max, update current max and reset
-                                    if (varSize > maxVarSize) {
-                                        minOffset = maxVarSize; // Downgrade the previous to min_offset
-                                        maxVarSize = varSize;
-                                        biggestVar = i;
-                                        nMatch = 1;
-                                    }
-                                    // If equal to current max, increment count
-                                    else if (varSize == maxVarSize) {
-                                        nMatch += 1;
-                                    }
-                                    // Otherwise (smaller) update the min offset
-                                    else {
-                                        minOffset = std::max(minOffset, varSize);
-                                    }
+                                // If equal to current max, increment count
+                                else if (varSize == maxVarSize) {
+                                    nMatch += 1;
                                 }
+                                // Otherwise (smaller) update the min offset
+                                else {
+                                    minOffset = std::max(minOffset, varSize);
+                                }
+                            }
 
-                                if (nMatch == 1) {
-                                    const size_t nicheVariantStart = biggestVar == 0 ? 1 : 0;
-                                    const size_t nicheVariantEnd = biggestVar + 1 == variants.size() ? biggestVar - 1 : variants.size() - 1;
-                                    const size_t requiredNicheCount = nicheVariantEnd - nicheVariantStart + 1;
-                                    for (size_t i = 0; i < reprs[biggestVar]->fields.size(); i++) {
-                                        const auto& fld = reprs[biggestVar]->fields[i];
+                            if (nMatch == 1) {
+                                const size_t nicheVariantStart = biggestVar == 0 ? 1 : 0;
+                                const size_t nicheVariantEnd = biggestVar + 1 == variants.size() ? biggestVar - 1 : variants.size() - 1;
+                                const size_t requiredNicheCount = nicheVariantEnd - nicheVariantStart + 1;
+                                for (size_t i = 0; i < reprs[biggestVar]->fields.size(); i++) {
+                                    const auto& fld = reprs[biggestVar]->fields[i];
 
-                                        // 1. Look for a tag at the end
-                                        // - Prefer the end-of-struct version, as it avoids adding fields to the other variants
+                                    // 1. Look for a tag at the end
+                                    // - Prefer the end-of-struct version, as it avoids adding fields to the other variants
+                                    TypeRepr::FieldPath nzPath;
+                                    size_t nicheStart = 0;
+                                    if (getVariantNichePath(sp, resolve, fld.ty, (minOffset > fld.offset ? minOffset - fld.offset : 0), maxVarSize - fld.offset, requiredNicheCount, nzPath, nicheStart)) {
+                                        nzPath.index = i;
+                                        ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                        nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
+                                        ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+
+                                        nzPath.subFields.push_back(i);
+                                        nzPath.index = biggestVar;
+                                        ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+
+                                        assert(rv.variants.is_None());
+                                        rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nzPath), nicheStart, e.size()});
+                                        break;
+                                    }
+
+                                    // Note: rustc doesn't do this.
+                                    // 2. Look for a possible tag at the start?
+                                    // - Prepending the tag might change the next-largest variant too much?
+                                    if (fld.offset == 0) {
                                         TypeRepr::FieldPath nzPath;
                                         size_t nicheStart = 0;
-                                        if (getVariantNichePath(sp, resolve, fld.ty, (minOffset > fld.offset ? minOffset - fld.offset : 0), maxVarSize - fld.offset, requiredNicheCount, nzPath, nicheStart)) {
+                                        if (getVariantNichePath(sp, resolve, fld.ty, 0, maxVarSize - minOffset, requiredNicheCount, nzPath, nicheStart)) {
                                             nzPath.index = i;
                                             ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
                                             nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
+                                            if (nicheOffset != 0) {
+                                                // - For now, only accept zero offsets
+                                                continue;
+                                            }
                                             ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
                                             nzPath.subFields.push_back(i);
                                             nzPath.index = biggestVar;
                                             ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
+                                            nicheBeforeData = true;
+                                            nonNicheOffset = nzPath.size;
                                             assert(rv.variants.is_None());
                                             rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nzPath), nicheStart, e.size()});
                                             break;
                                         }
-
-                                        // Note: rustc doesn't do this.
-                                        // 2. Look for a possible tag at the start?
-                                        // - Prepending the tag might change the next-largest variant too much?
-                                        if (fld.offset == 0) {
-                                            TypeRepr::FieldPath nzPath;
-                                            size_t nicheStart = 0;
-                                            if (getVariantNichePath(sp, resolve, fld.ty, 0, maxVarSize - minOffset, requiredNicheCount, nzPath, nicheStart)) {
-                                                nzPath.index = i;
-                                                ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
-                                                nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
-                                                if (nicheOffset != 0) {
-                                                    // - For now, only accept zero offsets
-                                                    continue;
-                                                }
-                                                ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
-
-                                                nzPath.subFields.push_back(i);
-                                                nzPath.index = biggestVar;
-                                                ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
-
-                                                nicheBeforeData = true;
-                                                nonNicheOffset = nzPath.size;
-                                                assert(rv.variants.is_None());
-                                                rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nzPath), nicheStart, e.size()});
-                                                break;
-                                            }
-                                        }
                                     }
                                 }
+                            }
 
-                                // Fix overall size
-                                size_t maxSize = maxVarSize;
-                                while (maxSize % maxAlign != 0) {
-                                    maxSize++;
+                            // Fix overall size
+                            size_t maxSize = maxVarSize;
+                            while (maxSize % maxAlign != 0) {
+                                maxSize++;
+                            }
+
+                            if (!rv.variants.is_None()) {
+                                const auto& nichePath = rv.variants.as_Linear().field;
+
+                                HIRTypeRef nicheTy;
+                                switch (nichePath.size) {
+                                    case 1:
+                                        nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U8);
+                                        break;
+                                    case 2:
+                                        nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U16);
+                                        break;
+                                    case 4:
+                                        nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U32);
+                                        break;
+                                    case 8:
+                                        nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U64);
+                                        break;
+                                    case 16:
+                                        nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U128);
+                                        break;
+                                    default:
+                                        BUG(sp, "Unknown niche size: " << nichePath);
                                 }
-
-                                if (!rv.variants.is_None()) {
-                                    const auto& nichePath = rv.variants.as_Linear().field;
-
-                                    HIRTypeRef nicheTy;
-                                    switch (nichePath.size) {
-                                        case 1:
-                                            nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U8);
-                                            break;
-                                        case 2:
-                                            nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U16);
-                                            break;
-                                        case 4:
-                                            nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U32);
-                                            break;
-                                        case 8:
-                                            nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U64);
-                                            break;
-                                        case 16:
-                                            nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U128);
-                                            break;
-                                        default:
-                                            BUG(sp, "Unknown niche size: " << nichePath);
-                                    }
-                                    // Generate raw struct reprs for all variants
-                                    // - Add `non_niche_offset` to all variants
-                                    assert(reprs.size() == variants.size());
-                                    // Size/alignment of the union of the *final* variant layouts, which is what codegen emits.
-                                    size_t finalSize = 0;
-                                    size_t finalAlign = 1;
-                                    for (size_t i = 0; i < reprs.size(); i++) {
-                                        if (e[i].type != resolve.hirCrate().types.unit()) {
-                                            // If the tag is leading, then add to all other variants and update reprs
-                                            if (i == biggestVar) {
-                                            } else if (nicheBeforeData) {
-                                                // Add padding (if needed)
-                                                if (nicheOffset > 0) {
-                                                    variants[i].ents.insert(variants[i].ents.begin(), Ent());
-                                                    variants[i].ents[0].align = 1;
-                                                    variants[i].ents[0].size = nicheOffset;
-                                                    variants[i].ents[0].field = ~0u;
-                                                    // Leave no type
-                                                    TODO(sp, "Handle adding padding");
-                                                }
-                                                // Add the tag
+                                // Generate raw struct reprs for all variants
+                                // - Add `non_niche_offset` to all variants
+                                assert(reprs.size() == variants.size());
+                                // Size/alignment of the union of the *final* variant layouts, which is what codegen emits.
+                                size_t finalSize = 0;
+                                size_t finalAlign = 1;
+                                for (size_t i = 0; i < reprs.size(); i++) {
+                                    if (e[i].type != resolve.hirCrate().types.unit()) {
+                                        // If the tag is leading, then add to all other variants and update reprs
+                                        if (i == biggestVar) {
+                                        } else if (nicheBeforeData) {
+                                            // Add padding (if needed)
+                                            if (nicheOffset > 0) {
                                                 variants[i].ents.insert(variants[i].ents.begin(), Ent());
-                                                variants[i].ents[0].align = nichePath.size;
-                                                variants[i].ents[0].size = nichePath.size;
-                                                variants[i].ents[0].field = variants[i].ents.size() - 1;
-                                                variants[i].ents[0].ty = nicheTy;
-                                                // Create the new repr
-                                                reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forcedAlignment, 0);
-                                                // Make sure that the newly calculated repr doesn't change the size/alignment
-                                                assert(reprs[i]->size <= maxSize);
-                                                assert(reprs[i]->align <= maxAlign);
-                                            } else {
-                                                auto tagFldIdx = variants[i].ents.size();
-                                                size_t maxOfs = 0;
-                                                for (const auto& f : reprs[i]->fields) {
-                                                    maxOfs = std::max(maxOfs, f.offset + getSizeOrZero(sp, resolve, f.ty));
-                                                }
-                                                // - Increase alignment to the niche size
-                                                if (maxOfs % nichePath.size != 0) {
-                                                    maxOfs += nichePath.size - (maxOfs % nichePath.size);
-                                                }
-                                                assert(nicheOffset % nichePath.size == 0);
-                                                assert(maxOfs % nichePath.size == 0);
-                                                ASSERT_BUG(sp, nicheOffset >= maxOfs, "Niche offset (" << nicheOffset << ") overlaps with variant data (" << maxOfs << ")");
-                                                auto reqPadding = nicheOffset - maxOfs;
-                                                if (reqPadding > 0) {
-                                                    variants[i].ents.push_back(Ent());
-                                                    variants[i].ents.back().align = 1;
-                                                    variants[i].ents.back().size = reqPadding;
-                                                    variants[i].ents.back().field = ~0u;
-                                                }
-                                                variants[i].ents.push_back(Ent());
-                                                variants[i].ents.back().align = nichePath.size;
-                                                variants[i].ents.back().size = nichePath.size;
-                                                variants[i].ents.back().field = tagFldIdx;
-                                                variants[i].ents.back().ty = nicheTy;
-                                                // Create the new repr
-                                                reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forcedAlignment, 0);
-                                                // Make sure that the newly calculated repr doesn't change the size/alignment
-                                                assert(reprs[i]->size <= maxSize);
-                                                assert(reprs[i]->align <= maxAlign);
+                                                variants[i].ents[0].align = 1;
+                                                variants[i].ents[0].size = nicheOffset;
+                                                variants[i].ents[0].field = ~0u;
+                                                // Leave no type
+                                                TODO(sp, "Handle adding padding");
                                             }
-                                            finalSize = std::max(finalSize, reprs[i]->size);
-                                            finalAlign = std::max(finalAlign, reprs[i]->align);
-                                            setTypeRepr(resolve, sp, variants[i].type, std::move(reprs[i]));
+                                            // Add the tag
+                                            variants[i].ents.insert(variants[i].ents.begin(), Ent());
+                                            variants[i].ents[0].align = nichePath.size;
+                                            variants[i].ents[0].size = nichePath.size;
+                                            variants[i].ents[0].field = variants[i].ents.size() - 1;
+                                            variants[i].ents[0].ty = nicheTy;
+                                            // Create the new repr
+                                            reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forcedAlignment, 0);
+                                            // Make sure that the newly calculated repr doesn't change the size/alignment
+                                            assert(reprs[i]->size <= maxSize);
+                                            assert(reprs[i]->align <= maxAlign);
                                         } else {
-                                            // Note: unit type (any empty type) doesn't need the tag added
-                                            // NOTE: Unit type should already have a repr, but make sure
-                                            if (const auto* r = TargetGetTypeRepr(sp, resolve, variants[i].type)) {
-                                                finalSize = std::max(finalSize, r->size);
-                                                finalAlign = std::max(finalAlign, r->align);
+                                            auto tagFldIdx = variants[i].ents.size();
+                                            size_t maxOfs = 0;
+                                            for (const auto& f : reprs[i]->fields) {
+                                                maxOfs = std::max(maxOfs, f.offset + getSizeOrZero(sp, resolve, f.ty));
                                             }
+                                            // - Increase alignment to the niche size
+                                            if (maxOfs % nichePath.size != 0) {
+                                                maxOfs += nichePath.size - (maxOfs % nichePath.size);
+                                            }
+                                            assert(nicheOffset % nichePath.size == 0);
+                                            assert(maxOfs % nichePath.size == 0);
+                                            ASSERT_BUG(sp, nicheOffset >= maxOfs, "Niche offset (" << nicheOffset << ") overlaps with variant data (" << maxOfs << ")");
+                                            auto reqPadding = nicheOffset - maxOfs;
+                                            if (reqPadding > 0) {
+                                                variants[i].ents.push_back(Ent());
+                                                variants[i].ents.back().align = 1;
+                                                variants[i].ents.back().size = reqPadding;
+                                                variants[i].ents.back().field = ~0u;
+                                            }
+                                            variants[i].ents.push_back(Ent());
+                                            variants[i].ents.back().align = nichePath.size;
+                                            variants[i].ents.back().size = nichePath.size;
+                                            variants[i].ents.back().field = tagFldIdx;
+                                            variants[i].ents.back().ty = nicheTy;
+                                            // Create the new repr
+                                            reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forcedAlignment, 0);
+                                            // Make sure that the newly calculated repr doesn't change the size/alignment
+                                            assert(reprs[i]->size <= maxSize);
+                                            assert(reprs[i]->align <= maxAlign);
                                         }
-                                        rv.fields.push_back(TypeRepr::Field{0, mv$(variants[i].type)});
-                                    }
-
-                                    rv.size = maxSize;
-                                    rv.align = maxAlign;
-
-                                    // Under a capping ABI take size/align from the final variant layouts - `max_align` predates the tag field, so it over-states them
-                                    if (TargetCapsMemberAlignment() && finalSize > 0) {
-                                        size_t sz = finalSize;
-                                        while (sz % finalAlign != 0) {
-                                            sz++;
-                                        }
-                                        if (sz != rv.size || finalAlign != rv.align) {
-                                            rv.size = sz;
-                                            rv.align = finalAlign;
-                                        }
-                                    }
-
-                                    // Ensure that the tag offset is still valid
-                                    auto tagOffset = getOffset(sp, resolve, &rv, nichePath);
-                                    if (nonNicheOffset != 0) {
-                                        ASSERT_BUG(sp, tagOffset < nonNicheOffset, "Niche offset invalid: " << tagOffset << " >= " << nonNicheOffset);
+                                        finalSize = std::max(finalSize, reprs[i]->size);
+                                        finalAlign = std::max(finalAlign, reprs[i]->align);
+                                        setTypeRepr(resolve, sp, variants[i].type, std::move(reprs[i]));
                                     } else {
-                                        ASSERT_BUG(sp, tagOffset >= minOffset, "Niche offset invalid: " << tagOffset << " < " << minOffset);
+                                        // Note: unit type (any empty type) doesn't need the tag added
+                                        // NOTE: Unit type should already have a repr, but make sure
+                                        if (const auto* r = TargetGetTypeRepr(sp, resolve, variants[i].type)) {
+                                            finalSize = std::max(finalSize, r->size);
+                                            finalAlign = std::max(finalAlign, r->align);
+                                        }
+                                    }
+                                    rv.fields.push_back(TypeRepr::Field{0, mv$(variants[i].type)});
+                                }
+
+                                rv.size = maxSize;
+                                rv.align = maxAlign;
+
+                                // Under a capping ABI take size/align from the final variant layouts - `max_align` predates the tag field, so it over-states them
+                                if (TargetCapsMemberAlignment() && finalSize > 0) {
+                                    size_t sz = finalSize;
+                                    while (sz % finalAlign != 0) {
+                                        sz++;
+                                    }
+                                    if (sz != rv.size || finalAlign != rv.align) {
+                                        rv.size = sz;
+                                        rv.align = finalAlign;
                                     }
                                 }
-                            } // Niche optimisation
-                        } // All optimisations
 
-                        // rustc-compatible enum repr
-                        // ```
-                        // union {
-                        //   struct {
-                        //      TagType tag;
-                        //      ...data
-                        // }
-                        // ```
-                        if (rv.variants.is_None()) {
-                            HIRTypeRef tagTy;
-                            // If the tag size is specified, then force that
-                            if (enm.tagRepr != HIREnum::Repr::Auto) {
-                                tagTy = resolve.hirCrate().types.primitive(enm.getReprType(enm.tagRepr));
-                            } else {
-                                ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
-                                if (e.size() <= 1) {
-                                    // Unreachable
-                                    BUG(sp, "Reached auto tag type logic with zero/one-sized enum");
-                                } else if (e.size() <= 255) {
-                                    tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U8);
-                                } else if (e.size() <= UINT16_MAX) {
-                                    tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U16);
+                                // Ensure that the tag offset is still valid
+                                auto tagOffset = getOffset(sp, resolve, &rv, nichePath);
+                                if (nonNicheOffset != 0) {
+                                    ASSERT_BUG(sp, tagOffset < nonNicheOffset, "Niche offset invalid: " << tagOffset << " >= " << nonNicheOffset);
                                 } else {
-                                    ASSERT_BUG(sp, e.size() <= UINT32_MAX, "");
-                                    tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U32);
+                                    ASSERT_BUG(sp, tagOffset >= minOffset, "Niche offset invalid: " << tagOffset << " < " << minOffset);
                                 }
                             }
+                        } // Niche optimisation
+                    } // All optimisations
 
-                            size_t tagSize;
-                            size_t tagAlign;
-                            TargetGetSizeAndAlignOf(sp, resolve, tagTy, tagSize, tagAlign);
-                            size_t maxSize = tagSize;
-                            size_t maxAlign = tagAlign;
-                            // Sort all varaint fields (fully)
-                            // Add the tag to the start of all variants
-                            // Generate a struct repr (with sorting off)
-                            for (size_t varI = 0; varI < variants.size(); varI++) {
-                                auto& ents = variants[varI].ents;
-                                auto& varTy = variants[varI].type;
-                                if (e[varI].type != resolve.hirCrate().types.unit()) {
-                                    if (enm.tagRepr == HIREnum::Repr::Auto) {
-                                        ::std::sort(ents.begin(), ents.end(), sortfnEnumVariantFields);
-                                    }
-                                    // - Add tag
-                                    ents.insert(ents.begin(), Ent());
-                                    ents[0].align = tagAlign;
-                                    ents[0].size = tagSize;
-                                    ents[0].field = ents.size() - 1;
-                                    ents[0].ty = tagTy;
-
-                                    // - Create repr and assign
-                                    auto repr = makeTypeReprStructInner(sp, varTy, ents, StructSorting::None, variants[varI].forcedAlignment, 0);
-                                    maxSize = std::max(maxSize, repr->size);
-                                    maxAlign = std::max(maxAlign, repr->align);
-                                    setTypeRepr(resolve, sp, varTy, std::move(repr));
-                                }
-
-                                // - Push the field
-                                rv.fields.push_back(TypeRepr::Field{0, mv$(varTy)});
-                            }
-                            rv.fields.push_back(TypeRepr::Field{0, mv$(tagTy)});
-
-                            // Size must be a multiple of alignment
-                            rv.size = maxSize;
-                            while (rv.size % maxAlign != 0) {
-                                rv.size++;
-                            }
-                            rv.align = maxAlign;
-
-                            if (hasExplcitValue) {
-                                ::std::vector<U128> vals;
-                                for (const auto& v : e) {
-                                    vals.push_back(v.discriminantValue);
-                                }
-                                rv.variants = TypeRepr::VariantMode::make_Values({{e.size(), tagSize, {}}, ::std::move(vals)});
+                    // rustc-compatible enum repr
+                    // ```
+                    // union {
+                    //   struct {
+                    //      TagType tag;
+                    //      ...data
+                    // }
+                    // ```
+                    if (rv.variants.is_None()) {
+                        HIRTypeRef tagTy;
+                        // If the tag size is specified, then force that
+                        if (enm.tagRepr != HIREnum::Repr::Auto) {
+                            tagTy = resolve.hirCrate().types.primitive(enm.getReprType(enm.tagRepr));
+                        } else {
+                            ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
+                            if (e.size() <= 1) {
+                                // Unreachable
+                                BUG(sp, "Reached auto tag type logic with zero/one-sized enum");
+                            } else if (e.size() <= 255) {
+                                tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U8);
+                            } else if (e.size() <= UINT16_MAX) {
+                                tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U16);
                             } else {
-                                rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
+                                ASSERT_BUG(sp, e.size() <= UINT32_MAX, "");
+                                tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U32);
                             }
                         }
-                    }
 
-                }
-                break;
-                break;
-                case HIREnumClass::TAG_Value: {
-                    auto& e = enm.data.as_Value();
-                    // TODO: If the values aren't yet populated, force const evaluation
-                    switch (enm.tagRepr) {
-                        case HIREnum::Repr::Auto:
-                            if (enm.isCRepr) {
-                                // No auto-sizing, just i32?
-                                rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(HIRCoreType::U32)});
-                            } else if (e.variants.size() == 1) {
-                                // One variant is not a choice, so nothing has to
-                                // be stored to tell which it is: `enum E { V }`
-                                // is zero-sized, and its discriminant is a
-                                // constant the tag-less paths below read off the
-                                // enum itself.
-                            } else if (!e.variants.empty()) {
-                                i64 minValue = INT64_MAX;
-                                i64 maxValue = INT64_MIN;
-                                for (const auto& variant : e.variants) {
-                                    const auto value = S128(variant.val).truncateI64();
-                                    minValue = std::min(minValue, value);
-                                    maxValue = std::max(maxValue, value);
+                        size_t tagSize;
+                        size_t tagAlign;
+                        TargetGetSizeAndAlignOf(sp, resolve, tagTy, tagSize, tagAlign);
+                        size_t maxSize = tagSize;
+                        size_t maxAlign = tagAlign;
+                        // Sort all varaint fields (fully)
+                        // Add the tag to the start of all variants
+                        // Generate a struct repr (with sorting off)
+                        for (size_t varI = 0; varI < variants.size(); varI++) {
+                            auto& ents = variants[varI].ents;
+                            auto& varTy = variants[varI].type;
+                            if (e[varI].type != resolve.hirCrate().types.unit()) {
+                                if (enm.tagRepr == HIREnum::Repr::Auto) {
+                                    ::std::sort(ents.begin(), ents.end(), sortfnEnumVariantFields);
                                 }
+                                // - Add tag
+                                ents.insert(ents.begin(), Ent());
+                                ents[0].align = tagAlign;
+                                ents[0].size = tagSize;
+                                ents[0].field = ents.size() - 1;
+                                ents[0].ty = tagTy;
 
-                                HIRCoreType tagType;
-                                if (minValue >= 0) {
-                                    const auto maxUnsigned = static_cast<u64>(maxValue);
-                                    if (maxUnsigned <= UINT8_MAX) {
-                                        tagType = HIRCoreType::U8;
-                                    } else if (maxUnsigned <= UINT16_MAX) {
-                                        tagType = HIRCoreType::U16;
-                                    } else if (maxUnsigned <= UINT32_MAX) {
-                                        tagType = HIRCoreType::U32;
-                                    } else {
-                                        tagType = HIRCoreType::U64;
-                                    }
-                                } else if (minValue >= INT8_MIN && maxValue <= INT8_MAX) {
-                                    tagType = HIRCoreType::I8;
-                                } else if (minValue >= INT16_MIN && maxValue <= INT16_MAX) {
-                                    tagType = HIRCoreType::I16;
-                                } else if (minValue >= INT32_MIN && maxValue <= INT32_MAX) {
-                                    tagType = HIRCoreType::I32;
-                                } else {
-                                    tagType = HIRCoreType::I64;
-                                }
-                                rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(tagType)});
+                                // - Create repr and assign
+                                auto repr = makeTypeReprStructInner(sp, varTy, ents, StructSorting::None, variants[varI].forcedAlignment, 0);
+                                maxSize = std::max(maxSize, repr->size);
+                                maxAlign = std::max(maxAlign, repr->align);
+                                setTypeRepr(resolve, sp, varTy, std::move(repr));
                             }
-                            break;
-                        default:
-                            rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(enm.getReprType(enm.tagRepr))});
-                            break;
-                    }
-                    if (rv.fields.size() > 0) {
-                        // Can't return false or unsized
-                        TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, rv.size, rv.align);
 
-                        ::std::vector<U128> vals;
-                        for (const auto& v : e.variants) {
-                            vals.push_back(v.val);
+                            // - Push the field
+                            rv.fields.push_back(TypeRepr::Field{0, mv$(varTy)});
                         }
-                        rv.variants = TypeRepr::VariantMode::make_Values({{0, static_cast<u8>(rv.size), {}}, ::std::move(vals)});
-                    }
+                        rv.fields.push_back(TypeRepr::Field{0, mv$(tagTy)});
 
+                        // Size must be a multiple of alignment
+                        rv.size = maxSize;
+                        while (rv.size % maxAlign != 0) {
+                            rv.size++;
+                        }
+                        rv.align = maxAlign;
+
+                        if (hasExplcitValue) {
+                            ::std::vector<U128> vals;
+                            for (const auto& v : e) {
+                                vals.push_back(v.discriminantValue);
+                            }
+                            rv.variants = TypeRepr::VariantMode::make_Values({{e.size(), tagSize, {}}, ::std::move(vals)});
+                        } else {
+                            rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
+                        }
+                    }
                 }
+
+            } break;
                 break;
+            case HIREnumClass::TAG_Value: {
+                auto& e = enm.data.as_Value();
+                // TODO: If the values aren't yet populated, force const evaluation
+                switch (enm.tagRepr) {
+                    case HIREnum::Repr::Auto:
+                        if (enm.isCRepr) {
+                            // No auto-sizing, just i32?
+                            rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(HIRCoreType::U32)});
+                        } else if (e.variants.size() == 1) {
+                            // One variant is not a choice, so nothing has to
+                            // be stored to tell which it is: `enum E { V }`
+                            // is zero-sized, and its discriminant is a
+                            // constant the tag-less paths below read off the
+                            // enum itself.
+                        } else if (!e.variants.empty()) {
+                            i64 minValue = INT64_MAX;
+                            i64 maxValue = INT64_MIN;
+                            for (const auto& variant : e.variants) {
+                                const auto value = S128(variant.val).truncateI64();
+                                minValue = std::min(minValue, value);
+                                maxValue = std::max(maxValue, value);
+                            }
+
+                            HIRCoreType tagType;
+                            if (minValue >= 0) {
+                                const auto maxUnsigned = static_cast<u64>(maxValue);
+                                if (maxUnsigned <= UINT8_MAX) {
+                                    tagType = HIRCoreType::U8;
+                                } else if (maxUnsigned <= UINT16_MAX) {
+                                    tagType = HIRCoreType::U16;
+                                } else if (maxUnsigned <= UINT32_MAX) {
+                                    tagType = HIRCoreType::U32;
+                                } else {
+                                    tagType = HIRCoreType::U64;
+                                }
+                            } else if (minValue >= INT8_MIN && maxValue <= INT8_MAX) {
+                                tagType = HIRCoreType::I8;
+                            } else if (minValue >= INT16_MIN && maxValue <= INT16_MAX) {
+                                tagType = HIRCoreType::I16;
+                            } else if (minValue >= INT32_MIN && maxValue <= INT32_MAX) {
+                                tagType = HIRCoreType::I32;
+                            } else {
+                                tagType = HIRCoreType::I64;
+                            }
+                            rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(tagType)});
+                        }
+                        break;
+                    default:
+                        rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(enm.getReprType(enm.tagRepr))});
+                        break;
+                }
+                if (rv.fields.size() > 0) {
+                    // Can't return false or unsized
+                    TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, rv.size, rv.align);
+
+                    ::std::vector<U128> vals;
+                    for (const auto& v : e.variants) {
+                        vals.push_back(v.val);
+                    }
+                    rv.variants = TypeRepr::VariantMode::make_Values({{0, static_cast<u8>(rv.size), {}}, ::std::move(vals)});
+                }
+
+            } break;
         }
 
         // `#[repr(align(N))]` raises the alignment of the enum itself, and the
@@ -2482,7 +2475,7 @@ namespace {
         }
 
         // An enum inherits user-alignment from any variant, as in gcc; every variant repr is already cached here, so this cannot recurse.
-        for(const auto& f : rv.fields) {
+        for (const auto& f : rv.fields) {
             if (TargetTypeHasUserAlignment(sp, resolve, f.ty)) {
                 rv.userAlign = true;
                 break;
@@ -2632,7 +2625,9 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     // Trans is reveal-all: a projection through a fn-def's return-position
     // opaque (e.g. a struct field of `<fn{bar} as Func>::Ret`) only becomes
     // a layout-able type once the opaque is revealed.
-    if (visitTyWith(ty, [](const HIRTypeData* inner) { return inner->is_ErasedType(); })) {
+    if (visitTyWith(ty, [](const HIRTypeData* inner) {
+        return inner->is_ErasedType();
+    })) {
         HIRTypeRef revealed = ty;
         resolve.revealOpaqueTypes(sp, revealed);
         if (revealed != ty) {
@@ -2763,9 +2758,7 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
         case TypeReprVariantMode::TAG_Values: {
             auto& ve = this->variants.as_Values();
             auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).readUint(ve.field.size);
-            const U128 mask = ve.field.size >= 16
-                ? U128::max()
-                : (U128(1) << static_cast<unsigned>(ve.field.size * 8)) - U128(1);
+            const U128 mask = ve.field.size >= 16 ? U128::max() : (U128(1) << static_cast<unsigned>(ve.field.size * 8)) - U128(1);
             auto it = std::find_if(ve.values.begin(), ve.values.end(), [&](const U128& candidate) {
                 return (candidate & mask) == v;
             });
@@ -2809,15 +2802,18 @@ namespace {
             TransmuteByteSet values;
             unsigned destination;
         };
+
         struct ReferenceEdge {
             TransmuteReference reference;
             unsigned destination;
         };
+
         struct State {
             ::std::vector<unsigned> epsilon;
             ::std::vector<ByteEdge> bytes;
             ::std::vector<ReferenceEdge> references;
         };
+
         struct Fragment {
             unsigned start;
             unsigned accept;
@@ -2825,54 +2821,19 @@ namespace {
 
         ::std::vector<State> states;
 
-        unsigned addState() {
-            states.push_back({});
-            return states.size() - 1;
-        }
+        unsigned addState();
 
-        Fragment empty() {
-            auto state = addState();
-            return {state, state};
-        }
+        Fragment empty();
 
-        Fragment uninhabited() {
-            return {addState(), addState()};
-        }
+        Fragment uninhabited();
 
-        Fragment byte(const TransmuteByteSet& values) {
-            auto start = addState();
-            auto accept = addState();
-            states[start].bytes.push_back({values, accept});
-            return {start, accept};
-        }
+        Fragment byte(const TransmuteByteSet& values);
 
-        Fragment reference(TransmuteReference reference) {
-            auto start = addState();
-            auto accept = addState();
-            states[start].references.push_back({reference, accept});
-            return {start, accept};
-        }
+        Fragment reference(TransmuteReference reference);
 
-        Fragment then(Fragment left, Fragment right) {
-            states[left.accept].epsilon.push_back(right.start);
-            return {left.start, right.accept};
-        }
+        Fragment then(Fragment left, Fragment right);
 
-        Fragment alternative(::std::vector<Fragment> alternatives) {
-            if (alternatives.empty()) {
-                return uninhabited();
-            }
-            if (alternatives.size() == 1) {
-                return alternatives.front();
-            }
-            auto start = addState();
-            auto accept = addState();
-            for (const auto& alternative : alternatives) {
-                states[start].epsilon.push_back(alternative.start);
-                states[alternative.accept].epsilon.push_back(accept);
-            }
-            return {start, accept};
-        }
+        Fragment alternative(::std::vector<Fragment> alternatives);
     };
 
     struct TransmuteDfa {
@@ -2882,9 +2843,7 @@ namespace {
         ::std::vector<::std::vector<::std::pair<TransmuteReference, unsigned>>> references;
         ::std::vector<bool> accepting;
 
-        bool inhabited() const {
-            return ::std::find(accepting.begin(), accepting.end(), true) != accepting.end();
-        }
+        bool inhabited() const;
     };
 
     class TransmuteLayoutBuilder {
@@ -2892,6 +2851,7 @@ namespace {
             TransmuteNfa::Fragment fragment;
             size_t size;
         };
+
         struct Segment {
             size_t offset;
             Built value;
@@ -2903,395 +2863,38 @@ namespace {
         bool assumeSafety;
         bool supported = true;
 
-        static TransmuteByteSet byteRange(unsigned first, unsigned last) {
-            TransmuteByteSet rv;
-            for (unsigned value = first; value <= last; value++) {
-                rv.set(value);
-            }
-            return rv;
-        }
+        static TransmuteByteSet byteRange(unsigned first, unsigned last);
 
-        Built bytes(size_t count, const TransmuteByteSet& values) {
-            auto rv = nfa.empty();
-            for (size_t i = 0; i < count; i++) {
-                rv = nfa.then(rv, nfa.byte(values));
-            }
-            return {rv, count};
-        }
+        Built bytes(size_t count, const TransmuteByteSet& values);
 
-        Built padding(size_t count) {
-            TransmuteByteSet values;
-            values.set();
-            return bytes(count, values);
-        }
+        Built padding(size_t count);
 
-        Built number(size_t count) {
-            return bytes(count, byteRange(0, 255));
-        }
+        Built number(size_t count);
 
-        Built exact(U128 value, size_t count) {
-            if (count > 16) {
-                supported = false;
-                return {nfa.uninhabited(), count};
-            }
-            u8 raw[16] = {};
-            value.toLeBytes(raw, count);
-            auto rv = nfa.empty();
-            for (size_t i = 0; i < count; i++) {
-                TransmuteByteSet values;
-                values.set(raw[i]);
-                rv = nfa.then(rv, nfa.byte(values));
-            }
-            return {rv, count};
-        }
+        Built exact(U128 value, size_t count);
 
-        Built character() {
-            const auto any = byteRange(0, 255);
-            const auto zero = byteRange(0, 0);
-            auto make = [&](const ::std::array<TransmuteByteSet, 4>& values) {
-                auto rv = nfa.empty();
-                for (const auto& value : values) {
-                    rv = nfa.then(rv, nfa.byte(value));
-                }
-                return rv;
-            };
-            ::std::vector<TransmuteNfa::Fragment> alternatives;
-            alternatives.push_back(make({any, byteRange(0x00, 0xD7), zero, zero}));
-            alternatives.push_back(make({any, byteRange(0xE0, 0xFF), zero, zero}));
-            alternatives.push_back(make({any, any, byteRange(0x01, 0x10), zero}));
-            return {nfa.alternative(::std::move(alternatives)), 4};
-        }
+        Built character();
 
-        Built combine(::std::vector<Segment> segments, size_t totalSize) {
-            ::std::stable_sort(segments.begin(), segments.end(), [](const Segment& left, const Segment& right) {
-                return left.offset < right.offset;
-            });
+        Built combine(::std::vector<Segment> segments, size_t totalSize);
 
-            auto rv = nfa.empty();
-            size_t offset = 0;
-            for (const auto& segment : segments) {
-                if (segment.offset > totalSize || segment.value.size > totalSize - segment.offset
-                    || (segment.value.size != 0 && segment.offset < offset)) {
-                    supported = false;
-                    return {nfa.uninhabited(), totalSize};
-                }
-                if (segment.offset > offset) {
-                    rv = nfa.then(rv, padding(segment.offset - offset).fragment);
-                }
-                rv = nfa.then(rv, segment.value.fragment);
-                offset = ::std::max(offset, segment.offset + segment.value.size);
-            }
-            rv = nfa.then(rv, padding(totalSize - offset).fragment);
-            return {rv, totalSize};
-        }
+        Built aggregate(const TypeRepr& repr, int skipField = -1);
 
-        Built aggregate(const TypeRepr& repr, int skipField = -1) {
-            ::std::vector<Segment> fields;
-            for (size_t i = 0; i < repr.fields.size(); i++) {
-                if (static_cast<int>(i) == skipField) {
-                    continue;
-                }
-                auto field = build(repr.fields[i].ty);
-                fields.push_back({repr.fields[i].offset, field});
-            }
-            return combine(::std::move(fields), repr.size);
-        }
+        void addVariantPayload(::std::vector<Segment>& segments, const TypeRepr& outerRepr, unsigned variant, bool skipSyntheticTag, size_t tagOffset, size_t tagSize);
 
-        void addVariantPayload(
-            ::std::vector<Segment>& segments,
-            const TypeRepr& outerRepr,
-            unsigned variant,
-            bool skipSyntheticTag,
-            size_t tagOffset,
-            size_t tagSize
-        ) {
-            ASSERT_BUG(sp, variant < outerRepr.fields.size(), "Enum variant field is missing");
-            const auto& outerField = outerRepr.fields[variant];
-            const auto* payloadRepr = TargetGetTypeRepr(sp, resolve, outerField.ty);
-            if (!payloadRepr) {
-                supported = false;
-                return;
-            }
+        Built taggedVariant(const TypeRepr& repr, unsigned variant, size_t tagOffset, size_t tagSize, U128 tag, bool skipSyntheticTag);
 
-            int skipField = -1;
-            if (skipSyntheticTag && !payloadRepr->fields.empty()) {
-                const auto& candidate = payloadRepr->fields.back();
-                size_t candidateSize = 0;
-                if (!TargetGetSizeOf(sp, resolve, candidate.ty, candidateSize)) {
-                    supported = false;
-                    return;
-                }
-                if (outerField.offset + candidate.offset == tagOffset && candidateSize == tagSize) {
-                    skipField = payloadRepr->fields.size() - 1;
-                }
-            }
+        Built enumLayout(const HIRTypeData* ty, const TypeRepr& repr, const HIREnum& enm);
 
-            if (skipField < 0) {
-                segments.push_back({outerField.offset, build(outerField.ty)});
-                return;
-            }
+        Built build(const HIRTypeData* ty);
 
-            for (size_t i = 0; i < payloadRepr->fields.size(); i++) {
-                if (static_cast<int>(i) == skipField) {
-                    continue;
-                }
-                const auto& field = payloadRepr->fields[i];
-                segments.push_back({outerField.offset + field.offset, build(field.ty)});
-            }
-        }
-
-        Built taggedVariant(
-            const TypeRepr& repr,
-            unsigned variant,
-            size_t tagOffset,
-            size_t tagSize,
-            U128 tag,
-            bool skipSyntheticTag
-        ) {
-            ::std::vector<Segment> segments;
-            addVariantPayload(segments, repr, variant, skipSyntheticTag, tagOffset, tagSize);
-            segments.push_back({tagOffset, exact(tag, tagSize)});
-            return combine(::std::move(segments), repr.size);
-        }
-
-        Built enumLayout(const HIRTypeData* ty, const TypeRepr& repr, const HIREnum& enm) {
-            if (enm.numVariants() == 0) {
-                return {nfa.uninhabited(), repr.size};
-            }
-
-            if (repr.variants.is_None()) {
-                if (repr.fields.empty()) {
-                    return padding(repr.size);
-                }
-                return combine({Segment{repr.fields[0].offset, build(repr.fields[0].ty)}}, repr.size);
-            }
-
-            ::std::vector<TransmuteNfa::Fragment> alternatives;
-            if (const auto* linear = repr.variants.opt_Linear()) {
-                const auto tagOffset = repr.getOffset(sp, resolve, linear->field);
-                for (unsigned variant = 0; variant < linear->numVariants; variant++) {
-                    Built value;
-                    if (linear->usesNiche() && variant == linear->field.index) {
-                        const auto& field = repr.fields.at(variant);
-                        value = combine({Segment{field.offset, build(field.ty)}}, repr.size);
-                    } else {
-                        value = taggedVariant(repr, variant, tagOffset, linear->field.size, U128(linear->tagValue(variant)), true);
-                    }
-                    alternatives.push_back(value.fragment);
-                }
-            } else if (const auto* values = repr.variants.opt_Values()) {
-                const auto tagOffset = repr.getOffset(sp, resolve, values->field);
-                for (unsigned variant = 0; variant < values->values.size(); variant++) {
-                    auto value = enm.data.is_Value()
-                        ? combine({Segment{tagOffset, exact(values->values[variant], values->field.size)}}, repr.size)
-                        : taggedVariant(repr, variant, tagOffset, values->field.size, values->values[variant], true);
-                    alternatives.push_back(value.fragment);
-                }
-            } else if (const auto* nonzero = repr.variants.opt_NonZero()) {
-                const auto tagOffset = repr.getOffset(sp, resolve, nonzero->field);
-                const auto nonzeroVariant = 1 - nonzero->zeroVariant;
-                for (unsigned variant = 0; variant < 2; variant++) {
-                    Built value;
-                    if (variant == nonzeroVariant) {
-                        const auto& field = repr.fields.at(variant);
-                        value = combine({Segment{field.offset, build(field.ty)}}, repr.size);
-                    } else {
-                        value = combine({Segment{tagOffset, exact(U128(0), nonzero->field.size)}}, repr.size);
-                    }
-                    alternatives.push_back(value.fragment);
-                }
-            } else {
-                BUG(sp, "Unhandled enum representation for " << ty);
-            }
-            return {nfa.alternative(::std::move(alternatives)), repr.size};
-        }
-
-        Built build(const HIRTypeData* ty) {
-            if (ty->is_Diverge()) {
-                return {nfa.uninhabited(), 0};
-            }
-            if (const auto* primitive = ty->opt_Primitive()) {
-                size_t size = 0;
-                if (!TargetGetSizeOf(sp, resolve, ty, size)) {
-                    supported = false;
-                    return {nfa.uninhabited(), 0};
-                }
-                if (*primitive == HIRCoreType::Bool) {
-                    return bytes(1, byteRange(0, 1));
-                }
-                if (*primitive == HIRCoreType::Char) {
-                    return character();
-                }
-                if (*primitive == HIRCoreType::Str) {
-                    supported = false;
-                    return {nfa.uninhabited(), size};
-                }
-                return number(size);
-            }
-            if (const auto* tuple = ty->opt_Tuple()) {
-                const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
-                if (!repr) {
-                    supported = false;
-                    return {nfa.uninhabited(), 0};
-                }
-                return aggregate(*repr);
-            }
-            if (const auto* array = ty->opt_Array()) {
-                if (!array->size.is_Known()) {
-                    supported = false;
-                    return {nfa.uninhabited(), 0};
-                }
-                auto rv = nfa.empty();
-                size_t size = 0;
-                for (u64 i = 0; i < array->size.as_Known(); i++) {
-                    auto element = build(array->inner);
-                    if (element.size > SIZE_MAX - size) {
-                        supported = false;
-                        return {nfa.uninhabited(), 0};
-                    }
-                    size += element.size;
-                    rv = nfa.then(rv, element.fragment);
-                }
-                return {rv, size};
-            }
-            if (const auto* borrow = ty->opt_Borrow()) {
-                if (borrow->type == HIRBorrowType::Owned) {
-                    supported = false;
-                    return {nfa.uninhabited(), 0};
-                }
-
-                size_t referentSize = 0;
-                size_t referentAlign = 0;
-                size_t referenceSize = 0;
-                if (!TargetGetSizeAndAlignOf(sp, resolve, borrow->inner, referentSize, referentAlign)
-                    || !TargetGetSizeOf(sp, resolve, ty, referenceSize)) {
-                    supported = false;
-                    return {nfa.uninhabited(), 0};
-                }
-                return {
-                    nfa.reference({borrow->type == HIRBorrowType::Unique, borrow->inner, referentSize, referentAlign}),
-                    referenceSize
-                };
-            }
-            if (const auto* path = ty->opt_Path()) {
-                if (destination && !assumeSafety) {
-                    supported = false;
-                    return {nfa.uninhabited(), 0};
-                }
-                const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
-                if (!repr) {
-                    supported = false;
-                    return {nfa.uninhabited(), 0};
-                }
-                if (path->binding.is_Struct()) {
-                    const auto& str = *path->binding.as_Struct();
-                    // rustc 1.90's transmutability layout does not yet model
-                    // scalar valid ranges (including the NonZero wrappers).
-                    if (str.structMarkings.isNonzero || str.structMarkings.boundedMax) {
-                        supported = false;
-                        return {nfa.uninhabited(), repr->size};
-                    }
-                    return aggregate(*repr);
-                }
-                if (path->binding.is_Union()) {
-                    ::std::vector<TransmuteNfa::Fragment> alternatives;
-                    for (const auto& field : repr->fields) {
-                        alternatives.push_back(combine({Segment{0, build(field.ty)}}, repr->size).fragment);
-                    }
-                    return {nfa.alternative(::std::move(alternatives)), repr->size};
-                }
-                if (path->binding.is_Enum()) {
-                    return enumLayout(ty, *repr, *path->binding.as_Enum());
-                }
-                supported = false;
-                return {nfa.uninhabited(), repr->size};
-            }
-            supported = false;
-            return {nfa.uninhabited(), 0};
-        }
-
-        ::std::vector<unsigned> epsilonClosure(::std::vector<unsigned> states) const {
-            ::std::vector<bool> seen(nfa.states.size(), false);
-            for (auto state : states) {
-                seen.at(state) = true;
-            }
-            for (size_t i = 0; i < states.size(); i++) {
-                for (auto next : nfa.states[states[i]].epsilon) {
-                    if (!seen[next]) {
-                        seen[next] = true;
-                        states.push_back(next);
-                    }
-                }
-            }
-            ::std::sort(states.begin(), states.end());
-            return states;
-        }
+        ::std::vector<unsigned> epsilonClosure(::std::vector<unsigned> states) const;
 
     public:
         TransmuteNfa nfa;
 
-        TransmuteLayoutBuilder(const Span& sp, const StaticTraitResolve& resolve, bool destination, bool assumeSafety)
-            : sp(sp)
-            , resolve(resolve)
-            , destination(destination)
-            , assumeSafety(assumeSafety)
-        {
-        }
+        TransmuteLayoutBuilder(const Span& sp, const StaticTraitResolve& resolve, bool destination, bool assumeSafety);
 
-        bool makeDfa(const HIRTypeData* ty, TransmuteDfa& out) {
-            auto root = build(ty);
-            if (!supported) {
-                return false;
-            }
-
-            ::std::map<::std::vector<unsigned>, unsigned> indexes;
-            ::std::vector<::std::vector<unsigned>> states;
-            auto intern = [&](::std::vector<unsigned> state) {
-                auto result = indexes.emplace(state, indexes.size());
-                if (result.second) {
-                    states.push_back(::std::move(state));
-                    TransmuteDfa::Transitions transitions;
-                    transitions.fill(-1);
-                    out.transitions.push_back(transitions);
-                    out.references.push_back({});
-                    out.accepting.push_back(false);
-                }
-                return result.first->second;
-            };
-
-            intern(epsilonClosure({root.fragment.start}));
-            for (size_t stateIndex = 0; stateIndex < states.size(); stateIndex++) {
-                const auto state = states[stateIndex];
-                out.accepting[stateIndex] = ::std::binary_search(state.begin(), state.end(), root.fragment.accept);
-
-                ::std::array<::std::vector<unsigned>, TRANSMUTE_BYTE_VALUES> destinations;
-                for (auto nfaState : state) {
-                    for (const auto& edge : nfa.states[nfaState].bytes) {
-                        for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES; value++) {
-                            if (edge.values[value]) {
-                                destinations[value].push_back(edge.destination);
-                            }
-                        }
-                    }
-                }
-                for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES; value++) {
-                    auto& destination = destinations[value];
-                    if (destination.empty()) {
-                        continue;
-                    }
-                    ::std::sort(destination.begin(), destination.end());
-                    destination.erase(::std::unique(destination.begin(), destination.end()), destination.end());
-                    out.transitions[stateIndex][value] = intern(epsilonClosure(::std::move(destination)));
-                }
-                for (auto nfaState : state) {
-                    for (const auto& edge : nfa.states[nfaState].references) {
-                        auto destination = intern(epsilonClosure({edge.destination}));
-                        out.references[stateIndex].push_back({edge.reference, destination});
-                    }
-                }
-            }
-            return true;
-        }
+        bool makeDfa(const HIRTypeData* ty, TransmuteDfa& out);
     };
 
     class TransmuteRelation;
@@ -3305,39 +2908,13 @@ namespace {
         ::std::map<::std::pair<const HIRTypeData*, const HIRTypeData*>, int> cache;
 
     public:
-        TransmuteTypeChecker(const Span& sp, const StaticTraitResolve& resolve, bool assumeAlignment, bool assumeSafety, bool assumeValidity)
-            : sp(sp)
-            , resolve(resolve)
-            , assumeAlignment(assumeAlignment)
-            , assumeSafety(assumeSafety)
-            , assumeValidity(assumeValidity)
-        {
-        }
+        TransmuteTypeChecker(const Span& sp, const StaticTraitResolve& resolve, bool assumeAlignment, bool assumeSafety, bool assumeValidity);
 
         bool check(const HIRTypeData* sourceType, const HIRTypeData* destinationType);
 
-        bool referencesCompatible(const TransmuteReference& source, const TransmuteReference& destination) {
-            if (!source.isMutable && destination.isMutable) {
-                return false;
-            }
-            if (!assumeAlignment && source.referentAlign < destination.referentAlign) {
-                return false;
-            }
-            if (destination.referentSize > source.referentSize) {
-                return false;
-            }
-            if (!check(source.referent, destination.referent)) {
-                return false;
-            }
-            if (destination.isMutable) {
-                return check(destination.referent, source.referent);
-            }
-            return resolve.typeIsInteriorMutable(sp, destination.referent) == HIRCompare::Unequal;
-        }
+        bool referencesCompatible(const TransmuteReference& source, const TransmuteReference& destination);
 
-        bool validityIsAssumed() const {
-            return assumeValidity;
-        }
+        bool validityIsAssumed() const;
     };
 
     class TransmuteRelation {
@@ -3347,89 +2924,12 @@ namespace {
         bool assumeValidity;
         ::std::map<::std::pair<unsigned, unsigned>, int> cache;
 
-        bool check(unsigned sourceState, unsigned destinationState) {
-            const auto key = ::std::make_pair(sourceState, destinationState);
-            auto existing = cache.find(key);
-            if (existing != cache.end()) {
-                return existing->second > 0;
-            }
-            cache.insert({key, 0});
-
-            bool result;
-            if (destination.accepting[destinationState]) {
-                result = true;
-            } else if (source.accepting[sourceState]) {
-                const auto next = destination.transitions[destinationState][TRANSMUTE_UNINITIALISED];
-                result = next >= 0 && check(sourceState, static_cast<unsigned>(next));
-            } else {
-                bool bytesResult = !assumeValidity;
-                for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES; value++) {
-                    const auto sourceNext = source.transitions[sourceState][value];
-                    if (sourceNext < 0) {
-                        continue;
-                    }
-                    const auto destinationNext = destination.transitions[destinationState][value];
-                    const bool edgeResult = destinationNext >= 0
-                        && check(static_cast<unsigned>(sourceNext), static_cast<unsigned>(destinationNext));
-                    if (assumeValidity) {
-                        bytesResult |= edgeResult;
-                        if (bytesResult) {
-                            break;
-                        }
-                    } else {
-                        bytesResult &= edgeResult;
-                        if (!bytesResult) {
-                            break;
-                        }
-                    }
-                }
-
-                bool referencesResult = !assumeValidity;
-                for (const auto& sourceEdge : source.references[sourceState]) {
-                    bool edgeResult = false;
-                    for (const auto& destinationEdge : destination.references[destinationState]) {
-                        if (typeChecker.referencesCompatible(sourceEdge.first, destinationEdge.first)
-                            && check(sourceEdge.second, destinationEdge.second)) {
-                            edgeResult = true;
-                            break;
-                        }
-                    }
-                    if (assumeValidity) {
-                        referencesResult |= edgeResult;
-                        if (referencesResult) {
-                            break;
-                        }
-                    } else {
-                        referencesResult &= edgeResult;
-                        if (!referencesResult) {
-                            break;
-                        }
-                    }
-                }
-                result = assumeValidity ? bytesResult || referencesResult : bytesResult && referencesResult;
-            }
-            cache[key] = result ? 1 : -1;
-            return result;
-        }
+        bool check(unsigned sourceState, unsigned destinationState);
 
     public:
-        TransmuteRelation(const TransmuteDfa& source, const TransmuteDfa& destination, TransmuteTypeChecker& typeChecker)
-            : source(source)
-            , destination(destination)
-            , typeChecker(typeChecker)
-            , assumeValidity(typeChecker.validityIsAssumed())
-        {
-        }
+        TransmuteRelation(const TransmuteDfa& source, const TransmuteDfa& destination, TransmuteTypeChecker& typeChecker);
 
-        bool check() {
-            if (!source.inhabited()) {
-                return true;
-            }
-            if (!destination.inhabited()) {
-                return false;
-            }
-            return check(0, 0);
-        }
+        bool check();
     };
 
     bool TransmuteTypeChecker::check(const HIRTypeData* sourceType, const HIRTypeData* destinationType) {
@@ -3460,16 +2960,7 @@ namespace {
     }
 }
 
-bool TargetTypesAreTransmutable(
-    const Span& sp,
-    const StaticTraitResolve& resolve,
-    const HIRTypeData* src,
-    const HIRTypeData* dst,
-    bool assumeAlignment,
-    bool assumeLifetimes,
-    bool assumeSafety,
-    bool assumeValidity
-) {
+bool TargetTypesAreTransmutable(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* src, const HIRTypeData* dst, bool assumeAlignment, bool assumeLifetimes, bool assumeSafety, bool assumeValidity) {
     return TransmuteTypeChecker(sp, resolve, assumeAlignment, assumeSafety, assumeValidity).check(src, dst);
 }
 
@@ -3503,4 +2994,540 @@ std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x) {
         }
     }
     return os;
+}
+
+auto AsyncDropFieldLayout::empty() const -> bool {
+    return futures.empty();
+}
+
+auto TransmuteNfa::addState() -> unsigned {
+    states.push_back({});
+    return states.size() - 1;
+}
+
+auto TransmuteNfa::empty() -> Fragment {
+    auto state = addState();
+    return {state, state};
+}
+
+auto TransmuteNfa::uninhabited() -> Fragment {
+    return {addState(), addState()};
+}
+
+auto TransmuteNfa::byte(const TransmuteByteSet& values) -> Fragment {
+    auto start = addState();
+    auto accept = addState();
+    states[start].bytes.push_back({values, accept});
+    return {start, accept};
+}
+
+auto TransmuteNfa::reference(TransmuteReference reference) -> Fragment {
+    auto start = addState();
+    auto accept = addState();
+    states[start].references.push_back({reference, accept});
+    return {start, accept};
+}
+
+auto TransmuteNfa::then(Fragment left, Fragment right) -> Fragment {
+    states[left.accept].epsilon.push_back(right.start);
+    return {left.start, right.accept};
+}
+
+auto TransmuteNfa::alternative(::std::vector<Fragment> alternatives) -> Fragment {
+    if (alternatives.empty()) {
+        return uninhabited();
+    }
+    if (alternatives.size() == 1) {
+        return alternatives.front();
+    }
+    auto start = addState();
+    auto accept = addState();
+    for (const auto& alternative : alternatives) {
+        states[start].epsilon.push_back(alternative.start);
+        states[alternative.accept].epsilon.push_back(accept);
+    }
+    return {start, accept};
+}
+
+auto TransmuteDfa::inhabited() const -> bool {
+    return ::std::find(accepting.begin(), accepting.end(), true) != accepting.end();
+}
+
+auto TransmuteLayoutBuilder::byteRange(unsigned first, unsigned last) -> TransmuteByteSet {
+    TransmuteByteSet rv;
+    for (unsigned value = first; value <= last; value++) {
+        rv.set(value);
+    }
+    return rv;
+}
+
+auto TransmuteLayoutBuilder::bytes(size_t count, const TransmuteByteSet& values) -> Built {
+    auto rv = nfa.empty();
+    for (size_t i = 0; i < count; i++) {
+        rv = nfa.then(rv, nfa.byte(values));
+    }
+    return {rv, count};
+}
+
+auto TransmuteLayoutBuilder::padding(size_t count) -> Built {
+    TransmuteByteSet values;
+    values.set();
+    return bytes(count, values);
+}
+
+auto TransmuteLayoutBuilder::number(size_t count) -> Built {
+    return bytes(count, byteRange(0, 255));
+}
+
+auto TransmuteLayoutBuilder::exact(U128 value, size_t count) -> Built {
+    if (count > 16) {
+        supported = false;
+        return {nfa.uninhabited(), count};
+    }
+    u8 raw[16] = {};
+    value.toLeBytes(raw, count);
+    auto rv = nfa.empty();
+    for (size_t i = 0; i < count; i++) {
+        TransmuteByteSet values;
+        values.set(raw[i]);
+        rv = nfa.then(rv, nfa.byte(values));
+    }
+    return {rv, count};
+}
+
+auto TransmuteLayoutBuilder::character() -> Built {
+    const auto any = byteRange(0, 255);
+    const auto zero = byteRange(0, 0);
+    auto make = [&](const ::std::array<TransmuteByteSet, 4>& values) {
+        auto rv = nfa.empty();
+        for (const auto& value : values) {
+            rv = nfa.then(rv, nfa.byte(value));
+        }
+        return rv;
+    };
+    ::std::vector<TransmuteNfa::Fragment> alternatives;
+    alternatives.push_back(make({any, byteRange(0x00, 0xD7), zero, zero}));
+    alternatives.push_back(make({any, byteRange(0xE0, 0xFF), zero, zero}));
+    alternatives.push_back(make({any, any, byteRange(0x01, 0x10), zero}));
+    return {nfa.alternative(::std::move(alternatives)), 4};
+}
+
+auto TransmuteLayoutBuilder::combine(::std::vector<Segment> segments, size_t totalSize) -> Built {
+    ::std::stable_sort(segments.begin(), segments.end(), [](const Segment& left, const Segment& right) {
+        return left.offset < right.offset;
+    });
+
+    auto rv = nfa.empty();
+    size_t offset = 0;
+    for (const auto& segment : segments) {
+        if (segment.offset > totalSize || segment.value.size > totalSize - segment.offset || (segment.value.size != 0 && segment.offset < offset)) {
+            supported = false;
+            return {nfa.uninhabited(), totalSize};
+        }
+        if (segment.offset > offset) {
+            rv = nfa.then(rv, padding(segment.offset - offset).fragment);
+        }
+        rv = nfa.then(rv, segment.value.fragment);
+        offset = ::std::max(offset, segment.offset + segment.value.size);
+    }
+    rv = nfa.then(rv, padding(totalSize - offset).fragment);
+    return {rv, totalSize};
+}
+
+auto TransmuteLayoutBuilder::aggregate(const TypeRepr& repr, int skipField) -> Built {
+    ::std::vector<Segment> fields;
+    for (size_t i = 0; i < repr.fields.size(); i++) {
+        if (static_cast<int>(i) == skipField) {
+            continue;
+        }
+        auto field = build(repr.fields[i].ty);
+        fields.push_back({repr.fields[i].offset, field});
+    }
+    return combine(::std::move(fields), repr.size);
+}
+
+auto TransmuteLayoutBuilder::addVariantPayload(::std::vector<Segment>& segments, const TypeRepr& outerRepr, unsigned variant, bool skipSyntheticTag, size_t tagOffset, size_t tagSize) -> void {
+    ASSERT_BUG(sp, variant < outerRepr.fields.size(), "Enum variant field is missing");
+    const auto& outerField = outerRepr.fields[variant];
+    const auto* payloadRepr = TargetGetTypeRepr(sp, resolve, outerField.ty);
+    if (!payloadRepr) {
+        supported = false;
+        return;
+    }
+
+    int skipField = -1;
+    if (skipSyntheticTag && !payloadRepr->fields.empty()) {
+        const auto& candidate = payloadRepr->fields.back();
+        size_t candidateSize = 0;
+        if (!TargetGetSizeOf(sp, resolve, candidate.ty, candidateSize)) {
+            supported = false;
+            return;
+        }
+        if (outerField.offset + candidate.offset == tagOffset && candidateSize == tagSize) {
+            skipField = payloadRepr->fields.size() - 1;
+        }
+    }
+
+    if (skipField < 0) {
+        segments.push_back({outerField.offset, build(outerField.ty)});
+        return;
+    }
+
+    for (size_t i = 0; i < payloadRepr->fields.size(); i++) {
+        if (static_cast<int>(i) == skipField) {
+            continue;
+        }
+        const auto& field = payloadRepr->fields[i];
+        segments.push_back({outerField.offset + field.offset, build(field.ty)});
+    }
+}
+
+auto TransmuteLayoutBuilder::taggedVariant(const TypeRepr& repr, unsigned variant, size_t tagOffset, size_t tagSize, U128 tag, bool skipSyntheticTag) -> Built {
+    ::std::vector<Segment> segments;
+    addVariantPayload(segments, repr, variant, skipSyntheticTag, tagOffset, tagSize);
+    segments.push_back({tagOffset, exact(tag, tagSize)});
+    return combine(::std::move(segments), repr.size);
+}
+
+auto TransmuteLayoutBuilder::enumLayout(const HIRTypeData* ty, const TypeRepr& repr, const HIREnum& enm) -> Built {
+    if (enm.numVariants() == 0) {
+        return {nfa.uninhabited(), repr.size};
+    }
+
+    if (repr.variants.is_None()) {
+        if (repr.fields.empty()) {
+            return padding(repr.size);
+        }
+        return combine({Segment{repr.fields[0].offset, build(repr.fields[0].ty)}}, repr.size);
+    }
+
+    ::std::vector<TransmuteNfa::Fragment> alternatives;
+    if (const auto* linear = repr.variants.opt_Linear()) {
+        const auto tagOffset = repr.getOffset(sp, resolve, linear->field);
+        for (unsigned variant = 0; variant < linear->numVariants; variant++) {
+            Built value;
+            if (linear->usesNiche() && variant == linear->field.index) {
+                const auto& field = repr.fields.at(variant);
+                value = combine({Segment{field.offset, build(field.ty)}}, repr.size);
+            } else {
+                value = taggedVariant(repr, variant, tagOffset, linear->field.size, U128(linear->tagValue(variant)), true);
+            }
+            alternatives.push_back(value.fragment);
+        }
+    } else if (const auto* values = repr.variants.opt_Values()) {
+        const auto tagOffset = repr.getOffset(sp, resolve, values->field);
+        for (unsigned variant = 0; variant < values->values.size(); variant++) {
+            auto value = enm.data.is_Value() ? combine({Segment{tagOffset, exact(values->values[variant], values->field.size)}}, repr.size) : taggedVariant(repr, variant, tagOffset, values->field.size, values->values[variant], true);
+            alternatives.push_back(value.fragment);
+        }
+    } else if (const auto* nonzero = repr.variants.opt_NonZero()) {
+        const auto tagOffset = repr.getOffset(sp, resolve, nonzero->field);
+        const auto nonzeroVariant = 1 - nonzero->zeroVariant;
+        for (unsigned variant = 0; variant < 2; variant++) {
+            Built value;
+            if (variant == nonzeroVariant) {
+                const auto& field = repr.fields.at(variant);
+                value = combine({Segment{field.offset, build(field.ty)}}, repr.size);
+            } else {
+                value = combine({Segment{tagOffset, exact(U128(0), nonzero->field.size)}}, repr.size);
+            }
+            alternatives.push_back(value.fragment);
+        }
+    } else {
+        BUG(sp, "Unhandled enum representation for " << ty);
+    }
+    return {nfa.alternative(::std::move(alternatives)), repr.size};
+}
+
+auto TransmuteLayoutBuilder::build(const HIRTypeData* ty) -> Built {
+    if (ty->is_Diverge()) {
+        return {nfa.uninhabited(), 0};
+    }
+    if (const auto* primitive = ty->opt_Primitive()) {
+        size_t size = 0;
+        if (!TargetGetSizeOf(sp, resolve, ty, size)) {
+            supported = false;
+            return {nfa.uninhabited(), 0};
+        }
+        if (*primitive == HIRCoreType::Bool) {
+            return bytes(1, byteRange(0, 1));
+        }
+        if (*primitive == HIRCoreType::Char) {
+            return character();
+        }
+        if (*primitive == HIRCoreType::Str) {
+            supported = false;
+            return {nfa.uninhabited(), size};
+        }
+        return number(size);
+    }
+    if (const auto* tuple = ty->opt_Tuple()) {
+        const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
+        if (!repr) {
+            supported = false;
+            return {nfa.uninhabited(), 0};
+        }
+        return aggregate(*repr);
+    }
+    if (const auto* array = ty->opt_Array()) {
+        if (!array->size.is_Known()) {
+            supported = false;
+            return {nfa.uninhabited(), 0};
+        }
+        auto rv = nfa.empty();
+        size_t size = 0;
+        for (u64 i = 0; i < array->size.as_Known(); i++) {
+            auto element = build(array->inner);
+            if (element.size > SIZE_MAX - size) {
+                supported = false;
+                return {nfa.uninhabited(), 0};
+            }
+            size += element.size;
+            rv = nfa.then(rv, element.fragment);
+        }
+        return {rv, size};
+    }
+    if (const auto* borrow = ty->opt_Borrow()) {
+        if (borrow->type == HIRBorrowType::Owned) {
+            supported = false;
+            return {nfa.uninhabited(), 0};
+        }
+
+        size_t referentSize = 0;
+        size_t referentAlign = 0;
+        size_t referenceSize = 0;
+        if (!TargetGetSizeAndAlignOf(sp, resolve, borrow->inner, referentSize, referentAlign) || !TargetGetSizeOf(sp, resolve, ty, referenceSize)) {
+            supported = false;
+            return {nfa.uninhabited(), 0};
+        }
+        return {nfa.reference({borrow->type == HIRBorrowType::Unique, borrow->inner, referentSize, referentAlign}), referenceSize};
+    }
+    if (const auto* path = ty->opt_Path()) {
+        if (destination && !assumeSafety) {
+            supported = false;
+            return {nfa.uninhabited(), 0};
+        }
+        const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
+        if (!repr) {
+            supported = false;
+            return {nfa.uninhabited(), 0};
+        }
+        if (path->binding.is_Struct()) {
+            const auto& str = *path->binding.as_Struct();
+            // rustc 1.90's transmutability layout does not yet model
+            // scalar valid ranges (including the NonZero wrappers).
+            if (str.structMarkings.isNonzero || str.structMarkings.boundedMax) {
+                supported = false;
+                return {nfa.uninhabited(), repr->size};
+            }
+            return aggregate(*repr);
+        }
+        if (path->binding.is_Union()) {
+            ::std::vector<TransmuteNfa::Fragment> alternatives;
+            for (const auto& field : repr->fields) {
+                alternatives.push_back(combine({Segment{0, build(field.ty)}}, repr->size).fragment);
+            }
+            return {nfa.alternative(::std::move(alternatives)), repr->size};
+        }
+        if (path->binding.is_Enum()) {
+            return enumLayout(ty, *repr, *path->binding.as_Enum());
+        }
+        supported = false;
+        return {nfa.uninhabited(), repr->size};
+    }
+    supported = false;
+    return {nfa.uninhabited(), 0};
+}
+
+auto TransmuteLayoutBuilder::epsilonClosure(::std::vector<unsigned> states) const -> ::std::vector<unsigned> {
+    ::std::vector<bool> seen(nfa.states.size(), false);
+    for (auto state : states) {
+        seen.at(state) = true;
+    }
+    for (size_t i = 0; i < states.size(); i++) {
+        for (auto next : nfa.states[states[i]].epsilon) {
+            if (!seen[next]) {
+                seen[next] = true;
+                states.push_back(next);
+            }
+        }
+    }
+    ::std::sort(states.begin(), states.end());
+    return states;
+}
+
+TransmuteLayoutBuilder::TransmuteLayoutBuilder(const Span& sp, const StaticTraitResolve& resolve, bool destination, bool assumeSafety)
+    : sp(sp)
+    , resolve(resolve)
+    , destination(destination)
+    , assumeSafety(assumeSafety)
+{
+}
+
+auto TransmuteLayoutBuilder::makeDfa(const HIRTypeData* ty, TransmuteDfa& out) -> bool {
+    auto root = build(ty);
+    if (!supported) {
+        return false;
+    }
+
+    ::std::map<::std::vector<unsigned>, unsigned> indexes;
+    ::std::vector<::std::vector<unsigned>> states;
+    auto intern = [&](::std::vector<unsigned> state) {
+        auto result = indexes.emplace(state, indexes.size());
+        if (result.second) {
+            states.push_back(::std::move(state));
+            TransmuteDfa::Transitions transitions;
+            transitions.fill(-1);
+            out.transitions.push_back(transitions);
+            out.references.push_back({});
+            out.accepting.push_back(false);
+        }
+        return result.first->second;
+    };
+
+    intern(epsilonClosure({root.fragment.start}));
+    for (size_t stateIndex = 0; stateIndex < states.size(); stateIndex++) {
+        const auto state = states[stateIndex];
+        out.accepting[stateIndex] = ::std::binary_search(state.begin(), state.end(), root.fragment.accept);
+
+        ::std::array<::std::vector<unsigned>, TRANSMUTE_BYTE_VALUES> destinations;
+        for (auto nfaState : state) {
+            for (const auto& edge : nfa.states[nfaState].bytes) {
+                for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES; value++) {
+                    if (edge.values[value]) {
+                        destinations[value].push_back(edge.destination);
+                    }
+                }
+            }
+        }
+        for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES; value++) {
+            auto& destination = destinations[value];
+            if (destination.empty()) {
+                continue;
+            }
+            ::std::sort(destination.begin(), destination.end());
+            destination.erase(::std::unique(destination.begin(), destination.end()), destination.end());
+            out.transitions[stateIndex][value] = intern(epsilonClosure(::std::move(destination)));
+        }
+        for (auto nfaState : state) {
+            for (const auto& edge : nfa.states[nfaState].references) {
+                auto destination = intern(epsilonClosure({edge.destination}));
+                out.references[stateIndex].push_back({edge.reference, destination});
+            }
+        }
+    }
+    return true;
+}
+
+TransmuteTypeChecker::TransmuteTypeChecker(const Span& sp, const StaticTraitResolve& resolve, bool assumeAlignment, bool assumeSafety, bool assumeValidity)
+    : sp(sp)
+    , resolve(resolve)
+    , assumeAlignment(assumeAlignment)
+    , assumeSafety(assumeSafety)
+    , assumeValidity(assumeValidity)
+{
+}
+
+auto TransmuteTypeChecker::referencesCompatible(const TransmuteReference& source, const TransmuteReference& destination) -> bool {
+    if (!source.isMutable && destination.isMutable) {
+        return false;
+    }
+    if (!assumeAlignment && source.referentAlign < destination.referentAlign) {
+        return false;
+    }
+    if (destination.referentSize > source.referentSize) {
+        return false;
+    }
+    if (!check(source.referent, destination.referent)) {
+        return false;
+    }
+    if (destination.isMutable) {
+        return check(destination.referent, source.referent);
+    }
+    return resolve.typeIsInteriorMutable(sp, destination.referent) == HIRCompare::Unequal;
+}
+
+auto TransmuteTypeChecker::validityIsAssumed() const -> bool {
+    return assumeValidity;
+}
+
+auto TransmuteRelation::check(unsigned sourceState, unsigned destinationState) -> bool {
+    const auto key = ::std::make_pair(sourceState, destinationState);
+    auto existing = cache.find(key);
+    if (existing != cache.end()) {
+        return existing->second > 0;
+    }
+    cache.insert({key, 0});
+
+    bool result;
+    if (destination.accepting[destinationState]) {
+        result = true;
+    } else if (source.accepting[sourceState]) {
+        const auto next = destination.transitions[destinationState][TRANSMUTE_UNINITIALISED];
+        result = next >= 0 && check(sourceState, static_cast<unsigned>(next));
+    } else {
+        bool bytesResult = !assumeValidity;
+        for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES; value++) {
+            const auto sourceNext = source.transitions[sourceState][value];
+            if (sourceNext < 0) {
+                continue;
+            }
+            const auto destinationNext = destination.transitions[destinationState][value];
+            const bool edgeResult = destinationNext >= 0 && check(static_cast<unsigned>(sourceNext), static_cast<unsigned>(destinationNext));
+            if (assumeValidity) {
+                bytesResult |= edgeResult;
+                if (bytesResult) {
+                    break;
+                }
+            } else {
+                bytesResult &= edgeResult;
+                if (!bytesResult) {
+                    break;
+                }
+            }
+        }
+
+        bool referencesResult = !assumeValidity;
+        for (const auto& sourceEdge : source.references[sourceState]) {
+            bool edgeResult = false;
+            for (const auto& destinationEdge : destination.references[destinationState]) {
+                if (typeChecker.referencesCompatible(sourceEdge.first, destinationEdge.first) && check(sourceEdge.second, destinationEdge.second)) {
+                    edgeResult = true;
+                    break;
+                }
+            }
+            if (assumeValidity) {
+                referencesResult |= edgeResult;
+                if (referencesResult) {
+                    break;
+                }
+            } else {
+                referencesResult &= edgeResult;
+                if (!referencesResult) {
+                    break;
+                }
+            }
+        }
+        result = assumeValidity ? bytesResult || referencesResult : bytesResult && referencesResult;
+    }
+    cache[key] = result ? 1 : -1;
+    return result;
+}
+
+TransmuteRelation::TransmuteRelation(const TransmuteDfa& source, const TransmuteDfa& destination, TransmuteTypeChecker& typeChecker)
+    : source(source)
+    , destination(destination)
+    , typeChecker(typeChecker)
+    , assumeValidity(typeChecker.validityIsAssumed())
+{
+}
+
+auto TransmuteRelation::check() -> bool {
+    if (!source.inhabited()) {
+        return true;
+    }
+    if (!destination.inhabited()) {
+        return false;
+    }
+    return check(0, 0);
 }

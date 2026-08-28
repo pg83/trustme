@@ -1,7 +1,5 @@
 #include "expand_cfg.h"
 
-#include "target_version.h"
-
 #include "synext.h"
 #include "ast_expr.h" // Needed to clear a ExprNodeP
 #include "settings.h"
@@ -10,16 +8,17 @@
 #include "wire_board.h"
 #include "parse_common.h"
 #include "parse_ttstream.h"
+#include "target_version.h"
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"
 
 #include <std/mem/obj_pool.h>
 
+#include <map>
+#include <set>
 #include <array>
 #include <cctype>
 #include <cstdlib>
-#include <map>
-#include <set>
 #include <optional>
 #include <stdexcept>
 
@@ -36,10 +35,7 @@ struct CfgState {
     ::std::map<::std::string, CfgValueCallback*> valueFcns;
     ::std::set<::std::string> flags;
 
-    explicit CfgState(ObjPool& pool)
-        : pool(&pool)
-    {
-    }
+    explicit CfgState(ObjPool& pool);
 };
 
 CfgState* CfgCreateState(ObjPool& pool) {
@@ -53,149 +49,29 @@ namespace {
         size_t pos = 0;
 
     public:
-        explicit CfgSpecParser(const ::std::string& input)
-            : input(input)
-        {
-        }
+        explicit CfgSpecParser(const ::std::string& input);
 
-        [[noreturn]] void fail(const ::std::string& message) const {
-            throw ::std::runtime_error("invalid `--cfg` argument `" + input + "`: " + message);
-        }
+        [[noreturn]] void fail(const ::std::string& message) const;
 
-        void skipWs() {
-            while (pos < input.size()) {
-                const auto c = static_cast<unsigned char>(input[pos]);
-                if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
-                    break;
-                }
-                pos += 1;
-            }
-        }
+        void skipWs();
 
-        bool take(char c) {
-            skipWs();
-            if (pos < input.size() && input[pos] == c) {
-                pos += 1;
-                return true;
-            }
-            return false;
-        }
+        bool take(char c);
 
-        void expect(char c, const char* description) {
-            if (!take(c)) {
-                fail(FMT("expected " << description));
-            }
-        }
+        void expect(char c, const char* description);
 
-        static bool isIdentStart(unsigned char c) {
-            return c == '_' || c >= 0x80 || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z');
-        }
+        static bool isIdentStart(unsigned char c);
 
-        static bool isIdentContinue(unsigned char c) {
-            return isIdentStart(c) || ('0' <= c && c <= '9');
-        }
+        static bool isIdentContinue(unsigned char c);
 
-        ::std::string ident() {
-            skipWs();
-            const auto start = pos;
-            if (pos >= input.size() || !isIdentStart(static_cast<unsigned char>(input[pos]))) {
-                fail("expected an identifier");
-            }
-            pos += 1;
-            while (pos < input.size() && isIdentContinue(static_cast<unsigned char>(input[pos]))) {
-                pos += 1;
-            }
-            return input.substr(start, pos - start);
-        }
+        ::std::string ident();
 
-        static unsigned hexDigit(char c) {
-            if ('0' <= c && c <= '9') {
-                return c - '0';
-            }
-            if ('a' <= c && c <= 'f') {
-                return c - 'a' + 10;
-            }
-            if ('A' <= c && c <= 'F') {
-                return c - 'A' + 10;
-            }
-            return 16;
-        }
+        static unsigned hexDigit(char c);
 
-        ::std::string stringLiteral() {
-            skipWs();
-            if (pos >= input.size() || input[pos] != '"') {
-                fail("expected a string literal");
-            }
-            pos += 1;
-            ::std::string rv;
-            while (pos < input.size()) {
-                auto c = input[pos++];
-                if (c == '"') {
-                    return rv;
-                }
-                if (c != '\\') {
-                    rv += c;
-                    continue;
-                }
-                if (pos >= input.size()) {
-                    fail("unterminated string escape");
-                }
-                c = input[pos++];
-                switch (c) {
-                    case '\\':
-                        rv += '\\';
-                        break;
-                    case '"':
-                        rv += '"';
-                        break;
-                    case 'n':
-                        rv += '\n';
-                        break;
-                    case 'r':
-                        rv += '\r';
-                        break;
-                    case 't':
-                        rv += '\t';
-                        break;
-                    case '0':
-                        rv += '\0';
-                        break;
-                    case 'x': {
-                        if (pos + 2 > input.size()) {
-                            fail("incomplete hexadecimal string escape");
-                        }
-                        const auto hi = hexDigit(input[pos]);
-                        const auto lo = hexDigit(input[pos + 1]);
-                        if (hi >= 16 || lo >= 16) {
-                            fail("invalid hexadecimal string escape");
-                        }
-                        rv += static_cast<char>((hi << 4) | lo);
-                        pos += 2;
-                        break;
-                    }
-                    default:
-                        fail(FMT("unsupported string escape \\" << c));
-                }
-            }
-            fail("unterminated string literal");
-        }
+        ::std::string stringLiteral();
 
-        bool atEnd() {
-            skipWs();
-            return pos == input.size();
-        }
+        bool atEnd();
 
-        ::std::pair<::std::string, ::std::optional<::std::string>> parseCfgOption() {
-            auto name = ident();
-            ::std::optional<::std::string> value;
-            if (take('=')) {
-                value = stringLiteral();
-            }
-            if (!atEnd()) {
-                fail("expected `key` or `key=\"value\"`");
-            }
-            return {::std::move(name), ::std::move(value)};
-        }
+        ::std::pair<::std::string, ::std::optional<::std::string>> parseCfgOption();
     };
 
 }
@@ -459,104 +335,279 @@ std::vector<ASTAttribute> checkCfgAttr(const Settings& settings, const ASTAttrib
 }
 
 class CCfgExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        auto lex = TTStream(sp, ParseState(), tt);
-        const auto& cfg = *wb.settings->cfg;
-        bool rv = checkCfgInner(cfg, lex);
-        lex.getTokenCheck(TOK_EOF);
-
-        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, {}, rv ? TOK_RWORD_TRUE : TOK_RWORD_FALSE)));
-    }
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
 class CCfgSelectExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        auto lex = TTStream(sp, ParseState(), tt);
-        for (;;) {
-            const auto& cfg = *wb.settings->cfg;
-            bool rv = lex.getTokenIf(TOK_UNDERSCORE) || checkCfgInner(cfg, lex);
-            lex.getTokenCheck(TOK_FATARROW);
-            auto t = ParseTT(lex, true);
-            if (rv) {
-                return box$(TTStreamO(sp, ParseState(), std::move(t)));
-            }
-        }
-        lex.getTokenCheck(TOK_EOF);
-
-        ERROR(sp, E0000, "cfg_select - Nothing matched");
-    }
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
 };
 
 class CCfgHandler: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Pre;
-    }
+    AttrStage stage() const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        // Ignore, as #[cfg] on a crate is handled in expand/mod.cpp
-        if (!checkCfg(*wb.settings, sp, mi)) {
-            // Remove all items (can't remove the module)
-            crate.rootModule_.items.clear();
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (!checkCfg(*wb.settings, sp, mi)) {
-            i = ASTItem::make_None({});
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        if (!checkCfg(*wb.settings, sp, mi)) {
-            i = ASTItem::make_None({});
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
-        if (!checkCfg(*wb.settings, sp, mi)) {
-            i = ASTItem::make_None({});
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override {
-        if (!checkCfg(*wb.settings, sp, mi)) {
-            expr.reset();
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override {
-        if (!checkCfg(*wb.settings, sp, mi)) {
-            si.name = RcString();
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& i) const override {
-        if (!checkCfg(*wb.settings, sp, mi)) {
-            i.type = ::mkType(*crate.pool, sp);
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& i) const override {
-        if (!checkCfg(*wb.settings, sp, mi)) {
-            i.name = RcString();
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& i) const override {
-        if (!checkCfg(*wb.settings, sp, mi)) {
-            i.patterns.clear();
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& i) const override;
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& i) const override {
-        if (!checkCfg(*wb.settings, sp, mi)) {
-            i.value.reset();
-        }
-    }
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& i) const override;
 };
 
 void RegisterCfgBuiltins(ExpandRegistry& registry) {
     registry.addMacro<CCfgExpander>("cfg");
     registry.addMacro<CCfgSelectExpander>("cfg_select");
     registry.addDecorator<CCfgHandler>("cfg");
+}
+
+CfgState::CfgState(ObjPool& pool)
+    : pool(&pool)
+{
+}
+
+CfgSpecParser::CfgSpecParser(const ::std::string& input)
+    : input(input)
+{
+}
+
+[[noreturn]] auto CfgSpecParser::fail(const ::std::string& message) const -> void {
+    throw ::std::runtime_error("invalid `--cfg` argument `" + input + "`: " + message);
+}
+
+auto CfgSpecParser::skipWs() -> void {
+    while (pos < input.size()) {
+        const auto c = static_cast<unsigned char>(input[pos]);
+        if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+            break;
+        }
+        pos += 1;
+    }
+}
+
+auto CfgSpecParser::take(char c) -> bool {
+    skipWs();
+    if (pos < input.size() && input[pos] == c) {
+        pos += 1;
+        return true;
+    }
+    return false;
+}
+
+auto CfgSpecParser::expect(char c, const char* description) -> void {
+    if (!take(c)) {
+        fail(FMT("expected " << description));
+    }
+}
+
+auto CfgSpecParser::isIdentStart(unsigned char c) -> bool {
+    return c == '_' || c >= 0x80 || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z');
+}
+
+auto CfgSpecParser::isIdentContinue(unsigned char c) -> bool {
+    return isIdentStart(c) || ('0' <= c && c <= '9');
+}
+
+auto CfgSpecParser::ident() -> ::std::string {
+    skipWs();
+    const auto start = pos;
+    if (pos >= input.size() || !isIdentStart(static_cast<unsigned char>(input[pos]))) {
+        fail("expected an identifier");
+    }
+    pos += 1;
+    while (pos < input.size() && isIdentContinue(static_cast<unsigned char>(input[pos]))) {
+        pos += 1;
+    }
+    return input.substr(start, pos - start);
+}
+
+auto CfgSpecParser::hexDigit(char c) -> unsigned {
+    if ('0' <= c && c <= '9') {
+        return c - '0';
+    }
+    if ('a' <= c && c <= 'f') {
+        return c - 'a' + 10;
+    }
+    if ('A' <= c && c <= 'F') {
+        return c - 'A' + 10;
+    }
+    return 16;
+}
+
+auto CfgSpecParser::stringLiteral() -> ::std::string {
+    skipWs();
+    if (pos >= input.size() || input[pos] != '"') {
+        fail("expected a string literal");
+    }
+    pos += 1;
+    ::std::string rv;
+    while (pos < input.size()) {
+        auto c = input[pos++];
+        if (c == '"') {
+            return rv;
+        }
+        if (c != '\\') {
+            rv += c;
+            continue;
+        }
+        if (pos >= input.size()) {
+            fail("unterminated string escape");
+        }
+        c = input[pos++];
+        switch (c) {
+            case '\\':
+                rv += '\\';
+                break;
+            case '"':
+                rv += '"';
+                break;
+            case 'n':
+                rv += '\n';
+                break;
+            case 'r':
+                rv += '\r';
+                break;
+            case 't':
+                rv += '\t';
+                break;
+            case '0':
+                rv += '\0';
+                break;
+            case 'x': {
+                if (pos + 2 > input.size()) {
+                    fail("incomplete hexadecimal string escape");
+                }
+                const auto hi = hexDigit(input[pos]);
+                const auto lo = hexDigit(input[pos + 1]);
+                if (hi >= 16 || lo >= 16) {
+                    fail("invalid hexadecimal string escape");
+                }
+                rv += static_cast<char>((hi << 4) | lo);
+                pos += 2;
+                break;
+            }
+            default:
+                fail(FMT("unsupported string escape \\" << c));
+        }
+    }
+    fail("unterminated string literal");
+}
+
+auto CfgSpecParser::atEnd() -> bool {
+    skipWs();
+    return pos == input.size();
+}
+
+auto CfgSpecParser::parseCfgOption() -> ::std::pair<::std::string, ::std::optional<::std::string>> {
+    auto name = ident();
+    ::std::optional<::std::string> value;
+    if (take('=')) {
+        value = stringLiteral();
+    }
+    if (!atEnd()) {
+        fail("expected `key` or `key=\"value\"`");
+    }
+    return {::std::move(name), ::std::move(value)};
+}
+
+auto CCfgExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> ::std::unique_ptr<TokenStream> {
+    auto lex = TTStream(sp, ParseState(), tt);
+    const auto& cfg = *wb.settings->cfg;
+    bool rv = checkCfgInner(cfg, lex);
+    lex.getTokenCheck(TOK_EOF);
+
+    return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, {}, rv ? TOK_RWORD_TRUE : TOK_RWORD_FALSE)));
+}
+
+auto CCfgSelectExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> ::std::unique_ptr<TokenStream> {
+    auto lex = TTStream(sp, ParseState(), tt);
+    for (;;) {
+        const auto& cfg = *wb.settings->cfg;
+        bool rv = lex.getTokenIf(TOK_UNDERSCORE) || checkCfgInner(cfg, lex);
+        lex.getTokenCheck(TOK_FATARROW);
+        auto t = ParseTT(lex, true);
+        if (rv) {
+            return box$(TTStreamO(sp, ParseState(), std::move(t)));
+        }
+    }
+    lex.getTokenCheck(TOK_EOF);
+
+    ERROR(sp, E0000, "cfg_select - Nothing matched");
+}
+
+auto CCfgHandler::stage() const -> AttrStage {
+    return AttrStage::Pre;
+}
+
+auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
+    // Ignore, as #[cfg] on a crate is handled in expand/mod.cpp
+    if (!checkCfg(*wb.settings, sp, mi)) {
+        // Remove all items (can't remove the module)
+        crate.rootModule_.items.clear();
+    }
+}
+
+auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (!checkCfg(*wb.settings, sp, mi)) {
+        i = ASTItem::make_None({});
+    }
+}
+
+auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
+    if (!checkCfg(*wb.settings, sp, mi)) {
+        i = ASTItem::make_None({});
+    }
+}
+
+auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
+    if (!checkCfg(*wb.settings, sp, mi)) {
+        i = ASTItem::make_None({});
+    }
+}
+
+auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const -> void {
+    if (!checkCfg(*wb.settings, sp, mi)) {
+        expr.reset();
+    }
+}
+
+auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const -> void {
+    if (!checkCfg(*wb.settings, sp, mi)) {
+        si.name = RcString();
+    }
+}
+
+auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& i) const -> void {
+    if (!checkCfg(*wb.settings, sp, mi)) {
+        i.type = ::mkType(*crate.pool, sp);
+    }
+}
+
+auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& i) const -> void {
+    if (!checkCfg(*wb.settings, sp, mi)) {
+        i.name = RcString();
+    }
+}
+
+auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& i) const -> void {
+    if (!checkCfg(*wb.settings, sp, mi)) {
+        i.patterns.clear();
+    }
+}
+
+auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& i) const -> void {
+    if (!checkCfg(*wb.settings, sp, mi)) {
+        i.value.reset();
+    }
 }

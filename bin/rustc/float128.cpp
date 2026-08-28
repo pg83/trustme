@@ -12,7 +12,7 @@ namespace {
     // binary128: 1 sign bit, 15 exponent bits, 112 fraction bits
     constexpr int significandBits = 112;
     constexpr int exponentBias = 16383;
-    constexpr int min_exponent = -16382;  // of normal values
+    constexpr int min_exponent = -16382; // of normal values
     constexpr int max_exponent = 16383;
 
     const u128 implicitBit = u128(1) << significandBits;
@@ -92,9 +92,7 @@ namespace {
             assert(exponent == min_exponent);
             biased = 0;
         }
-        const u64 hi = (negative ? 0x8000'0000'0000'0000ull : 0)
-            | (biased << 48)
-            | static_cast<u64>(significand >> 64);
+        const u64 hi = (negative ? 0x8000'0000'0000'0000ull : 0) | (biased << 48) | static_cast<u64>(significand >> 64);
         return Float128::fromBits(hi, static_cast<u64>(significand));
     }
 
@@ -176,153 +174,33 @@ namespace {
     class BigUint {
         std::vector<u64> limbs_;
 
-        void trim() {
-            while (!limbs_.empty() && limbs_.back() == 0) {
-                limbs_.pop_back();
-            }
-        }
+        void trim();
 
     public:
         BigUint() = default;
 
-        static BigUint fromU128(u128 v) {
-            BigUint r;
-            if (v != 0) {
-                r.limbs_.push_back(static_cast<u64>(v));
-                if ((v >> 64) != 0) {
-                    r.limbs_.push_back(static_cast<u64>(v >> 64));
-                }
-            }
-            return r;
-        }
+        static BigUint fromU128(u128 v);
 
-        bool isZero() const {
-            return limbs_.empty();
-        }
+        bool isZero() const;
 
-        void multiplyAddSmall(u64 factor, u64 addend) {
-            u128 carry = addend;
-            for (auto& limb : limbs_) {
-                const u128 v = u128(limb) * factor + carry;
-                limb = static_cast<u64>(v);
-                carry = v >> 64;
-            }
-            while (carry != 0) {
-                limbs_.push_back(static_cast<u64>(carry));
-                carry >>= 64;
-            }
-            trim();
-        }
+        void multiplyAddSmall(u64 factor, u64 addend);
 
         // Returns the remainder
-        u64 divideSmall(u64 divisor) {
-            assert(divisor != 0);
-            u128 remainder = 0;
-            for (size_t i = limbs_.size(); i-- > 0;) {
-                const u128 cur = (remainder << 64) | limbs_[i];
-                limbs_[i] = static_cast<u64>(cur / divisor);
-                remainder = cur % divisor;
-            }
-            trim();
-            return static_cast<u64>(remainder);
-        }
+        u64 divideSmall(u64 divisor);
 
-        void shiftLeft(size_t bits) {
-            if (isZero() || bits == 0) {
-                return;
-            }
-            const size_t whole = bits / 64;
-            const unsigned rest = bits % 64;
-            const size_t oldSize = limbs_.size();
-            limbs_.resize(oldSize + whole + (rest != 0 ? 1 : 0), 0);
-            for (size_t i = oldSize; i-- > 0;) {
-                const u64 limb = limbs_[i];
-                if (rest != 0) {
-                    limbs_[i + whole + 1] |= limb >> (64 - rest);
-                    limbs_[i + whole] = limb << rest;
-                } else {
-                    limbs_[i + whole] = limb;
-                }
-                if (i < whole) {
-                    limbs_[i] = 0;
-                }
-            }
-            for (size_t i = 0; i < whole && i < oldSize; i++) {
-                limbs_[i] = 0;
-            }
-            trim();
-        }
+        void shiftLeft(size_t bits);
 
         // Discards the low `bits` bits; sets sticky if any of them was set
-        void shiftRightSticky(size_t bits, bool& sticky) {
-            if (bits == 0) {
-                return;
-            }
-            const size_t whole = bits / 64;
-            const unsigned rest = bits % 64;
-            if (whole >= limbs_.size()) {
-                sticky |= !isZero();
-                limbs_.clear();
-                return;
-            }
-            for (size_t i = 0; i < whole; i++) {
-                sticky |= limbs_[i] != 0;
-            }
-            if (rest != 0) {
-                sticky |= (limbs_[whole] & ((u64(1) << rest) - 1)) != 0;
-            }
-            const size_t newSize = limbs_.size() - whole;
-            for (size_t i = 0; i < newSize; i++) {
-                u64 v = limbs_[i + whole] >> rest;
-                if (rest != 0 && i + whole + 1 < limbs_.size()) {
-                    v |= limbs_[i + whole + 1] << (64 - rest);
-                }
-                limbs_[i] = v;
-            }
-            limbs_.resize(newSize);
-            trim();
-        }
+        void shiftRightSticky(size_t bits, bool& sticky);
 
-        size_t bitLength() const {
-            if (limbs_.empty()) {
-                return 0;
-            }
-            return limbs_.size() * 64 - static_cast<size_t>(__builtin_clzll(limbs_.back()));
-        }
+        size_t bitLength() const;
 
         // The value truncated to its top `bits` bits; sets sticky if any
         // dropped bit was set
-        u128 topBits(size_t bits, bool& sticky) const {
-            assert(bits <= 128);
-            const size_t length = bitLength();
-            BigUint copy = *this;
-            if (length > bits) {
-                copy.shiftRightSticky(length - bits, sticky);
-            }
-            u128 v = 0;
-            for (size_t i = copy.limbs_.size(); i-- > 0;) {
-                v = (v << 64) | copy.limbs_[i];
-            }
-            return v;
-        }
+        u128 topBits(size_t bits, bool& sticky) const;
 
         // Decimal digits, most significant first ("0" for zero)
-        std::string toDecimal() const {
-            if (isZero()) {
-                return "0";
-            }
-            std::string reversed;
-            BigUint copy = *this;
-            while (!copy.isZero()) {
-                u64 chunk = copy.divideSmall(10'000'000'000'000'000'000ull);
-                const bool more = !copy.isZero();
-                for (int i = 0; i < 19 && (more || chunk != 0); i++) {
-                    reversed.push_back(static_cast<char>('0' + chunk % 10));
-                    chunk /= 10;
-                }
-            }
-            return std::string(reversed.rbegin(), reversed.rend());
-        }
+        std::string toDecimal() const;
     };
 
     // 5^27 is the largest power of five below 2^63
@@ -388,7 +266,7 @@ namespace {
             return 0;
         }
         if (result < targetImplicit) {
-            return result;  // subnormal: biased exponent 0
+            return result; // subnormal: biased exponent 0
         }
         const u64 biased = static_cast<u64>(exponent) + bias;
         return (biased << targetMantissaBits) | (result - targetImplicit);
@@ -945,9 +823,7 @@ bool Float128::operator<(const Float128& other) const {
     if (a.exponent == b.exponent && a.significand == b.significand) {
         return false;
     }
-    const bool magnitudeLess = a.exponent != b.exponent
-        ? a.exponent < b.exponent
-        : a.significand < b.significand;
+    const bool magnitudeLess = a.exponent != b.exponent ? a.exponent < b.exponent : a.significand < b.significand;
     return a.negative ? !magnitudeLess : magnitudeLess;
 }
 
@@ -1230,4 +1106,144 @@ Float128 Float128::parseDecimal(const char* text) {
         text = formatDefault(unpacked, precision < 0 ? 6 : precision);
     }
     return os << text;
+}
+
+auto BigUint::trim() -> void {
+    while (!limbs_.empty() && limbs_.back() == 0) {
+        limbs_.pop_back();
+    }
+}
+
+auto BigUint::fromU128(u128 v) -> BigUint {
+    BigUint r;
+    if (v != 0) {
+        r.limbs_.push_back(static_cast<u64>(v));
+        if ((v >> 64) != 0) {
+            r.limbs_.push_back(static_cast<u64>(v >> 64));
+        }
+    }
+    return r;
+}
+
+auto BigUint::isZero() const -> bool {
+    return limbs_.empty();
+}
+
+auto BigUint::multiplyAddSmall(u64 factor, u64 addend) -> void {
+    u128 carry = addend;
+    for (auto& limb : limbs_) {
+        const u128 v = u128(limb) * factor + carry;
+        limb = static_cast<u64>(v);
+        carry = v >> 64;
+    }
+    while (carry != 0) {
+        limbs_.push_back(static_cast<u64>(carry));
+        carry >>= 64;
+    }
+    trim();
+}
+
+auto BigUint::divideSmall(u64 divisor) -> u64 {
+    assert(divisor != 0);
+    u128 remainder = 0;
+    for (size_t i = limbs_.size(); i-- > 0;) {
+        const u128 cur = (remainder << 64) | limbs_[i];
+        limbs_[i] = static_cast<u64>(cur / divisor);
+        remainder = cur % divisor;
+    }
+    trim();
+    return static_cast<u64>(remainder);
+}
+
+auto BigUint::shiftLeft(size_t bits) -> void {
+    if (isZero() || bits == 0) {
+        return;
+    }
+    const size_t whole = bits / 64;
+    const unsigned rest = bits % 64;
+    const size_t oldSize = limbs_.size();
+    limbs_.resize(oldSize + whole + (rest != 0 ? 1 : 0), 0);
+    for (size_t i = oldSize; i-- > 0;) {
+        const u64 limb = limbs_[i];
+        if (rest != 0) {
+            limbs_[i + whole + 1] |= limb >> (64 - rest);
+            limbs_[i + whole] = limb << rest;
+        } else {
+            limbs_[i + whole] = limb;
+        }
+        if (i < whole) {
+            limbs_[i] = 0;
+        }
+    }
+    for (size_t i = 0; i < whole && i < oldSize; i++) {
+        limbs_[i] = 0;
+    }
+    trim();
+}
+
+auto BigUint::shiftRightSticky(size_t bits, bool& sticky) -> void {
+    if (bits == 0) {
+        return;
+    }
+    const size_t whole = bits / 64;
+    const unsigned rest = bits % 64;
+    if (whole >= limbs_.size()) {
+        sticky |= !isZero();
+        limbs_.clear();
+        return;
+    }
+    for (size_t i = 0; i < whole; i++) {
+        sticky |= limbs_[i] != 0;
+    }
+    if (rest != 0) {
+        sticky |= (limbs_[whole] & ((u64(1) << rest) - 1)) != 0;
+    }
+    const size_t newSize = limbs_.size() - whole;
+    for (size_t i = 0; i < newSize; i++) {
+        u64 v = limbs_[i + whole] >> rest;
+        if (rest != 0 && i + whole + 1 < limbs_.size()) {
+            v |= limbs_[i + whole + 1] << (64 - rest);
+        }
+        limbs_[i] = v;
+    }
+    limbs_.resize(newSize);
+    trim();
+}
+
+auto BigUint::bitLength() const -> size_t {
+    if (limbs_.empty()) {
+        return 0;
+    }
+    return limbs_.size() * 64 - static_cast<size_t>(__builtin_clzll(limbs_.back()));
+}
+
+auto BigUint::topBits(size_t bits, bool& sticky) const -> u128 {
+    assert(bits <= 128);
+    const size_t length = bitLength();
+    BigUint copy = *this;
+    if (length > bits) {
+        copy.shiftRightSticky(length - bits, sticky);
+    }
+    u128 v = 0;
+    for (size_t i = copy.limbs_.size(); i-- > 0;) {
+        v = (v << 64) | copy.limbs_[i];
+    }
+    return v;
+}
+
+auto BigUint::toDecimal() const -> std::string {
+    if (isZero()) {
+        return "0";
+    }
+    std::string reversed;
+    BigUint copy = *this;
+    while (!copy.isZero()) {
+        u64 chunk = copy.divideSmall(10'000'000'000'000'000'000ull);
+        const bool more = !copy.isZero();
+        for (int i = 0; i < 19 && (more || chunk != 0); i++) {
+            reversed.push_back(static_cast<char>('0' + chunk % 10));
+            chunk /= 10;
+        }
+    }
+    return std::string(reversed.rbegin(), reversed.rend());
 }

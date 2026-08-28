@@ -1,9 +1,5 @@
 #include "hir_hir.h"
 
-#include <std/mem/obj_pool.h>
-#include <std/alg/defer.h>
-#include <std/lib/vector.h>
-
 #include "floats.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
@@ -17,6 +13,10 @@
 #include "hir_conv_main_bindings.h"
 #include "macro_rules_macro_rules.h" // Used to update the crate name
 #include "hir_expand_main_bindings.h"
+
+#include <std/alg/defer.h>
+#include <std/lib/vector.h>
+#include <std/mem/obj_pool.h>
 
 #include <optional>
 #include <algorithm>
@@ -39,106 +39,106 @@ using namespace stl;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRConstGeneric& x) {
-        switch (x.tag()) {
-            case HIRConstGeneric::TAG_Infer: {
-                auto& e = x.as_Infer();
-                os << "Infer";
-                if (e.index != ~0u) {
-                    os << "(";
-                    os << e.index;
-                    os << ")";
-                }
-                break;
-            }
-            case HIRConstGeneric::TAG_Unevaluated: {
-                auto& e = x.as_Unevaluated();
-                os << "Unevaluated(";
-                e->fmt(os);
+    switch (x.tag()) {
+        case HIRConstGeneric::TAG_Infer: {
+            auto& e = x.as_Infer();
+            os << "Infer";
+            if (e.index != ~0u) {
+                os << "(";
+                os << e.index;
                 os << ")";
-                break;
             }
-            case HIRConstGeneric::TAG_Generic: {
-                auto& e = x.as_Generic();
-                os << "Generic(" << e << ")";
-                break;
-            }
-            case HIRConstGeneric::TAG_Evaluated: {
-                auto& e = x.as_Evaluated();
-                os << "Evaluated(" << *e << ")";
-                break;
-            }
+            break;
         }
-        return os;
+        case HIRConstGeneric::TAG_Unevaluated: {
+            auto& e = x.as_Unevaluated();
+            os << "Unevaluated(";
+            e->fmt(os);
+            os << ")";
+            break;
+        }
+        case HIRConstGeneric::TAG_Generic: {
+            auto& e = x.as_Generic();
+            os << "Generic(" << e << ")";
+            break;
+        }
+        case HIRConstGeneric::TAG_Evaluated: {
+            auto& e = x.as_Evaluated();
+            os << "Evaluated(" << *e << ")";
+            break;
+        }
+    }
+    return os;
 }
 
 bool HIRConstGeneric::operator==(const HIRConstGeneric& x) const {
     if (this->tag() != x.tag()) {
         return false;
     }
-        switch ((*this).tag()) {
-            case HIRConstGeneric::TAG_Infer: {
-                auto& te = (*this).as_Infer();
-                auto& xe = x.as_Infer();
-                return te.index == xe.index;
-            }
-            case HIRConstGeneric::TAG_Unevaluated: {
-                auto& te = (*this).as_Unevaluated();
-                auto& xe = x.as_Unevaluated();
-                return te->equivalent(*xe);
-            }
-            case HIRConstGeneric::TAG_Generic: {
-                auto& te = (*this).as_Generic();
-                auto& xe = x.as_Generic();
-                return te == xe;
-            }
-            case HIRConstGeneric::TAG_Evaluated: {
-                auto& te = (*this).as_Evaluated();
-                auto& xe = x.as_Evaluated();
-                return EncodedLiteralSlice(*te) == EncodedLiteralSlice(*xe);
-            }
+    switch ((*this).tag()) {
+        case HIRConstGeneric::TAG_Infer: {
+            auto& te = (*this).as_Infer();
+            auto& xe = x.as_Infer();
+            return te.index == xe.index;
         }
-        return true;
+        case HIRConstGeneric::TAG_Unevaluated: {
+            auto& te = (*this).as_Unevaluated();
+            auto& xe = x.as_Unevaluated();
+            return te->equivalent(*xe);
+        }
+        case HIRConstGeneric::TAG_Generic: {
+            auto& te = (*this).as_Generic();
+            auto& xe = x.as_Generic();
+            return te == xe;
+        }
+        case HIRConstGeneric::TAG_Evaluated: {
+            auto& te = (*this).as_Evaluated();
+            auto& xe = x.as_Evaluated();
+            return EncodedLiteralSlice(*te) == EncodedLiteralSlice(*xe);
+        }
+    }
+    return true;
 }
 
 Ordering HIRConstGeneric::ord(const HIRConstGeneric& x) const {
     if (auto cmp = ::ord(static_cast<int>(this->tag()), static_cast<int>(x.tag()))) {
         return cmp;
     }
-        switch ((*this).tag()) {
-            case HIRConstGeneric::TAG_Infer: {
-                auto& te = (*this).as_Infer();
-                auto& xe = x.as_Infer();
-                if (auto cmp = ::ord(te.index, xe.index)) {
-                    return cmp;
-                }
-                break;
+    switch ((*this).tag()) {
+        case HIRConstGeneric::TAG_Infer: {
+            auto& te = (*this).as_Infer();
+            auto& xe = x.as_Infer();
+            if (auto cmp = ::ord(te.index, xe.index)) {
+                return cmp;
             }
-            case HIRConstGeneric::TAG_Unevaluated: {
-                auto& te = (*this).as_Unevaluated();
-                auto& xe = x.as_Unevaluated();
-                if (te->equivalent(*xe)) {
-                    return OrdEqual;
-                }
-                return te->ord(*xe);
-            }
-            case HIRConstGeneric::TAG_Generic: {
-                auto& te = (*this).as_Generic();
-                auto& xe = x.as_Generic();
-                if (auto cmp = ::ord(te, xe)) {
-                    return cmp;
-                }
-                break;
-            }
-            case HIRConstGeneric::TAG_Evaluated: {
-                auto& te = (*this).as_Evaluated();
-                auto& xe = x.as_Evaluated();
-                if (auto cmp = ::ord(EncodedLiteralSlice(*te), EncodedLiteralSlice(*xe))) {
-                    return cmp;
-                }
-                break;
-            }
+            break;
         }
-        return OrdEqual;
+        case HIRConstGeneric::TAG_Unevaluated: {
+            auto& te = (*this).as_Unevaluated();
+            auto& xe = x.as_Unevaluated();
+            if (te->equivalent(*xe)) {
+                return OrdEqual;
+            }
+            return te->ord(*xe);
+        }
+        case HIRConstGeneric::TAG_Generic: {
+            auto& te = (*this).as_Generic();
+            auto& xe = x.as_Generic();
+            if (auto cmp = ::ord(te, xe)) {
+                return cmp;
+            }
+            break;
+        }
+        case HIRConstGeneric::TAG_Evaluated: {
+            auto& te = (*this).as_Evaluated();
+            auto& xe = x.as_Evaluated();
+            if (auto cmp = ::ord(EncodedLiteralSlice(*te), EncodedLiteralSlice(*xe))) {
+                return cmp;
+            }
+            break;
+        }
+    }
+    return OrdEqual;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRConstGenericUnevaluated& x) {
@@ -190,39 +190,39 @@ namespace {
         if (left.data.tag() != right.data.tag()) {
             return false;
         }
-            switch (left.data.tag()) {
-                case HIRExprLiteral::TAG_Integer: {
-                    auto& l = left.data.as_Integer();
-                    auto& r = right.data.as_Integer();
-                    return l.type == r.type && l.value == r.value;
-                }
-                case HIRExprLiteral::TAG_Float: {
-                    auto& l = left.data.as_Float();
-                    auto& r = right.data.as_Float();
-                    return l.type == r.type && l.value == r.value;
-                }
-                case HIRExprLiteral::TAG_Boolean: {
-                    auto& l = left.data.as_Boolean();
-                    auto& r = right.data.as_Boolean();
-                    return l == r;
-                }
-                case HIRExprLiteral::TAG_String: {
-                    auto& l = left.data.as_String();
-                    auto& r = right.data.as_String();
-                    return l == r;
-                }
-                case HIRExprLiteral::TAG_CString: {
-                    auto& l = left.data.as_CString();
-                    auto& r = right.data.as_CString();
-                    return l.v == r.v;
-                }
-                case HIRExprLiteral::TAG_ByteString: {
-                    auto& l = left.data.as_ByteString();
-                    auto& r = right.data.as_ByteString();
-                    return l == r;
-                }
+        switch (left.data.tag()) {
+            case HIRExprLiteral::TAG_Integer: {
+                auto& l = left.data.as_Integer();
+                auto& r = right.data.as_Integer();
+                return l.type == r.type && l.value == r.value;
             }
-            UNREACHABLE();
+            case HIRExprLiteral::TAG_Float: {
+                auto& l = left.data.as_Float();
+                auto& r = right.data.as_Float();
+                return l.type == r.type && l.value == r.value;
+            }
+            case HIRExprLiteral::TAG_Boolean: {
+                auto& l = left.data.as_Boolean();
+                auto& r = right.data.as_Boolean();
+                return l == r;
+            }
+            case HIRExprLiteral::TAG_String: {
+                auto& l = left.data.as_String();
+                auto& r = right.data.as_String();
+                return l == r;
+            }
+            case HIRExprLiteral::TAG_CString: {
+                auto& l = left.data.as_CString();
+                auto& r = right.data.as_CString();
+                return l.v == r.v;
+            }
+            case HIRExprLiteral::TAG_ByteString: {
+                auto& l = left.data.as_ByteString();
+                auto& r = right.data.as_ByteString();
+                return l == r;
+            }
+        }
+        UNREACHABLE();
     }
 
     bool constExprNodesEqual(const HIRConstGenericUnevaluated& leftValue, const HIRExprNode& left, const HIRConstGenericUnevaluated& rightValue, const HIRExprNode& right) {
@@ -664,8 +664,7 @@ const HIRTrait& HIRCrate::getTraitByPath(const Span& sp, const HIRSimplePath& pa
     if (ti.is_Trait()) {
         auto& e = ti.as_Trait();
         return e;
-    }
-    else {
+    } else {
         BUG(sp, "Trait path " << path << " didn't point to a trait (" << ti.tagStr() << ")");
     }
 }
@@ -708,8 +707,7 @@ const HIRStruct& HIRCrate::getStructByPath(const Span& sp, const HIRSimplePath& 
     if (ti.is_Struct()) {
         auto& e = ti.as_Struct();
         return e;
-    }
-    else {
+    } else {
         BUG(sp, "Struct path " << path << " didn't point to a struct (" << ti.tagStr() << ")");
     }
 }
@@ -719,8 +717,7 @@ const HIRUnion& HIRCrate::getUnionByPath(const Span& sp, const HIRSimplePath& pa
     if (ti.is_Union()) {
         auto& e = ti.as_Union();
         return e;
-    }
-    else {
+    } else {
         BUG(sp, "Path " << path << " didn't point to a union (" << ti.tagStr() << ")");
     }
 }
@@ -730,8 +727,7 @@ const HIREnum& HIRCrate::getEnumByPath(const Span& sp, const HIRSimplePath& path
     if (ti.is_Enum()) {
         auto& e = ti.as_Enum();
         return e;
-    }
-    else {
+    } else {
         BUG(sp, "Enum path " << path << " didn't point to an enum (" << ti.tagStr() << ")");
     }
 }
@@ -781,8 +777,7 @@ const HIRFunction& HIRCrate::getFunctionByPath(const Span& sp, const HIRSimplePa
     const auto& ti = this->getValitemByPath(sp, path);
     if (ti.is_Function()) {
         return *ti.as_Function();
-    }
-    else {
+    } else {
         BUG(sp, "Function path " << path << " didn't point to an function (" << ti.tagStr() << ")");
     }
 }
@@ -845,31 +840,13 @@ namespace {
         Vector<HIRTypeRef>& implTypes;
 
     public:
-        ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics)
-            : HIRMatchGenerics(BorrowMatchedValues{})
-            , implTypes(buf)
-        {
-            implTypes.clear();
-            implTypes.zero(implGenerics.types.size());
-        }
+        ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics);
 
-        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override {
-            assert(g.binding < implTypes.length());
-            if (implTypes[g.binding]) {
-                return implTypes[g.binding]->compareWithPlaceholders(Span(), ty, resolveCb);
-            }
-            implTypes.mut(g.binding) = ty;
-            return HIRCompare::Equal;
-        }
+        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override;
 
-        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
-            // TODO
-            return HIRCompare::Equal;
-        }
+        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
 
-        HIRTypeRef mappedType(unsigned binding) const {
-            return binding < implTypes.length() ? implTypes[binding] : HIRTypeRef();
-        }
+        HIRTypeRef mappedType(unsigned binding) const;
     };
 
     bool matchesTypeRoot(const HIRGenericParams& params, const HIRTypeData* implTy, const HIRTypeData* matchType, tCbResolveType tyRes, HIRImplMatcherScratch& scratch) {
@@ -1021,7 +998,10 @@ namespace {
                     case HIRPathData::TAG_Generic: {
                         auto& lpe = le.path.data.as_Generic();
                         auto& rpe = right->as_Path().path.data.as_Generic();
-                        if (lpe.path != rpe.path) BUG(sp, "Mismatched types - " << left << " and " << right); return typelistOrdSpecific(context, sp, lpe.params.types, rpe.params.types);
+                        if (lpe.path != rpe.path) {
+                            BUG(sp, "Mismatched types - " << left << " and " << right);
+                        }
+                        return typelistOrdSpecific(context, sp, lpe.params.types, rpe.params.types);
                         break;
                     }
                     case HIRPathData::TAG_UfcsUnknown: {
@@ -1218,31 +1198,13 @@ namespace {
         mutable bool complete_ = true;
 
     public:
-        ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplMatcher& matcher)
-            : Monomorphiser(types)
-            , matcher(matcher)
-        {
-        }
+        ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplMatcher& matcher);
 
-        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
-            if (generic.group() == 0) {
-                auto mapped = matcher.mappedType(generic.binding);
-                if (mapped) {
-                    return mapped;
-                }
-            }
-            complete_ = false;
-            return types.generic(generic.name, generic.binding);
-        }
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
 
-        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
-            complete_ = false;
-            return HIRConstGeneric(generic);
-        }
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
 
-        bool complete() const {
-            return complete_;
-        }
+        bool complete() const;
     };
 
     bool mappedBoundsImplied(const Span& sp, HIRTypeInterner& types, const HIRTraitImpl& child, const HIRTraitImpl& parent, const ImplMatcher& parentMatcher) {
@@ -1333,9 +1295,7 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     const bool childMatchesParent = matchImplHead(sp, *this, other, childMatcher);
 
     if (parentMatchesChild != childMatchesParent) {
-        return parentMatchesChild
-            && mappedBoundsImplied(sp, types, *this, other, parentMatcher)
-            && mappedImplicitSizedImplied(*this, other, parentMatcher);
+        return parentMatchesChild && mappedBoundsImplied(sp, types, *this, other, parentMatcher) && mappedImplicitSizedImplied(*this, other, parentMatcher);
     }
 
     // `T` carries an implicit `Sized` predicate while `T: ?Sized` does not.
@@ -1353,7 +1313,6 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     // TODO: Cache these lists (calculate after outer typecheck?)
     auto boundsT = flattenBounds(types, params.bounds);
     auto boundsO = flattenBounds(types, other.params.bounds);
-
 
     // If there are less bounds in this impl, it can't be more specific.
     if (boundsT.size() < boundsO.size()) {
@@ -1421,73 +1380,19 @@ namespace {
         ::std::vector<::std::optional<HIRTypeRef>> implTys;
         ::std::vector<::std::optional<HIRConstGeneric>> implVals;
 
-        explicit ImplTyMatcher(HIRTypeInterner& types)
-            : HIRMatchGenerics(types.objectPool())
-            , Monomorphiser(types)
-        {
-        }
+        explicit ImplTyMatcher(HIRTypeInterner& types);
 
-        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override {
-            assert(g.binding < implTys.size());
-            if (implTys.at(g.binding)) {
-                return (ty == *implTys.at(g.binding) ? HIRCompare::Equal : HIRCompare::Unequal);
-            } else {
-                implTys.at(g.binding) = ty;
-                return HIRCompare::Equal;
-            }
-        }
+        HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) override;
 
-        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
-            assert(g.binding < implVals.size());
-            if (implVals.at(g.binding)) {
-                return (sz == *implVals.at(g.binding) ? HIRCompare::Equal : HIRCompare::Unequal);
-            } else {
-                implVals.at(g.binding) = sz.clone();
-                return HIRCompare::Equal;
-            }
-        }
+        HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override;
 
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override {
-            ASSERT_BUG(sp, g.group() == 0, "");
-            ASSERT_BUG(sp, g.idx() < implTys.size(), "");
-            if (!implTys[g.idx()]) {
-                return types.generic(RcString(FMT("placeholder_" << &implTys << "_" << g.idx())), HIRGenericRef(RcString(), GENERICPlaceholder, g.idx()).binding);
-            }
-            return *implTys[g.idx()];
-        }
+        HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override;
 
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override {
-            ASSERT_BUG(sp, g.group() == 0, "");
-            ASSERT_BUG(sp, g.idx() < implVals.size(), "");
-            ASSERT_BUG(sp, implVals[g.idx()], "");
-            return implVals[g.idx()]->clone();
-        }
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
 
-        void reinit(const HIRGenericParams& params) {
-            this->implTys.clear();
-            this->implVals.clear();
-            this->implTys.resize(params.types.size());
-            this->implVals.resize(params.values.size());
-        }
+        void reinit(const HIRGenericParams& params);
 
-        void fmt(::std::ostream& os) const {
-            for (const auto& p : this->implTys) {
-                if (p) {
-                    os << *p;
-                } else {
-                    os << "?";
-                }
-                os << ",";
-            }
-            for (const auto& p : this->implVals) {
-                if (p) {
-                    os << *p;
-                } else {
-                    os << "?";
-                }
-                os << ",";
-            }
-        }
+        void fmt(::std::ostream& os) const;
     };
 }
 
@@ -1512,7 +1417,10 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                 case HIRPathData::TAG_Generic: {
                     auto& ape = a.data.as_Generic();
                     auto& bpe = b.data.as_Generic();
-                    if (ape.path != bpe.path) return false; return H::typesOverlap(ape.params, bpe.params);
+                    if (ape.path != bpe.path) {
+                        return false;
+                    }
+                    return H::typesOverlap(ape.params, bpe.params);
                     break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
@@ -1705,14 +1613,12 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
     auto cbIdent = HIRResolvePlaceholdersNop();
     ImplTyMatcher matcher(crate.types);
     matcher.reinit(this->params);
-    if (this->type->matchTestGenerics(sp, other.type, cbIdent, matcher)
-        && this->traitArgs.matchTestGenericsFuzz(sp, other.traitArgs, cbIdent, matcher) == HIRCompare::Equal) {
+    if (this->type->matchTestGenerics(sp, other.type, cbIdent, matcher) && this->traitArgs.matchTestGenericsFuzz(sp, other.traitArgs, cbIdent, matcher) == HIRCompare::Equal) {
         return true;
     }
 
     matcher.reinit(other.params);
-    return other.type->matchTestGenerics(sp, this->type, cbIdent, matcher)
-        && other.traitArgs.matchTestGenericsFuzz(sp, this->traitArgs, cbIdent, matcher) == HIRCompare::Equal;
+    return other.type->matchTestGenerics(sp, this->type, cbIdent, matcher) && other.traitArgs.matchTestGenericsFuzz(sp, this->traitArgs, cbIdent, matcher) == HIRCompare::Equal;
 }
 
 namespace {
@@ -2086,10 +1992,9 @@ const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIR
     }
     const auto& str = *strP;
 
-    if(isTuple) {
+    if (isTuple) {
         ASSERT_BUG(sp, str.data.is_Tuple(), "PathTuple pattern with non-tuple struct - " << str.data.tagStr());
-    }
-    else {
+    } else {
         ASSERT_BUG(sp, str.data.is_Named(), "Struct pattern on non-brace struct");
     }
     return str;
@@ -2500,8 +2405,7 @@ const HIRConstant& HIRCrate::getConstantByPath(const Span& sp, const HIRSimplePa
     const auto& ti = this->getValitemByPath(sp, path);
     if (ti.is_Constant()) {
         return *ti.as_Constant();
-    }
-    else {
+    } else {
         BUG(sp, "`const` path " << path << " didn't point to an enum");
     }
 }
@@ -2513,4 +2417,124 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
 
 const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, HIRTypeRef& expTy) const {
     return getOrGenMir(wb, ip, ep, emptyMirArgs, expTy);
+}
+
+ImplMatcher::ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics)
+    : HIRMatchGenerics(BorrowMatchedValues{})
+    , implTypes(buf)
+{
+    implTypes.clear();
+    implTypes.zero(implGenerics.types.size());
+}
+
+auto ImplMatcher::matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) -> HIRCompare {
+    assert(g.binding < implTypes.length());
+    if (implTypes[g.binding]) {
+        return implTypes[g.binding]->compareWithPlaceholders(Span(), ty, resolveCb);
+    }
+    implTypes.mut(g.binding) = ty;
+    return HIRCompare::Equal;
+}
+
+auto ImplMatcher::matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) -> HIRCompare {
+    // TODO
+    return HIRCompare::Equal;
+}
+
+auto ImplMatcher::mappedType(unsigned binding) const -> HIRTypeRef {
+    return binding < implTypes.length() ? implTypes[binding] : HIRTypeRef();
+}
+
+ImplHeadMonomorphiser::ImplHeadMonomorphiser(HIRTypeInterner& types, const ImplMatcher& matcher)
+    : Monomorphiser(types)
+    , matcher(matcher)
+{
+}
+
+auto ImplHeadMonomorphiser::getType(const Span&, const HIRGenericRef& generic) const -> HIRTypeRef {
+    if (generic.group() == 0) {
+        auto mapped = matcher.mappedType(generic.binding);
+        if (mapped) {
+            return mapped;
+        }
+    }
+    complete_ = false;
+    return types.generic(generic.name, generic.binding);
+}
+
+auto ImplHeadMonomorphiser::getValue(const Span&, const HIRGenericRef& generic) const -> HIRConstGeneric {
+    complete_ = false;
+    return HIRConstGeneric(generic);
+}
+
+auto ImplHeadMonomorphiser::complete() const -> bool {
+    return complete_;
+}
+
+ImplTyMatcher::ImplTyMatcher(HIRTypeInterner& types)
+    : HIRMatchGenerics(types.objectPool())
+    , Monomorphiser(types)
+{
+}
+
+auto ImplTyMatcher::matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType _resolve_cb) -> HIRCompare {
+    assert(g.binding < implTys.size());
+    if (implTys.at(g.binding)) {
+        return (ty == *implTys.at(g.binding) ? HIRCompare::Equal : HIRCompare::Unequal);
+    } else {
+        implTys.at(g.binding) = ty;
+        return HIRCompare::Equal;
+    }
+}
+
+auto ImplTyMatcher::matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) -> HIRCompare {
+    assert(g.binding < implVals.size());
+    if (implVals.at(g.binding)) {
+        return (sz == *implVals.at(g.binding) ? HIRCompare::Equal : HIRCompare::Unequal);
+    } else {
+        implVals.at(g.binding) = sz.clone();
+        return HIRCompare::Equal;
+    }
+}
+
+auto ImplTyMatcher::getType(const Span& sp, const HIRGenericRef& g) const -> HIRTypeRef {
+    ASSERT_BUG(sp, g.group() == 0, "");
+    ASSERT_BUG(sp, g.idx() < implTys.size(), "");
+    if (!implTys[g.idx()]) {
+        return types.generic(RcString(FMT("placeholder_" << &implTys << "_" << g.idx())), HIRGenericRef(RcString(), GENERICPlaceholder, g.idx()).binding);
+    }
+    return *implTys[g.idx()];
+}
+
+auto ImplTyMatcher::getValue(const Span& sp, const HIRGenericRef& g) const -> HIRConstGeneric {
+    ASSERT_BUG(sp, g.group() == 0, "");
+    ASSERT_BUG(sp, g.idx() < implVals.size(), "");
+    ASSERT_BUG(sp, implVals[g.idx()], "");
+    return implVals[g.idx()]->clone();
+}
+
+auto ImplTyMatcher::reinit(const HIRGenericParams& params) -> void {
+    this->implTys.clear();
+    this->implVals.clear();
+    this->implTys.resize(params.types.size());
+    this->implVals.resize(params.values.size());
+}
+
+auto ImplTyMatcher::fmt(::std::ostream& os) const -> void {
+    for (const auto& p : this->implTys) {
+        if (p) {
+            os << *p;
+        } else {
+            os << "?";
+        }
+        os << ",";
+    }
+    for (const auto& p : this->implVals) {
+        if (p) {
+            os << *p;
+        } else {
+            os << "?";
+        }
+        os << ",";
+    }
 }

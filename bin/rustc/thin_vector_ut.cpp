@@ -2,8 +2,8 @@
 
 #include <std/tst/ut.h>
 
-#include <vector>
 #include <string>
+#include <vector>
 #include <sstream>
 
 using namespace stl;
@@ -15,45 +15,21 @@ namespace {
         static int liveCount;
         int value;
 
-        Counted()
-            : value(0)
-        {
-            liveCount++;
-        }
-        explicit Counted(int v)
-            : value(v)
-        {
-            liveCount++;
-        }
-        Counted(const Counted& o)
-            : value(o.value)
-        {
-            liveCount++;
-        }
-        Counted(Counted&& o)
-            : value(o.value)
-        {
-            o.value = -1;
-            liveCount++;
-        }
-        Counted& operator=(const Counted& o) {
-            value = o.value;
-            return *this;
-        }
-        Counted& operator=(Counted&& o) {
-            value = o.value;
-            o.value = -1;
-            return *this;
-        }
-        ~Counted() {
-            liveCount--;
-        }
+        Counted();
+        explicit Counted(int v);
+        Counted(const Counted& o);
+        Counted(Counted&& o);
+        Counted& operator=(const Counted& o);
+        Counted& operator=(Counted&& o);
+        ~Counted();
     };
+
     int Counted::liveCount = 0;
 
     ::std::ostream& operator<<(::std::ostream& os, const Counted& c) {
         return os << c.value;
     }
+
     Ordering ord(const Counted& a, const Counted& b) {
         return ::ord(a.value, b.value);
     }
@@ -259,4 +235,44 @@ STD_TEST_SUITE(ThinVectorAccessAndOrder) {
         os2 << empty;
         STD_INSIST(os2.str().empty());
     }
+}
+
+Counted::Counted()
+    : value(0)
+{
+    liveCount++;
+}
+
+Counted::Counted(int v)
+    : value(v)
+{
+    liveCount++;
+}
+
+Counted::Counted(const Counted& o)
+    : value(o.value)
+{
+    liveCount++;
+}
+
+Counted::Counted(Counted&& o)
+    : value(o.value)
+{
+    o.value = -1;
+    liveCount++;
+}
+
+auto Counted::operator=(const Counted& o) -> Counted& {
+    value = o.value;
+    return *this;
+}
+
+auto Counted::operator=(Counted&& o) -> Counted& {
+    value = o.value;
+    o.value = -1;
+    return *this;
+}
+
+Counted::~Counted() {
+    liveCount--;
 }

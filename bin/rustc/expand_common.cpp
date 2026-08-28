@@ -34,17 +34,7 @@ struct ExpandState {
     mutable bool change;
     mutable bool hasMissing;
 
-    ExpandState(const WireBoard& wb, ASTCrate& crate, LList<const ASTModule*> modstack,
-        ExpandMode mode, ASTModule* currentMod)
-        : wb(wb)
-        , crate(crate)
-        , modstack(modstack)
-        , mode(mode)
-        , currentMod(currentMod)
-        , change(false)
-        , hasMissing(false)
-    {
-    }
+    ExpandState(const WireBoard& wb, ASTCrate& crate, LList<const ASTModule*> modstack, ExpandMode mode, ASTModule* currentMod);
 
     explicit ExpandState(const ExpandState&) = default;
 };
@@ -60,14 +50,9 @@ template <typename F>
 struct ExpandAttrCb final: ExpandAttrCallback {
     F f;
 
-    explicit ExpandAttrCb(F f)
-        : f(f)
-    {
-    }
+    explicit ExpandAttrCb(F f);
 
-    void run(const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) const override {
-        f(sp, d, a);
-    }
+    void run(const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) const override;
 };
 
 void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f);
@@ -171,18 +156,14 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
     const RcString* builtinName = nullptr;
     if (a.name().elems.size() == 1) {
         builtinName = &a.name().elems[0];
-    } else if (a.name().elems.size() == 4 && a.name().elems[0] == "core"
-        && a.name().elems[1] == "prelude" && a.name().elems[2] == "v1") {
+    } else if (a.name().elems.size() == 4 && a.name().elems[0] == "core" && a.name().elems[1] == "prelude" && a.name().elems[2] == "v1") {
         // HACK: Handle `::core::prelude::v1::<FOO>`.
         builtinName = &a.name().elems[3];
     }
     if (builtinName) {
         if (const auto* d = ExpandFindDecorator(es.wb, *builtinName)) {
             found = true;
-            if (d->stage() == stage
-                && (d->runDuringIter()
-                    || (es.mode != ExpandMode::Final && stage == AttrStage::Pre)
-                    || (es.mode == ExpandMode::Final && stage == AttrStage::Post))) {
+            if (d->stage() == stage && (d->runDuringIter() || (es.mode != ExpandMode::Final && stage == AttrStage::Pre) || (es.mode == ExpandMode::Final && stage == AttrStage::Post))) {
                 f.run(sp, *d, a);
                 a.markInert();
             }
@@ -288,6 +269,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
                         }
                     }
                 }
+
                 ASTModule* currentMod = nullptr;
             } d;
 
@@ -446,9 +428,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
                     if (!mr.data->exported && mr.data->definitionSpan && miSpan) {
                         const auto& definition = mr.data->definitionSpan.getTopFileSpan();
                         const auto& invocation = miSpan.getTopFileSpan();
-                        if (definition.filename == invocation.filename
-                            && (definition.startLine > invocation.startLine
-                                || (definition.startLine == invocation.startLine && definition.startOfs > invocation.startOfs))) {
+                        if (definition.filename == invocation.filename && (definition.startLine > invocation.startLine || (definition.startLine == invocation.startLine && definition.startOfs > invocation.startOfs))) {
                             continue;
                         }
                     }
@@ -509,7 +489,6 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
 
 ::std::unique_ptr<TokenStream> ExpandMacroInner(const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, ASTModule& mod, Span miSpan, const ASTPath& path, const RcString& inputIdent, TokenTree& inputTt) {
     ASSERT_BUG(miSpan, path.isValid(), "Macro invocation with invalid path");
-
 
     // Find the macro. `macro_rules! NAME { ... }` is always a definition, even
     // where a user macro named `macro_rules` is in scope -- only the identifier
@@ -970,1170 +949,104 @@ struct CExpandExpr: public ASTNodeVisitor {
     ASTExprNodeBlock* currentBlock = nullptr;
     bool inAssignLhs = false;
 
-    CExpandExpr(const ExpandState& es)
-        : crate(es.crate)
-        , parentExpandState(es)
-        , expandState(es)
-    {
-    }
+    CExpandExpr(const ExpandState& es);
 
-    ~CExpandExpr() {
-        if (expandState.change) {
-            parentExpandState.change = true;
-        }
-        if (expandState.hasMissing) {
-            parentExpandState.hasMissing = true;
-        }
-    }
+    ~CExpandExpr();
 
-    ASTModule& curMod() {
-        return *const_cast<ASTModule*>(expandState.modstack.item);
-    }
+    ASTModule& curMod();
 
-    void visit(ASTExprNodeP& cnode) {
-        if (cnode.get()) {
-            auto attrs = mv$(cnode->attrs());
-            ExpandAttrsCfgAttr(*expandState.wb.settings, attrs);
-            ExpandAttrs(expandState, attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const auto& a) {
-                d.handle(sp, a, this->expandState.wb, this->crate, cnode);
-            }));
-            if (cnode.get()) {
-                cnode->attrs() = mv$(attrs);
-            }
-        }
-        if (cnode.get()) {
-            cnode->visit(*this);
-            // If the node was a macro, and it was consumed, reset it
-            if (auto* nMac = cast<ASTExprNodeMacro>(cnode.get())) {
-                if (!nMac->path.isValid()) {
-                    cnode.reset();
-                }
-            }
-            if (this->replacement) {
-                cnode = mv$(this->replacement);
-            }
-        }
+    void visit(ASTExprNodeP& cnode);
 
-        if (cnode.get()) {
-            auto attrs = mv$(cnode->attrs());
-            ExpandAttrs(expandState, attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                d.handle(sp, a, this->expandState.wb, this->crate, cnode);
-            }));
-            if (cnode.get()) {
-                cnode->attrs() = mv$(attrs);
-            }
-        }
-        assert(!this->replacement);
-    }
+    void visitNodelete(const ASTExprNode& parent, ASTExprNodeP& cnode);
 
-    void visitNodelete(const ASTExprNode& parent, ASTExprNodeP& cnode) {
-        if (cnode.get() != nullptr) {
-            this->visit(cnode);
-            if (cnode.get() == nullptr) {
-                ERROR(parent.span(), E0000, "#[cfg] not allowed in this position");
-            }
-        }
-        assert(!this->replacement);
-    }
+    void visitVector(::std::vector<ASTExprNodeP>& cnodes);
 
-    void visitVector(::std::vector<ASTExprNodeP>& cnodes) {
-        for (auto it = cnodes.begin(); it != cnodes.end();) {
-            assert(it->get());
-            this->visit(*it);
-            if (it->get() == nullptr) {
-                it = cnodes.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
+    ASTExprNodeP visitMacro(ASTExprNodeMacro& node, ::std::vector<ASTExprNodeBlock::Line>* nodesOut);
 
-    ASTExprNodeP visitMacro(ASTExprNodeMacro& node, ::std::vector<ASTExprNodeBlock::Line>* nodesOut) {
-        if (!node.path.isValid()) {
-            return ASTExprNodeP();
-        }
+    void visit(ASTExprNodeMacro& node) override;
 
-        const bool definesMacro = node.path.isTrivial() && node.path.asTrivial() == "macro_rules";
+    void visit(ASTExprNodeBlock& node) override;
 
-        // How deep this invocation already is: each expansion adds a frame to
-        // the span naming the macro that produced the tokens.
-        unsigned int depth = 0;
-        for (Span frame = node.span(); frame; frame = frame->parentSpan) {
-            if (cast<const SpanInnerMacro>(frame.get())) {
-                depth++;
-            }
-        }
-        if (depth >= expandState.wb.settings->recursionLimit) {
-            ERROR(node.span(), E0000, "recursion limit reached while expanding `" << node.path << "!`");
-        }
+    void visit(ASTExprNodeAsyncBlock& node) override;
 
-        ASTExprNodeP rv;
-        auto& mod = this->curMod();
-        auto ttl = ExpandMacro(expandState, mod, node.span(), node.path, node.ident, node.tokens);
-        if (!ttl.get()) {
-            // No expansion
-        } else {
-            if (definesMacro) {
-                auto it = ::std::find_if(mod.macros().rbegin(), mod.macros().rend(), [&](const auto& macro) {
-                    return macro.name == node.ident;
-                });
-                ASSERT_BUG(node.span(), it != mod.macros().rend(), "macro_rules! definition was not installed");
-                it->data->definitionHygiene = node.definitionHygiene;
-                if (nodesOut) {
-                    auto marker = ASTExprNodeP(new ASTExprNodeMacroDefinition(it->data->definitionId, it->data->hygiene, it->data->definitionHygiene));
-                    marker->setSpan(node.span());
-                    nodesOut->push_back({true, ::std::move(marker)});
-                }
-            }
-            if (!nodesOut) {
-                if (ttl->lookahead(0) != TOK_EOF) {
-                    SET_MODULE((*ttl), mod);
-                    rv = ParseExpr0(*ttl);
-                    // A macro body written as `expr;` and used where an
-                    // expression is expected keeps the expression: rustc reports
-                    // the trailing semicolon as a lint, not an error.
-                    if (ttl->lookahead(0) == TOK_SEMICOLON && ttl->lookahead(1) == TOK_EOF) {
-                        ttl->getToken();
-                    }
-                    if (ttl->lookahead(0) != TOK_EOF) {
-                        ERROR(node.span(), E0000, "Unused tokens at the end of macro expansion - " << ttl->getToken());
-                    }
-                } else if (ttl->isMacroExpansionPlaceholder()) {
-                    rv = ASTExprNodeP(new ASTExprNodeTuple({}));
-                    rv->setSpan(node.span());
-                }
-            } else {
-                while (ttl->lookahead(0) != TOK_EOF) {
-                    SET_MODULE((*ttl), mod);
+    void visit(ASTExprNodeGeneratorBlock& node) override;
 
-                    // Reparse as statement / item
-                    bool addSilenceIfEnd = false;
-                    ::std::shared_ptr<ASTModule> tmpLocalMod;
-                    auto& localModPtr = (this->currentBlock ? this->currentBlock->localMod : tmpLocalMod);
-                    auto newexpr = ParseExprBlockLineWithItems(*ttl, localModPtr, addSilenceIfEnd);
+    void visit(ASTExprNodeTry& node) override;
 
-                    if (tmpLocalMod) {
-                        TODO(node.span(), "Handle edge case where a macro expansion outside of a _Block creates an item");
-                    }
+    void visit(ASTExprNodeAsm& node) override;
 
-                    if (newexpr) {
-                        nodesOut->push_back({addSilenceIfEnd, mv$(newexpr)});
-                    } else {
-                        // Expansion line just added a new item
-                    }
-                }
-            }
-            node.path = ASTPath();
+    void visit(ASTExprNodeAsm2& node) override;
 
-            if (!nodesOut && !rv) {
-                ERROR(node.span(), E0000, "Macro didn't expand to anything");
-            }
-        }
+    void visit(ASTExprNodeFlow& node) override;
 
-        return mv$(rv);
-    }
+    void visit(ASTExprNodeLetBinding& node) override;
 
-    void visit(ASTExprNodeMacro& node) override {
-        if (!node.path.isValid()) {
-            return;
-        }
+    void visit(ASTExprNodeAssign& node) override;
 
-        replacement = this->visitMacro(node, nullptr);
+    void visit(ASTExprNodeCallPath& node) override;
 
-        if (this->replacement) {
-            auto n = mv$(this->replacement);
-            this->visit(n);
-            if (n) {
-                assert(!this->replacement);
-                this->replacement = mv$(n);
-            }
-        }
-    }
+    void visit(ASTExprNodeCallMethod& node) override;
 
-    void visit(ASTExprNodeBlock& node) override {
-        this->inAssignLhs = false;
-        unsigned int modItemCount = 0;
-        bool hasLocalMod = node.localMod != nullptr;
+    void visit(ASTExprNodeCallObject& node) override;
 
-        auto prevModstack = this->expandState.modstack;
-        if (node.localMod) {
-            this->expandState.modstack = LList<const ASTModule*>(&prevModstack, node.localMod.get());
-        }
+    void visit(ASTExprNodeLoop& node) override;
 
-        // TODO: macro_rules! invocations within the expression list influence this.
-        // > Solution: Defer creation of the local module until during expand.
-        if (node.localMod) {
-            ExpandMod(this->expandState, node.localMod->path(), *node.localMod);
-            modItemCount = node.localMod->items.size();
-        }
+    void visit(ASTExprNodeFor& node) override;
 
-        auto saved = this->currentBlock;
-        this->currentBlock = &node;
-
-        for (auto it = node.nodes.begin(); it != node.nodes.end();) {
-            assert(it->node.get());
-
-            if (auto* nodeMac = cast<ASTExprNodeMacro>(it->node.get())) {
-                const bool definesMacro = nodeMac->path.isTrivial() && nodeMac->path.asTrivial() == "macro_rules";
-                const auto macroName = nodeMac->ident;
-                auto attrs = std::move(it->node->attrs());
-                ExpandAttrsCfgAttr(*expandState.wb.settings, attrs);
-                ExpandAttrs(expandState, attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                    d.handle(sp, a, this->expandState.wb, this->crate, it->node);
-                }));
-                if (!it->node.get()) {
-                    it = node.nodes.erase(it);
-                    continue;
-                }
-                it->node->attrs() = std::move(attrs);
-
-                assert(it->node.get() == nodeMac);
-
-                ::std::vector<ASTExprNodeBlock::Line> newNodes;
-                this->visitMacro(*nodeMac, &newNodes);
-                if (!hasLocalMod && node.localMod) {
-                    this->expandState.modstack = LList<const ASTModule*>(&prevModstack, node.localMod.get());
-                    hasLocalMod = true;
-                }
-                if (node.localMod && modItemCount < node.localMod->items.size()) {
-                    ExpandMod(this->expandState, node.localMod->path(), *node.localMod, modItemCount);
-                    modItemCount = node.localMod->items.size();
-                }
-                if (definesMacro && !nodeMac->path.isValid()) {
-                    for (auto& attr : nodeMac->attrs().items) {
-                        if (!attr.isInert() && attr.name() == "macro_export") {
-                            ExpandExportMacroRules(attr.span(), attr, this->expandState.wb, this->crate, this->curMod(), macroName);
-                            attr.markInert();
-                        }
-                    }
-                }
-                if (nodeMac->path.isValid()) {
-                    ++it;
-                } else {
-                    // If this has a semicolon, then force the new final node to have a semicolon
-                    if (it->hasSemicolon && !newNodes.empty()) {
-                        newNodes.back().hasSemicolon = true;
-                    }
-                    it = node.nodes.erase(it);
-                    it = node.nodes.insert(it, ::std::make_move_iterator(newNodes.begin()), ::std::make_move_iterator(newNodes.end()));
-                    // NOTE: Doesn't advance the iterator above, we want to re-visit the new node
-                }
-            } else {
-                this->visit(it->node);
-                if (it->node.get() == nullptr) {
-                    it = node.nodes.erase(it);
-                } else {
-                    ++it;
-                }
-            }
-        }
-
-        this->currentBlock = saved;
-
-        // HACK! Run Expand_Mod twice on local modules.
-        if (node.localMod) {
-            ExpandMod(this->expandState, node.localMod->path(), *node.localMod, modItemCount);
-        }
-
-        this->expandState.modstack = mv$(prevModstack);
-    }
-
-    void visit(ASTExprNodeAsyncBlock& node) override {
-        this->visitNodelete(node, node.inner);
-    }
-
-    void visit(ASTExprNodeGeneratorBlock& node) override {
-        ExpandType(this->expandState, this->curMod(), node.returnType);
-        this->visitNodelete(node, node.inner);
-    }
-
-    void visit(ASTExprNodeTry& node) override {
-        // Macro lookup can be deferred to a later expansion pass (for example,
-        // through a glob import).  Keep the lexical try scope until macro
-        // expansion has stabilised, so a `?` supplied as a macro argument is
-        // not lowered as a return from the surrounding function.
-        if (expandState.mode != ExpandMode::Final) {
-            this->visitNodelete(node, node.inner);
-            return;
-        }
-
-        // Desugar into
-        // ```
-        // loop '#tryNNN {
-        //   break '#tryNNN { ... }
-        // }
-        // ```
-        // NOTE: MIR lowering and HIR typecheck need to know to skip these (OR resolve should handle naming all loop blocks)
-        tryStack.push_back(RcString::newInterned(FMT("#try" << tryIndex++)));
-        this->visitNodelete(node, node.inner);
-        auto loopName = mv$(tryStack.back());
-        tryStack.pop_back();
-
-        auto coreCrate = crate.extCratenameCore;
-        auto pathTry = getPath(coreCrate, "ops", "Try");
-        auto pathTryFromOutput = ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathTry, {ASTPathNode(RcString::newInterned("from_output"))});
-        auto okNode = ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathTryFromOutput), ::makeVec1(mv$(node.inner))));
-        auto breakNode = ASTExprNodeP(new ASTExprNodeFlow(ASTExprNodeFlow::BREAK, loopName, mv$(okNode)));
-        this->replacement = ASTExprNodeP(new ASTExprNodeLoop(loopName, mv$(breakNode)));
-    }
-
-    void visit(ASTExprNodeAsm& node) override {
-        for (auto& v : node.output) {
-            this->visitNodelete(node, v.value);
-        }
-        for (auto& v : node.input) {
-            this->visitNodelete(node, v.value);
-        }
-    }
-
-    void visit(ASTExprNodeAsm2& node) override {
-        for (auto& v : node.params) {
-            switch (v.tag()) {
-                case ASTAsmParam::TAG_Const: {
-                    auto& e = v.as_Const();
-                    this->visitNodelete(node, e);
-                    break;
-                }
-                case ASTAsmParam::TAG_Sym: {
-                    auto& e = v.as_Sym();
-                    ExpandPath(this->expandState, this->curMod(), e);
-                    break;
-                }
-                case ASTAsmParam::TAG_Label: {
-                    auto& e = v.as_Label();
-                    this->visitNodelete(node, e.code);
-                    break;
-                }
-                case ASTAsmParam::TAG_RegSingle: {
-                    auto& e = v.as_RegSingle();
-                    this->visitNodelete(node, e.val);
-                    break;
-                }
-                case ASTAsmParam::TAG_Reg: {
-                    auto& e = v.as_Reg();
-                    this->visitNodelete(node, e.valIn);
-                    this->visitNodelete(node, e.valOut);
-                    break;
-                }
-            }
-        }
-    }
-
-    void visit(ASTExprNodeFlow& node) override {
-        this->visitNodelete(node, node.value);
-
-        if (node.type == ASTExprNodeFlow::YEET) {
-            if (expandState.mode != ExpandMode::Final) {
-                return;
-            }
-
-            auto coreCrate = crate.extCratenameCore;
-            auto pathOpsYeet = getPath(coreCrate, "ops", "Yeet");
-            auto pathFromResidualFromResidual = getPath(coreCrate, "ops", "FromResidual", "from_residual");
-
-            // `do yeet` with no value yeets a unit, the same as `do yeet ()`.
-            auto yeeted = std::move(node.value);
-            if (!yeeted) {
-                yeeted = ASTExprNodeP(new ASTExprNodeTuple(::std::vector<ASTExprNodeP>()));
-                yeeted->setSpan(node.span());
-            }
-            auto v = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathOpsYeet), ::makeVec1(std::move(yeeted))));
-            v->setSpan(node.span());
-            v = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathFromResidualFromResidual), ::makeVec1(std::move(v))));
-            v->setSpan(node.span());
-            replacement = ASTExprNodeP(new ASTExprNodeFlow(
-                (tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
-                (tryStack.empty() ? RcString("") : tryStack.back()),
-                std::move(v)
-            ));
-            replacement->setSpan(node.span());
-        }
-    }
-
-    void visit(ASTExprNodeLetBinding& node) override {
-        ExpandType(this->expandState, this->curMod(), node.type);
-        ExpandPattern(this->expandState, this->curMod(), node.pat, false);
-        this->visitNodelete(node, node.value);
-        this->visitNodelete(node, node.elseNode);
-    }
-
-    void visit(ASTExprNodeAssign& node) override {
-        inAssignLhs = true;
-        this->visitNodelete(node, node.slot);
-        inAssignLhs = false;
-        this->visitNodelete(node, node.value);
-
-        // Desugar destructuring assignment
-        // https://rust-lang.github.io/rfcs/2909-destructuring-assignment.html
-        if (node.op == ASTExprNodeAssign::NONE) {
-            struct VisitorToPat: public ASTNodeVisitor {
-                std::vector<std::pair<RcString, ASTExprNodeP>> slots;
-                ASTPattern rv;
-
-                bool rvSet = false;
-                bool isSlot = false;
-
-                ASTPattern lower(ASTExprNodeP& ep) {
-                    assert(ep);
-                    ep->visit(*this);
-                    ASSERT_BUG(ep->span(), rvSet, ep.typeName() << " - Didn't yield a pattern");
-                    if (isSlot) {
-                        assert(!slots.empty());
-                        assert(!slots.back().second);
-                        slots.back().second = std::move(ep);
-                        isSlot = false;
-                    }
-                    rvSet = false;
-                    return std::move(rv);
-                }
-
-                // - This is a de-structuring pattern
-                void pat(ASTPattern rv) {
-                    assert(!rvSet);
-                    assert(!isSlot);
-                    rvSet = true;
-                    assert(rv.bindings().empty());
-                    this->rv = std::move(rv);
-                }
-
-                // - This is a slot (to be assigned)
-                void slot(ASTExprNode& v) {
-                    rvSet = true;
-                    isSlot = true;
-
-                    RcString name(FMT("_#" << slots.size()).c_str());
-                    slots.push_back(std::make_pair(name, ASTExprNodeP()));
-                    rv = ASTPattern(ASTPattern::TagBind(), v.span(), slots.back().first);
-                }
-
-                // - The given node isn't valid on the LHS of an assignment
-                void invalid(const ASTExprNode& v) {
-                    ERROR(v.span(), E0000, typeid(v).name() << " isn't valid on the LHS of an assignemnt");
-                }
-
-                void visit(ASTExprNodeBlock& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeAsyncBlock& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeGeneratorBlock& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeTry& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeMacro& v) override {
-                    BUG(v.span(), "Encountered macro");
-                }
-
-                void visit(ASTExprNodeAsm& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeAsm2& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeFlow& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeLetBinding& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeAssign& v) override {
-                    invalid(v);
-                }
-
-                // `..` in a destructuring position parses as a range with no
-                // bounds, which is how the tuple, slice and tuple-struct forms
-                // all spell "the rest".
-                static bool isRest(ASTExprNodeP& ep) {
-                    if (const auto* e = cast<ASTExprNodeBinOp>(ep.get())) {
-                        return e->type == ASTExprNodeBinOp::RANGE && !e->left && !e->right && !e->parenthesised;
-                    }
-                    return false;
-                }
-
-                ASTPattern::TuplePat lowerTuplePat(const Span& sp, ::std::vector<ASTExprNodeP>& values) {
-                    bool isSplit = false;
-                    ::std::vector<ASTPattern> start;
-                    ::std::vector<ASTPattern> end;
-                    for (auto& m : values) {
-                        if (isRest(m)) {
-                            ASSERT_BUG(sp, !isSplit, "Multiple `..` in tuple pattern?");
-                            isSplit = true;
-                            start = std::move(end);
-                            continue;
-                        }
-                        end.push_back(lower(m));
-                    }
-                    if (!isSplit) {
-                        return ASTPattern::TuplePat{std::move(end), false, {}};
-                    }
-                    return ASTPattern::TuplePat{std::move(start), true, std::move(end)};
-                }
-
-                void visit(ASTExprNodeCallPath& v) override {
-                    // `TupleStruct(a, b) = value` destructures through the
-                    // tuple-struct (or enum variant) of that name.
-                    pat(ASTPattern(ASTPattern::TagNamedTuple(), v.span(), v.path, lowerTuplePat(v.span(), v.args)));
-                }
-
-                void visit(ASTExprNodeCallMethod& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeCallObject& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeLoop& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeFor& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeWhile& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeMatch& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeIf& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeWildcardPattern& v) override {
-                    rvSet = true;
-                    rv = ASTPattern(v.span(), ASTPattern::Data::make_Any({}));
-                }
-
-                void visit(ASTExprNodeInteger& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeFloat& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeBool& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeString& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeByteString& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeCString& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeSuffixedLiteral& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeClosure& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeStructLiteral& v) override {
-                    if (v.baseValue) {
-                        TODO(v.span(), "Struct literal with `..value` in destructured assignment");
-                    }
-                    std::vector<ASTStructPatternEntry> subpats;
-                    for (auto& m : v.values) {
-                        subpats.push_back(ASTStructPatternEntry{std::move(m.attrs), m.name, lower(m.value)});
-                    }
-                    pat(ASTPattern(ASTPattern::TagStruct(), v.span(), v.path, std::move(subpats), true));
-                }
-
-                void visit(ASTExprNodeStructLiteralPattern& v) override {
-                    std::vector<ASTStructPatternEntry> subpats;
-                    for (auto& m : v.values) {
-                        subpats.push_back(ASTStructPatternEntry{std::move(m.attrs), m.name, lower(m.value)});
-                    }
-                    pat(ASTPattern(ASTPattern::TagStruct(), v.span(), v.path, std::move(subpats), false));
-                }
-
-                void visit(ASTExprNodeArray& v) override {
-                    if (v.size) {
-                        TODO(v.span(), "Sized Array literal in destructured assignment");
-                    } else {
-                        bool isSplit = false;
-                        std::vector<ASTPattern> leading;
-                        std::vector<ASTPattern> trailing;
-                        for (auto& m : v.values) {
-                            if (isRest(m)) {
-                                ASSERT_BUG(v.span(), !isSplit, "Multiple `..` in slice pattern?");
-                                isSplit = true;
-                                leading = std::move(trailing);
-                                continue;
-                            }
-                            trailing.push_back(lower(m));
-                        }
-                        if (isSplit) {
-                            pat(ASTPattern(v.span(), ASTPattern::Data::make_SplitSlice({std::move(leading), ASTPatternBinding(), std::move(trailing)})));
-                        } else {
-                            pat(ASTPattern(v.span(), ASTPattern::Data::make_Slice({std::move(trailing)})));
-                        }
-                    }
-                }
-
-                void visit(ASTExprNodeTuple& v) override {
-                    pat(ASTPattern(ASTPattern::TagTuple(), v.span(), lowerTuplePat(v.span(), v.values)));
-                }
-
-                // Just emit as if it's a slot, `UnitStruct = Foo` isn't valid
-                void visit(ASTExprNodeNamedValue& v) override {
-                    slot(v);
-                }
-
-                void visit(ASTExprNodeField& v) override {
-                    slot(v);
-                }
-
-                void visit(ASTExprNodeIndex& v) override {
-                    slot(v);
-                }
-
-                void visit(ASTExprNodeDeref& v) override {
-                    slot(v);
-                }
-
-                void visit(ASTExprNodeCast& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeTypeAnnotation& v) override {
-                    slot(v);
-                }
-
-                void visit(ASTExprNodeBinOp& v) override {
-                    // `(..) = value` -- the parens are not a tuple, so the whole
-                    // left side is the bare rest pattern.
-                    if (v.type == ASTExprNodeBinOp::RANGE && !v.left && !v.right) {
-                        pat(ASTPattern(ASTPattern::TagTuple(), v.span(), ASTPattern::TuplePat{{}, true, {}}));
-                        return;
-                    }
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeUniOp& v) override {
-                    invalid(v);
-                }
-
-                void visit(ASTExprNodeMacroDefinition& v) override {
-                    invalid(v);
-                }
-            } v;
-
-            auto pat = v.lower(node.slot);
-            if (pat.bindings().size() > 0) {
-                assert(pat.bindings().size() == 1); // The above code shouldn't be making double bindings
-                assert(!node.slot);
-                assert(v.slots.front().second);
-                node.slot = std::move(v.slots.front().second);
-            } else {
-                // Create a block with a `let` and individual assignments
-                auto rv = new ASTExprNodeBlock();
-                rv->nodes.push_back({true, ASTExprNodeP(new ASTExprNodeLetBinding(std::move(pat), mkType(*parentExpandState.crate.pool, node.span()), std::move(node.value)))});
-                for (auto& slots : v.slots) {
-                    rv->nodes.push_back({true, ASTExprNodeP(new ASTExprNodeAssign(ASTExprNodeAssign::NONE, std::move(slots.second), ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newLocal(std::move(slots.first))))))});
-                }
-                this->replacement = ASTExprNodeP(rv);
-            }
-        }
-    }
-
-    void visit(ASTExprNodeCallPath& node) override {
-        ExpandPath(this->expandState, this->curMod(), node.path);
-        this->visitVector(node.args);
-    }
-
-    void visit(ASTExprNodeCallMethod& node) override {
-        ExpandPathParams(this->expandState, this->curMod(), node.method.args());
-        this->visitNodelete(node, node.val);
-        this->visitVector(node.args);
-    }
-
-    void visit(ASTExprNodeCallObject& node) override {
-        this->visitNodelete(node, node.val);
-        this->visitVector(node.args);
-    }
-
-    void visit(ASTExprNodeLoop& node) override {
-        this->visitNodelete(node, node.code);
-    }
-
-    void visit(ASTExprNodeFor& node) override {
-        ExpandPattern(this->expandState, this->curMod(), node.pattern, false);
-        this->visitNodelete(node, node.value);
-        this->visitNodelete(node, node.code);
-
-        const RcString rcstringIntoIter = RcString::newInterned("into_iter");
-        const RcString rcstringIntoAsyncIter = RcString::newInterned("into_async_iter");
-        const RcString rcstringNext = RcString::newInterned("next");
-        const RcString rcstringIt = RcString::newInterned("it");
-        // Hygiene outlives the AST (idents in HIR patterns and macro_rules
-        // keep pointing at it), so it lives in the persistent pool.
-        const auto iteratorHygiene = Ident::Hygiene::newScope(
-            parentExpandState.wb.id, *parentExpandState.crate.hirPool);
-        auto coreCrate = crate.extCratenameCore;
-        auto pathSome = getPath(coreCrate, "option", "Option", "Some");
-        auto pathNone = getPath(coreCrate, "option", "Option", "None");
-        auto pathIntoIterator = node.isAwait ? getPath(coreCrate, "async_iter", "IntoAsyncIterator") : getPath(coreCrate, "iter", "IntoIterator");
-        auto pathIterator = getPath(coreCrate, "iter", "Iterator");
-        // Desugar into:
-        // {
-        //         `m_label`: loop {
-        //             Some(`m_pattern`) => `m_code`,
-        //             None => break `m_label`,
-        //             }
-        //         }
-        //     }
-        // }
-        ::std::vector<ASTExprNodeMatchArm> arms;
-        // - `Some(pattern ) => code`
-        arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), pathSome, ::makeVec1(mv$(node.pattern)))), {}, mv$(node.code)));
-        // - `None => break label`
-        arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), node.span(), ASTPattern::Value::make_Named(pathNone))), {}, ASTExprNodeP(new ASTExprNodeFlow(ASTExprNodeFlow::BREAK, node.label, nullptr))));
-
-        auto nextReceiver = ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newRelative(iteratorHygiene, ::makeVec1(ASTPathNode(rcstringIt)))));
-        // An async iterator is polled where it stands: the await takes the place
-        // itself, and borrows it once per poll.
-        auto nextCall = node.isAwait
-            ? ASTExprNodeP(new ASTExprNodeUniOp(ASTExprNodeUniOp::AWaitNext, mv$(nextReceiver)))
-            : ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIterator, {ASTPathNode(rcstringNext)}), ::makeVec1(ASTExprNodeP(new ASTExprNodeUniOp(ASTExprNodeUniOp::REFMUT, mv$(nextReceiver))))));
-        auto nextMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(nextCall), mv$(arms)));
-        auto loop = ASTExprNodeP(new ASTExprNodeLoop(node.label, mv$(nextMatch)));
-
-        auto intoIterCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIntoIterator, {ASTPathNode(node.isAwait ? rcstringIntoAsyncIter : rcstringIntoIter)}), ::makeVec1(mv$(node.value))));
-        auto outerMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(intoIterCall), ::makeVec1(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), Ident(iteratorHygiene, rcstringIt))), {}, mv$(loop)))));
-
-        // rustc wraps the outer match in `DropTemps`: for always yields (), so
-        // a block containing the match as a statement provides the same
-        // terminating temporary scope without leaking head temporaries into a
-        // surrounding initializer or call expression.
-        auto block = new ASTExprNodeBlock();
-        block->nodes.push_back({true, mv$(outerMatch)});
-        replacement.reset(block);
-        replacement->setSpan(node.span());
-    }
-
-    void visit(ASTExprNodeWhile& node) override {
-        for (auto& cond : node.conditions) {
-            if (cond.optPat) {
-                ExpandPattern(this->expandState, this->curMod(), *cond.optPat, true);
-            }
-            this->visitNodelete(node, cond.value);
-        }
-        this->visitNodelete(node, node.code);
-    }
+    void visit(ASTExprNodeWhile& node) override;
 
     /// Lift each `pat if expr` out of a pattern, leaving the pattern it guards
     /// behind. The conditions become the arm's own guards, which is where they
     /// are evaluated: after every binding of the arm is in scope.
-    static void liftGuardPatterns(ASTPattern& pat, ::std::vector<ASTIfLetCondition>& out) {
-        switch (pat.data().tag()) {
-default:
-            break;
-            case ASTPatternData::TAG_Guard: {
-                auto& e = pat.data().as_Guard();
-                auto sub = mv$(*e.sub);
-                auto cond = mv$(e.cond);
-                for (auto& b : pat.bindings()) {
-                    sub.bindings().push_back(mv$(b));
-                }
-                pat = mv$(sub);
-                liftGuardPatterns(pat, out);
-                out.push_back(ASTIfLetCondition{nullptr, mv$(cond)});
-                return;
-            }
-            case ASTPatternData::TAG_Box: {
-                auto& e = pat.data().as_Box();
-                liftGuardPatterns(*e.sub, out);
-                break;
-            }
-            case ASTPatternData::TAG_Deref: {
-                auto& e = pat.data().as_Deref();
-                liftGuardPatterns(*e.sub, out);
-                break;
-            }
-            case ASTPatternData::TAG_Ref: {
-                auto& e = pat.data().as_Ref();
-                liftGuardPatterns(*e.sub, out);
-                break;
-            }
-            case ASTPatternData::TAG_Tuple: {
-                auto& e = pat.data().as_Tuple();
-                for (auto& sub : e.start) {
-                    liftGuardPatterns(sub, out);
-                }
-                for (auto& sub : e.end) {
-                    liftGuardPatterns(sub, out);
-                }
-                break;
-            }
-            case ASTPatternData::TAG_StructTuple: {
-                auto& e = pat.data().as_StructTuple();
-                for (auto& sub : e.tupPat.start) {
-                    liftGuardPatterns(sub, out);
-                }
-                for (auto& sub : e.tupPat.end) {
-                    liftGuardPatterns(sub, out);
-                }
-                break;
-            }
-            case ASTPatternData::TAG_Struct: {
-                auto& e = pat.data().as_Struct();
-                for (auto& sub : e.subPatterns) {
-                    liftGuardPatterns(sub.pat, out);
-                }
-                break;
-            }
-            case ASTPatternData::TAG_Slice: {
-                auto& e = pat.data().as_Slice();
-                for (auto& sub : e.subPats) {
-                    liftGuardPatterns(sub, out);
-                }
-                break;
-            }
-            case ASTPatternData::TAG_SplitSlice: {
-                auto& e = pat.data().as_SplitSlice();
-                for (auto& sub : e.leading) {
-                    liftGuardPatterns(sub, out);
-                }
-                for (auto& sub : e.trailing) {
-                    liftGuardPatterns(sub, out);
-                }
-                break;
-            }
-            case ASTPatternData::TAG_Or: {
-                auto& e = pat.data().as_Or();
-                for (auto& sub : e) {
-                    liftGuardPatterns(sub, out);
-                }
-                break;
-            }
-        }
-    }
+    static void liftGuardPatterns(ASTPattern& pat, ::std::vector<ASTIfLetCondition>& out);
 
-    void visit(ASTExprNodeMatch& node) override {
-        this->visitNodelete(node, node.val);
-        for (auto& arm : node.arms) {
-            ExpandAttrsCfgAttr(*expandState.wb.settings, arm.attrs);
-            ExpandAttrs(expandState, arm.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                d.handle(sp, a, expandState.wb, crate, arm);
-            }));
-            if (arm.patterns.size() == 0) {
-                continue;
-            }
-            for (auto& pat : arm.patterns) {
-                ExpandPattern(this->expandState, this->curMod(), pat, true);
-            }
-            {
-                ::std::vector<ASTIfLetCondition> patternGuards;
-                for (auto& pat : arm.patterns) {
-                    liftGuardPatterns(pat, patternGuards);
-                }
-                for (auto& guard : patternGuards) {
-                    arm.guard.push_back(mv$(guard));
-                }
-            }
-            for (auto& cond : arm.guard) {
-                if (cond.optPat) {
-                    ExpandPattern(this->expandState, this->curMod(), *cond.optPat, true);
-                }
-                this->visitNodelete(node, cond.value);
-            }
+    void visit(ASTExprNodeMatch& node) override;
 
-            this->visitNodelete(node, arm.code);
-            ExpandAttrs(expandState, arm.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                d.handle(sp, a, expandState.wb, crate, arm);
-            }));
-        }
-        // Prune deleted arms
-        for (auto it = node.arms.begin(); it != node.arms.end();) {
-            if (it->patterns.size() == 0) {
-                it = node.arms.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
+    void visit(ASTExprNodeIf& node) override;
 
-    void visit(ASTExprNodeIf& node) override {
-        for (auto& arm : node.arms) {
-            for (auto& cond : arm.conditions) {
-                if (cond.optPat) {
-                    ExpandPattern(this->expandState, this->curMod(), *cond.optPat, true);
-                }
-                this->visitNodelete(node, cond.value);
-            }
-            this->visitNodelete(node, arm.body);
-        }
-        this->visitNodelete(node, node.elseNode);
-    }
+    void visit(ASTExprNodeWildcardPattern& node) override;
 
-    void visit(ASTExprNodeWildcardPattern& node) override {
-    }
+    void visit(ASTExprNodeInteger& node) override;
 
-    void visit(ASTExprNodeInteger& node) override {
-    }
+    void visit(ASTExprNodeFloat& node) override;
 
-    void visit(ASTExprNodeFloat& node) override {
-    }
+    void visit(ASTExprNodeBool& node) override;
 
-    void visit(ASTExprNodeBool& node) override {
-    }
+    void visit(ASTExprNodeString& node) override;
 
-    void visit(ASTExprNodeString& node) override {
-    }
+    void visit(ASTExprNodeByteString& node) override;
 
-    void visit(ASTExprNodeByteString& node) override {
-    }
+    void visit(ASTExprNodeCString& node) override;
 
-    void visit(ASTExprNodeCString& node) override {
-    }
+    void visit(ASTExprNodeSuffixedLiteral& node) override;
 
-    void visit(ASTExprNodeSuffixedLiteral& node) override {
-    }
+    void visit(ASTExprNodeClosure& node) override;
 
-    void visit(ASTExprNodeClosure& node) override {
-        auto tryStack = ::std::move(this->tryStack);
-        for (auto& arg : node.args) {
-            ExpandPattern(this->expandState, this->curMod(), arg.first, false);
-            ExpandType(this->expandState, this->curMod(), arg.second);
-        }
-        ExpandType(this->expandState, this->curMod(), node.returnType);
-        this->visitNodelete(node, node.code);
-        this->tryStack = std::move(tryStack);
-    }
+    void visit(ASTExprNodeStructLiteral& node) override;
 
-    void visit(ASTExprNodeStructLiteral& node) override {
-        this->visitNodelete(node, node.baseValue);
-        for (auto& val : node.values) {
-            ExpandAttrsCfgAttr(*expandState.wb.settings, val.attrs);
-            ExpandAttrs(expandState, val.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                d.handle(sp, a, expandState.wb, crate, val);
-            }));
-            if (!val.value) {
-                continue;
-            }
-            this->visitNodelete(node, val.value);
-            ExpandAttrs(expandState, val.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                d.handle(sp, a, expandState.wb, crate, val);
-            }));
-        }
-        for (auto it = node.values.begin(); it != node.values.end();) {
-            if (it->value) {
-                ++it;
-            } else {
-                it = node.values.erase(it);
-            }
-        }
-    }
+    void visit(ASTExprNodeStructLiteralPattern& node) override;
 
-    void visit(ASTExprNodeStructLiteralPattern& node) override {
-        for (auto& val : node.values) {
-            ExpandAttrsCfgAttr(*expandState.wb.settings, val.attrs);
-            ExpandAttrs(expandState, val.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                d.handle(sp, a, expandState.wb, crate, val);
-            }));
-            if (!val.value) {
-                continue;
-            }
-            this->visitNodelete(node, val.value);
-            ExpandAttrs(expandState, val.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                d.handle(sp, a, expandState.wb, crate, val);
-            }));
-        }
-        for (auto it = node.values.begin(); it != node.values.end();) {
-            if (it->value) {
-                ++it;
-            } else {
-                it = node.values.erase(it);
-            }
-        }
-    }
+    void visit(ASTExprNodeArray& node) override;
 
-    void visit(ASTExprNodeArray& node) override {
-        this->visitNodelete(node, node.size);
-        this->visitVector(node.values);
-    }
+    void visit(ASTExprNodeTuple& node) override;
 
-    void visit(ASTExprNodeTuple& node) override {
-        this->visitVector(node.values);
-    }
+    void visit(ASTExprNodeNamedValue& node) override;
 
-    void visit(ASTExprNodeNamedValue& node) override {
-        ExpandPath(this->expandState, this->curMod(), node.path);
-    }
+    void visit(ASTExprNodeField& node) override;
 
-    void visit(ASTExprNodeField& node) override {
-        this->visitNodelete(node, node.obj);
-    }
+    void visit(ASTExprNodeIndex& node) override;
 
-    void visit(ASTExprNodeIndex& node) override {
-        this->inAssignLhs = false;
-        this->visitNodelete(node, node.obj);
-        this->visitNodelete(node, node.idx);
-    }
+    void visit(ASTExprNodeDeref& node) override;
 
-    void visit(ASTExprNodeDeref& node) override {
-        this->visitNodelete(node, node.value);
-    }
+    void visit(ASTExprNodeCast& node) override;
 
-    void visit(ASTExprNodeCast& node) override {
-        this->visitNodelete(node, node.value);
-        ExpandType(this->expandState, this->curMod(), node.type);
-    }
+    void visit(ASTExprNodeTypeAnnotation& node) override;
 
-    void visit(ASTExprNodeTypeAnnotation& node) override {
-        this->visitNodelete(node, node.value);
-        ExpandType(this->expandState, this->curMod(), node.type);
-    }
+    void visit(ASTExprNodeBinOp& node) override;
 
-    void visit(ASTExprNodeBinOp& node) override {
-        this->visitNodelete(node, node.left);
-        this->visitNodelete(node, node.right);
+    void visit(ASTExprNodeUniOp& node) override;
 
-        if (this->inAssignLhs) {
-            return;
-        }
-        const RcString rcstringStart = RcString::newInterned("start");
-        const RcString rcstringEnd = RcString::newInterned("end");
-        const RcString rcstringNewRange = RcString::newInterned("new_range");
-        const bool newRange = crate.features.count(rcstringNewRange) != 0;
-        switch (node.type) {
-            case ASTExprNodeBinOp::RANGE: {
-                // NOTE: Not language items pre 1.39
-                auto coreCrate = crate.extCratenameCore;
-                auto pathRange = getPath(coreCrate, newRange ? "range" : "ops", "Range");
-                auto pathRangeFrom = getPath(coreCrate, newRange ? "range" : "ops", "RangeFrom");
-                auto pathRangeTo = getPath(coreCrate, "ops", "RangeTo");
-                auto pathRangeFull = getPath(coreCrate, "ops", "RangeFull");
-
-                ASTExprNodeStructLiteral::tValues values;
-                if (node.left && node.right) {
-                    values.push_back({{}, rcstringStart, mv$(node.left)});
-                    values.push_back({{}, rcstringEnd, mv$(node.right)});
-                    replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRange), nullptr, mv$(values)));
-                } else if (node.left) {
-                    values.push_back({{}, rcstringStart, mv$(node.left)});
-                    replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeFrom), nullptr, mv$(values)));
-                } else if (node.right) {
-                    values.push_back({{}, rcstringEnd, mv$(node.right)});
-                    replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeTo), nullptr, mv$(values)));
-                } else {
-                    replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeFull), nullptr, mv$(values)));
-                }
-                replacement->setSpan(node.span());
-                break;
-            }
-            case ASTExprNodeBinOp::RANGE_INC: {
-                // NOTE: Not language items pre 1.54
-                auto coreCrate = crate.extCratenameCore;
-                auto pathRangeInclusiveNonEmpty = getPath(coreCrate, newRange ? "range" : "ops", "RangeInclusive");
-                auto pathRangeToInclusive = getPath(coreCrate, "ops", "RangeToInclusive");
-
-                if (node.left) {
-                    ASTExprNodeStructLiteral::tValues values;
-                    values.push_back({{}, rcstringStart, mv$(node.left)});
-                    values.push_back({{}, rcstringEnd, mv$(node.right)});
-                    if (!newRange) {
-                        values.push_back({{}, RcString::newInterned("exhausted"), ASTExprNodeP(new ASTExprNodeBool(false))});
-                    }
-                    replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeInclusiveNonEmpty), nullptr, mv$(values)));
-                } else {
-                    ASTExprNodeStructLiteral::tValues values;
-                    values.push_back({{}, rcstringEnd, mv$(node.right)});
-                    replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeToInclusive), nullptr, mv$(values)));
-                }
-                replacement->setSpan(node.span());
-                break;
-            }
-            default:
-                break;
-        }
-    }
-
-    void visit(ASTExprNodeUniOp& node) override {
-        this->visitNodelete(node, node.value);
-        // `&pin mut place` pins the place: `Pin::new_unchecked` of a borrow of it.
-        // The borrow is what keeps the place from moving, so the call is sound
-        // wherever the borrow is.
-        if (node.type == ASTExprNodeUniOp::PinBorrow || node.type == ASTExprNodeUniOp::PinBorrowMut) {
-            const bool isMut = node.type == ASTExprNodeUniOp::PinBorrowMut;
-            auto pathNewUnchecked = getPath(crate.extCratenameCore, "pin", "Pin", "new_unchecked");
-            auto borrow = ASTExprNodeP(new ASTExprNodeUniOp(isMut ? ASTExprNodeUniOp::REFMUT : ASTExprNodeUniOp::REF, mv$(node.value)));
-            borrow->setSpan(node.span());
-            auto call = ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathNewUnchecked), ::makeVec1(mv$(borrow))));
-            call->setSpan(node.span());
-            auto block = new ASTExprNodeBlock();
-            block->blockType = ASTExprNodeBlock::Type::Unsafe;
-            block->nodes.push_back({false, mv$(call)});
-            replacement.reset(block);
-            replacement->setSpan(node.span());
-            return;
-        }
-        // - Desugar question mark operator before resolve so it can create names
-        if (node.type == ASTExprNodeUniOp::QMARK) {
-            if (expandState.mode != ExpandMode::Final) {
-                return;
-            }
-
-            auto coreCrate = crate.extCratenameCore;
-
-            // TODO: Find a way of creating bindings during HIR lower instead (so lang items are available)
-
-            auto pathTry = getPath(coreCrate, "ops", "Try");
-            const RcString rcstringV = RcString::newInterned("v");
-            const RcString rcstringR = RcString::newInterned("r");
-            // TryV2
-            {
-                auto pathTryBranch = ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathTry, {ASTPathNode(RcString::newInterned("branch"))});
-                // Not a lang item
-                auto path_ControlFlow_Continue = getPath(coreCrate, "ops", "ControlFlow", "Continue");
-                auto path_ControlFlow_Break = getPath(coreCrate, "ops", "ControlFlow", "Break");
-                auto pathFromResidualFromResidual = getPath(coreCrate, "ops", "FromResidual", "from_residual");
-
-                ::std::vector<ASTExprNodeMatchArm> arms;
-                // `Continue(v) => v,`
-                arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Continue, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringV)))), {}, ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(rcstringV)))));
-                // `Break(r) => return R::from_residual(r),`
-                arms.push_back(ASTExprNodeMatchArm(
-                    ::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Break, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringR)))),
-                    {},
-                    ASTExprNodeP(new ASTExprNodeFlow(
-                        (tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
-                        (tryStack.empty() ? RcString("") : tryStack.back()),
-                        ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathFromResidualFromResidual), ::makeVec1(ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(rcstringR))))))
-                    ))
-                ));
-
-                replacement.reset(new ASTExprNodeMatch(ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathTryBranch), ::makeVec1(mv$(node.value)))), mv$(arms)));
-            }
-        }
-    }
-
-    void visit(ASTExprNodeMacroDefinition&) override {
-    }
+    void visit(ASTExprNodeMacroDefinition&) override;
 };
 
 void ExpandExpr(const ExpandState& es, ASTExprNodeP& node) {
@@ -2194,22 +1107,26 @@ void ExpandGenericParams(const ExpandState& es, ASTModule& mod, ASTGenericParams
             }
             case ASTGenericBound::TAG_IsTrait: {
                 auto& be = bound.as_IsTrait();
-                ExpandType(es, mod, be.type); ExpandPath(es, mod, be.trait);
+                ExpandType(es, mod, be.type);
+                ExpandPath(es, mod, be.trait);
                 break;
             }
             case ASTGenericBound::TAG_MaybeTrait: {
                 auto& be = bound.as_MaybeTrait();
-                ExpandType(es, mod, be.type); ExpandPath(es, mod, be.trait);
+                ExpandType(es, mod, be.type);
+                ExpandPath(es, mod, be.trait);
                 break;
             }
             case ASTGenericBound::TAG_NotTrait: {
                 auto& be = bound.as_NotTrait();
-                ExpandType(es, mod, be.type); ExpandPath(es, mod, be.trait);
+                ExpandType(es, mod, be.type);
+                ExpandPath(es, mod, be.trait);
                 break;
             }
             case ASTGenericBound::TAG_Equality: {
                 auto& be = bound.as_Equality();
-                ExpandType(es, mod, be.type); ExpandType(es, mod, be.replacement);
+                ExpandType(es, mod, be.type);
+                ExpandType(es, mod, be.replacement);
                 break;
             }
         }
@@ -2220,9 +1137,7 @@ void ExpandGenericParams(const ExpandState& es, ASTModule& mod, ASTGenericParams
 }
 
 void ExpandBareExpr(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, ASTExprNodeP& node) {
-    ExpandState es{wb, const_cast<ASTCrate&>(crate),
-        LList<const ASTModule*>(nullptr, &mod), ExpandMode::FirstPass,
-        const_cast<ASTModule*>(&mod)};
+    ExpandState es{wb, const_cast<ASTCrate&>(crate), LList<const ASTModule*>(nullptr, &mod), ExpandMode::FirstPass, const_cast<ASTModule*>(&mod)};
     ExpandExpr(es, node);
     es.mode = ExpandMode::Final;
 }
@@ -2278,8 +1193,8 @@ void Expand_Impl(const ExpandState& es, ASTPath modpath, ASTModule& mod, ASTImpl
         ExpandAttrs(es, attrs, AttrStage::Pre, mod, impl, i.vis, i.name, *i.data);
 
         switch ((*i.data).tag()) {
-default:
-            BUG(Span(), "Unknown item type in impl block - " << i.data->tagStr());
+            default:
+                BUG(Span(), "Unknown item type in impl block - " << i.data->tagStr());
             case ASTItem::TAG_None: {
                 break;
             }
@@ -2359,8 +1274,8 @@ void Expand_ExternBlock(const ExpandState& es, ASTModule& mod, ASTExternBlock& b
 
         auto dat = std::move(i.data);
         switch (dat.tag()) {
-default:
-            BUG(Span(), "Unexpected item type - " << dat.tagStr());
+            default:
+                BUG(Span(), "Unexpected item type - " << dat.tagStr());
             case ASTItem::TAG_None: {
                 // Skip: nothing
                 break;
@@ -2421,7 +1336,6 @@ default:
 }
 
 void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, unsigned int firstItem) {
-
     // Item order cannot affect name resolution.  In particular, a `use`
     // preceding an `extern crate` can be inspected while looking up a macro.
     // Crates from the initial AST were normalised by ASTCrate::loadExterns;
@@ -2521,28 +1435,28 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                         if (!checkCfgAttrs(*es.wb.settings, it->attrs)) {
                             it = enm.variants().erase(it);
                         } else {
-                        switch (it->data.tag()) {
-                            case ASTEnumVariantData::TAG_Unit: {
-                                break;
+                            switch (it->data.tag()) {
+                                case ASTEnumVariantData::TAG_Unit: {
+                                    break;
+                                }
+                                case ASTEnumVariantData::TAG_Tuple: {
+                                    auto& e = it->data.as_Tuple();
+                                    H::filterCfg(*es.wb.settings, e.items);
+                                    break;
+                                }
+                                case ASTEnumVariantData::TAG_Struct: {
+                                    auto& e = it->data.as_Struct();
+                                    H::filterCfg(*es.wb.settings, e.fields);
+                                    break;
+                                }
                             }
-                            case ASTEnumVariantData::TAG_Tuple: {
-                                auto& e = it->data.as_Tuple();
-                                H::filterCfg(*es.wb.settings, e.items);
-                                break;
-                            }
-                            case ASTEnumVariantData::TAG_Struct: {
-                                auto& e = it->data.as_Struct();
-                                H::filterCfg(*es.wb.settings, e.fields);
-                                break;
-                            }
-                        }
 
-                        ++ it;
+                            ++it;
                         }
                     }
                     break;
                 }
-default:
+                default:
                     break;
             }
         }
@@ -2632,33 +1546,32 @@ default:
                 for (const auto& ue : e.entries) {
                     // Get module ref, if it's to a HIR module then grab the macro
                     if (ue.name != "" && ue.path.nodes().size() >= 1) {
-
                         ASTAbsolutePath refPath;
                         auto m = ResolveLookupMacro(ue.sp, *es.wb.settings, es.crate, mod.path(), ue.path, /*out_path=*/&refPath);
                         MacroRef ref;
-                    switch (m.tag()) {
-                        case ResolveItemRefMacro::TAG_None: {
-                            // Not found? Ignore.
-                            break;
+                        switch (m.tag()) {
+                            case ResolveItemRefMacro::TAG_None: {
+                                // Not found? Ignore.
+                                break;
+                            }
+                            case ResolveItemRefMacro::TAG_InternalMacro: {
+                                // Ignore builtins, they're always available.
+                                break;
+                            }
+                            case ResolveItemRefMacro::TAG_ProcMacro: {
+                                auto& pm = m.as_ProcMacro();
+                                ref = pm;
+                                break;
+                            }
+                            case ResolveItemRefMacro::TAG_MacroRules: {
+                                auto& mr = m.as_MacroRules();
+                                ref = mr;
+                                break;
+                            }
                         }
-                        case ResolveItemRefMacro::TAG_InternalMacro: {
-                            // Ignore builtins, they're always available.
-                            break;
-                        }
-                        case ResolveItemRefMacro::TAG_ProcMacro: {
-                            auto& pm = m.as_ProcMacro();
-                            ref = pm;
-                            break;
-                        }
-                        case ResolveItemRefMacro::TAG_MacroRules: {
-                            auto& mr = m.as_MacroRules();
-                            ref = mr;
-                            break;
-                        }
-                    }
-                    if( ! ref.is_None() ) {
+                        if (!ref.is_None()) {
                             mod.macroImports.push_back(ASTModule::MacroImport{false, ue.name, std::move(refPath), std::move(ref)});
-                    }
+                        }
                     }
                 }
                 break;
@@ -2761,56 +1674,57 @@ default:
                     ExpandAttrs(es, var.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
                         d.handle(sp, a, es.wb, es.crate, var);
                     }));
-                switch (var.data.tag()) {
-                    case ASTEnumVariantData::TAG_Unit: {
-                        break;
-                    }
-                    case ASTEnumVariantData::TAG_Tuple: {
-                        auto& e = var.data.as_Tuple();
-                        for (auto it = e.items.begin(); it != e.items.end();) {
-                            auto& si = *it;
-                            ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
-                            ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                                d.handle(sp, a, es.wb, es.crate, si);
-                            }));
-                            ExpandType(es, mod, si.type);
-                            ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                                d.handle(sp, a, es.wb, es.crate, si);
-                            }));
-                            if (!si.type->isValid()) {
-                                it = e.items.erase(it);
-                            } else {
-                                ++it;
-                            }
+                    switch (var.data.tag()) {
+                        case ASTEnumVariantData::TAG_Unit: {
+                            break;
                         }
-                        break;
-                    }
-                    case ASTEnumVariantData::TAG_Struct: {
-                        auto& e = var.data.as_Struct();
-                        for (auto it = e.fields.begin(); it != e.fields.end();) {
-                            auto& si = *it;
-                            ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
-                            ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                                d.handle(sp, a, es.wb, es.crate, si);
-                            }));
-                            ExpandType(es, mod, si.type);
-                            ExpandExpr(es, si.defaultValue);
-                            ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
-                                d.handle(sp, a, es.wb, es.crate, si);
-                            }));
+                        case ASTEnumVariantData::TAG_Tuple: {
+                            auto& e = var.data.as_Tuple();
+                            for (auto it = e.items.begin(); it != e.items.end();) {
+                                auto& si = *it;
+                                ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
+                                ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+                                    d.handle(sp, a, es.wb, es.crate, si);
+                                }));
+                                ExpandType(es, mod, si.type);
+                                ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+                                    d.handle(sp, a, es.wb, es.crate, si);
+                                }));
+                                if (!si.type->isValid()) {
+                                    it = e.items.erase(it);
+                                } else {
+                                    ++it;
+                                }
+                            }
+                            break;
+                        }
+                        case ASTEnumVariantData::TAG_Struct: {
+                            auto& e = var.data.as_Struct();
+                            for (auto it = e.fields.begin(); it != e.fields.end();) {
+                                auto& si = *it;
+                                ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
+                                ExpandAttrs(es, si.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+                                    d.handle(sp, a, es.wb, es.crate, si);
+                                }));
+                                ExpandType(es, mod, si.type);
+                                ExpandExpr(es, si.defaultValue);
+                                ExpandAttrs(es, si.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+                                    d.handle(sp, a, es.wb, es.crate, si);
+                                }));
 
-                            if (si.name == "") {
-                                it = e.fields.erase(it);
-                            } else {
-                                ++it;
+                                if (si.name == "") {
+                                    it = e.fields.erase(it);
+                                } else {
+                                    ++it;
+                                }
                             }
+                            break;
                         }
-                        break;
                     }
-                }
-                ExpandExpr(es,  var.discriminantValue);
-                ExpandAttrs(es, var.attrs, AttrStage::Post,  makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a){
-                        d.handle(sp, a, es.wb, es.crate, var); }));
+                    ExpandExpr(es, var.discriminantValue);
+                    ExpandAttrs(es, var.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+                        d.handle(sp, a, es.wb, es.crate, var);
+                    }));
                 }
                 // Handle cfg on variants (kinda hacky)
                 for (auto it = e.variants().begin(); it != e.variants().end();) {
@@ -2859,66 +1773,66 @@ default:
                     ExpandAttrsCfgAttr(*es.wb.settings, attrs);
                     ExpandAttrs(es, attrs, AttrStage::Pre, tiPath, mod, e, ti.data);
 
-                switch (ti.data.tag()) {
-default:
-                    BUG(Span(), "Unknown item type in trait block - " << ti.data.tagStr());
-                    case ASTItem::TAG_None: {
-                        break;
-                    }
-                    case ASTItem::TAG_MacroInv: {
-                        auto& e = ti.data.as_MacroInv();
-                        if (e.path().isValid()) {
-                            // Move out of the module to avoid invalidation if a new macro invocation is added
-                            auto miOwned = mv$(e);
-
-                            // As in an impl block: a macro that is not in
-                            // scope yet is retried on the next pass.
-                            auto ttl = ExpandMacro(es, mod, miOwned);
-
-                            if (ttl.get()) {
-                                // Re-parse tt
-                                size_t insertPos = idx + 1;
-                                while (ttl->lookahead(0) != TOK_EOF) {
-                                    auto i = ParseTraitItem(*ttl);
-                                    traitItems.insert(traitItems.begin() + insertPos, mv$(i));
-                                    insertPos++;
-                                }
-                                // - Any new macro invocations ends up at the end of the list and handled
-                                traitItems[idx].data = ASTItem::make_None({});
-                            } else {
-                                // Move back in (using the index, as the old pointer may be invalid)
-                                traitItems[idx].data.as_MacroInv() = mv$(miOwned);
-                            }
+                    switch (ti.data.tag()) {
+                        default:
+                            BUG(Span(), "Unknown item type in trait block - " << ti.data.tagStr());
+                        case ASTItem::TAG_None: {
+                            break;
                         }
-                        break;
-                    }
-                    case ASTItem::TAG_Function: {
-                        auto& e = ti.data.as_Function();
-                        ExpandFunction(es, mod, e);
-                        break;
-                    }
-                    case ASTItem::TAG_Static: {
-                        auto& e = ti.data.as_Static();
-                        ExpandGenericParams(es, mod, e.params());
-                        ExpandExpr(es, e.value());
-                        ExpandType(es, mod, e.type());
-                        break;
-                    }
-                    case ASTItem::TAG_Type: {
-                        auto& e = ti.data.as_Type();
-                        ExpandType(es, mod, e.type());
-                        break;
-                    }
-                }
+                        case ASTItem::TAG_MacroInv: {
+                            auto& e = ti.data.as_MacroInv();
+                            if (e.path().isValid()) {
+                                // Move out of the module to avoid invalidation if a new macro invocation is added
+                                auto miOwned = mv$(e);
 
-                {
+                                // As in an impl block: a macro that is not in
+                                // scope yet is retried on the next pass.
+                                auto ttl = ExpandMacro(es, mod, miOwned);
+
+                                if (ttl.get()) {
+                                    // Re-parse tt
+                                    size_t insertPos = idx + 1;
+                                    while (ttl->lookahead(0) != TOK_EOF) {
+                                        auto i = ParseTraitItem(*ttl);
+                                        traitItems.insert(traitItems.begin() + insertPos, mv$(i));
+                                        insertPos++;
+                                    }
+                                    // - Any new macro invocations ends up at the end of the list and handled
+                                    traitItems[idx].data = ASTItem::make_None({});
+                                } else {
+                                    // Move back in (using the index, as the old pointer may be invalid)
+                                    traitItems[idx].data.as_MacroInv() = mv$(miOwned);
+                                }
+                            }
+                            break;
+                        }
+                        case ASTItem::TAG_Function: {
+                            auto& e = ti.data.as_Function();
+                            ExpandFunction(es, mod, e);
+                            break;
+                        }
+                        case ASTItem::TAG_Static: {
+                            auto& e = ti.data.as_Static();
+                            ExpandGenericParams(es, mod, e.params());
+                            ExpandExpr(es, e.value());
+                            ExpandType(es, mod, e.type());
+                            break;
+                        }
+                        case ASTItem::TAG_Type: {
+                            auto& e = ti.data.as_Type();
+                            ExpandType(es, mod, e.type());
+                            break;
+                        }
+                    }
+
+                    {
                         auto& ti = traitItems[idx];
 
                         ExpandAttrs(es, attrs, AttrStage::Post, tiPath, mod, e, ti.data);
                         if (ti.attrs.items.size() == 0) {
                             ti.attrs = mv$(attrs);
                         }
-                }
+                    }
                 }
                 break;
             }
@@ -2947,7 +1861,7 @@ default:
                 break;
             }
         }
-        ExpandAttrs(es, attrs, AttrStage::Post,  path, mod, idx, vis, dat);
+        ExpandAttrs(es, attrs, AttrStage::Post, path, mod, idx, vis, dat);
 
         {
             auto& i = *mod.items[idx];
@@ -2965,7 +1879,6 @@ default:
 }
 
 void ExpandModIndexAnon(ASTCrate& crate, ASTModule& mod) {
-
     for (auto& i : mod.items) {
         if (auto* e = i->data.opt_Module()) {
             ExpandModIndexAnon(crate, *e);
@@ -3052,7 +1965,6 @@ void Expand_Mod_Early(const WireBoard& wb, ASTCrate& crate, ASTModule& mod, std:
                 }
                 auto miOwned = mv$(*mi);
 
-
                 ExpandState es{wb, crate, {}, ExpandMode::Iterate, &mod};
                 auto ttl = ExpandMacro(es, mod, miOwned);
                 ASSERT_BUG(miOwned.span(), ttl, "BUG: macro_rules not expanded");
@@ -3072,13 +1984,10 @@ void Expand_Mod_Early(const WireBoard& wb, ASTCrate& crate, ASTModule& mod, std:
 }
 
 void Expand(const WireBoard& wb, ASTCrate& crate) {
-    wb.expandRegistry->eachDecorator([](const char* name, const ExpandDecorator&) {
-    });
-    wb.expandRegistry->eachMacro([](const char* name, const ExpandProcMacro&) {
-    });
+    wb.expandRegistry->eachDecorator([](const char* name, const ExpandDecorator&) {});
+    wb.expandRegistry->eachMacro([](const char* name, const ExpandProcMacro&) {});
 
-    ExpandState es{wb, crate, LList<const ASTModule*>(nullptr, &crate.rootModule_),
-        ExpandMode::FirstPass, &crate.rootModule_};
+    ExpandState es{wb, crate, LList<const ASTModule*>(nullptr, &crate.rootModule_), ExpandMode::FirstPass, &crate.rootModule_};
 
     // 1. Crate attributes
     ExpandAttrsCfgAttr(*es.wb.settings, crate.attrs);
@@ -3199,4 +2108,1185 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
             }
         }
     }
+}
+
+ExpandState::ExpandState(const WireBoard& wb, ASTCrate& crate, LList<const ASTModule*> modstack, ExpandMode mode, ASTModule* currentMod)
+    : wb(wb)
+    , crate(crate)
+    , modstack(modstack)
+    , mode(mode)
+    , currentMod(currentMod)
+    , change(false)
+    , hasMissing(false)
+{
+}
+
+template <typename F>
+ExpandAttrCb<F>::ExpandAttrCb(F f)
+    : f(f)
+{
+}
+
+template <typename F>
+auto ExpandAttrCb<F>::run(const Span& sp, const ExpandDecorator& d, const ASTAttribute& a) const -> void {
+    f(sp, d, a);
+}
+
+CExpandExpr::CExpandExpr(const ExpandState& es)
+    : crate(es.crate)
+    , parentExpandState(es)
+    , expandState(es)
+{
+}
+
+CExpandExpr::~CExpandExpr() {
+    if (expandState.change) {
+        parentExpandState.change = true;
+    }
+    if (expandState.hasMissing) {
+        parentExpandState.hasMissing = true;
+    }
+}
+
+auto CExpandExpr::curMod() -> ASTModule& {
+    return *const_cast<ASTModule*>(expandState.modstack.item);
+}
+
+auto CExpandExpr::visit(ASTExprNodeP& cnode) -> void {
+    if (cnode.get()) {
+        auto attrs = mv$(cnode->attrs());
+        ExpandAttrsCfgAttr(*expandState.wb.settings, attrs);
+        ExpandAttrs(expandState, attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const ExpandDecorator& d, const auto& a) {
+            d.handle(sp, a, this->expandState.wb, this->crate, cnode);
+        }));
+        if (cnode.get()) {
+            cnode->attrs() = mv$(attrs);
+        }
+    }
+    if (cnode.get()) {
+        cnode->visit(*this);
+        // If the node was a macro, and it was consumed, reset it
+        if (auto* nMac = cast<ASTExprNodeMacro>(cnode.get())) {
+            if (!nMac->path.isValid()) {
+                cnode.reset();
+            }
+        }
+        if (this->replacement) {
+            cnode = mv$(this->replacement);
+        }
+    }
+
+    if (cnode.get()) {
+        auto attrs = mv$(cnode->attrs());
+        ExpandAttrs(expandState, attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+            d.handle(sp, a, this->expandState.wb, this->crate, cnode);
+        }));
+        if (cnode.get()) {
+            cnode->attrs() = mv$(attrs);
+        }
+    }
+    assert(!this->replacement);
+}
+
+auto CExpandExpr::visitNodelete(const ASTExprNode& parent, ASTExprNodeP& cnode) -> void {
+    if (cnode.get() != nullptr) {
+        this->visit(cnode);
+        if (cnode.get() == nullptr) {
+            ERROR(parent.span(), E0000, "#[cfg] not allowed in this position");
+        }
+    }
+    assert(!this->replacement);
+}
+
+auto CExpandExpr::visitVector(::std::vector<ASTExprNodeP>& cnodes) -> void {
+    for (auto it = cnodes.begin(); it != cnodes.end();) {
+        assert(it->get());
+        this->visit(*it);
+        if (it->get() == nullptr) {
+            it = cnodes.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+auto CExpandExpr::visitMacro(ASTExprNodeMacro& node, ::std::vector<ASTExprNodeBlock::Line>* nodesOut) -> ASTExprNodeP {
+    if (!node.path.isValid()) {
+        return ASTExprNodeP();
+    }
+
+    const bool definesMacro = node.path.isTrivial() && node.path.asTrivial() == "macro_rules";
+
+    // How deep this invocation already is: each expansion adds a frame to
+    // the span naming the macro that produced the tokens.
+    unsigned int depth = 0;
+    for (Span frame = node.span(); frame; frame = frame->parentSpan) {
+        if (cast<const SpanInnerMacro>(frame.get())) {
+            depth++;
+        }
+    }
+    if (depth >= expandState.wb.settings->recursionLimit) {
+        ERROR(node.span(), E0000, "recursion limit reached while expanding `" << node.path << "!`");
+    }
+
+    ASTExprNodeP rv;
+    auto& mod = this->curMod();
+    auto ttl = ExpandMacro(expandState, mod, node.span(), node.path, node.ident, node.tokens);
+    if (!ttl.get()) {
+        // No expansion
+    } else {
+        if (definesMacro) {
+            auto it = ::std::find_if(mod.macros().rbegin(), mod.macros().rend(), [&](const auto& macro) {
+                return macro.name == node.ident;
+            });
+            ASSERT_BUG(node.span(), it != mod.macros().rend(), "macro_rules! definition was not installed");
+            it->data->definitionHygiene = node.definitionHygiene;
+            if (nodesOut) {
+                auto marker = ASTExprNodeP(new ASTExprNodeMacroDefinition(it->data->definitionId, it->data->hygiene, it->data->definitionHygiene));
+                marker->setSpan(node.span());
+                nodesOut->push_back({true, ::std::move(marker)});
+            }
+        }
+        if (!nodesOut) {
+            if (ttl->lookahead(0) != TOK_EOF) {
+                SET_MODULE((*ttl), mod);
+                rv = ParseExpr0(*ttl);
+                // A macro body written as `expr;` and used where an
+                // expression is expected keeps the expression: rustc reports
+                // the trailing semicolon as a lint, not an error.
+                if (ttl->lookahead(0) == TOK_SEMICOLON && ttl->lookahead(1) == TOK_EOF) {
+                    ttl->getToken();
+                }
+                if (ttl->lookahead(0) != TOK_EOF) {
+                    ERROR(node.span(), E0000, "Unused tokens at the end of macro expansion - " << ttl->getToken());
+                }
+            } else if (ttl->isMacroExpansionPlaceholder()) {
+                rv = ASTExprNodeP(new ASTExprNodeTuple({}));
+                rv->setSpan(node.span());
+            }
+        } else {
+            while (ttl->lookahead(0) != TOK_EOF) {
+                SET_MODULE((*ttl), mod);
+
+                // Reparse as statement / item
+                bool addSilenceIfEnd = false;
+                ::std::shared_ptr<ASTModule> tmpLocalMod;
+                auto& localModPtr = (this->currentBlock ? this->currentBlock->localMod : tmpLocalMod);
+                auto newexpr = ParseExprBlockLineWithItems(*ttl, localModPtr, addSilenceIfEnd);
+
+                if (tmpLocalMod) {
+                    TODO(node.span(), "Handle edge case where a macro expansion outside of a _Block creates an item");
+                }
+
+                if (newexpr) {
+                    nodesOut->push_back({addSilenceIfEnd, mv$(newexpr)});
+                } else {
+                    // Expansion line just added a new item
+                }
+            }
+        }
+        node.path = ASTPath();
+
+        if (!nodesOut && !rv) {
+            ERROR(node.span(), E0000, "Macro didn't expand to anything");
+        }
+    }
+
+    return mv$(rv);
+}
+
+auto CExpandExpr::visit(ASTExprNodeMacro& node) -> void {
+    if (!node.path.isValid()) {
+        return;
+    }
+
+    replacement = this->visitMacro(node, nullptr);
+
+    if (this->replacement) {
+        auto n = mv$(this->replacement);
+        this->visit(n);
+        if (n) {
+            assert(!this->replacement);
+            this->replacement = mv$(n);
+        }
+    }
+}
+
+auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
+    this->inAssignLhs = false;
+    unsigned int modItemCount = 0;
+    bool hasLocalMod = node.localMod != nullptr;
+
+    auto prevModstack = this->expandState.modstack;
+    if (node.localMod) {
+        this->expandState.modstack = LList<const ASTModule*>(&prevModstack, node.localMod.get());
+    }
+
+    // TODO: macro_rules! invocations within the expression list influence this.
+    // > Solution: Defer creation of the local module until during expand.
+    if (node.localMod) {
+        ExpandMod(this->expandState, node.localMod->path(), *node.localMod);
+        modItemCount = node.localMod->items.size();
+    }
+
+    auto saved = this->currentBlock;
+    this->currentBlock = &node;
+
+    for (auto it = node.nodes.begin(); it != node.nodes.end();) {
+        assert(it->node.get());
+
+        if (auto* nodeMac = cast<ASTExprNodeMacro>(it->node.get())) {
+            const bool definesMacro = nodeMac->path.isTrivial() && nodeMac->path.asTrivial() == "macro_rules";
+            const auto macroName = nodeMac->ident;
+            auto attrs = std::move(it->node->attrs());
+            ExpandAttrsCfgAttr(*expandState.wb.settings, attrs);
+            ExpandAttrs(expandState, attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+                d.handle(sp, a, this->expandState.wb, this->crate, it->node);
+            }));
+            if (!it->node.get()) {
+                it = node.nodes.erase(it);
+                continue;
+            }
+            it->node->attrs() = std::move(attrs);
+
+            assert(it->node.get() == nodeMac);
+
+            ::std::vector<ASTExprNodeBlock::Line> newNodes;
+            this->visitMacro(*nodeMac, &newNodes);
+            if (!hasLocalMod && node.localMod) {
+                this->expandState.modstack = LList<const ASTModule*>(&prevModstack, node.localMod.get());
+                hasLocalMod = true;
+            }
+            if (node.localMod && modItemCount < node.localMod->items.size()) {
+                ExpandMod(this->expandState, node.localMod->path(), *node.localMod, modItemCount);
+                modItemCount = node.localMod->items.size();
+            }
+            if (definesMacro && !nodeMac->path.isValid()) {
+                for (auto& attr : nodeMac->attrs().items) {
+                    if (!attr.isInert() && attr.name() == "macro_export") {
+                        ExpandExportMacroRules(attr.span(), attr, this->expandState.wb, this->crate, this->curMod(), macroName);
+                        attr.markInert();
+                    }
+                }
+            }
+            if (nodeMac->path.isValid()) {
+                ++it;
+            } else {
+                // If this has a semicolon, then force the new final node to have a semicolon
+                if (it->hasSemicolon && !newNodes.empty()) {
+                    newNodes.back().hasSemicolon = true;
+                }
+                it = node.nodes.erase(it);
+                it = node.nodes.insert(it, ::std::make_move_iterator(newNodes.begin()), ::std::make_move_iterator(newNodes.end()));
+                // NOTE: Doesn't advance the iterator above, we want to re-visit the new node
+            }
+        } else {
+            this->visit(it->node);
+            if (it->node.get() == nullptr) {
+                it = node.nodes.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    this->currentBlock = saved;
+
+    // HACK! Run Expand_Mod twice on local modules.
+    if (node.localMod) {
+        ExpandMod(this->expandState, node.localMod->path(), *node.localMod, modItemCount);
+    }
+
+    this->expandState.modstack = mv$(prevModstack);
+}
+
+auto CExpandExpr::visit(ASTExprNodeAsyncBlock& node) -> void {
+    this->visitNodelete(node, node.inner);
+}
+
+auto CExpandExpr::visit(ASTExprNodeGeneratorBlock& node) -> void {
+    ExpandType(this->expandState, this->curMod(), node.returnType);
+    this->visitNodelete(node, node.inner);
+}
+
+auto CExpandExpr::visit(ASTExprNodeTry& node) -> void {
+    // Macro lookup can be deferred to a later expansion pass (for example,
+    // through a glob import).  Keep the lexical try scope until macro
+    // expansion has stabilised, so a `?` supplied as a macro argument is
+    // not lowered as a return from the surrounding function.
+    if (expandState.mode != ExpandMode::Final) {
+        this->visitNodelete(node, node.inner);
+        return;
+    }
+
+    // Desugar into
+    // ```
+    // loop '#tryNNN {
+    //   break '#tryNNN { ... }
+    // }
+    // ```
+    // NOTE: MIR lowering and HIR typecheck need to know to skip these (OR resolve should handle naming all loop blocks)
+    tryStack.push_back(RcString::newInterned(FMT("#try" << tryIndex++)));
+    this->visitNodelete(node, node.inner);
+    auto loopName = mv$(tryStack.back());
+    tryStack.pop_back();
+
+    auto coreCrate = crate.extCratenameCore;
+    auto pathTry = getPath(coreCrate, "ops", "Try");
+    auto pathTryFromOutput = ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathTry, {ASTPathNode(RcString::newInterned("from_output"))});
+    auto okNode = ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathTryFromOutput), ::makeVec1(mv$(node.inner))));
+    auto breakNode = ASTExprNodeP(new ASTExprNodeFlow(ASTExprNodeFlow::BREAK, loopName, mv$(okNode)));
+    this->replacement = ASTExprNodeP(new ASTExprNodeLoop(loopName, mv$(breakNode)));
+}
+
+auto CExpandExpr::visit(ASTExprNodeAsm& node) -> void {
+    for (auto& v : node.output) {
+        this->visitNodelete(node, v.value);
+    }
+    for (auto& v : node.input) {
+        this->visitNodelete(node, v.value);
+    }
+}
+
+auto CExpandExpr::visit(ASTExprNodeAsm2& node) -> void {
+    for (auto& v : node.params) {
+        switch (v.tag()) {
+            case ASTAsmParam::TAG_Const: {
+                auto& e = v.as_Const();
+                this->visitNodelete(node, e);
+                break;
+            }
+            case ASTAsmParam::TAG_Sym: {
+                auto& e = v.as_Sym();
+                ExpandPath(this->expandState, this->curMod(), e);
+                break;
+            }
+            case ASTAsmParam::TAG_Label: {
+                auto& e = v.as_Label();
+                this->visitNodelete(node, e.code);
+                break;
+            }
+            case ASTAsmParam::TAG_RegSingle: {
+                auto& e = v.as_RegSingle();
+                this->visitNodelete(node, e.val);
+                break;
+            }
+            case ASTAsmParam::TAG_Reg: {
+                auto& e = v.as_Reg();
+                this->visitNodelete(node, e.valIn);
+                this->visitNodelete(node, e.valOut);
+                break;
+            }
+        }
+    }
+}
+
+auto CExpandExpr::visit(ASTExprNodeFlow& node) -> void {
+    this->visitNodelete(node, node.value);
+
+    if (node.type == ASTExprNodeFlow::YEET) {
+        if (expandState.mode != ExpandMode::Final) {
+            return;
+        }
+
+        auto coreCrate = crate.extCratenameCore;
+        auto pathOpsYeet = getPath(coreCrate, "ops", "Yeet");
+        auto pathFromResidualFromResidual = getPath(coreCrate, "ops", "FromResidual", "from_residual");
+
+        // `do yeet` with no value yeets a unit, the same as `do yeet ()`.
+        auto yeeted = std::move(node.value);
+        if (!yeeted) {
+            yeeted = ASTExprNodeP(new ASTExprNodeTuple(::std::vector<ASTExprNodeP>()));
+            yeeted->setSpan(node.span());
+        }
+        auto v = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathOpsYeet), ::makeVec1(std::move(yeeted))));
+        v->setSpan(node.span());
+        v = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathFromResidualFromResidual), ::makeVec1(std::move(v))));
+        v->setSpan(node.span());
+        replacement = ASTExprNodeP(new ASTExprNodeFlow(
+            (tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
+            (tryStack.empty() ? RcString("") : tryStack.back()),
+            std::move(v)
+        ));
+        replacement->setSpan(node.span());
+    }
+}
+
+auto CExpandExpr::visit(ASTExprNodeLetBinding& node) -> void {
+    ExpandType(this->expandState, this->curMod(), node.type);
+    ExpandPattern(this->expandState, this->curMod(), node.pat, false);
+    this->visitNodelete(node, node.value);
+    this->visitNodelete(node, node.elseNode);
+}
+
+auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
+    inAssignLhs = true;
+    this->visitNodelete(node, node.slot);
+    inAssignLhs = false;
+    this->visitNodelete(node, node.value);
+
+    // Desugar destructuring assignment
+    // https://rust-lang.github.io/rfcs/2909-destructuring-assignment.html
+    if (node.op == ASTExprNodeAssign::NONE) {
+        struct VisitorToPat: public ASTNodeVisitor {
+            std::vector<std::pair<RcString, ASTExprNodeP>> slots;
+            ASTPattern rv;
+
+            bool rvSet = false;
+            bool isSlot = false;
+
+            ASTPattern lower(ASTExprNodeP& ep) {
+                assert(ep);
+                ep->visit(*this);
+                ASSERT_BUG(ep->span(), rvSet, ep.typeName() << " - Didn't yield a pattern");
+                if (isSlot) {
+                    assert(!slots.empty());
+                    assert(!slots.back().second);
+                    slots.back().second = std::move(ep);
+                    isSlot = false;
+                }
+                rvSet = false;
+                return std::move(rv);
+            }
+
+            // - This is a de-structuring pattern
+            void pat(ASTPattern rv) {
+                assert(!rvSet);
+                assert(!isSlot);
+                rvSet = true;
+                assert(rv.bindings().empty());
+                this->rv = std::move(rv);
+            }
+
+            // - This is a slot (to be assigned)
+            void slot(ASTExprNode& v) {
+                rvSet = true;
+                isSlot = true;
+
+                RcString name(FMT("_#" << slots.size()).c_str());
+                slots.push_back(std::make_pair(name, ASTExprNodeP()));
+                rv = ASTPattern(ASTPattern::TagBind(), v.span(), slots.back().first);
+            }
+
+            // - The given node isn't valid on the LHS of an assignment
+            void invalid(const ASTExprNode& v) {
+                ERROR(v.span(), E0000, typeid(v).name() << " isn't valid on the LHS of an assignemnt");
+            }
+
+            void visit(ASTExprNodeBlock& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeAsyncBlock& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeGeneratorBlock& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeTry& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeMacro& v) override {
+                BUG(v.span(), "Encountered macro");
+            }
+
+            void visit(ASTExprNodeAsm& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeAsm2& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeFlow& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeLetBinding& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeAssign& v) override {
+                invalid(v);
+            }
+
+            // `..` in a destructuring position parses as a range with no
+            // bounds, which is how the tuple, slice and tuple-struct forms
+            // all spell "the rest".
+            static bool isRest(ASTExprNodeP& ep) {
+                if (const auto* e = cast<ASTExprNodeBinOp>(ep.get())) {
+                    return e->type == ASTExprNodeBinOp::RANGE && !e->left && !e->right && !e->parenthesised;
+                }
+                return false;
+            }
+
+            ASTPattern::TuplePat lowerTuplePat(const Span& sp, ::std::vector<ASTExprNodeP>& values) {
+                bool isSplit = false;
+                ::std::vector<ASTPattern> start;
+                ::std::vector<ASTPattern> end;
+                for (auto& m : values) {
+                    if (isRest(m)) {
+                        ASSERT_BUG(sp, !isSplit, "Multiple `..` in tuple pattern?");
+                        isSplit = true;
+                        start = std::move(end);
+                        continue;
+                    }
+                    end.push_back(lower(m));
+                }
+                if (!isSplit) {
+                    return ASTPattern::TuplePat{std::move(end), false, {}};
+                }
+                return ASTPattern::TuplePat{std::move(start), true, std::move(end)};
+            }
+
+            void visit(ASTExprNodeCallPath& v) override {
+                // `TupleStruct(a, b) = value` destructures through the
+                // tuple-struct (or enum variant) of that name.
+                pat(ASTPattern(ASTPattern::TagNamedTuple(), v.span(), v.path, lowerTuplePat(v.span(), v.args)));
+            }
+
+            void visit(ASTExprNodeCallMethod& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeCallObject& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeLoop& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeFor& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeWhile& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeMatch& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeIf& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeWildcardPattern& v) override {
+                rvSet = true;
+                rv = ASTPattern(v.span(), ASTPattern::Data::make_Any({}));
+            }
+
+            void visit(ASTExprNodeInteger& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeFloat& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeBool& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeString& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeByteString& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeCString& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeSuffixedLiteral& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeClosure& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeStructLiteral& v) override {
+                if (v.baseValue) {
+                    TODO(v.span(), "Struct literal with `..value` in destructured assignment");
+                }
+                std::vector<ASTStructPatternEntry> subpats;
+                for (auto& m : v.values) {
+                    subpats.push_back(ASTStructPatternEntry{std::move(m.attrs), m.name, lower(m.value)});
+                }
+                pat(ASTPattern(ASTPattern::TagStruct(), v.span(), v.path, std::move(subpats), true));
+            }
+
+            void visit(ASTExprNodeStructLiteralPattern& v) override {
+                std::vector<ASTStructPatternEntry> subpats;
+                for (auto& m : v.values) {
+                    subpats.push_back(ASTStructPatternEntry{std::move(m.attrs), m.name, lower(m.value)});
+                }
+                pat(ASTPattern(ASTPattern::TagStruct(), v.span(), v.path, std::move(subpats), false));
+            }
+
+            void visit(ASTExprNodeArray& v) override {
+                if (v.size) {
+                    TODO(v.span(), "Sized Array literal in destructured assignment");
+                } else {
+                    bool isSplit = false;
+                    std::vector<ASTPattern> leading;
+                    std::vector<ASTPattern> trailing;
+                    for (auto& m : v.values) {
+                        if (isRest(m)) {
+                            ASSERT_BUG(v.span(), !isSplit, "Multiple `..` in slice pattern?");
+                            isSplit = true;
+                            leading = std::move(trailing);
+                            continue;
+                        }
+                        trailing.push_back(lower(m));
+                    }
+                    if (isSplit) {
+                        pat(ASTPattern(v.span(), ASTPattern::Data::make_SplitSlice({std::move(leading), ASTPatternBinding(), std::move(trailing)})));
+                    } else {
+                        pat(ASTPattern(v.span(), ASTPattern::Data::make_Slice({std::move(trailing)})));
+                    }
+                }
+            }
+
+            void visit(ASTExprNodeTuple& v) override {
+                pat(ASTPattern(ASTPattern::TagTuple(), v.span(), lowerTuplePat(v.span(), v.values)));
+            }
+
+            // Just emit as if it's a slot, `UnitStruct = Foo` isn't valid
+            void visit(ASTExprNodeNamedValue& v) override {
+                slot(v);
+            }
+
+            void visit(ASTExprNodeField& v) override {
+                slot(v);
+            }
+
+            void visit(ASTExprNodeIndex& v) override {
+                slot(v);
+            }
+
+            void visit(ASTExprNodeDeref& v) override {
+                slot(v);
+            }
+
+            void visit(ASTExprNodeCast& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeTypeAnnotation& v) override {
+                slot(v);
+            }
+
+            void visit(ASTExprNodeBinOp& v) override {
+                // `(..) = value` -- the parens are not a tuple, so the whole
+                // left side is the bare rest pattern.
+                if (v.type == ASTExprNodeBinOp::RANGE && !v.left && !v.right) {
+                    pat(ASTPattern(ASTPattern::TagTuple(), v.span(), ASTPattern::TuplePat{{}, true, {}}));
+                    return;
+                }
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeUniOp& v) override {
+                invalid(v);
+            }
+
+            void visit(ASTExprNodeMacroDefinition& v) override {
+                invalid(v);
+            }
+        } v;
+
+        auto pat = v.lower(node.slot);
+        if (pat.bindings().size() > 0) {
+            assert(pat.bindings().size() == 1); // The above code shouldn't be making double bindings
+            assert(!node.slot);
+            assert(v.slots.front().second);
+            node.slot = std::move(v.slots.front().second);
+        } else {
+            // Create a block with a `let` and individual assignments
+            auto rv = new ASTExprNodeBlock();
+            rv->nodes.push_back({true, ASTExprNodeP(new ASTExprNodeLetBinding(std::move(pat), mkType(*parentExpandState.crate.pool, node.span()), std::move(node.value)))});
+            for (auto& slots : v.slots) {
+                rv->nodes.push_back({true, ASTExprNodeP(new ASTExprNodeAssign(ASTExprNodeAssign::NONE, std::move(slots.second), ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newLocal(std::move(slots.first))))))});
+            }
+            this->replacement = ASTExprNodeP(rv);
+        }
+    }
+}
+
+auto CExpandExpr::visit(ASTExprNodeCallPath& node) -> void {
+    ExpandPath(this->expandState, this->curMod(), node.path);
+    this->visitVector(node.args);
+}
+
+auto CExpandExpr::visit(ASTExprNodeCallMethod& node) -> void {
+    ExpandPathParams(this->expandState, this->curMod(), node.method.args());
+    this->visitNodelete(node, node.val);
+    this->visitVector(node.args);
+}
+
+auto CExpandExpr::visit(ASTExprNodeCallObject& node) -> void {
+    this->visitNodelete(node, node.val);
+    this->visitVector(node.args);
+}
+
+auto CExpandExpr::visit(ASTExprNodeLoop& node) -> void {
+    this->visitNodelete(node, node.code);
+}
+
+auto CExpandExpr::visit(ASTExprNodeFor& node) -> void {
+    ExpandPattern(this->expandState, this->curMod(), node.pattern, false);
+    this->visitNodelete(node, node.value);
+    this->visitNodelete(node, node.code);
+
+    const RcString rcstringIntoIter = RcString::newInterned("into_iter");
+    const RcString rcstringIntoAsyncIter = RcString::newInterned("into_async_iter");
+    const RcString rcstringNext = RcString::newInterned("next");
+    const RcString rcstringIt = RcString::newInterned("it");
+    // Hygiene outlives the AST (idents in HIR patterns and macro_rules
+    // keep pointing at it), so it lives in the persistent pool.
+    const auto iteratorHygiene = Ident::Hygiene::newScope(parentExpandState.wb.id, *parentExpandState.crate.hirPool);
+    auto coreCrate = crate.extCratenameCore;
+    auto pathSome = getPath(coreCrate, "option", "Option", "Some");
+    auto pathNone = getPath(coreCrate, "option", "Option", "None");
+    auto pathIntoIterator = node.isAwait ? getPath(coreCrate, "async_iter", "IntoAsyncIterator") : getPath(coreCrate, "iter", "IntoIterator");
+    auto pathIterator = getPath(coreCrate, "iter", "Iterator");
+    // Desugar into:
+    // {
+    //         `m_label`: loop {
+    //             Some(`m_pattern`) => `m_code`,
+    //             None => break `m_label`,
+    //             }
+    //         }
+    //     }
+    // }
+    ::std::vector<ASTExprNodeMatchArm> arms;
+    // - `Some(pattern ) => code`
+    arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), pathSome, ::makeVec1(mv$(node.pattern)))), {}, mv$(node.code)));
+    // - `None => break label`
+    arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), node.span(), ASTPattern::Value::make_Named(pathNone))), {}, ASTExprNodeP(new ASTExprNodeFlow(ASTExprNodeFlow::BREAK, node.label, nullptr))));
+
+    auto nextReceiver = ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newRelative(iteratorHygiene, ::makeVec1(ASTPathNode(rcstringIt)))));
+    // An async iterator is polled where it stands: the await takes the place
+    // itself, and borrows it once per poll.
+    auto nextCall = node.isAwait ? ASTExprNodeP(new ASTExprNodeUniOp(ASTExprNodeUniOp::AWaitNext, mv$(nextReceiver))) : ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIterator, {ASTPathNode(rcstringNext)}), ::makeVec1(ASTExprNodeP(new ASTExprNodeUniOp(ASTExprNodeUniOp::REFMUT, mv$(nextReceiver))))));
+    auto nextMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(nextCall), mv$(arms)));
+    auto loop = ASTExprNodeP(new ASTExprNodeLoop(node.label, mv$(nextMatch)));
+
+    auto intoIterCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIntoIterator, {ASTPathNode(node.isAwait ? rcstringIntoAsyncIter : rcstringIntoIter)}), ::makeVec1(mv$(node.value))));
+    auto outerMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(intoIterCall), ::makeVec1(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), Ident(iteratorHygiene, rcstringIt))), {}, mv$(loop)))));
+
+    // rustc wraps the outer match in `DropTemps`: for always yields (), so
+    // a block containing the match as a statement provides the same
+    // terminating temporary scope without leaking head temporaries into a
+    // surrounding initializer or call expression.
+    auto block = new ASTExprNodeBlock();
+    block->nodes.push_back({true, mv$(outerMatch)});
+    replacement.reset(block);
+    replacement->setSpan(node.span());
+}
+
+auto CExpandExpr::visit(ASTExprNodeWhile& node) -> void {
+    for (auto& cond : node.conditions) {
+        if (cond.optPat) {
+            ExpandPattern(this->expandState, this->curMod(), *cond.optPat, true);
+        }
+        this->visitNodelete(node, cond.value);
+    }
+    this->visitNodelete(node, node.code);
+}
+
+auto CExpandExpr::liftGuardPatterns(ASTPattern& pat, ::std::vector<ASTIfLetCondition>& out) -> void {
+    switch (pat.data().tag()) {
+        default:
+            break;
+        case ASTPatternData::TAG_Guard: {
+            auto& e = pat.data().as_Guard();
+            auto sub = mv$(*e.sub);
+            auto cond = mv$(e.cond);
+            for (auto& b : pat.bindings()) {
+                sub.bindings().push_back(mv$(b));
+            }
+            pat = mv$(sub);
+            liftGuardPatterns(pat, out);
+            out.push_back(ASTIfLetCondition{nullptr, mv$(cond)});
+            return;
+        }
+        case ASTPatternData::TAG_Box: {
+            auto& e = pat.data().as_Box();
+            liftGuardPatterns(*e.sub, out);
+            break;
+        }
+        case ASTPatternData::TAG_Deref: {
+            auto& e = pat.data().as_Deref();
+            liftGuardPatterns(*e.sub, out);
+            break;
+        }
+        case ASTPatternData::TAG_Ref: {
+            auto& e = pat.data().as_Ref();
+            liftGuardPatterns(*e.sub, out);
+            break;
+        }
+        case ASTPatternData::TAG_Tuple: {
+            auto& e = pat.data().as_Tuple();
+            for (auto& sub : e.start) {
+                liftGuardPatterns(sub, out);
+            }
+            for (auto& sub : e.end) {
+                liftGuardPatterns(sub, out);
+            }
+            break;
+        }
+        case ASTPatternData::TAG_StructTuple: {
+            auto& e = pat.data().as_StructTuple();
+            for (auto& sub : e.tupPat.start) {
+                liftGuardPatterns(sub, out);
+            }
+            for (auto& sub : e.tupPat.end) {
+                liftGuardPatterns(sub, out);
+            }
+            break;
+        }
+        case ASTPatternData::TAG_Struct: {
+            auto& e = pat.data().as_Struct();
+            for (auto& sub : e.subPatterns) {
+                liftGuardPatterns(sub.pat, out);
+            }
+            break;
+        }
+        case ASTPatternData::TAG_Slice: {
+            auto& e = pat.data().as_Slice();
+            for (auto& sub : e.subPats) {
+                liftGuardPatterns(sub, out);
+            }
+            break;
+        }
+        case ASTPatternData::TAG_SplitSlice: {
+            auto& e = pat.data().as_SplitSlice();
+            for (auto& sub : e.leading) {
+                liftGuardPatterns(sub, out);
+            }
+            for (auto& sub : e.trailing) {
+                liftGuardPatterns(sub, out);
+            }
+            break;
+        }
+        case ASTPatternData::TAG_Or: {
+            auto& e = pat.data().as_Or();
+            for (auto& sub : e) {
+                liftGuardPatterns(sub, out);
+            }
+            break;
+        }
+    }
+}
+
+auto CExpandExpr::visit(ASTExprNodeMatch& node) -> void {
+    this->visitNodelete(node, node.val);
+    for (auto& arm : node.arms) {
+        ExpandAttrsCfgAttr(*expandState.wb.settings, arm.attrs);
+        ExpandAttrs(expandState, arm.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+            d.handle(sp, a, expandState.wb, crate, arm);
+        }));
+        if (arm.patterns.size() == 0) {
+            continue;
+        }
+        for (auto& pat : arm.patterns) {
+            ExpandPattern(this->expandState, this->curMod(), pat, true);
+        }
+        {
+            ::std::vector<ASTIfLetCondition> patternGuards;
+            for (auto& pat : arm.patterns) {
+                liftGuardPatterns(pat, patternGuards);
+            }
+            for (auto& guard : patternGuards) {
+                arm.guard.push_back(mv$(guard));
+            }
+        }
+        for (auto& cond : arm.guard) {
+            if (cond.optPat) {
+                ExpandPattern(this->expandState, this->curMod(), *cond.optPat, true);
+            }
+            this->visitNodelete(node, cond.value);
+        }
+
+        this->visitNodelete(node, arm.code);
+        ExpandAttrs(expandState, arm.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+            d.handle(sp, a, expandState.wb, crate, arm);
+        }));
+    }
+    // Prune deleted arms
+    for (auto it = node.arms.begin(); it != node.arms.end();) {
+        if (it->patterns.size() == 0) {
+            it = node.arms.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+auto CExpandExpr::visit(ASTExprNodeIf& node) -> void {
+    for (auto& arm : node.arms) {
+        for (auto& cond : arm.conditions) {
+            if (cond.optPat) {
+                ExpandPattern(this->expandState, this->curMod(), *cond.optPat, true);
+            }
+            this->visitNodelete(node, cond.value);
+        }
+        this->visitNodelete(node, arm.body);
+    }
+    this->visitNodelete(node, node.elseNode);
+}
+
+auto CExpandExpr::visit(ASTExprNodeWildcardPattern& node) -> void {
+}
+
+auto CExpandExpr::visit(ASTExprNodeInteger& node) -> void {
+}
+
+auto CExpandExpr::visit(ASTExprNodeFloat& node) -> void {
+}
+
+auto CExpandExpr::visit(ASTExprNodeBool& node) -> void {
+}
+
+auto CExpandExpr::visit(ASTExprNodeString& node) -> void {
+}
+
+auto CExpandExpr::visit(ASTExprNodeByteString& node) -> void {
+}
+
+auto CExpandExpr::visit(ASTExprNodeCString& node) -> void {
+}
+
+auto CExpandExpr::visit(ASTExprNodeSuffixedLiteral& node) -> void {
+}
+
+auto CExpandExpr::visit(ASTExprNodeClosure& node) -> void {
+    auto tryStack = ::std::move(this->tryStack);
+    for (auto& arg : node.args) {
+        ExpandPattern(this->expandState, this->curMod(), arg.first, false);
+        ExpandType(this->expandState, this->curMod(), arg.second);
+    }
+    ExpandType(this->expandState, this->curMod(), node.returnType);
+    this->visitNodelete(node, node.code);
+    this->tryStack = std::move(tryStack);
+}
+
+auto CExpandExpr::visit(ASTExprNodeStructLiteral& node) -> void {
+    this->visitNodelete(node, node.baseValue);
+    for (auto& val : node.values) {
+        ExpandAttrsCfgAttr(*expandState.wb.settings, val.attrs);
+        ExpandAttrs(expandState, val.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+            d.handle(sp, a, expandState.wb, crate, val);
+        }));
+        if (!val.value) {
+            continue;
+        }
+        this->visitNodelete(node, val.value);
+        ExpandAttrs(expandState, val.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+            d.handle(sp, a, expandState.wb, crate, val);
+        }));
+    }
+    for (auto it = node.values.begin(); it != node.values.end();) {
+        if (it->value) {
+            ++it;
+        } else {
+            it = node.values.erase(it);
+        }
+    }
+}
+
+auto CExpandExpr::visit(ASTExprNodeStructLiteralPattern& node) -> void {
+    for (auto& val : node.values) {
+        ExpandAttrsCfgAttr(*expandState.wb.settings, val.attrs);
+        ExpandAttrs(expandState, val.attrs, AttrStage::Pre, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+            d.handle(sp, a, expandState.wb, crate, val);
+        }));
+        if (!val.value) {
+            continue;
+        }
+        this->visitNodelete(node, val.value);
+        ExpandAttrs(expandState, val.attrs, AttrStage::Post, makeCallable<ExpandAttrCb>([&](const Span& sp, const auto& d, const auto& a) {
+            d.handle(sp, a, expandState.wb, crate, val);
+        }));
+    }
+    for (auto it = node.values.begin(); it != node.values.end();) {
+        if (it->value) {
+            ++it;
+        } else {
+            it = node.values.erase(it);
+        }
+    }
+}
+
+auto CExpandExpr::visit(ASTExprNodeArray& node) -> void {
+    this->visitNodelete(node, node.size);
+    this->visitVector(node.values);
+}
+
+auto CExpandExpr::visit(ASTExprNodeTuple& node) -> void {
+    this->visitVector(node.values);
+}
+
+auto CExpandExpr::visit(ASTExprNodeNamedValue& node) -> void {
+    ExpandPath(this->expandState, this->curMod(), node.path);
+}
+
+auto CExpandExpr::visit(ASTExprNodeField& node) -> void {
+    this->visitNodelete(node, node.obj);
+}
+
+auto CExpandExpr::visit(ASTExprNodeIndex& node) -> void {
+    this->inAssignLhs = false;
+    this->visitNodelete(node, node.obj);
+    this->visitNodelete(node, node.idx);
+}
+
+auto CExpandExpr::visit(ASTExprNodeDeref& node) -> void {
+    this->visitNodelete(node, node.value);
+}
+
+auto CExpandExpr::visit(ASTExprNodeCast& node) -> void {
+    this->visitNodelete(node, node.value);
+    ExpandType(this->expandState, this->curMod(), node.type);
+}
+
+auto CExpandExpr::visit(ASTExprNodeTypeAnnotation& node) -> void {
+    this->visitNodelete(node, node.value);
+    ExpandType(this->expandState, this->curMod(), node.type);
+}
+
+auto CExpandExpr::visit(ASTExprNodeBinOp& node) -> void {
+    this->visitNodelete(node, node.left);
+    this->visitNodelete(node, node.right);
+
+    if (this->inAssignLhs) {
+        return;
+    }
+    const RcString rcstringStart = RcString::newInterned("start");
+    const RcString rcstringEnd = RcString::newInterned("end");
+    const RcString rcstringNewRange = RcString::newInterned("new_range");
+    const bool newRange = crate.features.count(rcstringNewRange) != 0;
+    switch (node.type) {
+        case ASTExprNodeBinOp::RANGE: {
+            // NOTE: Not language items pre 1.39
+            auto coreCrate = crate.extCratenameCore;
+            auto pathRange = getPath(coreCrate, newRange ? "range" : "ops", "Range");
+            auto pathRangeFrom = getPath(coreCrate, newRange ? "range" : "ops", "RangeFrom");
+            auto pathRangeTo = getPath(coreCrate, "ops", "RangeTo");
+            auto pathRangeFull = getPath(coreCrate, "ops", "RangeFull");
+
+            ASTExprNodeStructLiteral::tValues values;
+            if (node.left && node.right) {
+                values.push_back({{}, rcstringStart, mv$(node.left)});
+                values.push_back({{}, rcstringEnd, mv$(node.right)});
+                replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRange), nullptr, mv$(values)));
+            } else if (node.left) {
+                values.push_back({{}, rcstringStart, mv$(node.left)});
+                replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeFrom), nullptr, mv$(values)));
+            } else if (node.right) {
+                values.push_back({{}, rcstringEnd, mv$(node.right)});
+                replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeTo), nullptr, mv$(values)));
+            } else {
+                replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeFull), nullptr, mv$(values)));
+            }
+            replacement->setSpan(node.span());
+            break;
+        }
+        case ASTExprNodeBinOp::RANGE_INC: {
+            // NOTE: Not language items pre 1.54
+            auto coreCrate = crate.extCratenameCore;
+            auto pathRangeInclusiveNonEmpty = getPath(coreCrate, newRange ? "range" : "ops", "RangeInclusive");
+            auto pathRangeToInclusive = getPath(coreCrate, "ops", "RangeToInclusive");
+
+            if (node.left) {
+                ASTExprNodeStructLiteral::tValues values;
+                values.push_back({{}, rcstringStart, mv$(node.left)});
+                values.push_back({{}, rcstringEnd, mv$(node.right)});
+                if (!newRange) {
+                    values.push_back({{}, RcString::newInterned("exhausted"), ASTExprNodeP(new ASTExprNodeBool(false))});
+                }
+                replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeInclusiveNonEmpty), nullptr, mv$(values)));
+            } else {
+                ASTExprNodeStructLiteral::tValues values;
+                values.push_back({{}, rcstringEnd, mv$(node.right)});
+                replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeToInclusive), nullptr, mv$(values)));
+            }
+            replacement->setSpan(node.span());
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+auto CExpandExpr::visit(ASTExprNodeUniOp& node) -> void {
+    this->visitNodelete(node, node.value);
+    // `&pin mut place` pins the place: `Pin::new_unchecked` of a borrow of it.
+    // The borrow is what keeps the place from moving, so the call is sound
+    // wherever the borrow is.
+    if (node.type == ASTExprNodeUniOp::PinBorrow || node.type == ASTExprNodeUniOp::PinBorrowMut) {
+        const bool isMut = node.type == ASTExprNodeUniOp::PinBorrowMut;
+        auto pathNewUnchecked = getPath(crate.extCratenameCore, "pin", "Pin", "new_unchecked");
+        auto borrow = ASTExprNodeP(new ASTExprNodeUniOp(isMut ? ASTExprNodeUniOp::REFMUT : ASTExprNodeUniOp::REF, mv$(node.value)));
+        borrow->setSpan(node.span());
+        auto call = ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathNewUnchecked), ::makeVec1(mv$(borrow))));
+        call->setSpan(node.span());
+        auto block = new ASTExprNodeBlock();
+        block->blockType = ASTExprNodeBlock::Type::Unsafe;
+        block->nodes.push_back({false, mv$(call)});
+        replacement.reset(block);
+        replacement->setSpan(node.span());
+        return;
+    }
+    // - Desugar question mark operator before resolve so it can create names
+    if (node.type == ASTExprNodeUniOp::QMARK) {
+        if (expandState.mode != ExpandMode::Final) {
+            return;
+        }
+
+        auto coreCrate = crate.extCratenameCore;
+
+        // TODO: Find a way of creating bindings during HIR lower instead (so lang items are available)
+
+        auto pathTry = getPath(coreCrate, "ops", "Try");
+        const RcString rcstringV = RcString::newInterned("v");
+        const RcString rcstringR = RcString::newInterned("r");
+        // TryV2
+        {
+            auto pathTryBranch = ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathTry, {ASTPathNode(RcString::newInterned("branch"))});
+            // Not a lang item
+            auto path_ControlFlow_Continue = getPath(coreCrate, "ops", "ControlFlow", "Continue");
+            auto path_ControlFlow_Break = getPath(coreCrate, "ops", "ControlFlow", "Break");
+            auto pathFromResidualFromResidual = getPath(coreCrate, "ops", "FromResidual", "from_residual");
+
+            ::std::vector<ASTExprNodeMatchArm> arms;
+            // `Continue(v) => v,`
+            arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Continue, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringV)))), {}, ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(rcstringV)))));
+            // `Break(r) => return R::from_residual(r),`
+            arms.push_back(ASTExprNodeMatchArm(
+                ::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Break, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringR)))),
+                {},
+                ASTExprNodeP(new ASTExprNodeFlow(
+                    (tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
+                    (tryStack.empty() ? RcString("") : tryStack.back()),
+                    ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathFromResidualFromResidual), ::makeVec1(ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(rcstringR))))))
+                ))
+            ));
+
+            replacement.reset(new ASTExprNodeMatch(ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathTryBranch), ::makeVec1(mv$(node.value)))), mv$(arms)));
+        }
+    }
+}
+
+auto CExpandExpr::visit(ASTExprNodeMacroDefinition&) -> void {
 }

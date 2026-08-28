@@ -3,11 +3,11 @@
 #include "hir_expr.h"
 #include "hir_type.h"
 
-#include <algorithm>
-
 #include <std/sym/i_map.h>
 #include <std/mem/obj_pool.h>
 #include <std/rng/split_mix_64.h>
+
+#include <algorithm>
 
 using namespace stl;
 
@@ -115,7 +115,9 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
         }
         case HIRPath::Data::TAG_UfcsKnown: {
             auto& e = x.data.as_UfcsKnown();
-            os << "<" << e.type << " as "; os << e.trait << ">::" << e.item << e.params; return os;
+            os << "<" << e.type << " as ";
+            os << e.trait << ">::" << e.item << e.params;
+            return os;
             break;
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
@@ -156,11 +158,7 @@ namespace {
     struct PathNode: public HIRSimplePathData {
         PathNode* next;
 
-        PathNode(u64 h1, u64 h2, ThinVector<RcString> m, PathNode* next)
-            : HIRSimplePathData{h1, h2, std::move(m)}
-            , next(next)
-        {
-        }
+        PathNode(u64 h1, u64 h2, ThinVector<RcString> m, PathNode* next);
     };
 
     struct PathInterner {
@@ -751,19 +749,26 @@ Ordering HIRPath::ord(const HIRPath& x) const {
         case HIRPath::Data::TAG_UfcsInherent: {
             auto& tpe = this->data.as_UfcsInherent();
             auto& xpe = x.data.as_UfcsInherent();
-            ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);
+            ORD(tpe.type, xpe.type);
+            ORD(tpe.item, xpe.item);
+            return ::ord(tpe.params, xpe.params);
             break;
         }
         case HIRPath::Data::TAG_UfcsKnown: {
             auto& tpe = this->data.as_UfcsKnown();
             auto& xpe = x.data.as_UfcsKnown();
-            ORD(tpe.type, xpe.type); ORD(tpe.trait, xpe.trait); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);
+            ORD(tpe.type, xpe.type);
+            ORD(tpe.trait, xpe.trait);
+            ORD(tpe.item, xpe.item);
+            return ::ord(tpe.params, xpe.params);
             break;
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
             auto& tpe = this->data.as_UfcsUnknown();
             auto& xpe = x.data.as_UfcsUnknown();
-            ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);
+            ORD(tpe.type, xpe.type);
+            ORD(tpe.item, xpe.item);
+            return ::ord(tpe.params, xpe.params);
             break;
         }
     }
@@ -944,4 +949,10 @@ HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y) {
 ::std::ostream& operator<<(::std::ostream& os, const HIRTraitPath::AtyEqual& x) {
     os << x.type;
     return os;
+}
+
+PathNode::PathNode(u64 h1, u64 h2, ThinVector<RcString> m, PathNode* next)
+    : HIRSimplePathData{h1, h2, std::move(m)}
+    , next(next)
+{
 }

@@ -3,11 +3,11 @@
 #include "span.h"
 #include "hir_expr.h" // ArraySize::Unevaluated cloning needs the complete expression definition.
 
-#include <std/mem/obj_pool.h>
 #include <std/alg/defer.h>
+#include <std/mem/obj_pool.h>
 
-#include <cstdint>
 #include <cassert>
+#include <cstdint>
 
 using namespace stl;
 
@@ -17,22 +17,13 @@ namespace {
         const TypeFmtRecursionNode* next;
     };
 
-    class TypeFmtStream final : public ::std::ostream {
+    class TypeFmtStream final: public ::std::ostream {
     public:
         const TypeFmtRecursionNode* recurseStack = nullptr;
 
-        explicit TypeFmtStream(::std::ostream& output)
-            : ::std::ostream(output.rdbuf())
-        {
-            copyfmt(output);
-            clear(output.rdstate());
-            pword(0) = this;
-        }
+        explicit TypeFmtStream(::std::ostream& output);
 
-        static TypeFmtStream* from(::std::ostream& output) {
-            // This stream is private to HIR formatting, so slot zero is ours.
-            return output.pword(0) == &output ? static_cast<TypeFmtStream*>(&output) : nullptr;
-        }
+        static TypeFmtStream* from(::std::ostream& output);
     };
 }
 
@@ -115,19 +106,19 @@ Ordering ord(const HIRTypeData* l, const HIRTypeData* r) {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRArraySize& x) {
-        switch (x.tag()) {
-            case HIRArraySize::TAG_Unevaluated: {
-                auto& se = x.as_Unevaluated();
-                os << se;
-                break;
-            }
-            case HIRArraySize::TAG_Known: {
-                auto& se = x.as_Known();
-                os << se;
-                break;
-            }
+    switch (x.tag()) {
+        case HIRArraySize::TAG_Unevaluated: {
+            auto& se = x.as_Unevaluated();
+            os << se;
+            break;
         }
-        return os;
+        case HIRArraySize::TAG_Known: {
+            auto& se = x.as_Known();
+            os << se;
+            break;
+        }
+    }
+    return os;
 }
 
 HIRTypePatternRange HIRTypePatternRange::clone() const {
@@ -136,23 +127,33 @@ HIRTypePatternRange HIRTypePatternRange::clone() const {
 
 Ordering HIRTypePatternRange::ord(const HIRTypePatternRange& x) const {
     ORD(hasStart, x.hasStart);
-    if (hasStart) ORD(start, x.start);
+    if (hasStart) {
+        ORD(start, x.start);
+    }
     ORD(hasEnd, x.hasEnd);
-    if (hasEnd) ORD(end, x.end);
+    if (hasEnd) {
+        ORD(end, x.end);
+    }
     ORD(endInclusive, x.endInclusive);
     return OrdEqual;
 }
 
 void HIRTypePatternRange::fmt(::std::ostream& os) const {
-    if (hasStart) os << start;
+    if (hasStart) {
+        os << start;
+    }
     os << (endInclusive ? "..=" : "..");
-    if (hasEnd) os << end;
+    if (hasEnd) {
+        os << end;
+    }
 }
 
 HIRTypePattern HIRTypePattern::clone() const {
     HIRTypePattern rv;
     rv.alternatives.reserve(alternatives.size());
-    for (const auto& range : alternatives) rv.alternatives.push_back(range.clone());
+    for (const auto& range : alternatives) {
+        rv.alternatives.push_back(range.clone());
+    }
     return rv;
 }
 
@@ -160,14 +161,18 @@ Ordering HIRTypePattern::ord(const HIRTypePattern& x) const {
     ORD(alternatives.size(), x.alternatives.size());
     for (size_t i = 0; i < alternatives.size(); i++) {
         auto rv = alternatives[i].ord(x.alternatives[i]);
-        if (rv != OrdEqual) return rv;
+        if (rv != OrdEqual) {
+            return rv;
+        }
     }
     return OrdEqual;
 }
 
 void HIRTypePattern::fmt(::std::ostream& os) const {
     for (size_t i = 0; i < alternatives.size(); i++) {
-        if (i != 0) os << " | ";
+        if (i != 0) {
+            os << " | ";
+        }
         alternatives[i].fmt(os);
     }
 }
@@ -308,15 +313,9 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
                     break;
                 }
             }
-            MonomorphStatePtr   ms { types, tySelf, ppImpl, ppMethod };
+            MonomorphStatePtr ms{types, tySelf, ppImpl, ppMethod};
             const auto& f = *fp;
-            HIRTypeDataFunctionPointer ft {
-                f.unsafe,
-                f.variadic,
-                f.abi,
-                ms.monomorphType(sp, f.returnType),
-                {}
-            };
+            HIRTypeDataFunctionPointer ft{f.unsafe, f.variadic, f.abi, ms.monomorphType(sp, f.returnType), {}};
             for (size_t i = 0; i < f.fixedArgCount(); i++) {
                 ft.argTypes.push_back(ms.monomorphType(sp, f.args[i].second));
             }
@@ -460,14 +459,14 @@ void HIRTypeData::fmt(::std::ostream& os) const {
         case HIRTypeData::TAG_ErasedType: {
             auto& e = (*this).as_ErasedType();
             os << "impl ";
-                for (const auto& tr : e.traits) {
-                    if (&tr != &e.traits[0]) {
-                        os << "+";
-                    }
-                    os << tr;
+            for (const auto& tr : e.traits) {
+                if (&tr != &e.traits[0]) {
+                    os << "+";
                 }
-                os << "+use" << e.use;
-                os << "/*";
+                os << tr;
+            }
+            os << "+use" << e.use;
+            os << "/*";
             switch (e.inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Known: {
                     auto& ee = e.inner.as_Known();
@@ -777,8 +776,7 @@ namespace {
             case HIRGenericBound::TAG_TraitBound: {
                 auto& ae = a.as_TraitBound();
                 auto& be = b.as_TraitBound();
-                return ae.type == be.type && exactTraitPathEqual(ae.trait, be.trait)
-                    && ae.isTrivial == be.isTrivial;
+                return ae.type == be.type && exactTraitPathEqual(ae.trait, be.trait) && ae.isTrivial == be.isTrivial;
             }
             case HIRGenericBound::TAG_TypeEquality: {
                 auto& ae = a.as_TypeEquality();
@@ -977,8 +975,8 @@ namespace {
                 auto& ae = a.as_NamedFunction();
                 auto& be = b.as_NamedFunction();
                 if (!exactPathEqual(ae.path, be.path) || ae.def.tag() != be.def.tag()) {
-                        return false;
-                    }
+                    return false;
+                }
                 switch (ae.def.tag()) {
                     case HIRTypeDataNamedFunctionTy::TAG_Function: {
                         auto& ad = ae.def.as_Function();
@@ -1126,9 +1124,9 @@ namespace {
             case HIRTypeData::TAG_ErasedType: {
                 auto& e = type.as_ErasedType();
                 for (const auto& trait : e.traits) {
-                        flags |= typeFlags(trait);
-                    }
-                    flags |= typeFlags(e.use);
+                    flags |= typeFlags(trait);
+                }
+                flags |= typeFlags(e.use);
                 {
                     auto& tuMatch = e.inner;
                     switch (tuMatch.tag()) {
@@ -1170,16 +1168,23 @@ namespace {
                 for (const auto& range : e.pattern.alternatives) {
                     const HIRConstGeneric* values[] = {range.hasStart ? &range.start : nullptr, range.hasEnd ? &range.end : nullptr};
                     for (const auto* value : values) {
-                        if (!value) continue;
-                        if (value->is_Generic()) flags |= HIRTypeData::HAS_TYPE_PARAM;
-                        else if (value->is_Infer() || value->is_Unevaluated()) flags |= HIRTypeData::HAS_DEFERRED_CONST;
+                        if (!value) {
+                            continue;
+                        }
+                        if (value->is_Generic()) {
+                            flags |= HIRTypeData::HAS_TYPE_PARAM;
+                        } else if (value->is_Infer() || value->is_Unevaluated()) {
+                            flags |= HIRTypeData::HAS_DEFERRED_CONST;
+                        }
                     }
                 }
                 break;
             }
             case HIRTypeData::TAG_Tuple: {
                 auto& e = type.as_Tuple();
-                for (const auto inner : e) addTypeFlags(flags, inner);
+                for (const auto inner : e) {
+                    addTypeFlags(flags, inner);
+                }
                 break;
             }
             case HIRTypeData::TAG_Borrow: {
@@ -1404,7 +1409,7 @@ namespace {
             case HIRTypeData::TAG_ErasedType: {
                 auto& e = type.as_ErasedType();
                 h = hashMix(h, static_cast<size_t>(e.inner.tag()));
-                    h = hashMix(h, e.traits.size());
+                h = hashMix(h, e.traits.size());
                 {
                     auto& tuMatch = e.inner;
                     switch (tuMatch.tag()) {
@@ -1432,7 +1437,7 @@ namespace {
             case HIRTypeData::TAG_Array: {
                 auto& e = type.as_Array();
                 h = hashMix(h, hashTypeRef(e.inner));
-                    h = hashMix(h, static_cast<size_t>(e.size.tag()));
+                h = hashMix(h, static_cast<size_t>(e.size.tag()));
                 {
                     auto& tuMatch = e.size;
                     switch (tuMatch.tag()) {
@@ -1461,9 +1466,13 @@ namespace {
                 h = hashMix(h, e.pattern.alternatives.size());
                 for (const auto& range : e.pattern.alternatives) {
                     h = hashMix(h, range.hasStart);
-                    if (range.hasStart) h = hashMix(h, hashConstGeneric(range.start));
+                    if (range.hasStart) {
+                        h = hashMix(h, hashConstGeneric(range.start));
+                    }
                     h = hashMix(h, range.hasEnd);
-                    if (range.hasEnd) h = hashMix(h, hashConstGeneric(range.end));
+                    if (range.hasEnd) {
+                        h = hashMix(h, hashConstGeneric(range.end));
+                    }
                     h = hashMix(h, range.endInclusive);
                 }
                 break;
@@ -1836,25 +1845,33 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
         case HIRTypeData::TAG_Generic: {
             auto& te = (*this).as_Generic();
             auto& xe = (*x).as_Generic();
-            if ((rv = ::ord(te.binding, xe.binding)) != OrdEqual) return rv; return OrdEqual;
+            if ((rv = ::ord(te.binding, xe.binding)) != OrdEqual) {
+                return rv;
+            }
+            return OrdEqual;
             break;
         }
         case HIRTypeData::TAG_TraitObject: {
             auto& te = (*this).as_TraitObject();
             auto& xe = (*x).as_TraitObject();
-            ORD(te.trait, xe.trait); ORD(te.markers, xe.markers); return OrdEqual;
+            ORD(te.trait, xe.trait);
+            ORD(te.markers, xe.markers);
+            return OrdEqual;
             break;
         }
         case HIRTypeData::TAG_ErasedType: {
             auto& te = (*this).as_ErasedType();
             auto& xe = (*x).as_ErasedType();
-            ORD(te.inner, xe.inner); return OrdEqual;
+            ORD(te.inner, xe.inner);
+            return OrdEqual;
             break;
         }
         case HIRTypeData::TAG_Array: {
             auto& te = (*this).as_Array();
             auto& xe = (*x).as_Array();
-            ORD(te.inner, xe.inner); ORD(te.size, xe.size); return OrdEqual;
+            ORD(te.inner, xe.inner);
+            ORD(te.size, xe.size);
+            return OrdEqual;
             break;
         }
         case HIRTypeData::TAG_Slice: {
@@ -1865,7 +1882,8 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
         case HIRTypeData::TAG_Pattern: {
             auto& te = (*this).as_Pattern();
             auto& xe = (*x).as_Pattern();
-            ORD(te.inner, xe.inner); return te.pattern.ord(xe.pattern);
+            ORD(te.inner, xe.inner);
+            return te.pattern.ord(xe.pattern);
             break;
         }
         case HIRTypeData::TAG_Tuple: {
@@ -1876,13 +1894,15 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
         case HIRTypeData::TAG_Borrow: {
             auto& te = (*this).as_Borrow();
             auto& xe = (*x).as_Borrow();
-            ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);
+            ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type));
+            return ::ord(te.inner, xe.inner);
             break;
         }
         case HIRTypeData::TAG_Pointer: {
             auto& te = (*this).as_Pointer();
             auto& xe = (*x).as_Pointer();
-            ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);
+            ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type));
+            return ::ord(te.inner, xe.inner);
             break;
         }
         case HIRTypeData::TAG_NamedFunction: {
@@ -1893,7 +1913,12 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
         case HIRTypeData::TAG_Function: {
             auto& te = (*this).as_Function();
             auto& xe = (*x).as_Function();
-            ORD(te.isUnsafe, xe.isUnsafe); ORD(te.isVariadic, xe.isVariadic); ORD(te.trackCaller, xe.trackCaller); ORD(te.abi, xe.abi); ORD(te.argTypes, xe.argTypes); return ::ord(te.rettype, xe.rettype);
+            ORD(te.isUnsafe, xe.isUnsafe);
+            ORD(te.isVariadic, xe.isVariadic);
+            ORD(te.trackCaller, xe.trackCaller);
+            ORD(te.abi, xe.abi);
+            ORD(te.argTypes, xe.argTypes);
+            return ::ord(te.rettype, xe.rettype);
             break;
         }
         case HIRTypeData::TAG_NodeType: {
@@ -2283,12 +2308,8 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             HIRConstGeneric xeKnown;
             EncodedLiteral teLiteral;
             EncodedLiteral xeLiteral;
-            const auto& teValue = te.size.is_Known()
-                ? (teLiteral = EncodedLiteral::makeUsize(te.size.as_Known()), teKnown = retainedValuePool ? freezeEncodedLiteral(*retainedValuePool, mv$(teLiteral)) : &teLiteral)
-                : resolvePlaceholder.getVal(sp, te.size.as_Unevaluated());
-            const auto& xeValue = xe.size.is_Known()
-                ? (xeLiteral = EncodedLiteral::makeUsize(xe.size.as_Known()), xeKnown = retainedValuePool ? freezeEncodedLiteral(*retainedValuePool, mv$(xeLiteral)) : &xeLiteral)
-                : resolvePlaceholder.getVal(sp, xe.size.as_Unevaluated());
+            const auto& teValue = te.size.is_Known() ? (teLiteral = EncodedLiteral::makeUsize(te.size.as_Known()), teKnown = retainedValuePool ? freezeEncodedLiteral(*retainedValuePool, mv$(teLiteral)) : &teLiteral) : resolvePlaceholder.getVal(sp, te.size.as_Unevaluated());
+            const auto& xeValue = xe.size.is_Known() ? (xeLiteral = EncodedLiteral::makeUsize(xe.size.as_Known()), xeKnown = retainedValuePool ? freezeEncodedLiteral(*retainedValuePool, mv$(xeLiteral)) : &xeLiteral) : resolvePlaceholder.getVal(sp, xe.size.as_Unevaluated());
             auto rv = matchValues(sp, teValue, xeValue, *this);
             rv &= this->cmpType(sp, te.inner, xe.inner, resolvePlaceholder);
             return rv;
@@ -2301,15 +2322,25 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         case HIRTypeData::TAG_Pattern: {
             auto& te = (*v).as_Pattern();
             auto& xe = (*x).as_Pattern();
-            if (te.pattern.alternatives.size() != xe.pattern.alternatives.size()) return HIRCompare::Unequal;
+            if (te.pattern.alternatives.size() != xe.pattern.alternatives.size()) {
+                return HIRCompare::Unequal;
+            }
             auto rv = this->cmpType(sp, te.inner, xe.inner, resolvePlaceholder);
             for (size_t i = 0; i < te.pattern.alternatives.size(); i++) {
                 const auto& left = te.pattern.alternatives[i];
                 const auto& right = xe.pattern.alternatives[i];
-                if (left.hasStart != right.hasStart || left.hasEnd != right.hasEnd || left.endInclusive != right.endInclusive) return HIRCompare::Unequal;
-                if (left.hasStart) rv &= matchValues(sp, left.start, right.start, *this);
-                if (left.hasEnd) rv &= matchValues(sp, left.end, right.end, *this);
-                if (rv == HIRCompare::Unequal) return rv;
+                if (left.hasStart != right.hasStart || left.hasEnd != right.hasEnd || left.endInclusive != right.endInclusive) {
+                    return HIRCompare::Unequal;
+                }
+                if (left.hasStart) {
+                    rv &= matchValues(sp, left.start, right.start, *this);
+                }
+                if (left.hasEnd) {
+                    rv &= matchValues(sp, left.end, right.end, *this);
+                }
+                if (rv == HIRCompare::Unequal) {
+                    return rv;
+                }
             }
             return rv;
         }
@@ -2459,22 +2490,30 @@ const HIRTraitMarkings* HIRTypePathBinding::getTraitMarkings() const {
         }
         case HIRTypePathBinding::TAG_ExternType: {
             auto& tpb = (*this).as_ExternType();
-            if (tpb) markingsPtr = &tpb->markings;
+            if (tpb) {
+                markingsPtr = &tpb->markings;
+            }
             break;
         }
         case HIRTypePathBinding::TAG_Struct: {
             auto& tpb = (*this).as_Struct();
-            if (tpb) markingsPtr = &tpb->markings;
+            if (tpb) {
+                markingsPtr = &tpb->markings;
+            }
             break;
         }
         case HIRTypePathBinding::TAG_Union: {
             auto& tpb = (*this).as_Union();
-            if (tpb) markingsPtr = &tpb->markings;
+            if (tpb) {
+                markingsPtr = &tpb->markings;
+            }
             break;
         }
         case HIRTypePathBinding::TAG_Enum: {
             auto& tpb = (*this).as_Enum();
-            if (tpb) markingsPtr = &tpb->markings;
+            if (tpb) {
+                markingsPtr = &tpb->markings;
+            }
             break;
         }
     }
@@ -2495,17 +2534,23 @@ const HIRGenericParams* HIRTypePathBinding::getGenerics() const {
         }
         case HIRTypePathBinding::TAG_Struct: {
             auto& tpb = (*this).as_Struct();
-            if (tpb) rv = &tpb->params;
+            if (tpb) {
+                rv = &tpb->params;
+            }
             break;
         }
         case HIRTypePathBinding::TAG_Union: {
             auto& tpb = (*this).as_Union();
-            if (tpb) rv = &tpb->params;
+            if (tpb) {
+                rv = &tpb->params;
+            }
             break;
         }
         case HIRTypePathBinding::TAG_Enum: {
             auto& tpb = (*this).as_Enum();
-            if (tpb) rv = &tpb->params;
+            if (tpb) {
+                rv = &tpb->params;
+            }
             break;
         }
     }
@@ -2565,12 +2610,12 @@ HIRTypeData HIRTypeData::cloneData() const {
         case HIRTypeData::TAG_ErasedType: {
             auto& e = (*this).as_ErasedType();
             ::std::vector<HIRTraitPath> traits;
-                traits.reserve(e.traits.size());
-                for (const auto& trait : e.traits) {
-                    traits.push_back(trait.clone());
-                }
+            traits.reserve(e.traits.size());
+            for (const auto& trait : e.traits) {
+                traits.push_back(trait.clone());
+            }
 
-                TypeDataErasedTypeInner inner;
+            TypeDataErasedTypeInner inner;
             switch (e.inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Fcn: {
                     auto& ee = e.inner.as_Fcn();
@@ -2588,13 +2633,7 @@ HIRTypeData HIRTypeData::cloneData() const {
                     break;
                 }
             }
-            return HIRTypeData::make_ErasedType({
-                e.isSized,
-                mv$(traits),
-                mv$(inner),
-                e.use.clone(),
-                e.usePresent
-                });
+            return HIRTypeData::make_ErasedType({e.isSized, mv$(traits), mv$(inner), e.use.clone(), e.usePresent});
         }
         case HIRTypeData::TAG_Array: {
             auto& e = (*this).as_Array();
@@ -2678,79 +2717,79 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
             case HIRInferClass::None:
                 return HIRCompare::Fuzzy;
             case HIRInferClass::Integer:
-            switch ((*right).tag()) {
-default:
-                return HIRCompare::Unequal;
-                case HIRTypeData::TAG_Primitive: {
-                    auto& re = (*right).as_Primitive();
-                    switch (re) {
-                        case HIRCoreType::I8:
-                        case HIRCoreType::U8:
-                        case HIRCoreType::I16:
-                        case HIRCoreType::U16:
-                        case HIRCoreType::I32:
-                        case HIRCoreType::U32:
-                        case HIRCoreType::I64:
-                        case HIRCoreType::U64:
-                        case HIRCoreType::I128:
-                        case HIRCoreType::U128:
-                        case HIRCoreType::Isize:
-                        case HIRCoreType::Usize:
-                            return HIRCompare::Fuzzy;
-                        default:
-                            return HIRCompare::Unequal;
+                switch ((*right).tag()) {
+                    default:
+                        return HIRCompare::Unequal;
+                    case HIRTypeData::TAG_Primitive: {
+                        auto& re = (*right).as_Primitive();
+                        switch (re) {
+                            case HIRCoreType::I8:
+                            case HIRCoreType::U8:
+                            case HIRCoreType::I16:
+                            case HIRCoreType::U16:
+                            case HIRCoreType::I32:
+                            case HIRCoreType::U32:
+                            case HIRCoreType::I64:
+                            case HIRCoreType::U64:
+                            case HIRCoreType::I128:
+                            case HIRCoreType::U128:
+                            case HIRCoreType::Isize:
+                            case HIRCoreType::Usize:
+                                return HIRCompare::Fuzzy;
+                            default:
+                                return HIRCompare::Unequal;
+                        }
+                        break;
                     }
-                    break;
-                }
-                case HIRTypeData::TAG_Infer: {
-                    auto& re = (*right).as_Infer();
-                    switch (re.tyClass) {
-                        case HIRInferClass::None:
-                        case HIRInferClass::Integer:
-                            return HIRCompare::Fuzzy;
-                        case HIRInferClass::Float:
-                            return HIRCompare::Unequal;
+                    case HIRTypeData::TAG_Infer: {
+                        auto& re = (*right).as_Infer();
+                        switch (re.tyClass) {
+                            case HIRInferClass::None:
+                            case HIRInferClass::Integer:
+                                return HIRCompare::Fuzzy;
+                            case HIRInferClass::Float:
+                                return HIRCompare::Unequal;
+                        }
+                        break;
                     }
-                    break;
-                }
-                case HIRTypeData::TAG_Path: {
-                    auto& re = (*right).as_Path();
-                    return re.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
-                }
-            }
-        case HIRInferClass::Float:
-            switch ((*right).tag()) {
-default:
-                return HIRCompare::Unequal;
-                case HIRTypeData::TAG_Primitive: {
-                    auto& re = (*right).as_Primitive();
-                    switch (re) {
-                        case HIRCoreType::F16:
-                        case HIRCoreType::F32:
-                        case HIRCoreType::F64:
-                        case HIRCoreType::F128:
-                            return HIRCompare::Fuzzy;
-                        default:
-                            return HIRCompare::Unequal;
+                    case HIRTypeData::TAG_Path: {
+                        auto& re = (*right).as_Path();
+                        return re.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
                     }
-                    break;
                 }
-                case HIRTypeData::TAG_Infer: {
-                    auto& re = (*right).as_Infer();
-                    switch (re.tyClass) {
-                        case HIRInferClass::None:
-                        case HIRInferClass::Float:
-                            return HIRCompare::Fuzzy;
-                        case HIRInferClass::Integer:
-                            return HIRCompare::Unequal;
+            case HIRInferClass::Float:
+                switch ((*right).tag()) {
+                    default:
+                        return HIRCompare::Unequal;
+                    case HIRTypeData::TAG_Primitive: {
+                        auto& re = (*right).as_Primitive();
+                        switch (re) {
+                            case HIRCoreType::F16:
+                            case HIRCoreType::F32:
+                            case HIRCoreType::F64:
+                            case HIRCoreType::F128:
+                                return HIRCompare::Fuzzy;
+                            default:
+                                return HIRCompare::Unequal;
+                        }
+                        break;
                     }
-                    break;
+                    case HIRTypeData::TAG_Infer: {
+                        auto& re = (*right).as_Infer();
+                        switch (re.tyClass) {
+                            case HIRInferClass::None:
+                            case HIRInferClass::Float:
+                                return HIRCompare::Fuzzy;
+                            case HIRInferClass::Integer:
+                                return HIRCompare::Unequal;
+                        }
+                        break;
+                    }
+                    case HIRTypeData::TAG_Path: {
+                        auto& re = (*right).as_Path();
+                        return re.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
+                    }
                 }
-                case HIRTypeData::TAG_Path: {
-                    auto& re = (*right).as_Path();
-                    return re.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
-                }
-            }
         }
         UNREACHABLE();
     }
@@ -2761,57 +2800,57 @@ default:
             case HIRInferClass::None:
                 return HIRCompare::Fuzzy;
             case HIRInferClass::Integer:
-            switch ((*left).tag()) {
-default:
-                return HIRCompare::Unequal;
-                case HIRTypeData::TAG_Primitive: {
-                    auto& le = (*left).as_Primitive();
-                    switch (le) {
-                        case HIRCoreType::I8:
-                        case HIRCoreType::U8:
-                        case HIRCoreType::I16:
-                        case HIRCoreType::U16:
-                        case HIRCoreType::I32:
-                        case HIRCoreType::U32:
-                        case HIRCoreType::I64:
-                        case HIRCoreType::U64:
-                        case HIRCoreType::I128:
-                        case HIRCoreType::U128:
-                        case HIRCoreType::Isize:
-                        case HIRCoreType::Usize:
-                            return HIRCompare::Fuzzy;
-                        default:
-                            return HIRCompare::Unequal;
+                switch ((*left).tag()) {
+                    default:
+                        return HIRCompare::Unequal;
+                    case HIRTypeData::TAG_Primitive: {
+                        auto& le = (*left).as_Primitive();
+                        switch (le) {
+                            case HIRCoreType::I8:
+                            case HIRCoreType::U8:
+                            case HIRCoreType::I16:
+                            case HIRCoreType::U16:
+                            case HIRCoreType::I32:
+                            case HIRCoreType::U32:
+                            case HIRCoreType::I64:
+                            case HIRCoreType::U64:
+                            case HIRCoreType::I128:
+                            case HIRCoreType::U128:
+                            case HIRCoreType::Isize:
+                            case HIRCoreType::Usize:
+                                return HIRCompare::Fuzzy;
+                            default:
+                                return HIRCompare::Unequal;
+                        }
+                        break;
                     }
-                    break;
-                }
-                case HIRTypeData::TAG_Path: {
-                    auto& le = (*left).as_Path();
-                    return le.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
-                }
-            }
-        case HIRInferClass::Float:
-            switch ((*left).tag()) {
-default:
-                return HIRCompare::Unequal;
-                case HIRTypeData::TAG_Primitive: {
-                    auto& le = (*left).as_Primitive();
-                    switch (le) {
-                        case HIRCoreType::F16:
-                        case HIRCoreType::F32:
-                        case HIRCoreType::F64:
-                        case HIRCoreType::F128:
-                            return HIRCompare::Fuzzy;
-                        default:
-                            return HIRCompare::Unequal;
+                    case HIRTypeData::TAG_Path: {
+                        auto& le = (*left).as_Path();
+                        return le.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
                     }
-                    break;
                 }
-                case HIRTypeData::TAG_Path: {
-                    auto& le = (*left).as_Path();
-                    return le.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
+            case HIRInferClass::Float:
+                switch ((*left).tag()) {
+                    default:
+                        return HIRCompare::Unequal;
+                    case HIRTypeData::TAG_Primitive: {
+                        auto& le = (*left).as_Primitive();
+                        switch (le) {
+                            case HIRCoreType::F16:
+                            case HIRCoreType::F32:
+                            case HIRCoreType::F64:
+                            case HIRCoreType::F128:
+                                return HIRCompare::Fuzzy;
+                            default:
+                                return HIRCompare::Unequal;
+                        }
+                        break;
+                    }
+                    case HIRTypeData::TAG_Path: {
+                        auto& le = (*left).as_Path();
+                        return le.binding.is_Unbound() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
+                    }
                 }
-            }
         }
         UNREACHABLE();
     }
@@ -2885,8 +2924,8 @@ default:
             auto& le = (*left).as_ErasedType();
             auto& re = (*right).as_ErasedType();
             if (le.inner.tag() != re.inner.tag()) {
-                    return HIRCompare::Unequal;
-                }
+                return HIRCompare::Unequal;
+            }
             switch (le.inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Known: {
                     auto& l = le.inner.as_Known();
@@ -2936,22 +2975,36 @@ default:
         case HIRTypeData::TAG_Pattern: {
             auto& le = (*left).as_Pattern();
             auto& re = (*right).as_Pattern();
-            if (le.pattern.alternatives.size() != re.pattern.alternatives.size()) return HIRCompare::Unequal;
+            if (le.pattern.alternatives.size() != re.pattern.alternatives.size()) {
+                return HIRCompare::Unequal;
+            }
             auto rv = le.inner->compareWithPlaceholders(sp, re.inner, resolvePlaceholder);
             auto compareValue = [&](const HIRConstGeneric& left, const HIRConstGeneric& right) {
                 const auto& leftResolved = resolvePlaceholder.getVal(sp, left);
                 const auto& rightResolved = resolvePlaceholder.getVal(sp, right);
-                if (leftResolved.is_Infer() || rightResolved.is_Infer()) return HIRCompare::Fuzzy;
-                if (leftResolved == rightResolved) return HIRCompare::Equal;
+                if (leftResolved.is_Infer() || rightResolved.is_Infer()) {
+                    return HIRCompare::Fuzzy;
+                }
+                if (leftResolved == rightResolved) {
+                    return HIRCompare::Equal;
+                }
                 return leftResolved.is_Unevaluated() || rightResolved.is_Unevaluated() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
             };
             for (size_t i = 0; i < le.pattern.alternatives.size(); i++) {
                 const auto& left = le.pattern.alternatives[i];
                 const auto& right = re.pattern.alternatives[i];
-                if (left.hasStart != right.hasStart || left.hasEnd != right.hasEnd || left.endInclusive != right.endInclusive) return HIRCompare::Unequal;
-                if (left.hasStart) rv &= compareValue(left.start, right.start);
-                if (left.hasEnd) rv &= compareValue(left.end, right.end);
-                if (rv == HIRCompare::Unequal) return rv;
+                if (left.hasStart != right.hasStart || left.hasEnd != right.hasEnd || left.endInclusive != right.endInclusive) {
+                    return HIRCompare::Unequal;
+                }
+                if (left.hasStart) {
+                    rv &= compareValue(left.start, right.start);
+                }
+                if (left.hasEnd) {
+                    rv &= compareValue(left.end, right.end);
+                }
+                if (rv == HIRCompare::Unequal) {
+                    return rv;
+                }
             }
             return rv;
         }
@@ -3058,4 +3111,17 @@ bool isFloat(const HIRCoreType& v) {
         default:
             return false;
     }
+}
+
+TypeFmtStream::TypeFmtStream(::std::ostream& output)
+    : ::std::ostream(output.rdbuf())
+{
+    copyfmt(output);
+    clear(output.rdstate());
+    pword(0) = this;
+}
+
+auto TypeFmtStream::from(::std::ostream& output) -> TypeFmtStream* {
+    // This stream is private to HIR formatting, so slot zero is ours.
+    return output.pword(0) == &output ? static_cast<TypeFmtStream*>(&output) : nullptr;
 }

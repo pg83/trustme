@@ -2,7 +2,6 @@
 
 #include "ast_ast.h"
 #include "hir_hir.h"
-#include <span> // std::span
 #include "ast_expr.h"
 #include "settings.h"
 #include "ast_crate.h"
@@ -10,6 +9,8 @@
 #include "pop_on_drop.h"
 #include "main_bindings.h"
 #include "macro_rules_macro_rules.h"
+
+#include <span> // std::span
 
 using namespace stl;
 
@@ -42,13 +43,7 @@ namespace {
         } level;
         unsigned short index;
 
-        unsigned int toBinding() const {
-            if ((level == Level::Method || level == Level::Hrb) && index != 0xFFFF) {
-                return (unsigned int)index + 256 * static_cast<unsigned int>(level);
-            } else {
-                return (unsigned int)index;
-            }
-        }
+        unsigned int toBinding() const;
     };
 
     template <typename Val>
@@ -63,11 +58,10 @@ namespace {
         Val value;
     };
 
-    // Definitions generated from resolve_ctx_ent.tu.
-    #include "resolve_ctx_ent_tu.h"
+// Definitions generated from resolve_ctx_ent.tu.
+#include "resolve_ctx_ent_tu.h"
 
     struct Context {
-
         const ASTCrate& crate;
         const ASTModule& mod;
         ::std::vector<Ent> nameContext;
@@ -93,327 +87,65 @@ namespace {
         const Settings& settings;
 
         // Pool that owns AST type nodes created during resolution.
-        ObjPool& typePool() const {
-            return *crate.pool;
-        }
+        ObjPool& typePool() const;
 
-        Context(const Settings& settings, const ASTCrate& crate, const ASTModule& mod)
-            : settings(settings)
-            , crate(crate)
-            , mod(mod)
-            , varCount(~0u)
-            , blockLevel(0)
-            , iblTargetGenerics(nullptr)
-        {
-        }
+        Context(const Settings& settings, const ASTCrate& crate, const ASTModule& mod);
 
-        void push(const ASTHigherRankedBounds& params) {
-            auto e = Ent::make_Generic({GenericSlot::Level::Hrb, nullptr /*, &params*/});
-            auto& data = e.as_Generic();
-
-            for (size_t i = 0; i < params.lifetimes.size(); i++) {
-                data.lifetimes.push_back(NamedI<GenericSlot>{params.lifetimes[i].name(), GenericSlot{GenericSlot::Level::Hrb, static_cast<unsigned short>(i)}});
-            }
-            for (size_t i = 0; i < params.types.size(); i++) {
-                data.types.push_back(Named<GenericSlot>{params.types[i], GenericSlot{GenericSlot::Level::Hrb, static_cast<unsigned short>(i)}});
-            }
-
-            nameContext.push_back(mv$(e));
-        }
+        void push(const ASTHigherRankedBounds& params);
 
         /// A generic parameter of an item may not shadow one of the item around
         /// it: `trait T<'a> { fn f<'a>(); }` is an error, not a new `'a`.
-        void checkGenericNotShadowed(const Span& sp, const RcString& name, const char* what) const {
-            for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
-                const auto* g = it->opt_Generic();
-                if (!g) {
-                    continue;
-                }
-                if (g->level == GenericSlot::Level::Hrb) {
-                    // A `for<..>` binder is its own scope, and shadowing one is
-                    // a lint in rustc rather than an error.
-                    continue;
-                }
-                // The lists spell their names differently: a lifetime and a
-                // const keep the identifier they were written with, a type just
-                // its name.
-                auto namedI = [&](const auto& list) {
-                    for (const auto& v : list) {
-                        if (v.name.name == name) {
-                            return true;
-                        }
-                    }
-                    return false;
-                };
-                auto named = [&](const auto& list) {
-                    for (const auto& v : list) {
-                        if (v.name == name) {
-                            return true;
-                        }
-                    }
-                    return false;
-                };
-                if (namedI(g->lifetimes) || named(g->types) || namedI(g->constants)) {
-                    ERROR(sp, E0000, "the name `" << name << "` is already used for a generic parameter in this item's generic parameters");
-                }
-            }
-        }
+        void checkGenericNotShadowed(const Span& sp, const RcString& name, const char* what) const;
 
-        void push(/*const */ ASTGenericParams& params, GenericSlot::Level level, bool hasSelf = false, bool allowShadowing = false) {
-            auto e = Ent::make_Generic({level, &params});
-            auto& data = e.as_Generic();
+        void push(/*const */ ASTGenericParams& params, GenericSlot::Level level, bool hasSelf = false, bool allowShadowing = false);
 
-            if (hasSelf) {
-                data.types.push_back(Named<GenericSlot>{selfName(), GenericSlot{level, GENERICSelf}});
-                nameContext.push_back(Ent::make_ConcreteSelf(nullptr));
-            }
-            if (!params.params.empty()) {
-                unsigned short lftIdx = 0;
-                unsigned short tyIdx = 0;
-                unsigned short valIdx = 0;
-                for (const auto& e : params.params) {
-                    switch (e.tag()) {
-                        case GenericParam::TAG_None: {
-                            break;
-                        }
-                        case GenericParam::TAG_Lifetime: {
-                            auto& lft = e.as_Lifetime();
-                            if (!allowShadowing) {
-                                checkGenericNotShadowed(Span(), lft.name().name, "lifetime");
-                            }
-                            data.lifetimes.push_back(NamedI<GenericSlot>{lft.name(), GenericSlot{level, lftIdx}});
-                            lftIdx += 1;
-                            break;
-                        }
-                        case GenericParam::TAG_Type: {
-                            auto& tyDef = e.as_Type();
-                            if (!allowShadowing) {
-                                checkGenericNotShadowed(Span(), tyDef.name(), "type");
-                            }
-                            data.types.push_back(Named<GenericSlot>{tyDef.name(), GenericSlot{level, tyIdx}});
-                            tyIdx += 1;
-                            break;
-                        }
-                        case GenericParam::TAG_Value: {
-                            auto& valDef = e.as_Value();
-                            if (!allowShadowing) {
-                                checkGenericNotShadowed(Span(), valDef.name().name, "const");
-                            }
-                            data.constants.push_back(NamedI<GenericSlot>{valDef.name(), GenericSlot{level, valIdx}});
-                            valIdx += 1;
-                            break;
-                        }
-                    }
-                }
-            }
+        void pop(const ASTHigherRankedBounds&);
 
-            nameContext.push_back(mv$(e));
-        }
+        void pop(const ASTGenericParams&, bool hasSelf = false);
 
-        void pop(const ASTHigherRankedBounds&) {
-            if (!nameContext.back().is_Generic()) {
-                BUG(Span(), "resolve/absolute.cpp - Context::pop(GenericParams) - Mismatched pop");
-            }
-            nameContext.pop_back();
-        }
+        void push(const ASTModule& mod);
 
-        void pop(const ASTGenericParams&, bool hasSelf = false) {
-            if (!nameContext.back().is_Generic()) {
-                BUG(Span(), "resolve/absolute.cpp - Context::pop(GenericParams) - Mismatched pop");
-            }
-            nameContext.pop_back();
-            if (hasSelf) {
-                if (!nameContext.back().is_ConcreteSelf()) {
-                    BUG(Span(), "resolve/absolute.cpp - Context::pop(GenericParams) - Mismatched pop");
-                }
-                nameContext.pop_back();
-            }
-        }
-
-        void push(const ASTModule& mod) {
-            nameContext.push_back(Ent::make_Module({&mod}));
-        }
-
-        void pop(const ASTModule& mod) {
-            if (!nameContext.back().is_Module()) {
-                BUG(Span(), "resolve/absolute.cpp - Context::pop(GenericParams) - Mismatched pop");
-            }
-            nameContext.pop_back();
-        }
+        void pop(const ASTModule& mod);
 
         class RootBlockScope {
             friend struct Context;
             Context& ctxt;
             unsigned int oldVarcount;
 
-            RootBlockScope(Context& ctxt, unsigned int val)
-                : ctxt(ctxt)
-                , oldVarcount(ctxt.varCount)
-            {
-                ctxt.varCount = val;
-            }
+            RootBlockScope(Context& ctxt, unsigned int val);
 
         public:
-            ~RootBlockScope() {
-                ctxt.varCount = oldVarcount;
-            }
+            ~RootBlockScope();
         };
 
-        RootBlockScope enterRootblock() {
-            return RootBlockScope(*this, 0);
-        }
+        RootBlockScope enterRootblock();
 
-        RootBlockScope clearRootblock() {
-            return RootBlockScope(*this, ~0u);
-        }
+        RootBlockScope clearRootblock();
 
-        void pushSelf(ASTType*& tr) {
-            // Store the address of the caller's (stable) self-type slot, NOT a
-            // by-value parameter copy — the ConcreteSelf entry must stay valid
-            // (and see in-place resolution of the self type) until popSelf.
-            nameContext.push_back(Ent::make_ConcreteSelf(&tr));
-        }
+        void pushSelf(ASTType*& tr);
 
-        void popSelf(ASTType* tr) {
-            if (nameContext.back().is_ConcreteSelf()) {
-                nameContext.pop_back();
-            }
-            else {
-                BUG(Span(), "resolve/absolute.cpp - Context::pop(ASTType*) - Mismatched pop");
-            }
-        }
+        void popSelf(ASTType* tr);
 
-        ::ASTType* getSelf() const {
-            for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
-                switch ((*it).tag()) {
-                    case Ent::TAG_ConcreteSelf: {
-                        auto& e = (*it).as_ConcreteSelf();
-                        if (false && e) { return (*e)->clone(); } else { return ::mkType(typePool(), Span(), selfName(), GENERICSelf); }
-                        break;
-                    }
-                    default: {
-                        break;
-                    }
-                }
-            }
+        ::ASTType* getSelf() const;
 
-            TODO(Span(), "Error when get_self called with no self");
-        }
+        ::ASTType* const* getSelfOpt() const;
 
-        ::ASTType* const* getSelfOpt() const {
-            for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
-                if (const auto* e = it->opt_ConcreteSelf()) {
-                    return *e;
-                }
-            }
-            return nullptr;
-        }
+        void pushBlock();
 
-        void pushBlock() {
-            blockLevel += 1;
-        }
+        void pushMacroDefinition(unsigned int definitionId, const Ident::Hygiene& tokenHygiene, const Ident::Hygiene& definitionHygiene);
 
-        void pushMacroDefinition(unsigned int definitionId, const Ident::Hygiene& tokenHygiene, const Ident::Hygiene& definitionHygiene) {
-            assert(blockLevel > 0);
-            nameContext.push_back(Ent::make_MacroDefinition({blockLevel, definitionId, tokenHygiene, definitionHygiene}));
-        }
+        unsigned int pushVar(const Span& sp, const Ident& name);
 
-        unsigned int pushVar(const Span& sp, const Ident& name) {
-            if (varCount == ~0u) {
-                BUG(sp, "Assigning local when there's no variable context");
-            }
-            // If this variable is defined within a stack entry, then use it
-            ASSERT_BUG(sp, !patternStack.empty(), "Pushing a variable with no active scopes");
-            bool alreadyDefined = patternStack.back().firstArmDone;
-            for (auto it = patternStack.rbegin(); it != patternStack.rend(); ++it) {
-                if (it->firstArmVariables.count(name)) {
-                    alreadyDefined = true;
-                    break;
-                }
-            }
-            if (!patternStack.back().createdVariables.insert(name).second) {
-                ERROR(sp, E0000, "Duplicate definition of `" << name << "` in pattern arm");
-            }
-            // Are we currently in the second (or later) arm of a split pattern
-            if (alreadyDefined) {
-                if (!nameContext.back().is_VarBlock()) {
-                    BUG(sp, "resolve/absolute.cpp - Context::push_var - No block");
-                }
-                auto& vb = nameContext.back().as_VarBlock();
-                // Work backwards, in case there are multiple bindings in the same scope.
-                for (const auto& v : ::reverse(vb.variables)) {
-                    if (v.first == name) {
-                        return v.second;
-                    }
-                }
-                ERROR(sp, E0000, "Mismatched bindings in pattern (`" << name << "` wasn't in the first arm)");
-            } else {
-                assert(blockLevel > 0);
-                if (nameContext.empty() || !nameContext.back().is_VarBlock() || nameContext.back().as_VarBlock().level < blockLevel) {
-                    nameContext.push_back(Ent::make_VarBlock({blockLevel, {}}));
-                }
-                auto& vb = nameContext.back().as_VarBlock();
-                assert(vb.level == blockLevel);
-                vb.variables.push_back(::std::make_pair(mv$(name), varCount));
-                varCount += 1;
-                assert(varCount >= vb.variables.size());
-                return varCount - 1;
-            }
-        }
-
-        void popBlock() {
-            assert(blockLevel > 0);
-            while (!nameContext.empty()) {
-                if (const auto* e = nameContext.back().opt_VarBlock()) {
-                    if (e->level != blockLevel) {
-                        break;
-                    }
-                    nameContext.pop_back();
-                } else if (const auto* e = nameContext.back().opt_MacroDefinition()) {
-                    if (e->level != blockLevel) {
-                        break;
-                    }
-                    nameContext.pop_back();
-                } else {
-                    break;
-                }
-            }
-            blockLevel -= 1;
-        }
+        void popBlock();
 
         /// Indicate that a multiple-pattern binding is started
-        void startPatbind() {
-            assert(blockLevel > 0);
-            patternStack.push_back(PatternStackEnt());
-        }
+        void startPatbind();
 
         /// Freeze the set of pattern bindings
-        void endPatbindArm(const Span& sp) {
-            auto& e = patternStack.back();
-            if (e.firstArmDone) {
-                if (e.firstArmVariables != e.createdVariables) {
-                    ERROR(sp, E0000, "Mismatched bindings in pattern - [" << e.firstArmVariables << "] != [" << e.createdVariables << "]");
-                }
-            } else {
-                e.firstArmVariables = std::move(e.createdVariables);
-                e.firstArmDone = true;
-            }
-            e.createdVariables.clear();
-        }
+        void endPatbindArm(const Span& sp);
 
         /// End a multiple-pattern binding state (unfreeze really)
-        void endPatbind() {
-            assert(!patternStack.empty());
-            // Propagate the created variables to the next level up.
-            if (patternStack.size() > 1) {
-                const auto& cur = patternStack[patternStack.size() - 1];
-                auto& next = patternStack[patternStack.size() - 2];
-                for (auto& var : cur.firstArmVariables) {
-                    next.createdVariables.insert(std::move(var));
-                }
-            }
-            patternStack.pop_back();
-        }
+        void endPatbind();
 
         enum class LookupMode {
             Namespace,
@@ -424,521 +156,22 @@ namespace {
             Variable,
         };
 
-        static const char* lookupModeMsg(LookupMode mode) {
-            switch (mode) {
-                case LookupMode::Namespace:
-                    return "path component";
-                case LookupMode::Type:
-                    return "type name";
-                case LookupMode::PatternValue:
-                    return "pattern constant";
-                case LookupMode::PatternType:
-                    return "pattern type";
-                case LookupMode::Constant:
-                    return "constant name";
-                case LookupMode::Variable:
-                    return "variable name";
-            }
-            return "";
-        }
+        static const char* lookupModeMsg(LookupMode mode);
 
-        ASTPath lookup(const Span& sp, const RcString& name, const Ident::Hygiene& srcContext, LookupMode mode) const {
-            auto rv = this->lookupOpt(sp, name, srcContext, mode);
-            if (!rv.isValid()) {
-                switch (mode) {
-                    case LookupMode::Namespace:
-                        ERROR(sp, E0000, "Couldn't find path component '" << name << "'");
-                    case LookupMode::Type:
-                        ERROR(sp, E0000, "Couldn't find type name '" << name << "'");
-                    case LookupMode::PatternValue:
-                        ERROR(sp, E0000, "Couldn't find pattern value '" << name << "'");
-                    case LookupMode::PatternType:
-                        ERROR(sp, E0000, "Couldn't find pattern type '" << name << "'");
-                    case LookupMode::Constant:
-                        ERROR(sp, E0000, "Couldn't find constant name '" << name << "'");
-                    case LookupMode::Variable:
-                        ERROR(sp, E0000, "Couldn't find variable name '" << name << "'");
-                }
-            }
-            return rv;
-        }
+        ASTPath lookup(const Span& sp, const RcString& name, const Ident::Hygiene& srcContext, LookupMode mode) const;
 
         /// Two globs offering one name shadow nothing: the name is an error
         /// where it is used, not where it was brought in.
-        static void checkUnambiguous(const Span& sp, const ASTModule& mod, const RcString& name, const ASTModule::IndexEnt& ent) {
-            if (ent.ambiguous) {
-                ERROR(sp, E0000, "`" << name << "` is ambiguous: more than one glob import in " << mod.path() << " provides it");
-            }
-        }
+        static void checkUnambiguous(const Span& sp, const ASTModule& mod, const RcString& name, const ASTModule::IndexEnt& ent);
 
-        static bool lookupInMod(const Span& sp, const ASTModule& mod, const RcString& name, LookupMode mode, ASTPath& path) {
-            switch (mode) {
-                case LookupMode::Namespace: {
-                    auto v = mod.namespaceItems.find(name);
-                    if (v != mod.namespaceItems.end()) {
-                        checkUnambiguous(sp, mod, name, v->second);
-                        path = ASTPath(v->second.path);
-                        return true;
-                    }
-                }
-                    {
-                        auto v = mod.typeItems.find(name);
-                        if (v != mod.typeItems.end()) {
-                            checkUnambiguous(sp, mod, name, v->second);
-                            path = ASTPath(v->second.path);
-                            return true;
-                        }
-                    }
-                    break;
+        static bool lookupInMod(const Span& sp, const ASTModule& mod, const RcString& name, LookupMode mode, ASTPath& path);
 
-                case LookupMode::Type:
-                case LookupMode::PatternType: {
-                    auto v = mod.typeItems.find(name);
-                    if (v != mod.typeItems.end()) {
-                        checkUnambiguous(sp, mod, name, v->second);
-                        path = ASTPath(v->second.path);
-                        return true;
-                    }
-                }
-                    // HACK: For `Enum::Var { .. }` patterns matching value variants
-                    if (mode == LookupMode::PatternType) {
-                        auto v = mod.valueItems.find(name);
-                        if (v != mod.valueItems.end()) {
-                            const auto& b = v->second.path.bindings.value;
-                            if (/*const auto* be =*/b.binding.opt_EnumVar()) {
-                                checkUnambiguous(sp, mod, name, v->second);
-                                path = ASTPath(b);
-                                return true;
-                            }
-                        }
-                    }
-                    break;
-                case LookupMode::PatternValue: {
-                    auto v = mod.valueItems.find(name);
-                    if (v != mod.valueItems.end()) {
-                        const auto& b = v->second.path.bindings.value;
-                        switch (b.binding.tag()) {
-                            case ASTPathBindingValue::TAG_EnumVar:
-                            case ASTPathBindingValue::TAG_Static:
-                                checkUnambiguous(sp, mod, name, v->second);
-                                path = ASTPath(v->second.path);
-                                return true;
-                            case ASTPathBindingValue::TAG_Struct: {
-                                const auto& be = b.binding.as_Struct();
-                                // TODO: Restrict this to unit-like structs
-                                if (be.struct_ && !be.struct_->data.is_Unit())
-                                    ;
-                                else if (be.hir && !be.hir->data.is_Unit())
-                                    ;
-                                else {
-                                    checkUnambiguous(sp, mod, name, v->second);
-                                    path = ASTPath(b);
-                                    return true;
-                                }
-                                break;
-                            }
-                            default:
-                                break;
-                        }
-                    }
-                } break;
-                case LookupMode::Constant:
-                case LookupMode::Variable: {
-                    auto v = mod.valueItems.find(name);
-                    if (v != mod.valueItems.end()) {
-                        checkUnambiguous(sp, mod, name, v->second);
-                        path = ASTPath(v->second.path);
-                        return true;
-                    }
-                } break;
-            }
-            return false;
-        }
+        ASTPath lookupOpt(const Span& sp, const RcString& name, const Ident::Hygiene& srcContext, LookupMode mode) const;
 
-        ASTPath lookupOpt(const Span& sp, const RcString& name, const Ident::Hygiene& srcContext, LookupMode mode) const {
-            const auto itemName = srcContext.applyToItemName(name);
-            auto resolvedItemName = itemName;
-            auto lookupContext = srcContext;
-            // NOTE: src_context may provide a module to search
-            // TODO: This should be checked AFTER locals
-            if (srcContext.hasModPath()) {
-                const auto& mp = srcContext.modPath();
-                if (mp.crate != "") {
-                    HIRSimplePath visPath{mp.crate, mp.ents};
-
-                    Span sp;
-                    // External crate path
-                    ASSERT_BUG(sp, crate.externCrates.count(mp.crate), "Crate not loaded for " << mp);
-                    const auto& extCrate = crate.externCrates.at(mp.crate);
-                    const HIRModule* mod = &extCrate.hir->rootModule;
-                    for (const auto& n : mp.ents) {
-                        ASSERT_BUG(sp, mod->modItems.count(n), "Node `" << n << "` missing in path " << mp);
-                        const auto& i = *mod->modItems.at(n);
-                        ASSERT_BUG(sp, i.ent.is_Module(), "Node `" << n << "` not a module in path " << mp);
-                        mod = &i.ent.as_Module();
-                    }
-                    ASTPath::Bindings bindings;
-                    const HIRSimplePath* truePath = nullptr;
-                    switch (mode) {
-                        case LookupMode::Constant:
-                        case LookupMode::PatternValue:
-                        case LookupMode::Variable: {
-                            auto it = findHygienicItem(mod->valueItems, name, itemName);
-                            if (it != mod->valueItems.end()) {
-                                resolvedItemName = it->first;
-                                const auto* item = &it->second->ent;
-                                auto itemPath = ASTAbsolutePath(mp.crate, mp.ents) + resolvedItemName;
-                                if (item->is_Import()) {
-                                    const auto& imp = item->as_Import();
-                                    // Set the true path (so the returned path is canonical)
-                                    truePath = &imp.path;
-
-                                    auto itemPath = spToAp(imp.path) + resolvedItemName;
-                                    if (imp.isVariant) {
-                                        const auto& enm = crate.externCrates.at(imp.path.crateName()).hir->getEnumByPath(sp, imp.path, /*ignore_crate_name*/ true, /*ignore_last*/ true);
-                                        bindings.value.set(itemPath, ASTPathBindingValue::make_EnumVar({nullptr, imp.idx, &enm}));
-                                        break; // Break out of the switch
-                                    } else {
-                                        item = &crate.externCrates.at(imp.path.crateName()).hir->getValitemByPath(sp, imp.path, true);
-                                    }
-                                }
-                            switch ((*item).tag()) {
-default:
-                                TODO(sp, "Bind value '" << name << "' for module path " << mp << " : " << item->tagStr());
-                                case HIRValueItem::TAG_Function: {
-                                    bindings.value.set(itemPath, ASTPathBindingValue::make_Function({nullptr}));
-                                    break;
-                                }
-                                case HIRValueItem::TAG_Static: {
-                                    bindings.value.set(itemPath, ASTPathBindingValue::make_Static({nullptr}));
-                                    break;
-                                }
-                            }
-                            }
-                        } break;
-                        case LookupMode::Namespace:
-                        case LookupMode::PatternType:
-                        case LookupMode::Type: {
-                            auto it = findHygienicItem(mod->modItems, name, itemName);
-                            if (it != mod->modItems.end()) {
-                                resolvedItemName = it->first;
-                                const auto* item = &it->second->ent;
-                                auto itemPath = ASTAbsolutePath(mp.crate, mp.ents) + resolvedItemName;
-                                if (item->is_Import()) {
-                                    const auto& imp = item->as_Import();
-                                    // Set the true path (so the returned path is canonical)
-                                    truePath = &imp.path;
-
-                                    auto itemPath = spToAp(imp.path) + resolvedItemName;
-                                    if (imp.isVariant) {
-                                        const auto& enm = crate.externCrates.at(imp.path.crateName()).hir->getEnumByPath(sp, imp.path, /*ignore_crate_name*/ true, /*ignore_last*/ true);
-                                        bindings.type.set(itemPath, ASTPathBindingType::make_EnumVar({nullptr, imp.idx, &enm}));
-                                        break; // Break out of the switch
-                                    } else {
-                                        item = &crate.externCrates.at(imp.path.crateName()).hir->getTypeitemByPath(sp, imp.path, true);
-                                    }
-                                }
-                            switch ((*item).tag()) {
-default:
-                                TODO(sp, "Bind type/mod '" << name << "' for module path " << mp << " : " << item->tagStr());
-                                case HIRTypeItem::TAG_Module: {
-                                    auto& e = (*item).as_Module();
-                                    bindings.type.set(itemPath, ASTPathBindingType::make_Module({nullptr, {&extCrate, &e}}));
-                                    break;
-                                }
-                                case HIRTypeItem::TAG_Trait: {
-                                    bindings.type.set(itemPath, ASTPathBindingType::make_Trait({nullptr}));
-                                    break;
-                                }
-                                case HIRTypeItem::TAG_TypeAlias: {
-                                    bindings.type.set(itemPath, ASTPathBindingType::make_TypeAlias({nullptr}));
-                                    break;
-                                }
-                                case HIRTypeItem::TAG_Struct: {
-                                    bindings.type.set(itemPath, ASTPathBindingType::make_Struct({nullptr}));
-                                    break;
-                                }
-                                case HIRTypeItem::TAG_Enum: {
-                                    bindings.type.set(itemPath, ASTPathBindingType::make_Enum({nullptr}));
-                                    break;
-                                }
-                                case HIRTypeItem::TAG_Union: {
-                                    bindings.type.set(itemPath, ASTPathBindingType::make_Union({nullptr}));
-                                    break;
-                                }
-                            }
-                            }
-                        } break;
-                    }
-                    // If any bindings were populated, then generate a path
-                    if (bindings.hasBinding()) {
-                        auto rv = ASTPath(mp.crate, {});
-                        if (truePath) {
-                            rv.cls.as_Absolute().crate = truePath->crateName();
-                            for (const auto& e : truePath->components()) {
-                                rv.nodes().push_back(e);
-                            }
-                        } else {
-                            for (const auto& e : mp.ents) {
-                                rv.nodes().push_back(e);
-                            }
-                            rv.nodes().push_back(resolvedItemName);
-                        }
-                        rv.bindings = std::move(bindings);
-                        return rv;
-                    }
-                    // Fall through
-                } else {
-                    const ASTModule* mod = &crate.rootModule();
-                    for (const auto& node : mp.ents) {
-                        const ASTModule* next = nullptr;
-                        if (node.c_str()[0] == '#') {
-                            char c;
-                            unsigned int idx;
-                            ::std::stringstream ss(node.c_str());
-                            ss >> c;
-                            ss >> idx;
-                            assert(idx < mod->anonMods().size());
-                            assert(mod->anonMods()[idx]);
-                            next = mod->anonMods()[idx].get();
-                        } else {
-                            for (const auto& i : mod->items) {
-                                if (i->name == node) {
-                                    next = &i->data.as_Module();
-                                    break;
-                                }
-                            }
-                        }
-                        ASSERT_BUG(Span(), next, "Failed to find module `" << node << "` in " << mod->path() << " for " << mp);
-                        mod = next;
-                    }
-                    ASTPath rv;
-                    if (this->lookupInMod(sp, *mod, itemName, mode, rv)
-                        || (itemName != name && this->lookupInMod(sp, *mod, name, mode, rv))) {
-                        return rv;
-                    }
-                }
-            }
-            for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
-                switch ((*it).tag()) {
-                    case Ent::TAG_Module: {
-                        auto& e = (*it).as_Module();
-                        ASTPath rv;
-                        if (this->lookupInMod(sp, *e.mod, itemName, mode, rv)
-                            || (itemName != name && this->lookupInMod(sp, *e.mod, name, mode, rv))) {
-                            return rv;
-                        }
-                        break;
-                    }
-                    case Ent::TAG_ConcreteSelf: {
-                        auto& e = (*it).as_ConcreteSelf();
-                        if (name == selfName()) {
-                            switch (mode) {
-                                case LookupMode::PatternType:
-                                case LookupMode::Type:
-                                case LookupMode::Namespace: {
-                                    if (static_cast<size_t>(nameContext.rend() - it) - 1 == this->selfCtorOnlyIdx) {
-                                        break;
-                                    }
-                                    ASTPath rv(name);
-                                    rv.bindings.type.set(ASTAbsolutePath(), ASTPathBindingType::make_TypeParameter({0xFFFF}));
-                                    return rv;
-                                }
-                                case LookupMode::Constant:
-                                case LookupMode::Variable:
-                                    // TODO: Ensure validity? (I.e. that `Self` is a unit or tuple struct
-                                    if (const auto* p = (*e)->data.opt_Path()) {
-                                        // HACK! If `Self` points to a `type`, look through it
-                                        // - rustc-1.90.0-src/compiler/rustc_codegen_llvm/src/context.rs:675
-                                        if (const auto* pbe = (**p).bindings.type.binding.opt_TypeAlias()) {
-                                            assert(pbe->alias_);
-                                            assert(pbe->alias_->type_->isPath());
-                                            return *pbe->alias_->type_->data.as_Path();
-                                        }
-                                        return **p;
-                                    }
-                                default:
-                                    break;
-                            }
-                        }
-                        break;
-                    }
-                    case Ent::TAG_VarBlock: {
-                        auto& e = (*it).as_VarBlock();
-                        assert(e.level <= blockLevel);
-                        if (mode != LookupMode::Variable) {
-                            // ignore
-                        } else {
-                            for (auto it2 = e.variables.rbegin(); it2 != e.variables.rend(); ++it2) {
-                                if (it2->first.name == name) {
-                                }
-                                if (it2->first.name == name && it2->first.hygiene.isVisible(lookupContext)) {
-                                    ASTPath rv(name);
-                                    rv.bindVariable(it2->second);
-                                    return rv;
-                                }
-                            }
-                        }
-                        break;
-                    }
-                    case Ent::TAG_MacroDefinition: {
-                        auto& e = (*it).as_MacroDefinition();
-                        if (mode == LookupMode::Variable) {
-                            lookupContext.leaveMacroDefinition(typePool(), e.definitionId, e.tokenHygiene, e.definitionHygiene);
-                        }
-                        break;
-                    }
-                    case Ent::TAG_Generic: {
-                        auto& e = (*it).as_Generic();
-                        switch (mode) {
-                            case LookupMode::Type:
-                            case LookupMode::Namespace:
-                                for (auto it2 = e.types.rbegin(); it2 != e.types.rend(); ++it2) {
-                                    if (it2->name == name) {
-                                        ASTPath rv(name);
-                                        rv.bindings.type.set(ASTAbsolutePath(), ASTPathBindingType::make_TypeParameter({it2->value.toBinding()}));
-                                        return rv;
-                                    }
-                                }
-                                break;
-                            case LookupMode::Variable:
-                            case LookupMode::Constant:
-                                for (auto it2 = e.constants.rbegin(); it2 != e.constants.rend(); ++it2) {
-                                    if (it2->name.name == name) {
-                                        ASTPath rv(name);
-                                        rv.bindings.value.set(ASTAbsolutePath(), ASTPathBindingValue::make_Generic({it2->value.toBinding()}));
-                                        return rv;
-                                    }
-                                }
-                                break;
-                            default:
-                                // ignore.
-                                // TODO: Integer generics
-                                break;
-                        }
-                        break;
-                    }
-                }
-            }
-
-            // Top-level module
-            ASTPath rv;
-            if (this->lookupInMod(sp, mod, itemName, mode, rv)
-                || (itemName != name && this->lookupInMod(sp, mod, name, mode, rv))) {
-                return rv;
-            }
-
-            switch (mode) {
-                case LookupMode::Namespace:
-                case LookupMode::Type: {
-                    // Look up primitive types
-                    auto ct = coretypeFromstring(name.c_str());
-                    if (ct != CORETYPE_INVAL) {
-                        return ASTPath::newUfcsTy(mkType(typePool(), Span(), ct), ::std::vector<ASTPathNode>());
-                    }
-                } break;
-                default:
-                    break;
-            }
-
-            // #![feature(extern_prelude)] - 2018-style extern paths
-            if (mode == LookupMode::Namespace /*&& m_crate.has_feature("extern_prelude")*/) {
-                auto it = this->settings.implicitCrates.find(name);
-                if (it != this->settings.implicitCrates.end()) {
-                    return ASTPath(it->second, {});
-                }
-            }
-
-            return ASTPath();
-        }
-
-        unsigned int lookupLocal(const Span& sp, const RcString name, LookupMode mode) {
-            for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
-                switch ((*it).tag()) {
-                    case Ent::TAG_Module: {
-                        break;
-                    }
-                    case Ent::TAG_ConcreteSelf: {
-                        break;
-                    }
-                    case Ent::TAG_VarBlock: {
-                        auto& e = (*it).as_VarBlock();
-                        if (mode == LookupMode::Variable) {
-                            for (auto it2 = e.variables.rbegin(); it2 != e.variables.rend(); ++it2) {
-                                // TODO: Hyginic lookup?
-                                if (it2->first.name == name) {
-                                    return it2->second;
-                                }
-                            }
-                        }
-                        break;
-                    }
-                    case Ent::TAG_MacroDefinition: {
-                        break;
-                    }
-                    case Ent::TAG_Generic: {
-                        auto& e = (*it).as_Generic();
-                        switch (mode) {
-                            case LookupMode::Type:
-                                for (auto it2 = e.types.rbegin(); it2 != e.types.rend(); ++it2) {
-                                    if (it2->name == name) {
-                                        return it2->value.toBinding();
-                                    }
-                                }
-                                break;
-                            case LookupMode::Variable:
-                                for (auto it2 = e.constants.rbegin(); it2 != e.constants.rend(); ++it2) {
-                                    if (it2->name.name == name) {
-                                        //TODO(sp, "Return a reference to a constant generic '" << name << "'");
-                                        // Need to disambiguate it... could set a high bit
-                                        return it2->value.toBinding() | FLAG_CONST_GENERIC;
-                                    }
-                                }
-                                break;
-                            default:
-                                // ignore.
-                                // TODO: Integer generics
-                                break;
-                        }
-                        break;
-                    }
-                }
-            }
-
-            ERROR(sp, E0000, "Unable to find local " << (mode == LookupMode::Variable ? "variable" : "type") << " '" << name << "'");
-        }
+        unsigned int lookupLocal(const Span& sp, const RcString name, LookupMode mode);
 
         /// Clones the context, including only the module-level items (i.e. just the Module entries)
-        Context cloneMod() const {
-            auto rv = Context(this->settings, this->crate, this->mod);
-            for (const auto& v : nameContext) {
-                if (const auto* e = v.opt_Module()) {
-                    rv.nameContext.push_back(Ent::make_Module(*e));
-                }
-            }
-            // An item nested in a method still reaches the `Self` constructor:
-            // rustc deprecated that but still accepts it, and only where the
-            // outer item is not generic -- a generic there would name a
-            // parameter this item does not have. `Self` as a type is not
-            // carried over, so only a value lookup answers here.
-            if (const auto* selfTy = this->getSelfOpt()) {
-                if (*selfTy && (*selfTy)->isPath()) {
-                    const auto& path = (*selfTy)->path();
-                    bool isConcrete = true;
-                    // A local path is a bare name, so it carries no arguments.
-                    if (!path.cls.is_Local()) {
-                        for (const auto& node : path.nodes()) {
-                            isConcrete = isConcrete && node.args().isEmpty();
-                        }
-                    }
-                    if (isConcrete) {
-                        rv.selfCtorOnlyIdx = rv.nameContext.size();
-                        rv.nameContext.push_back(Ent::make_ConcreteSelf(const_cast<ASTType**>(selfTy)));
-                    }
-                }
-            }
-            return rv;
-        }
+        Context cloneMod() const;
     };
 } // Namespace
 
@@ -981,13 +214,7 @@ struct DelegationSignatureSource {
     const HIRFunction* hir = nullptr;
 };
 
-void ResolveAbsoluteFunction(
-    Context& itemContext,
-    ASTFunction& fcn,
-    DelegationSignatureSource signatureSource = {},
-    bool hasParentSelf = false,
-    bool isTraitImpl = false
-);
+void ResolveAbsoluteFunction(Context& itemContext, ASTFunction& fcn, DelegationSignatureSource signatureSource = {}, bool hasParentSelf = false, bool isTraitImpl = false);
 void ResolveAbsoluteStatic(Context& itemContext, ASTStatic& e);
 
 void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPathParams& args) {
@@ -1137,7 +364,6 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
                             break;
                         }
                         default: {
-
                             // TODO: Error
 
                             break;
@@ -1151,21 +377,21 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
                     if (item.name != itemName) {
                         continue;
                     }
-                switch (item.data.tag()) {
-default:
-                    // TODO: Error
-                    break;
-                    case ASTItem::TAG_Function: {
-                        auto& e = item.data.as_Function();
-                        // Bind as trait method
-                        path.bindings.value.set(ufcs.trait->bindings.type.path + item.name, ASTPathBindingValue::make_Function({&e}));
-                        break;
+                    switch (item.data.tag()) {
+                        default:
+                            // TODO: Error
+                            break;
+                        case ASTItem::TAG_Function: {
+                            auto& e = item.data.as_Function();
+                            // Bind as trait method
+                            path.bindings.value.set(ufcs.trait->bindings.type.path + item.name, ASTPathBindingValue::make_Function({&e}));
+                            break;
+                        }
+                        case ASTItem::TAG_Static: {
+                            // Resolve to asociated static
+                            break;
+                        }
                     }
-                    case ASTItem::TAG_Static: {
-                        // Resolve to asociated static
-                        break;
-                    }
-                }
                 }
                 break;
         }
@@ -1196,7 +422,6 @@ namespace {
         for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
             newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
         }
-
 
         return newPath;
     }
@@ -1245,8 +470,8 @@ namespace {
             }
 
             switch (it->second->ent.tag()) {
-default:
-                TODO(sp, "Unknown item type in path - " << i << " " << p << " - " << it->second->ent.tagStr());
+                default:
+                    TODO(sp, "Unknown item type in path - " << i << " " << p << " - " << it->second->ent.tagStr());
                 case HIRTypeItem::TAG_Enum: {
                     auto& e = it->second->ent.as_Enum();
                     if (i != p.components().size() - 2) {
@@ -1320,7 +545,7 @@ default:
                     break;
                 }
             }
-            pb.value.set( ::std::move(ap), ::std::move(pbv) );
+            pb.value.set(::std::move(ap), ::std::move(pbv));
         } else {
             auto it = hmod->modItems.find(name);
             if (it == hmod->modItems.end()) {
@@ -1372,7 +597,7 @@ default:
                     break;
                 }
             }
-            pb.type.set( ::std::move(ap), ::std::move(pbt) );
+            pb.type.set(::std::move(ap), ::std::move(pbt));
         }
 
         // Construct output path (with same set of parameters)
@@ -1503,7 +728,7 @@ default:
                     path = mv$(newPath);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
-case HIRTypeItem::TAG_ExternType:
+                case HIRTypeItem::TAG_ExternType:
                 case HIRTypeItem::TAG_TypeAlias:
                 case HIRTypeItem::TAG_Struct:
                 case HIRTypeItem::TAG_Union:
@@ -1612,8 +837,8 @@ case HIRTypeItem::TAG_ExternType:
                     }
                     path.bindings.type.set(::std::move(ap), ::std::move(pbt));
                     // Update path (trim down to `start` and set crate name)
-                    path = splitIntoCrate(sp, mv$(path), start,  crate.name);
-                    return ;
+                    path = splitIntoCrate(sp, mv$(path), start, crate.name);
+                    return;
                 }
             } break;
 
@@ -1622,8 +847,8 @@ case HIRTypeItem::TAG_ExternType:
                 if (v != hmod->valueItems.end()) {
                     auto ap = resolvedPath + v->first;
                     switch (v->second->ent.tag()) {
-default:
-                        break;
+                        default:
+                            break;
                         case HIRValueItem::TAG_StructConstant: {
                             auto& e = v->second->ent.as_StructConstant();
                             auto tyPath = e.ty;
@@ -1685,8 +910,8 @@ default:
                         }
                     }
                     path.bindings.value.set(::std::move(ap), ::std::move(pbv));
-                    path = splitIntoCrate(sp, mv$(path), start,  crate.name);
-                    return ;
+                    path = splitIntoCrate(sp, mv$(path), start, crate.name);
+                    return;
                 }
             } break;
         }
@@ -1749,8 +974,8 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
             const auto& nameRef = it->second;
 
             switch (nameRef.path.bindings.type.binding.tag()) {
-default:
-                ERROR(sp, E0000, "Encountered non-namespace item '" << n.name() << "' ("<<nameRef.path<<") in path " << path);
+                default:
+                    ERROR(sp, E0000, "Encountered non-namespace item '" << n.name() << "' (" << nameRef.path << ") in path " << path);
                 case ASTPathBindingType::TAG_TypeAlias: {
                     path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
@@ -1774,21 +999,21 @@ default:
                     } else {
                         if (e.trait_) {
                             for (const auto& param : e.trait_->params().params) {
-                            switch (param.tag()) {
-                                case GenericParam::TAG_None: {
-                                    break;
+                                switch (param.tag()) {
+                                    case GenericParam::TAG_None: {
+                                        break;
+                                    }
+                                    case GenericParam::TAG_Lifetime: {
+                                        break;
+                                    }
+                                    case GenericParam::TAG_Type: {
+                                        traitPath.nodes().back().args().entries.push_back(::mkType(context.typePool(), sp));
+                                        break;
+                                    }
+                                    case GenericParam::TAG_Value: {
+                                        break;
+                                    }
                                 }
-                                case GenericParam::TAG_Lifetime: {
-                                    break;
-                                }
-                                case GenericParam::TAG_Type: {
-                                    traitPath.nodes().back().args().entries.push_back(::mkType(context.typePool(), sp));
-                                    break;
-                                }
-                                case GenericParam::TAG_Value: {
-                                    break;
-                                }
-                            }
                             }
                         } else {
                             for (const auto& typ : e.hir->params.types) {
@@ -1923,8 +1148,7 @@ default:
     // Set binding to binding of node in last module
     ASTPath tmp;
     const auto finalName = pathAbs.nodes.back().hygienicName();
-    if (!Context::lookupInMod(sp, *mod, finalName, mode, tmp)
-        && (finalName == pathAbs.nodes.back().name() || !Context::lookupInMod(sp, *mod, pathAbs.nodes.back().name(), mode, tmp))) {
+    if (!Context::lookupInMod(sp, *mod, finalName, mode, tmp) && (finalName == pathAbs.nodes.back().name() || !Context::lookupInMod(sp, *mod, pathAbs.nodes.back().name(), mode, tmp))) {
         ERROR(sp, E0000, "Couldn't find " << Context::lookupModeMsg(mode) << " '" << pathAbs.nodes.back().name() << "' of " << path);
     }
     ASSERT_BUG(sp, tmp.bindings.hasBinding(), "Lookup for " << path << " succeeded, but had no binding");
@@ -1941,7 +1165,6 @@ default:
 }
 
 void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::LookupMode mode, ASTPath& path) {
-
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
             BUG(sp, "Attempted resolution of invalid path");
@@ -2029,7 +1252,6 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                             auto ct = coretypeFromstring(e.nodes[0].name().c_str());
                             p = ASTPath::newUfcsTy(mkType(context.typePool(), Span(), ct), ::std::vector<ASTPathNode>());
                         }
-
                     }
                 }
 
@@ -2053,9 +1275,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                 // Look up value
                 auto p = context.lookup(sp, e.nodes[0].name(), e.hygiene, mode);
                 const auto coreType = coretypeFromstring(e.nodes[0].name().c_str());
-                if (mode == Context::LookupMode::Type
-                    && coreType != CORETYPE_INVAL
-                    && p.bindings.type.binding.is_Module()) {
+                if (mode == Context::LookupMode::Type && coreType != CORETYPE_INVAL && p.bindings.type.binding.is_Module()) {
                     p = ASTPath::newUfcsTy(mkType(context.typePool(), sp, coreType));
                 }
                 if (p.isAbsolute()) {
@@ -2190,8 +1410,8 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
     // - Doing it here so the HIR lowering has a bit more information
     // - Also handles splitting "absolute" paths into UFCS
     switch (path.cls.tag()) {
-default:
-        BUG(sp, "Path wasn't absolutised correctly");
+        default:
+            BUG(sp, "Path wasn't absolutised correctly");
         case ASTPathClass::TAG_Local: {
             if (!path.bindings.hasBinding()) {
                 TODO(sp, "Bind unbound local path - " << path);
@@ -2211,8 +1431,7 @@ default:
     // TODO: Expand default type parameters?
     // - Helps with cases like PartialOrd<Self>, but hinders when the default is a hint (in expressions)
 
-    if(const auto* e = path.cls.opt_UFCS())
-    {
+    if (const auto* e = path.cls.opt_UFCS()) {
         if (!e->nodes.empty() && (!e->trait || !e->trait->isValid()) && e->type->data.is_Generic() && e->type->data.as_Generic().index == GENERICSelf) {
             const auto& node = e->nodes.front();
             auto name = node.hygienicName();
@@ -2485,7 +1704,6 @@ void ResolveAbsoluteExpr(Context& context, ASTExpr& expr) {
 }
 
 void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node) {
-
     struct NV: public ASTNodeVisitorDef {
         Context& context;
 
@@ -2650,7 +1868,6 @@ void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node) {
         }
 
         void visit(ASTExprNodeClosure& node) override {
-
             // A closure's own lifetime binder scopes over its signature and body.
             this->context.push(node.hrbs);
 
@@ -2707,32 +1924,42 @@ void ResolveAbsoluteGeneric(Context& context, ASTGenericParams& params) {
             }
             case ASTGenericBound::TAG_Lifetime: {
                 auto& e = bound.as_Lifetime();
-                ResolveAbsoluteLifetime(context, bound.span, e.test); ResolveAbsoluteLifetime(context, bound.span, e.bound);
+                ResolveAbsoluteLifetime(context, bound.span, e.test);
+                ResolveAbsoluteLifetime(context, bound.span, e.bound);
                 break;
             }
             case ASTGenericBound::TAG_TypeLifetime: {
                 auto& e = bound.as_TypeLifetime();
-                ResolveAbsoluteType(context, e.type); ResolveAbsoluteLifetime(context, bound.span, e.bound);
+                ResolveAbsoluteType(context, e.type);
+                ResolveAbsoluteLifetime(context, bound.span, e.bound);
                 break;
             }
             case ASTGenericBound::TAG_IsTrait: {
                 auto& e = bound.as_IsTrait();
-                context.push(e.outerHrbs); ResolveAbsoluteType(context, e.type); context.push(e.innerHrbs); ResolveAbsolutePath(context, bound.span, Context::LookupMode::Type, e.trait); context.pop(e.innerHrbs); context.pop(e.outerHrbs);
+                context.push(e.outerHrbs);
+                ResolveAbsoluteType(context, e.type);
+                context.push(e.innerHrbs);
+                ResolveAbsolutePath(context, bound.span, Context::LookupMode::Type, e.trait);
+                context.pop(e.innerHrbs);
+                context.pop(e.outerHrbs);
                 break;
             }
             case ASTGenericBound::TAG_MaybeTrait: {
                 auto& e = bound.as_MaybeTrait();
-                ResolveAbsoluteType(context, e.type); ResolveAbsolutePath(context, bound.span, Context::LookupMode::Type, e.trait);
+                ResolveAbsoluteType(context, e.type);
+                ResolveAbsolutePath(context, bound.span, Context::LookupMode::Type, e.trait);
                 break;
             }
             case ASTGenericBound::TAG_NotTrait: {
                 auto& e = bound.as_NotTrait();
-                ResolveAbsoluteType(context, e.type); ResolveAbsolutePath(context, bound.span, Context::LookupMode::Type, e.trait);
+                ResolveAbsoluteType(context, e.type);
+                ResolveAbsolutePath(context, bound.span, Context::LookupMode::Type, e.trait);
                 break;
             }
             case ASTGenericBound::TAG_Equality: {
                 auto& e = bound.as_Equality();
-                ResolveAbsoluteType(context, e.type); ResolveAbsoluteType(context, e.replacement);
+                ResolveAbsoluteType(context, e.type);
+                ResolveAbsoluteType(context, e.replacement);
                 break;
             }
         }
@@ -3008,8 +2235,7 @@ void ExpandDelegationGlobs(Context& itemContext, ASTImpl& impl) {
             continue;
         }
         auto& fcn = item.data->as_Function();
-        if (!fcn.delegation() || fcn.delegation()->targets.size() != 1
-            || fcn.delegation()->targets.front().name != "") {
+        if (!fcn.delegation() || fcn.delegation()->targets.size() != 1 || fcn.delegation()->targets.front().name != "") {
             continue;
         }
 
@@ -3115,9 +2341,7 @@ void ResolveAbsoluteImplItems(Context& itemContext, ASTImpl& impl) {
         }
     }
     for (auto& i : impl.items()) {
-        if (i.name != i.sourceName
-            && !TraitHasImplItem(implementedTrait, implementedHirTrait, i.name, i.data->tag())
-            && TraitHasImplItem(implementedTrait, implementedHirTrait, i.sourceName, i.data->tag())) {
+        if (i.name != i.sourceName && !TraitHasImplItem(implementedTrait, implementedHirTrait, i.name, i.data->tag()) && TraitHasImplItem(implementedTrait, implementedHirTrait, i.sourceName, i.data->tag())) {
             i.name = i.sourceName;
         }
         switch ((*i.data).tag()) {
@@ -3206,7 +2430,7 @@ void ResolveAbsoluteImplItems(Context& itemContext, ASTImpl& impl) {
             }
             case ASTItem::TAG_Static: {
                 auto& e = (*i.data).as_Static();
-                 ResolveAbsoluteStatic(itemContext, e);
+                ResolveAbsoluteStatic(itemContext, e);
                 break;
             }
         }
@@ -3311,12 +2535,16 @@ void ReplaceDelegatedSelf(ASTType*& type, const RcString& replacementName) {
         case TypeData::TAG_Function: {
             auto& e = type->data.as_Function();
             ReplaceDelegatedSelf(e.info.rettype, replacementName);
-            for (auto*& arg : e.info.argTypes) { ReplaceDelegatedSelf(arg, replacementName); }
+            for (auto*& arg : e.info.argTypes) {
+                ReplaceDelegatedSelf(arg, replacementName);
+            }
             break;
         }
         case TypeData::TAG_Tuple: {
             auto& e = type->data.as_Tuple();
-            for (auto*& inner : e.innerTypes) { ReplaceDelegatedSelf(inner, replacementName); }
+            for (auto*& inner : e.innerTypes) {
+                ReplaceDelegatedSelf(inner, replacementName);
+            }
             break;
         }
         case TypeData::TAG_Borrow: {
@@ -3346,7 +2574,9 @@ void ReplaceDelegatedSelf(ASTType*& type, const RcString& replacementName) {
         }
         case TypeData::TAG_Generic: {
             auto& e = type->data.as_Generic();
-            if (e.name == selfName()) { e.name = replacementName; }
+            if (e.name == selfName()) {
+                e.name = replacementName;
+            }
             break;
         }
         case TypeData::TAG_Path: {
@@ -3356,14 +2586,22 @@ void ReplaceDelegatedSelf(ASTType*& type, const RcString& replacementName) {
         }
         case TypeData::TAG_TraitObject: {
             auto& e = type->data.as_TraitObject();
-            for (auto& trait : e.traits) { ReplaceDelegatedSelf(*trait.path, replacementName); }
+            for (auto& trait : e.traits) {
+                ReplaceDelegatedSelf(*trait.path, replacementName);
+            }
             break;
         }
         case TypeData::TAG_ErasedType: {
             auto& e = type->data.as_ErasedType();
-            for (auto& trait : e->traits) { ReplaceDelegatedSelf(*trait.path, replacementName); }
-            for (auto& trait : e->maybeTraits) { ReplaceDelegatedSelf(*trait.path, replacementName); }
-            if (e->use) { ReplaceDelegatedSelf(*e->use, replacementName); }
+            for (auto& trait : e->traits) {
+                ReplaceDelegatedSelf(*trait.path, replacementName);
+            }
+            for (auto& trait : e->maybeTraits) {
+                ReplaceDelegatedSelf(*trait.path, replacementName);
+            }
+            if (e->use) {
+                ReplaceDelegatedSelf(*e->use, replacementName);
+            }
             break;
         }
     }
@@ -3409,22 +2647,26 @@ void ReplaceDelegatedSelf(ASTFunction& function, const RcString& replacementName
             }
             case ASTGenericBound::TAG_IsTrait: {
                 auto& e = bound.as_IsTrait();
-                ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.trait, replacementName);
+                ReplaceDelegatedSelf(e.type, replacementName);
+                ReplaceDelegatedSelf(e.trait, replacementName);
                 break;
             }
             case ASTGenericBound::TAG_MaybeTrait: {
                 auto& e = bound.as_MaybeTrait();
-                ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.trait, replacementName);
+                ReplaceDelegatedSelf(e.type, replacementName);
+                ReplaceDelegatedSelf(e.trait, replacementName);
                 break;
             }
             case ASTGenericBound::TAG_NotTrait: {
                 auto& e = bound.as_NotTrait();
-                ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.trait, replacementName);
+                ReplaceDelegatedSelf(e.type, replacementName);
+                ReplaceDelegatedSelf(e.trait, replacementName);
                 break;
             }
             case ASTGenericBound::TAG_Equality: {
                 auto& e = bound.as_Equality();
-                ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.replacement, replacementName);
+                ReplaceDelegatedSelf(e.type, replacementName);
+                ReplaceDelegatedSelf(e.replacement, replacementName);
                 break;
             }
         }
@@ -3433,34 +2675,56 @@ void ReplaceDelegatedSelf(ASTFunction& function, const RcString& replacementName
 
 eCoreType HIRCoreTypeToAST(HIRCoreType type) {
     switch (type) {
-        case HIRCoreType::Usize: return CORETYPE_UINT;
-        case HIRCoreType::Isize: return CORETYPE_INT;
-        case HIRCoreType::U8: return CORETYPE_U8;
-        case HIRCoreType::I8: return CORETYPE_I8;
-        case HIRCoreType::U16: return CORETYPE_U16;
-        case HIRCoreType::I16: return CORETYPE_I16;
-        case HIRCoreType::U32: return CORETYPE_U32;
-        case HIRCoreType::I32: return CORETYPE_I32;
-        case HIRCoreType::U64: return CORETYPE_U64;
-        case HIRCoreType::I64: return CORETYPE_I64;
-        case HIRCoreType::U128: return CORETYPE_U128;
-        case HIRCoreType::I128: return CORETYPE_I128;
-        case HIRCoreType::F16: return CORETYPE_F16;
-        case HIRCoreType::F32: return CORETYPE_F32;
-        case HIRCoreType::F64: return CORETYPE_F64;
-        case HIRCoreType::F128: return CORETYPE_F128;
-        case HIRCoreType::Bool: return CORETYPE_BOOL;
-        case HIRCoreType::Char: return CORETYPE_CHAR;
-        case HIRCoreType::Str: return CORETYPE_STR;
+        case HIRCoreType::Usize:
+            return CORETYPE_UINT;
+        case HIRCoreType::Isize:
+            return CORETYPE_INT;
+        case HIRCoreType::U8:
+            return CORETYPE_U8;
+        case HIRCoreType::I8:
+            return CORETYPE_I8;
+        case HIRCoreType::U16:
+            return CORETYPE_U16;
+        case HIRCoreType::I16:
+            return CORETYPE_I16;
+        case HIRCoreType::U32:
+            return CORETYPE_U32;
+        case HIRCoreType::I32:
+            return CORETYPE_I32;
+        case HIRCoreType::U64:
+            return CORETYPE_U64;
+        case HIRCoreType::I64:
+            return CORETYPE_I64;
+        case HIRCoreType::U128:
+            return CORETYPE_U128;
+        case HIRCoreType::I128:
+            return CORETYPE_I128;
+        case HIRCoreType::F16:
+            return CORETYPE_F16;
+        case HIRCoreType::F32:
+            return CORETYPE_F32;
+        case HIRCoreType::F64:
+            return CORETYPE_F64;
+        case HIRCoreType::F128:
+            return CORETYPE_F128;
+        case HIRCoreType::Bool:
+            return CORETYPE_BOOL;
+        case HIRCoreType::Char:
+            return CORETYPE_CHAR;
+        case HIRCoreType::Str:
+            return CORETYPE_STR;
     }
     UNREACHABLE();
 }
 
 ASTBoundConstness HIRConstnessToAST(HIRBoundConstness constness) {
     switch (constness) {
-        case HIRBoundConstness::Never: return ASTBoundConstness::Never;
-        case HIRBoundConstness::Always: return ASTBoundConstness::Always;
-        case HIRBoundConstness::Maybe: return ASTBoundConstness::Maybe;
+        case HIRBoundConstness::Never:
+            return ASTBoundConstness::Never;
+        case HIRBoundConstness::Always:
+            return ASTBoundConstness::Always;
+        case HIRBoundConstness::Maybe:
+            return ASTBoundConstness::Maybe;
     }
     UNREACHABLE();
 }
@@ -3483,10 +2747,7 @@ ASTPath HIRGenericPathToAST(Context& context, const Span& span, const HIRGeneric
 ASTPath HIRTraitPathToAST(Context& context, const Span& span, const HIRTraitPath& trait) {
     auto rv = HIRGenericPathToAST(context, span, trait.path);
     for (const auto& assoc : trait.typeBounds) {
-        rv.nodes().back().args().entries.push_back(ASTPathParamEnt::make_AssociatedTyEqual({
-            ASTPathNode(assoc.first, HIRPathParamsToAST(context, span, assoc.second.atyParams)),
-            HIRTypeToAST(context, span, assoc.second.type)
-        }));
+        rv.nodes().back().args().entries.push_back(ASTPathParamEnt::make_AssociatedTyEqual({ASTPathNode(assoc.first, HIRPathParamsToAST(context, span, assoc.second.atyParams)), HIRTypeToAST(context, span, assoc.second.type)}));
     }
     return rv;
 }
@@ -3499,25 +2760,15 @@ ASTPath HIRPathToAST(Context& context, const Span& span, const HIRPath& path) {
         }
         case HIRPathData::TAG_UfcsInherent: {
             auto& e = path.data.as_UfcsInherent();
-            return ASTPath::newUfcsTy(
-                HIRTypeToAST(context, span, e.type),
-                {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))}
-            );
+            return ASTPath::newUfcsTy(HIRTypeToAST(context, span, e.type), {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))});
         }
         case HIRPathData::TAG_UfcsKnown: {
             auto& e = path.data.as_UfcsKnown();
-            return ASTPath::newUfcsTrait(
-                HIRTypeToAST(context, span, e.type),
-                HIRGenericPathToAST(context, span, e.trait),
-                {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))}
-            );
+            return ASTPath::newUfcsTrait(HIRTypeToAST(context, span, e.type), HIRGenericPathToAST(context, span, e.trait), {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))});
         }
         case HIRPathData::TAG_UfcsUnknown: {
             auto& e = path.data.as_UfcsUnknown();
-            return ASTPath::newUfcsTy(
-                HIRTypeToAST(context, span, e.type),
-                {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))}
-            );
+            return ASTPath::newUfcsTy(HIRTypeToAST(context, span, e.type), {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))});
         }
     }
     UNREACHABLE();
@@ -3542,9 +2793,7 @@ ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
         }
         case HIRTypeData::TAG_Generic: {
             auto& e = (*type).as_Generic();
-            const auto name = e.binding != GENERICSelf && e.group() == GENERICItem
-                ? RcString::newInterned(FMT("#hir-item-" << e.idx()))
-                : e.name;
+            const auto name = e.binding != GENERICSelf && e.group() == GENERICItem ? RcString::newInterned(FMT("#hir-item-" << e.idx())) : e.name;
             return mkType(pool, span, name, e.binding);
         }
         case HIRTypeData::TAG_TraitObject: {
@@ -3575,7 +2824,9 @@ ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
         case HIRTypeData::TAG_Tuple: {
             auto& e = (*type).as_Tuple();
             ::std::vector<ASTType*> types;
-            for (const auto& inner : e) { types.push_back(HIRTypeToAST(context, span, inner)); }
+            for (const auto& inner : e) {
+                types.push_back(HIRTypeToAST(context, span, inner));
+            }
             return mkType(pool, ASTTypeTags::Tuple(), span, mv$(types));
         }
         case HIRTypeData::TAG_Borrow: {
@@ -3593,7 +2844,9 @@ ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
         case HIRTypeData::TAG_Function: {
             auto& e = (*type).as_Function();
             ::std::vector<ASTType*> args;
-            for (const auto& arg : e.argTypes) { args.push_back(HIRTypeToAST(context, span, arg)); }
+            for (const auto& arg : e.argTypes) {
+                args.push_back(HIRTypeToAST(context, span, arg));
+            }
             return mkType(pool, ASTTypeTags::Function(), span, {}, e.isUnsafe, e.abi.c_str(), mv$(args), e.isVariadic, HIRTypeToAST(context, span, e.rettype));
         }
         case HIRTypeData::TAG_NodeType: {
@@ -3620,22 +2873,12 @@ ASTGenericParams HIRGenericParamsToAST(Context& context, const Span& span, const
         switch (bound.tag()) {
             case HIRGenericBound::TAG_TraitBound: {
                 auto& e = bound.as_TraitBound();
-                rv.addBound(ASTGenericBound::make_IsTrait({
-                    span,
-                    {},
-                    HIRTypeToAST(context, span, e.type),
-                    {},
-                    HIRTraitPathToAST(context, span, e.trait),
-                    HIRConstnessToAST(e.constness)
-                }));
+                rv.addBound(ASTGenericBound::make_IsTrait({span, {}, HIRTypeToAST(context, span, e.type), {}, HIRTraitPathToAST(context, span, e.trait), HIRConstnessToAST(e.constness)}));
                 break;
             }
             case HIRGenericBound::TAG_TypeEquality: {
                 auto& e = bound.as_TypeEquality();
-                rv.addBound(ASTGenericBound::make_Equality({
-                    HIRTypeToAST(context, span, e.type),
-                    HIRTypeToAST(context, span, e.otherType)
-                }));
+                rv.addBound(ASTGenericBound::make_Equality({HIRTypeToAST(context, span, e.type), HIRTypeToAST(context, span, e.otherType)}));
                 break;
             }
         }
@@ -3648,24 +2891,16 @@ ASTFunction HIRFunctionToAST(Context& context, const Span& span, const HIRFuncti
     for (size_t i = 0; i < function.args.size(); i++) {
         const bool receiver = i == 0 && function.receiver != HIRFunction::Receiver::Free;
         const auto name = receiver ? RcString::newInterned("self") : RcString::newInterned(FMT("arg" << i));
-        args.push_back(ASTFunction::Arg(
-            ASTPattern(ASTPattern::TagBind(), span, name),
-            HIRTypeToAST(context, span, function.args[i].second)
-        ));
+        args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), span, name), HIRTypeToAST(context, span, function.args[i].second)));
     }
     auto flags = ASTFunction::Flags();
-    if (function.unsafe) { flags = flags.setUnsafe(); }
-    if (function.isConst) { flags = flags.setConst(); }
-    return ASTFunction(
-        span,
-        function.abi.c_str(),
-        flags,
-        HIRGenericParamsToAST(context, span, function.params),
-        HIRTypeToAST(context, span, function.returnType),
-        mv$(args),
-        function.variadic,
-        function.hasNamedVariadic
-    );
+    if (function.unsafe) {
+        flags = flags.setUnsafe();
+    }
+    if (function.isConst) {
+        flags = flags.setConst();
+    }
+    return ASTFunction(span, function.abi.c_str(), flags, HIRGenericParamsToAST(context, span, function.params), HIRTypeToAST(context, span, function.returnType), mv$(args), function.variadic, function.hasNamedVariadic);
 }
 
 const HIRFunction* FindHIRTraitFunction(const HIRTrait& trait, const RcString& name) {
@@ -3673,13 +2908,7 @@ const HIRFunction* FindHIRTraitFunction(const HIRTrait& trait, const RcString& n
     return it == trait.values.end() ? nullptr : it->second.opt_Function();
 }
 
-void ResolveAbsoluteFunction(
-    Context& itemContext,
-    ASTFunction& fcn,
-    DelegationSignatureSource signatureSource,
-    bool hasParentSelf,
-    bool isTraitImpl
-) {
+void ResolveAbsoluteFunction(Context& itemContext, ASTFunction& fcn, DelegationSignatureSource signatureSource, bool hasParentSelf, bool isTraitImpl) {
     // A `reuse` delegation copies the generic parameters of the function it
     // stands for, so those may repeat what the impl around it already named.
     const bool fromDelegation = fcn.delegation() != nullptr;
@@ -3705,13 +2934,7 @@ void ResolveAbsoluteFunction(
         }
         ASSERT_BUG(fcn.sp(), targetFunction || targetHirFunction, "Delegation target is not a function: " << target);
 
-        auto replacement = signatureSource.ast
-            ? signatureSource.ast->clone()
-            : signatureSource.hir
-                ? HIRFunctionToAST(itemContext, fcn.sp(), *signatureSource.hir)
-                : targetFunction
-                    ? targetFunction->clone()
-                    : HIRFunctionToAST(itemContext, fcn.sp(), *targetHirFunction);
+        auto replacement = signatureSource.ast ? signatureSource.ast->clone() : signatureSource.hir ? HIRFunctionToAST(itemContext, fcn.sp(), *signatureSource.hir) : targetFunction ? targetFunction->clone() : HIRFunctionToAST(itemContext, fcn.sp(), *targetHirFunction);
         const ASTTrait* targetTrait = nullptr;
         if (target.cls.is_UFCS()) {
             const auto& ufcs = target.cls.as_UFCS();
@@ -3754,13 +2977,7 @@ void ResolveAbsoluteFunction(
                         }
                     }
                 }
-                merged.addBound(ASTGenericBound::make_IsTrait({
-                    fcn.sp(),
-                    {},
-                    mkType(itemContext.typePool(), fcn.sp(), delegatedSelf),
-                    {},
-                    mv$(traitBound)
-                }));
+                merged.addBound(ASTGenericBound::make_IsTrait({fcn.sp(), {}, mkType(itemContext.typePool(), fcn.sp(), delegatedSelf), {}, mv$(traitBound)}));
             }
             AppendGenericParams(merged, targetTrait->params());
             AppendGenericParams(merged, replacement.params());
@@ -3769,9 +2986,7 @@ void ResolveAbsoluteFunction(
             });
             replacement.params() = mv$(merged);
         }
-        const bool isMethod = hasParentSelf && !replacement.args().empty()
-            && replacement.args().front().pat.bindings().size() == 1
-            && replacement.args().front().pat.bindings().front().name.name == "self";
+        const bool isMethod = hasParentSelf && !replacement.args().empty() && replacement.args().front().pat.bindings().size() == 1 && replacement.args().front().pat.bindings().front().name.name == "self";
         ::std::vector<ASTExprNodeP> args;
         for (size_t i = 0; i < replacement.args().size(); i++) {
             auto name = isMethod && i == 0 ? RcString::newInterned("self") : RcString::newInterned(FMT("arg" << i));
@@ -3779,36 +2994,33 @@ void ResolveAbsoluteFunction(
             ASTExprNodeP arg(new ASTExprNodeNamedValue(ASTPath(name)));
             if (i == 0 && delegation->body.isValid()) {
                 arg = delegation->body.node().clone();
-                if (auto* block = cast<ASTExprNodeBlock>(arg.get()); block && !block->localMod
-                    && block->nodes.size() == 1 && !block->nodes.front().hasSemicolon) {
+                if (auto* block = cast<ASTExprNodeBlock>(arg.get()); block && !block->localMod && block->nodes.size() == 1 && !block->nodes.front().hasSemicolon) {
                     auto unwrapped = mv$(block->nodes.front().node);
                     arg = mv$(unwrapped);
                 }
+
                 struct ReplaceDelegationSelf: ASTNodeVisitorDef {
                     RcString replacement;
-                    ReplaceDelegationSelf(RcString replacement): replacement(mv$(replacement)) {}
+
+                    ReplaceDelegationSelf(RcString replacement)
+                        : replacement(mv$(replacement))
+                    {
+                    }
+
                     void visit(ASTExprNodeNamedValue& node) override {
                         if (node.path.cls.is_Local() && node.path.cls.as_Local().name == "#delegation-self") {
                             node.path = ASTPath(replacement);
                         }
                     }
                 } visitor(name);
+
                 arg->visit(visitor);
 
                 const auto targetBorrow = targetFunction && !targetFunction->args().empty() && targetFunction->args().front().ty->data.is_Borrow();
-                const auto targetHirBorrow = targetHirFunction && (
-                    targetHirFunction->receiver == HIRFunction::Receiver::BorrowOwned
-                    || targetHirFunction->receiver == HIRFunction::Receiver::BorrowUnique
-                    || targetHirFunction->receiver == HIRFunction::Receiver::BorrowShared
-                );
+                const auto targetHirBorrow = targetHirFunction && (targetHirFunction->receiver == HIRFunction::Receiver::BorrowOwned || targetHirFunction->receiver == HIRFunction::Receiver::BorrowUnique || targetHirFunction->receiver == HIRFunction::Receiver::BorrowShared);
                 if (targetBorrow || targetHirBorrow) {
-                    const bool isMut = targetBorrow
-                        ? targetFunction->args().front().ty->data.as_Borrow().isMut
-                        : targetHirFunction->receiver == HIRFunction::Receiver::BorrowUnique;
-                    arg = ASTExprNodeP(new ASTExprNodeUniOp(
-                        isMut ? ASTExprNodeUniOp::REFMUT : ASTExprNodeUniOp::REF,
-                        mv$(arg)
-                    ));
+                    const bool isMut = targetBorrow ? targetFunction->args().front().ty->data.as_Borrow().isMut : targetHirFunction->receiver == HIRFunction::Receiver::BorrowUnique;
+                    arg = ASTExprNodeP(new ASTExprNodeUniOp(isMut ? ASTExprNodeUniOp::REFMUT : ASTExprNodeUniOp::REF, mv$(arg)));
                 }
             }
             args.push_back(mv$(arg));
@@ -3867,7 +3079,9 @@ void ResolveAbsoluteStruct(Context& itemContext, ASTStruct& e) {
         }
         case ASTStructData::TAG_Tuple: {
             auto& s = e.data.as_Tuple();
-            for (auto& field : s.ents) { ResolveAbsoluteType(itemContext, field.type); }
+            for (auto& field : s.ents) {
+                ResolveAbsoluteType(itemContext, field.type);
+            }
             break;
         }
         case ASTStructData::TAG_Struct: {
@@ -3926,7 +3140,9 @@ void ResolveAbsoluteEnum(Context& itemContext, ASTEnum& e) {
             }
             case ASTEnumVariantData::TAG_Tuple: {
                 auto& s = variant.data.as_Tuple();
-                for (auto& field : s.items) { ResolveAbsoluteType(itemContext, field.type); }
+                for (auto& field : s.items) {
+                    ResolveAbsoluteType(itemContext, field.type);
+                }
                 break;
             }
             case ASTEnumVariantData::TAG_Struct: {
@@ -3950,7 +3166,6 @@ void ResolveAbsoluteMod(const Settings& settings, const ASTCrate& crate, ASTModu
 }
 
 void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
-
     for (auto& i : mod.items) {
         switch (i->data.tag()) {
             case ASTItem::TAG_None: {
@@ -4241,8 +3456,7 @@ bool spanIsFromMacro(const Span& sp) {
     return false;
 }
 
-void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false,
-    bool globIsNested = false, bool fromMacro = false) {
+void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false, bool globIsNested = false, bool fromMacro = false) {
     ASSERT_BUG(sp, ir.bindings.hasBinding(), "Adding item with no binding - " << ir);
     auto& list = getModIndex(mod, location);
 
@@ -4291,14 +3505,12 @@ void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcStrin
     }
 }
 
-void _add_item_type(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false,
-    bool globIsNested = false, bool fromMacro = false) {
+void _add_item_type(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false, bool globIsNested = false, bool fromMacro = false) {
     _add_item(sp, mod, IndexName::Namespace, name, vis, ASTPath(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested, fromMacro);
     _add_item(sp, mod, IndexName::Type, name, vis, ::std::move(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested, fromMacro);
 }
 
-void _add_item_value(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false,
-    bool globIsNested = false, bool fromMacro = false) {
+void _add_item_value(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false, bool fromGlob = false, bool globIsNested = false, bool fromMacro = false) {
     _add_item(sp, mod, IndexName::Value, name, vis, mv$(ir), errorOnCollision, fromPrelude, fromGlob, globIsNested, fromMacro);
 }
 
@@ -4431,108 +3643,108 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
 
                 bool allowCollide = true; // Allow collisions (`use` can import mutliple namespaces, local gets priority)
                 // - Types
-            switch (pb.type.binding.tag()) {
-                case ASTPathBindingType::TAG_Unbound: {
-                    break;
+                switch (pb.type.binding.tag()) {
+                    case ASTPathBindingType::TAG_Unbound: {
+                        break;
+                    }
+                    case ASTPathBindingType::TAG_TypeParameter: {
+                        BUG(sp, "Import was bound to type parameter");
+                        break;
+                    }
+                    case ASTPathBindingType::TAG_Primitive: {
+                        _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingType::TAG_Crate: {
+                        _add_item(sp, mod, IndexName::Namespace, iData.name, i.vis, pb.type, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingType::TAG_Module: {
+                        _add_item(sp, mod, IndexName::Namespace, iData.name, i.vis, pb.type, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingType::TAG_Enum: {
+                        _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingType::TAG_Union: {
+                        _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingType::TAG_Trait: {
+                        _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingType::TAG_TraitAlias: {
+                        _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingType::TAG_TypeAlias: {
+                        _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingType::TAG_Struct: {
+                        _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingType::TAG_EnumVar: {
+                        _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
+                        break;
+                    }
                 }
-                case ASTPathBindingType::TAG_TypeParameter: {
-                    BUG(sp, "Import was bound to type parameter");
-                    break;
+                // - Values
+                // `use m::foo::{self}` names the module, not the function beside it.
+                switch (iData.isSelf ? ASTPathBindingValue::TAG_Unbound : pb.value.binding.tag()) {
+                    case ASTPathBindingValue::TAG_Unbound: {
+                        break;
+                    }
+                    case ASTPathBindingValue::TAG_Variable: {
+                        BUG(sp, "Import was bound to a variable");
+                        break;
+                    }
+                    case ASTPathBindingValue::TAG_Generic: {
+                        BUG(sp, "Import was bound to a generic value");
+                        break;
+                    }
+                    case ASTPathBindingValue::TAG_Struct: {
+                        _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingValue::TAG_EnumVar: {
+                        _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingValue::TAG_Static: {
+                        _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingValue::TAG_Function: {
+                        _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
+                        break;
+                    }
                 }
-                case ASTPathBindingType::TAG_Primitive: {
-                    _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    break;
+                // - Macros
+                switch (pb.macro.binding.tag()) {
+                    case ASTPathBindingMacro::TAG_Unbound: {
+                        break;
+                    }
+                    case ASTPathBindingMacro::TAG_MacroRules: {
+                        _add_item(sp, mod, IndexName::Macro, iData.name, i.vis, pb.macro, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingMacro::TAG_ProcMacro: {
+                        _add_item(sp, mod, IndexName::Macro, iData.name, i.vis, pb.macro, !allowCollide);
+                        break;
+                    }
+                    case ASTPathBindingMacro::TAG_ProcMacroAttribute: {
+                        TODO(sp, "ProcMacroAttribute import");
+                        break;
+                    }
+                    case ASTPathBindingMacro::TAG_ProcMacroDerive: {
+                        TODO(sp, "ProcMacroDerive import");
+                        break;
+                    }
                 }
-                case ASTPathBindingType::TAG_Crate: {
-                    _add_item(sp, mod, IndexName::Namespace, iData.name, i.vis, pb.type, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingType::TAG_Module: {
-                    _add_item(sp, mod, IndexName::Namespace, iData.name, i.vis, pb.type, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingType::TAG_Enum: {
-                    _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingType::TAG_Union: {
-                    _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingType::TAG_Trait: {
-                    _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingType::TAG_TraitAlias: {
-                    _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingType::TAG_TypeAlias: {
-                    _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingType::TAG_Struct: {
-                    _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingType::TAG_EnumVar: {
-                    _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
-                    break;
-                }
-            }
-            // - Values
-            // `use m::foo::{self}` names the module, not the function beside it.
-            switch (iData.isSelf ? ASTPathBindingValue::TAG_Unbound : pb.value.binding.tag()) {
-                case ASTPathBindingValue::TAG_Unbound: {
-                    break;
-                }
-                case ASTPathBindingValue::TAG_Variable: {
-                    BUG(sp, "Import was bound to a variable");
-                    break;
-                }
-                case ASTPathBindingValue::TAG_Generic: {
-                    BUG(sp, "Import was bound to a generic value");
-                    break;
-                }
-                case ASTPathBindingValue::TAG_Struct: {
-                    _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingValue::TAG_EnumVar: {
-                    _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingValue::TAG_Static: {
-                    _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingValue::TAG_Function: {
-                    _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
-                    break;
-                }
-            }
-            // - Macros
-            switch (pb.macro.binding.tag()) {
-                case ASTPathBindingMacro::TAG_Unbound: {
-                    break;
-                }
-                case ASTPathBindingMacro::TAG_MacroRules: {
-                    _add_item(sp, mod, IndexName::Macro, iData.name, i.vis, pb.macro, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingMacro::TAG_ProcMacro: {
-                    _add_item(sp, mod, IndexName::Macro, iData.name, i.vis, pb.macro, !allowCollide);
-                    break;
-                }
-                case ASTPathBindingMacro::TAG_ProcMacroAttribute: {
-                    TODO(sp, "ProcMacroAttribute import");
-                    break;
-                }
-                case ASTPathBindingMacro::TAG_ProcMacroDerive: {
-                    TODO(sp, "ProcMacroDerive import");
-                    break;
-                }
-            }
             } else {
                 if (i.vis.ty() != ASTVisibility::Ty::Private) {
                     hasPubWildcard = true;
@@ -4650,7 +3862,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     break;
                 }
             }
-            _add_item_type( sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested );
+            _add_item_type(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested);
         }
     }
     for (const auto& it : hmod.valueItems) {
@@ -4714,7 +3926,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     break;
                 }
             }
-            _add_item_value( sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested );
+            _add_item_value(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested);
         }
     }
     for (const auto& it : hmod.macroItems) {
@@ -4746,7 +3958,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     break;
                 }
             }
-            _add_item(sp, dstMod, IndexName::Macro, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested );
+            _add_item(sp, dstMod, IndexName::Macro, it.first, vis, mv$(pb), false, fromPrelude, /*from_glob=*/true, nested);
         }
     }
 }
@@ -4978,14 +4190,18 @@ void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, A
                 break;
             }
             case HIRTypeItem::TAG_Enum: {
-                if (i != info.nodes.size() - 2) { BUG(sp, "Path " << path << " pointed to non-module in component " << i); }
+                if (i != info.nodes.size() - 2) {
+                    BUG(sp, "Path " << path << " pointed to non-module in component " << i);
+                }
                 // Lazy, not checking
                 return;
             }
             case HIRTypeItem::TAG_Trait: {
                 // An associated item of a trait, which resolution handles where
                 // the path is written out.
-                if (i != info.nodes.size() - 2) { BUG(sp, "Path " << path << " pointed to non-module in component " << i); }
+                if (i != info.nodes.size() - 2) {
+                    BUG(sp, "Path " << path << " pointed to non-module in component " << i);
+                }
                 return;
             }
             case HIRTypeItem::TAG_Module: {
@@ -5085,8 +4301,8 @@ bool ResolveIndexModuleNormalisePath(const ASTCrate& crate, const Span& sp, ASTP
             return ResolveIndexModuleNormalisePath(crate, sp, path, loc);
         } else {
             switch (ie.path.bindings.type.binding.tag()) {
-default:
-                BUG(sp, "Path " << path << " pointed to non-module " << ie.path);
+                default:
+                    BUG(sp, "Path " << path << " pointed to non-module " << ie.path);
                 case ASTPathBindingType::TAG_Module: {
                     auto& e = ie.path.bindings.type.binding.as_Module();
                     mod = e.module_;
@@ -5194,7 +4410,6 @@ void ResolveIndexModuleNormalise(const ASTCrate& crate, const Span& modSpan, AST
 }
 
 void ResolveIndexModuleExportedMacros(ASTCrate& crate, const Span& modSpan, ASTModule& mod) {
-
     if (&mod != &crate.rootModule_) {
         for (const auto& item : mod.macros()) {
             if (item.data->exported) {
@@ -5250,18 +4465,9 @@ namespace {
         const ASTPath* path;
         const ActiveUseResolution* parent;
 
-        ActiveUseResolution(UseResolutionContext& context, const ASTPath& path)
-            : context(context)
-            , path(&path)
-            , parent(context.activeUse)
-        {
-            context.activeUse = this;
-        }
+        ActiveUseResolution(UseResolutionContext& context, const ASTPath& path);
 
-        ~ActiveUseResolution() {
-            assert(context.activeUse == this);
-            context.activeUse = parent;
-        }
+        ~ActiveUseResolution();
     };
 
     bool isUseResolutionActive(const UseResolutionContext& context, const ASTPath& path) {
@@ -5468,7 +4674,6 @@ ASTPath ResolveUseAbsolutisePath(UseResolutionContext& resolveContext, const Spa
 }
 
 void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::span<const ASTModule*> parentModules) {
-
     for (auto& useStmt : mod.items) {
         if (!useStmt->data.is_Use()) {
             continue;
@@ -5477,7 +4682,6 @@ void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& setting
 
         const Span& span = useStmtData.sp;
         for (auto& useEnt : useStmtData.entries) {
-
             useEnt.path = ResolveUseAbsolutisePath(resolveContext, span, settings, crate, path, useEnt.path);
             if (!useEnt.path.cls.is_Absolute()) {
                 BUG(span, "Use path is not absolute after absolutisation");
@@ -5560,8 +4764,8 @@ void ResolveUseMod(UseResolutionContext& resolveContext, const Settings& setting
     for (auto& ip : mod.items) {
         auto& i = *ip;
         switch (i.data.tag()) {
-default:
-            break;
+            default:
+                break;
             case ASTItem::TAG_Module: {
                 auto& e = i.data.as_Module();
                 ResolveUseMod(resolveContext, settings, crate, e, path + i.name);
@@ -5573,13 +4777,19 @@ default:
                     switch ((*i.data).tag()) {
                         case ASTItem::TAG_Function: {
                             auto& e = (*i.data).as_Function();
-                            if (e.delegation() && e.delegation()->body.isValid()) { e.delegation()->body.node().visit(exprIter); }
-                            if (e.code().isValid()) { e.code().node().visit(exprIter); }
+                            if (e.delegation() && e.delegation()->body.isValid()) {
+                                e.delegation()->body.node().visit(exprIter);
+                            }
+                            if (e.code().isValid()) {
+                                e.code().node().visit(exprIter);
+                            }
                             break;
                         }
                         case ASTItem::TAG_Static: {
                             auto& e = (*i.data).as_Static();
-                            if (e.value().isValid()) { e.value().node().visit(exprIter); }
+                            if (e.value().isValid()) {
+                                e.value().node().visit(exprIter);
+                            }
                             break;
                         }
                         default: {
@@ -5606,13 +4816,19 @@ default:
                         }
                         case ASTItem::TAG_Function: {
                             auto& e = ti.data.as_Function();
-                            if (e.delegation() && e.delegation()->body.isValid()) { e.delegation()->body.node().visit(exprIter); }
-                            if (e.code().isValid()) { e.code().node().visit(exprIter); }
+                            if (e.delegation() && e.delegation()->body.isValid()) {
+                                e.delegation()->body.node().visit(exprIter);
+                            }
+                            if (e.code().isValid()) {
+                                e.code().node().visit(exprIter);
+                            }
                             break;
                         }
                         case ASTItem::TAG_Static: {
                             auto& e = ti.data.as_Static();
-                            if (e.value().isValid()) { e.value().node().visit(exprIter); }
+                            if (e.value().isValid()) {
+                                e.value().node().visit(exprIter);
+                            }
                             break;
                         }
                         default: {
@@ -5855,7 +5071,7 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                             break;
                         }
                     }
-                    if( ! rv.macro.is_Unbound() ) {
+                    if (!rv.macro.is_Unbound()) {
                         break;
                     }
                 }
@@ -6057,8 +5273,7 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                             }
                         }
                         break;
-                    }
-break;
+                    } break;
                     default:
                         BUG(sp2, "Wildcard import expanded to an invalid item class - " << bindings->type.binding.tagStr());
                         break;
@@ -6092,16 +5307,19 @@ namespace {
             if (it->second->ent.is_Module()) {
                 auto& mod = it->second->ent.as_Module();
                 hmod = &mod;
-            }
-            else if (it->second->ent.is_Import()) {
+            } else if (it->second->ent.is_Import()) {
                 auto& import = it->second->ent.as_Import();
-                hmod = getHirModByPath(sp, crate, import.path); if (!hmod) BUG(sp, "Import in module position didn't resolve as a module - " << import.path);
+                hmod = getHirModByPath(sp, crate, import.path);
+                if (!hmod) {
+                    BUG(sp, "Import in module position didn't resolve as a module - " << import.path);
+                }
             } else if (it->second->ent.is_Enum()) {
                 auto& enm = it->second->ent.as_Enum();
                 if (&node == &path.components().back()) {
                     is_enum = true;
                     return &enm;
-                } BUG(sp, "");
+                }
+                BUG(sp, "");
             } else {
                 if (&node == &path.components().back()) {
                     return nullptr;
@@ -6149,8 +5367,8 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
         }
         ap.nodes.push_back(it->first);
         switch (it->second->ent.tag()) {
-default:
-            ERROR(span, E0000, "Unexpected item type in import " << path << " @ " << i << " - " << it->second->ent.tagStr());
+            default:
+                ERROR(span, E0000, "Unexpected item type in import " << path << " @ " << i << " - " << it->second->ent.tagStr());
             case HIRTypeItem::TAG_Import: {
                 auto& e = it->second->ent.as_Import();
                 // TODO: This is kinda like a duplicate of Resolve_Absolute_Path_BindAbsolute__hir_from ?
@@ -6543,8 +5761,8 @@ ASTPath::Bindings ResolveUseGetBinding(
             b = ResolveUseGetBindingMod(resolveContext, span, settings, crate, sourceModPath, *mod, node.name(), innerParentModules, /*types_only=*/true);
         }
         switch (b.type.binding.tag()) {
-default:
-            ERROR(span, E0000, "Unexpected item type " << b.type.binding.tagStr() << " in import of " << path);
+            default:
+                ERROR(span, E0000, "Unexpected item type " << b.type.binding.tagStr() << " in import of " << path);
             case ASTPathBindingType::TAG_Unbound: {
                 // During speculative glob resolution a miss just skips the glob; the recursion
                 // guard can hide a module that a later direct resolution will find.
@@ -6660,17 +5878,17 @@ default:
                         ERROR(span, E0000, "Unknown enum variant " << path);
                     }
                     variantIndex = static_cast<unsigned>(idx);
-                switch (enum_.data.tag()) {
-                    case HIREnumClass::TAG_Value: {
-                        isValue = true;
-                        break;
+                    switch (enum_.data.tag()) {
+                        case HIREnumClass::TAG_Value: {
+                            isValue = true;
+                            break;
+                        }
+                        case HIREnumClass::TAG_Data: {
+                            auto& ve = enum_.data.as_Data();
+                            isValue = !ve[idx].isStruct;
+                            break;
+                        }
                     }
-                    case HIREnumClass::TAG_Data: {
-                        auto& ve = enum_.data.as_Data();
-                        isValue = !ve[idx].isStruct;
-                        break;
-                    }
-                }
                 } else {
                     const auto& enum_ = *e.enum_;
                     for (;;) {
@@ -6690,7 +5908,6 @@ default:
                     if (variantIndex == enum_.variants().size()) {
                         ERROR(span, E0000, "Unknown enum variant '" << node2.name() << "'");
                     }
-
                 }
                 if (isValue) {
                     rv.value.set(b.type.path + variantName, ASTPathBindingValue::make_EnumVar({e.enum_, variantIndex, e.hir}));
@@ -6731,3 +5948,854 @@ default:
 
 // Bodies of the generated local unions (see resolve_ctx_ent.tu).
 #include "resolve_ctx_ent_tu.cpp"
+
+auto GenericSlot::toBinding() const -> unsigned int {
+    if ((level == Level::Method || level == Level::Hrb) && index != 0xFFFF) {
+        return (unsigned int)index + 256 * static_cast<unsigned int>(level);
+    } else {
+        return (unsigned int)index;
+    }
+}
+
+auto Context::typePool() const -> ObjPool& {
+    return *crate.pool;
+}
+
+Context::Context(const Settings& settings, const ASTCrate& crate, const ASTModule& mod)
+    : settings(settings)
+    , crate(crate)
+    , mod(mod)
+    , varCount(~0u)
+    , blockLevel(0)
+    , iblTargetGenerics(nullptr)
+{
+}
+
+auto Context::push(const ASTHigherRankedBounds& params) -> void {
+    auto e = Ent::make_Generic({GenericSlot::Level::Hrb, nullptr /*, &params*/});
+    auto& data = e.as_Generic();
+
+    for (size_t i = 0; i < params.lifetimes.size(); i++) {
+        data.lifetimes.push_back(NamedI<GenericSlot>{params.lifetimes[i].name(), GenericSlot{GenericSlot::Level::Hrb, static_cast<unsigned short>(i)}});
+    }
+    for (size_t i = 0; i < params.types.size(); i++) {
+        data.types.push_back(Named<GenericSlot>{params.types[i], GenericSlot{GenericSlot::Level::Hrb, static_cast<unsigned short>(i)}});
+    }
+
+    nameContext.push_back(mv$(e));
+}
+
+auto Context::checkGenericNotShadowed(const Span& sp, const RcString& name, const char* what) const -> void {
+    for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
+        const auto* g = it->opt_Generic();
+        if (!g) {
+            continue;
+        }
+        if (g->level == GenericSlot::Level::Hrb) {
+            // A `for<..>` binder is its own scope, and shadowing one is
+            // a lint in rustc rather than an error.
+            continue;
+        }
+        // The lists spell their names differently: a lifetime and a
+        // const keep the identifier they were written with, a type just
+        // its name.
+        auto namedI = [&](const auto& list) {
+            for (const auto& v : list) {
+                if (v.name.name == name) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        auto named = [&](const auto& list) {
+            for (const auto& v : list) {
+                if (v.name == name) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        if (namedI(g->lifetimes) || named(g->types) || namedI(g->constants)) {
+            ERROR(sp, E0000, "the name `" << name << "` is already used for a generic parameter in this item's generic parameters");
+        }
+    }
+}
+
+auto Context::push(/*const */ ASTGenericParams& params, GenericSlot::Level level, bool hasSelf, bool allowShadowing) -> void {
+    auto e = Ent::make_Generic({level, &params});
+    auto& data = e.as_Generic();
+
+    if (hasSelf) {
+        data.types.push_back(Named<GenericSlot>{selfName(), GenericSlot{level, GENERICSelf}});
+        nameContext.push_back(Ent::make_ConcreteSelf(nullptr));
+    }
+    if (!params.params.empty()) {
+        unsigned short lftIdx = 0;
+        unsigned short tyIdx = 0;
+        unsigned short valIdx = 0;
+        for (const auto& e : params.params) {
+            switch (e.tag()) {
+                case GenericParam::TAG_None: {
+                    break;
+                }
+                case GenericParam::TAG_Lifetime: {
+                    auto& lft = e.as_Lifetime();
+                    if (!allowShadowing) {
+                        checkGenericNotShadowed(Span(), lft.name().name, "lifetime");
+                    }
+                    data.lifetimes.push_back(NamedI<GenericSlot>{lft.name(), GenericSlot{level, lftIdx}});
+                    lftIdx += 1;
+                    break;
+                }
+                case GenericParam::TAG_Type: {
+                    auto& tyDef = e.as_Type();
+                    if (!allowShadowing) {
+                        checkGenericNotShadowed(Span(), tyDef.name(), "type");
+                    }
+                    data.types.push_back(Named<GenericSlot>{tyDef.name(), GenericSlot{level, tyIdx}});
+                    tyIdx += 1;
+                    break;
+                }
+                case GenericParam::TAG_Value: {
+                    auto& valDef = e.as_Value();
+                    if (!allowShadowing) {
+                        checkGenericNotShadowed(Span(), valDef.name().name, "const");
+                    }
+                    data.constants.push_back(NamedI<GenericSlot>{valDef.name(), GenericSlot{level, valIdx}});
+                    valIdx += 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    nameContext.push_back(mv$(e));
+}
+
+auto Context::pop(const ASTHigherRankedBounds&) -> void {
+    if (!nameContext.back().is_Generic()) {
+        BUG(Span(), "resolve/absolute.cpp - Context::pop(GenericParams) - Mismatched pop");
+    }
+    nameContext.pop_back();
+}
+
+auto Context::pop(const ASTGenericParams&, bool hasSelf) -> void {
+    if (!nameContext.back().is_Generic()) {
+        BUG(Span(), "resolve/absolute.cpp - Context::pop(GenericParams) - Mismatched pop");
+    }
+    nameContext.pop_back();
+    if (hasSelf) {
+        if (!nameContext.back().is_ConcreteSelf()) {
+            BUG(Span(), "resolve/absolute.cpp - Context::pop(GenericParams) - Mismatched pop");
+        }
+        nameContext.pop_back();
+    }
+}
+
+auto Context::push(const ASTModule& mod) -> void {
+    nameContext.push_back(Ent::make_Module({&mod}));
+}
+
+auto Context::pop(const ASTModule& mod) -> void {
+    if (!nameContext.back().is_Module()) {
+        BUG(Span(), "resolve/absolute.cpp - Context::pop(GenericParams) - Mismatched pop");
+    }
+    nameContext.pop_back();
+}
+
+auto Context::enterRootblock() -> RootBlockScope {
+    return RootBlockScope(*this, 0);
+}
+
+auto Context::clearRootblock() -> RootBlockScope {
+    return RootBlockScope(*this, ~0u);
+}
+
+auto Context::pushSelf(ASTType*& tr) -> void {
+    // Store the address of the caller's (stable) self-type slot, NOT a
+    // by-value parameter copy — the ConcreteSelf entry must stay valid
+    // (and see in-place resolution of the self type) until popSelf.
+    nameContext.push_back(Ent::make_ConcreteSelf(&tr));
+}
+
+auto Context::popSelf(ASTType* tr) -> void {
+    if (nameContext.back().is_ConcreteSelf()) {
+        nameContext.pop_back();
+    } else {
+        BUG(Span(), "resolve/absolute.cpp - Context::pop(ASTType*) - Mismatched pop");
+    }
+}
+
+auto Context::getSelf() const -> ::ASTType* {
+    for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
+        switch ((*it).tag()) {
+            case Ent::TAG_ConcreteSelf: {
+                auto& e = (*it).as_ConcreteSelf();
+                if (false && e) {
+                    return (*e)->clone();
+                } else {
+                    return ::mkType(typePool(), Span(), selfName(), GENERICSelf);
+                }
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+    }
+
+    TODO(Span(), "Error when get_self called with no self");
+}
+
+auto Context::getSelfOpt() const -> ::ASTType* const* {
+    for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
+        if (const auto* e = it->opt_ConcreteSelf()) {
+            return *e;
+        }
+    }
+    return nullptr;
+}
+
+auto Context::pushBlock() -> void {
+    blockLevel += 1;
+}
+
+auto Context::pushMacroDefinition(unsigned int definitionId, const Ident::Hygiene& tokenHygiene, const Ident::Hygiene& definitionHygiene) -> void {
+    assert(blockLevel > 0);
+    nameContext.push_back(Ent::make_MacroDefinition({blockLevel, definitionId, tokenHygiene, definitionHygiene}));
+}
+
+auto Context::pushVar(const Span& sp, const Ident& name) -> unsigned int {
+    if (varCount == ~0u) {
+        BUG(sp, "Assigning local when there's no variable context");
+    }
+    // If this variable is defined within a stack entry, then use it
+    ASSERT_BUG(sp, !patternStack.empty(), "Pushing a variable with no active scopes");
+    bool alreadyDefined = patternStack.back().firstArmDone;
+    for (auto it = patternStack.rbegin(); it != patternStack.rend(); ++it) {
+        if (it->firstArmVariables.count(name)) {
+            alreadyDefined = true;
+            break;
+        }
+    }
+    if (!patternStack.back().createdVariables.insert(name).second) {
+        ERROR(sp, E0000, "Duplicate definition of `" << name << "` in pattern arm");
+    }
+    // Are we currently in the second (or later) arm of a split pattern
+    if (alreadyDefined) {
+        if (!nameContext.back().is_VarBlock()) {
+            BUG(sp, "resolve/absolute.cpp - Context::push_var - No block");
+        }
+        auto& vb = nameContext.back().as_VarBlock();
+        // Work backwards, in case there are multiple bindings in the same scope.
+        for (const auto& v : ::reverse(vb.variables)) {
+            if (v.first == name) {
+                return v.second;
+            }
+        }
+        ERROR(sp, E0000, "Mismatched bindings in pattern (`" << name << "` wasn't in the first arm)");
+    } else {
+        assert(blockLevel > 0);
+        if (nameContext.empty() || !nameContext.back().is_VarBlock() || nameContext.back().as_VarBlock().level < blockLevel) {
+            nameContext.push_back(Ent::make_VarBlock({blockLevel, {}}));
+        }
+        auto& vb = nameContext.back().as_VarBlock();
+        assert(vb.level == blockLevel);
+        vb.variables.push_back(::std::make_pair(mv$(name), varCount));
+        varCount += 1;
+        assert(varCount >= vb.variables.size());
+        return varCount - 1;
+    }
+}
+
+auto Context::popBlock() -> void {
+    assert(blockLevel > 0);
+    while (!nameContext.empty()) {
+        if (const auto* e = nameContext.back().opt_VarBlock()) {
+            if (e->level != blockLevel) {
+                break;
+            }
+            nameContext.pop_back();
+        } else if (const auto* e = nameContext.back().opt_MacroDefinition()) {
+            if (e->level != blockLevel) {
+                break;
+            }
+            nameContext.pop_back();
+        } else {
+            break;
+        }
+    }
+    blockLevel -= 1;
+}
+
+auto Context::startPatbind() -> void {
+    assert(blockLevel > 0);
+    patternStack.push_back(PatternStackEnt());
+}
+
+auto Context::endPatbindArm(const Span& sp) -> void {
+    auto& e = patternStack.back();
+    if (e.firstArmDone) {
+        if (e.firstArmVariables != e.createdVariables) {
+            ERROR(sp, E0000, "Mismatched bindings in pattern - [" << e.firstArmVariables << "] != [" << e.createdVariables << "]");
+        }
+    } else {
+        e.firstArmVariables = std::move(e.createdVariables);
+        e.firstArmDone = true;
+    }
+    e.createdVariables.clear();
+}
+
+auto Context::endPatbind() -> void {
+    assert(!patternStack.empty());
+    // Propagate the created variables to the next level up.
+    if (patternStack.size() > 1) {
+        const auto& cur = patternStack[patternStack.size() - 1];
+        auto& next = patternStack[patternStack.size() - 2];
+        for (auto& var : cur.firstArmVariables) {
+            next.createdVariables.insert(std::move(var));
+        }
+    }
+    patternStack.pop_back();
+}
+
+auto Context::lookupModeMsg(LookupMode mode) -> const char* {
+    switch (mode) {
+        case LookupMode::Namespace:
+            return "path component";
+        case LookupMode::Type:
+            return "type name";
+        case LookupMode::PatternValue:
+            return "pattern constant";
+        case LookupMode::PatternType:
+            return "pattern type";
+        case LookupMode::Constant:
+            return "constant name";
+        case LookupMode::Variable:
+            return "variable name";
+    }
+    return "";
+}
+
+auto Context::lookup(const Span& sp, const RcString& name, const Ident::Hygiene& srcContext, LookupMode mode) const -> ASTPath {
+    auto rv = this->lookupOpt(sp, name, srcContext, mode);
+    if (!rv.isValid()) {
+        switch (mode) {
+            case LookupMode::Namespace:
+                ERROR(sp, E0000, "Couldn't find path component '" << name << "'");
+            case LookupMode::Type:
+                ERROR(sp, E0000, "Couldn't find type name '" << name << "'");
+            case LookupMode::PatternValue:
+                ERROR(sp, E0000, "Couldn't find pattern value '" << name << "'");
+            case LookupMode::PatternType:
+                ERROR(sp, E0000, "Couldn't find pattern type '" << name << "'");
+            case LookupMode::Constant:
+                ERROR(sp, E0000, "Couldn't find constant name '" << name << "'");
+            case LookupMode::Variable:
+                ERROR(sp, E0000, "Couldn't find variable name '" << name << "'");
+        }
+    }
+    return rv;
+}
+
+auto Context::checkUnambiguous(const Span& sp, const ASTModule& mod, const RcString& name, const ASTModule::IndexEnt& ent) -> void {
+    if (ent.ambiguous) {
+        ERROR(sp, E0000, "`" << name << "` is ambiguous: more than one glob import in " << mod.path() << " provides it");
+    }
+}
+
+auto Context::lookupInMod(const Span& sp, const ASTModule& mod, const RcString& name, LookupMode mode, ASTPath& path) -> bool {
+    switch (mode) {
+        case LookupMode::Namespace: {
+            auto v = mod.namespaceItems.find(name);
+            if (v != mod.namespaceItems.end()) {
+                checkUnambiguous(sp, mod, name, v->second);
+                path = ASTPath(v->second.path);
+                return true;
+            }
+        }
+            {
+                auto v = mod.typeItems.find(name);
+                if (v != mod.typeItems.end()) {
+                    checkUnambiguous(sp, mod, name, v->second);
+                    path = ASTPath(v->second.path);
+                    return true;
+                }
+            }
+            break;
+
+        case LookupMode::Type:
+        case LookupMode::PatternType: {
+            auto v = mod.typeItems.find(name);
+            if (v != mod.typeItems.end()) {
+                checkUnambiguous(sp, mod, name, v->second);
+                path = ASTPath(v->second.path);
+                return true;
+            }
+        }
+            // HACK: For `Enum::Var { .. }` patterns matching value variants
+            if (mode == LookupMode::PatternType) {
+                auto v = mod.valueItems.find(name);
+                if (v != mod.valueItems.end()) {
+                    const auto& b = v->second.path.bindings.value;
+                    if (/*const auto* be =*/b.binding.opt_EnumVar()) {
+                        checkUnambiguous(sp, mod, name, v->second);
+                        path = ASTPath(b);
+                        return true;
+                    }
+                }
+            }
+            break;
+        case LookupMode::PatternValue: {
+            auto v = mod.valueItems.find(name);
+            if (v != mod.valueItems.end()) {
+                const auto& b = v->second.path.bindings.value;
+                switch (b.binding.tag()) {
+                    case ASTPathBindingValue::TAG_EnumVar:
+                    case ASTPathBindingValue::TAG_Static:
+                        checkUnambiguous(sp, mod, name, v->second);
+                        path = ASTPath(v->second.path);
+                        return true;
+                    case ASTPathBindingValue::TAG_Struct: {
+                        const auto& be = b.binding.as_Struct();
+                        // TODO: Restrict this to unit-like structs
+                        if (be.struct_ && !be.struct_->data.is_Unit())
+                            ;
+                        else if (be.hir && !be.hir->data.is_Unit())
+                            ;
+                        else {
+                            checkUnambiguous(sp, mod, name, v->second);
+                            path = ASTPath(b);
+                            return true;
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            }
+        } break;
+        case LookupMode::Constant:
+        case LookupMode::Variable: {
+            auto v = mod.valueItems.find(name);
+            if (v != mod.valueItems.end()) {
+                checkUnambiguous(sp, mod, name, v->second);
+                path = ASTPath(v->second.path);
+                return true;
+            }
+        } break;
+    }
+    return false;
+}
+
+auto Context::lookupOpt(const Span& sp, const RcString& name, const Ident::Hygiene& srcContext, LookupMode mode) const -> ASTPath {
+    const auto itemName = srcContext.applyToItemName(name);
+    auto resolvedItemName = itemName;
+    auto lookupContext = srcContext;
+    // NOTE: src_context may provide a module to search
+    // TODO: This should be checked AFTER locals
+    if (srcContext.hasModPath()) {
+        const auto& mp = srcContext.modPath();
+        if (mp.crate != "") {
+            HIRSimplePath visPath{mp.crate, mp.ents};
+
+            Span sp;
+            // External crate path
+            ASSERT_BUG(sp, crate.externCrates.count(mp.crate), "Crate not loaded for " << mp);
+            const auto& extCrate = crate.externCrates.at(mp.crate);
+            const HIRModule* mod = &extCrate.hir->rootModule;
+            for (const auto& n : mp.ents) {
+                ASSERT_BUG(sp, mod->modItems.count(n), "Node `" << n << "` missing in path " << mp);
+                const auto& i = *mod->modItems.at(n);
+                ASSERT_BUG(sp, i.ent.is_Module(), "Node `" << n << "` not a module in path " << mp);
+                mod = &i.ent.as_Module();
+            }
+            ASTPath::Bindings bindings;
+            const HIRSimplePath* truePath = nullptr;
+            switch (mode) {
+                case LookupMode::Constant:
+                case LookupMode::PatternValue:
+                case LookupMode::Variable: {
+                    auto it = findHygienicItem(mod->valueItems, name, itemName);
+                    if (it != mod->valueItems.end()) {
+                        resolvedItemName = it->first;
+                        const auto* item = &it->second->ent;
+                        auto itemPath = ASTAbsolutePath(mp.crate, mp.ents) + resolvedItemName;
+                        if (item->is_Import()) {
+                            const auto& imp = item->as_Import();
+                            // Set the true path (so the returned path is canonical)
+                            truePath = &imp.path;
+
+                            auto itemPath = spToAp(imp.path) + resolvedItemName;
+                            if (imp.isVariant) {
+                                const auto& enm = crate.externCrates.at(imp.path.crateName()).hir->getEnumByPath(sp, imp.path, /*ignore_crate_name*/ true, /*ignore_last*/ true);
+                                bindings.value.set(itemPath, ASTPathBindingValue::make_EnumVar({nullptr, imp.idx, &enm}));
+                                break; // Break out of the switch
+                            } else {
+                                item = &crate.externCrates.at(imp.path.crateName()).hir->getValitemByPath(sp, imp.path, true);
+                            }
+                        }
+                        switch ((*item).tag()) {
+                            default:
+                                TODO(sp, "Bind value '" << name << "' for module path " << mp << " : " << item->tagStr());
+                            case HIRValueItem::TAG_Function: {
+                                bindings.value.set(itemPath, ASTPathBindingValue::make_Function({nullptr}));
+                                break;
+                            }
+                            case HIRValueItem::TAG_Static: {
+                                bindings.value.set(itemPath, ASTPathBindingValue::make_Static({nullptr}));
+                                break;
+                            }
+                        }
+                    }
+                } break;
+                case LookupMode::Namespace:
+                case LookupMode::PatternType:
+                case LookupMode::Type: {
+                    auto it = findHygienicItem(mod->modItems, name, itemName);
+                    if (it != mod->modItems.end()) {
+                        resolvedItemName = it->first;
+                        const auto* item = &it->second->ent;
+                        auto itemPath = ASTAbsolutePath(mp.crate, mp.ents) + resolvedItemName;
+                        if (item->is_Import()) {
+                            const auto& imp = item->as_Import();
+                            // Set the true path (so the returned path is canonical)
+                            truePath = &imp.path;
+
+                            auto itemPath = spToAp(imp.path) + resolvedItemName;
+                            if (imp.isVariant) {
+                                const auto& enm = crate.externCrates.at(imp.path.crateName()).hir->getEnumByPath(sp, imp.path, /*ignore_crate_name*/ true, /*ignore_last*/ true);
+                                bindings.type.set(itemPath, ASTPathBindingType::make_EnumVar({nullptr, imp.idx, &enm}));
+                                break; // Break out of the switch
+                            } else {
+                                item = &crate.externCrates.at(imp.path.crateName()).hir->getTypeitemByPath(sp, imp.path, true);
+                            }
+                        }
+                        switch ((*item).tag()) {
+                            default:
+                                TODO(sp, "Bind type/mod '" << name << "' for module path " << mp << " : " << item->tagStr());
+                            case HIRTypeItem::TAG_Module: {
+                                auto& e = (*item).as_Module();
+                                bindings.type.set(itemPath, ASTPathBindingType::make_Module({nullptr, {&extCrate, &e}}));
+                                break;
+                            }
+                            case HIRTypeItem::TAG_Trait: {
+                                bindings.type.set(itemPath, ASTPathBindingType::make_Trait({nullptr}));
+                                break;
+                            }
+                            case HIRTypeItem::TAG_TypeAlias: {
+                                bindings.type.set(itemPath, ASTPathBindingType::make_TypeAlias({nullptr}));
+                                break;
+                            }
+                            case HIRTypeItem::TAG_Struct: {
+                                bindings.type.set(itemPath, ASTPathBindingType::make_Struct({nullptr}));
+                                break;
+                            }
+                            case HIRTypeItem::TAG_Enum: {
+                                bindings.type.set(itemPath, ASTPathBindingType::make_Enum({nullptr}));
+                                break;
+                            }
+                            case HIRTypeItem::TAG_Union: {
+                                bindings.type.set(itemPath, ASTPathBindingType::make_Union({nullptr}));
+                                break;
+                            }
+                        }
+                    }
+                } break;
+            }
+            // If any bindings were populated, then generate a path
+            if (bindings.hasBinding()) {
+                auto rv = ASTPath(mp.crate, {});
+                if (truePath) {
+                    rv.cls.as_Absolute().crate = truePath->crateName();
+                    for (const auto& e : truePath->components()) {
+                        rv.nodes().push_back(e);
+                    }
+                } else {
+                    for (const auto& e : mp.ents) {
+                        rv.nodes().push_back(e);
+                    }
+                    rv.nodes().push_back(resolvedItemName);
+                }
+                rv.bindings = std::move(bindings);
+                return rv;
+            }
+            // Fall through
+        } else {
+            const ASTModule* mod = &crate.rootModule();
+            for (const auto& node : mp.ents) {
+                const ASTModule* next = nullptr;
+                if (node.c_str()[0] == '#') {
+                    char c;
+                    unsigned int idx;
+                    ::std::stringstream ss(node.c_str());
+                    ss >> c;
+                    ss >> idx;
+                    assert(idx < mod->anonMods().size());
+                    assert(mod->anonMods()[idx]);
+                    next = mod->anonMods()[idx].get();
+                } else {
+                    for (const auto& i : mod->items) {
+                        if (i->name == node) {
+                            next = &i->data.as_Module();
+                            break;
+                        }
+                    }
+                }
+                ASSERT_BUG(Span(), next, "Failed to find module `" << node << "` in " << mod->path() << " for " << mp);
+                mod = next;
+            }
+            ASTPath rv;
+            if (this->lookupInMod(sp, *mod, itemName, mode, rv) || (itemName != name && this->lookupInMod(sp, *mod, name, mode, rv))) {
+                return rv;
+            }
+        }
+    }
+    for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
+        switch ((*it).tag()) {
+            case Ent::TAG_Module: {
+                auto& e = (*it).as_Module();
+                ASTPath rv;
+                if (this->lookupInMod(sp, *e.mod, itemName, mode, rv) || (itemName != name && this->lookupInMod(sp, *e.mod, name, mode, rv))) {
+                    return rv;
+                }
+                break;
+            }
+            case Ent::TAG_ConcreteSelf: {
+                auto& e = (*it).as_ConcreteSelf();
+                if (name == selfName()) {
+                    switch (mode) {
+                        case LookupMode::PatternType:
+                        case LookupMode::Type:
+                        case LookupMode::Namespace: {
+                            if (static_cast<size_t>(nameContext.rend() - it) - 1 == this->selfCtorOnlyIdx) {
+                                break;
+                            }
+                            ASTPath rv(name);
+                            rv.bindings.type.set(ASTAbsolutePath(), ASTPathBindingType::make_TypeParameter({0xFFFF}));
+                            return rv;
+                        }
+                        case LookupMode::Constant:
+                        case LookupMode::Variable:
+                            // TODO: Ensure validity? (I.e. that `Self` is a unit or tuple struct
+                            if (const auto* p = (*e)->data.opt_Path()) {
+                                // HACK! If `Self` points to a `type`, look through it
+                                // - rustc-1.90.0-src/compiler/rustc_codegen_llvm/src/context.rs:675
+                                if (const auto* pbe = (**p).bindings.type.binding.opt_TypeAlias()) {
+                                    assert(pbe->alias_);
+                                    assert(pbe->alias_->type_->isPath());
+                                    return *pbe->alias_->type_->data.as_Path();
+                                }
+                                return **p;
+                            }
+                        default:
+                            break;
+                    }
+                }
+                break;
+            }
+            case Ent::TAG_VarBlock: {
+                auto& e = (*it).as_VarBlock();
+                assert(e.level <= blockLevel);
+                if (mode != LookupMode::Variable) {
+                    // ignore
+                } else {
+                    for (auto it2 = e.variables.rbegin(); it2 != e.variables.rend(); ++it2) {
+                        if (it2->first.name == name) {
+                        }
+                        if (it2->first.name == name && it2->first.hygiene.isVisible(lookupContext)) {
+                            ASTPath rv(name);
+                            rv.bindVariable(it2->second);
+                            return rv;
+                        }
+                    }
+                }
+                break;
+            }
+            case Ent::TAG_MacroDefinition: {
+                auto& e = (*it).as_MacroDefinition();
+                if (mode == LookupMode::Variable) {
+                    lookupContext.leaveMacroDefinition(typePool(), e.definitionId, e.tokenHygiene, e.definitionHygiene);
+                }
+                break;
+            }
+            case Ent::TAG_Generic: {
+                auto& e = (*it).as_Generic();
+                switch (mode) {
+                    case LookupMode::Type:
+                    case LookupMode::Namespace:
+                        for (auto it2 = e.types.rbegin(); it2 != e.types.rend(); ++it2) {
+                            if (it2->name == name) {
+                                ASTPath rv(name);
+                                rv.bindings.type.set(ASTAbsolutePath(), ASTPathBindingType::make_TypeParameter({it2->value.toBinding()}));
+                                return rv;
+                            }
+                        }
+                        break;
+                    case LookupMode::Variable:
+                    case LookupMode::Constant:
+                        for (auto it2 = e.constants.rbegin(); it2 != e.constants.rend(); ++it2) {
+                            if (it2->name.name == name) {
+                                ASTPath rv(name);
+                                rv.bindings.value.set(ASTAbsolutePath(), ASTPathBindingValue::make_Generic({it2->value.toBinding()}));
+                                return rv;
+                            }
+                        }
+                        break;
+                    default:
+                        // ignore.
+                        // TODO: Integer generics
+                        break;
+                }
+                break;
+            }
+        }
+    }
+
+    // Top-level module
+    ASTPath rv;
+    if (this->lookupInMod(sp, mod, itemName, mode, rv) || (itemName != name && this->lookupInMod(sp, mod, name, mode, rv))) {
+        return rv;
+    }
+
+    switch (mode) {
+        case LookupMode::Namespace:
+        case LookupMode::Type: {
+            // Look up primitive types
+            auto ct = coretypeFromstring(name.c_str());
+            if (ct != CORETYPE_INVAL) {
+                return ASTPath::newUfcsTy(mkType(typePool(), Span(), ct), ::std::vector<ASTPathNode>());
+            }
+        } break;
+        default:
+            break;
+    }
+
+    // #![feature(extern_prelude)] - 2018-style extern paths
+    if (mode == LookupMode::Namespace /*&& m_crate.has_feature("extern_prelude")*/) {
+        auto it = this->settings.implicitCrates.find(name);
+        if (it != this->settings.implicitCrates.end()) {
+            return ASTPath(it->second, {});
+        }
+    }
+
+    return ASTPath();
+}
+
+#ifdef FLAG_CONST_GENERIC
+    #undef FLAG_CONST_GENERIC
+#endif
+#define FLAG_CONST_GENERIC (1u << 31)
+
+auto Context::lookupLocal(const Span& sp, const RcString name, LookupMode mode) -> unsigned int {
+    for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
+        switch ((*it).tag()) {
+            case Ent::TAG_Module: {
+                break;
+            }
+            case Ent::TAG_ConcreteSelf: {
+                break;
+            }
+            case Ent::TAG_VarBlock: {
+                auto& e = (*it).as_VarBlock();
+                if (mode == LookupMode::Variable) {
+                    for (auto it2 = e.variables.rbegin(); it2 != e.variables.rend(); ++it2) {
+                        // TODO: Hyginic lookup?
+                        if (it2->first.name == name) {
+                            return it2->second;
+                        }
+                    }
+                }
+                break;
+            }
+            case Ent::TAG_MacroDefinition: {
+                break;
+            }
+            case Ent::TAG_Generic: {
+                auto& e = (*it).as_Generic();
+                switch (mode) {
+                    case LookupMode::Type:
+                        for (auto it2 = e.types.rbegin(); it2 != e.types.rend(); ++it2) {
+                            if (it2->name == name) {
+                                return it2->value.toBinding();
+                            }
+                        }
+                        break;
+                    case LookupMode::Variable:
+                        for (auto it2 = e.constants.rbegin(); it2 != e.constants.rend(); ++it2) {
+                            if (it2->name.name == name) {
+                                //TODO(sp, "Return a reference to a constant generic '" << name << "'");
+                                // Need to disambiguate it... could set a high bit
+                                return it2->value.toBinding() | FLAG_CONST_GENERIC;
+                            }
+                        }
+                        break;
+                    default:
+                        // ignore.
+                        // TODO: Integer generics
+                        break;
+                }
+                break;
+            }
+        }
+    }
+
+    ERROR(sp, E0000, "Unable to find local " << (mode == LookupMode::Variable ? "variable" : "type") << " '" << name << "'");
+}
+
+#undef FLAG_CONST_GENERIC
+
+auto Context::cloneMod() const -> Context {
+    auto rv = Context(this->settings, this->crate, this->mod);
+    for (const auto& v : nameContext) {
+        if (const auto* e = v.opt_Module()) {
+            rv.nameContext.push_back(Ent::make_Module(*e));
+        }
+    }
+    // An item nested in a method still reaches the `Self` constructor:
+    // rustc deprecated that but still accepts it, and only where the
+    // outer item is not generic -- a generic there would name a
+    // parameter this item does not have. `Self` as a type is not
+    // carried over, so only a value lookup answers here.
+    if (const auto* selfTy = this->getSelfOpt()) {
+        if (*selfTy && (*selfTy)->isPath()) {
+            const auto& path = (*selfTy)->path();
+            bool isConcrete = true;
+            // A local path is a bare name, so it carries no arguments.
+            if (!path.cls.is_Local()) {
+                for (const auto& node : path.nodes()) {
+                    isConcrete = isConcrete && node.args().isEmpty();
+                }
+            }
+            if (isConcrete) {
+                rv.selfCtorOnlyIdx = rv.nameContext.size();
+                rv.nameContext.push_back(Ent::make_ConcreteSelf(const_cast<ASTType**>(selfTy)));
+            }
+        }
+    }
+    return rv;
+}
+
+Context::RootBlockScope::RootBlockScope(Context& ctxt, unsigned int val)
+    : ctxt(ctxt)
+    , oldVarcount(ctxt.varCount)
+{
+    ctxt.varCount = val;
+}
+
+Context::RootBlockScope::~RootBlockScope() {
+    ctxt.varCount = oldVarcount;
+}
+
+ActiveUseResolution::ActiveUseResolution(UseResolutionContext& context, const ASTPath& path)
+    : context(context)
+    , path(&path)
+    , parent(context.activeUse)
+{
+    context.activeUse = this;
+}
+
+ActiveUseResolution::~ActiveUseResolution() {
+    assert(context.activeUse == this);
+    context.activeUse = parent;
+}
