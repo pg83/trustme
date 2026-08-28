@@ -1,6 +1,6 @@
 #pragma once
 
-#include <memory>
+#include <iosfwd>
 
 class ASTExprNode;
 class ASTNodeVisitor;
@@ -11,13 +11,11 @@ class ASTExprNodeP {
     ASTExprNode* ptr;
 
 public:
-    ~ASTExprNodeP();
+    ~ASTExprNodeP() = default;
 
     ASTExprNodeP();
 
     ASTExprNodeP(ASTExprNode* node);
-
-    ASTExprNodeP(std::unique_ptr<ASTExprNode> node);
 
     ASTExprNodeP(ASTExprNodeP&& x)
         : ptr(x.ptr)
@@ -71,7 +69,7 @@ public:
 };
 
 class ASTExpr {
-    std::shared_ptr<ASTExprNode> node_;
+    ASTExprNode* node_;
 
 public:
     ASTExpr(ASTExprNodeP node);
@@ -83,14 +81,14 @@ public:
     }
 
     bool isValid() const {
-        return node_.get() != nullptr;
+        return node_ != nullptr;
     }
 
     const ASTExprNode& node() const;
 
     ASTExprNode& node();
 
-    std::shared_ptr<ASTExprNode> takeNode();
+    ASTExprNode* takeNode();
 
     void visitNodes(ASTNodeVisitor& v);
     void visitNodes(ASTNodeVisitor& v) const;

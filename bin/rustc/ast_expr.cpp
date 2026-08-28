@@ -4,18 +4,6 @@
 
 #include <cctype>
 
-ASTExprNodeP::~ASTExprNodeP() {
-    if (ptr) {
-        delete ptr;
-    }
-    ptr = nullptr;
-}
-
-ASTExprNodeP::ASTExprNodeP(std::unique_ptr<ASTExprNode> node)
-    : ptr(node.release())
-{
-}
-
 const char* ASTExprNodeP::typeName() const {
     return typeid(*ptr).name();
 }
@@ -57,7 +45,7 @@ ASTExpr ASTExpr::clone() const {
 }
 
 std::ostream& operator<<(std::ostream& os, const ASTExpr& pat) {
-    if (pat.node_.get()) {
+    if (pat.node_) {
         return os << *pat.node_;
     } else {
         return os << "/* null */";
@@ -241,9 +229,9 @@ unsigned int ASTExprNodeMacroDefinition::nodeKind() const {
 #define OPT_CLONE(node) (node.get() ? node->clone() : ASTExprNodeP())
 
 namespace {
-    static inline ASTExprNodeP mkExprnodep(const Span& pos, ASTExprNode* en) {
+    static inline ASTExprNodeP mkExprnodep(const Span& pos, ASTExprNodeP en) {
         en->setSpan(pos);
-        return ASTExprNodeP(en);
+        return en;
     }
 
     bool macroTokenNeedsSpace(eTokenType previous, eTokenType current) {
@@ -294,7 +282,7 @@ namespace {
         }
     }
 
-#define NEWNODE(type, ...) mkExprnodep(span(), new type(__VA_ARGS__))
+#define NEWNODE(type, ...) mkExprnodep(span(), makeAstExprNode<type>(pool() __VA_OPT__(,) __VA_ARGS__))
 
     void printFmtString(std::ostream& os, const std::string& s) {
         static const char* hex = "0123456789ABCDEF";

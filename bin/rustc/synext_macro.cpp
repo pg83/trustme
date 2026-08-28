@@ -22,6 +22,8 @@
 #include <cctype>
 #include <string_view>
 
+using namespace stl;
+
 namespace {
     struct FmtArgs {
         enum class Align {
@@ -158,8 +160,9 @@ namespace {
         };
 
         ThinVector<Capture> captures;
+        ObjPool& pool;
 
-        GenericAssertCaptureVisitor(RcString coreCrate, Ident::Hygiene hygiene);
+        GenericAssertCaptureVisitor(ObjPool& pool, RcString coreCrate, Ident::Hygiene hygiene);
 
         void manage(ASTExprNodeP& node);
 
@@ -1378,9 +1381,10 @@ auto CIterExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& 
         ERROR(sp, E0000, "iter! requires a plain closure");
     }
 
-    auto* generator = new ASTExprNodeGeneratorBlock(mv$(closure->code), closure->returnType, true, true);
+    auto generatorNode = makeAstExprNode<ASTExprNodeGeneratorBlock>(*crate.pool, mv$(closure->code), closure->returnType, true, true);
+    auto* generator = static_cast<ASTExprNodeGeneratorBlock*>(generatorNode.get());
     generator->setSpan(sp);
-    closure->code = ASTExprNodeP(generator);
+    closure->code = std::move(generatorNode);
     closure->returnType = mkType(*crate.pool, sp);
 
     return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
@@ -1501,7 +1505,7 @@ auto CLlvmAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrat
         ERROR(sp, E0000, "Unexpected token in asm! - " << lex.getToken());
     }
 
-    ASTExprNodeP rv = ASTExprNodeP(new ASTExprNodeAsm{mv$(templateText), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags)});
+    auto rv = makeAstExprNode<ASTExprNodeAsm>(*crate.pool, mv$(templateText), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags));
     return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
 }
 
@@ -1945,7 +1949,7 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         }
     }
 
-    ASTExprNodeP rv = ASTExprNodeP(new ASTExprNodeAsm2{mv$(options), mv$(lines), mv$(params)});
+    auto rv = makeAstExprNode<ASTExprNodeAsm2>(*crate.pool, mv$(options), mv$(lines), mv$(params));
     return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
 }
 
@@ -2008,8 +2012,9 @@ auto CNakedAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCra
     return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
 }
 
-GenericAssertCaptureVisitor::GenericAssertCaptureVisitor(RcString coreCrate, Ident::Hygiene hygiene)
-    : coreCrate(coreCrate)
+GenericAssertCaptureVisitor::GenericAssertCaptureVisitor(ObjPool& pool, RcString coreCrate, Ident::Hygiene hygiene)
+    : pool(pool)
+    , coreCrate(coreCrate)
     , hygiene(hygiene)
 {
 }
@@ -2128,13 +2133,13 @@ auto GenericAssertCaptureVisitor::visit(ASTExprNodeNamedValue& node) -> void {
     captures.push_back({ASTPath(node.path), name, captureName, localBindName, !consumed});
 
     if (consumed) {
-        ASTExprNodeBlock captureBlock;
-        captureBlock.setSpan(node.span());
-        captureBlock.pushStmt(makeTryCapture(captureName, localBindName, node.span()));
-        captureBlock.pushTailExpr(makeGeneratedValue(localBindName, node.span()));
-        *current = ASTExprNodeP(box$(ASTExprNodeDeref(ASTExprNodeP(box$(captureBlock)))));
+        auto captureBlock = makeAstExprNode<ASTExprNodeBlock>(pool);
+        captureBlock->setSpan(node.span());
+        static_cast<ASTExprNodeBlock&>(*captureBlock).pushStmt(makeTryCapture(captureName, localBindName, node.span()));
+        static_cast<ASTExprNodeBlock&>(*captureBlock).pushTailExpr(makeGeneratedValue(localBindName, node.span()));
+        *current = makeAstExprNode<ASTExprNodeDeref>(pool, std::move(captureBlock));
     } else {
-        *current = ASTExprNodeP(box$(ASTExprNodeDeref(makeGeneratedValue(localBindName, node.span()))));
+        *current = makeAstExprNode<ASTExprNodeDeref>(pool, makeGeneratedValue(localBindName, node.span()));
     }
     (*current)->setSpan(node.span());
 }
@@ -2153,14 +2158,17 @@ auto GenericAssertCaptureVisitor::visit(ASTExprNodeTuple& node) -> void {
 }
 
 auto GenericAssertCaptureVisitor::makeTryCapture(RcString captureName, RcString localBindName, const Span& sp) const -> ASTExprNodeP {
-    auto wrapper = ASTExprNodeP(box$(ASTExprNodeCallPath(ASTPath(ASTAbsolutePath(coreCrate, {RcString::newInterned("asserting"), RcString::newInterned("Wrapper")})), makeVec1(makeGeneratedValue(localBindName, sp)))));
+    auto wrapper = makeAstExprNode<ASTExprNodeCallPath>(
+        pool,
+        ASTPath(ASTAbsolutePath(coreCrate, {RcString::newInterned("asserting"), RcString::newInterned("Wrapper")})),
+        makeVec1(makeGeneratedValue(localBindName, sp)));
     wrapper->setSpan(sp);
 
-    auto wrapperRef = ASTExprNodeP(box$(ASTExprNodeUniOp(ASTExprNodeUniOp::REF, ASTExprNodeP(wrapper.release()))));
+    auto wrapperRef = makeAstExprNode<ASTExprNodeUniOp>(pool, ASTExprNodeUniOp::REF, std::move(wrapper));
     wrapperRef->setSpan(sp);
-    auto captureRef = ASTExprNodeP(box$(ASTExprNodeUniOp(ASTExprNodeUniOp::REFMUT, makeGeneratedValue(captureName, sp))));
+    auto captureRef = makeAstExprNode<ASTExprNodeUniOp>(pool, ASTExprNodeUniOp::REFMUT, makeGeneratedValue(captureName, sp));
     captureRef->setSpan(sp);
-    auto call = ASTExprNodeP(box$(ASTExprNodeCallMethod(ASTExprNodeP(wrapperRef.release()), ASTPathNode(hygiene, RcString::newInterned("try_capture")), makeVec1(ASTExprNodeP(captureRef.release())))));
+    auto call = makeAstExprNode<ASTExprNodeCallMethod>(pool, std::move(wrapperRef), ASTPathNode(hygiene, RcString::newInterned("try_capture")), makeVec1(std::move(captureRef)));
     call->setSpan(sp);
     return call;
 }
@@ -2170,7 +2178,7 @@ auto GenericAssertCaptureVisitor::generatedPath(RcString name) const -> ASTPath 
 }
 
 auto GenericAssertCaptureVisitor::makeGeneratedValue(RcString name, const Span& sp) const -> ASTExprNodeP {
-    auto value = ASTExprNodeP(box$(ASTExprNodeNamedValue(generatedPath(name))));
+    auto value = makeAstExprNode<ASTExprNodeNamedValue>(pool, generatedPath(name));
     value->setSpan(sp);
     return value;
 }
@@ -2239,7 +2247,7 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
                 conditionText.erase(conditionText.begin());
                 conditionText.pop_back();
             }
-            GenericAssertCaptureVisitor captureVisitor(crate.extCratenameCore, expansionHygiene);
+            GenericAssertCaptureVisitor captureVisitor(*crate.pool, crate.extCratenameCore, expansionHygiene);
             captureVisitor.manage(n);
 
             toks.push_back(Token(TOK_BRACE_OPEN));

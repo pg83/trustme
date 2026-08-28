@@ -259,7 +259,7 @@ namespace {
                         if (newPath == ASTPath()) {
                             auto newPath = context.lookupOpt(sp, p.nodes[0].name(), p.hygiene, Context::LookupMode::Constant);
                             if (newPath != ASTPath()) {
-                                ent = ASTPathParamEnt::make_Value(new ASTExprNodeNamedValue(std::move(newPath)));
+                                ent = ASTPathParamEnt::make_Value(makeAstExprNode<ASTExprNodeNamedValue>(context.typePool(), std::move(newPath)).release());
                                 auto _h = context.enterRootblock();
                                 ResolveAbsoluteExprNode(context, *ent.as_Value());
                             } else {
@@ -2890,7 +2890,7 @@ namespace {
                             }
                             case GenericParam::TAG_Value: {
                                 auto& e = param.as_Value();
-                                traitArgs.push_back(ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(e.name().name))));
+                                traitArgs.push_back(makeAstExprNode<ASTExprNodeNamedValue>(itemContext.typePool(), ASTPath(e.name().name)));
                                 break;
                             }
                         }
@@ -2909,7 +2909,7 @@ namespace {
             for (size_t i = 0; i < replacement.args().size(); i++) {
                 auto name = isMethod && i == 0 ? RcString::newInterned("self") : RcString::newInterned(FMT("arg" << i));
                 replacement.args()[i].pat = ASTPattern(ASTPattern::TagBind(), fcn.sp(), name);
-                ASTExprNodeP arg(new ASTExprNodeNamedValue(ASTPath(name)));
+                auto arg = makeAstExprNode<ASTExprNodeNamedValue>(itemContext.typePool(), ASTPath(name));
                 if (i == 0 && delegation->body.isValid()) {
                     arg = delegation->body.node().clone();
                     if (auto* block = cast<ASTExprNodeBlock>(arg.get()); block && !block->localMod && block->nodes.size() == 1 && !block->nodes.front().hasSemicolon) {
@@ -2938,12 +2938,12 @@ namespace {
                     const auto targetHirBorrow = targetHirFunction && (targetHirFunction->receiver == HIRFunction::Receiver::BorrowOwned || targetHirFunction->receiver == HIRFunction::Receiver::BorrowUnique || targetHirFunction->receiver == HIRFunction::Receiver::BorrowShared);
                     if (targetBorrow || targetHirBorrow) {
                         const bool isMut = targetBorrow ? targetFunction->args().front().ty->data.as_Borrow().isMut : targetHirFunction->receiver == HIRFunction::Receiver::BorrowUnique;
-                        arg = ASTExprNodeP(new ASTExprNodeUniOp(isMut ? ASTExprNodeUniOp::REFMUT : ASTExprNodeUniOp::REF, mv$(arg)));
+                        arg = makeAstExprNode<ASTExprNodeUniOp>(itemContext.typePool(), isMut ? ASTExprNodeUniOp::REFMUT : ASTExprNodeUniOp::REF, mv$(arg));
                     }
                 }
                 args.push_back(mv$(arg));
             }
-            replacement.setCode(ASTExpr(new ASTExprNodeCallPath(mv$(target), mv$(args))));
+            replacement.setCode(ASTExpr(makeAstExprNode<ASTExprNodeCallPath>(itemContext.typePool(), mv$(target), mv$(args))));
             fcn = mv$(replacement);
         }
         itemContext.push(fcn.params(), GenericSlot::Level::Method, /*hasSelf=*/false, /*allowShadowing=*/fromDelegation);

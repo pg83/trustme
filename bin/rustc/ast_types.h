@@ -244,7 +244,7 @@ ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, std::vector<AST
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, std::string abi, std::vector<ASTType*> args, bool isVariadic, ASTType* ret);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType, bool isPin = false);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTType* innerType);
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, std::shared_ptr<ASTExprNode> size);
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, ASTExprNode* size);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::UnsizedArray, Span sp, ASTType* innerType);
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Arg, Span sp, RcString name, unsigned int binding = ~0u);
 ASTType* mkType(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding = ~0u);

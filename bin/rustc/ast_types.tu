@@ -28,7 +28,7 @@ generate(
         ]),
         v("Array", fields=[
             ("ASTType*", "inner"),
-            ("std::shared_ptr<ASTExprNode>", "size"),
+            ("ASTExprNode*", "size"),
         ], doc="A nullptr size means an inferred size"),
         v("Slice", fields=[("ASTType*", "inner")]),
         v("Pattern", fields=[

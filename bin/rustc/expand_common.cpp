@@ -58,7 +58,7 @@ namespace {
     void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, unsigned int firstItem = 0);
     void ExpandExpr(const ExpandState& es, ASTExprNodeP& node);
     void ExpandExpr(const ExpandState& es, ASTExpr& node);
-    void ExpandExpr(const ExpandState& es, std::shared_ptr<ASTExprNode>& node);
+    void ExpandExpr(const ExpandState& es, ASTExprNode*& node);
     void ExpandPath(const ExpandState& es, ASTModule& mod, ASTPath& p);
     void ExpandPathParams(const ExpandState& es, ASTModule& mod, ASTPathParams& params);
 
@@ -77,6 +77,11 @@ namespace {
         CExpandExpr(const ExpandState& es);
 
         ~CExpandExpr();
+
+        template <typename T, typename... Args>
+        ASTExprNodeP makeNode(Args&&... args) {
+            return makeAstExprNode<T>(*crate.pool, std::forward<Args>(args)...);
+        }
 
         ASTModule& curMod();
 
@@ -880,11 +885,11 @@ namespace {
         visitor.visit(node);
     }
 
-    void ExpandExpr(const ExpandState& es, std::shared_ptr<ASTExprNode>& node) {
+    void ExpandExpr(const ExpandState& es, ASTExprNode*& node) {
         CExpandExpr visitor{es};
         node->visit(visitor);
         if (visitor.replacement) {
-            node.reset(visitor.replacement.release());
+            node = visitor.replacement.release();
         }
     }
 
@@ -2121,7 +2126,7 @@ auto CExpandExpr::visitMacro(ASTExprNodeMacro& node, std::vector<ASTExprNodeBloc
             ASSERT_BUG(node.span(), it != mod.macros().rend(), "macro_rules! definition was not installed");
             it->data->definitionHygiene = node.definitionHygiene;
             if (nodesOut) {
-                auto marker = ASTExprNodeP(new ASTExprNodeMacroDefinition(it->data->definitionId, it->data->hygiene, it->data->definitionHygiene));
+                auto marker = makeNode<ASTExprNodeMacroDefinition>(it->data->definitionId, it->data->hygiene, it->data->definitionHygiene);
                 marker->setSpan(node.span());
                 nodesOut->push_back({true, std::move(marker)});
             }
@@ -2137,7 +2142,7 @@ auto CExpandExpr::visitMacro(ASTExprNodeMacro& node, std::vector<ASTExprNodeBloc
                     ERROR(node.span(), E0000, "Unused tokens at the end of macro expansion - " << ttl->getToken());
                 }
             } else if (ttl->isMacroExpansionPlaceholder()) {
-                rv = ASTExprNodeP(new ASTExprNodeTuple({}));
+                rv = makeNode<ASTExprNodeTuple>(decltype(ASTExprNodeTuple::values)());
                 rv->setSpan(node.span());
             }
         } else {
@@ -2295,9 +2300,9 @@ auto CExpandExpr::visit(ASTExprNodeTry& node) -> void {
     auto coreCrate = crate.extCratenameCore;
     auto pathTry = getPath(coreCrate, "ops", "Try");
     auto pathTryFromOutput = ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathTry, {ASTPathNode(RcString::newInterned("from_output"))});
-    auto okNode = ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathTryFromOutput), ::makeVec1(mv$(node.inner))));
-    auto breakNode = ASTExprNodeP(new ASTExprNodeFlow(ASTExprNodeFlow::BREAK, loopName, mv$(okNode)));
-    this->replacement = ASTExprNodeP(new ASTExprNodeLoop(loopName, mv$(breakNode)));
+    auto okNode = makeNode<ASTExprNodeCallPath>(mv$(pathTryFromOutput), ::makeVec1(mv$(node.inner)));
+    auto breakNode = makeNode<ASTExprNodeFlow>(ASTExprNodeFlow::BREAK, loopName, mv$(okNode));
+    this->replacement = makeNode<ASTExprNodeLoop>(loopName, mv$(breakNode));
 }
 
 auto CExpandExpr::visit(ASTExprNodeAsm& node) -> void {
@@ -2356,14 +2361,14 @@ auto CExpandExpr::visit(ASTExprNodeFlow& node) -> void {
 
         auto yeeted = std::move(node.value);
         if (!yeeted) {
-            yeeted = ASTExprNodeP(new ASTExprNodeTuple(std::vector<ASTExprNodeP>()));
+            yeeted = makeNode<ASTExprNodeTuple>(decltype(ASTExprNodeTuple::values)());
             yeeted->setSpan(node.span());
         }
-        auto v = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathOpsYeet), ::makeVec1(std::move(yeeted))));
+        auto v = makeNode<ASTExprNodeCallPath>(ASTPath(pathOpsYeet), ::makeVec1(std::move(yeeted)));
         v->setSpan(node.span());
-        v = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathFromResidualFromResidual), ::makeVec1(std::move(v))));
+        v = makeNode<ASTExprNodeCallPath>(ASTPath(pathFromResidualFromResidual), ::makeVec1(std::move(v)));
         v->setSpan(node.span());
-        replacement = ASTExprNodeP(new ASTExprNodeFlow((tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), (tryStack.empty() ? RcString("") : tryStack.back()), std::move(v)));
+        replacement = makeNode<ASTExprNodeFlow>((tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), (tryStack.empty() ? RcString("") : tryStack.back()), std::move(v));
         replacement->setSpan(node.span());
     }
 }
@@ -2654,12 +2659,12 @@ auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
             BUG_ASSERT(v.slots.front().second);
             node.slot = std::move(v.slots.front().second);
         } else {
-            auto rv = new ASTExprNodeBlock();
-            rv->nodes.push_back({true, ASTExprNodeP(new ASTExprNodeLetBinding(std::move(pat), mkType(*parentExpandState.crate.pool, node.span()), std::move(node.value)))});
+            auto rv = makeNode<ASTExprNodeBlock>();
+            static_cast<ASTExprNodeBlock&>(*rv).nodes.push_back({true, makeNode<ASTExprNodeLetBinding>(std::move(pat), mkType(*parentExpandState.crate.pool, node.span()), std::move(node.value))});
             for (auto& slots : v.slots) {
-                rv->nodes.push_back({true, ASTExprNodeP(new ASTExprNodeAssign(ASTExprNodeAssign::NONE, std::move(slots.second), ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newLocal(std::move(slots.first))))))});
+                static_cast<ASTExprNodeBlock&>(*rv).nodes.push_back({true, makeNode<ASTExprNodeAssign>(ASTExprNodeAssign::NONE, std::move(slots.second), makeNode<ASTExprNodeNamedValue>(ASTPath::newLocal(std::move(slots.first))))});
             }
-            this->replacement = ASTExprNodeP(rv);
+            this->replacement = std::move(rv);
         }
     }
 }
@@ -2701,19 +2706,19 @@ auto CExpandExpr::visit(ASTExprNodeFor& node) -> void {
     auto pathIterator = getPath(coreCrate, "iter", "Iterator");
     std::vector<ASTExprNodeMatchArm> arms;
     arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), pathSome, ::makeVec1(mv$(node.pattern)))), {}, mv$(node.code)));
-    arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), node.span(), ASTPattern::Value::make_Named(pathNone))), {}, ASTExprNodeP(new ASTExprNodeFlow(ASTExprNodeFlow::BREAK, node.label, nullptr))));
+    arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), node.span(), ASTPattern::Value::make_Named(pathNone))), {}, makeNode<ASTExprNodeFlow>(ASTExprNodeFlow::BREAK, node.label, nullptr)));
 
-    auto nextReceiver = ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newRelative(iteratorHygiene, ::makeVec1(ASTPathNode(rcstringIt)))));
-    auto nextCall = node.isAwait ? ASTExprNodeP(new ASTExprNodeUniOp(ASTExprNodeUniOp::AWaitNext, mv$(nextReceiver))) : ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIterator, {ASTPathNode(rcstringNext)}), ::makeVec1(ASTExprNodeP(new ASTExprNodeUniOp(ASTExprNodeUniOp::REFMUT, mv$(nextReceiver))))));
-    auto nextMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(nextCall), mv$(arms)));
-    auto loop = ASTExprNodeP(new ASTExprNodeLoop(node.label, mv$(nextMatch)));
+    auto nextReceiver = makeNode<ASTExprNodeNamedValue>(ASTPath::newRelative(iteratorHygiene, ::makeVec1(ASTPathNode(rcstringIt))));
+    auto nextCall = node.isAwait ? makeNode<ASTExprNodeUniOp>(ASTExprNodeUniOp::AWaitNext, mv$(nextReceiver)) : makeNode<ASTExprNodeCallPath>(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIterator, {ASTPathNode(rcstringNext)}), ::makeVec1(makeNode<ASTExprNodeUniOp>(ASTExprNodeUniOp::REFMUT, mv$(nextReceiver))));
+    auto nextMatch = makeNode<ASTExprNodeMatch>(mv$(nextCall), mv$(arms));
+    auto loop = makeNode<ASTExprNodeLoop>(node.label, mv$(nextMatch));
 
-    auto intoIterCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIntoIterator, {ASTPathNode(node.isAwait ? rcstringIntoAsyncIter : rcstringIntoIter)}), ::makeVec1(mv$(node.value))));
-    auto outerMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(intoIterCall), ::makeVec1(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), Ident(iteratorHygiene, rcstringIt))), {}, mv$(loop)))));
+    auto intoIterCall = makeNode<ASTExprNodeCallPath>(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIntoIterator, {ASTPathNode(node.isAwait ? rcstringIntoAsyncIter : rcstringIntoIter)}), ::makeVec1(mv$(node.value)));
+    auto outerMatch = makeNode<ASTExprNodeMatch>(mv$(intoIterCall), ::makeVec1(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), Ident(iteratorHygiene, rcstringIt))), {}, mv$(loop))));
 
-    auto block = new ASTExprNodeBlock();
-    block->nodes.push_back({true, mv$(outerMatch)});
-    replacement.reset(block);
+    auto block = makeNode<ASTExprNodeBlock>();
+    static_cast<ASTExprNodeBlock&>(*block).nodes.push_back({true, mv$(outerMatch)});
+    replacement = std::move(block);
     replacement->setSpan(node.span());
 }
 
@@ -3010,15 +3015,15 @@ auto CExpandExpr::visit(ASTExprNodeBinOp& node) -> void {
             if (node.left && node.right) {
                 values.push_back({{}, rcstringStart, mv$(node.left)});
                 values.push_back({{}, rcstringEnd, mv$(node.right)});
-                replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRange), nullptr, mv$(values)));
+                replacement = makeNode<ASTExprNodeStructLiteral>(mv$(pathRange), nullptr, mv$(values));
             } else if (node.left) {
                 values.push_back({{}, rcstringStart, mv$(node.left)});
-                replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeFrom), nullptr, mv$(values)));
+                replacement = makeNode<ASTExprNodeStructLiteral>(mv$(pathRangeFrom), nullptr, mv$(values));
             } else if (node.right) {
                 values.push_back({{}, rcstringEnd, mv$(node.right)});
-                replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeTo), nullptr, mv$(values)));
+                replacement = makeNode<ASTExprNodeStructLiteral>(mv$(pathRangeTo), nullptr, mv$(values));
             } else {
-                replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeFull), nullptr, mv$(values)));
+                replacement = makeNode<ASTExprNodeStructLiteral>(mv$(pathRangeFull), nullptr, mv$(values));
             }
             replacement->setSpan(node.span());
             break;
@@ -3033,13 +3038,13 @@ auto CExpandExpr::visit(ASTExprNodeBinOp& node) -> void {
                 values.push_back({{}, rcstringStart, mv$(node.left)});
                 values.push_back({{}, rcstringEnd, mv$(node.right)});
                 if (!newRange) {
-                    values.push_back({{}, RcString::newInterned("exhausted"), ASTExprNodeP(new ASTExprNodeBool(false))});
+                    values.push_back({{}, RcString::newInterned("exhausted"), makeNode<ASTExprNodeBool>(false)});
                 }
-                replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeInclusiveNonEmpty), nullptr, mv$(values)));
+                replacement = makeNode<ASTExprNodeStructLiteral>(mv$(pathRangeInclusiveNonEmpty), nullptr, mv$(values));
             } else {
                 ASTExprNodeStructLiteral::tValues values;
                 values.push_back({{}, rcstringEnd, mv$(node.right)});
-                replacement.reset(new ASTExprNodeStructLiteral(mv$(pathRangeToInclusive), nullptr, mv$(values)));
+                replacement = makeNode<ASTExprNodeStructLiteral>(mv$(pathRangeToInclusive), nullptr, mv$(values));
             }
             replacement->setSpan(node.span());
             break;
@@ -3054,14 +3059,14 @@ auto CExpandExpr::visit(ASTExprNodeUniOp& node) -> void {
     if (node.type == ASTExprNodeUniOp::PinBorrow || node.type == ASTExprNodeUniOp::PinBorrowMut) {
         const bool isMut = node.type == ASTExprNodeUniOp::PinBorrowMut;
         auto pathNewUnchecked = getPath(crate.extCratenameCore, "pin", "Pin", "new_unchecked");
-        auto borrow = ASTExprNodeP(new ASTExprNodeUniOp(isMut ? ASTExprNodeUniOp::REFMUT : ASTExprNodeUniOp::REF, mv$(node.value)));
+        auto borrow = makeNode<ASTExprNodeUniOp>(isMut ? ASTExprNodeUniOp::REFMUT : ASTExprNodeUniOp::REF, mv$(node.value));
         borrow->setSpan(node.span());
-        auto call = ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathNewUnchecked), ::makeVec1(mv$(borrow))));
+        auto call = makeNode<ASTExprNodeCallPath>(mv$(pathNewUnchecked), ::makeVec1(mv$(borrow)));
         call->setSpan(node.span());
-        auto block = new ASTExprNodeBlock();
-        block->blockType = ASTExprNodeBlock::Type::Unsafe;
-        block->nodes.push_back({false, mv$(call)});
-        replacement.reset(block);
+        auto block = makeNode<ASTExprNodeBlock>();
+        static_cast<ASTExprNodeBlock&>(*block).blockType = ASTExprNodeBlock::Type::Unsafe;
+        static_cast<ASTExprNodeBlock&>(*block).nodes.push_back({false, mv$(call)});
+        replacement = std::move(block);
         replacement->setSpan(node.span());
         return;
     }
@@ -3084,10 +3089,10 @@ auto CExpandExpr::visit(ASTExprNodeUniOp& node) -> void {
             auto pathFromResidualFromResidual = getPath(coreCrate, "ops", "FromResidual", "from_residual");
 
             std::vector<ASTExprNodeMatchArm> arms;
-            arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Continue, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringV)))), {}, ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(rcstringV)))));
-            arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Break, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringR)))), {}, ASTExprNodeP(new ASTExprNodeFlow((tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), (tryStack.empty() ? RcString("") : tryStack.back()), ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathFromResidualFromResidual), ::makeVec1(ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(rcstringR))))))))));
+            arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Continue, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringV)))), {}, makeNode<ASTExprNodeNamedValue>(ASTPath(rcstringV))));
+            arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagNamedTuple(), node.span(), path_ControlFlow_Break, ::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), rcstringR)))), {}, makeNode<ASTExprNodeFlow>((tryStack.empty() ? ASTExprNodeFlow::RETURN : ASTExprNodeFlow::BREAK), (tryStack.empty() ? RcString("") : tryStack.back()), makeNode<ASTExprNodeCallPath>(ASTPath(pathFromResidualFromResidual), ::makeVec1(makeNode<ASTExprNodeNamedValue>(ASTPath(rcstringR)))))));
 
-            replacement.reset(new ASTExprNodeMatch(ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathTryBranch), ::makeVec1(mv$(node.value)))), mv$(arms)));
+            replacement = makeNode<ASTExprNodeMatch>(makeNode<ASTExprNodeCallPath>(mv$(pathTryBranch), ::makeVec1(mv$(node.value))), mv$(arms));
         }
     }
 }

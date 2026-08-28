@@ -42,7 +42,7 @@
 
 using namespace stl;
 
-#define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
+#define NEWNODE(ty, ...) makeAstExprNode<ASTExprNode##ty>(*crate.pool __VA_OPT__(,) __VA_ARGS__)
 
 namespace {
     struct ProgramParams {
@@ -823,7 +823,7 @@ void ExpandTestHarness(ASTCrate& crate) {
 
         auto testFcnNode = NEWNODE(NamedValue, ASTPath(test.path));
         {
-            testFcnNode = NEWNODE(Closure, {}, mkType(*crate.pool, Span()), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, ASTPath(test.path), {}))), false, false, false);
+            testFcnNode = NEWNODE(Closure, ASTExprNodeClosure::argsT(), mkType(*crate.pool, Span()), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, ASTPath(test.path), decltype(ASTExprNodeCallPath::args)()))), false, false, false);
         }
         auto testTypeVarName = test.isBenchmark ? "StaticBenchFn" : "StaticTestFn";
         descandfnVals.push_back({{}, RcString::newInterned("testfn"), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode(testTypeVarName)}), ::makeVec1(std::move(testFcnNode)))});
@@ -833,14 +833,14 @@ void ExpandTestHarness(ASTCrate& crate) {
             testNodes.back() = NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(testNodes.back()));
         }
     }
-    auto* testsArray = new ASTExprNodeArray(mv$(testNodes));
+    auto testsArray = makeAstExprNode<ASTExprNodeArray>(*crate.pool, mv$(testNodes));
 
-    size_t testCount = testsArray->values.size();
+    size_t testCount = static_cast<ASTExprNodeArray&>(*testsArray).values.size();
     auto listItemTy = mkType(*crate.pool, Span(), ASTPath(cTest, {ASTPathNode("TestDescAndFn")}));
     {
         listItemTy = mkType(*crate.pool, ASTTypeTags::Reference(), Span(), ASTLifetimeRef::newStatic(), false, mv$(listItemTy));
     }
-    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mv$(listItemTy), std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mv$(listItemTy), makeAstExprNode<ASTExprNodeInteger>(*crate.pool, U128(testCount), CORETYPE_UINT).release()), ASTExpr(mv$(testsArray))};
 
     auto newmod = ASTModule{ASTAbsolutePath("", {"test#"})};
     auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
