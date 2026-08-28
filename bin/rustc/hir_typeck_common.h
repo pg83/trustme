@@ -35,6 +35,12 @@ extern bool visitTyWithCb(const HIRTypeData*, HIRTypeVisitorCallback& callback);
 extern bool visitTraitPathTysWithCb(const HIRTraitPath&, HIRTypeVisitorCallback& callback);
 extern bool visitPathTysWithCb(const HIRPath&, HIRTypeVisitorCallback& callback);
 
+/// Returns true when the complete type/const-generic structure contains a
+/// reference from `group`. Unlike `visitTyWith`, this includes const-generic
+/// values captured by paths, arrays, patterns and unevaluated expressions.
+extern bool typeContainsGenericGroup(const HIRTypeData*, HIRGenericGroup group);
+extern bool pathParamsContainGenericGroup(const HIRPathParams&, HIRGenericGroup group);
+
 template <typename F>
 bool visitTyWith(const HIRTypeData* type, F f) {
     HIRTypeVisitorCb<F> cb(f);

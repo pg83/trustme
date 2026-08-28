@@ -2,10 +2,11 @@
 #![allow(incomplete_features)]
 
 trait Bar<T> {
-    fn method() -> T;
+    type Output;
+    fn method() -> Self::Output;
 }
 
-trait Foo: for<T> Bar<T> {}
+trait Foo: for<T> Bar<T, Output = T> {}
 
 fn probe<T: Foo>() {
     let _: i32 = T::method();

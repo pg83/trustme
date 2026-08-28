@@ -15,6 +15,7 @@ FORBIDDEN = (
     "TraitImplCb",
     "headMatch",
     "aliasRelateActive_",
+    "HrtbBoundMatcher",
 )
 
 

@@ -23,9 +23,18 @@ struct TyVisitor {
 
     virtual typename W<HIRTypeData>::T& getTyData(const HIRTypeData* ty) const = 0;
 
+    virtual bool visitConstGeneric(typename W<HIRConstGeneric>::T&) {
+        return false;
+    }
+
     virtual bool visitPathParams(typename W<HIRPathParams>::T& tpl) {
         for (auto& ty : tpl.types) {
             if (visitType(ty)) {
+                return true;
+            }
+        }
+        for (auto& value : tpl.values) {
+            if (visitConstGeneric(value)) {
                 return true;
             }
         }
@@ -158,7 +167,13 @@ struct TyVisitor {
                 }
                 case HIRTypeData::TAG_Array: {
                     auto& e = tuMatch.as_Array();
-                    return visitType(e.inner);
+                    if (visitType(e.inner)) {
+                        return true;
+                    }
+                    if (auto* size = e.size.opt_Unevaluated()) {
+                        return visitConstGeneric(*size);
+                    }
+                    return false;
                 }
                 case HIRTypeData::TAG_Slice: {
                     auto& e = tuMatch.as_Slice();
@@ -166,7 +181,16 @@ struct TyVisitor {
                 }
                 case HIRTypeData::TAG_Pattern: {
                     auto& e = tuMatch.as_Pattern();
-                    return visitType(e.inner);
+                    if (visitType(e.inner)) {
+                        return true;
+                    }
+                    for (auto& range : e.pattern.alternatives) {
+                        if ((range.hasStart && visitConstGeneric(range.start))
+                            || (range.hasEnd && visitConstGeneric(range.end))) {
+                            return true;
+                        }
+                    }
+                    return false;
                 }
                 case HIRTypeData::TAG_Tuple: {
                     auto& e = tuMatch.as_Tuple();
@@ -241,6 +265,50 @@ bool visitTraitPathTysWithCb(const HIRTraitPath& path, HIRTypeVisitorCallback& c
 bool visitPathTysWithCb(const HIRPath& path, HIRTypeVisitorCallback& callback) {
     TyVisitorCbConst v(callback);
     return v.visitPath(path);
+}
+
+namespace {
+    struct TyVisitorGenericGroup final: TyVisitor<WConst> {
+        HIRGenericGroup group;
+
+        explicit TyVisitorGenericGroup(HIRGenericGroup group)
+            : group(group)
+        {
+        }
+
+        const HIRTypeData& getTyData(const HIRTypeData* ty) const override {
+            return *ty;
+        }
+
+        bool visitConstGeneric(const HIRConstGeneric& value) override {
+            if (const auto* generic = value.opt_Generic()) {
+                return generic->group() == group;
+            }
+            if (const auto* unevaluated = value.opt_Unevaluated()) {
+                return ((*unevaluated)->selfType && visitType((*unevaluated)->selfType))
+                    || visitPathParams((*unevaluated)->paramsImpl)
+                    || visitPathParams((*unevaluated)->paramsItem);
+            }
+            return false;
+        }
+
+        bool visitType(const HIRTypeData* ty) override {
+            if (const auto* generic = ty->opt_Generic(); generic && generic->group() == group) {
+                return true;
+            }
+            return TyVisitor::visitType(ty);
+        }
+    };
+}
+
+bool typeContainsGenericGroup(const HIRTypeData* type, HIRGenericGroup group) {
+    TyVisitorGenericGroup visitor(group);
+    return visitor.visitType(type);
+}
+
+bool pathParamsContainGenericGroup(const HIRPathParams& params, HIRGenericGroup group) {
+    TyVisitorGenericGroup visitor(group);
+    return visitor.visitPathParams(params);
 }
 
 namespace {

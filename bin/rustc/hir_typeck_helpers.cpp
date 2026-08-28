@@ -5318,23 +5318,129 @@ default:
             Certainty relateAssembledHead(
                 const HIRPathParams& goalParams,
                 const HIRTypeData* goalType,
-                const ImplRef& impl,
+                ImplRef& impl,
                 bool& headNormalizationAmbiguity,
                 ThinVector<SolverTypeEquality>& headEqualities,
                 ThinVector<SolverValueEquality>& headValueEqualities
-            ) {
-                const auto candidateType = impl.getImplType(crate.types);
-                const auto candidateParams = impl.getTraitParams(crate.types);
-                if (candidateParams.types.size() != goalParams.types.size() || candidateParams.values.size() != goalParams.values.size()) {
+            ) const {
+                struct HrtbTypeBinding {
+                    HIRGenericRef generic;
+                    HIRTypeRef probe;
+                };
+                struct HrtbValueBinding {
+                    HIRGenericRef generic;
+                    unsigned probeIndex;
+                };
+
+                // A higher-ranked ParamEnv predicate is instantiated for this
+                // probe exactly like an impl's existential parameters.  This
+                // class only performs that instantiation; all matching is done
+                // below by the common Unifier relation.
+                class InstantiateHrtb final: public MonomorphiserNop {
+                    HMTypeInferrence& table_;
+
+                public:
+                    mutable stl::Vector<HrtbTypeBinding> typeBindings;
+                    mutable stl::Vector<HrtbValueBinding> valueBindings;
+
+                    InstantiateHrtb(HIRTypeInterner& types, HMTypeInferrence& table)
+                        : MonomorphiserNop(types)
+                        , table_(table)
+                    {
+                    }
+
+                    HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override {
+                        if (generic.group() != GENERICHrtb) {
+                            return MonomorphiserNop::getType(sp, generic);
+                        }
+                        for (const auto& binding : typeBindings) {
+                            if (binding.generic.binding == generic.binding) {
+                                return binding.probe;
+                            }
+                        }
+                        auto probe = table_.newIvarTr();
+                        typeBindings.pushBack(HrtbTypeBinding{generic, probe});
+                        return probe;
+                    }
+
+                    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override {
+                        if (generic.group() != GENERICHrtb) {
+                            return MonomorphiserNop::getValue(sp, generic);
+                        }
+                        for (const auto& binding : valueBindings) {
+                            if (binding.generic.binding == generic.binding) {
+                                return HIRConstGeneric::make_Infer({binding.probeIndex});
+                            }
+                        }
+                        const auto probeIndex = table_.newIvarVal();
+                        valueBindings.pushBack(HrtbValueBinding{generic, probeIndex});
+                        return HIRConstGeneric::make_Infer({probeIndex});
+                    }
+                };
+
+                const auto originalCandidateType = impl.getImplType(crate.types);
+                const auto originalCandidateParams = impl.getTraitParams(crate.types);
+                if (originalCandidateParams.types.size() != goalParams.types.size() || originalCandidateParams.values.size() != goalParams.values.size()) {
                     return Certainty::NoSolution;
                 }
+
+                const bool typeHasHrtb = typeContainsGenericGroup(originalCandidateType, GENERICHrtb);
+                const bool paramsHaveHrtb = pathParamsContainGenericGroup(originalCandidateParams, GENERICHrtb);
+
+                const HIRTraitPath::assocListT* originalAssoc = nullptr;
+                if (const auto* bounded = impl.data.opt_Bounded()) {
+                    originalAssoc = &bounded->assoc;
+                } else if (const auto* bounded = impl.data.opt_BoundedPtr()) {
+                    originalAssoc = bounded->assoc;
+                }
+                stl::Vector<RcString> hrtbAssocNames;
+                if (originalAssoc) {
+                    for (const auto& entry : *originalAssoc) {
+                        if (pathParamsContainGenericGroup(entry.second.sourceTrait.params, GENERICHrtb)
+                            || pathParamsContainGenericGroup(entry.second.atyParams, GENERICHrtb)
+                            || typeContainsGenericGroup(entry.second.type, GENERICHrtb)) {
+                            hrtbAssocNames.pushBack(entry.first);
+                        }
+                    }
+                }
+                const bool headHasHrtb = typeHasHrtb || paramsHaveHrtb;
+                const bool hasHrtb = headHasHrtb || !hrtbAssocNames.empty();
 
                 const auto snapshot = resolve_.ivars.snapshot();
                 STD_DEFER {
                     resolve_.ivars.rollbackTo(snapshot);
                 };
 
-                Unifier unifier(span(), resolve_.ivars, &resolve_);
+                InstantiateHrtb instantiate(crate.types, resolve_.ivars);
+                auto instantiatedType = originalCandidateType;
+                if (typeHasHrtb) {
+                    instantiatedType = instantiate.monomorphType(span(), originalCandidateType, true);
+                }
+                HIRPathParams instantiatedParams;
+                if (paramsHaveHrtb) {
+                    instantiatedParams = instantiate.monomorphPathParams(span(), originalCandidateParams, true);
+                }
+                HIRTraitPath::assocListT instantiatedAssoc;
+                if (hasHrtb && originalAssoc) {
+                    for (const auto& entry : *originalAssoc) {
+                        bool entryHasHrtb = false;
+                        for (const auto& name : hrtbAssocNames) {
+                            if (name == entry.first) {
+                                entryHasHrtb = true;
+                                break;
+                            }
+                        }
+                        instantiatedAssoc.insert({
+                            entry.first,
+                            entryHasHrtb ? instantiate.monomorphTpAtyEqual(span(), entry.second, true) : entry.second.clone(),
+                        });
+                    }
+                }
+
+                const auto candidateType = typeHasHrtb ? instantiatedType : originalCandidateType;
+                const HIRPathParams& candidateParams = paramsHaveHrtb ? instantiatedParams : originalCandidateParams;
+
+                Unifier unifier(span(), resolve_.ivars, &resolve_, headHasHrtb);
                 auto relation = unifier.unify(goalType, candidateType);
                 if (relation == Unifier::Outcome::Mismatch) {
                     return Certainty::NoSolution;
@@ -5352,20 +5458,97 @@ default:
                     }
                 }
 
+                if (hasHrtb) {
+                    // Candidate storage outlives the probe snapshot. Resolve
+                    // every bound HRTB variable now; an unconstrained one is
+                    // restored to its stable binder spelling, never leaked as
+                    // a dead inference-table index.
+                    class MaterializeHrtb final: public MonomorphiserNop {
+                        const HMTypeInferrence& table_;
+                        const stl::Vector<HrtbTypeBinding>& typeBindings_;
+                        const stl::Vector<HrtbValueBinding>& valueBindings_;
+
+                    public:
+                        MaterializeHrtb(HIRTypeInterner& types, const HMTypeInferrence& table, const stl::Vector<HrtbTypeBinding>& typeBindings, const stl::Vector<HrtbValueBinding>& valueBindings)
+                            : MonomorphiserNop(types)
+                            , table_(table)
+                            , typeBindings_(typeBindings)
+                            , valueBindings_(valueBindings)
+                        {
+                        }
+
+                        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
+                            for (const auto& binding : typeBindings_) {
+                                if (binding.probe != type) {
+                                    continue;
+                                }
+                                const auto* resolved = table_.getType(type);
+                                if (resolved == type) {
+                                    return types.generic(binding.generic.name, binding.generic.binding);
+                                }
+                                return this->monomorphType(sp, resolved, allowInfer);
+                            }
+                            return MonomorphiserNop::monomorphType(sp, type, allowInfer);
+                        }
+
+                        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override {
+                            if (const auto* infer = value.opt_Infer()) {
+                                for (const auto& binding : valueBindings_) {
+                                    if (binding.probeIndex != infer->index) {
+                                        continue;
+                                    }
+                                    const auto& resolved = table_.getValue(value);
+                                    if (resolved == value) {
+                                        return binding.generic;
+                                    }
+                                    return this->monomorphConstgeneric(sp, resolved, allowInfer);
+                                }
+                            }
+                            return MonomorphiserNop::monomorphConstgeneric(sp, value, allowInfer);
+                        }
+                    };
+
+                    MaterializeHrtb materialize(crate.types, resolve_.ivars, instantiate.typeBindings, instantiate.valueBindings);
+                    auto stableType = typeHasHrtb ? materialize.monomorphType(span(), candidateType, true) : originalCandidateType;
+                    auto stableParams = paramsHaveHrtb ? materialize.monomorphPathParams(span(), candidateParams, true) : originalCandidateParams.clone();
+                    HIRTraitPath::assocListT stableAssoc;
+                    if (originalAssoc) {
+                        for (const auto& entry : instantiatedAssoc) {
+                            bool entryHasHrtb = false;
+                            for (const auto& name : hrtbAssocNames) {
+                                if (name == entry.first) {
+                                    entryHasHrtb = true;
+                                    break;
+                                }
+                            }
+                            stableAssoc.insert({
+                                entry.first,
+                                entryHasHrtb ? materialize.monomorphTpAtyEqual(span(), entry.second, true) : entry.second.clone(),
+                            });
+                        }
+                    }
+                    impl = ImplRef(mv$(stableType), mv$(stableParams), mv$(stableAssoc), impl.boundConstness());
+                }
+
+                // Use the stable candidate spelling for response effects. In
+                // the HRTB case `impl` was materialised before rollback.
+                const auto stableCandidateType = impl.getImplType(crate.types);
+                const auto stableCandidateParams = impl.getTraitParams(crate.types);
+
                 // These are the selected head's inference effects.  Record
                 // the relation inputs themselves rather than reconstructing
                 // them later from a fuzzy callback result.
-                if (goalType != candidateType) {
-                    headEqualities.push_back(SolverTypeEquality{goalType, candidateType});
+                if (goalType != stableCandidateType) {
+                    headEqualities.push_back(SolverTypeEquality{goalType, stableCandidateType});
                 }
-                for (size_t i = 0; i < candidateParams.types.size(); i++) {
-                    if (goalParams.types[i] != candidateParams.types[i]) {
-                        headEqualities.push_back(SolverTypeEquality{goalParams.types[i], candidateParams.types[i]});
+                for (size_t i = 0; i < stableCandidateParams.types.size(); i++) {
+                    if (goalParams.types[i] != stableCandidateParams.types[i]) {
+                        headEqualities.push_back(SolverTypeEquality{goalParams.types[i], stableCandidateParams.types[i]});
                     }
                 }
-                for (size_t i = 0; i < candidateParams.values.size(); i++) {
-                    if (goalParams.values[i] != candidateParams.values[i]) {
-                        headValueEqualities.push_back(SolverValueEquality{goalParams.values[i].clone(), candidateParams.values[i].clone()});
+                for (size_t i = 0; i < stableCandidateParams.values.size(); i++) {
+                    if (goalParams.values[i] != stableCandidateParams.values[i]) {
+                        headValueEqualities.push_back(SolverValueEquality{goalParams.values[i].clone(), stableCandidateParams.values[i].clone()});
                     }
                 }
                 headNormalizationAmbiguity = !unifier.pendingValues().empty();
@@ -9224,121 +9407,33 @@ default:
             // E.g. `T: IntoIterator<Item=&u8>` implies `<T as IntoIterator>::IntoIter : Iterator<Item=&u8>`
             // > Would maybe want a list of all explicit and implied bounds instead.
             {
-                struct HrtbBoundMatcher: public HIRMatchGenerics, public Monomorphiser {
-                    Span sp;
-                    stl::ObjPool::Ref scratchPool;
-                    stl::IntMap<HIRTypeRef> hrtbTypes;
-                    stl::IntMap<HIRConstGeneric> hrtbValues;
-
-                    HrtbBoundMatcher(Span sp, HIRTypeInterner& types)
-                        : HIRMatchGenerics(types.objectPool())
-                        , Monomorphiser(types)
-                        , sp(sp)
-                        , scratchPool(stl::ObjPool::fromMemory())
-                        , hrtbTypes(scratchPool.mutPtr())
-                        , hrtbValues(scratchPool.mutPtr())
-                    {
-                    }
-
-                    HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override {
-                        if (generic.group() != GENERICHrtb) {
-                            return types.generic(generic.name, generic.binding)->compareWithPlaceholders(sp, type, resolve);
-                        }
-                        auto* existing = hrtbTypes.find(generic.binding);
-                        if (!existing) {
-                            hrtbTypes.insert(generic.binding, type);
-                            return HIRCompare::Equal;
-                        }
-                        return (*existing)->compareWithPlaceholders(sp, type, resolve);
-                    }
-
-                    HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
-                        if (generic.group() != GENERICHrtb) {
-                            if (value.is_Infer()) {
-                                return HIRCompare::Fuzzy;
-                            }
-                            return value.is_Generic() && value.as_Generic() == generic ? HIRCompare::Equal : HIRCompare::Unequal;
-                        }
-                        auto* existing = hrtbValues.find(generic.binding);
-                        if (!existing) {
-                            hrtbValues.insert(generic.binding, value.clone());
-                            return HIRCompare::Equal;
-                        }
-                        if (*existing == value) {
-                            return HIRCompare::Equal;
-                        }
-                        return existing->is_Infer() || value.is_Infer() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
-                    }
-
-                    HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
-                        if (generic.group() == GENERICHrtb) {
-                            if (auto* type = hrtbTypes.find(generic.binding)) {
-                                return *type;
-                            }
-                        }
-                        return types.generic(generic.name, generic.binding);
-                    }
-
-                    HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
-                        if (generic.group() == GENERICHrtb) {
-                            if (auto* value = hrtbValues.find(generic.binding)) {
-                                return value->clone();
-                            }
-                        }
-                        return generic;
-                    }
-                };
-
                 bool rv = this->iterateBoundsTraits(sp, type, trait, [&](HIRCompare cmp, const HIRTypeData* boundTy, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
                     const auto& storedParams = boundTrait.params;
                     HIRPathParams normalisedParams;
-                    const HIRPathParams* bParams = &storedParams;
+                    const HIRPathParams* boundParams = &storedParams;
                     if (::std::any_of(storedParams.types.begin(), storedParams.types.end(), [&](const auto& ty) {
                         return this->hasAssociatedType(ty);
                     })) {
                         normalisedParams = storedParams.clone();
                         this->expandAssociatedTypesParams(sp, normalisedParams);
-                        bParams = &normalisedParams;
+                        boundParams = &normalisedParams;
                     }
 
-
-                    // Check against `params`
-                    auto ord = cmp;
-                    const bool hasHrtb = ::std::any_of(bParams->types.begin(), bParams->types.end(), [](const auto& ty) {
-                        return visitTyWith(ty, [](const auto* type) {
-                            return type->is_Generic() && type->as_Generic().group() == GENERICHrtb;
-                        });
-                    }) || ::std::any_of(bParams->values.begin(), bParams->values.end(), [](const auto& value) {
-                        return value.is_Generic() && value.as_Generic().group() == GENERICHrtb;
-                    });
+                    // Ordinary predicates still serve legacy method probing,
+                    // which is migrated in the next SOLVER_EX stage. Preserve
+                    // its existing prefilter until that consumer disappears.
+                    // HRTB predicates bypass the old matcher entirely: the
+                    // evaluator instantiates them with fresh variables and
+                    // runs the common transactional relation.
+                    const bool hasHrtb = pathParamsContainGenericGroup(*boundParams, GENERICHrtb);
                     if (!hasHrtb) {
-                        ord &= this->comparePp(sp, *bParams, params);
-                        if (ord == HIRCompare::Unequal) {
+                        auto relation = cmp;
+                        relation &= this->comparePp(sp, *boundParams, params);
+                        if (relation == HIRCompare::Unequal) {
                             return false;
                         }
-                        if (ord == HIRCompare::Fuzzy) {
-                        }
-                        return callback.visit(ImplRef(boundTy, &boundTrait.params, &boundInfo.assoc, boundInfo.constness));
                     }
-
-                    HrtbBoundMatcher matcher(sp, crate.types);
-                    ord &= bParams->matchTestGenericsFuzz(sp, params, this->ivars.callbackResolveInfer(), matcher);
-                    if (ord == HIRCompare::Unequal) {
-                        return false;
-                    }
-                    if (ord == HIRCompare::Fuzzy) {
-                    }
-                    // Hand off to the closure, and return true if it does
-                    // TODO: The type bounds are only the types that are specified.
-                    HIRTraitPath::assocListT assoc;
-                    for (const auto& entry : boundInfo.assoc) {
-                        assoc.insert({entry.first, matcher.monomorphTpAtyEqual(sp, entry.second, true)});
-                    }
-                    if (callback.visit(ImplRef(boundTy, params.clone(), mv$(assoc), boundInfo.constness))) {
-                        return true;
-                    }
-
-                    return false;
+                    return callback.visit(ImplRef(boundTy, &boundTrait.params, &boundInfo.assoc, boundInfo.constness));
                 });
                 if (rv) {
                     return rv;
