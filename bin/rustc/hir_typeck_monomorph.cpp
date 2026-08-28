@@ -39,7 +39,6 @@ MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types, const HIRTypeData* 
     , selfTy(selfTy)
     , ppImpl(paramsI)
     , ppMethod(paramsM)
-    //, pp_placeholder(params_p)
     , ppHrb(paramsH)
 {
 }
@@ -73,13 +72,13 @@ MonomorphState::MonomorphState(HIRTypeInterner& types)
 MonomorphState::MonomorphState(MonomorphState&& x)
     : MonomorphState(x.typeInterner())
 {
-    *this = ::std::move(x);
+    *this = std::move(x);
 }
 
 MonomorphState& MonomorphState::operator=(MonomorphState&& x) {
-    this->selfTy = ::std::move(x.selfTy);
+    this->selfTy = std::move(x.selfTy);
     this->ppImpl = (x.ppImpl == &x.ppImplData ? &this->ppImplData : x.ppImpl);
-    this->ppImplData = ::std::move(x.ppImplData);
+    this->ppImplData = std::move(x.ppImplData);
     this->ppMethod = x.ppMethod;
     return *this;
 }

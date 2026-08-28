@@ -1,26 +1,26 @@
 #pragma once
 
 #include "common.h"
-#include "hir_type.h"
-#include "int128.h"
 #include "floats.h"
+#include "int128.h"
+#include "hir_type.h"
 
 struct Reloc {
     size_t ofs;
     size_t len;
-    ::std::unique_ptr<HIRPath> p;
-    ::std::string bytes;
+    std::unique_ptr<HIRPath> p;
+    std::string bytes;
     bool preserveTrackCaller = false;
 
     static Reloc newNamed(size_t ofs, size_t len, HIRPath p, bool preserveTrackCaller = false) {
         return Reloc{ofs, len, box$(p), "", preserveTrackCaller};
     }
 
-    static Reloc newBytes(size_t ofs, size_t len, ::std::string bytes) {
-        return Reloc{ofs, len, nullptr, ::std::move(bytes), false};
+    static Reloc newBytes(size_t ofs, size_t len, std::string bytes) {
+        return Reloc{ofs, len, nullptr, std::move(bytes), false};
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const Reloc& x);
+    friend std::ostream& operator<<(std::ostream& os, const Reloc& x);
 
     Ordering ord(const Reloc& x) const;
 
@@ -43,7 +43,7 @@ struct EncodedLiteral {
     void writeUsize(size_t ofs, u64 v);
     u64 readUsize(size_t ofs) const;
 
-    friend ::std::ostream& operator<<(std::ostream& os, const EncodedLiteral& x);
+    friend std::ostream& operator<<(std::ostream& os, const EncodedLiteral& x);
 
     Ordering ord(const EncodedLiteral& x) const;
 
@@ -56,9 +56,6 @@ struct EncodedLiteralSlice {
     const EncodedLiteral& base;
     size_t ofs;
     size_t size;
-
-    //size_t  m_reloc_ofs;
-    //size_t  m_reloc_size;
 
     EncodedLiteralSlice(const EncodedLiteral& base);
 
@@ -79,5 +76,5 @@ struct EncodedLiteralSlice {
 
     Ordering ord(const EncodedLiteralSlice& x) const;
 
-    friend ::std::ostream& operator<<(std::ostream& os, const EncodedLiteralSlice& x);
+    friend std::ostream& operator<<(std::ostream& os, const EncodedLiteralSlice& x);
 };

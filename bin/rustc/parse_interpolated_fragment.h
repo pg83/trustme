@@ -36,7 +36,6 @@ public:
         VIS,
     } type;
 
-    // Owned type-pruned pointer
     void* ptr;
     Span span;
 
@@ -52,11 +51,11 @@ public:
     InterpolatedFragment(Type, ASTNamed<ASTItem>);
     ~InterpolatedFragment();
     InterpolatedFragment(Type, ASTExprNode*);
-    InterpolatedFragment(ASTVisibility); // :vis
+    InterpolatedFragment(ASTVisibility);
 
     TokenTree& asTt();
 
     const TokenTree& asTt() const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const InterpolatedFragment& x);
+    friend std::ostream& operator<<(std::ostream& os, const InterpolatedFragment& x);
 };

@@ -10,17 +10,17 @@ generate(
     variants=[
         v("Variant", fields=[
             ("unsigned int", "idx"),
-            ("::std::vector<PatternRule>", "subRules"),
+            ("std::vector<PatternRule>", "subRules"),
         ], copy=False, doc="Enum variant"),
         v("Slice", fields=[
             ("unsigned int", "len"),
-            ("::std::vector<PatternRule>", "subRules"),
+            ("std::vector<PatternRule>", "subRules"),
         ], copy=False, doc="Slice (includes desired length)"),
         v("SplitSlice", fields=[
             ("unsigned int", "minLen"),
             ("unsigned int", "trailingLen"),
-            ("::std::vector<PatternRule>", "leading"),
-            ("::std::vector<PatternRule>", "trailing"),
+            ("std::vector<PatternRule>", "leading"),
+            ("std::vector<PatternRule>", "trailing"),
         ], copy=False, doc="How can the negative offsets in the `trailing` be"
                            " handled correctly? (both here and in the"
                            " destructure)"),

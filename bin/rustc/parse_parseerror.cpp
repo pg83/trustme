@@ -16,7 +16,7 @@ void parseErrorUnexpected(const TokenStream& lex, const Token& tok, Token exp) {
     ERROR(pos, E0000, "Unexpected token " << tok << ", expected " << exp);
 }
 
-void parseErrorUnexpected(const TokenStream& lex, const Token& tok, ::std::vector<eTokenType> exp) {
+void parseErrorUnexpected(const TokenStream& lex, const Token& tok, std::vector<eTokenType> exp) {
     Span pos = tok.getPos().filename != "" ? lex.subSpan(tok.getPos()) : lex.pointSpan();
     ERROR(pos, E0000, "Unexpected token " << tok << ", expected one of " << FMT_CB(os, {
                           bool f = true;

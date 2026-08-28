@@ -7,8 +7,6 @@
  * configuration the compiler emits, and it is hand-written arithmetic.
  */
 
-// The prelude includes these itself; including them first at file scope keeps
-// them out of the namespace it is put in.
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -27,8 +25,6 @@ namespace {
 #define TRUSTME_TARGET_U128_ALIGN 16
 #define TRUSTME_TARGET_HAS_NATIVE_F128 1
 #include "prelude.inc"
-// The prelude opens an `extern "C"` block that the generated program closes
-// after all the emitted code; nothing follows it here.
 }
 }
 
@@ -55,9 +51,6 @@ namespace {
 
 STD_TEST_SUITE(PreludeInt128) {
     STD_TEST(testHalvesAreNamedNotOrdered) {
-        // `make128_raw` takes the high half first, and the two conversions
-        // between the signed and unsigned representations must not exchange
-        // them.
         const auto v = u128(0x0123456789ABCDEF, 0xFEDCBA9876543210);
         STD_INSIST(v.hi == 0x0123456789ABCDEF);
         STD_INSIST(v.lo == 0xFEDCBA9876543210);
@@ -75,14 +68,11 @@ STD_TEST_SUITE(PreludeInt128) {
         uint128_t out;
         STD_INSIST(!add128_o(make128(1), make128(2), &out) && same(out, make128(3)));
 
-        // Carrying out of the low half.
         STD_INSIST(!add128_o(u128(0, UINT64_MAX), make128(1), &out));
         STD_INSIST(same(out, u128(1, 0)));
 
         STD_INSIST(add128_o(U128_MAX, make128(1), &out) && same(out, U128_ZERO));
 
-        // The case a high-word comparison misses: the carry into the high half
-        // leaves it equal to what it went in as.
         const auto a = u128(UINT64_MAX, UINT64_MAX - 1);
         STD_INSIST(add128_o(a, U128_MAX, &out));
         STD_INSIST(same(out, u128(UINT64_MAX, UINT64_MAX - 2)));
@@ -95,12 +85,9 @@ STD_TEST_SUITE(PreludeInt128) {
         STD_INSIST(!sub128_o(make128(5), make128(3), &out) && same(out, make128(2)));
         STD_INSIST(sub128_o(U128_ZERO, make128(1), &out) && same(out, U128_MAX));
 
-        // Borrowing out of the low half.
         STD_INSIST(!sub128_o(u128(1, 0), make128(1), &out));
         STD_INSIST(same(out, u128(0, UINT64_MAX)));
 
-        // The case a high-word comparison misses: the borrow leaves the high
-        // half equal to what it went in as.
         STD_INSIST(sub128_o(u128(UINT64_MAX, 0), u128(UINT64_MAX, 1), &out));
         STD_INSIST(same(out, U128_MAX));
     }
@@ -111,14 +98,11 @@ STD_TEST_SUITE(PreludeInt128) {
         STD_INSIST(!mul128_o(U128_ZERO, U128_MAX, &out) && same(out, U128_ZERO));
         STD_INSIST(!mul128_o(U128_MAX, make128(1), &out) && same(out, U128_MAX));
 
-        // A product term shifted off the top is an overflow even when no
-        // addition carried.
         STD_INSIST(mul128_o(U128_MAX, make128(2), &out));
         STD_INSIST(same(out, u128(UINT64_MAX, UINT64_MAX - 1)));
         STD_INSIST(mul128_o(u128(0x8000000000000000, 0), make128(2), &out));
         STD_INSIST(same(out, U128_ZERO));
 
-        // The widest product that still fits.
         STD_INSIST(!mul128_o(u128(0, UINT64_MAX), u128(0, UINT64_MAX), &out));
         STD_INSIST(same(out, u128(UINT64_MAX - 1, 1)));
     }
@@ -144,7 +128,6 @@ STD_TEST_SUITE(PreludeInt128) {
         STD_INSIST(same(shr128(u128(0x8000000000000000, 0), 127), make128(1)));
         STD_INSIST(same(shr128(u128(1, 0), 64), make128(1)));
 
-        // An arithmetic shift keeps the sign.
         STD_INSIST(sameS(shr128s(make128s(-1), 64), make128s(-1)));
         STD_INSIST(sameS(shr128s(i128(0x8000000000000000, 0), 127), make128s(-1)));
         STD_INSIST(sameS(shr128s(make128s(8), 2), make128s(2)));
@@ -181,8 +164,7 @@ STD_TEST_SUITE(PreludeInt128) {
 
         STD_INSIST(same(__trustme_bswap128(U128_ZERO), U128_ZERO));
         STD_INSIST(same(__trustme_bswap128(make128(1)), u128(0x0100000000000000, 0)));
-        STD_INSIST(same(__trustme_bswap128(u128(0x0102030405060708, 0x090A0B0C0D0E0F10)),
-                        u128(0x100F0E0D0C0B0A09, 0x0807060504030201)));
+        STD_INSIST(same(__trustme_bswap128(u128(0x0102030405060708, 0x090A0B0C0D0E0F10)), u128(0x100F0E0D0C0B0A09, 0x0807060504030201)));
     }
 
     STD_TEST(testIntToFloat) {
@@ -191,7 +173,6 @@ STD_TEST_SUITE(PreludeInt128) {
         STD_INSIST(cast128_float(make128(11259375)) == 11259375.0f);
         STD_INSIST(cast128_double(u128(1, 0)) == 18446744073709551616.0);
 
-        // A negative value converts by its magnitude, not by its raw bits.
         STD_INSIST(cast128s_double(make128s(-11259375)) == -11259375.0);
         STD_INSIST(cast128s_float(make128s(-11259375)) == -11259375.0f);
         STD_INSIST(cast128s_double(make128s(-1)) == -1.0);
@@ -204,11 +185,8 @@ STD_TEST_SUITE(PreludeInt128) {
         STD_INSIST(same(cast_float_to_u128(11259375.0), make128(11259375)));
         STD_INSIST(same(cast_float_to_u128(18446744073709551616.0), u128(1, 0)));
 
-        // 432 * 2^100, which needs both halves.
-        STD_INSIST(same(cast_float_to_u128(432.0 * 1267650600228229401496703205376.0),
-                        shl128(make128(432), 100)));
+        STD_INSIST(same(cast_float_to_u128(432.0 * 1267650600228229401496703205376.0), shl128(make128(432), 100)));
 
-        // The cast saturates, and NaN becomes zero.
         STD_INSIST(same(cast_float_to_u128(-1.5), U128_ZERO));
         STD_INSIST(same(cast_float_to_u128(1e40), U128_MAX));
         STD_INSIST(same(cast_float_to_u128(__builtin_nan("")), U128_ZERO));
@@ -221,7 +199,6 @@ STD_TEST_SUITE(PreludeInt128) {
     }
 
     STD_TEST(testRoundTripThroughFloat) {
-        // Every value a double can hold exactly must come back unchanged.
         const uint128_t values[] = {
             make128(0),
             make128(1),

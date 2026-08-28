@@ -7,6 +7,7 @@
 
 #include <std/alg/defer.h>
 
+namespace {
 template <typename I>
 struct WConst {
     typedef const I T;
@@ -17,240 +18,81 @@ struct WMut {
     typedef I T;
 };
 
-template <template <typename> class W>
+template <template <typename> typename W>
 struct TyVisitor {
     const LList<const HIRTypeData*>* curRecurseStack = nullptr;
 
     virtual typename W<HIRTypeData>::T& getTyData(const HIRTypeData* ty) const = 0;
 
-    virtual bool visitConstGeneric(typename W<HIRConstGeneric>::T&) {
-        return false;
-    }
+    virtual bool visitConstGeneric(typename W<HIRConstGeneric>::T&);
 
-    virtual bool visitPathParams(typename W<HIRPathParams>::T& tpl) {
-        for (auto& ty : tpl.types) {
-            if (visitType(ty)) {
-                return true;
-            }
-        }
-        for (auto& value : tpl.values) {
-            if (visitConstGeneric(value)) {
-                return true;
-            }
-        }
-        return false;
-    }
+    virtual bool visitPathParams(typename W<HIRPathParams>::T& tpl);
 
-    virtual bool visitTraitPath(typename W<HIRTraitPath>::T& tpl) {
-        if (visitPathParams(tpl.path.params)) {
-            return true;
-        }
-        for (auto& assoc : tpl.typeBounds) {
-            if (visitPathParams(assoc.second.sourceTrait.params)
-                || visitPathParams(assoc.second.atyParams)
-                || visitType(assoc.second.type)) {
-                return true;
-            }
-        }
-        for (auto& assoc : tpl.traitBounds) {
-            if (visitPathParams(assoc.second.sourceTrait.params)
-                || visitPathParams(assoc.second.atyParams)) {
-                return true;
-            }
-            for (auto& t : assoc.second.traits) {
-                if (visitTraitPath(t)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
+    virtual bool visitTraitPath(typename W<HIRTraitPath>::T& tpl);
 
-    virtual bool visitPath(typename W<HIRPath>::T& path) {
-        switch (path.data.tag()) {
-            case HIRPathData::TAG_Generic: {
-                auto& e = path.data.as_Generic();
-                return visitPathParams(e.params);
-            }
-            case HIRPathData::TAG_UfcsInherent: {
-                auto& e = path.data.as_UfcsInherent();
-                return visitType(e.type) || visitPathParams(e.params);
-            }
-            case HIRPathData::TAG_UfcsKnown: {
-                auto& e = path.data.as_UfcsKnown();
-                return visitType(e.type) || visitPathParams(e.trait.params) || visitPathParams(e.params);
-            }
-            case HIRPathData::TAG_UfcsUnknown: {
-                auto& e = path.data.as_UfcsUnknown();
-                return visitType(e.type) || visitPathParams(e.params);
-            }
-        }
-        UNREACHABLE();
-    }
+    virtual bool visitPath(typename W<HIRPath>::T& path);
 
-    virtual bool visitType(const HIRTypeData* ty) {
-        if (curRecurseStack) {
-            for (const auto* p : *curRecurseStack) {
-                if (p == ty) {
-                    return false;
-                }
-            }
-        }
-
-        LList<const HIRTypeData*> recurseNode(curRecurseStack, ty);
-        curRecurseStack = &recurseNode;
-        STD_DEFER {
-            curRecurseStack = recurseNode.prev;
-        };
-
-        {
-            auto& tuMatch = (this->getTyData(ty));
-            switch (tuMatch.tag()) {
-                case HIRTypeData::TAG_Infer: {
-                    break;
-                }
-                case HIRTypeData::TAG_Diverge: {
-                    break;
-                }
-                case HIRTypeData::TAG_Primitive: {
-                    break;
-                }
-                case HIRTypeData::TAG_Generic: {
-                    break;
-                }
-                case HIRTypeData::TAG_Path: {
-                    auto& e = tuMatch.as_Path();
-                    return visitPath(e.path);
-                }
-                case HIRTypeData::TAG_TraitObject: {
-                    auto& e = tuMatch.as_TraitObject();
-                    if (visitTraitPath(e.trait)) {
-                        return true;
-                    }
-                    for (auto& trait : e.markers) {
-                        if (visitPathParams(trait.params)) {
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-                case HIRTypeData::TAG_ErasedType: {
-                    auto& e = tuMatch.as_ErasedType();
-                    for (auto& trait : e.traits) {
-                            if (visitTraitPath(trait)) {
-                                return true;
-                            }
-                        }
-                        visitPathParams(e.use);
-                    switch (e.inner.tag()) {
-                        case TypeDataErasedTypeInner::TAG_Fcn: {
-                            auto& ee = e.inner.as_Fcn();
-                            if (visitPath(ee.origin)) {
-                                return true;
-                            }
-                            break;
-                        }
-                        case TypeDataErasedTypeInner::TAG_Known: {
-                            auto& ee = e.inner.as_Known();
-                            if (visitType(ee)) {
-                                return true;
-                            }
-                            break;
-                        }
-                        case TypeDataErasedTypeInner::TAG_Alias: {
-                            auto& ee = e.inner.as_Alias();
-                            visitPathParams(ee.params);
-                            break;
-                        }
-                    }
-                    return false;
-                }
-                case HIRTypeData::TAG_Array: {
-                    auto& e = tuMatch.as_Array();
-                    if (visitType(e.inner)) {
-                        return true;
-                    }
-                    if (auto* size = e.size.opt_Unevaluated()) {
-                        return visitConstGeneric(*size);
-                    }
-                    return false;
-                }
-                case HIRTypeData::TAG_Slice: {
-                    auto& e = tuMatch.as_Slice();
-                    return visitType(e.inner);
-                }
-                case HIRTypeData::TAG_Pattern: {
-                    auto& e = tuMatch.as_Pattern();
-                    if (visitType(e.inner)) {
-                        return true;
-                    }
-                    for (auto& range : e.pattern.alternatives) {
-                        if ((range.hasStart && visitConstGeneric(range.start))
-                            || (range.hasEnd && visitConstGeneric(range.end))) {
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-                case HIRTypeData::TAG_Tuple: {
-                    auto& e = tuMatch.as_Tuple();
-                    for (auto& ty : e) {
-                        if (visitType(ty)) {
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-                case HIRTypeData::TAG_Borrow: {
-                    auto& e = tuMatch.as_Borrow();
-                    return visitType(e.inner);
-                }
-                case HIRTypeData::TAG_Pointer: {
-                    auto& e = tuMatch.as_Pointer();
-                    return visitType(e.inner);
-                }
-                case HIRTypeData::TAG_NamedFunction: {
-                    auto& e = tuMatch.as_NamedFunction();
-                    return visitPath(e.path);
-                }
-                case HIRTypeData::TAG_Function: {
-                    auto& e = tuMatch.as_Function();
-                    for (auto& ty : e.argTypes) {
-                        if (visitType(ty)) {
-                            return true;
-                        }
-                    }
-                    return visitType(e.rettype);
-                }
-                case HIRTypeData::TAG_NodeType: {
-                    // These just have a node pointer, no visiting
-                    break;
-                }
-            }
-        }
-        return false;
-    }
+    virtual bool visitType(const HIRTypeData* ty);
 };
 
 struct TyVisitorCbConst: TyVisitor<WConst> {
     HIRTypeVisitorCallback& callback;
 
-    explicit TyVisitorCbConst(HIRTypeVisitorCallback& callback)
-        : callback(callback)
-    {
-    }
+    explicit TyVisitorCbConst(HIRTypeVisitorCallback& callback);
 
-    const HIRTypeData& getTyData(const HIRTypeData* ty) const override {
-        return *ty;
-    }
+    const HIRTypeData& getTyData(const HIRTypeData* ty) const override;
 
-    bool visitType(const HIRTypeData* ty) override {
-        if (callback.visit(ty)) {
-            return true;
-        }
-        return TyVisitor::visitType(ty);
-    }
+    bool visitType(const HIRTypeData* ty) override;
 };
+
+struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
+    const HIRTypeData& getTyData(const HIRTypeData* ty) const override;
+
+    bool visitPathParams(const HIRPathParams& pp) override;
+
+    bool visitType(const HIRTypeData* ty) override;
+};
+
+struct CloneTyWithMonomorph: Monomorphiser {
+    HIRTypeCloneCallback& callback;
+
+    CloneTyWithMonomorph(HIRTypeInterner& types, HIRTypeCloneCallback& callback);
+
+    HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override;
+
+    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override;
+
+    HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
+};
+}
+
+namespace {
+    struct TyVisitorGenericGroup final: TyVisitor<WConst> {
+        HIRGenericGroup group;
+
+        explicit TyVisitorGenericGroup(HIRGenericGroup group);
+
+        const HIRTypeData& getTyData(const HIRTypeData* ty) const override;
+
+        bool visitConstGeneric(const HIRConstGeneric& value) override;
+
+        bool visitType(const HIRTypeData* ty) override;
+    };
+
+    struct TyRewriter {
+        HIRTypeInterner& types;
+        HIRTypeRewriteCallback& callback;
+        std::vector<HIRTypeRef> stack;
+
+        bool rewritePathParams(HIRPathParams& params);
+
+        bool rewriteTraitPath(HIRTraitPath& trait);
+
+        bool rewritePath(HIRPath& path);
+
+        bool rewriteType(HIRTypeRef& type);
+    };
+}
 
 bool visitTyWithCb(const HIRTypeData* ty, HIRTypeVisitorCallback& callback) {
     TyVisitorCbConst v(callback);
@@ -267,40 +109,6 @@ bool visitPathTysWithCb(const HIRPath& path, HIRTypeVisitorCallback& callback) {
     return v.visitPath(path);
 }
 
-namespace {
-    struct TyVisitorGenericGroup final: TyVisitor<WConst> {
-        HIRGenericGroup group;
-
-        explicit TyVisitorGenericGroup(HIRGenericGroup group)
-            : group(group)
-        {
-        }
-
-        const HIRTypeData& getTyData(const HIRTypeData* ty) const override {
-            return *ty;
-        }
-
-        bool visitConstGeneric(const HIRConstGeneric& value) override {
-            if (const auto* generic = value.opt_Generic()) {
-                return generic->group() == group;
-            }
-            if (const auto* unevaluated = value.opt_Unevaluated()) {
-                return ((*unevaluated)->selfType && visitType((*unevaluated)->selfType))
-                    || visitPathParams((*unevaluated)->paramsImpl)
-                    || visitPathParams((*unevaluated)->paramsItem);
-            }
-            return false;
-        }
-
-        bool visitType(const HIRTypeData* ty) override {
-            if (const auto* generic = ty->opt_Generic(); generic && generic->group() == group) {
-                return true;
-            }
-            return TyVisitor::visitType(ty);
-        }
-    };
-}
-
 bool typeContainsGenericGroup(const HIRTypeData* type, HIRGenericGroup group) {
     TyVisitorGenericGroup visitor(group);
     return visitor.visitType(type);
@@ -309,202 +117,6 @@ bool typeContainsGenericGroup(const HIRTypeData* type, HIRGenericGroup group) {
 bool pathParamsContainGenericGroup(const HIRPathParams& params, HIRGenericGroup group) {
     TyVisitorGenericGroup visitor(group);
     return visitor.visitPathParams(params);
-}
-
-namespace {
-    struct TyRewriter {
-        HIRTypeInterner& types;
-        HIRTypeRewriteCallback& callback;
-        ::std::vector<HIRTypeRef> stack;
-
-        bool rewritePathParams(HIRPathParams& params) {
-            for (auto& type : params.types) {
-                if (rewriteType(type)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        bool rewriteTraitPath(HIRTraitPath& trait) {
-            if (rewritePathParams(trait.path.params)) {
-                return true;
-            }
-            for (auto& assoc : trait.typeBounds) {
-                if (rewritePathParams(assoc.second.sourceTrait.params) || rewritePathParams(assoc.second.atyParams) || rewriteType(assoc.second.type)) {
-                    return true;
-                }
-            }
-            for (auto& assoc : trait.traitBounds) {
-                if (rewritePathParams(assoc.second.sourceTrait.params) || rewritePathParams(assoc.second.atyParams)) {
-                    return true;
-                }
-                for (auto& bound : assoc.second.traits) {
-                    if (rewriteTraitPath(bound)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        bool rewritePath(HIRPath& path) {
-            switch (path.data.tag()) {
-                case HIRPathData::TAG_Generic: {
-                    auto& e = path.data.as_Generic();
-                    return rewritePathParams(e.params);
-                }
-                case HIRPathData::TAG_UfcsInherent: {
-                    auto& e = path.data.as_UfcsInherent();
-                    return rewriteType(e.type) || rewritePathParams(e.params) || rewritePathParams(e.implParams);
-                }
-                case HIRPathData::TAG_UfcsKnown: {
-                    auto& e = path.data.as_UfcsKnown();
-                    return rewriteType(e.type) || rewritePathParams(e.trait.params) || rewritePathParams(e.params);
-                }
-                case HIRPathData::TAG_UfcsUnknown: {
-                    auto& e = path.data.as_UfcsUnknown();
-                    return rewriteType(e.type) || rewritePathParams(e.params);
-                }
-            }
-            UNREACHABLE();
-        }
-
-        bool rewriteType(HIRTypeRef& type) {
-            if (!type || ::std::find(stack.begin(), stack.end(), type) != stack.end()) {
-                return false;
-            }
-            const auto original = type;
-            auto data = original->cloneData();
-            HIRTypeRef rewritten = original;
-            const bool stop = callback.rewrite(rewritten, data);
-            if (rewritten != original) {
-                type = rewritten;
-                return stop;
-            }
-
-            stack.push_back(original);
-            bool childStop = false;
-            if (!stop) {
-                switch (data.tag()) {
-                    case HIRTypeData::TAG_Infer: {
-                        break;
-                    }
-                    case HIRTypeData::TAG_Diverge: {
-                        break;
-                    }
-                    case HIRTypeData::TAG_Primitive: {
-                        break;
-                    }
-                    case HIRTypeData::TAG_Generic: {
-                        break;
-                    }
-                    case HIRTypeData::TAG_Path: {
-                        auto& e = data.as_Path();
-                        childStop = rewritePath(e.path);
-                        break;
-                    }
-                    case HIRTypeData::TAG_TraitObject: {
-                        auto& e = data.as_TraitObject();
-                        childStop = rewriteTraitPath(e.trait);
-                        for (auto& marker : e.markers) {
-                            if (!childStop) {
-                                childStop = rewritePathParams(marker.params);
-                            }
-                        }
-                        break;
-                    }
-                    case HIRTypeData::TAG_ErasedType: {
-                        auto& e = data.as_ErasedType();
-                        for (auto& trait : e.traits) {
-                            if (!childStop) {
-                                childStop = rewriteTraitPath(trait);
-                            }
-                        }
-                        if (!childStop) {
-                            childStop = rewritePathParams(e.use);
-                        }
-                        if (!childStop) {
-                        {
-                            auto& tuMatch = e.inner;
-                            switch (tuMatch.tag()) {
-                                case TypeDataErasedTypeInner::TAG_Fcn: {
-                                    auto& inner = tuMatch.as_Fcn();
-                                    childStop = rewritePath(inner.origin);
-                                    break;
-                                }
-                                case TypeDataErasedTypeInner::TAG_Known: {
-                                    auto& inner = tuMatch.as_Known();
-                                    childStop = rewriteType(inner);
-                                    break;
-                                }
-                                case TypeDataErasedTypeInner::TAG_Alias: {
-                                    auto& inner = tuMatch.as_Alias();
-                                    childStop = rewritePathParams(inner.params);
-                                    break;
-                                }
-                            }
-                        }
-                        }
-                        break;
-                    }
-                    case HIRTypeData::TAG_Array: {
-                        auto& e = data.as_Array();
-                        childStop = rewriteType(e.inner);
-                        break;
-                    }
-                    case HIRTypeData::TAG_Slice: {
-                        auto& e = data.as_Slice();
-                        childStop = rewriteType(e.inner);
-                        break;
-                    }
-                    case HIRTypeData::TAG_Pattern: {
-                        auto& e = data.as_Pattern();
-                        childStop = rewriteType(e.inner);
-                        break;
-                    }
-                    case HIRTypeData::TAG_Tuple: {
-                        auto& e = data.as_Tuple();
-                        for (auto& inner : e) if (!childStop) childStop = rewriteType(inner);
-                        break;
-                    }
-                    case HIRTypeData::TAG_Borrow: {
-                        auto& e = data.as_Borrow();
-                        childStop = rewriteType(e.inner);
-                        break;
-                    }
-                    case HIRTypeData::TAG_Pointer: {
-                        auto& e = data.as_Pointer();
-                        childStop = rewriteType(e.inner);
-                        break;
-                    }
-                    case HIRTypeData::TAG_NamedFunction: {
-                        auto& e = data.as_NamedFunction();
-                        childStop = rewritePath(e.path);
-                        break;
-                    }
-                    case HIRTypeData::TAG_Function: {
-                        auto& e = data.as_Function();
-                        for (auto& arg : e.argTypes) {
-                            if (!childStop) {
-                                childStop = rewriteType(arg);
-                            }
-                        }
-                        if (!childStop) {
-                            childStop = rewriteType(e.rettype);
-                        }
-                        break;
-                    }
-                    case HIRTypeData::TAG_NodeType: {
-                        break;
-                    }
-                }
-            }
-            stack.pop_back();
-            type = types.intern(mv$(data));
-            return stop || childStop;
-        }
-    };
 }
 
 bool rewriteTyWithCb(HIRTypeInterner& types, HIRTypeRef& ty, HIRTypeRewriteCallback& callback) {
@@ -516,31 +128,6 @@ bool rewritePathTysWithCb(HIRTypeInterner& types, HIRPath& path, HIRTypeRewriteC
     TyRewriter rewriter{types, callback, {}};
     return rewriter.rewritePath(path);
 }
-
-struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
-    const HIRTypeData& getTyData(const HIRTypeData* ty) const override {
-        return *ty;
-    }
-
-    bool visitPathParams(const HIRPathParams& pp) override {
-        for (const auto& v : pp.values) {
-            if (v.is_Generic()) {
-                return true;
-            }
-        }
-        return TyVisitor::visitPathParams(pp);
-    }
-
-    bool visitType(const HIRTypeData* ty) override {
-        if (ty->is_Generic()) {
-            return true;
-        }
-        if (ty->is_Array() && ty->as_Array().size.is_Unevaluated() /*&& ty->as_Array().size.as_Unevaluated().*/) {
-            return true;
-        }
-        return TyVisitor::visitType(ty);
-    }
-};
 
 bool monomorphisePathparamsNeeded(const HIRPathParams& tpl) {
     TyVisitorMonomorphNeeded v{};
@@ -597,13 +184,13 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         }
         case HIRTypeData::TAG_ErasedType: {
             auto& e = (*tpl).as_ErasedType();
-            ::std::vector<HIRTraitPath> traits;
-                traits.reserve(e.traits.size());
-                for (const auto& trait : e.traits) {
-                    traits.push_back(this->monomorphTraitpath(sp, trait, allowInfer));
-                }
+            std::vector<HIRTraitPath> traits;
+            traits.reserve(e.traits.size());
+            for (const auto& trait : e.traits) {
+                traits.push_back(this->monomorphTraitpath(sp, trait, allowInfer));
+            }
 
-                TypeDataErasedTypeInner inner;
+            TypeDataErasedTypeInner inner;
             switch (e.inner.tag()) {
                 case TypeDataErasedTypeInner::TAG_Fcn: {
                     auto& ee = e.inner.as_Fcn();
@@ -622,13 +209,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
                 }
             }
 
-            return types.intern(HIRTypeData::make_ErasedType(HIRTypeData::Data_ErasedType {
-                e.isSized,
-                mv$(traits),
-                mv$(inner),
-                this->monomorphPathParams(sp, e.use, allowInfer),
-                e.usePresent
-                }));
+            return types.intern(HIRTypeData::make_ErasedType(HIRTypeData::Data_ErasedType{e.isSized, mv$(traits), mv$(inner), this->monomorphPathParams(sp, e.use, allowInfer), e.usePresent}));
         }
         case HIRTypeData::TAG_Array: {
             auto& e = (*tpl).as_Array();
@@ -656,7 +237,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         }
         case HIRTypeData::TAG_Tuple: {
             auto& e = (*tpl).as_Tuple();
-            ::std::vector<HIRTypeRef> types;
+            std::vector<HIRTypeRef> types;
             for (const auto& ty : e) {
                 types.push_back(this->monomorphType(sp, ty, allowInfer));
             }
@@ -672,14 +253,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         }
         case HIRTypeData::TAG_NamedFunction: {
             auto& e = (*tpl).as_NamedFunction();
-            return types.intern(
-                HIRTypeData::make_NamedFunction(
-                    HIRTypeData::Data_NamedFunction{
-                        this->monomorphPath(sp, e.path, allowInfer),
-                        e.def.clone() // Should this become `nullptr`? Or should the definition be fixed
-                    }
-                )
-            );
+            return types.intern(HIRTypeData::make_NamedFunction(HIRTypeData::Data_NamedFunction{this->monomorphPath(sp, e.path, allowInfer), e.def.clone()}));
         }
         case HIRTypeData::TAG_Function: {
             auto& e = (*tpl).as_Function();
@@ -730,27 +304,21 @@ HIRTraitPath Monomorphiser::monomorphTraitpath(const Span& sp, const HIRTraitPat
     HIRTraitPath rv{this->monomorphGenericpath(sp, tpl.path, allowInfer), {}, {}, tpl.traitPtr, tpl.constness};
 
     for (const auto& assoc : tpl.typeBounds) {
-        rv.typeBounds.insert(::std::make_pair(assoc.first, this->monomorphTpAtyEqual(sp, assoc.second, allowInfer)));
+        rv.typeBounds.insert(std::make_pair(assoc.first, this->monomorphTpAtyEqual(sp, assoc.second, allowInfer)));
     }
     for (const auto& assoc : tpl.traitBounds) {
-        auto v = HIRTraitPath::AtyBound{
-            this->monomorphGenericpath(sp, assoc.second.sourceTrait, allowInfer),
-            this->monomorphPathParams(sp, assoc.second.atyParams, allowInfer),
-            {}};
+        auto v = HIRTraitPath::AtyBound{this->monomorphGenericpath(sp, assoc.second.sourceTrait, allowInfer), this->monomorphPathParams(sp, assoc.second.atyParams, allowInfer), {}};
         for (const auto& trait : assoc.second.traits) {
             v.traits.push_back(monomorphTraitpath(sp, trait, allowInfer));
         }
-        rv.traitBounds.insert(::std::make_pair(assoc.first, std::move(v)));
+        rv.traitBounds.insert(std::make_pair(assoc.first, std::move(v)));
     }
 
     return rv;
 }
 
 HIRTraitPath::AtyEqual Monomorphiser::monomorphTpAtyEqual(const Span& sp, const HIRTraitPath::AtyEqual& tpl, bool allowInfer) const {
-    return HIRTraitPath::AtyEqual{
-        this->monomorphGenericpath(sp, tpl.sourceTrait, allowInfer),
-        this->monomorphPathParams(sp, tpl.atyParams, allowInfer),
-        this->monomorphType(sp, tpl.type, allowInfer)};
+    return HIRTraitPath::AtyEqual{this->monomorphGenericpath(sp, tpl.sourceTrait, allowInfer), this->monomorphPathParams(sp, tpl.atyParams, allowInfer), this->monomorphType(sp, tpl.type, allowInfer)};
 }
 
 HIRConstGeneric Monomorphiser::monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const {
@@ -793,14 +361,11 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
         } else if (se->is_Unevaluated()) {
             sz = HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(se->as_Unevaluated()->monomorph(sp, *this, true)));
         } else {
-            // Routes const inference variables through the virtual hook so a
-            // canonicalising monomorphiser sees array sizes too.
             sz = this->monomorphConstgeneric(sp, *se, true);
         }
         se = sz.opt_Unevaluated();
         assert(se);
 
-        // Evaluate, if possible
         if (se->is_Unevaluated()) {
             if (this->constevalWb) {
                 ConvertHIRConstantEvaluateConstGeneric(sp, *this->constevalWb, *this->constevalWb->crate, types.primitive(HIRCoreType::Usize), sz.as_Unevaluated());
@@ -816,33 +381,6 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
         return tpl.clone();
     }
 }
-
-struct CloneTyWithMonomorph: Monomorphiser {
-    HIRTypeCloneCallback& callback;
-
-    CloneTyWithMonomorph(HIRTypeInterner& types, HIRTypeCloneCallback& callback)
-        : Monomorphiser(types)
-        , callback(callback)
-    {
-    }
-
-    HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override {
-        return types.generic(g.name, g.binding);
-    }
-
-    HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override {
-        return g;
-    }
-
-    HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override {
-        HIRTypeRef rv;
-
-        if (callback.clone(ty, rv)) {
-            return rv;
-        }
-        return Monomorphiser::monomorphType(sp, ty, allowInfer);
-    }
-};
 
 HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, HIRTypeCloneCallback& callback) {
     HIRPathParams rv;
@@ -929,10 +467,7 @@ HIRConstGeneric MonomorphiserPP::getValue(const Span& sp, const HIRGenericRef& v
     }
 }
 
-//t_cb_generic MonomorphState::get_cb(const Span& sp) const
-//{
-//}
-::std::ostream& operator<<(::std::ostream& os, const MonomorphState& ms) {
+std::ostream& operator<<(std::ostream& os, const MonomorphState& ms) {
     os << "MonomorphState {";
     if (ms.selfTy != HIRTypeRef()) {
         os << " self=" << ms.selfTy;
@@ -1052,10 +587,6 @@ bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRTypeData* 
     UNREACHABLE();
 }
 
-// For these binary language operations, once the left-hand type is known
-// it also fixes an otherwise untyped right-hand operand. Shifts are
-// deliberately excluded: their right-hand side need only be an integer
-// and may have a different type.
 bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const HIRTypeData* left) {
     const auto* primitive = left->opt_Primitive();
     const auto numeric = primitive && (isInteger(*primitive) || isFloat(*primitive));
@@ -1100,9 +631,6 @@ bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const HIRType
     UNREACHABLE();
 }
 
-// A binary language candidate is available either when both operands are
-// already known to be valid primitive inputs, or when the known lhs
-// determines the still-inferred rhs.
 bool primitiveOperatorHasLanguageCandidate(TypeckPrimitiveOperator op, const HIRTypeData* left, const HIRTypeData* right) {
     return primitiveOperatorHasBuiltin(op, left, right) || (right->is_Infer() && primitiveOperatorLhsDeterminesRhs(op, left));
 }
@@ -1140,4 +668,492 @@ bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRTypeData* 
         default:
             return false;
     }
+}
+
+template <template <typename> typename W>
+auto TyVisitor<W>::visitConstGeneric(typename W<HIRConstGeneric>::T&) -> bool {
+    return false;
+}
+
+template <template <typename> typename W>
+auto TyVisitor<W>::visitPathParams(typename W<HIRPathParams>::T& tpl) -> bool {
+    for (auto& ty : tpl.types) {
+        if (visitType(ty)) {
+            return true;
+        }
+    }
+    for (auto& value : tpl.values) {
+        if (visitConstGeneric(value)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+template <template <typename> typename W>
+auto TyVisitor<W>::visitTraitPath(typename W<HIRTraitPath>::T& tpl) -> bool {
+    if (visitPathParams(tpl.path.params)) {
+        return true;
+    }
+    for (auto& assoc : tpl.typeBounds) {
+        if (visitPathParams(assoc.second.sourceTrait.params) || visitPathParams(assoc.second.atyParams) || visitType(assoc.second.type)) {
+            return true;
+        }
+    }
+    for (auto& assoc : tpl.traitBounds) {
+        if (visitPathParams(assoc.second.sourceTrait.params) || visitPathParams(assoc.second.atyParams)) {
+            return true;
+        }
+        for (auto& t : assoc.second.traits) {
+            if (visitTraitPath(t)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+template <template <typename> typename W>
+auto TyVisitor<W>::visitPath(typename W<HIRPath>::T& path) -> bool {
+    switch (path.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            auto& e = path.data.as_Generic();
+            return visitPathParams(e.params);
+        }
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& e = path.data.as_UfcsInherent();
+            return visitType(e.type) || visitPathParams(e.params);
+        }
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& e = path.data.as_UfcsKnown();
+            return visitType(e.type) || visitPathParams(e.trait.params) || visitPathParams(e.params);
+        }
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& e = path.data.as_UfcsUnknown();
+            return visitType(e.type) || visitPathParams(e.params);
+        }
+    }
+    UNREACHABLE();
+}
+
+template <template <typename> typename W>
+auto TyVisitor<W>::visitType(const HIRTypeData* ty) -> bool {
+    if (curRecurseStack) {
+        for (const auto* p : *curRecurseStack) {
+            if (p == ty) {
+                return false;
+            }
+        }
+    }
+
+    LList<const HIRTypeData*> recurseNode(curRecurseStack, ty);
+    curRecurseStack = &recurseNode;
+    STD_DEFER {
+        curRecurseStack = recurseNode.prev;
+    };
+
+    {
+        auto& tuMatch = (this->getTyData(ty));
+        switch (tuMatch.tag()) {
+            case HIRTypeData::TAG_Infer: {
+                break;
+            }
+            case HIRTypeData::TAG_Diverge: {
+                break;
+            }
+            case HIRTypeData::TAG_Primitive: {
+                break;
+            }
+            case HIRTypeData::TAG_Generic: {
+                break;
+            }
+            case HIRTypeData::TAG_Path: {
+                auto& e = tuMatch.as_Path();
+                return visitPath(e.path);
+            }
+            case HIRTypeData::TAG_TraitObject: {
+                auto& e = tuMatch.as_TraitObject();
+                if (visitTraitPath(e.trait)) {
+                    return true;
+                }
+                for (auto& trait : e.markers) {
+                    if (visitPathParams(trait.params)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            case HIRTypeData::TAG_ErasedType: {
+                auto& e = tuMatch.as_ErasedType();
+                for (auto& trait : e.traits) {
+                    if (visitTraitPath(trait)) {
+                        return true;
+                    }
+                }
+                visitPathParams(e.use);
+                switch (e.inner.tag()) {
+                    case TypeDataErasedTypeInner::TAG_Fcn: {
+                        auto& ee = e.inner.as_Fcn();
+                        if (visitPath(ee.origin)) {
+                            return true;
+                        }
+                        break;
+                    }
+                    case TypeDataErasedTypeInner::TAG_Known: {
+                        auto& ee = e.inner.as_Known();
+                        if (visitType(ee)) {
+                            return true;
+                        }
+                        break;
+                    }
+                    case TypeDataErasedTypeInner::TAG_Alias: {
+                        auto& ee = e.inner.as_Alias();
+                        visitPathParams(ee.params);
+                        break;
+                    }
+                }
+                return false;
+            }
+            case HIRTypeData::TAG_Array: {
+                auto& e = tuMatch.as_Array();
+                if (visitType(e.inner)) {
+                    return true;
+                }
+                if (auto* size = e.size.opt_Unevaluated()) {
+                    return visitConstGeneric(*size);
+                }
+                return false;
+            }
+            case HIRTypeData::TAG_Slice: {
+                auto& e = tuMatch.as_Slice();
+                return visitType(e.inner);
+            }
+            case HIRTypeData::TAG_Pattern: {
+                auto& e = tuMatch.as_Pattern();
+                if (visitType(e.inner)) {
+                    return true;
+                }
+                for (auto& range : e.pattern.alternatives) {
+                    if ((range.hasStart && visitConstGeneric(range.start)) || (range.hasEnd && visitConstGeneric(range.end))) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            case HIRTypeData::TAG_Tuple: {
+                auto& e = tuMatch.as_Tuple();
+                for (auto& ty : e) {
+                    if (visitType(ty)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            case HIRTypeData::TAG_Borrow: {
+                auto& e = tuMatch.as_Borrow();
+                return visitType(e.inner);
+            }
+            case HIRTypeData::TAG_Pointer: {
+                auto& e = tuMatch.as_Pointer();
+                return visitType(e.inner);
+            }
+            case HIRTypeData::TAG_NamedFunction: {
+                auto& e = tuMatch.as_NamedFunction();
+                return visitPath(e.path);
+            }
+            case HIRTypeData::TAG_Function: {
+                auto& e = tuMatch.as_Function();
+                for (auto& ty : e.argTypes) {
+                    if (visitType(ty)) {
+                        return true;
+                    }
+                }
+                return visitType(e.rettype);
+            }
+            case HIRTypeData::TAG_NodeType: {
+                break;
+            }
+        }
+    }
+    return false;
+}
+
+TyVisitorCbConst::TyVisitorCbConst(HIRTypeVisitorCallback& callback)
+    : callback(callback)
+{
+}
+
+auto TyVisitorCbConst::getTyData(const HIRTypeData* ty) const -> const HIRTypeData& {
+    return *ty;
+}
+
+auto TyVisitorCbConst::visitType(const HIRTypeData* ty) -> bool {
+    if (callback.visit(ty)) {
+        return true;
+    }
+    return TyVisitor::visitType(ty);
+}
+
+TyVisitorGenericGroup::TyVisitorGenericGroup(HIRGenericGroup group)
+    : group(group)
+{
+}
+
+auto TyVisitorGenericGroup::getTyData(const HIRTypeData* ty) const -> const HIRTypeData& {
+    return *ty;
+}
+
+auto TyVisitorGenericGroup::visitConstGeneric(const HIRConstGeneric& value) -> bool {
+    if (const auto* generic = value.opt_Generic()) {
+        return generic->group() == group;
+    }
+    if (const auto* unevaluated = value.opt_Unevaluated()) {
+        return ((*unevaluated)->selfType && visitType((*unevaluated)->selfType)) || visitPathParams((*unevaluated)->paramsImpl) || visitPathParams((*unevaluated)->paramsItem);
+    }
+    return false;
+}
+
+auto TyVisitorGenericGroup::visitType(const HIRTypeData* ty) -> bool {
+    if (const auto* generic = ty->opt_Generic(); generic && generic->group() == group) {
+        return true;
+    }
+    return TyVisitor::visitType(ty);
+}
+
+auto TyRewriter::rewritePathParams(HIRPathParams& params) -> bool {
+    for (auto& type : params.types) {
+        if (rewriteType(type)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+auto TyRewriter::rewriteTraitPath(HIRTraitPath& trait) -> bool {
+    if (rewritePathParams(trait.path.params)) {
+        return true;
+    }
+    for (auto& assoc : trait.typeBounds) {
+        if (rewritePathParams(assoc.second.sourceTrait.params) || rewritePathParams(assoc.second.atyParams) || rewriteType(assoc.second.type)) {
+            return true;
+        }
+    }
+    for (auto& assoc : trait.traitBounds) {
+        if (rewritePathParams(assoc.second.sourceTrait.params) || rewritePathParams(assoc.second.atyParams)) {
+            return true;
+        }
+        for (auto& bound : assoc.second.traits) {
+            if (rewriteTraitPath(bound)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+auto TyRewriter::rewritePath(HIRPath& path) -> bool {
+    switch (path.data.tag()) {
+        case HIRPathData::TAG_Generic: {
+            auto& e = path.data.as_Generic();
+            return rewritePathParams(e.params);
+        }
+        case HIRPathData::TAG_UfcsInherent: {
+            auto& e = path.data.as_UfcsInherent();
+            return rewriteType(e.type) || rewritePathParams(e.params) || rewritePathParams(e.implParams);
+        }
+        case HIRPathData::TAG_UfcsKnown: {
+            auto& e = path.data.as_UfcsKnown();
+            return rewriteType(e.type) || rewritePathParams(e.trait.params) || rewritePathParams(e.params);
+        }
+        case HIRPathData::TAG_UfcsUnknown: {
+            auto& e = path.data.as_UfcsUnknown();
+            return rewriteType(e.type) || rewritePathParams(e.params);
+        }
+    }
+    UNREACHABLE();
+}
+
+auto TyRewriter::rewriteType(HIRTypeRef& type) -> bool {
+    if (!type || std::find(stack.begin(), stack.end(), type) != stack.end()) {
+        return false;
+    }
+    const auto original = type;
+    auto data = original->cloneData();
+    HIRTypeRef rewritten = original;
+    const bool stop = callback.rewrite(rewritten, data);
+    if (rewritten != original) {
+        type = rewritten;
+        return stop;
+    }
+
+    stack.push_back(original);
+    bool childStop = false;
+    if (!stop) {
+        switch (data.tag()) {
+            case HIRTypeData::TAG_Infer: {
+                break;
+            }
+            case HIRTypeData::TAG_Diverge: {
+                break;
+            }
+            case HIRTypeData::TAG_Primitive: {
+                break;
+            }
+            case HIRTypeData::TAG_Generic: {
+                break;
+            }
+            case HIRTypeData::TAG_Path: {
+                auto& e = data.as_Path();
+                childStop = rewritePath(e.path);
+                break;
+            }
+            case HIRTypeData::TAG_TraitObject: {
+                auto& e = data.as_TraitObject();
+                childStop = rewriteTraitPath(e.trait);
+                for (auto& marker : e.markers) {
+                    if (!childStop) {
+                        childStop = rewritePathParams(marker.params);
+                    }
+                }
+                break;
+            }
+            case HIRTypeData::TAG_ErasedType: {
+                auto& e = data.as_ErasedType();
+                for (auto& trait : e.traits) {
+                    if (!childStop) {
+                        childStop = rewriteTraitPath(trait);
+                    }
+                }
+                if (!childStop) {
+                    childStop = rewritePathParams(e.use);
+                }
+                if (!childStop) {
+                    {
+                        auto& tuMatch = e.inner;
+                        switch (tuMatch.tag()) {
+                            case TypeDataErasedTypeInner::TAG_Fcn: {
+                                auto& inner = tuMatch.as_Fcn();
+                                childStop = rewritePath(inner.origin);
+                                break;
+                            }
+                            case TypeDataErasedTypeInner::TAG_Known: {
+                                auto& inner = tuMatch.as_Known();
+                                childStop = rewriteType(inner);
+                                break;
+                            }
+                            case TypeDataErasedTypeInner::TAG_Alias: {
+                                auto& inner = tuMatch.as_Alias();
+                                childStop = rewritePathParams(inner.params);
+                                break;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+            case HIRTypeData::TAG_Array: {
+                auto& e = data.as_Array();
+                childStop = rewriteType(e.inner);
+                break;
+            }
+            case HIRTypeData::TAG_Slice: {
+                auto& e = data.as_Slice();
+                childStop = rewriteType(e.inner);
+                break;
+            }
+            case HIRTypeData::TAG_Pattern: {
+                auto& e = data.as_Pattern();
+                childStop = rewriteType(e.inner);
+                break;
+            }
+            case HIRTypeData::TAG_Tuple: {
+                auto& e = data.as_Tuple();
+                for (auto& inner : e) {
+                    if (!childStop) {
+                        childStop = rewriteType(inner);
+                    }
+                }
+                break;
+            }
+            case HIRTypeData::TAG_Borrow: {
+                auto& e = data.as_Borrow();
+                childStop = rewriteType(e.inner);
+                break;
+            }
+            case HIRTypeData::TAG_Pointer: {
+                auto& e = data.as_Pointer();
+                childStop = rewriteType(e.inner);
+                break;
+            }
+            case HIRTypeData::TAG_NamedFunction: {
+                auto& e = data.as_NamedFunction();
+                childStop = rewritePath(e.path);
+                break;
+            }
+            case HIRTypeData::TAG_Function: {
+                auto& e = data.as_Function();
+                for (auto& arg : e.argTypes) {
+                    if (!childStop) {
+                        childStop = rewriteType(arg);
+                    }
+                }
+                if (!childStop) {
+                    childStop = rewriteType(e.rettype);
+                }
+                break;
+            }
+            case HIRTypeData::TAG_NodeType: {
+                break;
+            }
+        }
+    }
+    stack.pop_back();
+    type = types.intern(mv$(data));
+    return stop || childStop;
+}
+
+auto TyVisitorMonomorphNeeded::getTyData(const HIRTypeData* ty) const -> const HIRTypeData& {
+    return *ty;
+}
+
+auto TyVisitorMonomorphNeeded::visitPathParams(const HIRPathParams& pp) -> bool {
+    for (const auto& v : pp.values) {
+        if (v.is_Generic()) {
+            return true;
+        }
+    }
+    return TyVisitor::visitPathParams(pp);
+}
+
+auto TyVisitorMonomorphNeeded::visitType(const HIRTypeData* ty) -> bool {
+    if (ty->is_Generic()) {
+        return true;
+    }
+    if (ty->is_Array() && ty->as_Array().size.is_Unevaluated() /*&& ty->as_Array().size.as_Unevaluated().*/) {
+        return true;
+    }
+    return TyVisitor::visitType(ty);
+}
+
+CloneTyWithMonomorph::CloneTyWithMonomorph(HIRTypeInterner& types, HIRTypeCloneCallback& callback)
+    : Monomorphiser(types)
+    , callback(callback)
+{
+}
+
+auto CloneTyWithMonomorph::getType(const Span& sp, const HIRGenericRef& g) const -> HIRTypeRef {
+    return types.generic(g.name, g.binding);
+}
+
+auto CloneTyWithMonomorph::getValue(const Span& sp, const HIRGenericRef& g) const -> HIRConstGeneric {
+    return g;
+}
+
+auto CloneTyWithMonomorph::monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer) const -> HIRTypeRef {
+    HIRTypeRef rv;
+
+    if (callback.clone(ty, rv)) {
+        return rv;
+    }
+    return Monomorphiser::monomorphType(sp, ty, allowInfer);
 }

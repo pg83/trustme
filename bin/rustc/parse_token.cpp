@@ -2,15 +2,104 @@
 
 #include "common.h"
 #include "ast_ast.h"
-#include "ast_expr.h" // for reasons
+#include "ast_expr.h"
 #include "ast_types.h"
 #include "parse_parseerror.h"
 #include "parse_interpolated_fragment.h"
 
-#include <iomanip>
-
 #include <std/str/view.h>
 #include <std/str/builder.h>
+
+#include <iomanip>
+
+using namespace stl;
+
+namespace {
+struct EscapedString {
+    StringView s;
+
+    EscapedString(StringView s);
+
+    static size_t utf8Run(StringView s, size_t i);
+
+    friend std::ostream& operator<<(std::ostream& os, const EscapedString& x) {
+        for (size_t i = 0; i < x.s.length(); i++) {
+            const u8 b = x.s[i];
+            switch (b) {
+                case '"':
+                    os << "\\\"";
+                    continue;
+                case '\\':
+                    os << "\\\\";
+                    continue;
+                case '\n':
+                    os << "\\n";
+                    continue;
+                case '\r':
+                    os << "\\r";
+                    continue;
+                case '\t':
+                    os << "\\t";
+                    continue;
+                default:
+                    break;
+            }
+            if (' ' <= b && b < 0x7F) {
+                os << static_cast<char>(b);
+                continue;
+            }
+            if (b < 0x80) {
+                os << "\\u{" << std::hex << static_cast<unsigned int>(b) << std::dec << "}";
+                continue;
+            }
+            if (const auto run = utf8Run(x.s, i)) {
+                os.write(reinterpret_cast<const char*>(x.s.data() + i), run);
+                i += run - 1;
+                continue;
+            }
+            os << "\\x" << std::hex << std::uppercase << static_cast<unsigned int>(b) << std::nouppercase << std::dec;
+        }
+        return os;
+    }
+};
+
+struct EscapedByteString {
+    StringView s;
+
+    EscapedByteString(StringView s);
+
+    friend std::ostream& operator<<(std::ostream& os, const EscapedByteString& x) {
+        for (size_t i = 0; i < x.s.length(); i++) {
+            const u8 b = x.s[i];
+            switch (b) {
+                case '"':
+                    os << "\\\"";
+                    continue;
+                case '\\':
+                    os << "\\\\";
+                    continue;
+                case '\n':
+                    os << "\\n";
+                    continue;
+                case '\r':
+                    os << "\\r";
+                    continue;
+                case '\t':
+                    os << "\\t";
+                    continue;
+                default:
+                    break;
+            }
+            if (' ' <= b && b < 0x7F) {
+                os << static_cast<char>(b);
+                continue;
+            }
+            os << "\\x" << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(b) << std::nouppercase << std::dec << std::setfill(' ');
+        }
+        return os;
+    }
+};
+}
 
 Token::~Token() {
     switch (type_) {
@@ -63,7 +152,7 @@ Token::Token(enum eTokenType type, Ident i)
 {
 }
 
-Token::Token(enum eTokenType type, ::std::string str, Ident::Hygiene h)
+Token::Token(enum eTokenType type, std::string str, Ident::Hygiene h)
     : type_(type)
     , data_(Data::make_String(mv$(str)))
     , hygiene_(std::move(h))
@@ -270,7 +359,8 @@ Token Token::clone() const {
         }
         case Data::TAG_Fragment: {
             auto& e = data_.as_Fragment();
-            assert(e); switch (type_) {
+            assert(e);
+            switch (type_) {
                 case TOK_INTERPOLATED_TYPE:
                     rv.data_ = new ASTType*((*reinterpret_cast<ASTType**>(e))->clone());
                     break;
@@ -302,7 +392,8 @@ Token Token::clone() const {
                 default:
                     BUG(Span(Span(), pos), "Fragment with invalid token type (" << *this << ")");
                     break;
-            } assert(rv.data_.is_Fragment());
+            }
+            assert(rv.data_.is_Fragment());
             break;
         }
     }
@@ -315,11 +406,11 @@ ASTExprNode& Token::fragNode() {
     return *reinterpret_cast<ASTExprNode*>(ptr);
 }
 
-::std::unique_ptr<ASTExprNode> Token::takeFragNode() {
+std::unique_ptr<ASTExprNode> Token::takeFragNode() {
     assert(type_ == TOK_INTERPOLATED_EXPR || type_ == TOK_INTERPOLATED_STMT || type_ == TOK_INTERPOLATED_BLOCK);
     auto ptr = data_.as_Fragment();
     data_.as_Fragment() = nullptr;
-    return ::std::unique_ptr<ASTExprNode>(reinterpret_cast<ASTExprNode*>(ptr));
+    return std::unique_ptr<ASTExprNode>(reinterpret_cast<ASTExprNode*>(ptr));
 }
 
 ASTNamed<ASTItem> Token::takeFragItem() {
@@ -360,7 +451,7 @@ const char* Token::typestr(enum eTokenType type) {
     return ">>BUGCHECK: BADTOK<<";
 }
 
-enum eTokenType Token::typefromstr(const ::std::string& s) {
+enum eTokenType Token::typefromstr(const std::string& s) {
     if (s == "") {
         return TOK_NULL;
     }
@@ -372,126 +463,14 @@ enum eTokenType Token::typefromstr(const ::std::string& s) {
     return TOK_NULL;
 }
 
-/// The text of a string literal, viewed as the bytes it holds.
-static stl::StringView literalBytes(const ::std::string& s) {
-    return stl::StringView(reinterpret_cast<const u8*>(s.data()), s.size());
+namespace {
+static StringView literalBytes(const std::string& s) {
+    return StringView(reinterpret_cast<const u8*>(s.data()), s.size());
+}
 }
 
-struct EscapedString {
-    stl::StringView s;
-
-    EscapedString(stl::StringView s)
-        : s(s)
-    {
-    }
-
-    /// How many bytes the UTF-8 sequence starting at `i` runs for, or zero
-    /// when the bytes there are not one.
-    static size_t utf8Run(stl::StringView s, size_t i) {
-        const u8 lead = s[i];
-        const size_t len = (lead & 0xE0) == 0xC0 ? 2 : (lead & 0xF0) == 0xE0 ? 3 : (lead & 0xF8) == 0xF0 ? 4 : 0;
-        if (len == 0 || i + len > s.length()) {
-            return 0;
-        }
-        for (size_t k = 1; k < len; k++) {
-            if ((s[i + k] & 0xC0) != 0x80) {
-                return 0;
-            }
-        }
-        return len;
-    }
-
-    friend ::std::ostream& operator<<(::std::ostream& os, const EscapedString& x) {
-        for (size_t i = 0; i < x.s.length(); i++) {
-            // A byte, not a char: `char` is signed here, and a high byte read
-            // through it would print as its sign-extended self.
-            const u8 b = x.s[i];
-            switch (b) {
-                case '"':
-                    os << "\\\"";
-                    continue;
-                case '\\':
-                    os << "\\\\";
-                    continue;
-                case '\n':
-                    os << "\\n";
-                    continue;
-                case '\r':
-                    os << "\\r";
-                    continue;
-                case '\t':
-                    os << "\\t";
-                    continue;
-                default:
-                    break;
-            }
-            if (' ' <= b && b < 0x7F) {
-                os << static_cast<char>(b);
-                continue;
-            }
-            if (b < 0x80) {
-                // A control character is written by its value.
-                os << "\\u{" << ::std::hex << static_cast<unsigned int>(b) << ::std::dec << "}";
-                continue;
-            }
-            // Text passes through as itself; a byte that starts no sequence is
-            // written as the byte it is.
-            if (const auto run = utf8Run(x.s, i)) {
-                os.write(reinterpret_cast<const char*>(x.s.data() + i), run);
-                i += run - 1;
-                continue;
-            }
-            os << "\\x" << ::std::hex << ::std::uppercase << static_cast<unsigned int>(b) << ::std::nouppercase << ::std::dec;
-        }
-        return os;
-    }
-};
-
-/// A byte string holds bytes, not text: rustc writes every byte that is not
-/// printable ASCII as a hex escape, since `\u{..}` has no meaning there.
-struct EscapedByteString {
-    stl::StringView s;
-
-    EscapedByteString(stl::StringView s)
-        : s(s)
-    {
-    }
-
-    friend ::std::ostream& operator<<(::std::ostream& os, const EscapedByteString& x) {
-        for (size_t i = 0; i < x.s.length(); i++) {
-            const u8 b = x.s[i];
-            switch (b) {
-                case '"':
-                    os << "\\\"";
-                    continue;
-                case '\\':
-                    os << "\\\\";
-                    continue;
-                case '\n':
-                    os << "\\n";
-                    continue;
-                case '\r':
-                    os << "\\r";
-                    continue;
-                case '\t':
-                    os << "\\t";
-                    continue;
-                default:
-                    break;
-            }
-            if (' ' <= b && b < 0x7F) {
-                os << static_cast<char>(b);
-                continue;
-            }
-            os << "\\x" << ::std::hex << ::std::uppercase << ::std::setw(2) << ::std::setfill('0') << static_cast<unsigned int>(b)
-               << ::std::nouppercase << ::std::dec << ::std::setfill(' ');
-        }
-        return os;
-    }
-};
-
-void printEscapedLiteral(::std::ostream& os, eTokenType type, const u8* value, size_t size) {
-    const auto bytes = stl::StringView(value, size);
+void printEscapedLiteral(std::ostream& os, eTokenType type, const u8* value, size_t size) {
+    const auto bytes = StringView(value, size);
     switch (type) {
         case TOK_STRING:
             os << "\"" << EscapedString(bytes) << "\"";
@@ -508,9 +487,7 @@ void printEscapedLiteral(::std::ostream& os, eTokenType type, const u8* value, s
 }
 
 namespace {
-    /// The fewest hashes that let a raw literal hold `text`: one more than the
-    /// longest run of `#` that follows a quote in it, and none without a quote.
-    static size_t rawStringHashes(stl::StringView text) {
+    static size_t rawStringHashes(StringView text) {
         size_t needed = 0;
         for (size_t i = 0; i < text.length(); i++) {
             if (text[i] != '"') {
@@ -527,9 +504,7 @@ namespace {
         return needed;
     }
 
-    /// Append `tt` to `out` as source, spacing the tokens the way whoever wrote
-    /// them had to.  `prev` carries the token before the tree.
-    static void appendTokenTreeSource(stl::StringBuilder& out, const TokenTree& tt, eTokenType& prev) {
+    static void appendTokenTreeSource(StringBuilder& out, const TokenTree& tt, eTokenType& prev) {
         if (tt.isToken()) {
             if (!out.empty() && tokensNeedSpace(prev, tt.tok().type())) {
                 out.append(" ", 1);
@@ -543,8 +518,7 @@ namespace {
         }
     }
 
-    /// An attribute's meta item as source: `doc = "..."`, `cfg(unix)`, `C`.
-    static void attributeToSource(stl::StringBuilder& out, const ASTAttribute& attr) {
+    static void attributeToSource(StringBuilder& out, const ASTAttribute& attr) {
         auto name = FMT(attr.name());
         out.append(name.data(), name.size());
         auto prev = TOK_IDENT;
@@ -553,7 +527,6 @@ namespace {
 }
 
 bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
-    // These bind to what is on their left: `x,` `x;` `x.y` `f()` `a[0]`.
     switch (cur) {
         case TOK_COMMA:
         case TOK_SEMICOLON:
@@ -566,7 +539,6 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         default:
             break;
     }
-    // And these to what is on their right: `.y` `#[a]` `$x` `(a` `[a`.
     switch (prev) {
         case TOK_DOT:
         case TOK_HASH:
@@ -578,23 +550,20 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         default:
             break;
     }
-    // A macro call keeps its name, its `!` and its delimiter together.
     if (cur == TOK_EXCLAM && (prev == TOK_IDENT || Token::typeIsRword(prev))) {
         return false;
     }
     if (prev == TOK_EXCLAM && (cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN || cur == TOK_BRACE_OPEN)) {
         return false;
     }
-    // As does a call or an index.
-    if ((cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN)
-        && (prev == TOK_IDENT || prev == TOK_PAREN_CLOSE || prev == TOK_SQUARE_CLOSE)) {
+    if ((cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN) && (prev == TOK_IDENT || prev == TOK_PAREN_CLOSE || prev == TOK_SQUARE_CLOSE)) {
         return false;
     }
     return true;
 }
 
-::std::string Token::toStr() const {
-    ::std::stringstream ss;
+std::string Token::toStr() const {
+    std::stringstream ss;
     switch (type_) {
         case TOK_NULL:
             return "/*null*/";
@@ -619,12 +588,12 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         case TOK_INTERPOLATED_STMT:
         case TOK_INTERPOLATED_BLOCK:
         case TOK_INTERPOLATED_EXPR: {
-            ::std::stringstream ss;
+            std::stringstream ss;
             reinterpret_cast<const ASTExprNode*>(data_.as_Fragment())->print(ss);
             return ss.str();
         }
         case TOK_INTERPOLATED_META: {
-            stl::StringBuilder out;
+            StringBuilder out;
             attributeToSource(out, *reinterpret_cast<const ASTAttribute*>(data_.as_Fragment()));
             return {static_cast<const char*>(out.data()), out.used()};
         }
@@ -633,13 +602,12 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         case TOK_INTERPOLATED_ITEM:
             return "/*:item*/";
         case TOK_INTERPOLATED_VIS: {
-            ::std::stringstream ss;
+            std::stringstream ss;
             ss << *reinterpret_cast<const ASTVisibility*>(data_.as_Fragment());
             return ss.str();
         }
-        // Value tokens
         case TOK_IDENT:
-            return data_.as_Ident().isRaw ? "r#" + ::std::string(data_.as_Ident().name.c_str()) : ::std::string(data_.as_Ident().name.c_str());
+            return data_.as_Ident().isRaw ? "r#" + std::string(data_.as_Ident().name.c_str()) : std::string(data_.as_Ident().name.c_str());
         case TOK_LIFETIME:
             return FMT("'" << data_.as_Ident().name.c_str());
         case TOK_INTEGER: {
@@ -656,7 +624,7 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
                                 return FMT("'" << (char)v.truncateU64() << "'");
                         }
                     }
-                    return FMT("'\\u{" << ::std::hex << v << ::std::dec << "}'");
+                    return FMT("'\\u{" << std::hex << v << std::dec << "}'");
                 case CORETYPE_ANY:
                     return FMT(data_.as_Integer().intval);
                 default:
@@ -665,7 +633,7 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
             break;
         }
         case TOK_CHAR:
-            return FMT("'\\u{" << ::std::hex << data_.as_Integer().intval << "}");
+            return FMT("'\\u{" << std::hex << data_.as_Integer().intval << "}");
         case TOK_FLOAT:
             if (data_.as_Float().datatype == CORETYPE_ANY) {
                 return formatFloatValueForToken(data_.as_Float().floatval);
@@ -673,8 +641,6 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
                 return FMT(formatFloatValueForToken(data_.as_Float().floatval) << coretypeName(data_.as_Float().datatype));
             }
         case TOK_STRING: {
-            // A doc comment is a `#[doc = ...]` whose string rustc writes as a
-            // raw literal, with just enough hashes to close it unambiguously.
             const auto& text = data_.as_String();
             if (!isDocComment_) {
                 return FMT("\"" << EscapedString(literalBytes(text)) << "\"");
@@ -700,7 +666,6 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
             return "#";
         case TOK_UNDERSCORE:
             return "_";
-        // Symbols
         case TOK_PAREN_OPEN:
             return "(";
         case TOK_PAREN_CLOSE:
@@ -816,7 +781,6 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         case TOK_BACKTICK:
             return "`";
 
-        // Reserved Words
         case TOK_RWORD_PUB:
             return "pub";
         case TOK_RWORD_PRIV:
@@ -919,7 +883,6 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         case TOK_RWORD_MACRO:
             return "macro";
 
-        // 2018
         case TOK_RWORD_ASYNC:
             return "async";
         case TOK_RWORD_AWAIT:
@@ -932,7 +895,7 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
     compileErrorBugCheck("Reached end of Token::to_str");
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Token& tok) {
+std::ostream& operator<<(std::ostream& os, const Token& tok) {
     os << Token::typestr(tok.type());
     switch (tok.type()) {
         case TOK_STRING:
@@ -997,8 +960,8 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Position& p) {
-    return os << ::std::dec << p.filename << ":" << p.line;
+std::ostream& operator<<(std::ostream& os, const Position& p) {
+    return os << std::dec << p.filename << ":" << p.line;
 }
 
 Position::Position()
@@ -1023,12 +986,10 @@ Position::Position(RcString filename, unsigned int line, unsigned int ofs)
 {
 }
 
-// Only for strings, for formatting
-
 Token::Token(enum eTokenType t, Data d, Position p)
     : type_(t)
-    , data_(::std::move(d))
-    , pos(::std::move(p))
+    , data_(std::move(d))
+    , pos(std::move(p))
 {
 }
 
@@ -1037,14 +998,14 @@ Token& Token::operator=(Token&& t) {
         return *this;
     }
     this->~Token();
-    new (this) Token(::std::move(t));
+    new (this) Token(std::move(t));
     return *this;
 }
 
 Token::Token(Token&& t)
     : type_(t.type_)
-    , data_(::std::move(t.data_))
-    , pos(::std::move(t.pos))
+    , data_(std::move(t.data_))
+    , pos(std::move(t.pos))
     , hygiene_(std::move(t.hygiene_))
     , isDocComment_(t.isDocComment_)
 {
@@ -1112,4 +1073,28 @@ bool Token::operator==(const Token& r) const {
         }
     }
     UNREACHABLE();
+}
+
+EscapedString::EscapedString(StringView s)
+    : s(s)
+{
+}
+
+auto EscapedString::utf8Run(StringView s, size_t i) -> size_t {
+    const u8 lead = s[i];
+    const size_t len = (lead & 0xE0) == 0xC0 ? 2 : (lead & 0xF0) == 0xE0 ? 3 : (lead & 0xF8) == 0xF0 ? 4 : 0;
+    if (len == 0 || i + len > s.length()) {
+        return 0;
+    }
+    for (size_t k = 1; k < len; k++) {
+        if ((s[i + k] & 0xC0) != 0x80) {
+            return 0;
+        }
+    }
+    return len;
+}
+
+EscapedByteString::EscapedByteString(StringView s)
+    : s(s)
+{
 }

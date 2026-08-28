@@ -1,10 +1,9 @@
 #pragma once
 
-#include "lang_items.h"
-#include "wire_board.h"
-
 #include "hir_hir.h"
 #include "hir_path.h"
+#include "lang_items.h"
+#include "wire_board.h"
 #include "hir_type_ref.h"
 #include "range_vec_map.h"
 #include "hir_generic_params.h"
@@ -49,10 +48,6 @@ struct HIRGenericBoundCb final: HIRGenericBoundCallback {
 };
 
 struct TraitResolveCommon {
-    // NOTE: `wb`/`crate` are on their way out as data: a component may expose
-    // only methods, and `crate` is just `*wb.crate`. Read them through
-    // `board()`/`hirCrate()`; the fields become implementation-private when
-    // StaticTraitResolve is flipped to an opaque interface.
     const WireBoard& wb;
     const HIRCrate& crate;
 
@@ -144,8 +139,6 @@ struct TraitResolveCommon {
         return wb.langItems->asyncIterator();
     }
 
-    // Nullable views of the current generics context (the non-Ptr overloads
-    // below assert they are set).
     const HIRGenericParams* implGenericsPtr() const {
         return implGenerics_;
     }
@@ -154,7 +147,6 @@ struct TraitResolveCommon {
         return itemGenerics_;
     }
 
-    // Visit each cached type-equality target; the cache itself stays internal.
     void forEachTypeEqualityCb(HIRTypeEqualityCallback& cb) {
         for (auto& e : typeEqualities) {
             cb.visit(e.second.ty);
@@ -175,7 +167,6 @@ struct TraitResolveCommon {
         return crate;
     }
 
-
     const HIRGenericParams* implGenerics_;
     const HIRGenericParams* itemGenerics_;
     HIRGenericParams emptyGenerics_;
@@ -186,7 +177,6 @@ struct TraitResolveCommon {
 
     HIRTypeRefMap<CachedEquality> typeEqualities;
 
-    // A pre-calculated list of trait bounds
     struct CachedBound {
         const HIRTrait* traitPtr;
         HIRTraitPath::assocListT assoc;
@@ -230,7 +220,6 @@ struct TraitResolveCommon {
     typedef RangeVecMap<std::pair<HIRTypeRef, HIRGenericPath>, CachedBound, CachedBoundCmp> cachedBoundsT;
     cachedBoundsT traitBounds;
 
-
     TraitResolveCommon(const WireBoard& wb);
 
     bool hasSelf() const {
@@ -241,9 +230,6 @@ struct TraitResolveCommon {
 
     const HIRGenericParams& itemGenerics() const;
 
-    /// <summary>
-    /// Obtain the type for a given constant parameter
-    /// </summary>
     const HIRTypeData* getConstParamType(const Span& sp, unsigned binding) const;
 
     void prepIndexes(const Span& sp);
@@ -252,7 +238,6 @@ protected:
     void prepIndexesAddEquality(const Span& sp, HIRTypeRef longTy, HIRTypeRef shortTy);
     void prepIndexesAddTraitBound(const Span& sp, HIRTypeRef type, HIRTraitPath traitPath, bool addParents = true);
 
-    /// Iterate over in-scope bounds (function then type)
     bool iterateBoundsCb(HIRGenericBoundCallback& cb) const;
 
     template <typename F>
@@ -262,4 +247,4 @@ protected:
     }
 };
 
-extern ::std::ostream& operator<<(::std::ostream& s, const TraitResolveCommon::CachedEquality& x);
+extern std::ostream& operator<<(std::ostream& s, const TraitResolveCommon::CachedEquality& x);

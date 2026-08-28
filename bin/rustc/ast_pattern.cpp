@@ -2,9 +2,9 @@
 
 #include "common.h"
 #include "ast_ast.h"
-#include "ast_expr.h" // A guard pattern holds an expression
+#include "ast_expr.h"
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPattern::Value& val) {
+std::ostream& operator<<(std::ostream& os, const ASTPattern::Value& val) {
     switch (val.tag()) {
         case ASTPattern::Value::TAG_Invalid: {
             os << "/*BAD PAT VAL*/";
@@ -62,7 +62,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPattern::TuplePat& val) {
+std::ostream& operator<<(std::ostream& os, const ASTPattern::TuplePat& val) {
     if (val.hasWildcard) {
         os << val.start;
         os << ".., ";
@@ -74,7 +74,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPatternBinding& pb) {
+std::ostream& operator<<(std::ostream& os, const ASTPatternBinding& pb) {
     if (pb.isMutable) {
         os << "mut ";
     }
@@ -92,7 +92,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ASTPattern& pat) {
+std::ostream& operator<<(std::ostream& os, const ASTPattern& pat) {
     for (const auto& pb : pat.bindings_) {
         os << pb << " @ ";
     }
@@ -137,8 +137,6 @@
         }
         case ASTPatternData::TAG_Value: {
             auto& ent = pat.data_.as_Value();
-            // A range may have no start (`..=10`), and `..` is the rest pattern,
-            // which has neither.
             if (!ent.start.is_Invalid()) {
                 os << ent.start;
             }
@@ -232,7 +230,7 @@ ASTPattern::~ASTPattern() {
 
 bool PatternContainsNever(const ASTPattern& pat) {
     struct H {
-        static bool any(const ::std::vector<ASTPattern>& list) {
+        static bool any(const std::vector<ASTPattern>& list) {
             for (const auto& p : list) {
                 if (PatternContainsNever(p)) {
                     return true;
@@ -247,8 +245,8 @@ bool PatternContainsNever(const ASTPattern& pat) {
     };
 
     switch (pat.data().tag()) {
-default:
-        return false;
+        default:
+            return false;
         case ASTPatternData::TAG_Never: {
             return true;
         }
@@ -301,9 +299,9 @@ default:
     return false;
 }
 
-ASTPattern::ASTPattern(TagStruct, Span sp, ASTPath path, ::std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive)
+ASTPattern::ASTPattern(TagStruct, Span sp, ASTPath path, std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive)
     : span_(mv$(sp))
-    , data_(Data::make_Struct({::std::move(path), ::std::move(subPatterns), isExhaustive}))
+    , data_(Data::make_Struct({std::move(path), std::move(subPatterns), isExhaustive}))
 {
 }
 
@@ -315,12 +313,12 @@ ASTPattern ASTPattern::clone() const {
     }
 
     struct H {
-        static ::std::unique_ptr<ASTPattern> cloneSp(const ::std::unique_ptr<ASTPattern>& p) {
-            return ::std::make_unique<ASTPattern>(p->clone());
+        static std::unique_ptr<ASTPattern> cloneSp(const std::unique_ptr<ASTPattern>& p) {
+            return std::make_unique<ASTPattern>(p->clone());
         }
 
-        static ::std::vector<ASTPattern> cloneList(const ::std::vector<ASTPattern>& list) {
-            ::std::vector<ASTPattern> rv;
+        static std::vector<ASTPattern> cloneList(const std::vector<ASTPattern>& list) {
+            std::vector<ASTPattern> rv;
             rv.reserve(list.size());
             for (const auto& p : list) {
                 rv.push_back(p.clone());
@@ -381,7 +379,7 @@ ASTPattern ASTPattern::clone() const {
         }
         case ASTPatternData::TAG_Macro: {
             auto& e = data_.as_Macro();
-            rv.data_ = Data::make_Macro({::std::make_unique<ASTMacroInvocation>(e.inv->clone())});
+            rv.data_ = Data::make_Macro({std::make_unique<ASTMacroInvocation>(e.inv->clone())});
             break;
         }
         case ASTPatternData::TAG_Box: {
@@ -426,7 +424,7 @@ ASTPattern ASTPattern::clone() const {
         }
         case ASTPatternData::TAG_Struct: {
             auto& e = data_.as_Struct();
-            ::std::vector<ASTStructPatternEntry> sps;
+            std::vector<ASTStructPatternEntry> sps;
             for (const auto& sp : e.subPatterns) {
                 sps.push_back(ASTStructPatternEntry{sp.attrs.clone(), sp.name, sp.pat.clone()});
             }
@@ -462,7 +460,7 @@ ASTPatternBinding::ASTPatternBinding()
 }
 
 ASTPatternBinding::ASTPatternBinding(Ident name, Type ty, bool ismut)
-    : name(::std::move(name))
+    : name(std::move(name))
     , type(ty)
     , isMutable(ismut)
     , slot(~0u)
@@ -510,17 +508,17 @@ ASTPattern::ASTPattern(TagDeref, Span sp, ASTPattern sub)
 
 ASTPattern::ASTPattern(TagValue, Span sp, Value val, Value end)
     : span_(mv$(sp))
-    , data_(Data::make_Value({::std::move(val), ::std::move(end)}))
+    , data_(Data::make_Value({std::move(val), std::move(end)}))
 {
 }
 
 ASTPattern::ASTPattern(TagReference, Span sp, bool isMutable, ASTPattern subPattern)
     : span_(mv$(sp))
-    , data_(Data::make_Ref(/*Data::Data_Ref */ {isMutable, unique_ptr<ASTPattern>(new ASTPattern(::std::move(subPattern)))}))
+    , data_(Data::make_Ref(/*Data::Data_Ref */ {isMutable, unique_ptr<ASTPattern>(new ASTPattern(std::move(subPattern)))}))
 {
 }
 
-ASTPattern::ASTPattern(TagTuple, Span sp, ::std::vector<ASTPattern> pats)
+ASTPattern::ASTPattern(TagTuple, Span sp, std::vector<ASTPattern> pats)
     : span_(mv$(sp))
     , data_(Data::make_Tuple(TuplePat{mv$(pats), false, {}}))
 {
@@ -532,7 +530,7 @@ ASTPattern::ASTPattern(TagTuple, Span sp, TuplePat pat)
 {
 }
 
-ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, ::std::vector<ASTPattern> pats)
+ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, std::vector<ASTPattern> pats)
     : span_(mv$(sp))
     , data_(Data::make_StructTuple({mv$(path), TuplePat{mv$(pats), false, {}}}))
 {
@@ -540,13 +538,16 @@ ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, ::std::vector<ASTPa
 
 ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, TuplePat pat)
     : span_(mv$(sp))
-    , data_(Data::make_StructTuple({::std::move(path), ::std::move(pat)}))
+    , data_(Data::make_StructTuple({std::move(path), std::move(pat)}))
 {
 }
+
 namespace {
     Ordering ordPatternValue(const ASTPattern::Value& a, const ASTPattern::Value& b) {
         auto rv = ::ord(static_cast<unsigned>(a.tag()), static_cast<unsigned>(b.tag()));
-        if (rv != OrdEqual) return rv;
+        if (rv != OrdEqual) {
+            return rv;
+        }
         switch (a.tag()) {
             case ASTPattern::Value::TAG_Invalid: {
                 return OrdEqual;
@@ -554,13 +555,25 @@ namespace {
             case ASTPattern::Value::TAG_Integer: {
                 auto& ae = a.as_Integer();
                 auto& be = b.as_Integer();
-                rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type)); if (rv != OrdEqual) return rv; return ::ord(ae.value, be.value);
+                rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type));
+                if (rv != OrdEqual) {
+                    return rv;
+                }
+                return ::ord(ae.value, be.value);
                 break;
             }
             case ASTPattern::Value::TAG_Float: {
                 auto& ae = a.as_Float();
                 auto& be = b.as_Float();
-                rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type)); if (rv != OrdEqual) return rv; rv = ::ord(ae.value.bitsHi(), be.value.bitsHi()); if (rv != OrdEqual) return rv; return ::ord(ae.value.bitsLo(), be.value.bitsLo());
+                rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type));
+                if (rv != OrdEqual) {
+                    return rv;
+                }
+                rv = ::ord(ae.value.bitsHi(), be.value.bitsHi());
+                if (rv != OrdEqual) {
+                    return rv;
+                }
+                return ::ord(ae.value.bitsLo(), be.value.bitsLo());
                 break;
             }
             case ASTPattern::Value::TAG_String: {
@@ -585,24 +598,44 @@ namespace {
 
 Ordering ord(const ASTPattern& a, const ASTPattern& b) {
     auto rv = ::ord(static_cast<unsigned>(a.data().tag()), static_cast<unsigned>(b.data().tag()));
-    if (rv != OrdEqual) return rv;
+    if (rv != OrdEqual) {
+        return rv;
+    }
     switch (a.data().tag()) {
         case ASTPattern::Data::TAG_Value: {
             auto& ae = a.data().as_Value();
             auto& be = b.data().as_Value();
-            rv = ordPatternValue(ae.start, be.start); if (rv != OrdEqual) return rv; return ordPatternValue(ae.end, be.end);
+            rv = ordPatternValue(ae.start, be.start);
+            if (rv != OrdEqual) {
+                return rv;
+            }
+            return ordPatternValue(ae.end, be.end);
             break;
         }
         case ASTPattern::Data::TAG_ValueLeftInc: {
             auto& ae = a.data().as_ValueLeftInc();
             auto& be = b.data().as_ValueLeftInc();
-            rv = ordPatternValue(ae.start, be.start); if (rv != OrdEqual) return rv; return ordPatternValue(ae.end, be.end);
+            rv = ordPatternValue(ae.start, be.start);
+            if (rv != OrdEqual) {
+                return rv;
+            }
+            return ordPatternValue(ae.end, be.end);
             break;
         }
         case ASTPattern::Data::TAG_Or: {
             auto& ae = a.data().as_Or();
             auto& be = b.data().as_Or();
-            rv = ::ord(ae.size(), be.size()); if (rv != OrdEqual) return rv; for (size_t i = 0; i < ae.size(); i++) { rv = ::ord(ae[i], be[i]); if (rv != OrdEqual) return rv; } return OrdEqual;
+            rv = ::ord(ae.size(), be.size());
+            if (rv != OrdEqual) {
+                return rv;
+            }
+            for (size_t i = 0; i < ae.size(); i++) {
+                rv = ::ord(ae[i], be[i]);
+                if (rv != OrdEqual) {
+                    return rv;
+                }
+            }
+            return OrdEqual;
             break;
         }
         case ASTPattern::Data::TAG_MaybeBind: {
@@ -635,7 +668,11 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
         case ASTPattern::Data::TAG_Ref: {
             auto& ae = a.data().as_Ref();
             auto& be = b.data().as_Ref();
-            rv = ::ord(ae.mut, be.mut); if (rv != OrdEqual) return rv; return ::ord(*ae.sub, *be.sub);
+            rv = ::ord(ae.mut, be.mut);
+            if (rv != OrdEqual) {
+                return rv;
+            }
+            return ::ord(*ae.sub, *be.sub);
             break;
         }
         case ASTPattern::Data::TAG_Tuple: {

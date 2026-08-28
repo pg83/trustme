@@ -15,8 +15,8 @@ generate(
             ("HIRCoreType", "type"),
             ("FloatValue", "value"),
         ], doc="type Str means _"),
-        v("String", "::std::string"),
-        v("ByteString", fields=[("::std::string", "v")]),
+        v("String", "std::string"),
+        v("ByteString", fields=[("std::string", "v")]),
         v("Named", fields=[
             ("HIRPath", "path"),
             ("const HIRConstant*", "binding"),

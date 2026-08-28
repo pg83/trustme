@@ -1,7 +1,7 @@
 #include "hir_typeck_impl_ref.h"
 
 #include "hir_hir.h"
-#include "hir_typeck_static.h" // for monomorphise_type_with
+#include "hir_typeck_static.h"
 
 namespace {
     bool pathParamsEqual(const HIRPathParams* left, const HIRPathParams* right) {
@@ -20,10 +20,16 @@ bool ImplRef::moreSpecificThan(HIRTypeInterner& types, const ImplRef& other) con
     switch (this->data.tag()) {
         case Data::TAG_TraitImpl: {
             auto& te = this->data.as_TraitImpl();
-            if (te.impl == nullptr) { return false; } switch (other.data.tag()) {
+            if (te.impl == nullptr) {
+                return false;
+            }
+            switch (other.data.tag()) {
                 case Data::TAG_TraitImpl: {
                     auto& oe = other.data.as_TraitImpl();
-                    if (oe.impl == nullptr) { return true; } return te.impl->moreSpecificThan(types, *oe.impl);
+                    if (oe.impl == nullptr) {
+                        return true;
+                    }
+                    return te.impl->moreSpecificThan(types, *oe.impl);
                     break;
                 }
                 case Data::TAG_BoundedPtr: {
@@ -37,12 +43,30 @@ bool ImplRef::moreSpecificThan(HIRTypeInterner& types, const ImplRef& other) con
         }
         case Data::TAG_BoundedPtr: {
             auto& te = this->data.as_BoundedPtr();
-            if (!other.data.is_BoundedPtr()) return false; const auto& oe = other.data.as_BoundedPtr(); assert(te.type == oe.type); assert(pathParamsEqual(te.traitArgs, oe.traitArgs)); if (associatedSize(te.assoc) > associatedSize(oe.assoc)) return true; return false;
+            if (!other.data.is_BoundedPtr()) {
+                return false;
+            }
+            const auto& oe = other.data.as_BoundedPtr();
+            assert(te.type == oe.type);
+            assert(pathParamsEqual(te.traitArgs, oe.traitArgs));
+            if (associatedSize(te.assoc) > associatedSize(oe.assoc)) {
+                return true;
+            }
+            return false;
             break;
         }
         case Data::TAG_Bounded: {
             auto& te = this->data.as_Bounded();
-            if (!other.data.is_Bounded()) return false; const auto& oe = other.data.as_Bounded(); assert(te.type == oe.type); assert(te.traitArgs == oe.traitArgs); if (te.assoc.size() > oe.assoc.size()) return true; return false;
+            if (!other.data.is_Bounded()) {
+                return false;
+            }
+            const auto& oe = other.data.as_Bounded();
+            assert(te.type == oe.type);
+            assert(te.traitArgs == oe.traitArgs);
+            if (te.assoc.size() > oe.assoc.size()) {
+                return true;
+            }
+            return false;
             break;
         }
     }
@@ -57,26 +81,32 @@ bool ImplRef::overlapsWith(const HIRCrate& crate, const ImplRef& other) const {
         case Data::TAG_TraitImpl: {
             auto& te = this->data.as_TraitImpl();
             auto& oe = other.data.as_TraitImpl();
-            // Distinct concrete impl heads are related by the next-solver
-            // coherence evaluator.  This fallback only recognises identity
-            // for incomplete/legacy ImplRefs.
-            return te.impl == oe.impl;
+            if (te.impl != nullptr && oe.impl != nullptr) {
+                return te.impl->overlapsWith(crate, *oe.impl);
+            }
             break;
         }
         case Data::TAG_BoundedPtr: {
             auto& te = this->data.as_BoundedPtr();
             auto& oe = other.data.as_BoundedPtr();
             // TODO: Bounded and BoundedPtr are compatible
-            if (te.type != oe.type) return false;
-            if (!pathParamsEqual(te.traitArgs, oe.traitArgs)) return false;
-            // Don't check associated types
+            if (te.type != oe.type) {
+                return false;
+            }
+            if (!pathParamsEqual(te.traitArgs, oe.traitArgs)) {
+                return false;
+            }
             return true;
         }
         case Data::TAG_Bounded: {
             auto& te = this->data.as_Bounded();
             auto& oe = other.data.as_Bounded();
-            if (te.type != oe.type) return false; if (te.traitArgs != oe.traitArgs) return false;
-            // Don't check associated types
+            if (te.type != oe.type) {
+                return false;
+            }
+            if (te.traitArgs != oe.traitArgs) {
+                return false;
+            }
             return true;
         }
     }
@@ -106,12 +136,10 @@ bool ImplRef::typeIsSpecialisable(const char* name) const {
         case ImplRefData::TAG_TraitImpl: {
             auto& e = this->data.as_TraitImpl();
             if (e.impl == nullptr) {
-                // No impl yet? This type is specialisable.
                 return true;
             }
             auto it = e.impl->types.find(name);
             if (it == e.impl->types.end()) {
-                // If not present (which might happen during UFCS resolution), assume that it's not specialisable
                 return false;
             }
             return it->second.isSpecialisable;
@@ -126,7 +154,6 @@ bool ImplRef::typeIsSpecialisable(const char* name) const {
     UNREACHABLE();
 }
 
-// Returns a closure to monomorphise including placeholders (if present)
 ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIRTypeInterner& types, const Span& sp, const HIRPathParams& params) const {
     const auto& e = this->data.as_TraitImpl();
     return Monomorph(types, e, params);
@@ -135,7 +162,6 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIRTypeInterner& types, cons
 HIRTypeRef ImplRef::Monomorph::getType(const Span& sp, const HIRGenericRef& ge) const /*override*/
 {
     if (ge.isSelf()) {
-        // Store (or cache) a monomorphisation of Self, and error if this recurses
         if (this->ti.selfCache == HIRTypeRef()) {
             this->ti.selfCache = types.diverge();
             this->ti.selfCache = this->monomorphType(sp, this->ti.impl->type);
@@ -166,7 +192,6 @@ HIRTypeRef ImplRef::getImplType(HIRTypeInterner& types) const {
         }
         case ImplRefData::TAG_BoundedPtr: {
             auto& e = this->data.as_BoundedPtr();
-            // HRLs needed?
             return e.type;
         }
         case ImplRefData::TAG_Bounded: {
@@ -242,7 +267,6 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
             if (it == e.impl->types.end()) {
                 const HIRTypeRef tySelf = types.self();
                 if (e.traitPtr->types.count(name) && e.traitPtr->types.at(name).hasDefault) {
-                    // Monomorph twice, first from trait to trait impl, second from trait impl to current
                     auto def = MonomorphStatePtr(types, tySelf, &e.impl->traitArgs, nullptr).monomorphType(sp, e.traitPtr->types.at(name).defaultValue);
                     return this->getCbMonomorphTraitimpl(types, sp, params).monomorphType(sp, def);
                 }
@@ -280,7 +304,7 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
     return HIRTypeRef();
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ImplRef& x) {
+std::ostream& operator<<(std::ostream& os, const ImplRef& x) {
     switch (x.data.tag()) {
         case ImplRefData::TAG_TraitImpl: {
             auto& e = x.data.as_TraitImpl();

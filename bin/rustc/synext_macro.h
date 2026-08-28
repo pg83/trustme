@@ -1,9 +1,9 @@
 #pragma once
 
-//#include "../common.h"   // for mv$ and other things
-#include <string>
-#include <memory>
 #include "span.h"
+
+#include <memory>
+#include <string>
 
 struct ASTType;
 
@@ -17,9 +17,9 @@ class ExpandRegistry;
 class ExpandProcMacro {
 public:
     virtual ~ExpandProcMacro() = default;
-    virtual ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) = 0;
+    virtual std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) = 0;
 
-    virtual ::std::unique_ptr<TokenStream> expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod);
+    virtual std::unique_ptr<TokenStream> expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod);
 };
 
 void RegisterBuiltinMacros(ExpandRegistry& registry);

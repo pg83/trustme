@@ -2,58 +2,32 @@
 
 #include <std/tst/ut.h>
 
-#include <vector>
 #include <string>
+#include <vector>
 #include <sstream>
 
 using namespace stl;
 
 namespace {
-    // Instance-counting element: lets tests assert that every constructed value
-    // is destroyed exactly once (no leaks, no double-frees).
     struct Counted {
         static int liveCount;
         int value;
 
-        Counted()
-            : value(0)
-        {
-            liveCount++;
-        }
-        explicit Counted(int v)
-            : value(v)
-        {
-            liveCount++;
-        }
-        Counted(const Counted& o)
-            : value(o.value)
-        {
-            liveCount++;
-        }
-        Counted(Counted&& o)
-            : value(o.value)
-        {
-            o.value = -1;
-            liveCount++;
-        }
-        Counted& operator=(const Counted& o) {
-            value = o.value;
-            return *this;
-        }
-        Counted& operator=(Counted&& o) {
-            value = o.value;
-            o.value = -1;
-            return *this;
-        }
-        ~Counted() {
-            liveCount--;
-        }
+        Counted();
+        explicit Counted(int v);
+        Counted(const Counted& o);
+        Counted(Counted&& o);
+        Counted& operator=(const Counted& o);
+        Counted& operator=(Counted&& o);
+        ~Counted();
     };
+
     int Counted::liveCount = 0;
 
-    ::std::ostream& operator<<(::std::ostream& os, const Counted& c) {
+    std::ostream& operator<<(std::ostream& os, const Counted& c) {
         return os << c.value;
     }
+
     Ordering ord(const Counted& a, const Counted& b) {
         return ::ord(a.value, b.value);
     }
@@ -70,9 +44,6 @@ STD_TEST_SUITE(ThinVectorBasics) {
     }
 
     STD_TEST(sizedConstructorDefaultInits) {
-        // The sized constructor default-constructs each element (`new (p) T;`),
-        // so trivial types are left indeterminate — use a type with a defined
-        // default to observe that every slot was constructed exactly once.
         STD_INSIST(Counted::liveCount == 0);
         {
             ThinVector<Counted> v(4);
@@ -128,7 +99,6 @@ STD_TEST_SUITE(ThinVectorBasics) {
         v.reserve(16);
         STD_INSIST(v.capacity() >= 16);
         STD_INSIST(v.size() == 0);
-        // Reserving smaller must not shrink.
         v.reserve(4);
         STD_INSIST(v.capacity() >= 16);
 
@@ -142,7 +112,7 @@ STD_TEST_SUITE(ThinVectorBasics) {
         STD_INSIST(v.size() == 2);
         v.resize(4);
         STD_INSIST(v.size() == 4);
-        STD_INSIST(v[2] == 0); // regrown slot is fresh, not the old 99
+        STD_INSIST(v[2] == 0);
     }
 }
 
@@ -156,12 +126,12 @@ STD_TEST_SUITE(ThinVectorSemantics) {
         ThinVector<int> b(a);
         STD_INSIST(b.size() == 3 && a.size() == 3);
         b[0] = 100;
-        STD_INSIST(a[0] == 1); // deep copy, independent storage
+        STD_INSIST(a[0] == 1);
 
         ThinVector<int> c(std::move(a));
         STD_INSIST(c.size() == 3);
         STD_INSIST(c[0] == 1 && c[2] == 3);
-        STD_INSIST(a.empty()); // moved-from is empty
+        STD_INSIST(a.empty());
     }
 
     STD_TEST(copyAndMoveAssign) {
@@ -188,7 +158,7 @@ STD_TEST_SUITE(ThinVectorSemantics) {
         {
             ThinVector<Counted> v;
             for (int i = 0; i < 20; i++) {
-                v.push_back(Counted(i)); // growth reallocates; must not leak
+                v.push_back(Counted(i));
             }
             STD_INSIST(v.size() == 20);
             STD_INSIST(Counted::liveCount == 20);
@@ -199,17 +169,15 @@ STD_TEST_SUITE(ThinVectorSemantics) {
             v.pop_back();
             STD_INSIST(Counted::liveCount == 39);
 
-            v.resize(5); // drops 14
+            v.resize(5);
             STD_INSIST(Counted::liveCount == 25);
         }
-        STD_INSIST(Counted::liveCount == 0); // all destroyed on scope exit
+        STD_INSIST(Counted::liveCount == 0);
     }
 }
 
 STD_TEST_SUITE(ThinVectorAccessAndOrder) {
     STD_TEST(atInBounds) {
-        // Out-of-range access aborts (logic error), so only the valid
-        // paths are exercised here.
         ThinVector<int> v;
         v.push_back(5);
         v.push_back(7);
@@ -243,7 +211,6 @@ STD_TEST_SUITE(ThinVectorAccessAndOrder) {
         STD_INSIST(a.ord(b) == OrdEqual);
         STD_INSIST(a.ord(c) == OrdLess);
         STD_INSIST(c.ord(a) == OrdGreater);
-        // Shorter prefix sorts before the longer list.
         STD_INSIST(shorter.ord(a) == OrdLess);
         STD_INSIST(a.ord(shorter) == OrdGreater);
     }
@@ -259,4 +226,44 @@ STD_TEST_SUITE(ThinVectorAccessAndOrder) {
         os2 << empty;
         STD_INSIST(os2.str().empty());
     }
+}
+
+Counted::Counted()
+    : value(0)
+{
+    liveCount++;
+}
+
+Counted::Counted(int v)
+    : value(v)
+{
+    liveCount++;
+}
+
+Counted::Counted(const Counted& o)
+    : value(o.value)
+{
+    liveCount++;
+}
+
+Counted::Counted(Counted&& o)
+    : value(o.value)
+{
+    o.value = -1;
+    liveCount++;
+}
+
+auto Counted::operator=(const Counted& o) -> Counted& {
+    value = o.value;
+    return *this;
+}
+
+auto Counted::operator=(Counted&& o) -> Counted& {
+    value = o.value;
+    o.value = -1;
+    return *this;
+}
+
+Counted::~Counted() {
+    liveCount--;
 }

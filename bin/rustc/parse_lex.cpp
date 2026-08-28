@@ -1,76 +1,22 @@
 #include "parse_lex.h"
 
-#include <std/str/view.h>
-#include "wire_board.h"
-
 #include "common.h"
+#include "wire_board.h"
+#include "unicode_nfc.h"
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"
-#include "unicode_nfc.h"
+
+#include <std/str/view.h>
 
 #include <cctype>
-#include <limits> // std::numeric_limits
+#include <limits>
 #include <cassert>
-#include <cstdlib> // strtol
+#include <cstdlib>
 #include <iostream>
 #include <typeinfo>
-#include <algorithm> // std::count
+#include <algorithm>
 
-//#define TRACE_CHARS
-//#define TRACE_RAW_TOKENS
-
-Lexer::Lexer(u32& id, stl::ObjPool& pool, const ::std::string& filename, ASTEdition edition, ParseState ps)
-    : TokenStream(ps)
-    , id(id)
-    , path_(filename.c_str())
-    , line(1)
-    , lineOfs(0)
-    , istreamFp(filename != "-" ? new std::ifstream(filename.c_str()) : nullptr)
-    , istream(filename != "-" ? *istreamFp : std::cin)
-    , lastCharValid(false)
-    , initialShebangChecked(false)
-    , initialFrontmatterAllowed(true)
-    , initialFrontmatterPrecededByWhitespace(false)
-    , replayCharOffset(0)
-    , edition(edition)
-    , hygiene_(Ident::Hygiene::newScope(id, pool))
-{
-    if (istreamFp) {
-        if (!istreamFp->is_open()) {
-            throw ::std::runtime_error("Unable to open file '" + filename + "'");
-        }
-        // Consume the BOM
-        if (this->getcByte() == '\xef') {
-            if (this->getcByte() != '\xbb') {
-                throw ::std::runtime_error("Incomplete BOM - missing \\xBB in second position");
-            }
-            if (this->getcByte() != '\xbf') {
-                throw ::std::runtime_error("Incomplete BOM - missing \\xBF in third position");
-            }
-            lineOfs = 0;
-        } else {
-            istream.unget();
-        }
-    }
-}
-
-Lexer::Lexer(u32& id, stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, ParseState ps)
-    : TokenStream(ps)
-    , id(id)
-    , path_("-")
-    , line(1)
-    , lineOfs(0)
-    , istreamFp(nullptr)
-    , istream(ss)
-    , lastCharValid(false)
-    , initialShebangChecked(false)
-    , initialFrontmatterAllowed(true)
-    , initialFrontmatterPrecededByWhitespace(false)
-    , replayCharOffset(0)
-    , edition(edition)
-    , hygiene_(Ident::Hygiene::newScope(id, pool))
-{
-}
+using namespace stl;
 
 #define LINECOMMENT -1
 #define BLOCKCOMMENT -2
@@ -78,9 +24,11 @@ Lexer::Lexer(u32& id, stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition e
 #define DOUBLEQUOTE -4
 #define SHEBANG -5
 
-// NOTE: This array must be kept sorted, or symbols are will be skipped
 #define TOKENT(str, sym) {sizeof(str) - 1, str, sym}
 
+#define LEN(arr) (sizeof(arr) / sizeof(arr[0]))
+
+namespace {
 static const struct {
     unsigned char len;
     const char* chars;
@@ -108,7 +56,6 @@ static const struct {
     TOKENT("-=", TOK_DASH_EQUAL),
     TOKENT("->", TOK_THINARROW),
     TOKENT(".", TOK_DOT),
-    // NOTE: These have special handling when following numbers
     TOKENT("..", TOK_DOUBLE_DOT),
     TOKENT("...", TOK_TRIPLE_DOT),
     TOKENT("..=", TOK_DOUBLE_DOT_EQUAL),
@@ -116,7 +63,6 @@ static const struct {
     TOKENT("/*", BLOCKCOMMENT),
     TOKENT("//", LINECOMMENT),
     TOKENT("/=", TOK_SLASH_EQUAL),
-    // 0-9 :: Elsewhere
     TOKENT(":", TOK_COLON),
     TOKENT("::", TOK_DOUBLE_COLON),
     TOKENT(";", TOK_SEMICOLON),
@@ -134,15 +80,12 @@ static const struct {
     TOKENT(">>=", TOK_DOUBLE_GT_EQUAL),
     TOKENT("?", TOK_QMARK),
     TOKENT("@", TOK_AT),
-    // A-Z :: Elsewhere
     TOKENT("[", TOK_SQUARE_OPEN),
     TOKENT("\\", TOK_BACKSLASH),
     TOKENT("]", TOK_SQUARE_CLOSE),
     TOKENT("^", TOK_CARET),
     TOKENT("^=", TOK_CARET_EQUAL),
     TOKENT("`", TOK_BACKTICK),
-    // a-z :: Elsewhere
-    //TOKENT("b\"", DOUBLEQUOTE),
 
     TOKENT("{", TOK_BRACE_OPEN),
     TOKENT("|", TOK_PIPE),
@@ -152,30 +95,82 @@ static const struct {
     TOKENT("~", TOK_TILDE),
 };
 
-#define LEN(arr) (sizeof(arr) / sizeof(arr[0]))
-
 struct sRWORD {
     unsigned char len;
     const char* chars;
     signed int type;
 };
+}
 
+Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edition, ParseState ps)
+    : TokenStream(ps)
+    , id(id)
+    , path_(filename.c_str())
+    , line(1)
+    , lineOfs(0)
+    , istreamFp(filename != "-" ? new std::ifstream(filename.c_str()) : nullptr)
+    , istream(filename != "-" ? *istreamFp : std::cin)
+    , lastCharValid(false)
+    , initialShebangChecked(false)
+    , initialFrontmatterAllowed(true)
+    , initialFrontmatterPrecededByWhitespace(false)
+    , replayCharOffset(0)
+    , edition(edition)
+    , hygiene_(Ident::Hygiene::newScope(id, pool))
+{
+    if (istreamFp) {
+        if (!istreamFp->is_open()) {
+            throw std::runtime_error("Unable to open file '" + filename + "'");
+        }
+        if (this->getcByte() == '\xef') {
+            if (this->getcByte() != '\xbb') {
+                throw std::runtime_error("Incomplete BOM - missing \\xBB in second position");
+            }
+            if (this->getcByte() != '\xbf') {
+                throw std::runtime_error("Incomplete BOM - missing \\xBF in third position");
+            }
+            lineOfs = 0;
+        } else {
+            istream.unget();
+        }
+    }
+}
+
+Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition, ParseState ps)
+    : TokenStream(ps)
+    , id(id)
+    , path_("-")
+    , line(1)
+    , lineOfs(0)
+    , istreamFp(nullptr)
+    , istream(ss)
+    , lastCharValid(false)
+    , initialShebangChecked(false)
+    , initialFrontmatterAllowed(true)
+    , initialFrontmatterPrecededByWhitespace(false)
+    , replayCharOffset(0)
+    , edition(edition)
+    , hygiene_(Ident::Hygiene::newScope(id, pool))
+{
+}
+
+namespace {
 static const sRWORD RWORDS_2015[] = {
     TOKENT("_", TOK_UNDERSCORE),
-    TOKENT("abstract", TOK_RWORD_ABSTRACT), // Reserved 2015+
+    TOKENT("abstract", TOK_RWORD_ABSTRACT),
     TOKENT("as", TOK_RWORD_AS),
-    TOKENT("become", TOK_RWORD_BECOME), //  // Reserved 2015+
+    TOKENT("become", TOK_RWORD_BECOME),
     TOKENT("box", TOK_RWORD_BOX),
     TOKENT("break", TOK_RWORD_BREAK),
     TOKENT("const", TOK_RWORD_CONST),
     TOKENT("continue", TOK_RWORD_CONTINUE),
     TOKENT("crate", TOK_RWORD_CRATE),
-    TOKENT("do", TOK_RWORD_DO), // Reserved 2015+
+    TOKENT("do", TOK_RWORD_DO),
     TOKENT("else", TOK_RWORD_ELSE),
     TOKENT("enum", TOK_RWORD_ENUM),
     TOKENT("extern", TOK_RWORD_EXTERN),
     TOKENT("false", TOK_RWORD_FALSE),
-    TOKENT("final", TOK_RWORD_FINAL), // Reserved 2015+
+    TOKENT("final", TOK_RWORD_FINAL),
     TOKENT("fn", TOK_RWORD_FN),
     TOKENT("for", TOK_RWORD_FOR),
     TOKENT("if", TOK_RWORD_IF),
@@ -188,7 +183,7 @@ static const sRWORD RWORDS_2015[] = {
     TOKENT("mod", TOK_RWORD_MOD),
     TOKENT("move", TOK_RWORD_MOVE),
     TOKENT("mut", TOK_RWORD_MUT),
-    TOKENT("override", TOK_RWORD_OVERRIDE), // Reserved 2015+
+    TOKENT("override", TOK_RWORD_OVERRIDE),
     TOKENT("priv", TOK_RWORD_PRIV),
     TOKENT("pub", TOK_RWORD_PUB),
     TOKENT("ref", TOK_RWORD_REF),
@@ -200,35 +195,35 @@ static const sRWORD RWORDS_2015[] = {
     TOKENT("trait", TOK_RWORD_TRAIT),
     TOKENT("true", TOK_RWORD_TRUE),
     TOKENT("type", TOK_RWORD_TYPE),
-    TOKENT("typeof", TOK_RWORD_TYPEOF), // Reserved 2015+
+    TOKENT("typeof", TOK_RWORD_TYPEOF),
     TOKENT("unsafe", TOK_RWORD_UNSAFE),
-    TOKENT("unsized", TOK_RWORD_UNSIZED), // Reserved 2015+
+    TOKENT("unsized", TOK_RWORD_UNSIZED),
     TOKENT("use", TOK_RWORD_USE),
-    TOKENT("virtual", TOK_RWORD_VIRTUAL), // Reserved 2015+
+    TOKENT("virtual", TOK_RWORD_VIRTUAL),
     TOKENT("where", TOK_RWORD_WHERE),
     TOKENT("while", TOK_RWORD_WHILE),
-    TOKENT("yield", TOK_RWORD_YIELD), // Reserved 2015+
+    TOKENT("yield", TOK_RWORD_YIELD),
 };
 
 static const sRWORD RWORDS_2018[] = {
     TOKENT("_", TOK_UNDERSCORE),
-    TOKENT("abstract", TOK_RWORD_ABSTRACT), // Reserved 2015+
+    TOKENT("abstract", TOK_RWORD_ABSTRACT),
     TOKENT("as", TOK_RWORD_AS),
-    TOKENT("async", TOK_RWORD_ASYNC),   // Added 2018
-    TOKENT("await", TOK_RWORD_AWAIT),   // Added 2018
-    TOKENT("become", TOK_RWORD_BECOME), //  // Reserved 2015+
+    TOKENT("async", TOK_RWORD_ASYNC),
+    TOKENT("await", TOK_RWORD_AWAIT),
+    TOKENT("become", TOK_RWORD_BECOME),
     TOKENT("box", TOK_RWORD_BOX),
     TOKENT("break", TOK_RWORD_BREAK),
     TOKENT("const", TOK_RWORD_CONST),
     TOKENT("continue", TOK_RWORD_CONTINUE),
     TOKENT("crate", TOK_RWORD_CRATE),
-    TOKENT("do", TOK_RWORD_DO),   // Reserved 2015+
-    TOKENT("dyn", TOK_RWORD_DYN), // Added 2018
+    TOKENT("do", TOK_RWORD_DO),
+    TOKENT("dyn", TOK_RWORD_DYN),
     TOKENT("else", TOK_RWORD_ELSE),
     TOKENT("enum", TOK_RWORD_ENUM),
     TOKENT("extern", TOK_RWORD_EXTERN),
     TOKENT("false", TOK_RWORD_FALSE),
-    TOKENT("final", TOK_RWORD_FINAL), // Reserved 2015+
+    TOKENT("final", TOK_RWORD_FINAL),
     TOKENT("fn", TOK_RWORD_FN),
     TOKENT("for", TOK_RWORD_FOR),
     TOKENT("if", TOK_RWORD_IF),
@@ -241,7 +236,7 @@ static const sRWORD RWORDS_2018[] = {
     TOKENT("mod", TOK_RWORD_MOD),
     TOKENT("move", TOK_RWORD_MOVE),
     TOKENT("mut", TOK_RWORD_MUT),
-    TOKENT("override", TOK_RWORD_OVERRIDE), // Reserved 2015+
+    TOKENT("override", TOK_RWORD_OVERRIDE),
     TOKENT("priv", TOK_RWORD_PRIV),
     TOKENT("pub", TOK_RWORD_PUB),
     TOKENT("ref", TOK_RWORD_REF),
@@ -252,23 +247,22 @@ static const sRWORD RWORDS_2018[] = {
     TOKENT("super", TOK_RWORD_SUPER),
     TOKENT("trait", TOK_RWORD_TRAIT),
     TOKENT("true", TOK_RWORD_TRUE),
-    TOKENT("try", TOK_RWORD_TRY), // Reserved 2018+
+    TOKENT("try", TOK_RWORD_TRY),
     TOKENT("type", TOK_RWORD_TYPE),
-    TOKENT("typeof", TOK_RWORD_TYPEOF), // Reserved 2015+
+    TOKENT("typeof", TOK_RWORD_TYPEOF),
     TOKENT("unsafe", TOK_RWORD_UNSAFE),
-    TOKENT("unsized", TOK_RWORD_UNSIZED), // Reserved 2015+
+    TOKENT("unsized", TOK_RWORD_UNSIZED),
     TOKENT("use", TOK_RWORD_USE),
-    TOKENT("virtual", TOK_RWORD_VIRTUAL), // Reserved 2015+
+    TOKENT("virtual", TOK_RWORD_VIRTUAL),
     TOKENT("where", TOK_RWORD_WHERE),
     TOKENT("while", TOK_RWORD_WHILE),
-    TOKENT("yield", TOK_RWORD_YIELD), // Reserved 2015+
+    TOKENT("yield", TOK_RWORD_YIELD),
 };
+
+}
 
 signed int Lexer::getSymbol() {
     Codepoint ch = this->getc();
-    // 1. lsearch for character
-    // 2. Consume as many characters as currently match
-    // 3. IF: a smaller character or, EOS is hit - Return current best
     unsigned ofs = 0;
     signed int best = 0;
     bool hitEof = false;
@@ -285,7 +279,6 @@ signed int Lexer::getSymbol() {
                 ch = this->getc();
             } catch (Lexer::EndOfFile) {
                 ch = 0;
-                // Prevent `ungetc` if EOF was hit
                 hitEof = true;
             }
             ofs++;
@@ -301,11 +294,12 @@ signed int Lexer::getSymbol() {
     return best;
 }
 
+namespace {
 bool issym(Codepoint ch) {
     if ('0' <= ch.v && ch.v <= '9') {
         return true;
     }
-    if (::std::isalpha(ch.v)) {
+    if (std::isalpha(ch.v)) {
         return true;
     }
     if (ch == '_') {
@@ -315,6 +309,7 @@ bool issym(Codepoint ch) {
         return !ch.isspace();
     }
     return false;
+}
 }
 
 Token Lexer::withLiteralSuffix(Token tok) {
@@ -329,7 +324,7 @@ Token Lexer::withLiteralSuffix(Token tok) {
         return tok;
     }
 
-    ::std::string suffix;
+    std::string suffix;
     do {
         suffix += ch;
         try {
@@ -353,14 +348,12 @@ Ident::Hygiene Lexer::realGetHygiene() const {
 Token Lexer::realGetToken() {
     while (true) {
         auto tokenPosition = this->getPosition();
-        // Whitespace scanning leaves the first non-whitespace codepoint in
-        // the one-character cache after advancing the source offset.
         if (lastCharValid && tokenPosition.ofs > 0) {
             tokenPosition.ofs--;
         }
         Token tok = getTokenInt();
 #ifdef TRACE_RAW_TOKENS
-        ::std::cout << "getTokenInt: tok = " << tok << ::std::endl;
+        std::cout << "getTokenInt: tok = " << tok << std::endl;
 #endif
         switch (tok.type()) {
             case TOK_NEWLINE:
@@ -384,7 +377,7 @@ void Lexer::checkInitialShebang() {
 
     const auto initialLine = line;
     const auto initialLineOfs = lineOfs;
-    ::std::vector<Codepoint> consumed;
+    std::vector<Codepoint> consumed;
     bool eof = false;
     auto read = [&]() {
         try {
@@ -400,7 +393,7 @@ void Lexer::checkInitialShebang() {
         line = initialLine;
         lineOfs = initialLineOfs;
         lastCharValid = false;
-        replayChars = ::std::move(consumed);
+        replayChars = std::move(consumed);
         replayCharOffset = start;
     };
 
@@ -536,7 +529,7 @@ bool Lexer::trySkipInitialFrontmatter() {
 
     const auto initialLine = line;
     const auto initialLineOfs = lineOfs;
-    ::std::vector<Codepoint> consumed;
+    std::vector<Codepoint> consumed;
     bool eof = false;
     auto read = [&]() {
         try {
@@ -552,7 +545,7 @@ bool Lexer::trySkipInitialFrontmatter() {
         line = initialLine;
         lineOfs = initialLineOfs;
         lastCharValid = false;
-        replayChars = ::std::move(consumed);
+        replayChars = std::move(consumed);
         replayCharOffset = 0;
     };
 
@@ -595,7 +588,7 @@ bool Lexer::trySkipInitialFrontmatter() {
         ch = read();
     }
     if (!eof && ch != '\n') {
-        const bool validIdentifierStart = ch == '_' || (ch.v < 128 && ::std::isalpha(ch.v)) || ch.v >= 128;
+        const bool validIdentifierStart = ch == '_' || (ch.v < 128 && std::isalpha(ch.v)) || ch.v >= 128;
         if (!validIdentifierStart) {
             initialFrontmatterAllowed = false;
             restore();
@@ -672,7 +665,7 @@ bool Lexer::trySkipInitialFrontmatter() {
 
 Token Lexer::getTokenInt() {
     if (!this->nextTokens.empty()) {
-        auto rv = ::std::move(this->nextTokens.back());
+        auto rv = std::move(this->nextTokens.back());
         nextTokens.pop_back();
         return rv;
     }
@@ -698,23 +691,19 @@ Token Lexer::getTokenInt() {
 
         const signed int sym = this->getSymbol();
         if (sym == 0) {
-            // No match at all, check for symbol
             auto ch = this->getc();
             if (ch.isdigit()) {
                 enum eCoreType numType = CORETYPE_ANY;
                 NumMode numMode = NumMode::DEC;
 
-                // Handle integers/floats
                 this->ungetc();
                 auto val = this->parseInt(&numMode);
                 ch = this->getc();
 
                 if (ch == 'e' || ch == 'E' || ch == '.') {
-                    // Special handling for `.` - for `..` and method access
                     if (ch == '.') {
                         ch = this->getc();
 
-                        // Double/Triple Dot
                         if (ch == '.') {
                             ch = this->getc();
                             if (ch == '.') {
@@ -728,8 +717,6 @@ Token Lexer::getTokenInt() {
                             return Token(val, CORETYPE_ANY);
                         }
 
-                        // Single dot followed by a non-digit, could be a float or an integer with a method/field access
-                        // NOTE: `1.e1` is not a float
                         if (!ch.isdigit()) {
                             bool sawSpace = false;
                             while (ch.isspace()) {
@@ -737,10 +724,6 @@ Token Lexer::getTokenInt() {
                                 ch = this->getc();
                             }
                             this->ungetc();
-                            // A digit after the dot is a tuple index however it
-                            // is spaced, but a name is a field or a method only
-                            // when it is written right after the dot: `1.min(2)`
-                            // is a call, while `1. as u16` is a float and a cast.
                             if (ch.isdigit() || (issym(ch) && !sawSpace)) {
                                 this->nextTokens.push_back(TOK_DOT);
                                 return Token(val, CORETYPE_ANY);
@@ -749,9 +732,6 @@ Token Lexer::getTokenInt() {
                                 return Token::makeFloat(fval, CORETYPE_ANY);
                             }
                         } else {
-                            // Digit, continue
-                            // NOTE: parseFloat assumes that the '.' has been consumed, and reads digits until it hits a non-digit and then parses exponents
-                            // - Thus, continuing here and letting the below 'ungetc' push a digit back is correct.
                         }
                     }
                     if (numMode != NumMode::DEC) {
@@ -767,7 +747,7 @@ Token Lexer::getTokenInt() {
                         return t;
                     }
                     if (issym(ch = this->getc())) {
-                        ::std::string suffix;
+                        std::string suffix;
                         while (issym(ch)) {
                             suffix += ch;
                             ch = this->getc();
@@ -794,8 +774,7 @@ Token Lexer::getTokenInt() {
                     return Token::makeFloat(fval, numType);
 
                 } else if (issym(ch)) {
-                    // Unsigned
-                    ::std::string suffix;
+                    std::string suffix;
                     while (issym(ch)) {
                         suffix += ch;
                         ch = this->getc();
@@ -837,10 +816,6 @@ Token Lexer::getTokenInt() {
                     } else if (suffix == "f128") {
                         numType = CORETYPE_F128;
                     } else {
-                        // An arbitrary suffix is part of the literal token. It
-                        // is valid in token trees, but the Rust parser rejects
-                        // this distinct token kind if a macro emits it as an
-                        // expression.
                         auto tok = Token(val, CORETYPE_ANY);
                         return Token(TOK_LITERAL_SUFFIXED, tok.toStr() + suffix, this->realGetHygiene());
                     }
@@ -849,9 +824,7 @@ Token Lexer::getTokenInt() {
                     this->ungetc();
                     return Token(val, numType);
                 }
-            }
-            // Byte/Raw strings
-            else if (ch == 'b' || ch == 'r') {
+            } else if (ch == 'b' || ch == 'r') {
                 bool isByte = false;
                 if (ch == 'b') {
                     isByte = true;
@@ -863,9 +836,8 @@ Token Lexer::getTokenInt() {
                 } else {
                     assert(isByte);
 
-                    // Byte string
                     if (ch == '"') {
-                        ::std::string str;
+                        std::string str;
                         while ((ch = this->getc()) != '"') {
                             if (ch == '\\') {
                                 auto v = this->parseEscape('"');
@@ -880,10 +852,7 @@ Token Lexer::getTokenInt() {
                             }
                         }
                         return this->withLiteralSuffix(Token(TOK_BYTESTRING, mv$(str), realGetHygiene()));
-                    }
-                    // Byte constant
-                    else if (ch == '\'') {
-                        // Byte constant
+                    } else if (ch == '\'') {
                         ch = this->getc();
                         if (ch == '\\') {
                             u32 val = this->parseEscape('\'');
@@ -903,15 +872,12 @@ Token Lexer::getTokenInt() {
                         return this->getTokenIntIdentifier('b');
                     }
                 }
-            }
-            // Symbols
-            else if (issym(ch)) {
+            } else if (issym(ch)) {
                 return this->getTokenIntIdentifier(ch);
             } else {
                 parseErrorBadChar(*this, ch.v);
             }
         } else if (sym > 0) {
-            // If the symbol is `TOK_DOT`, check if the next character is a digit and consume an integer
             if (sym == TOK_DOT) {
                 auto ch = this->getc();
                 this->ungetc();
@@ -921,9 +887,6 @@ Token Lexer::getTokenInt() {
                     if (ch == '.') {
                         ch = this->getc();
                         if (ch == '.') {
-                            // `.0..`, `.0..=`, and `.0...`: the first dot
-                            // belongs to the tuple index and the remaining
-                            // run is a range operator.
                             ch = this->getc();
                             if (ch == '.') {
                                 nextTokens.push_back(TOK_TRIPLE_DOT);
@@ -956,8 +919,7 @@ Token Lexer::getTokenInt() {
         } else {
             switch (sym) {
                 case LINECOMMENT: {
-                    // Line comment
-                    ::std::string str;
+                    std::string str;
                     auto ch = this->getc();
                     bool isDoc = false;
                     bool isPdoc = false;
@@ -972,19 +934,15 @@ Token Lexer::getTokenInt() {
                         isPdoc = true;
                         ch = this->getc();
                     }
-                    // A line comment ends at the newline: a bare CR inside one
-                    // is content, not a terminator.
                     while (ch != '\n') {
                         str += ch;
                         ch = this->getc();
                     }
                     this->ungetc();
-                    // ... but a CRLF's CR is not part of the comment.
                     if (!str.empty() && str.back() == '\r') {
                         str.pop_back();
                     }
                     if (isDoc || isPdoc) {
-                        //# [ doc = "commment data" ]
                         nextTokens.push_back(TOK_SQUARE_CLOSE);
                         auto docString = Token(TOK_STRING, mv$(str), realGetHygiene());
                         docString.markAsDocComment();
@@ -1002,20 +960,17 @@ Token Lexer::getTokenInt() {
                     return Token(TOK_COMMENT, str, realGetHygiene());
                 }
                 case BLOCKCOMMENT: {
-                    ::std::string str;
+                    std::string str;
                     bool isDoc = false;
                     bool isPdoc = false;
                     ch = this->getc();
                     if (ch == '*') {
                         ch = this->getc();
                         if (ch == '*') {
-                            // `/***....` - more than two `*`s is a normal block comment with a bunch of stuff
                             str += "*";
                         } else if (ch == '/') {
-                            // `/**/` - an empty block comment
                             return Token(TOK_COMMENT, str, realGetHygiene());
                         } else {
-                            // `/**` - A doc comment
                             isDoc = true;
                         }
                     } else if (ch == '!') {
@@ -1024,10 +979,6 @@ Token Lexer::getTokenInt() {
                     }
                     unsigned int level = 0;
                     while (true) {
-                        // A `*` or a `/` that does not open or close a comment
-                        // is an ordinary character, and the one after it has to
-                        // be looked at again: a run of `*`s ends a comment on
-                        // whichever of them the `/` follows.
                         if (ch == '*') {
                             auto next = this->getc();
                             if (next == '/') {
@@ -1059,7 +1010,6 @@ Token Lexer::getTokenInt() {
                         }
                     }
                     if (isDoc || isPdoc) {
-                        //# [ doc = "commment data" ]
                         nextTokens.push_back(TOK_SQUARE_CLOSE);
                         auto docString = Token(TOK_STRING, mv$(str), realGetHygiene());
                         docString.markAsDocComment();
@@ -1079,7 +1029,6 @@ Token Lexer::getTokenInt() {
                 case SINGLEQUOTE: {
                     auto firstchar = this->getc();
                     if (firstchar.v == '\\') {
-                        // Character constant with an escape code
                         u32 val = this->parseEscape('\'');
                         if (this->getc() != '\'') {
                             TODO(this->pointSpan(), "Proper error for lex failures - multi-char const?");
@@ -1090,13 +1039,9 @@ Token Lexer::getTokenInt() {
                     } else {
                         ch = this->getc();
                         if (ch == '\'') {
-                            // Character constant
                             return this->withLiteralSuffix(Token(U128(firstchar.v), CORETYPE_CHAR));
-                        }
-                        // A raw lifetime needs raw identifiers, which arrived in
-                        // Rust 2021: before that `'r#lt` is three tokens.
-                        else if (firstchar == 'r' && ch == '#' && this->editionAfter(ASTEdition::Rust2018)) {
-                            ::std::string str;
+                        } else if (firstchar == 'r' && ch == '#' && this->editionAfter(ASTEdition::Rust2018)) {
+                            std::string str;
                             ch = this->getc();
                             if (!issym(ch)) {
                                 compileErrorGeneric(*this, "Invalid raw lifetime");
@@ -1108,8 +1053,7 @@ Token Lexer::getTokenInt() {
                             this->ungetc();
                             return Token(TOK_LIFETIME, Ident(this->realGetHygiene(), RcString::newInterned(str)));
                         } else if (issym(firstchar.v)) {
-                            // Lifetime name
-                            ::std::string str;
+                            std::string str;
                             str += firstchar;
                             while (issym(ch)) {
                                 str += ch;
@@ -1124,7 +1068,7 @@ Token Lexer::getTokenInt() {
                     break;
                 }
                 case DOUBLEQUOTE: {
-                    ::std::string str;
+                    std::string str;
                     while ((ch = this->getc()) != '"') {
                         if (ch == '\\') {
                             auto v = this->parseEscape('"');
@@ -1148,7 +1092,6 @@ Token Lexer::getTokenInt() {
 }
 
 Token Lexer::getTokenIntRawString(eTokenType kind) {
-    // Raw string (possibly a byte or C string)
     const bool isByte = (kind == TOK_BYTESTRING);
     Codepoint ch = this->getc();
     unsigned int hashes = 0;
@@ -1157,9 +1100,8 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
         ch = this->getc();
     }
     if (ch != '"') {
-        // 'b' or 'br' identifier
         if (hashes == 0) {
-            this->ungetc(); // Unget the not '"'
+            this->ungetc();
             if (isByte) {
                 return this->getTokenIntIdentifier('b', 'r');
             } else if (kind == TOK_CSTRING) {
@@ -1167,16 +1109,14 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
             } else {
                 return this->getTokenIntIdentifier('r');
             }
-        }
-        // Raw identifier
-        else if (hashes == 1) {
+        } else if (hashes == 1) {
             return this->getTokenIntIdentifier(ch, Codepoint(), /*parse_reserved_word*/ false);
         } else {
             compileErrorGeneric(*this, "Expected '\"' after hashes following `r`");
         }
     }
     auto terminator = ch;
-    ::std::string val;
+    std::string val;
 
     unsigned terminatingHashes = 0;
     for (;;) {
@@ -1218,7 +1158,7 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
 }
 
 Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool parseReservedWord) {
-    ::std::string str;
+    std::string str;
     if (leader2 != '\0') {
         str += leader;
     }
@@ -1227,13 +1167,11 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
         str += ch;
         ch = this->getc();
     }
-    // Raw C string literal: `cr"..."` or `cr#"..."#`
     if (str == "cr" && (ch == '\"' || ch == '#')) {
         this->ungetc();
         return this->getTokenIntRawString(TOK_CSTRING);
     }
     if (ch == '\"') {
-        // C String literal
         if (str == "c") {
             str = "";
             while ((ch = this->getc()) != '"') {
@@ -1262,25 +1200,16 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
             return Token(v);
         }
     }
-    // Rust normalises identifiers, so `Résumé` written with a precomposed `é`
-    // and with `e` plus a combining acute are the same name.
     auto ident = Ident(this->realGetHygiene(), RcString::newInterned(unicodeNormaliseNfc(str)));
-    // The only caller that asks for no reserved words is the `r#` prefix.
     ident.isRaw = !parseReservedWord;
     return Token(TOK_IDENT, mv$(ident));
 }
 
-/// Parse an integer from the input stream
 U128 Lexer::parseInt(NumMode* numModeOut) {
     auto numMode = NumMode::DEC;
 
     U128 val(0);
     auto ch = this->getc();
-    // Leading zero could be part of a base suffix
-    // - `0x` Hex
-    // - `0o` Octal
-    // - `0b` Binary
-    // - Any other character: decimal
     if (ch == '0') {
         ch = this->getcNum();
         if (ch == 'x') {
@@ -1341,10 +1270,8 @@ U128 Lexer::parseInt(NumMode* numModeOut) {
     return val;
 }
 
-// Takes the VERY lazy way of reading the float into a string then passing to strtod
 FloatValue Lexer::parseFloat(U128 whole) {
     std::string sbuf = FMT(whole << ".");
-    //char buf[MAX_LEN+1];
 
     auto ch = this->getcNum();
 #define PUTC(ch)                                                                                                                          \
@@ -1360,13 +1287,10 @@ FloatValue Lexer::parseFloat(U128 whole) {
         nextTokens.push_back(Token::makeFloat(parseFloatValue(sbuf.c_str()), CORETYPE_ANY));
         return std::numeric_limits<double>::quiet_NaN();
     };
-    // If the current char is a `.`
     if (ch == '.') {
         // TODO: `0.0..` should be a range, so if the next character is `.`, then unget and continue
         ch = this->getc();
         if (ch == '.') {
-            // Double-dot, need to unget twice
-            // OR: Explicitly handle the symbols
             switch (this->getc().v) {
                 case '.':
                     nextTokens.push_back(TOK_TRIPLE_DOT);
@@ -1402,7 +1326,6 @@ FloatValue Lexer::parseFloat(U128 whole) {
 
         ch = this->getc();
         if (ch == '.') {
-            // `0.0 ..= 1.0` is a range, not the start of a tuple-index chain.
             switch (this->getc().v) {
                 case '.':
                     nextTokens.push_back(TOK_TRIPLE_DOT);
@@ -1460,18 +1383,17 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
             }
             ch = this->getc();
             if (!ch.isxdigit()) {
-                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence").c_str());
+                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << std::hex << ch.v << "' in \\u sequence").c_str());
             }
             char tmp[3] = {static_cast<char>(ch.v), 0, 0};
             ch = this->getc();
             if (!ch.isxdigit()) {
-                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence").c_str());
+                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << std::hex << ch.v << "' in \\u sequence").c_str());
             }
             tmp[1] = static_cast<char>(ch.v);
-            return ::std::strtol(tmp, NULL, 16);
+            return std::strtol(tmp, NULL, 16);
         } break;
         case 'u': {
-            // Unicode (up to six hex digits)
             u32 val = 0;
             ch = this->getc();
             bool reqCloseBrace = false;
@@ -1480,15 +1402,13 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
                 ch = this->getc();
             }
             if (!ch.isxdigit()) {
-                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence").c_str());
+                compileErrorGeneric(*this, FMT("Found invalid character '\\x" << std::hex << ch.v << "' in \\u sequence").c_str());
             }
-            // `\u{10__FFFF}` -- an underscore may separate the digits, as it
-            // may in any other numeric literal.
             while (ch.isxdigit() || ch == '_') {
                 if (ch != '_') {
                     char tmp[2] = {static_cast<char>(ch.v), 0};
                     val *= 16;
-                    val += ::std::strtol(tmp, NULL, 16);
+                    val += std::strtol(tmp, NULL, 16);
                 }
                 ch = this->getc();
             }
@@ -1516,9 +1436,6 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
             return '\t';
         case '\r':
         case '\n':
-            // A line continuation skips the four characters Rust calls
-            // whitespace here, not everything a locale would: a form feed or a
-            // no-break space after it stays in the string.
             while (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
                 ch = this->getc();
             }
@@ -1560,7 +1477,7 @@ Codepoint Lexer::getc() {
     if (lastCharValid) {
         lastCharValid = false;
 #ifdef TRACE_CHARS
-        ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << " (cached)" << ::std::endl;
+        std::cout << "getc(): U+" << std::hex << lastChar.v << " (cached)" << std::endl;
 #endif
     } else if (replayCharOffset < replayChars.size()) {
         lastChar = replayChars[replayCharOffset++];
@@ -1571,7 +1488,7 @@ Codepoint Lexer::getc() {
             lineOfs += 1;
         }
 #ifdef TRACE_CHARS
-        ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << " (replayed)" << ::std::endl;
+        std::cout << "getc(): U+" << std::hex << lastChar.v << " (replayed)" << std::endl;
 #endif
     } else {
         replayChars.clear();
@@ -1581,7 +1498,7 @@ Codepoint Lexer::getc() {
             lineOfs += 1;
         }
 #ifdef TRACE_CHARS
-        ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << ::std::endl;
+        std::cout << "getc(): U+" << std::hex << lastChar.v << std::endl;
 #endif
     }
     return lastChar;
@@ -1600,10 +1517,8 @@ Codepoint Lexer::getcCp() {
     if (v1 < 128) {
         return {v1};
     } else if ((v1 & 0xC0) == 0x80) {
-        // Invalid (continuation)
         return {0xFFFE};
     } else if ((v1 & 0xE0) == 0xC0) {
-        // Two bytes
         u8 e1 = this->getcByte();
         if ((e1 & 0xC0) != 0x80) {
             return {0xFFFE};
@@ -1612,7 +1527,6 @@ Codepoint Lexer::getcCp() {
         u32 outval = ((v1 & 0x1F) << 6) | ((e1 & 0x3F) << 0);
         return {outval};
     } else if ((v1 & 0xF0) == 0xE0) {
-        // Three bytes
         u8 e1 = this->getcByte();
         if ((e1 & 0xC0) != 0x80) {
             return {0xFFFE};
@@ -1625,7 +1539,6 @@ Codepoint Lexer::getcCp() {
         u32 outval = ((v1 & 0x0F) << 12) | ((e1 & 0x3F) << 6) | ((e2 & 0x3F) << 0);
         return {outval};
     } else if ((v1 & 0xF8) == 0xF0) {
-        // Four bytes
         u8 e1 = this->getcByte();
         if ((e1 & 0xC0) != 0x80) {
             return {0xFFFE};
@@ -1648,15 +1561,11 @@ Codepoint Lexer::getcCp() {
 
 void Lexer::ungetc() {
 #ifdef TRACE_CHARS
-    ::std::cout << "ungetc(): cache U+" << ::std::hex << lastChar.v << ::std::endl;
+    std::cout << "ungetc(): cache U+" << std::hex << lastChar.v << std::endl;
 #endif
     assert(!lastCharValid);
     lastCharValid = true;
 }
-
-// --------------------------------------------------------------------
-// Codepoint - Unicode codepoint.
-// --------------------------------------------------------------------
 
 bool Codepoint::isspace() const {
     switch (this->v) {
@@ -1664,13 +1573,13 @@ bool Codepoint::isspace() const {
         case '\r':
         case '\n':
         case ' ':
-        case 0xB: // vertical tab
-        case 0xC: // ^L
+        case 0xB:
+        case 0xC:
         case 0x85:
         case 0x200E:
-        case 0x200F: // LTR / RTL markers
-        case 0x2028: // Line Separator
-        case 0x2029: // Paragrah Separator
+        case 0x200F:
+        case 0x2028:
+        case 0x2029:
             return true;
         default:
             return false;
@@ -1685,7 +1594,7 @@ bool Codepoint::isxdigit() const {
     return this->v < 128 && std::isxdigit(static_cast<int>(this->v));
 }
 
-::std::string& operator+=(::std::string& s, const Codepoint& cp) {
+std::string& operator+=(std::string& s, const Codepoint& cp) {
     if (cp.v < 0x80) {
         s += (char)cp.v;
     } else if (cp.v < (0x1F + 1) << (1 * 6)) {
@@ -1701,12 +1610,12 @@ bool Codepoint::isxdigit() const {
         s += (char)(0x80 | ((cp.v >> 6) & 0x3F));
         s += (char)(0x80 | ((cp.v >> 0) & 0x3F));
     } else {
-        throw ::std::runtime_error(FMT("BUGCHECK: Bad unicode codepoint encountered - " << ::std::hex << cp.v));
+        throw std::runtime_error(FMT("BUGCHECK: Bad unicode codepoint encountered - " << std::hex << cp.v));
     }
     return s;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Codepoint& cp) {
+std::ostream& operator<<(std::ostream& os, const Codepoint& cp) {
     if (cp.v < 0x80) {
         os << (char)cp.v;
     } else if (cp.v < (0x1F + 1) << (1 * 6)) {
@@ -1722,19 +1631,19 @@ bool Codepoint::isxdigit() const {
         os << (char)(0x80 | ((cp.v >> 6) & 0x3F));
         os << (char)(0x80 | ((cp.v >> 0) & 0x3F));
     } else {
-        throw ::std::runtime_error("BUGCHECK: Bad unicode codepoint encountered");
+        throw std::runtime_error("BUGCHECK: Bad unicode codepoint encountered");
     }
     return os;
 }
 
-Token LexFindOperator(stl::StringView s) {
-    const stl::StringView underscore(reinterpret_cast<const u8*>("_"), 1);
+Token LexFindOperator(StringView s) {
+    const StringView underscore(reinterpret_cast<const u8*>("_"), 1);
     if (s == underscore) {
         return TOK_UNDERSCORE;
     }
     for (size_t i = 0; i < LEN(TOKENMAP); i++) {
         const auto& e = TOKENMAP[i];
-        const stl::StringView chars(reinterpret_cast<const u8*>(e.chars), e.len);
+        const StringView chars(reinterpret_cast<const u8*>(e.chars), e.len);
         if (s < chars) {
             break;
         }
@@ -1748,11 +1657,11 @@ Token LexFindOperator(stl::StringView s) {
     return TOK_NULL;
 }
 
-Token LexFindOperator(const ::std::string& s) {
-    return LexFindOperator(stl::StringView(reinterpret_cast<const u8*>(s.data()), s.size()));
+Token LexFindOperator(const std::string& s) {
+    return LexFindOperator(StringView(reinterpret_cast<const u8*>(s.data()), s.size()));
 }
 
-Token LexFindReservedWord(const ::std::string& s, ASTEdition edition) {
+Token LexFindReservedWord(const std::string& s, ASTEdition edition) {
     size_t len = 0;
     const sRWORD* RWORDS = nullptr;
     switch (edition) {

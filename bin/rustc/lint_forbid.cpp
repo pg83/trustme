@@ -1,17 +1,14 @@
 #include "lint_forbid.h"
 
+#include "span.h"
 #include "ast_ast.h"
 #include "ast_crate.h"
-#include "parse_ttstream.h"
-#include "span.h"
 #include "wire_board.h"
+#include "parse_ttstream.h"
 
 #include <set>
 
 namespace {
-    /// The plain lint names listed in `(...)`. The list also carries entries
-    /// this compiler has no lint for -- tool lints (`clippy::foo`) and keyed
-    /// entries (`reason = "..."`) -- so the scan skips whatever it cannot read.
     template <typename F>
     void collectLintNames(const ASTAttribute& mi, const F& cb) {
         TTStream lex(mi.span(), ParseState(), mi.data());
@@ -49,10 +46,8 @@ namespace {
         }
     }
 
-    /// Read one item's lint attributes: what it forbids, and what it tries to
-    /// set to a level below forbid.
     template <typename F>
-    void readLintAttrs(const ASTAttributeList& attrs, ::std::set<RcString>& forbidden, const F& lowered) {
+    void readLintAttrs(const ASTAttributeList& attrs, std::set<RcString>& forbidden, const F& lowered) {
         for (const auto& a : attrs.items) {
             const auto& name = a.name();
             if (name == "forbid") {
@@ -67,11 +62,10 @@ namespace {
         }
     }
 
-    void checkModule(ASTModule& mod, ::std::set<RcString> forbidden);
+    void checkModule(ASTModule& mod, std::set<RcString> forbidden);
 
-    void checkNamedItem(ASTNamed<ASTItem>& item, const ::std::set<RcString>& outerForbidden) {
+    void checkNamedItem(ASTNamed<ASTItem>& item, const std::set<RcString>& outerForbidden) {
         auto forbidden = outerForbidden;
-        // What this item forbids applies to what is nested in it.
         readLintAttrs(item.attrs, forbidden, [&](const Span& sp, const RcString& lint) {
             if (outerForbidden.count(lint)) {
                 ERROR(sp, E0000, "lint `" << lint << "` is forbidden by an enclosing item and cannot be lowered here");
@@ -82,13 +76,12 @@ namespace {
         }
     }
 
-    void checkModule(ASTModule& mod, ::std::set<RcString> forbidden) {
+    void checkModule(ASTModule& mod, std::set<RcString> forbidden) {
         for (auto& item : mod.items) {
             if (item) {
                 checkNamedItem(*item, forbidden);
             }
         }
-        // An item written inside a function body lives in an anonymous module.
         for (auto& anon : mod.anonMods()) {
             if (anon) {
                 checkModule(*anon, forbidden);
@@ -98,7 +91,7 @@ namespace {
 }
 
 void LintCheckForbid(const WireBoard& wb, ASTCrate& crate) {
-    ::std::set<RcString> forbidden;
+    std::set<RcString> forbidden;
     readLintAttrs(crate.attrs, forbidden, [](const Span&, const RcString&) {});
     checkModule(crate.rootModule(), forbidden);
 }

@@ -8,7 +8,7 @@ generate(
     variants=[
         v("None"),
         v("Ident", "Ident"),
-        v("String", "::std::string"),
+        v("String", "std::string"),
         v("Integer", fields=[
             ("enum eCoreType", "datatype"),
             ("U128", "intval"),

@@ -5,10 +5,9 @@
 
 class ASTLifetimeRef {
 public:
-    // NOTE: These (the first three) must match HIR::LifetimeRef's versions
-    static const u16 BINDING_STATIC = 0xFFFF;      // 'static
-    static const u16 BINDING_UNSPECIFIED = 0xFFFE; // <unspec>
-    static const u16 BINDING_INFER = 0xFFFD;       // '_
+    static const u16 BINDING_STATIC = 0xFFFF;
+    static const u16 BINDING_UNSPECIFIED = 0xFFFE;
+    static const u16 BINDING_INFER = 0xFFFD;
     static const u16 BINDING_UNBOUND = 0xFFFC;
 
 private:
@@ -64,5 +63,5 @@ public:
         return ord(x) == OrdLess;
     };
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTLifetimeRef& x);
+    friend std::ostream& operator<<(std::ostream& os, const ASTLifetimeRef& x);
 };

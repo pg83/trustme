@@ -2,7 +2,7 @@
 
 #include "hir_type.h"
 
-::std::ostream& operator<<(::std::ostream& os, const HIRGenericBound& x) {
+std::ostream& operator<<(std::ostream& os, const HIRGenericBound& x) {
     switch (x.tag()) {
         case HIRGenericBound::TAG_TraitBound: {
             auto& e = x.as_TraitBound();
@@ -18,7 +18,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRGenericParams::PrintArgs& x) {
+std::ostream& operator<<(std::ostream& os, const HIRGenericParams::PrintArgs& x) {
     if (x.gp.types.size() > 0 || x.gp.values.size() > 0) {
         os << "<";
         size_t typeIndex = 0;
@@ -44,7 +44,7 @@
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRGenericParams::PrintBounds& x) {
+std::ostream& operator<<(std::ostream& os, const HIRGenericParams::PrintBounds& x) {
     if (x.gp.bounds.size() > 0) {
         os << " where ";
         bool commaNeeded = false;
@@ -67,14 +67,31 @@ Ordering HIRGenericBound::ord(const HIRGenericBound& b) const {
         case HIRGenericBound::TAG_TraitBound: {
             auto& ae = (*this).as_TraitBound();
             auto& be = b.as_TraitBound();
-            auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.trait.ord(be.trait); if (cmp != OrdEqual) return cmp;
-            cmp = ::ord(ae.isTrivial, be.isTrivial); if (cmp != OrdEqual) return cmp;
+            auto cmp = ae.type->ordIgnoringRegions(be.type);
+            if (cmp != OrdEqual) {
+                return cmp;
+            }
+            cmp = ae.trait.ord(be.trait);
+            if (cmp != OrdEqual) {
+                return cmp;
+            }
+            cmp = ::ord(ae.isTrivial, be.isTrivial);
+            if (cmp != OrdEqual) {
+                return cmp;
+            }
             break;
         }
         case HIRGenericBound::TAG_TypeEquality: {
             auto& ae = (*this).as_TypeEquality();
             auto& be = b.as_TypeEquality();
-            auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.otherType->ordIgnoringRegions(be.otherType); if (cmp != OrdEqual) return cmp;
+            auto cmp = ae.type->ordIgnoringRegions(be.type);
+            if (cmp != OrdEqual) {
+                return cmp;
+            }
+            cmp = ae.otherType->ordIgnoringRegions(be.otherType);
+            if (cmp != OrdEqual) {
+                return cmp;
+            }
             break;
         }
     }
@@ -156,7 +173,6 @@ bool HIRGenericParams::isGeneric() const {
     if (!types.empty()) {
         return true;
     }
-    // Note: Lifetimes don't matter
     if (!values.empty()) {
         return true;
     }

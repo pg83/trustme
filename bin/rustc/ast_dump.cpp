@@ -6,7 +6,7 @@
 #include "ast_crate.h"
 #include "cpp_unpack.h"
 
-#include <limits> // std::numeric_limits
+#include <limits>
 #include <fstream>
 #include <string_view>
 
@@ -22,17 +22,13 @@
         }                                                               \
     } while (0)
 
-class RustPrinter: public ASTNodeVisitor {
-    ::std::ostream& os;
+namespace {
+struct RustPrinter: public ASTNodeVisitor {
+    std::ostream& os;
     int indentLevel;
-    bool exprRoot; //!< used to allow 'if' and 'match' to behave differently as standalone exprs
-public:
-    RustPrinter(::std::ostream& os)
-        : os(os)
-        , indentLevel(0)
-        , exprRoot(false)
-    {
-    }
+    bool exprRoot;
+
+    RustPrinter(std::ostream& os);
 
     void handleModule(const ASTModule& mod);
     void handleStruct(const ASTStruct& s);
@@ -42,883 +38,95 @@ public:
     void handleFunction(const ASTVisibility& vis, const RcString& name, const ASTFunction& f);
     void handleStatic(const ASTVisibility& vis, const RcString& name, const ASTStatic& s);
 
-    virtual bool isConst() const override {
-        return true;
-    }
+    virtual bool isConst() const override;
 
-    virtual void visit(ASTExprNodeBlock& n) override {
-        switch (n.blockType) {
-            case ASTExprNodeBlock::Type::Bare:
-                break;
-            case ASTExprNodeBlock::Type::Unsafe:
-                os << "unsafe ";
-                break;
-            case ASTExprNodeBlock::Type::Const:
-                os << "const ";
-                break;
-        }
-        if (n.label.name != RcString()) {
-            os << "'" << n.label << ": ";
-        }
-        os << "{";
-        incIndent();
-        if (n.localMod) {
-            os << "\n";
-            os << indent() << "// ANON: " << n.localMod->path() << "\n";
-            handleModule(*n.localMod);
-        }
-        for (auto& child : n.nodes) {
-            os << "\n";
-            if (child.node) {
-                this->printAttrs(child.node->attrs());
-            }
-            os << indent();
-            exprRoot = true;
-            if (!child.node.get()) {
-                os << "/* nil */";
-            } else {
-                ASTNodeVisitor::visit(child.node);
-            }
-            if (child.hasSemicolon) {
-                os << ";";
-            }
-        }
-        os << "\n";
-        decIndent();
-        os << indent() << "}";
-    }
+    virtual void visit(ASTExprNodeBlock& n) override;
 
-    virtual void visit(ASTExprNodeAsyncBlock& n) override {
-        os << "async ";
-        if (n.isMove) {
-            os << "move ";
-        }
-        if (n.isUse) {
-            os << "use ";
-        }
-        ASTNodeVisitor::visit(n.inner);
-    }
+    virtual void visit(ASTExprNodeAsyncBlock& n) override;
 
-    virtual void visit(ASTExprNodeGeneratorBlock& n) override {
-        os << "gen ";
-        if (n.isMove) {
-            os << "move ";
-        }
-        ASTNodeVisitor::visit(n.inner);
-    }
+    virtual void visit(ASTExprNodeGeneratorBlock& n) override;
 
-    virtual void visit(ASTExprNodeTry& n) override {
-        os << "try ";
-        ASTNodeVisitor::visit(n.inner);
-    }
+    virtual void visit(ASTExprNodeTry& n) override;
 
-    void dumpToken(const Token& t) {
-        os << t.toStr() << " ";
-    }
+    void dumpToken(const Token& t);
 
-    void dumpTokentree(const TokenTree& tt) {
-        if (tt.isToken()) {
-            dumpToken(tt.tok());
-        } else {
-            for (size_t i = 0; i < tt.size(); i++) {
-                dumpTokentree(tt[i]);
-            }
-        }
-    }
+    void dumpTokentree(const TokenTree& tt);
 
-    virtual void visit(ASTExprNodeMacro& n) override {
-        exprRoot = false;
-        os << n.path << "!";
-        if (n.ident != "") {
-            os << " ";
-            os << n.ident;
-        }
-        os << (n.isBraced ? "{" : "(");
-        dumpTokentree(n.tokens);
-        os << (n.isBraced ? "}" : ")");
-    }
+    virtual void visit(ASTExprNodeMacro& n) override;
 
-    virtual void visit(ASTExprNodeAsm& n) override {
-        os << "asm!( \"" << n.text << "\"";
-        os << " :";
-        for (auto& v : n.output) {
-            os << " \"" << v.name << "\" (";
-            ASTNodeVisitor::visit(v.value);
-            os << "),";
-        }
-        os << " :";
-        for (auto& v : n.input) {
-            os << " \"" << v.name << "\" (";
-            ASTNodeVisitor::visit(v.value);
-            os << "),";
-        }
-        os << " :";
-        for (const auto& v : n.clobbers) {
-            os << " \"" << v << "\",";
-        }
-        os << " :";
-        for (const auto& v : n.flags) {
-            os << " \"" << v << "\",";
-        }
-        os << " )";
-    }
+    virtual void visit(ASTExprNodeAsm& n) override;
 
-    virtual void visit(ASTExprNodeAsm2& n) override {
-        os << "asm!( ";
-        for (const auto& l : n.lines) {
-            l.fmt(os);
-            os << ", ";
-        }
-        for (auto& p : n.params) {
-            switch (p.tag()) {
-                case ASTAsmParam::TAG_Const: {
-                    auto& e = p.as_Const();
-                    os << "const ";
-                    ASTNodeVisitor::visit(e);
-                    break;
-                }
-                case ASTAsmParam::TAG_Sym: {
-                    auto& e = p.as_Sym();
-                    os << "sym " << e;
-                    break;
-                }
-                case ASTAsmParam::TAG_Label: {
-                    auto& e = p.as_Label();
-                    os << "label ";
-                    ASTNodeVisitor::visit(e.code);
-                    break;
-                }
-                case ASTAsmParam::TAG_RegSingle: {
-                    auto& e = p.as_RegSingle();
-                    os << e.dir << "(" << e.spec << ") ";
-                    ASTNodeVisitor::visit(e.val);
-                    break;
-                }
-                case ASTAsmParam::TAG_Reg: {
-                    auto& e = p.as_Reg();
-                    os << e.dir << "(" << e.spec << ") ";
-                    if (e.valIn) {
-                        ASTNodeVisitor::visit(e.valIn);
-                        if (e.valOut) {
-                            os << " => ";
-                        }
-                    }
-                    if (e.valOut) {
-                        ASTNodeVisitor::visit(e.valOut);
-                    }
-                    break;
-                }
-            }
-            os << ", ";
-        }
-        if (n.options.any()) {
-            n.options.fmt(os);
-        }
-        os << ")";
-    }
+    virtual void visit(ASTExprNodeAsm2& n) override;
 
-    virtual void visit(ASTExprNodeFlow& n) override {
-        exprRoot = false;
-        switch (n.type) {
-            case ASTExprNodeFlow::RETURN:
-                os << "return ";
-                break;
-            case ASTExprNodeFlow::TAILCALL:
-                os << "become ";
-                break;
-            case ASTExprNodeFlow::YIELD:
-                os << "yield ";
-                break;
-            case ASTExprNodeFlow::BREAK:
-                os << "break ";
-                break;
-            case ASTExprNodeFlow::CONTINUE:
-                os << "continue ";
-                break;
-            case ASTExprNodeFlow::YEET:
-                os << "do yeet ";
-                break;
-        }
-        if (n.target.name != "") {
-            os << "'" << n.target << " ";
-        }
-        ASTNodeVisitor::visit(n.value);
-    }
+    virtual void visit(ASTExprNodeFlow& n) override;
 
-    virtual void visit(ASTExprNodeLetBinding& n) override {
-        exprRoot = false;
-        os << "let ";
-        printPattern(n.pat, false);
-        os << ": ";
-        printType(n.type);
-        if (n.value) {
-            os << " = ";
-            ASTNodeVisitor::visit(n.value);
-        }
-        if (n.elseNode) {
-            os << " else ";
-            ASTNodeVisitor::visit(n.elseNode);
-        }
-        os << ";";
-    }
+    virtual void visit(ASTExprNodeLetBinding& n) override;
 
-    virtual void visit(ASTExprNodeAssign& n) override {
-        exprRoot = false;
-        ASTNodeVisitor::visit(n.slot);
-        switch (n.op) {
-            case ASTExprNodeAssign::NONE:
-                os << "  = ";
-                break;
-            case ASTExprNodeAssign::ADD:
-                os << " += ";
-                break;
-            case ASTExprNodeAssign::SUB:
-                os << " -= ";
-                break;
-            case ASTExprNodeAssign::MUL:
-                os << " *= ";
-                break;
-            case ASTExprNodeAssign::DIV:
-                os << " /= ";
-                break;
-            case ASTExprNodeAssign::MOD:
-                os << " %= ";
-                break;
-            case ASTExprNodeAssign::AND:
-                os << " &= ";
-                break;
-            case ASTExprNodeAssign::OR:
-                os << " |= ";
-                break;
-            case ASTExprNodeAssign::XOR:
-                os << " ^= ";
-                break;
-            case ASTExprNodeAssign::SHR:
-                os << " >>= ";
-                break;
-            case ASTExprNodeAssign::SHL:
-                os << " <<= ";
-                break;
-        }
-        ASTNodeVisitor::visit(n.value);
-    }
+    virtual void visit(ASTExprNodeAssign& n) override;
 
-    virtual void visit(ASTExprNodeCallPath& n) override {
-        exprRoot = false;
-        os << n.path;
-        os << "(";
-        bool isFirst = true;
-        for (auto& arg : n.args) {
-            if (isFirst) {
-                isFirst = false;
-            } else {
-                os << ", ";
-            }
-            ASTNodeVisitor::visit(arg);
-        }
-        os << ")";
-    }
+    virtual void visit(ASTExprNodeCallPath& n) override;
 
-    virtual void visit(ASTExprNodeCallMethod& n) override {
-        exprRoot = false;
-        WRAPIF(n.val, ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf, ASTExprNodeMatch);
-        os << "." << n.method;
-        os << "(";
-        bool isFirst = true;
-        for (auto& arg : n.args) {
-            if (isFirst) {
-                isFirst = false;
-            } else {
-                os << ", ";
-            }
-            ASTNodeVisitor::visit(arg);
-        }
-        os << ")";
-    }
+    virtual void visit(ASTExprNodeCallMethod& n) override;
 
-    virtual void visit(ASTExprNodeCallObject& n) override {
-        exprRoot = false;
-        os << "(";
-        ASTNodeVisitor::visit(n.val);
-        os << ")(";
-        bool isFirst = true;
-        for (auto& arg : n.args) {
-            if (isFirst) {
-                isFirst = false;
-            } else {
-                os << ", ";
-            }
-            ASTNodeVisitor::visit(arg);
-        }
-        os << ")";
-    }
+    virtual void visit(ASTExprNodeCallObject& n) override;
 
-    virtual void visit(ASTExprNodeLoop& n) override {
-        bool exprRoot = exprRoot;
-        exprRoot = false;
+    virtual void visit(ASTExprNodeLoop& n) override;
 
-        if (n.label.name != "") {
-            os << "'" << n.label << ": ";
-        }
+    virtual void visit(ASTExprNodeFor& n) override;
 
-        os << "loop";
+    void visitIfletConditions(std::vector<ASTIfLetCondition>& conds);
 
-        if (exprRoot) {
-            os << "\n";
-            os << indent();
-        } else {
-            os << " ";
-        }
+    void visit(ASTExprNodeWhile& n) override;
 
-        ASTNodeVisitor::visit(n.code);
-    }
+    virtual void visit(ASTExprNodeMatch& n) override;
 
-    virtual void visit(ASTExprNodeFor& n) override {
-        bool exprRoot = exprRoot;
-        exprRoot = false;
+    virtual void visit(ASTExprNodeIf& n) override;
 
-        if (n.label.name != "") {
-            os << "'" << n.label << ": ";
-        }
-        os << "for ";
-        printPattern(n.pattern, true);
-        os << " in ";
-        ASTNodeVisitor::visit(n.value);
+    virtual void visit(ASTExprNodeClosure& n) override;
 
-        if (exprRoot) {
-            os << "\n";
-            os << indent();
-        } else {
-            os << " ";
-        }
+    virtual void visit(ASTExprNodeWildcardPattern& n) override;
 
-        ASTNodeVisitor::visit(n.code);
-    }
+    virtual void visit(ASTExprNodeInteger& n) override;
 
-    void visitIfletConditions(std::vector<ASTIfLetCondition>& conds) {
-        for (size_t i = 0; i < conds.size(); i++) {
-            if (i != 0) {
-                os << " && ";
-            }
-            if (conds[i].optPat) {
-                os << "let ";
-                printPattern(*conds[i].optPat, true);
-                os << " = ";
-            }
-            os << "(";
-            ASTNodeVisitor::visit(conds[i].value);
-            os << ")";
-        }
-    }
+    virtual void visit(ASTExprNodeFloat& n) override;
 
-    void visit(ASTExprNodeWhile& n) override {
-        bool exprRoot = exprRoot;
-        exprRoot = false;
+    virtual void visit(ASTExprNodeBool& n) override;
 
-        if (n.label.name != "") {
-            os << "'" << n.label << ": ";
-        }
+    virtual void visit(ASTExprNodeString& n) override;
 
-        os << "while ";
-        visitIfletConditions(n.conditions);
-        if (exprRoot) {
-            os << "\n";
-            os << indent();
-        } else {
-            os << " ";
-        }
+    virtual void visit(ASTExprNodeByteString& n) override;
 
-        ASTNodeVisitor::visit(n.code);
-    }
+    virtual void visit(ASTExprNodeCString& n) override;
 
-    virtual void visit(ASTExprNodeMatch& n) override {
-        bool exprRoot = exprRoot;
-        exprRoot = false;
-        os << "match ";
-        ASTNodeVisitor::visit(n.val);
+    virtual void visit(ASTExprNodeSuffixedLiteral& n) override;
 
-        if (exprRoot) {
-            os << "\n";
-            os << indent() << "{\n";
-        } else {
-            os << " {\n";
-            incIndent();
-        }
+    virtual void visit(ASTExprNodeStructLiteral& n) override;
 
-        for (auto& arm : n.arms) {
-            os << indent();
-            bool isFirst = true;
-            for (const auto& pat : arm.patterns) {
-                if (!isFirst) {
-                    os << "|";
-                }
-                isFirst = false;
-                printPattern(pat, true);
-            }
-            if (!arm.guard.empty()) {
-                os << " if ";
-                visitIfletConditions(arm.guard);
-            }
-            os << " => ";
-            // Increase indent, but don't print. Causes nested blocks to be indented above the match
-            incIndent();
-            ASTNodeVisitor::visit(arm.code);
-            decIndent();
-            os << ",\n";
-        }
+    virtual void visit(ASTExprNodeStructLiteralPattern& n) override;
 
-        if (exprRoot) {
-            os << indent() << "}";
-        } else {
-            os << indent() << "}";
-            decIndent();
-        }
-    }
+    virtual void visit(ASTExprNodeArray& n) override;
 
-    virtual void visit(ASTExprNodeIf& n) override {
-        bool exprRoot = exprRoot;
-        exprRoot = false;
-        for (auto& arm : n.arms) {
-            if (&arm != n.arms.data()) {
-                if (exprRoot) {
-                    os << indent();
-                }
-                os << "else ";
-            }
+    virtual void visit(ASTExprNodeTuple& n) override;
 
-            os << "if ";
-            visitIfletConditions(arm.conditions);
+    virtual void visit(ASTExprNodeNamedValue& n) override;
 
-            bool isBlock = (cast<const ASTExprNodeBlock>(&*arm.body) != nullptr);
-            if (!isBlock) {
-                os << "{ ";
-            }
-            ASTNodeVisitor::visit(arm.body);
-            if (!isBlock) {
-                os << " }";
-            }
-            if (exprRoot) {
-                os << "\n";
-            }
-        }
-        if (n.elseNode) {
-            if (exprRoot) {
-                os << indent();
-            }
-            os << "else";
-            bool isBlock = (cast<const ASTExprNodeBlock>(&*n.elseNode) != nullptr);
-            if (!isBlock) {
-                os << "{ ";
-            }
-            ASTNodeVisitor::visit(n.elseNode);
-            if (!isBlock) {
-                os << " }";
-            }
-        }
-    }
+    virtual void visit(ASTExprNodeField& n) override;
 
-    virtual void visit(ASTExprNodeClosure& n) override {
-        exprRoot = false;
-        if (n.isMove) {
-            os << "move ";
-        }
-        if (n.isUse) {
-            os << "use ";
-        }
-        os << "|";
-        bool isFirst = true;
-        for (const auto& arg : n.args) {
-            if (!isFirst) {
-                os << ", ";
-            }
-            isFirst = false;
-            printPattern(arg.first, false);
-            os << ": ";
-            printType(arg.second);
-        }
-        os << "| ->";
-        printType(n.returnType);
-        os << " { ";
-        ASTNodeVisitor::visit(n.code);
-        os << " }";
-    }
+    virtual void visit(ASTExprNodeIndex& n) override;
 
-    virtual void visit(ASTExprNodeWildcardPattern& n) override {
-        os << "_";
-    }
+    virtual void visit(ASTExprNodeDeref& n) override;
 
-    virtual void visit(ASTExprNodeInteger& n) override {
-        exprRoot = false;
-        switch (n.datatype) {
-            case CORETYPE_INVAL:
-                os << "0x" << ::std::hex << n.value << ::std::dec << "_/*INVAL*/";
-                break;
-            case CORETYPE_BOOL:
-            case CORETYPE_STR:
-                os << "0x" << ::std::hex << n.value << ::std::dec << "_/*bool/str*/";
-                break;
-            case CORETYPE_CHAR:
-                if (n.value >= 0x20 && n.value < 128) {
-                    switch (n.value.truncateU64()) {
-                        case '\'':
-                            os << "'\\''";
-                            break;
-                        case '\\':
-                            os << "'\\\\'";
-                            break;
-                        default:
-                            os << "'" << (char)n.value.truncateU64() << "'";
-                            break;
-                    }
-                } else {
-                    os << "'\\u{" << ::std::hex << n.value << ::std::dec << "}'";
-                }
-                break;
-            case CORETYPE_F16:
-            case CORETYPE_F32:
-            case CORETYPE_F64:
-            case CORETYPE_F128:
-                break;
-            case CORETYPE_U8:
-            case CORETYPE_U16:
-            case CORETYPE_U32:
-            case CORETYPE_U64:
-            case CORETYPE_U128:
-            case CORETYPE_UINT:
-            case CORETYPE_ANY:
-                os << "0x" << ::std::hex << n.value << ::std::dec;
-                os << "_" << coretypeName(n.datatype);
-                break;
-            case CORETYPE_I8:
-            case CORETYPE_I16:
-            case CORETYPE_I32:
-            case CORETYPE_I64:
-            case CORETYPE_I128:
-            case CORETYPE_INT:
-                os << n.value;
-                os << "_" << coretypeName(n.datatype);
-                break;
-        }
-    }
+    virtual void visit(ASTExprNodeCast& n) override;
 
-    virtual void visit(ASTExprNodeFloat& n) override {
-        exprRoot = false;
-        switch (n.datatype) {
-            case CORETYPE_ANY:
-                os.precision(::std::numeric_limits<double>::max_digits10 + 1);
-                os << n.value;
-                break;
-            case CORETYPE_F16:
-            case CORETYPE_F32:
-                os.precision(::std::numeric_limits<float>::max_digits10 + 1);
-                os << n.value;
-                os << "_" << coretypeName(n.datatype);
-                break;
-            case CORETYPE_F64:
-                os.precision(::std::numeric_limits<double>::max_digits10 + 1);
-                os << n.value;
-                os << "_" << coretypeName(n.datatype);
-                break;
-            case CORETYPE_F128:
-                os.precision(::std::numeric_limits<double>::max_digits10 + 1);
-                os << n.value;
-                os << "_" << coretypeName(n.datatype);
-                break;
-            default:
-                break;
-        }
-    }
+    virtual void visit(ASTExprNodeTypeAnnotation& n) override;
 
-    virtual void visit(ASTExprNodeBool& n) override {
-        exprRoot = false;
-        if (n.value) {
-            os << "true";
-        } else {
-            os << "false";
-        }
-    }
+    virtual void visit(ASTExprNodeBinOp& n) override;
 
-    virtual void visit(ASTExprNodeString& n) override {
-        exprRoot = false;
-        os << "\"" << FmtEscaped(n.value) << "\"";
-    }
+    virtual void visit(ASTExprNodeUniOp& n) override;
 
-    virtual void visit(ASTExprNodeByteString& n) override {
-        exprRoot = false;
-        os << "b\"" << FmtEscaped(n.value) << "\"";
-    }
+    virtual void visit(ASTExprNodeMacroDefinition& n) override;
 
-    virtual void visit(ASTExprNodeCString& n) override {
-        exprRoot = false;
-        os << "c\"" << FmtEscaped(n.value) << "\"";
-    }
-
-    virtual void visit(ASTExprNodeSuffixedLiteral& n) override {
-        exprRoot = false;
-        os << n.text;
-    }
-
-    virtual void visit(ASTExprNodeStructLiteral& n) override {
-        exprRoot = false;
-        os << n.path << " {\n";
-        incIndent();
-        for (auto& i : n.values) {
-            printAttrs(i.attrs);
-            os << indent() << "r#" << i.name << ": ";
-            ASTNodeVisitor::visit(i.value);
-            os << ",\n";
-        }
-        if (n.baseValue.get()) {
-            os << indent() << ".. ";
-            ASTNodeVisitor::visit(n.baseValue);
-            os << "\n";
-        }
-        os << indent() << "}";
-        decIndent();
-    }
-
-    virtual void visit(ASTExprNodeStructLiteralPattern& n) override {
-        exprRoot = false;
-        os << n.path << " {\n";
-        incIndent();
-        for (auto& i : n.values) {
-            printAttrs(i.attrs);
-            os << indent() << "r#" << i.name << ": ";
-            ASTNodeVisitor::visit(i.value);
-            os << ",\n";
-        }
-        os << indent() << "..\n";
-        os << indent() << "}";
-        decIndent();
-    }
-
-    virtual void visit(ASTExprNodeArray& n) override {
-        exprRoot = false;
-        os << "[";
-        if (n.size.get()) {
-            ASTNodeVisitor::visit(n.values[0]);
-            os << "; ";
-            ASTNodeVisitor::visit(n.size);
-        } else {
-            for (auto& item : n.values) {
-                ASTNodeVisitor::visit(item);
-                os << ", ";
-            }
-        }
-        os << "]";
-    }
-
-    virtual void visit(ASTExprNodeTuple& n) override {
-        exprRoot = false;
-        os << "(";
-        for (auto& item : n.values) {
-            ASTNodeVisitor::visit(item);
-            os << ", ";
-        }
-        os << ")";
-    }
-
-    virtual void visit(ASTExprNodeNamedValue& n) override {
-        exprRoot = false;
-        os << n.path;
-    }
-
-    virtual void visit(ASTExprNodeField& n) override {
-        exprRoot = false;
-        WRAPIF(n.obj, ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf, ASTExprNodeMatch);
-        os << "." << n.name;
-    }
-
-    virtual void visit(ASTExprNodeIndex& n) override {
-        exprRoot = false;
-        WRAPIF(n.obj, ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf, ASTExprNodeMatch);
-        os << "[";
-        ASTNodeVisitor::visit(n.idx);
-        os << "]";
-    }
-
-    virtual void visit(ASTExprNodeDeref& n) override {
-        exprRoot = false;
-        os << "*(";
-        ASTNodeVisitor::visit(n.value);
-        os << ")";
-    }
-
-    virtual void visit(ASTExprNodeCast& n) override {
-        exprRoot = false;
-        os << "(";
-        ASTNodeVisitor::visit(n.value);
-        os << ") as " << n.type;
-    }
-
-    virtual void visit(ASTExprNodeTypeAnnotation& n) override {
-        exprRoot = false;
-        os << "(";
-        ASTNodeVisitor::visit(n.value);
-        os << ") : " << n.type;
-    }
-
-    virtual void visit(ASTExprNodeBinOp& n) override {
-        exprRoot = false;
-        auto* leftBinop = cast<ASTExprNodeBinOp>(n.left.get());
-        if (!n.left) {
-            os << "/*null*/";
-        } else if (leftBinop && leftBinop->type == n.type) {
-            ASTNodeVisitor::visit(n.left);
-        } else {
-            WRAPIF(n.left, ASTExprNodeCast, ASTExprNodeBinOp);
-        }
-        os << " ";
-        switch (n.type) {
-            case ASTExprNodeBinOp::CMPEQU:
-                os << "==";
-                break;
-            case ASTExprNodeBinOp::CMPNEQU:
-                os << "!=";
-                break;
-            case ASTExprNodeBinOp::CMPLT:
-                os << "<";
-                break;
-            case ASTExprNodeBinOp::CMPLTE:
-                os << "<=";
-                break;
-            case ASTExprNodeBinOp::CMPGT:
-                os << ">";
-                break;
-            case ASTExprNodeBinOp::CMPGTE:
-                os << ">=";
-                break;
-            case ASTExprNodeBinOp::BOOLAND:
-                os << "&&";
-                break;
-            case ASTExprNodeBinOp::BOOLOR:
-                os << "||";
-                break;
-            case ASTExprNodeBinOp::BITAND:
-                os << "&";
-                break;
-            case ASTExprNodeBinOp::BITOR:
-                os << "|";
-                break;
-            case ASTExprNodeBinOp::BITXOR:
-                os << "^";
-                break;
-            case ASTExprNodeBinOp::SHL:
-                os << "<<";
-                break;
-            case ASTExprNodeBinOp::SHR:
-                os << ">>";
-                break;
-            case ASTExprNodeBinOp::MULTIPLY:
-                os << "*";
-                break;
-            case ASTExprNodeBinOp::DIVIDE:
-                os << "/";
-                break;
-            case ASTExprNodeBinOp::MODULO:
-                os << "%";
-                break;
-            case ASTExprNodeBinOp::ADD:
-                os << "+";
-                break;
-            case ASTExprNodeBinOp::SUB:
-                os << "-";
-                break;
-            case ASTExprNodeBinOp::RANGE:
-                os << "..";
-                break;
-            case ASTExprNodeBinOp::RANGE_INC:
-                os << "...";
-                break;
-            case ASTExprNodeBinOp::PLACE_IN:
-                os << "<-";
-                break;
-        }
-        os << " ";
-        auto* rightBinop = cast<ASTExprNodeBinOp>(n.right.get());
-        if (!n.right) {
-            os << "/*null*/";
-        } else if (rightBinop && rightBinop->type != n.type) {
-            parenWrap(n.right);
-        } else {
-            ASTNodeVisitor::visit(n.right);
-        }
-    }
-
-    virtual void visit(ASTExprNodeUniOp& n) override {
-        exprRoot = false;
-        switch (n.type) {
-            case ASTExprNodeUniOp::NEGATE:
-                os << "-";
-                break;
-            case ASTExprNodeUniOp::INVERT:
-                os << "!";
-                break;
-            case ASTExprNodeUniOp::BOX:
-                os << "box ";
-                break;
-            case ASTExprNodeUniOp::REF:
-                os << "&";
-                break;
-            case ASTExprNodeUniOp::REFMUT:
-                os << "&mut ";
-                break;
-            case ASTExprNodeUniOp::RawBorrow:
-                os << "&raw const ";
-                break;
-            case ASTExprNodeUniOp::PinBorrow:
-                os << "&pin const ";
-                break;
-            case ASTExprNodeUniOp::PinBorrowMut:
-                os << "&pin mut ";
-                break;
-            case ASTExprNodeUniOp::RawBorrowMut:
-                os << "&raw mut ";
-                break;
-            case ASTExprNodeUniOp::QMARK:
-                break;
-            case ASTExprNodeUniOp::AWait:
-            case ASTExprNodeUniOp::AWaitNext:
-            case ASTExprNodeUniOp::USE:
-                break;
-        }
-
-        bool wrap = IS(*n.value, ASTExprNodeBinOp) || IS(*n.value, ASTExprNodeCast);
-        if (wrap) {
-            os << "(";
-        }
-        ASTNodeVisitor::visit(n.value);
-        if (wrap) {
-            os << ")";
-        }
-        switch (n.type) {
-            case ASTExprNodeUniOp::QMARK:
-                os << "?";
-                break;
-            case ASTExprNodeUniOp::AWait:
-                os << ".await";
-                break;
-            case ASTExprNodeUniOp::AWaitNext:
-                os << ".await/*next*/";
-                break;
-            case ASTExprNodeUniOp::USE:
-                os << ".use";
-                break;
-            default:
-                break;
-        }
-    }
-
-    virtual void visit(ASTExprNodeMacroDefinition& n) override {
-        os << "/* macro definition #" << n.definitionId << " */";
-    }
-
-private:
-    void parenWrap(ASTExprNodeP& node) {
-        os << "(";
-        ASTNodeVisitor::visit(node);
-        os << ")";
-    }
+    void parenWrap(ASTExprNodeP& node);
 
     void printAttrs(const ASTAttributeList& attrs);
     void printParams(const ASTGenericParams& params);
@@ -931,6 +139,7 @@ private:
     RepeatLitStr indent();
     void decIndent();
 };
+}
 
 void RustPrinter::printAttrs(const ASTAttributeList& attrs) {
     for (const auto& a : attrs.items) {
@@ -947,7 +156,6 @@ void RustPrinter::handleModule(const ASTModule& mod) {
             continue;
         }
         const auto& iData = i.data.as_Use();
-        //}
         if (iData.entries.empty()) {
             continue;
         }
@@ -1123,7 +331,6 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         for (const auto& it : i.items()) {
             switch ((*it.data).tag()) {
                 case ASTItem::TAG_None: {
-                    // Ignore, it's been deleted by #[cfg]
                     break;
                 }
                 case ASTItem::TAG_MacroInv: {
@@ -1146,7 +353,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
                     break;
                 }
                 default: {
-                    throw ::std::runtime_error(FMT("Unexpected item type in impl block - " << it.data->tagStr()));
+                    throw std::runtime_error(FMT("Unexpected item type in impl block - " << it.data->tagStr()));
                 }
             }
         }
@@ -1233,7 +440,13 @@ void RustPrinter::printBounds(const ASTGenericParams& params) {
                 }
                 case ASTGenericBound::TAG_IsTrait: {
                     auto& ent = b.as_IsTrait();
-                    os << ent.outerHrbs << ent.type << ": "; if (ent.constness == ASTBoundConstness::Always) os << "const "; else if (ent.constness == ASTBoundConstness::Maybe) os << "[const] "; os << ent.innerHrbs << ent.trait;
+                    os << ent.outerHrbs << ent.type << ": ";
+                    if (ent.constness == ASTBoundConstness::Always) {
+                        os << "const ";
+                    } else if (ent.constness == ASTBoundConstness::Maybe) {
+                        os << "[const] ";
+                    }
+                    os << ent.innerHrbs << ent.trait;
                     break;
                 }
                 case ASTGenericBound::TAG_MaybeTrait: {
@@ -1289,7 +502,6 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                 break;
         }
         os << pb.name << "/*" << pb.slot << "*/";
-        // If binding is irrefutable, and would be binding against a wildcard, just emit the name
         if (!isRefutable && p.bindings().size() == 1 && p.data().is_Any()) {
             return;
         }
@@ -1339,7 +551,6 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                 } else {
                     os << "& ";
                 }
-                // Just in case the inner binds as mut
                 os << "(";
                 printPattern(*v.sub, isRefutable);
                 os << ")";
@@ -1357,7 +568,10 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
         }
         case ASTPattern::Data::TAG_Value: {
             auto& v = p.data().as_Value();
-            os << v.start; if (!v.end.is_Invalid()) { os << " ..= " << v.end; }
+            os << v.start;
+            if (!v.end.is_Invalid()) {
+                os << " ..= " << v.end;
+            }
             break;
         }
         case ASTPattern::Data::TAG_ValueLeftInc: {
@@ -1367,7 +581,9 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
         }
         case ASTPattern::Data::TAG_StructTuple: {
             auto& v = p.data().as_StructTuple();
-            os << v.path << "("; this->printPatternTuple(v.tupPat, isRefutable); os << ")";
+            os << v.path << "(";
+            this->printPatternTuple(v.tupPat, isRefutable);
+            os << ")";
             break;
         }
         case ASTPattern::Data::TAG_Struct: {
@@ -1388,42 +604,48 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
         }
         case ASTPattern::Data::TAG_Tuple: {
             auto& v = p.data().as_Tuple();
-            os << "("; this->printPatternTuple(v, isRefutable); os << ")";
+            os << "(";
+            this->printPatternTuple(v, isRefutable);
+            os << ")";
             break;
         }
         case ASTPattern::Data::TAG_Slice: {
             auto& v = p.data().as_Slice();
-            os << "["; for (const auto& sp : v.subPats) {
+            os << "[";
+            for (const auto& sp : v.subPats) {
                 printPattern(sp, isRefutable);
                 os << ", ";
-            } os << "]";
+            }
+            os << "]";
             break;
         }
         case ASTPattern::Data::TAG_SplitSlice: {
             auto& v = p.data().as_SplitSlice();
-            os << "["; bool needsComma = false; for (const auto& sp : v.leading) {
+            os << "[";
+            bool needsComma = false;
+            for (const auto& sp : v.leading) {
                 printPattern(sp, isRefutable);
                 os << ", ";
             }
 
-                                                            if (v.extraBind.isValid()) {
-                                                                const auto& b = v.extraBind;
-                                                                if (b.isMutable) {
-                                                                    os << "mut ";
-                                                                }
-                                                                switch (b.type) {
-                                                                    case ASTPatternBinding::Type::MOVE:
-                                                                        break;
-                                                                    case ASTPatternBinding::Type::REF:
-                                                                        os << "ref ";
-                                                                        break;
-                                                                    case ASTPatternBinding::Type::MUTREF:
-                                                                        os << "ref mut ";
-                                                                        break;
-                                                                }
-                                                                os << b.name << "/*" << b.slot << "*/";
-                                                            } os
-                                                            << "..";
+            if (v.extraBind.isValid()) {
+                const auto& b = v.extraBind;
+                if (b.isMutable) {
+                    os << "mut ";
+                }
+                switch (b.type) {
+                    case ASTPatternBinding::Type::MOVE:
+                        break;
+                    case ASTPatternBinding::Type::REF:
+                        os << "ref ";
+                        break;
+                    case ASTPatternBinding::Type::MUTREF:
+                        os << "ref mut ";
+                        break;
+                }
+                os << b.name << "/*" << b.slot << "*/";
+            }
+            os << "..";
             needsComma = true;
 
             if (v.trailing.size()) {
@@ -1434,16 +656,18 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                     printPattern(sp, isRefutable);
                     os << ", ";
                 }
-            } os
-            << "]";
+            }
+            os << "]";
             break;
         }
         case ASTPattern::Data::TAG_Or: {
             auto& v = p.data().as_Or();
-            os << "("; for (const auto& e : v) {
+            os << "(";
+            for (const auto& e : v) {
                 os << (&e == &v.front() ? "" : " | ");
                 printPattern(e, isRefutable);
-            } os << ")";
+            }
+            os << ")";
             break;
         }
     }
@@ -1458,21 +682,33 @@ void RustPrinter::handleStruct(const ASTStruct& s) {
 
     switch (s.data.tag()) {
         case ASTStructData::TAG_Unit: {
-            os << " /* unit-like */\n"; printBounds(s.params()); os << indent() << ";\n";
+            os << " /* unit-like */\n";
+            printBounds(s.params());
+            os << indent() << ";\n";
             break;
         }
         case ASTStructData::TAG_Tuple: {
             auto& e = s.data.as_Tuple();
-            os << "("; for (const auto& i : e.ents) { os << i.vis << i.type << ", "; } os << ")\n"; printBounds(s.params()); os << indent() << ";\n";
+            os << "(";
+            for (const auto& i : e.ents) {
+                os << i.vis << i.type << ", ";
+            }
+            os << ")\n";
+            printBounds(s.params());
+            os << indent() << ";\n";
             break;
         }
         case ASTStructData::TAG_Struct: {
             auto& e = s.data.as_Struct();
-            os << "\n"; printBounds(s.params());
+            os << "\n";
+            printBounds(s.params());
 
             os << indent() << "{\n";
             incIndent();
-            for (const auto& i : e.ents) { os << indent() << i.vis << i.name << ": " << i.type->printPretty() << ",\n"; } decIndent();
+            for (const auto& i : e.ents) {
+                os << indent() << i.vis << i.name << ": " << i.type->printPretty() << ",\n";
+            }
+            decIndent();
             os << indent() << "}\n";
             break;
         }
@@ -1496,12 +732,22 @@ void RustPrinter::handleEnum(const ASTEnum& s) {
             }
             case ASTEnumVariantData::TAG_Tuple: {
                 auto& e = i.data.as_Tuple();
-                os << "("; for (const auto& t : e.items) os << t.type->printPretty() << ", "; os << ")";
+                os << "(";
+                for (const auto& t : e.items) {
+                    os << t.type->printPretty() << ", ";
+                }
+                os << ")";
                 break;
             }
             case ASTEnumVariantData::TAG_Struct: {
                 auto& e = i.data.as_Struct();
-                os << "{\n"; incIndent(); for (const auto& i : e.fields) { os << indent() << i.name << ": " << i.type->printPretty() << ",\n"; } decIndent(); os << indent() << "}";
+                os << "{\n";
+                incIndent();
+                for (const auto& i : e.fields) {
+                    os << indent() << i.name << ": " << i.type->printPretty() << ",\n";
+                }
+                decIndent();
+                os << indent() << "}";
                 break;
             }
         }
@@ -1663,12 +909,12 @@ void RustPrinter::decIndent() {
 }
 
 void DumpRust(const char* filename, const ASTCrate& crate) {
-    ::std::ofstream os(filename);
+    std::ofstream os(filename);
     RustPrinter printer(os);
     printer.handleModule(crate.rootModule());
 }
 
-void DumpASTNode(::std::ostream& os, const ASTExprNode& node) {
+void DumpASTNode(std::ostream& os, const ASTExprNode& node) {
     RustPrinter printer(os);
     const_cast<ASTExprNode&>(node).visit(printer);
 }
@@ -1676,3 +922,993 @@ void DumpASTNode(::std::ostream& os, const ASTExprNode& node) {
 #undef IS
 #undef WRAPIF_CMD
 #undef WRAPIF
+
+RustPrinter::RustPrinter(std::ostream& os)
+    : os(os)
+    , indentLevel(0)
+    , exprRoot(false)
+{
+}
+
+auto RustPrinter::isConst() const -> bool {
+    return true;
+}
+
+auto RustPrinter::visit(ASTExprNodeBlock& n) -> void {
+    switch (n.blockType) {
+        case ASTExprNodeBlock::Type::Bare:
+            break;
+        case ASTExprNodeBlock::Type::Unsafe:
+            os << "unsafe ";
+            break;
+        case ASTExprNodeBlock::Type::Const:
+            os << "const ";
+            break;
+    }
+    if (n.label.name != RcString()) {
+        os << "'" << n.label << ": ";
+    }
+    os << "{";
+    incIndent();
+    if (n.localMod) {
+        os << "\n";
+        os << indent() << "// ANON: " << n.localMod->path() << "\n";
+        handleModule(*n.localMod);
+    }
+    for (auto& child : n.nodes) {
+        os << "\n";
+        if (child.node) {
+            this->printAttrs(child.node->attrs());
+        }
+        os << indent();
+        exprRoot = true;
+        if (!child.node.get()) {
+            os << "/* nil */";
+        } else {
+            ASTNodeVisitor::visit(child.node);
+        }
+        if (child.hasSemicolon) {
+            os << ";";
+        }
+    }
+    os << "\n";
+    decIndent();
+    os << indent() << "}";
+}
+
+auto RustPrinter::visit(ASTExprNodeAsyncBlock& n) -> void {
+    os << "async ";
+    if (n.isMove) {
+        os << "move ";
+    }
+    if (n.isUse) {
+        os << "use ";
+    }
+    ASTNodeVisitor::visit(n.inner);
+}
+
+auto RustPrinter::visit(ASTExprNodeGeneratorBlock& n) -> void {
+    os << "gen ";
+    if (n.isMove) {
+        os << "move ";
+    }
+    ASTNodeVisitor::visit(n.inner);
+}
+
+auto RustPrinter::visit(ASTExprNodeTry& n) -> void {
+    os << "try ";
+    ASTNodeVisitor::visit(n.inner);
+}
+
+auto RustPrinter::dumpToken(const Token& t) -> void {
+    os << t.toStr() << " ";
+}
+
+auto RustPrinter::dumpTokentree(const TokenTree& tt) -> void {
+    if (tt.isToken()) {
+        dumpToken(tt.tok());
+    } else {
+        for (size_t i = 0; i < tt.size(); i++) {
+            dumpTokentree(tt[i]);
+        }
+    }
+}
+
+auto RustPrinter::visit(ASTExprNodeMacro& n) -> void {
+    exprRoot = false;
+    os << n.path << "!";
+    if (n.ident != "") {
+        os << " ";
+        os << n.ident;
+    }
+    os << (n.isBraced ? "{" : "(");
+    dumpTokentree(n.tokens);
+    os << (n.isBraced ? "}" : ")");
+}
+
+auto RustPrinter::visit(ASTExprNodeAsm& n) -> void {
+    os << "asm!( \"" << n.text << "\"";
+    os << " :";
+    for (auto& v : n.output) {
+        os << " \"" << v.name << "\" (";
+        ASTNodeVisitor::visit(v.value);
+        os << "),";
+    }
+    os << " :";
+    for (auto& v : n.input) {
+        os << " \"" << v.name << "\" (";
+        ASTNodeVisitor::visit(v.value);
+        os << "),";
+    }
+    os << " :";
+    for (const auto& v : n.clobbers) {
+        os << " \"" << v << "\",";
+    }
+    os << " :";
+    for (const auto& v : n.flags) {
+        os << " \"" << v << "\",";
+    }
+    os << " )";
+}
+
+auto RustPrinter::visit(ASTExprNodeAsm2& n) -> void {
+    os << "asm!( ";
+    for (const auto& l : n.lines) {
+        l.fmt(os);
+        os << ", ";
+    }
+    for (auto& p : n.params) {
+        switch (p.tag()) {
+            case ASTAsmParam::TAG_Const: {
+                auto& e = p.as_Const();
+                os << "const ";
+                ASTNodeVisitor::visit(e);
+                break;
+            }
+            case ASTAsmParam::TAG_Sym: {
+                auto& e = p.as_Sym();
+                os << "sym " << e;
+                break;
+            }
+            case ASTAsmParam::TAG_Label: {
+                auto& e = p.as_Label();
+                os << "label ";
+                ASTNodeVisitor::visit(e.code);
+                break;
+            }
+            case ASTAsmParam::TAG_RegSingle: {
+                auto& e = p.as_RegSingle();
+                os << e.dir << "(" << e.spec << ") ";
+                ASTNodeVisitor::visit(e.val);
+                break;
+            }
+            case ASTAsmParam::TAG_Reg: {
+                auto& e = p.as_Reg();
+                os << e.dir << "(" << e.spec << ") ";
+                if (e.valIn) {
+                    ASTNodeVisitor::visit(e.valIn);
+                    if (e.valOut) {
+                        os << " => ";
+                    }
+                }
+                if (e.valOut) {
+                    ASTNodeVisitor::visit(e.valOut);
+                }
+                break;
+            }
+        }
+        os << ", ";
+    }
+    if (n.options.any()) {
+        n.options.fmt(os);
+    }
+    os << ")";
+}
+
+auto RustPrinter::visit(ASTExprNodeFlow& n) -> void {
+    exprRoot = false;
+    switch (n.type) {
+        case ASTExprNodeFlow::RETURN:
+            os << "return ";
+            break;
+        case ASTExprNodeFlow::TAILCALL:
+            os << "become ";
+            break;
+        case ASTExprNodeFlow::YIELD:
+            os << "yield ";
+            break;
+        case ASTExprNodeFlow::BREAK:
+            os << "break ";
+            break;
+        case ASTExprNodeFlow::CONTINUE:
+            os << "continue ";
+            break;
+        case ASTExprNodeFlow::YEET:
+            os << "do yeet ";
+            break;
+    }
+    if (n.target.name != "") {
+        os << "'" << n.target << " ";
+    }
+    ASTNodeVisitor::visit(n.value);
+}
+
+auto RustPrinter::visit(ASTExprNodeLetBinding& n) -> void {
+    exprRoot = false;
+    os << "let ";
+    printPattern(n.pat, false);
+    os << ": ";
+    printType(n.type);
+    if (n.value) {
+        os << " = ";
+        ASTNodeVisitor::visit(n.value);
+    }
+    if (n.elseNode) {
+        os << " else ";
+        ASTNodeVisitor::visit(n.elseNode);
+    }
+    os << ";";
+}
+
+auto RustPrinter::visit(ASTExprNodeAssign& n) -> void {
+    exprRoot = false;
+    ASTNodeVisitor::visit(n.slot);
+    switch (n.op) {
+        case ASTExprNodeAssign::NONE:
+            os << "  = ";
+            break;
+        case ASTExprNodeAssign::ADD:
+            os << " += ";
+            break;
+        case ASTExprNodeAssign::SUB:
+            os << " -= ";
+            break;
+        case ASTExprNodeAssign::MUL:
+            os << " *= ";
+            break;
+        case ASTExprNodeAssign::DIV:
+            os << " /= ";
+            break;
+        case ASTExprNodeAssign::MOD:
+            os << " %= ";
+            break;
+        case ASTExprNodeAssign::AND:
+            os << " &= ";
+            break;
+        case ASTExprNodeAssign::OR:
+            os << " |= ";
+            break;
+        case ASTExprNodeAssign::XOR:
+            os << " ^= ";
+            break;
+        case ASTExprNodeAssign::SHR:
+            os << " >>= ";
+            break;
+        case ASTExprNodeAssign::SHL:
+            os << " <<= ";
+            break;
+    }
+    ASTNodeVisitor::visit(n.value);
+}
+
+auto RustPrinter::visit(ASTExprNodeCallPath& n) -> void {
+    exprRoot = false;
+    os << n.path;
+    os << "(";
+    bool isFirst = true;
+    for (auto& arg : n.args) {
+        if (isFirst) {
+            isFirst = false;
+        } else {
+            os << ", ";
+        }
+        ASTNodeVisitor::visit(arg);
+    }
+    os << ")";
+}
+
+#ifdef IS
+    #undef IS
+#endif
+#define IS(v, c) (cast<c>(&v) != 0)
+#ifdef WRAPIF_CMD
+    #undef WRAPIF_CMD
+#endif
+#define WRAPIF_CMD(v, t) || IS(v, t)
+#ifdef WRAPIF
+    #undef WRAPIF
+#endif
+#define WRAPIF(uniqPtr, class1, ...)                                    \
+    do {                                                                \
+        auto& _v = *(uniqPtr);                                          \
+        if (IS(_v, class1) CC_ITERATE(WRAPIF_CMD, (_v), __VA_ARGS__)) { \
+            parenWrap(uniqPtr);                                         \
+        } else {                                                        \
+            ASTNodeVisitor::visit(uniqPtr);                             \
+        }                                                               \
+    } while (0)
+
+auto RustPrinter::visit(ASTExprNodeCallMethod& n) -> void {
+    exprRoot = false;
+    WRAPIF(n.val, ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf, ASTExprNodeMatch);
+    os << "." << n.method;
+    os << "(";
+    bool isFirst = true;
+    for (auto& arg : n.args) {
+        if (isFirst) {
+            isFirst = false;
+        } else {
+            os << ", ";
+        }
+        ASTNodeVisitor::visit(arg);
+    }
+    os << ")";
+}
+
+#undef WRAPIF
+#undef WRAPIF_CMD
+#undef IS
+
+auto RustPrinter::visit(ASTExprNodeCallObject& n) -> void {
+    exprRoot = false;
+    os << "(";
+    ASTNodeVisitor::visit(n.val);
+    os << ")(";
+    bool isFirst = true;
+    for (auto& arg : n.args) {
+        if (isFirst) {
+            isFirst = false;
+        } else {
+            os << ", ";
+        }
+        ASTNodeVisitor::visit(arg);
+    }
+    os << ")";
+}
+
+auto RustPrinter::visit(ASTExprNodeLoop& n) -> void {
+    bool exprRoot = exprRoot;
+    exprRoot = false;
+
+    if (n.label.name != "") {
+        os << "'" << n.label << ": ";
+    }
+
+    os << "loop";
+
+    if (exprRoot) {
+        os << "\n";
+        os << indent();
+    } else {
+        os << " ";
+    }
+
+    ASTNodeVisitor::visit(n.code);
+}
+
+auto RustPrinter::visit(ASTExprNodeFor& n) -> void {
+    bool exprRoot = exprRoot;
+    exprRoot = false;
+
+    if (n.label.name != "") {
+        os << "'" << n.label << ": ";
+    }
+    os << "for ";
+    printPattern(n.pattern, true);
+    os << " in ";
+    ASTNodeVisitor::visit(n.value);
+
+    if (exprRoot) {
+        os << "\n";
+        os << indent();
+    } else {
+        os << " ";
+    }
+
+    ASTNodeVisitor::visit(n.code);
+}
+
+auto RustPrinter::visitIfletConditions(std::vector<ASTIfLetCondition>& conds) -> void {
+    for (size_t i = 0; i < conds.size(); i++) {
+        if (i != 0) {
+            os << " && ";
+        }
+        if (conds[i].optPat) {
+            os << "let ";
+            printPattern(*conds[i].optPat, true);
+            os << " = ";
+        }
+        os << "(";
+        ASTNodeVisitor::visit(conds[i].value);
+        os << ")";
+    }
+}
+
+auto RustPrinter::visit(ASTExprNodeWhile& n) -> void {
+    bool exprRoot = exprRoot;
+    exprRoot = false;
+
+    if (n.label.name != "") {
+        os << "'" << n.label << ": ";
+    }
+
+    os << "while ";
+    visitIfletConditions(n.conditions);
+    if (exprRoot) {
+        os << "\n";
+        os << indent();
+    } else {
+        os << " ";
+    }
+
+    ASTNodeVisitor::visit(n.code);
+}
+
+auto RustPrinter::visit(ASTExprNodeMatch& n) -> void {
+    bool exprRoot = exprRoot;
+    exprRoot = false;
+    os << "match ";
+    ASTNodeVisitor::visit(n.val);
+
+    if (exprRoot) {
+        os << "\n";
+        os << indent() << "{\n";
+    } else {
+        os << " {\n";
+        incIndent();
+    }
+
+    for (auto& arm : n.arms) {
+        os << indent();
+        bool isFirst = true;
+        for (const auto& pat : arm.patterns) {
+            if (!isFirst) {
+                os << "|";
+            }
+            isFirst = false;
+            printPattern(pat, true);
+        }
+        if (!arm.guard.empty()) {
+            os << " if ";
+            visitIfletConditions(arm.guard);
+        }
+        os << " => ";
+        incIndent();
+        ASTNodeVisitor::visit(arm.code);
+        decIndent();
+        os << ",\n";
+    }
+
+    if (exprRoot) {
+        os << indent() << "}";
+    } else {
+        os << indent() << "}";
+        decIndent();
+    }
+}
+
+auto RustPrinter::visit(ASTExprNodeIf& n) -> void {
+    bool exprRoot = exprRoot;
+    exprRoot = false;
+    for (auto& arm : n.arms) {
+        if (&arm != n.arms.data()) {
+            if (exprRoot) {
+                os << indent();
+            }
+            os << "else ";
+        }
+
+        os << "if ";
+        visitIfletConditions(arm.conditions);
+
+        bool isBlock = (cast<const ASTExprNodeBlock>(&*arm.body) != nullptr);
+        if (!isBlock) {
+            os << "{ ";
+        }
+        ASTNodeVisitor::visit(arm.body);
+        if (!isBlock) {
+            os << " }";
+        }
+        if (exprRoot) {
+            os << "\n";
+        }
+    }
+    if (n.elseNode) {
+        if (exprRoot) {
+            os << indent();
+        }
+        os << "else";
+        bool isBlock = (cast<const ASTExprNodeBlock>(&*n.elseNode) != nullptr);
+        if (!isBlock) {
+            os << "{ ";
+        }
+        ASTNodeVisitor::visit(n.elseNode);
+        if (!isBlock) {
+            os << " }";
+        }
+    }
+}
+
+auto RustPrinter::visit(ASTExprNodeClosure& n) -> void {
+    exprRoot = false;
+    if (n.isMove) {
+        os << "move ";
+    }
+    if (n.isUse) {
+        os << "use ";
+    }
+    os << "|";
+    bool isFirst = true;
+    for (const auto& arg : n.args) {
+        if (!isFirst) {
+            os << ", ";
+        }
+        isFirst = false;
+        printPattern(arg.first, false);
+        os << ": ";
+        printType(arg.second);
+    }
+    os << "| ->";
+    printType(n.returnType);
+    os << " { ";
+    ASTNodeVisitor::visit(n.code);
+    os << " }";
+}
+
+auto RustPrinter::visit(ASTExprNodeWildcardPattern& n) -> void {
+    os << "_";
+}
+
+auto RustPrinter::visit(ASTExprNodeInteger& n) -> void {
+    exprRoot = false;
+    switch (n.datatype) {
+        case CORETYPE_INVAL:
+            os << "0x" << std::hex << n.value << std::dec << "_/*INVAL*/";
+            break;
+        case CORETYPE_BOOL:
+        case CORETYPE_STR:
+            os << "0x" << std::hex << n.value << std::dec << "_/*bool/str*/";
+            break;
+        case CORETYPE_CHAR:
+            if (n.value >= 0x20 && n.value < 128) {
+                switch (n.value.truncateU64()) {
+                    case '\'':
+                        os << "'\\''";
+                        break;
+                    case '\\':
+                        os << "'\\\\'";
+                        break;
+                    default:
+                        os << "'" << (char)n.value.truncateU64() << "'";
+                        break;
+                }
+            } else {
+                os << "'\\u{" << std::hex << n.value << std::dec << "}'";
+            }
+            break;
+        case CORETYPE_F16:
+        case CORETYPE_F32:
+        case CORETYPE_F64:
+        case CORETYPE_F128:
+            break;
+        case CORETYPE_U8:
+        case CORETYPE_U16:
+        case CORETYPE_U32:
+        case CORETYPE_U64:
+        case CORETYPE_U128:
+        case CORETYPE_UINT:
+        case CORETYPE_ANY:
+            os << "0x" << std::hex << n.value << std::dec;
+            os << "_" << coretypeName(n.datatype);
+            break;
+        case CORETYPE_I8:
+        case CORETYPE_I16:
+        case CORETYPE_I32:
+        case CORETYPE_I64:
+        case CORETYPE_I128:
+        case CORETYPE_INT:
+            os << n.value;
+            os << "_" << coretypeName(n.datatype);
+            break;
+    }
+}
+
+auto RustPrinter::visit(ASTExprNodeFloat& n) -> void {
+    exprRoot = false;
+    switch (n.datatype) {
+        case CORETYPE_ANY:
+            os.precision(std::numeric_limits<double>::max_digits10 + 1);
+            os << n.value;
+            break;
+        case CORETYPE_F16:
+        case CORETYPE_F32:
+            os.precision(std::numeric_limits<float>::max_digits10 + 1);
+            os << n.value;
+            os << "_" << coretypeName(n.datatype);
+            break;
+        case CORETYPE_F64:
+            os.precision(std::numeric_limits<double>::max_digits10 + 1);
+            os << n.value;
+            os << "_" << coretypeName(n.datatype);
+            break;
+        case CORETYPE_F128:
+            os.precision(std::numeric_limits<double>::max_digits10 + 1);
+            os << n.value;
+            os << "_" << coretypeName(n.datatype);
+            break;
+        default:
+            break;
+    }
+}
+
+auto RustPrinter::visit(ASTExprNodeBool& n) -> void {
+    exprRoot = false;
+    if (n.value) {
+        os << "true";
+    } else {
+        os << "false";
+    }
+}
+
+auto RustPrinter::visit(ASTExprNodeString& n) -> void {
+    exprRoot = false;
+    os << "\"" << FmtEscaped(n.value) << "\"";
+}
+
+auto RustPrinter::visit(ASTExprNodeByteString& n) -> void {
+    exprRoot = false;
+    os << "b\"" << FmtEscaped(n.value) << "\"";
+}
+
+auto RustPrinter::visit(ASTExprNodeCString& n) -> void {
+    exprRoot = false;
+    os << "c\"" << FmtEscaped(n.value) << "\"";
+}
+
+auto RustPrinter::visit(ASTExprNodeSuffixedLiteral& n) -> void {
+    exprRoot = false;
+    os << n.text;
+}
+
+auto RustPrinter::visit(ASTExprNodeStructLiteral& n) -> void {
+    exprRoot = false;
+    os << n.path << " {\n";
+    incIndent();
+    for (auto& i : n.values) {
+        printAttrs(i.attrs);
+        os << indent() << "r#" << i.name << ": ";
+        ASTNodeVisitor::visit(i.value);
+        os << ",\n";
+    }
+    if (n.baseValue.get()) {
+        os << indent() << ".. ";
+        ASTNodeVisitor::visit(n.baseValue);
+        os << "\n";
+    }
+    os << indent() << "}";
+    decIndent();
+}
+
+auto RustPrinter::visit(ASTExprNodeStructLiteralPattern& n) -> void {
+    exprRoot = false;
+    os << n.path << " {\n";
+    incIndent();
+    for (auto& i : n.values) {
+        printAttrs(i.attrs);
+        os << indent() << "r#" << i.name << ": ";
+        ASTNodeVisitor::visit(i.value);
+        os << ",\n";
+    }
+    os << indent() << "..\n";
+    os << indent() << "}";
+    decIndent();
+}
+
+auto RustPrinter::visit(ASTExprNodeArray& n) -> void {
+    exprRoot = false;
+    os << "[";
+    if (n.size.get()) {
+        ASTNodeVisitor::visit(n.values[0]);
+        os << "; ";
+        ASTNodeVisitor::visit(n.size);
+    } else {
+        for (auto& item : n.values) {
+            ASTNodeVisitor::visit(item);
+            os << ", ";
+        }
+    }
+    os << "]";
+}
+
+auto RustPrinter::visit(ASTExprNodeTuple& n) -> void {
+    exprRoot = false;
+    os << "(";
+    for (auto& item : n.values) {
+        ASTNodeVisitor::visit(item);
+        os << ", ";
+    }
+    os << ")";
+}
+
+auto RustPrinter::visit(ASTExprNodeNamedValue& n) -> void {
+    exprRoot = false;
+    os << n.path;
+}
+
+#ifdef IS
+    #undef IS
+#endif
+#define IS(v, c) (cast<c>(&v) != 0)
+#ifdef WRAPIF_CMD
+    #undef WRAPIF_CMD
+#endif
+#define WRAPIF_CMD(v, t) || IS(v, t)
+#ifdef WRAPIF
+    #undef WRAPIF
+#endif
+#define WRAPIF(uniqPtr, class1, ...)                                    \
+    do {                                                                \
+        auto& _v = *(uniqPtr);                                          \
+        if (IS(_v, class1) CC_ITERATE(WRAPIF_CMD, (_v), __VA_ARGS__)) { \
+            parenWrap(uniqPtr);                                         \
+        } else {                                                        \
+            ASTNodeVisitor::visit(uniqPtr);                             \
+        }                                                               \
+    } while (0)
+
+auto RustPrinter::visit(ASTExprNodeField& n) -> void {
+    exprRoot = false;
+    WRAPIF(n.obj, ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf, ASTExprNodeMatch);
+    os << "." << n.name;
+}
+
+#undef WRAPIF
+#undef WRAPIF_CMD
+#undef IS
+
+#ifdef IS
+    #undef IS
+#endif
+#define IS(v, c) (cast<c>(&v) != 0)
+#ifdef WRAPIF_CMD
+    #undef WRAPIF_CMD
+#endif
+#define WRAPIF_CMD(v, t) || IS(v, t)
+#ifdef WRAPIF
+    #undef WRAPIF
+#endif
+#define WRAPIF(uniqPtr, class1, ...)                                    \
+    do {                                                                \
+        auto& _v = *(uniqPtr);                                          \
+        if (IS(_v, class1) CC_ITERATE(WRAPIF_CMD, (_v), __VA_ARGS__)) { \
+            parenWrap(uniqPtr);                                         \
+        } else {                                                        \
+            ASTNodeVisitor::visit(uniqPtr);                             \
+        }                                                               \
+    } while (0)
+
+auto RustPrinter::visit(ASTExprNodeIndex& n) -> void {
+    exprRoot = false;
+    WRAPIF(n.obj, ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf, ASTExprNodeMatch);
+    os << "[";
+    ASTNodeVisitor::visit(n.idx);
+    os << "]";
+}
+
+#undef WRAPIF
+#undef WRAPIF_CMD
+#undef IS
+
+auto RustPrinter::visit(ASTExprNodeDeref& n) -> void {
+    exprRoot = false;
+    os << "*(";
+    ASTNodeVisitor::visit(n.value);
+    os << ")";
+}
+
+auto RustPrinter::visit(ASTExprNodeCast& n) -> void {
+    exprRoot = false;
+    os << "(";
+    ASTNodeVisitor::visit(n.value);
+    os << ") as " << n.type;
+}
+
+auto RustPrinter::visit(ASTExprNodeTypeAnnotation& n) -> void {
+    exprRoot = false;
+    os << "(";
+    ASTNodeVisitor::visit(n.value);
+    os << ") : " << n.type;
+}
+
+#ifdef IS
+    #undef IS
+#endif
+#define IS(v, c) (cast<c>(&v) != 0)
+#ifdef WRAPIF_CMD
+    #undef WRAPIF_CMD
+#endif
+#define WRAPIF_CMD(v, t) || IS(v, t)
+#ifdef WRAPIF
+    #undef WRAPIF
+#endif
+#define WRAPIF(uniqPtr, class1, ...)                                    \
+    do {                                                                \
+        auto& _v = *(uniqPtr);                                          \
+        if (IS(_v, class1) CC_ITERATE(WRAPIF_CMD, (_v), __VA_ARGS__)) { \
+            parenWrap(uniqPtr);                                         \
+        } else {                                                        \
+            ASTNodeVisitor::visit(uniqPtr);                             \
+        }                                                               \
+    } while (0)
+
+auto RustPrinter::visit(ASTExprNodeBinOp& n) -> void {
+    exprRoot = false;
+    auto* leftBinop = cast<ASTExprNodeBinOp>(n.left.get());
+    if (!n.left) {
+        os << "/*null*/";
+    } else if (leftBinop && leftBinop->type == n.type) {
+        ASTNodeVisitor::visit(n.left);
+    } else {
+        WRAPIF(n.left, ASTExprNodeCast, ASTExprNodeBinOp);
+    }
+    os << " ";
+    switch (n.type) {
+        case ASTExprNodeBinOp::CMPEQU:
+            os << "==";
+            break;
+        case ASTExprNodeBinOp::CMPNEQU:
+            os << "!=";
+            break;
+        case ASTExprNodeBinOp::CMPLT:
+            os << "<";
+            break;
+        case ASTExprNodeBinOp::CMPLTE:
+            os << "<=";
+            break;
+        case ASTExprNodeBinOp::CMPGT:
+            os << ">";
+            break;
+        case ASTExprNodeBinOp::CMPGTE:
+            os << ">=";
+            break;
+        case ASTExprNodeBinOp::BOOLAND:
+            os << "&&";
+            break;
+        case ASTExprNodeBinOp::BOOLOR:
+            os << "||";
+            break;
+        case ASTExprNodeBinOp::BITAND:
+            os << "&";
+            break;
+        case ASTExprNodeBinOp::BITOR:
+            os << "|";
+            break;
+        case ASTExprNodeBinOp::BITXOR:
+            os << "^";
+            break;
+        case ASTExprNodeBinOp::SHL:
+            os << "<<";
+            break;
+        case ASTExprNodeBinOp::SHR:
+            os << ">>";
+            break;
+        case ASTExprNodeBinOp::MULTIPLY:
+            os << "*";
+            break;
+        case ASTExprNodeBinOp::DIVIDE:
+            os << "/";
+            break;
+        case ASTExprNodeBinOp::MODULO:
+            os << "%";
+            break;
+        case ASTExprNodeBinOp::ADD:
+            os << "+";
+            break;
+        case ASTExprNodeBinOp::SUB:
+            os << "-";
+            break;
+        case ASTExprNodeBinOp::RANGE:
+            os << "..";
+            break;
+        case ASTExprNodeBinOp::RANGE_INC:
+            os << "...";
+            break;
+        case ASTExprNodeBinOp::PLACE_IN:
+            os << "<-";
+            break;
+    }
+    os << " ";
+    auto* rightBinop = cast<ASTExprNodeBinOp>(n.right.get());
+    if (!n.right) {
+        os << "/*null*/";
+    } else if (rightBinop && rightBinop->type != n.type) {
+        parenWrap(n.right);
+    } else {
+        ASTNodeVisitor::visit(n.right);
+    }
+}
+
+#undef WRAPIF
+#undef WRAPIF_CMD
+#undef IS
+
+#ifdef IS
+    #undef IS
+#endif
+#define IS(v, c) (cast<c>(&v) != 0)
+
+auto RustPrinter::visit(ASTExprNodeUniOp& n) -> void {
+    exprRoot = false;
+    switch (n.type) {
+        case ASTExprNodeUniOp::NEGATE:
+            os << "-";
+            break;
+        case ASTExprNodeUniOp::INVERT:
+            os << "!";
+            break;
+        case ASTExprNodeUniOp::BOX:
+            os << "box ";
+            break;
+        case ASTExprNodeUniOp::REF:
+            os << "&";
+            break;
+        case ASTExprNodeUniOp::REFMUT:
+            os << "&mut ";
+            break;
+        case ASTExprNodeUniOp::RawBorrow:
+            os << "&raw const ";
+            break;
+        case ASTExprNodeUniOp::PinBorrow:
+            os << "&pin const ";
+            break;
+        case ASTExprNodeUniOp::PinBorrowMut:
+            os << "&pin mut ";
+            break;
+        case ASTExprNodeUniOp::RawBorrowMut:
+            os << "&raw mut ";
+            break;
+        case ASTExprNodeUniOp::QMARK:
+            break;
+        case ASTExprNodeUniOp::AWait:
+        case ASTExprNodeUniOp::AWaitNext:
+        case ASTExprNodeUniOp::USE:
+            break;
+    }
+
+    bool wrap = IS(*n.value, ASTExprNodeBinOp) || IS(*n.value, ASTExprNodeCast);
+    if (wrap) {
+        os << "(";
+    }
+    ASTNodeVisitor::visit(n.value);
+    if (wrap) {
+        os << ")";
+    }
+    switch (n.type) {
+        case ASTExprNodeUniOp::QMARK:
+            os << "?";
+            break;
+        case ASTExprNodeUniOp::AWait:
+            os << ".await";
+            break;
+        case ASTExprNodeUniOp::AWaitNext:
+            os << ".await/*next*/";
+            break;
+        case ASTExprNodeUniOp::USE:
+            os << ".use";
+            break;
+        default:
+            break;
+    }
+}
+
+#undef IS
+
+auto RustPrinter::visit(ASTExprNodeMacroDefinition& n) -> void {
+    os << "/* macro definition #" << n.definitionId << " */";
+}
+
+auto RustPrinter::parenWrap(ASTExprNodeP& node) -> void {
+    os << "(";
+    ASTNodeVisitor::visit(node);
+    os << ")";
+}

@@ -7,7 +7,7 @@ TokenTree TokenTree::clone() const {
     if (subtrees.size() == 0) {
         return TokenTree(edition, hygiene_, tok_.clone());
     } else {
-        ::std::vector<TokenTree> ents;
+        std::vector<TokenTree> ents;
         ents.reserve(subtrees.size());
         for (const auto& sub : subtrees) {
             ents.push_back(sub.clone());
@@ -16,7 +16,7 @@ TokenTree TokenTree::clone() const {
     }
 }
 
-::std::ostream& operator<<(::std::ostream& os, const TokenTree& tt) {
+std::ostream& operator<<(std::ostream& os, const TokenTree& tt) {
     if (tt.subtrees.size() == 0) {
         switch (tt.tok_.type()) {
             case TOK_IDENT:
@@ -34,7 +34,6 @@ TokenTree TokenTree::clone() const {
         return os << tt.tok_.toStr();
     } else {
         os << "/*" << tt.edition << " " << tt.hygiene_ << " TT*/";
-        // NOTE: All TTs (except the outer tt on a macro invocation) include the grouping
         bool first = true;
         for (const auto& i : tt.subtrees) {
             if (!first) {
@@ -59,27 +58,27 @@ TokenTree::TokenTree(enum eTokenType ty)
 }
 
 TokenTree::TokenTree(Token tok)
-    : tok_(::std::move(tok))
+    : tok_(std::move(tok))
 {
 }
 
 TokenTree::TokenTree(ASTEdition edition, Token tok)
     : edition(edition)
-    , tok_(::std::move(tok))
+    , tok_(std::move(tok))
 {
 }
 
 TokenTree::TokenTree(ASTEdition edition, Ident::Hygiene hygiene, Token tok)
     : edition(edition)
-    , hygiene_(::std::move(hygiene))
-    , tok_(::std::move(tok))
+    , hygiene_(std::move(hygiene))
+    , tok_(std::move(tok))
 {
 }
 
-TokenTree::TokenTree(ASTEdition edition, Ident::Hygiene hygiene, ::std::vector<TokenTree> subtrees)
+TokenTree::TokenTree(ASTEdition edition, Ident::Hygiene hygiene, std::vector<TokenTree> subtrees)
     : edition(edition)
-    , hygiene_(::std::move(hygiene))
-    , subtrees(::std::move(subtrees))
+    , hygiene_(std::move(hygiene))
+    , subtrees(std::move(subtrees))
 {
 }
 

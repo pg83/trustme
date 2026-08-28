@@ -1,7 +1,7 @@
 #include "trans_trans_list.h"
 
 #include "trans_mangling.h"
-#include "hir_typeck_static.h" // StaticTraitResolve
+#include "hir_typeck_static.h"
 
 TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
     assert(wb_);
@@ -12,7 +12,7 @@ TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
         return nullptr;
     }
 
-    auto rv = functions.insert(::std::make_pair(mv$(p), nullptr));
+    auto rv = functions.insert(std::make_pair(mv$(p), nullptr));
     if (rv.second) {
         functionSymbols.emplace(mv$(symbol), rv.first->first.clone());
         assert(!rv.first->second);
@@ -71,7 +71,7 @@ bool TransList::addType(HIRTypeRef type, bool shallow) {
         }
         alreadyEmitted = true;
     }
-    types.push_back(::std::make_pair(type, shallow));
+    types.push_back(std::make_pair(type, shallow));
     return true;
 }
 
@@ -89,7 +89,7 @@ TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
         return nullptr;
     }
 
-    auto rv = statics.insert(::std::make_pair(mv$(p), nullptr));
+    auto rv = statics.insert(std::make_pair(mv$(p), nullptr));
     if (rv.second) {
         staticSymbols.emplace(mv$(symbol), rv.first->first.clone());
         assert(!rv.first->second);
@@ -101,7 +101,7 @@ TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
 }
 
 TransListConst* TransList::addConst(HIRTypeInterner& types, HIRPath p) {
-    auto rv = constants.insert(::std::make_pair(mv$(p), nullptr));
+    auto rv = constants.insert(std::make_pair(mv$(p), nullptr));
     if (rv.second) {
         assert(!rv.first->second);
         rv.first->second.reset(new TransListConst(types));
@@ -187,14 +187,14 @@ TransParams::TransParams(HIRTypeInterner& types, const Span& sp)
 TransParams::TransParams(TransParams&& x)
     : TransParams(x.typeInterner())
 {
-    *this = ::std::move(x);
+    *this = std::move(x);
 }
 
 TransParams& TransParams::operator=(TransParams&& x) {
-    sp = ::std::move(x.sp);
+    sp = std::move(x.sp);
     gdefImpl = x.gdefImpl;
-    ppMethod = ::std::move(x.ppMethod);
-    ppImpl = ::std::move(x.ppImpl);
+    ppMethod = std::move(x.ppMethod);
+    ppImpl = std::move(x.ppImpl);
     selfType = x.selfType;
     forceMonomorphisation = x.forceMonomorphisation;
     return *this;

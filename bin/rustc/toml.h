@@ -19,43 +19,37 @@ struct TomlToken;
 
 class TomlLexer {
     friend class TomlFile;
-    /// Input file stream
-    ::std::ifstream input;
 
-    ::std::string filename;
+    std::ifstream input;
+
+    std::string filename;
     unsigned line;
 
 protected:
-    TomlLexer(const ::std::string& filename);
+    TomlLexer(const std::string& filename);
     TomlToken getToken();
 
 public:
-    friend ::std::ostream& operator<<(::std::ostream& os, const TomlLexer& x);
+    friend std::ostream& operator<<(std::ostream& os, const TomlLexer& x);
 };
 
 class TomlFile {
-    /// Input file stream
     TomlLexer lexer_;
 
-    /// Name of the current `[]` block
-    ::std::vector<::std::string> currentBlock;
+    std::vector<std::string> currentBlock;
 
-    /// Path suffix of the current composite (none if empty)
-    ::std::vector<std::vector<std::string>> currentComposite;
+    std::vector<std::vector<std::string>> currentComposite;
 
-    /// Index of the next array field (if zero, not parsing an array)
     unsigned int nextArrayIndex;
 
-    /// Next indexes if top-level defined arrays (e.g. `[[foo]]`)
-    ::std::unordered_map<::std::string, unsigned> arrayCounts;
+    std::unordered_map<std::string, unsigned> arrayCounts;
 
 public:
-    TomlFile(const ::std::string& filename);
+    TomlFile(const std::string& filename);
 
     TomlFileIter begin();
     TomlFileIter end();
 
-    // Obtain the next value in the file
     TomlKeyValue getNextValue();
 
     const TomlLexer& lexer() const {
@@ -64,71 +58,66 @@ public:
 
 private:
     std::vector<std::string> getPath(std::vector<std::string> tail) const;
-    /// Consume a balanced `[...]` / `{...}` group (nested groups included),
-    /// discarding its contents. The opening bracket/brace must already have
-    /// been consumed. Used to skip nested arrays / inline tables that only
-    /// appear in sections the compiler never reads (e.g. `[package.metadata.*]`).
+
     void skipCompositeValue();
 };
 
 struct TomlValue {
     enum class Type {
-        // A true/false, 1/0, yes/no value
         Boolean,
-        // A double-quoted string
+
         String,
-        // Integer
+
         Integer,
-        // A list of other values
+
         List,
     };
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const Type& e);
+    friend std::ostream& operator<<(std::ostream& os, const Type& e);
 
-    struct TypeError: public ::std::exception {
+    struct TypeError: public std::exception {
         Type have;
         Type exp;
-        // Formatted in the constructor; what() needs stable storage and the
-        // two type names are short.
+
         char message[64];
 
         TypeError(Type h, Type e);
 
         const char* what() const noexcept override;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const TypeError& e);
+        friend std::ostream& operator<<(std::ostream& os, const TypeError& e);
     };
 
     Type type;
     u64 intValue;
-    ::std::string strValue;
-    ::std::vector<TomlValue> subValues;
+    std::string strValue;
+    std::vector<TomlValue> subValues;
 
     TomlValue();
 
-    TomlValue(::std::string s);
+    TomlValue(std::string s);
 
     TomlValue(i64 v);
 
     TomlValue(bool v);
 
-    const ::std::string& asString() const;
+    const std::string& asString() const;
 
     bool asBool() const;
 
     u64 asInt() const;
 
-    const ::std::vector<TomlValue>& asList() const;
+    const std::vector<TomlValue>& asList() const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const TomlValue& x);
+    friend std::ostream& operator<<(std::ostream& os, const TomlValue& x);
 };
 
 struct TomlKeyValue {
-    typedef ::std::vector<::std::string> Path;
-    // Path to the value (last node is the value name)
+    typedef std::vector<std::string> Path;
+
     // TODO: How are things like `[[bin]]` handled?
     Path path;
-    // Relevant value
+
     TomlValue value;
 };
 

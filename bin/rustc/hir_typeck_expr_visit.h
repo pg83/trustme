@@ -16,8 +16,8 @@ struct TypeckModuleState {
     const HIRGenericParams* implGenerics;
     const HIRGenericParams* itemGenerics;
 
-    ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> traits;
-    ::std::vector<HIRSimplePath> modPaths;
+    std::vector<std::pair<const HIRSimplePath*, const HIRTrait*>> traits;
+    std::vector<HIRSimplePath> modPaths;
 
     TypeckModuleState(const WireBoard& wb);
 
@@ -51,9 +51,8 @@ struct TypeckModuleState {
     void popTraits(const HIRModule& mod);
 };
 
-typedef ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> tArgs;
-// Needs to mutate the pattern
-// A null resultType means that the expression determines its own result type.
+typedef std::vector<std::pair<HIRPattern, HIRTypeRef>> tArgs;
+
 extern void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);
 extern void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);
 extern void TypecheckCodeSimple(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr);

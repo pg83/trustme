@@ -13,6 +13,7 @@ struct EncodedLiteral;
 class Monomorphiser;
 class HirSerialiser;
 class HirDeserialiser;
+
 namespace stl {
     class ObjPool;
 }
@@ -23,11 +24,9 @@ enum class HIRBoundConstness : u8 {
     Maybe,
 };
 
-/// Freeze an evaluated literal in storage whose lifetime is owned by the
-/// caller. The returned immutable pointer must not outlive that pool.
 extern const EncodedLiteral* freezeEncodedLiteral(stl::ObjPool& pool, EncodedLiteral e);
 struct HIRConstGenericUnevaluated;
-/// An inference placeholder for a const generic
+
 struct HIRInferData {
     unsigned index;
 
@@ -37,34 +36,22 @@ struct HIRInferData {
     }
 };
 
-// Definitions generated from hir_path.tu.
 #include "hir_path_tu.h"
-::std::ostream& operator<<(::std::ostream& os, const HIRConstGeneric& x);
+std::ostream& operator<<(std::ostream& os, const HIRConstGeneric& x);
 
 class HIRTrait;
 class HIRGenericParams;
 
-::std::ostream& operator<<(::std::ostream& os, const HIRCompare& x);
+std::ostream& operator<<(std::ostream& os, const HIRCompare& x);
 
 HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y);
 
-/// Interned storage for HIRSimplePath. Never constructed directly: entries
-/// live forever in the process-wide interner in hir_path.cpp.
 struct HIRSimplePathData {
-    // Two independent Zobrist hashes over (component, position). hash1 keys
-    // the interner table; hash2 is what lookups compare instead of the
-    // component content. Both support O(1) incremental update on
-    // append/pop/replace, which is what makes path mutation cheap.
     u64 hash1;
     u64 hash2;
-    ThinVector<RcString> members; // [0] = crate name; empty vector = empty path
+    ThinVector<RcString> members;
 };
 
-/// Simple path - Absolute with no generic parameters.
-/// De-duplicated: the object is a single pointer into the interner, so copies
-/// are trivial and equality is pointer identity. ord() stays lexicographic
-/// over the components: HIRSimplePath keys many std::map's whose iteration
-/// order leaks into the output, so it must not depend on interning order.
 struct HIRSimplePath {
     friend HirSerialiser;
     friend HirDeserialiser;
@@ -84,20 +71,18 @@ public:
 
     HIRSimplePath(RcString crate);
 
-    HIRSimplePath(RcString crate, ::std::vector<RcString> components);
+    HIRSimplePath(RcString crate, std::vector<RcString> components);
 
-    HIRSimplePath(RcString crate, ::std::span<RcString> components);
+    HIRSimplePath(RcString crate, std::span<RcString> components);
 
-    HIRSimplePath(RcString crate, ::std::span<const RcString> components);
+    HIRSimplePath(RcString crate, std::span<const RcString> components);
 
-    HIRSimplePath(RcString crate, ::std::initializer_list<RcString> components);
+    HIRSimplePath(RcString crate, std::initializer_list<RcString> components);
 
     HIRSimplePath clone() const {
         return *this;
     }
 
-    /// The interned identity: stable for the process lifetime, equal iff the
-    /// paths are equal. For pointer-keyed caches.
     const HIRSimplePathData* rawData() const {
         return p;
     }
@@ -106,7 +91,7 @@ public:
 
     RcString crateName() const;
 
-    ::std::span<const RcString> components() const {
+    std::span<const RcString> components() const {
         if (!p) {
             return {};
         }
@@ -114,7 +99,7 @@ public:
         return m.empty() ? std::span<const RcString>() : std::span<const RcString>(m.begin() + 1, m.end());
     }
 
-    ::std::vector<RcString> componentsVec() const;
+    std::vector<RcString> componentsVec() const;
 
     HIRSimplePath operator+(const RcString& s) const;
 
@@ -150,7 +135,7 @@ public:
     }
 
     bool startsWith(const HIRSimplePath& x, bool skipLast = false) const;
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRSimplePath& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRSimplePath& x);
 };
 
 struct HIRPathParams {
@@ -169,7 +154,6 @@ struct HIRPathParams {
     HIRCompare matchTestGenericsFuzz(const Span& sp, const HIRPathParams& x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& match) const;
     bool equalsIgnoringRegions(const HIRPathParams& x) const;
 
-    /// Indicates that params exist (and thus the target requires monomorphisation)
     bool hasParams() const {
         return !types.empty() || !values.empty();
     }
@@ -188,10 +172,9 @@ struct HIRPathParams {
 
     Ordering ord(const HIRPathParams& x) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRPathParams& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRPathParams& x);
 };
 
-/// Generic path - Simple path with one lot of generic params
 class HIRGenericPath {
 public:
     HIRSimplePath path;
@@ -219,7 +202,7 @@ public:
 
     Ordering ord(const HIRGenericPath& x) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRGenericPath& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRGenericPath& x);
 };
 
 class HIRTraitPath {
@@ -236,10 +219,9 @@ public:
             return AtyEqual{sourceTrait.clone(), atyParams.clone(), type};
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const AtyEqual& x);
+        friend std::ostream& operator<<(std::ostream& os, const AtyEqual& x);
     };
 
-    /// Associated type trait bounds (`Type: Trait`)
     struct AtyBound {
         HIRGenericPath sourceTrait;
         HIRPathParams atyParams;
@@ -250,17 +232,17 @@ public:
         AtyBound clone() const;
     };
 
-    typedef ::std::map<RcString, AtyEqual> assocListT;
+    typedef std::map<RcString, AtyEqual> assocListT;
 
     HIRGenericPath path;
     assocListT typeBounds;
-    ::std::map<RcString, AtyBound> traitBounds;
+    std::map<RcString, AtyBound> traitBounds;
     HIRBoundConstness constness = HIRBoundConstness::Never;
     const HIRTrait* traitPtr;
 
     HIRTraitPath();
     explicit HIRTraitPath(HIRGenericPath path);
-    HIRTraitPath(HIRGenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr = nullptr, HIRBoundConstness constness = HIRBoundConstness::Never);
+    HIRTraitPath(HIRGenericPath path, assocListT typeBounds, std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr = nullptr, HIRBoundConstness constness = HIRBoundConstness::Never);
     ~HIRTraitPath();
     HIRTraitPath(HIRTraitPath&&);
     HIRTraitPath& operator=(HIRTraitPath&&);
@@ -283,10 +265,9 @@ public:
 
     Ordering ord(const HIRTraitPath& x) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRTraitPath& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRTraitPath& x);
 };
 
-// Definitions generated from hir_path_data.tu.
 #include "hir_path_data_tu.h"
 
 class HIRPath {
@@ -319,16 +300,15 @@ public:
         return ord(x) == OrdLess;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRPath& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRPath& x);
 };
 
 struct HIRConstGenericUnevaluated {
-    /// `Self` captured by the expression, separate from impl parameters.
     HIRTypeRef selfType = nullptr;
-    /// Impl-level parameters to the expression
+
     HIRPathParams paramsImpl;
     HIRPathParams paramsItem;
-    /// HIR/MIR for this unevaluated parameter
+
     std::shared_ptr<HIRExprPtr> expr;
 
     HIRConstGenericUnevaluated(HIRExprPtr ep);
@@ -336,7 +316,7 @@ struct HIRConstGenericUnevaluated {
     HIRConstGenericUnevaluated monomorph(const Span& sp, const Monomorphiser& ms, bool allowInfer = true) const;
     bool equivalent(const HIRConstGenericUnevaluated& x) const;
     Ordering ord(const HIRConstGenericUnevaluated& x) const;
-    void fmt(::std::ostream& os) const;
+    void fmt(std::ostream& os) const;
 
 private:
     HIRConstGenericUnevaluated();

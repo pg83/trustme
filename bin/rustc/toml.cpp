@@ -10,7 +10,6 @@
 #include <string>
 #include <iostream>
 
-/// Representation of a syntatic token in a TOML file
 struct TomlToken {
     enum class Type {
         Eof,
@@ -29,35 +28,21 @@ struct TomlToken {
     };
 
     Type type;
-    ::std::string data;
+    std::string data;
     i64 intval = 0;
 
-    TomlToken(Type ty)
-        : type(ty)
-    {
-    }
+    TomlToken(Type ty);
 
-    TomlToken(Type ty, ::std::string s)
-        : type(ty)
-        , data(s)
-    {
-    }
+    TomlToken(Type ty, std::string s);
 
-    TomlToken(Type ty, i64 i)
-        : type(ty)
-        , intval(i)
-    {
-    }
+    TomlToken(Type ty, i64 i);
 
-    static TomlToken lexFrom(::std::ifstream& is, unsigned& line);
-    static TomlToken lexFromInner(::std::ifstream& is, unsigned& line);
+    static TomlToken lexFrom(std::ifstream& is, unsigned& line);
+    static TomlToken lexFromInner(std::ifstream& is, unsigned& line);
 
-    const ::std::string& asString() const {
-        assert(type == Type::Ident || type == Type::String);
-        return data;
-    }
+    const std::string& asString() const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const TomlToken& x) {
+    friend std::ostream& operator<<(std::ostream& os, const TomlToken& x) {
         switch (x.type) {
             case Type::Eof:
                 os << "Eof";
@@ -100,7 +85,7 @@ struct TomlToken {
     }
 };
 
-TomlFile::TomlFile(const ::std::string& filename)
+TomlFile::TomlFile(const std::string& filename)
     : lexer_(filename)
 {
 }
@@ -123,10 +108,8 @@ TomlKeyValue TomlFile::getNextValue() {
             t = lexer_.getToken();
         }
 
-        // Expect '[', a string, or an identifier
         switch (t.type) {
             case TomlToken::Type::Eof:
-                // Empty return indicates the end of the list
                 return TomlKeyValue{};
             case TomlToken::Type::SquareOpen: {
                 currentBlock.clear();
@@ -139,7 +122,7 @@ TomlKeyValue TomlFile::getNextValue() {
                 }
                 for (;;) {
                     if (!(t.type == TomlToken::Type::Ident || t.type == TomlToken::Type::String)) {
-                        throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token in block name - " << t));
+                        throw std::runtime_error(FMT(lexer_ << ": Unexpected token in block name - " << t));
                     }
                     currentBlock.push_back(t.asString());
 
@@ -152,28 +135,25 @@ TomlKeyValue TomlFile::getNextValue() {
                 if (isArray) {
                     currentBlock.push_back(FMT(arrayCounts[currentBlock.back()]++));
                     if (t.type != TomlToken::Type::SquareClose) {
-                        throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token after array name - " << t));
+                        throw std::runtime_error(FMT(lexer_ << ": Unexpected token after array name - " << t));
                     }
                     t = lexer_.getToken();
                 }
                 if (t.type != TomlToken::Type::SquareClose) {
-                    throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token in block header - " << t));
+                    throw std::runtime_error(FMT(lexer_ << ": Unexpected token in block header - " << t));
                 }
                 t = lexer_.getToken();
                 if (t.type != TomlToken::Type::Newline) {
-                    throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token after block block - " << t));
+                    throw std::runtime_error(FMT(lexer_ << ": Unexpected token after block block - " << t));
                 }
-                // Recurse!
                 return getNextValue();
             }
             default:
                 break;
         }
     } else {
-        // Expect a string or an identifier
         if (t.type == TomlToken::Type::Eof) {
-            // EOF isn't allowed here
-            throw ::std::runtime_error(FMT(lexer_ << ": Unexpected EOF in composite"));
+            throw std::runtime_error(FMT(lexer_ << ": Unexpected EOF in composite"));
         }
     }
     std::vector<std::string> keyName;
@@ -183,7 +163,7 @@ TomlKeyValue TomlFile::getNextValue() {
             case TomlToken::Type::Ident:
                 break;
             default:
-                throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token for key - " << t));
+                throw std::runtime_error(FMT(lexer_ << ": Unexpected token for key - " << t));
         }
         keyName.push_back(t.asString());
         t = lexer_.getToken();
@@ -192,24 +172,20 @@ TomlKeyValue TomlFile::getNextValue() {
         }
 
         if (t.type != TomlToken::Type::Dot) {
-            throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token after key - " << t));
+            throw std::runtime_error(FMT(lexer_ << ": Unexpected token after key - " << t));
         }
         t = lexer_.getToken();
     }
 
-    // Note: Should be impossible, as it's the break condition above
     assert(t.type == TomlToken::Type::Assign);
     t = lexer_.getToken();
 
-    // --- Value ---
     TomlKeyValue rv;
     switch (t.type) {
-        // String: Return the string value
         case TomlToken::Type::String:
             rv.path = this->getPath(std::move(keyName));
             rv.value = TomlValue{t.data};
             break;
-        // Array: Parse the entire list and return as Type::List
         case TomlToken::Type::SquareOpen: {
             rv.path = this->getPath(std::move(keyName));
             rv.value.type = TomlValue::Type::List;
@@ -233,21 +209,16 @@ TomlKeyValue TomlFile::getNextValue() {
                         if (t.data == "true" || t.data == "false") {
                             rv.value.subValues.push_back(TomlValue{t.data == "true"});
                         } else {
-                            throw ::std::runtime_error(FMT(lexer_ << ": Unexpected identifier in array value position - " << t));
+                            throw std::runtime_error(FMT(lexer_ << ": Unexpected identifier in array value position - " << t));
                         }
                         break;
-                    // Nested array or inline table. This parser's value model is flat
-                    // (strings / scalars), so these are consumed (balanced) and
-                    // discarded rather than aborting the whole file. A warning is
-                    // emitted after the loop so a dropped value is noticed if it ever
-                    // turns out to matter.
                     case TomlToken::Type::SquareOpen:
                     case TomlToken::Type::BraceOpen:
                         skippedNested = true;
                         this->skipCompositeValue();
                         break;
                     default:
-                        throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token in array value position - " << t));
+                        throw std::runtime_error(FMT(lexer_ << ": Unexpected token in array value position - " << t));
                 }
 
                 t = lexer_.getToken();
@@ -259,23 +230,22 @@ TomlKeyValue TomlFile::getNextValue() {
                 t = lexer_.getToken();
             }
             if (t.type != TomlToken::Type::SquareClose) {
-                throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token after array - " << t));
+                throw std::runtime_error(FMT(lexer_ << ": Unexpected token after array - " << t));
             }
             if (skippedNested) {
-                ::std::string key;
+                std::string key;
                 for (const auto& c : rv.path) {
                     if (!key.empty()) {
                         key += ".";
                     }
                     key += c;
                 }
-                ::std::cerr << "warning: " << lexer_ << ": skipped nested array / inline-table element(s) in `" << key << "` (not represented in the flat TOML value model)" << ::std::endl;
+                std::cerr << "warning: " << lexer_ << ": skipped nested array / inline-table element(s) in `" << key << "` (not represented in the flat TOML value model)" << std::endl;
             }
             break;
         }
         case TomlToken::Type::BraceOpen:
             currentComposite.push_back(std::move(keyName));
-            // Recurse to restart parse
             return getNextValue();
         case TomlToken::Type::Integer:
             rv.path = this->getPath(std::move(keyName));
@@ -290,11 +260,11 @@ TomlKeyValue TomlFile::getNextValue() {
 
                 rv.value = TomlValue{false};
             } else {
-                throw ::std::runtime_error(FMT(lexer_ << ": Unexpected identifier in value position - " << t));
+                throw std::runtime_error(FMT(lexer_ << ": Unexpected identifier in value position - " << t));
             }
             break;
         default:
-            throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token in value position - " << t));
+            throw std::runtime_error(FMT(lexer_ << ": Unexpected token in value position - " << t));
     }
 
     t = lexer_.getToken();
@@ -304,26 +274,23 @@ TomlKeyValue TomlFile::getNextValue() {
     }
     if (currentComposite.empty()) {
         if (t.type != TomlToken::Type::Newline && t.type != TomlToken::Type::Eof) {
-            throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token in TOML file after entry - " << t));
+            throw std::runtime_error(FMT(lexer_ << ": Unexpected token in TOML file after entry - " << t));
         }
     } else {
         if (t.type != TomlToken::Type::Comma) {
-            throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token in TOML file after composite entry - " << t));
+            throw std::runtime_error(FMT(lexer_ << ": Unexpected token in TOML file after composite entry - " << t));
         }
     }
     return rv;
 }
 
 void TomlFile::skipCompositeValue() {
-    // The opening `[` or `{` has already been consumed by the caller. Read
-    // tokens (including any nested groups) until the matching close balances
-    // the count back to zero. Contents are discarded.
     unsigned depth = 1;
     while (depth > 0) {
         auto t = lexer_.getToken();
         switch (t.type) {
             case TomlToken::Type::Eof:
-                throw ::std::runtime_error(FMT(lexer_ << ": Unexpected EOF in nested array/table value"));
+                throw std::runtime_error(FMT(lexer_ << ": Unexpected EOF in nested array/table value"));
             case TomlToken::Type::SquareOpen:
             case TomlToken::Type::BraceOpen:
                 depth++;
@@ -348,13 +315,13 @@ std::vector<std::string> TomlFile::getPath(std::vector<std::string> tail) const 
     return path;
 }
 
-TomlLexer::TomlLexer(const ::std::string& filename)
+TomlLexer::TomlLexer(const std::string& filename)
     : input(filename)
     , filename(filename)
     , line(1)
 {
     if (!input.is_open()) {
-        throw ::std::runtime_error("Unable to open file '" + filename + "'");
+        throw std::runtime_error("Unable to open file '" + filename + "'");
     }
 }
 
@@ -366,18 +333,18 @@ TomlToken TomlLexer::getToken() {
     return rv;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const TomlLexer& x) {
+std::ostream& operator<<(std::ostream& os, const TomlLexer& x) {
     os << x.filename << ":" << x.line;
     return os;
 }
 
-TomlToken TomlToken::lexFrom(::std::ifstream& is, unsigned& line) {
+TomlToken TomlToken::lexFrom(std::ifstream& is, unsigned& line) {
     auto rv = TomlToken::lexFromInner(is, line);
     return rv;
 }
 
 namespace {
-    void handleEscape(::std::string& str, ::std::ifstream& is, unsigned& line) {
+    void handleEscape(std::string& str, std::ifstream& is, unsigned& line) {
         int c = is.get();
         switch (c) {
             case '"':
@@ -401,8 +368,6 @@ namespace {
             case 'f':
                 str += '\f';
                 break;
-            // `\uXXXX` / `\UXXXXXXXX`: consume the hex digits. The compiler never
-            // needs the exact codepoint of a string value, so store a placeholder.
             case 'u':
                 for (int i = 0; i < 4; i++) {
                     (void)is.get();
@@ -415,8 +380,6 @@ namespace {
                 }
                 str += '?';
                 break;
-            // Line-ending backslash in a multi-line basic string: trim the newline
-            // and all following whitespace up to the next non-whitespace char.
             case '\n':
             case '\r':
             case ' ':
@@ -437,18 +400,18 @@ namespace {
                 break;
             }
             default:
-                throw ::std::runtime_error(FMT("toml.cpp handle_escape: TODO: Escape sequences in strings - `" << (char)c << "`"));
+                throw std::runtime_error(FMT("toml.cpp handle_escape: TODO: Escape sequences in strings - `" << (char)c << "`"));
         }
     }
 }
 
-TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
+TomlToken TomlToken::lexFromInner(std::ifstream& is, unsigned& line) {
     int c;
     do {
         c = is.get();
     } while (c != EOF && c != '\n' && isspace(c));
 
-    ::std::string str;
+    std::string str;
     switch (c) {
         case EOF:
             return TomlToken{Type::Eof};
@@ -476,22 +439,18 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                 }
             }
             return TomlToken{Type::Newline};
-        // Literal string: No escaping
         case '\'':
             c = is.get();
             if (c == '\'') {
                 c = is.get();
-                // Empty literal string
                 if (c != '\'') {
                     str = "";
                 } else {
-                    // If the first character is a newline, strip it
                     c = is.get();
                     if (c == '\n') {
                         line++;
                         c = is.get();
                     }
-                    // Multi-line literal string
                     for (;;) {
                         if (c == '\'') {
                             c = is.get();
@@ -508,7 +467,7 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                             line++;
                         }
                         if (c == EOF) {
-                            throw ::std::runtime_error("Unexpected EOF in triple-quoted string");
+                            throw std::runtime_error("Unexpected EOF in triple-quoted string");
                         }
                         c = is.get();
                     }
@@ -516,9 +475,8 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
             } else {
                 while (c != '\'') {
                     if (c == EOF) {
-                        throw ::std::runtime_error("Unexpected EOF in single-quoted string");
+                        throw std::runtime_error("Unexpected EOF in single-quoted string");
                     }
-                    // Technically not allowed
                     if (c == '\n') {
                         line++;
                     }
@@ -527,7 +485,6 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                 }
             }
             return TomlToken{Type::String, str};
-        // Basic string: has escape sequences
         case '"':
             c = is.get();
             if (c == '"') {
@@ -536,13 +493,11 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                     is.putback(c);
                     return TomlToken{Type::String, ""};
                 } else {
-                    // Strip newline if it's the first character
                     c = is.get();
                     if (c == '\n') {
                         line++;
                         c = is.get();
                     }
-                    // Keep reading until """
                     for (;;) {
                         if (c == '"') {
                             c = is.get();
@@ -556,7 +511,7 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                             str += '"';
                         }
                         if (c == EOF) {
-                            throw ::std::runtime_error("Unexpected EOF in triple-quoted string");
+                            throw std::runtime_error("Unexpected EOF in triple-quoted string");
                         }
                         if (c == '\\') {
                             handleEscape(str, is, line);
@@ -572,14 +527,13 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
             } else {
                 while (c != '"') {
                     if (c == EOF) {
-                        throw ::std::runtime_error("Unexpected EOF in double-quoted string");
+                        throw std::runtime_error("Unexpected EOF in double-quoted string");
                     }
                     if (c == '\\') {
                         handleEscape(str, is, line);
                         c = is.get();
                         continue;
                     }
-                    // Technically not allowed
                     if (c == '\n') {
                         line++;
                     }
@@ -590,7 +544,6 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
             return TomlToken{Type::String, str};
         default:
             if (isalnum(c) || c == '_' || c == '-') {
-                // Identifier
                 while (isalnum(c) || c == '-' || c == '_') {
                     str += (char)c;
                     c = is.get();
@@ -641,7 +594,6 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                             val += c - '0';
                         }
                     } else {
-                        // Literal `0` is handled below
                     }
                 } else {
                     for (; i < str.size(); i++) {
@@ -659,7 +611,7 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                 }
                 return TomlToken{Type::Ident, str};
             } else {
-                throw ::std::runtime_error(FMT("?:" << line << ": Unexpected character '" << (char)c << "' in file"));
+                throw std::runtime_error(FMT("?:" << line << ": Unexpected character '" << (char)c << "' in file"));
             }
     }
 }
@@ -670,10 +622,10 @@ TomlValue::TomlValue()
 {
 }
 
-TomlValue::TomlValue(::std::string s)
+TomlValue::TomlValue(std::string s)
     : type(Type::String)
     , intValue(0)
-    , strValue(::std::move(s))
+    , strValue(std::move(s))
 {
 }
 
@@ -689,7 +641,7 @@ TomlValue::TomlValue(bool v)
 {
 }
 
-const ::std::string& TomlValue::asString() const {
+const std::string& TomlValue::asString() const {
     if (type != Type::String) {
         throw TypeError{type, Type::String};
     }
@@ -710,7 +662,7 @@ u64 TomlValue::asInt() const {
     return intValue;
 }
 
-const ::std::vector<TomlValue>& TomlValue::asList() const {
+const std::vector<TomlValue>& TomlValue::asList() const {
     if (type != Type::List) {
         throw TypeError{type, Type::List};
     }
@@ -722,7 +674,7 @@ TomlFileIter::TomlFileIter(TomlFile& tf)
 {
 }
 
-::std::ostream& operator<<(::std::ostream& os, const TomlValue::Type& e) {
+std::ostream& operator<<(std::ostream& os, const TomlValue::Type& e) {
     switch (e) {
         case TomlValue::Type::Boolean:
             os << "boolean";
@@ -740,7 +692,7 @@ TomlFileIter::TomlFileIter(TomlFile& tf)
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const TomlValue& x) {
+std::ostream& operator<<(std::ostream& os, const TomlValue& x) {
     switch (x.type) {
         case TomlValue::Type::Boolean:
             os << (x.intValue != 0 ? "true" : "false");
@@ -787,17 +739,39 @@ TomlValue::TypeError::TypeError(TomlValue::Type h, TomlValue::Type e)
     : have(h)
     , exp(e)
 {
-    ::std::ostringstream ss;
+    std::ostringstream ss;
     ss << "TOML type error: " << *this;
     const auto rendered = ss.str();
     snprintf(message, sizeof(message), "%s", rendered.c_str());
 }
 
-::std::ostream& operator<<(::std::ostream& os, const TomlValue::TypeError& e) {
+std::ostream& operator<<(std::ostream& os, const TomlValue::TypeError& e) {
     os << "expected " << e.exp << ", got " << e.have;
     return os;
 }
 
 const char* TomlValue::TypeError::what() const noexcept {
     return message;
+}
+
+TomlToken::TomlToken(Type ty)
+    : type(ty)
+{
+}
+
+TomlToken::TomlToken(Type ty, std::string s)
+    : type(ty)
+    , data(s)
+{
+}
+
+TomlToken::TomlToken(Type ty, i64 i)
+    : type(ty)
+    , intval(i)
+{
+}
+
+auto TomlToken::asString() const -> const std::string& {
+    assert(type == Type::Ident || type == Type::String);
+    return data;
 }

@@ -1,8 +1,8 @@
 #include "rc_string.h"
 
-#include <cstring>
 #include <string>
-#include <algorithm> // std::min
+#include <cstring>
+#include <algorithm>
 
 #define XXH_INLINE_ALL
 #include <xxhash.h>
@@ -10,11 +10,8 @@
 #include <std/lib/vector.h>
 #include <std/mem/obj_pool.h>
 
-// The string interner. Every constructed string lives here forever:
-// zero-terminated bytes in the interner's ObjPool, one InternedString
-// entry per unique content, and an open-addressing slot table keyed by
-// the first xxh128 half with the second half as the whole equality check
-// (a full 128-bit collision is the accepted, negligible failure mode).
+using namespace stl;
+
 namespace {
     struct InternedString {
         const char* begin;
@@ -24,65 +21,18 @@ namespace {
     };
 
     struct StrInterner {
-        stl::ObjPool::Ref poolRef = stl::ObjPool::fromMemory();
-        stl::ObjPool* pool = poolRef.mutPtr();
-        stl::Vector<InternedString> strs;
-        stl::Vector<u32> slots; // values are ids; 0 = empty slot
+        ObjPool::Ref poolRef = ObjPool::fromMemory();
+        ObjPool* pool = poolRef.mutPtr();
+        Vector<InternedString> strs;
+        Vector<u32> slots;
         size_t mask;
         size_t used = 0;
 
-        StrInterner() {
-            auto* empty = static_cast<char*>(pool->allocate(1));
-            empty[0] = '\0';
-            strs.pushBack(InternedString{empty, empty, 0, 0});
+        StrInterner();
 
-            const size_t initial = 1 << 19; // libcargo peaks at ~129k uniques
-            slots.zero(initial);
-            mask = initial - 1;
-        }
+        void grow();
 
-        void grow() {
-            stl::Vector<u32> next;
-            next.zero((mask + 1) * 2);
-            const size_t nextMask = (mask + 1) * 2 - 1;
-            for (u32 id = 1; id < strs.length(); id++) {
-                size_t i = strs[id].hash1 & nextMask;
-                while (next[i]) {
-                    i = (i + 1) & nextMask;
-                }
-                next.mut(i) = id;
-            }
-            slots.xchg(next);
-            mask = nextMask;
-        }
-
-        u32 intern(const char* s, size_t len) {
-            if (len == 0) {
-                return 0;
-            }
-            const auto h = XXH3_128bits(s, len);
-            size_t i = h.high64 & mask;
-            while (u32 id = slots[i]) {
-                const auto& e = strs[id];
-                if (e.hash1 == h.high64 && e.hash2 == h.low64) {
-                    return id;
-                }
-                i = (i + 1) & mask;
-            }
-
-            auto* data = static_cast<char*>(pool->allocate(len + 1));
-            ::std::memcpy(data, s, len);
-            data[len] = '\0';
-
-            const auto id = static_cast<u32>(strs.length());
-            strs.pushBack(InternedString{data, data + len, h.high64, h.low64});
-            slots.mut(i) = id;
-            used += 1;
-            if (used * 10 > (mask + 1) * 7) {
-                grow();
-            }
-            return id;
-        }
+        u32 intern(const char* s, size_t len);
     };
 
     StrInterner& interner() {
@@ -101,11 +51,11 @@ RcString::RcString(const char* s, size_t len)
 }
 
 RcString::RcString(const char* s)
-    : RcString(s, ::std::strlen(s))
+    : RcString(s, std::strlen(s))
 {
 }
 
-RcString::RcString(const ::std::string& s)
+RcString::RcString(const std::string& s)
     : RcString(s.data(), s.size())
 {
 }
@@ -129,14 +79,13 @@ u64 RcString::contentHash() const {
 }
 
 Ordering RcString::ord(const char* s, size_t len) const {
-    auto cmpLen = ::std::min(len, this->size());
+    auto cmpLen = std::min(len, this->size());
     if (cmpLen > 0) {
         int cmp = memcmp(this->c_str(), s, cmpLen);
         if (cmp != 0) {
             return ::ord(cmp, 0);
         }
     }
-    // Since the prefix is equal, then sort `this` before `s` if it's shorter
     return ::ord(this->size(), len);
 }
 
@@ -164,7 +113,7 @@ Ordering RcString::ord(const char* s) const {
     return ::ord(cmp, 0);
 }
 
-::std::ostream& operator<<(::std::ostream& os, const RcString& x) {
+std::ostream& operator<<(std::ostream& os, const RcString& x) {
     os.write(x.c_str(), x.size());
     return os;
 }
@@ -179,4 +128,57 @@ int RcString::compare(size_t o, size_t l, const char* s) const {
         }
         return -1;
     }
+}
+
+StrInterner::StrInterner() {
+    auto* empty = static_cast<char*>(pool->allocate(1));
+    empty[0] = '\0';
+    strs.pushBack(InternedString{empty, empty, 0, 0});
+
+    const size_t initial = 1 << 19;
+    slots.zero(initial);
+    mask = initial - 1;
+}
+
+auto StrInterner::grow() -> void {
+    Vector<u32> next;
+    next.zero((mask + 1) * 2);
+    const size_t nextMask = (mask + 1) * 2 - 1;
+    for (u32 id = 1; id < strs.length(); id++) {
+        size_t i = strs[id].hash1 & nextMask;
+        while (next[i]) {
+            i = (i + 1) & nextMask;
+        }
+        next.mut(i) = id;
+    }
+    slots.xchg(next);
+    mask = nextMask;
+}
+
+auto StrInterner::intern(const char* s, size_t len) -> u32 {
+    if (len == 0) {
+        return 0;
+    }
+    const auto h = XXH3_128bits(s, len);
+    size_t i = h.high64 & mask;
+    while (u32 id = slots[i]) {
+        const auto& e = strs[id];
+        if (e.hash1 == h.high64 && e.hash2 == h.low64) {
+            return id;
+        }
+        i = (i + 1) & mask;
+    }
+
+    auto* data = static_cast<char*>(pool->allocate(len + 1));
+    std::memcpy(data, s, len);
+    data[len] = '\0';
+
+    const auto id = static_cast<u32>(strs.length());
+    strs.pushBack(InternedString{data, data + len, h.high64, h.low64});
+    slots.mut(i) = id;
+    used += 1;
+    if (used * 10 > (mask + 1) * 7) {
+        grow();
+    }
+    return id;
 }

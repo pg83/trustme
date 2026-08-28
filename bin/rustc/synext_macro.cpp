@@ -2,18 +2,18 @@
 #include "synext_macro.h"
 
 #include "common.h"
-#include "synext.h" // for Expand_BareExpr
+#include "synext.h"
 #include "hir_asm.h"
 #include "hir_hir.h"
-#include "ast_expr.h" // for ExprNode_*
+#include "ast_expr.h"
 #include "settings.h"
 #include "ast_crate.h"
-#include "parse_lex.h" // For Codepoint
+#include "parse_lex.h"
 #include "expand_cfg.h"
-#include "expand_common.h"
 #include "wire_board.h"
 #include "parse_common.h"
 #include "trans_target.h"
+#include "expand_common.h"
 #include "parse_ttstream.h"
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"
@@ -23,13 +23,331 @@
 #include <string_view>
 
 namespace {
-    ::std::unique_ptr<TokenStream> makeMacroExpansionPlaceholder(const Span& sp) {
+    struct FmtArgs {
+        enum class Align {
+            Unspec,
+            Left,
+            Center,
+            Right,
+        };
+        enum class Sign {
+            Unspec,
+            Plus,
+            Minus,
+        };
+        enum class Debug {
+            Normal,
+            LowerHex,
+            UpperHex,
+        };
+
+        Align align = Align::Unspec;
+        u32 alignChar = ' ';
+
+        Sign sign = Sign::Unspec;
+        bool alternate = false;
+        bool zeroPad = false;
+
+        Debug debugTy = Debug::Normal;
+
+        bool widthIsArg = false;
+        unsigned int width = 0;
+
+        bool precSet = false;
+        bool precIsArg = false;
+        unsigned int prec = 0;
+
+        bool operator==(const FmtArgs& x) const;
+
+        bool operator!=(const FmtArgs& x) const;
+
+        friend std::ostream& operator<<(std::ostream& os, const FmtArgs& x) {
+            os << "Align(";
+            switch (x.align) {
+                case Align::Unspec:
+                    os << "-";
+                    break;
+                case Align::Left:
+                    os << "<";
+                    break;
+                case Align::Center:
+                    os << "^";
+                    break;
+                case Align::Right:
+                    os << ">";
+                    break;
+            }
+            os << "'" << x.alignChar << "'";
+            os << ")";
+            os << "Sign(";
+            switch (x.sign) {
+                case Sign::Unspec:
+                    os << " ";
+                    break;
+                case Sign::Plus:
+                    os << "+";
+                    break;
+                case Sign::Minus:
+                    os << "-";
+                    break;
+            }
+            if (x.alternate) {
+                os << "#";
+            }
+            if (x.zeroPad) {
+                os << "0";
+            }
+            os << ")";
+            os << "Width(" << (x.widthIsArg ? "$" : "") << x.width << ")";
+            os << "Prec(" << (x.precIsArg ? "$" : "") << x.prec << ")";
+            return os;
+        }
+    };
+
+    struct FmtFrag {
+        std::string leadingText;
+
+        unsigned int argIndex;
+
+        const char* traitName;
+
+        // TODO: Support case where this hasn't been edited (telling the formatter that it has nothing to apply)
+
+        FmtArgs args;
+    };
+
+}
+
+namespace {
+struct CTraceMacrosExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override;
+};
+
+struct CLogSyntaxExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override;
+};
+
+struct CPatternTypeExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override;
+};
+
+struct CIterExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CLlvmAsmExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CAsmExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CGlobalAsmExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CNakedAsmExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct GenericAssertCaptureVisitor: public ASTNodeVisitor {
+    struct Capture {
+        ASTPath path;
+        RcString name;
+        RcString captureName;
+        RcString localBindName;
+        bool deferred;
+    };
+
+    ThinVector<Capture> captures;
+
+    GenericAssertCaptureVisitor(RcString coreCrate, Ident::Hygiene hygiene);
+
+    void manage(ASTExprNodeP& node);
+
+    void visit(ASTExprNodeArray& node) override;
+
+    void visit(ASTExprNodeBinOp& node) override;
+
+    void visit(ASTExprNodeCallPath& node) override;
+
+    void visit(ASTExprNodeCallMethod& node) override;
+
+    void visit(ASTExprNodeCallObject& node) override;
+
+    void visit(ASTExprNodeCast& node) override;
+
+    void visit(ASTExprNodeDeref& node) override;
+
+    void visit(ASTExprNodeIf& node) override;
+
+    void visit(ASTExprNodeIndex& node) override;
+
+    void visit(ASTExprNodeLetBinding& node) override;
+
+    void visit(ASTExprNodeMatch& node) override;
+
+    void visit(ASTExprNodeUniOp& node) override;
+
+    void visit(ASTExprNodeNamedValue& node) override;
+
+    void visit(ASTExprNodeStructLiteral& node) override;
+
+    void visit(ASTExprNodeTuple& node) override;
+
+#define NO_GENERIC_ASSERT_CAPTURE(Node) \
+    void visit(Node&) override {        \
+    }
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeBlock);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeAsyncBlock);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeGeneratorBlock);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeTry);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeMacro);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeAsm);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeAsm2);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeFlow);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeAssign);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeLoop);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeFor);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeWhile);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeWildcardPattern);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeInteger);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeFloat);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeBool);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeString);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeByteString);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeCString);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeSuffixedLiteral);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeClosure);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeStructLiteralPattern);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeField);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeTypeAnnotation);
+    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeMacroDefinition);
+#undef NO_GENERIC_ASSERT_CAPTURE
+
+    ASTExprNodeP makeTryCapture(RcString captureName, RcString localBindName, const Span& sp) const;
+
+    ASTPath generatedPath(RcString name) const;
+
+    ASTExprNodeP makeGeneratedValue(RcString name, const Span& sp) const;
+
+    RcString coreCrate;
+    Ident::Hygiene hygiene;
+    ASTExprNodeP* current = nullptr;
+    bool consumed = true;
+};
+
+struct CExpanderAssert: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderCompileError: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CConcatExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CConcatBytesExpander: public ExpandProcMacro {
+    static char getArrayByte(const Span& sp, const ASTExprNode& node);
+
+    static void append(const Span& sp, std::string& output, const ASTExprNode& node);
+
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CConcatIdentsExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderEnv: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderOptionEnv: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderFile: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderLine: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderColumn: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderUnstableColumn: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderModulePath: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CFormatArgsExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CConstFormatArgsExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CFormatArgsNlExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CIncludeExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CIncludeBytesExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CIncludeStrExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderPanic: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderUnreachable: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderRegisterDiagnostic: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderDiagnosticUsed: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpanderBuildDiagnosticArray: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+
+struct CExpander: public ExpandProcMacro {
+    std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override;
+};
+}
+
+namespace {
+
+    std::unique_ptr<TokenStream> makeMacroExpansionPlaceholder(const Span& sp) {
         auto rv = box$(TTStreamO(sp, ParseState(), TokenTree()));
         rv->markMacroExpansionPlaceholder();
         return rv;
     }
 
-    ::std::string getString(const Span& sp, TokenStream& lex, const ASTCrate& crate, ASTModule& mod) {
+    std::string getString(const Span& sp, TokenStream& lex, const ASTCrate& crate, ASTModule& mod) {
         auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
 
         auto* formatStringNp = cast<ASTExprNodeString>(&*n);
@@ -51,199 +369,6 @@ namespace {
         parseErrorUnexpected(lex, tok, TOK_IDENT);
     }
 }
-
-class CTraceMacrosExpander: public ExpandProcMacro {
-public:
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override {
-        auto lex = TTStream(sp, ParseState(), tt);
-        const auto setting = lex.getToken();
-        if (setting.type() != TOK_RWORD_TRUE && setting.type() != TOK_RWORD_FALSE) {
-            ERROR(sp, E0000, "trace_macros! expects `true` or `false`");
-        }
-        if (lex.lookahead(0) != TOK_EOF) {
-            ERROR(sp, E0000, "trace_macros! expects exactly one boolean argument");
-        }
-        return makeMacroExpansionPlaceholder(sp);
-    }
-};
-
-class CLogSyntaxExpander: public ExpandProcMacro {
-public:
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override {
-        auto lex = TTStream(sp, ParseState(), tt);
-        bool first = true;
-        while (lex.lookahead(0) != TOK_EOF) {
-            if (!first) {
-                ::std::cout << ' ';
-            }
-            ::std::cout << lex.getToken().toStr();
-            first = false;
-        }
-        ::std::cout << ::std::endl;
-        return makeMacroExpansionPlaceholder(sp);
-    }
-};
-
-class CPatternTypeExpander: public ExpandProcMacro {
-public:
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override {
-        return box$(TTStreamO(sp, ParseState(), tt.clone()));
-    }
-};
-
-class CIterExpander: public ExpandProcMacro {
-public:
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().crate = &crate;
-        lex.parseState().wb = &wb;
-        lex.parseState().module = &mod;
-
-        auto node = ParseExpr0(lex);
-        GET_CHECK_TOK(tok, lex, TOK_EOF);
-
-        auto* closure = cast<ASTExprNodeClosure>(node.get());
-        if (!closure || closure->isPinned || cast<ASTExprNodeAsyncBlock>(closure->code.get())) {
-            ERROR(sp, E0000, "iter! requires a plain closure");
-        }
-
-        auto* generator = new ASTExprNodeGeneratorBlock(mv$(closure->code), closure->returnType, true, true);
-        generator->setSpan(sp);
-        closure->code = ASTExprNodeP(generator);
-        closure->returnType = mkType(*crate.pool, sp);
-
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
-    }
-};
-
-class CLlvmAsmExpander: public ExpandProcMacro {
-public:
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-
-        auto templateText = getString(sp, lex, crate, mod);
-        ::std::vector<ASTExprNodeAsm::ValRef> outputs;
-        ::std::vector<ASTExprNodeAsm::ValRef> inputs;
-        ::std::vector<::std::string> clobbers;
-        ::std::vector<::std::string> flags;
-
-        // Outputs
-        if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
-            GET_TOK(tok, lex);
-            lex.putback(Token(TOK_COLON));
-        } else if (lex.lookahead(0) == TOK_COLON) {
-            GET_TOK(tok, lex);
-
-            while (lex.lookahead(0) == TOK_STRING) {
-                GET_CHECK_TOK(tok, lex, TOK_STRING);
-                auto name = mv$(tok.str());
-
-                GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-                auto val = ParseExpr0(lex);
-                GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
-
-                outputs.push_back(ASTExprNodeAsm::ValRef{mv$(name), mv$(val)});
-
-                if (lex.lookahead(0) != TOK_COMMA) {
-                    break;
-                }
-
-                GET_TOK(tok, lex);
-            }
-        } else {
-        }
-
-        // Inputs
-        if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
-            GET_TOK(tok, lex);
-            lex.putback(Token(TOK_COLON));
-        } else if (lex.lookahead(0) == TOK_COLON) {
-            GET_TOK(tok, lex);
-
-            while (lex.lookahead(0) == TOK_STRING) {
-                GET_CHECK_TOK(tok, lex, TOK_STRING);
-                auto name = mv$(tok.str());
-
-                GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-                auto val = ParseExpr0(lex);
-                GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
-
-                inputs.push_back(ASTExprNodeAsm::ValRef{mv$(name), mv$(val)});
-
-                if (lex.lookahead(0) != TOK_COMMA) {
-                    break;
-                }
-                GET_TOK(tok, lex);
-            }
-        } else {
-        }
-
-        // Clobbers
-        if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
-            GET_TOK(tok, lex);
-            lex.putback(Token(TOK_COLON));
-        } else if (lex.lookahead(0) == TOK_COLON) {
-            GET_TOK(tok, lex);
-
-            while (lex.lookahead(0) == TOK_STRING) {
-                GET_CHECK_TOK(tok, lex, TOK_STRING);
-                clobbers.push_back(mv$(tok.str()));
-
-                if (lex.lookahead(0) != TOK_COMMA) {
-                    break;
-                }
-                GET_TOK(tok, lex);
-            }
-        } else {
-        }
-
-        // Flags
-        if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
-            GET_TOK(tok, lex);
-            lex.putback(Token(TOK_COLON));
-        } else if (lex.lookahead(0) == TOK_COLON) {
-            GET_TOK(tok, lex);
-
-            while (lex.lookahead(0) == TOK_STRING) {
-                GET_CHECK_TOK(tok, lex, TOK_STRING);
-                flags.push_back(mv$(tok.str()));
-
-                if (lex.lookahead(0) != TOK_COMMA) {
-                    break;
-                }
-                GET_TOK(tok, lex);
-            }
-        } else {
-        }
-
-        // trailing `: voltaile` - TODO: Is this valid?
-        if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
-            GET_TOK(tok, lex);
-            lex.putback(Token(TOK_COLON));
-        } else if (lex.lookahead(0) == TOK_COLON) {
-            GET_TOK(tok, lex);
-
-            if (GET_TOK(tok, lex) == TOK_IDENT && tok.ident() == "volatile") {
-                flags.push_back("volatile");
-            } else {
-                PUTBACK(tok, lex);
-            }
-        } else {
-        }
-
-        // has to be the end
-        if (lex.lookahead(0) != TOK_EOF) {
-            ERROR(sp, E0000, "Unexpected token in asm! - " << lex.getToken());
-        }
-
-        // Convert this into an AST node and insert as an intepolated expression
-        ASTExprNodeP rv = ASTExprNodeP(new ASTExprNodeAsm{mv$(templateText), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags)});
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
-    }
-};
 
 namespace {
     AsmRegisterClass getRegClassX8664(const Span& sp, const RcString& str) {
@@ -294,13 +419,17 @@ namespace {
         ERROR(sp, E0000, "Unknown architecture for asm!");
     }
 
-    /// Registers the target reserves: naming one as an operand is an error,
-    /// not a clobber.
     const char* x86ReservedRegister(const std::string& name) {
         static const std::pair<const char*, const char*> reserved[] = {
-            {"bp", "the frame pointer"}, {"ebp", "the frame pointer"}, {"rbp", "the frame pointer"},
-            {"sp", "the stack pointer"}, {"esp", "the stack pointer"}, {"rsp", "the stack pointer"},
-            {"ip", "the instruction pointer"}, {"eip", "the instruction pointer"}, {"rip", "the instruction pointer"},
+            {"bp", "the frame pointer"},
+            {"ebp", "the frame pointer"},
+            {"rbp", "the frame pointer"},
+            {"sp", "the stack pointer"},
+            {"esp", "the stack pointer"},
+            {"rsp", "the stack pointer"},
+            {"ip", "the instruction pointer"},
+            {"eip", "the instruction pointer"},
+            {"rip", "the instruction pointer"},
         };
         for (const auto& entry : reserved) {
             if (name == entry.first) {
@@ -312,12 +441,34 @@ namespace {
 
     std::string canonicalX86Register(const std::string& name, bool is64Bit) {
         static const std::pair<const char*, const char*> aliases[] = {
-            {"al", "rax"}, {"ah", "rax"}, {"ax", "rax"}, {"eax", "rax"}, {"rax", "rax"},
-            {"bl", "rbx"}, {"bh", "rbx"}, {"bx", "rbx"}, {"ebx", "rbx"}, {"rbx", "rbx"},
-            {"cl", "rcx"}, {"ch", "rcx"}, {"cx", "rcx"}, {"ecx", "rcx"}, {"rcx", "rcx"},
-            {"dl", "rdx"}, {"dh", "rdx"}, {"dx", "rdx"}, {"edx", "rdx"}, {"rdx", "rdx"},
-            {"sil", "rsi"}, {"si", "rsi"}, {"esi", "rsi"}, {"rsi", "rsi"},
-            {"dil", "rdi"}, {"di", "rdi"}, {"edi", "rdi"}, {"rdi", "rdi"},
+            {"al", "rax"},
+            {"ah", "rax"},
+            {"ax", "rax"},
+            {"eax", "rax"},
+            {"rax", "rax"},
+            {"bl", "rbx"},
+            {"bh", "rbx"},
+            {"bx", "rbx"},
+            {"ebx", "rbx"},
+            {"rbx", "rbx"},
+            {"cl", "rcx"},
+            {"ch", "rcx"},
+            {"cx", "rcx"},
+            {"ecx", "rcx"},
+            {"rcx", "rcx"},
+            {"dl", "rdx"},
+            {"dh", "rdx"},
+            {"dx", "rdx"},
+            {"edx", "rdx"},
+            {"rdx", "rdx"},
+            {"sil", "rsi"},
+            {"si", "rsi"},
+            {"esi", "rsi"},
+            {"rsi", "rsi"},
+            {"dil", "rdi"},
+            {"di", "rdi"},
+            {"edi", "rdi"},
+            {"rdi", "rdi"},
         };
         for (const auto& alias : aliases) {
             if (name == alias.first) {
@@ -403,1088 +554,8 @@ namespace {
     }
 }
 
-class CAsmExpander: public ExpandProcMacro {
-public:
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        // Stabilisation-path `asm!`
-
-        Token tok;
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-
-        std::vector<std::pair<Span, std::string>> rawLines;
-        do {
-            auto ps = lex.startSpan();
-            auto attrs = ParseItemAttrs(lex);
-            auto text = getString(sp, lex, crate, mod);
-            auto sp = lex.endSpan(ps);
-            if (checkCfgAttrs(*lex.parseState().wb->settings, attrs)) {
-                rawLines.push_back(std::make_pair(sp, std::move(text)));
-            }
-
-            if (lex.lookahead(0) == TOK_EOF) {
-                GET_TOK(tok, lex);
-                break;
-            }
-            GET_CHECK_TOK(tok, lex, TOK_COMMA);
-        } while (lex.lookahead(0) == TOK_STRING || lex.lookahead(0) == TOK_HASH);
-
-        std::vector<ASTExprNodeAsm2::Param> params;
-        std::vector<RcString> names;
-        std::vector<std::string> clobberAbis;
-        AsmOptions options;
-        while (tok.type() == TOK_COMMA) {
-            if (lex.lookahead(0) == TOK_EOF) {
-                GET_TOK(tok, lex);
-                break;
-            }
-
-            RcString bindingName;
-            auto v = getTokIdentRword(lex);
-            if (v == "clobber_abi") {
-                GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-                do {
-                    GET_CHECK_TOK(tok, lex, TOK_STRING);
-                    clobberAbis.push_back(tok.str());
-                    if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
-                        GET_TOK(tok, lex);
-                        break;
-                    }
-                } while (GET_TOK(tok, lex) == TOK_COMMA);
-                CHECK_TOK(tok, TOK_PAREN_CLOSE);
-
-                GET_TOK(tok, lex);
-                continue;
-            }
-            if (v == "options") {
-                GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-                do {
-                    GET_CHECK_TOK(tok, lex, TOK_IDENT);
-
-                    if (tok.ident().name == "pure") {
-                        if (options.pure) {
-                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
-                        }
-                        options.pure = 1;
-                    } else if (tok.ident().name == "nomem") {
-                        if (options.nomem) {
-                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
-                        }
-                        options.nomem = 1;
-                    } else if (tok.ident().name == "readonly") {
-                        if (options.readonly) {
-                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
-                        }
-                        options.readonly = 1;
-                    } else if (tok.ident().name == "preserves_flags") {
-                        if (options.preservesFlags) {
-                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
-                        }
-                        options.preservesFlags = 1;
-                    } else if (tok.ident().name == "noreturn") {
-                        if (options.noreturn) {
-                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
-                        }
-                        options.noreturn = 1;
-                    } else if (tok.ident().name == "nostack") {
-                        if (options.nostack) {
-                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
-                        }
-                        options.nostack = 1;
-                    } else if (tok.ident().name == "att_syntax") {
-                        if (options.attSyntax) {
-                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
-                        }
-                        // TODO: x86(-64) only
-                        options.attSyntax = 1;
-                    } else if (tok.ident().name == "raw") {
-                        if (options.raw) {
-                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
-                        }
-                        options.raw = 1;
-                    } else {
-                        ERROR(lex.pointSpan(), E0000, "Unknown asm option - " << tok.ident().name);
-                    }
-
-                    if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
-                        GET_TOK(tok, lex);
-                        break;
-                    }
-                } while (GET_TOK(tok, lex) == TOK_COMMA);
-                CHECK_TOK(tok, TOK_PAREN_CLOSE);
-
-                GET_TOK(tok, lex);
-                continue;
-            }
-
-            if (lex.lookahead(0) == TOK_EQUAL) {
-                GET_CHECK_TOK(tok, lex, TOK_EQUAL);
-                bindingName = v;
-                v = getTokIdentRword(lex);
-            }
-
-            ASTExprNodeAsm2::Param paramSpec;
-            if (v == "const") {
-                auto e = ParseExpr0(lex);
-                paramSpec = ASTExprNodeAsm2::Param::make_Const(std::move(e));
-            } else if (v == "sym") {
-                auto p = ParsePath(lex, PATH_GENERIC_EXPR);
-                paramSpec = ASTExprNodeAsm2::Param::make_Sym(std::move(p));
-            } else if (v == "label") {
-                auto e = ParseExpr0(lex);
-                if (!cast<ASTExprNodeBlock>(e.get())) {
-                    ERROR(sp, E0000, "asm! label operand requires a block");
-                }
-                paramSpec = ASTExprNodeAsm2::Param::make_Label({std::move(e)});
-            } else {
-                AsmDirection dir;
-                if (v == "inlateout") {
-                    dir = AsmDirection::InLateOut;
-                } else if (v == "in") {
-                    dir = AsmDirection::In;
-                } else if (v == "out") {
-                    dir = AsmDirection::Out;
-                } else if (v == "lateout") {
-                    dir = AsmDirection::LateOut;
-                } else if (v == "inout") {
-                    dir = AsmDirection::InOut;
-                } else {
-                    ERROR(sp, E0000, "Unknown asm fragment - `" << v << "`");
-                }
-
-                GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-                GET_TOK(tok, lex);
-                AsmRegisterSpec regSpec;
-                if (tok.type() == TOK_IDENT) {
-                    //Target_GetCurSpec().m_arch
-                    regSpec = AsmRegisterSpec::make_Class(getRegClass(wb, lex.pointSpan(), tok.ident().name));
-                } else if (tok.type() == TOK_STRING) {
-                    regSpec = AsmRegisterSpec::make_Explicit(tok.str());
-                } else {
-                    parseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_STRING});
-                }
-                GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
-
-                if (lex.lookahead(0) == TOK_UNDERSCORE) {
-                    GET_TOK(tok, lex);
-                    // out or lateout only
-                    switch (dir) {
-                        case AsmDirection::LateOut:
-                        case AsmDirection::Out:
-                            break;
-                        default:
-                            ERROR(sp, E0000, "Invalid use of _ in asm!");
-                    }
-                    paramSpec = ASTExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), nullptr, nullptr});
-                } else {
-                    auto e = ParseExpr0(lex);
-
-                    if (lex.lookahead(0) == TOK_FATARROW) {
-                        // inout or inlateout only
-                        switch (dir) {
-                            case AsmDirection::InLateOut:
-                            case AsmDirection::InOut:
-                                break;
-                            default:
-                                ERROR(sp, E0000, "Invalid use of => in asm!");
-                        }
-                        GET_TOK(tok, lex);
-                        if (lex.lookahead(0) == TOK_UNDERSCORE) {
-                            GET_TOK(tok, lex);
-                            paramSpec = ASTExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), mv$(e), nullptr});
-                        } else {
-                            auto e2 = ParseExpr0(lex);
-                            paramSpec = ASTExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), mv$(e), mv$(e2)});
-                        }
-                    } else {
-                        // Note: Different variant to handle `inout(reg) foo` without duplicating
-                        paramSpec = ASTExprNodeAsm2::Param::make_RegSingle({dir, std::move(regSpec), mv$(e)});
-                    }
-                }
-            }
-
-            names.push_back(bindingName);
-            params.push_back(std::move(paramSpec));
-
-            GET_TOK(tok, lex);
-        }
-        CHECK_TOK(tok, TOK_EOF);
-
-        // - A positional operand may not follow one that has to be named to be
-        //   referenced.
-        {
-            bool seenNonPositional = false;
-            for (size_t i = 0; i < params.size(); i++) {
-                const AsmRegisterSpec* spec = nullptr;
-                if (const auto* e = params[i].opt_Reg()) {
-                    spec = &e->spec;
-                } else if (const auto* e = params[i].opt_RegSingle()) {
-                    spec = &e->spec;
-                }
-                const bool positional = (names[i] == RcString()) && !(spec && spec->is_Explicit());
-                if (!positional) {
-                    seenNonPositional = true;
-                } else if (seenNonPositional) {
-                    ERROR(sp, E0000, "positional arguments cannot follow named arguments or explicit register arguments");
-                }
-            }
-        }
-
-        // - Explicit registers must be distinct, and must not name a register
-        //   the target reserves.
-        {
-            const auto& arch = TargetGetCurSpec(wb).arch.name;
-            const bool isX86 = arch == "x86" || arch == "x86_64";
-            const bool is64Bit = arch == "x86_64";
-            std::map<std::string, std::string> seen;
-            for (const auto& param : params) {
-                const AsmRegisterSpec* spec = nullptr;
-                if (const auto* e = param.opt_Reg()) {
-                    spec = &e->spec;
-                } else if (const auto* e = param.opt_RegSingle()) {
-                    spec = &e->spec;
-                }
-                if (!spec || !spec->is_Explicit()) {
-                    continue;
-                }
-                const auto& name = spec->as_Explicit();
-                if (isX86) {
-                    if (const char* what = x86ReservedRegister(name)) {
-                        ERROR(sp, E0000, "invalid register `" << name << "`: " << what << " cannot be used as an operand for inline asm");
-                    }
-                }
-                const auto canonical = isX86 ? canonicalX86Register(name, is64Bit) : name;
-                auto inserted = seen.insert(std::make_pair(canonical, name));
-                if (!inserted.second) {
-                    ERROR(sp, E0000, "register `" << name << "` conflicts with register `" << inserted.first->second << "`");
-                }
-            }
-        }
-
-        bool hasLabel = false;
-        bool hasOutputValue = false;
-        for (const auto& param : params) {
-            if (param.is_Label()) {
-                hasLabel = true;
-            } else if (const auto* reg = param.opt_RegSingle()) {
-                hasOutputValue |= reg->dir != AsmDirection::In;
-            } else if (const auto* reg = param.opt_Reg()) {
-                hasOutputValue |= bool(reg->valOut);
-            }
-        }
-        if (hasLabel && hasOutputValue) {
-            ERROR(sp, E0000, "using both label and output operands for inline assembly is unstable in Rust 1.90");
-        }
-
-        if (!clobberAbis.empty()) {
-            const auto& arch = TargetGetCurSpec(wb).arch.name;
-            const bool isX86 = arch == "x86" || arch == "x86_64";
-            const bool is64Bit = arch == "x86_64";
-            std::set<std::string> explicitOutputs;
-            for (const auto& param : params) {
-                const AsmRegisterSpec* spec = nullptr;
-                if (const auto* e = param.opt_Reg()) {
-                    if (e->dir != AsmDirection::In) {
-                        spec = &e->spec;
-                    }
-                } else if (const auto* e = param.opt_RegSingle()) {
-                    if (e->dir != AsmDirection::In) {
-                        spec = &e->spec;
-                    }
-                }
-                if (spec && spec->is_Explicit()) {
-                    explicitOutputs.insert(isX86 ? canonicalX86Register(spec->as_Explicit(), is64Bit) : spec->as_Explicit());
-                } else if (spec) {
-                    // A register-class output could land on a register the ABI
-                    // clobbers, so the operand has to name its register.
-                    ERROR(sp, E0000, "asm with `clobber_abi` must specify explicit registers for outputs");
-                }
-            }
-
-            std::set<std::string> added;
-            for (const auto& abi : clobberAbis) {
-                for (auto reg : getClobberAbiRegisters(wb, sp, abi)) {
-                    const auto canonical = isX86 ? canonicalX86Register(reg, is64Bit) : reg;
-                    if (explicitOutputs.count(canonical) || !added.insert(canonical).second) {
-                        continue;
-                    }
-                    names.push_back({});
-                    params.push_back(ASTExprNodeAsm2::Param::make_Reg({AsmDirection::LateOut, AsmRegisterSpec::make_Explicit(mv$(reg)), nullptr, nullptr}));
-                }
-            }
-        }
-
-        // - Sanity-check options
-        if (options.nomem && options.readonly) {
-            ERROR(sp, E0000, "asm! options `nomem` and `readonly` are mutually exclusive");
-        }
-        if (options.pure && !(options.nomem || options.readonly)) {
-            ERROR(sp, E0000, "asm! marked `pure` without `nomem` or `readonly`");
-        }
-        if (options.noreturn && hasOutputValue) {
-            ERROR(sp, E0000, "asm outputs are not allowed with the `noreturn` option");
-        }
-        //}
-        //}
-
-        unsigned nextIndex = 0;
-        std::vector<AsmLine> lines;
-        for (const auto& e : rawLines) {
-            const auto& sp = e.first;
-            const auto& text = e.second;
-
-            AsmLine line;
-
-            const char* c = text.c_str();
-            std::string curString;
-            while (*c) {
-                if (*c == '}') {
-                    c++;
-                    if (!*c) {
-                        ERROR(sp, E0000, "Unexpected EOF in asm! format string");
-                    }
-                    if (*c != '}') {
-                        ERROR(sp, E0000, "Closing braces in `asm!` need to be written as `}}`");
-                    }
-                    c++;
-                    curString += '}';
-                    continue;
-                }
-
-                if (*c == '{') {
-                    c++;
-                    if (*c == '{') {
-                        curString += '{';
-                        c++;
-                        continue;
-                    }
-
-                    std::string name;
-                    while (*c && *c != ':' && *c != '}') {
-                        name += *c;
-                        c++;
-                    }
-                    if (!*c) {
-                        ERROR(sp, E0000, "Unexpected EOF in asm! format string");
-                    }
-                    AsmLineFragment frag;
-                    if (name.empty()) {
-                        frag.index = nextIndex;
-                        if (frag.index >= params.size()) {
-                            ERROR(sp, E0000, "asm! format doesn't have enough arguments");
-                        }
-                        nextIndex++;
-                    } else if (std::isdigit(name[0])) {
-                        frag.index = std::stoul(name);
-                        if (frag.index >= params.size()) {
-                            ERROR(sp, E0000, "asm! format string index out of range - " << frag.index);
-                        }
-                    } else {
-                        auto it = std::find(names.begin(), names.end(), name);
-                        if (it == names.end()) {
-                            ERROR(sp, E0000, "asm! format string references undefined value - `" << name << "`");
-                        }
-                        frag.index = it - names.begin();
-                    }
-                    assert(*c == ':' || *c == '}');
-                    if (*c == ':') {
-                        c++;
-                        if (!*c) {
-                            ERROR(sp, E0000, "Unexpected EOF in asm! format string");
-                        }
-                        if (*c != '}') {
-                            frag.modifier = *c;
-                            c++;
-                        }
-                    }
-                    if (!*c) {
-                        ERROR(sp, E0000, "Unexpected EOF in asm! format string");
-                    }
-                    if (*c != '}') {
-                        ERROR(sp, E0000, "Expected '}' in asm! format string");
-                    }
-
-                    frag.before = std::move(curString);
-                    curString.clear();
-                    line.frags.push_back(std::move(frag));
-                } else {
-                    curString += *c;
-                }
-                c++;
-            }
-            line.trailing = std::move(curString);
-            lines.push_back(std::move(line));
-        }
-
-        // - Every operand has to be referenced by the template, unless it names
-        //   an explicit register (which the assembly can use directly).
-        {
-            std::set<unsigned> referenced;
-            for (const auto& line : lines) {
-                for (const auto& frag : line.frags) {
-                    referenced.insert(frag.index);
-                }
-            }
-            unsigned unused = 0;
-            for (size_t i = 0; i < params.size(); i++) {
-                if (referenced.count(static_cast<unsigned>(i))) {
-                    continue;
-                }
-                const AsmRegisterSpec* spec = nullptr;
-                if (const auto* e = params[i].opt_Reg()) {
-                    spec = &e->spec;
-                } else if (const auto* e = params[i].opt_RegSingle()) {
-                    spec = &e->spec;
-                }
-                if (spec && spec->is_Explicit()) {
-                    continue;
-                }
-                if (params[i].is_Label()) {
-                    continue;
-                }
-                unused += 1;
-            }
-            if (unused == 1) {
-                ERROR(sp, E0000, "unused asm argument");
-            } else if (unused > 1) {
-                ERROR(sp, E0000, "multiple unused asm arguments");
-            }
-        }
-
-        // - Sanity-check register modifiers
-        for (const auto& line : lines) {
-            for (const auto& frag : line.frags) {
-                if (frag.index == UINT_MAX) {
-                    ERROR(sp, E0000, "asm! marked `pure` without `nomem` or `readonly`");
-                }
-                if (frag.modifier != '\0') {
-                    // TODO: Check that the modifier is valid for the specifier
-                }
-            }
-        }
-
-        // Convert this into an AST node and insert as an intepolated expression
-        ASTExprNodeP rv = ASTExprNodeP(new ASTExprNodeAsm2{mv$(options), mv$(lines), mv$(params)});
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
-    }
-};
-
-class CGlobalAsmExpander: public ExpandProcMacro {
-public:
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        auto o = CAsmExpander().expand(sp, wb, crate, tt, mod);
-
-        auto node = o->getToken().takeFragNode();
-        auto* nodeAp = cast<ASTExprNodeAsm2>(node.get());
-        ASSERT_BUG(sp, nodeAp, "");
-        auto& nodeA = *nodeAp;
-
-        // `global_asm!` is not a call: only the syntax options apply to it.
-        {
-            const auto& o = nodeA.options;
-            const char* bad = o.pure ? "pure"
-                : o.nomem ? "nomem"
-                : o.readonly ? "readonly"
-                : o.preservesFlags ? "preserves_flags"
-                : o.noreturn ? "noreturn"
-                : o.nostack ? "nostack"
-                : nullptr;
-            if (bad) {
-                ERROR(sp, E0000, "the `" << bad << "` option cannot be used with `global_asm!`");
-            }
-        }
-
-        auto globalAsm = ASTGlobalAsm{std::move(nodeA.lines), {}, nodeA.options};
-        globalAsm.operands.reserve(nodeA.params.size());
-        for (auto& param : nodeA.params) {
-            switch (param.tag()) {
-                case ASTAsmParam::TAG_Const: {
-                    auto& expr = param.as_Const();
-                    globalAsm.operands.push_back(ASTGlobalAsm::Operand::make_Const(std::move(expr)));
-                    break;
-                }
-                case ASTAsmParam::TAG_Sym: {
-                    auto& path = param.as_Sym();
-                    globalAsm.operands.push_back(ASTGlobalAsm::Operand::make_Sym(std::move(path)));
-                    break;
-                }
-                case ASTAsmParam::TAG_Label: {
-                    ERROR(sp, E0000, "`label` is not allowed in `global_asm!`");
-                    break;
-                }
-                case ASTAsmParam::TAG_RegSingle: {
-                    ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
-                    break;
-                }
-                case ASTAsmParam::TAG_Reg: {
-                    ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
-                    break;
-                }
-            }
-        }
-        auto namedItem = ASTNamed<ASTItem>(sp, {}, ASTVisibility::makeBarePrivate(), "", ASTItem(std::move(globalAsm)));
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(Token::TagTakeIP(), InterpolatedFragment(std::move(namedItem))))));
-    }
-};
-
-class CNakedAsmExpander: public ExpandProcMacro {
-public:
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        auto o = CAsmExpander().expand(sp, wb, crate, tt, mod);
-
-        auto node = o->getToken().takeFragNode();
-        auto* nodeAp = cast<ASTExprNodeAsm2>(node.get());
-        ASSERT_BUG(sp, nodeAp, "");
-        nodeAp->options.naked = true;
-
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
-    }
-};
-
-
-class GenericAssertCaptureVisitor: public ASTNodeVisitor {
-public:
-    struct Capture {
-        ASTPath path;
-        RcString name;
-        RcString captureName;
-        RcString localBindName;
-        bool deferred;
-    };
-
-    ThinVector<Capture> captures;
-
-    GenericAssertCaptureVisitor(RcString coreCrate, Ident::Hygiene hygiene)
-        : coreCrate(coreCrate)
-        , hygiene(hygiene)
-    {
-    }
-
-    void manage(ASTExprNodeP& node) {
-        if (!node) {
-            return;
-        }
-        auto* previous = current;
-        current = &node;
-        node->visit(*this);
-        current = previous;
-    }
-
-    void visit(ASTExprNodeArray& node) override {
-        manage(node.size);
-        for (auto& value : node.values) {
-            manage(value);
-        }
-    }
-
-    void visit(ASTExprNodeBinOp& node) override {
-        const bool wasConsumed = consumed;
-        switch (node.type) {
-            case ASTExprNodeBinOp::CMPEQU:
-            case ASTExprNodeBinOp::CMPNEQU:
-            case ASTExprNodeBinOp::CMPLT:
-            case ASTExprNodeBinOp::CMPLTE:
-            case ASTExprNodeBinOp::CMPGT:
-            case ASTExprNodeBinOp::CMPGTE:
-            case ASTExprNodeBinOp::RANGE:
-            case ASTExprNodeBinOp::RANGE_INC:
-                consumed = false;
-                break;
-            default:
-                consumed = true;
-                break;
-        }
-        manage(node.left);
-        manage(node.right);
-        consumed = wasConsumed;
-    }
-
-    void visit(ASTExprNodeCallPath& node) override {
-        for (auto& arg : node.args) {
-            manage(arg);
-        }
-    }
-
-    void visit(ASTExprNodeCallMethod& node) override {
-        manage(node.val);
-        for (auto& arg : node.args) {
-            manage(arg);
-        }
-    }
-
-    void visit(ASTExprNodeCallObject& node) override {
-        for (auto& arg : node.args) {
-            manage(arg);
-        }
-    }
-
-    void visit(ASTExprNodeCast& node) override {
-        manage(node.value);
-    }
-
-    void visit(ASTExprNodeDeref& node) override {
-        const bool wasConsumed = consumed;
-        consumed = false;
-        manage(node.value);
-        consumed = wasConsumed;
-    }
-
-    void visit(ASTExprNodeIf& node) override {
-        for (auto& arm : node.arms) {
-            for (auto& condition : arm.conditions) {
-                manage(condition.value);
-            }
-        }
-    }
-
-    void visit(ASTExprNodeIndex& node) override {
-        manage(node.obj);
-        manage(node.idx);
-    }
-
-    void visit(ASTExprNodeLetBinding& node) override {
-        manage(node.value);
-    }
-
-    void visit(ASTExprNodeMatch& node) override {
-        manage(node.val);
-    }
-
-    void visit(ASTExprNodeUniOp& node) override {
-        const bool wasConsumed = consumed;
-        consumed = node.type != ASTExprNodeUniOp::REF;
-        manage(node.value);
-        consumed = wasConsumed;
-    }
-
-    void visit(ASTExprNodeNamedValue& node) override {
-        if (!node.path.isTrivial()) {
-            return;
-        }
-        const auto& name = node.path.asTrivial();
-        for (const auto& capture : captures) {
-            if (capture.path == node.path) {
-                return;
-            }
-        }
-
-        const auto captureIndex = captures.size();
-        const auto captureName = RcString::newInterned(FMT("__capture" << captureIndex));
-        const auto localBindName = RcString::newInterned(FMT("__local_bind" << captureIndex));
-        captures.push_back({ASTPath(node.path), name, captureName, localBindName, !consumed});
-
-        if (consumed) {
-            ASTExprNodeBlock captureBlock;
-            captureBlock.setSpan(node.span());
-            captureBlock.pushStmt(makeTryCapture(captureName, localBindName, node.span()));
-            captureBlock.pushTailExpr(makeGeneratedValue(localBindName, node.span()));
-            *current = ASTExprNodeP(box$(ASTExprNodeDeref(ASTExprNodeP(box$(captureBlock)))));
-        } else {
-            *current = ASTExprNodeP(box$(ASTExprNodeDeref(makeGeneratedValue(localBindName, node.span()))));
-        }
-        (*current)->setSpan(node.span());
-    }
-
-    void visit(ASTExprNodeStructLiteral& node) override {
-        for (auto& value : node.values) {
-            manage(value.value);
-        }
-        manage(node.baseValue);
-    }
-
-    void visit(ASTExprNodeTuple& node) override {
-        for (auto& value : node.values) {
-            manage(value);
-        }
-    }
-
-#define NO_GENERIC_ASSERT_CAPTURE(Node) void visit(Node&) override {}
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeBlock);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeAsyncBlock);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeGeneratorBlock);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeTry);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeMacro);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeAsm);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeAsm2);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeFlow);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeAssign);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeLoop);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeFor);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeWhile);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeWildcardPattern);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeInteger);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeFloat);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeBool);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeString);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeByteString);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeCString);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeSuffixedLiteral);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeClosure);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeStructLiteralPattern);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeField);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeTypeAnnotation);
-    NO_GENERIC_ASSERT_CAPTURE(ASTExprNodeMacroDefinition);
-#undef NO_GENERIC_ASSERT_CAPTURE
-
-    ASTExprNodeP makeTryCapture(RcString captureName, RcString localBindName, const Span& sp) const {
-        auto wrapper = ASTExprNodeP(box$(ASTExprNodeCallPath(
-            ASTPath(ASTAbsolutePath(coreCrate, {RcString::newInterned("asserting"), RcString::newInterned("Wrapper")})),
-            makeVec1(makeGeneratedValue(localBindName, sp))
-        )));
-        wrapper->setSpan(sp);
-
-        auto wrapperRef = ASTExprNodeP(box$(ASTExprNodeUniOp(ASTExprNodeUniOp::REF, ASTExprNodeP(wrapper.release()))));
-        wrapperRef->setSpan(sp);
-        auto captureRef = ASTExprNodeP(box$(ASTExprNodeUniOp(ASTExprNodeUniOp::REFMUT, makeGeneratedValue(captureName, sp))));
-        captureRef->setSpan(sp);
-        auto call = ASTExprNodeP(box$(ASTExprNodeCallMethod(
-            ASTExprNodeP(wrapperRef.release()),
-            ASTPathNode(hygiene, RcString::newInterned("try_capture")),
-            makeVec1(ASTExprNodeP(captureRef.release()))
-        )));
-        call->setSpan(sp);
-        return call;
-    }
-
-private:
-    ASTPath generatedPath(RcString name) const {
-        return ASTPath::newRelative(hygiene, {ASTPathNode(hygiene, name)});
-    }
-
-    ASTExprNodeP makeGeneratedValue(RcString name, const Span& sp) const {
-        auto value = ASTExprNodeP(box$(ASTExprNodeNamedValue(generatedPath(name))));
-        value->setSpan(sp);
-        return value;
-    }
-
-    RcString coreCrate;
-    Ident::Hygiene hygiene;
-    ASTExprNodeP* current = nullptr;
-    bool consumed = true;
-};
-
-class CExpanderAssert: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-        lex.parseState().module = &mod;
-
-        // assertion condition
-        auto n = ParseExpr0(lex);
-        ASSERT_BUG(sp, n, "No expression returned");
-
-        ::std::vector<TokenTree> toks;
-        const auto expansionHygiene = Ident::Hygiene::newScope(wb.id, *wb.pool);
-
-        bool closeOuterBlock = false;
-
-        GET_TOK(tok, lex);
-        if (tok == TOK_COMMA && lex.lookahead(0) == TOK_EOF) {
-            GET_TOK(tok, lex);
-        }
-        if (tok == TOK_COMMA) {
-            toks.push_back(Token(TOK_RWORD_IF));
-            toks.push_back(Token(TOK_EXCLAM));
-            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
-            toks.push_back(Token(TOK_BRACE_OPEN));
-            // User-provided message
-            toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
-            toks.push_back(Token(TOK_EXCLAM));
-            toks.push_back(Token(TOK_PAREN_OPEN));
-
-            auto fmt = ParseExpr0(lex);
-            // If there's a comma, it's a formatting sequence
-            if (lex.getTokenIf(TOK_COMMA)) {
-                toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, fmt.release())));
-
-                while (lex.lookahead(0) != TOK_EOF) {
-                    toks.push_back(TOK_COMMA);
-
-                    if ((lex.lookahead(0) == TOK_IDENT || Token::typeIsRword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
-                        toks.push_back(lex.getToken());
-                        toks.push_back(lex.getToken());
-                        toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
-                    } else {
-                        toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
-                    }
-                    if (lex.lookahead(0) != TOK_COMMA) {
-                        break;
-                    }
-                    GET_CHECK_TOK(tok, lex, TOK_COMMA);
-                }
-            } else {
-                toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, fmt.release())));
-            }
-
-            GET_CHECK_TOK(tok, lex, TOK_EOF);
-            toks.push_back(Token(TOK_PAREN_CLOSE));
-        } else if (tok == TOK_EOF) {
-            ::std::stringstream ss;
-            n->print(ss);
-            auto conditionText = ss.str();
-
-            const auto genericAssert = RcString::newInterned("generic_assert");
-            if (crate.features.count(genericAssert) != 0) {
-                if (n->nodeKind() == ASTExprNodeBinOp::kind && conditionText.size() >= 2) {
-                    conditionText.erase(conditionText.begin());
-                    conditionText.pop_back();
-                }
-                GenericAssertCaptureVisitor captureVisitor(crate.extCratenameCore, expansionHygiene);
-                captureVisitor.manage(n);
-
-                toks.push_back(Token(TOK_BRACE_OPEN));
-                closeOuterBlock = true;
-
-                toks.push_back(Token(TOK_RWORD_USE));
-                toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, {RcString::newInterned("asserting"), RcString::newInterned("TryCaptureGeneric")})))));
-                toks.push_back(Token(TOK_SEMICOLON));
-                toks.push_back(Token(TOK_RWORD_USE));
-                toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, {RcString::newInterned("asserting"), RcString::newInterned("TryCapturePrintable")})))));
-                toks.push_back(Token(TOK_SEMICOLON));
-
-                for (size_t i = 0; i < captureVisitor.captures.size(); i++) {
-                    const auto& capture = captureVisitor.captures[i];
-                    toks.push_back(Token(TOK_RWORD_LET));
-                    toks.push_back(Token(TOK_RWORD_MUT));
-                    toks.push_back(Token(TOK_IDENT, capture.captureName));
-                    toks.push_back(Token(TOK_EQUAL));
-                    toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, {RcString::newInterned("asserting"), RcString::newInterned("Capture"), RcString::newInterned("new")})))));
-                    toks.push_back(Token(TOK_PAREN_OPEN));
-                    toks.push_back(Token(TOK_PAREN_CLOSE));
-                    toks.push_back(Token(TOK_SEMICOLON));
-
-                    toks.push_back(Token(TOK_RWORD_LET));
-                    toks.push_back(Token(TOK_IDENT, capture.localBindName));
-                    toks.push_back(Token(TOK_EQUAL));
-                    toks.push_back(Token(TOK_AMP));
-                    toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(capture.path), sp)));
-                    toks.push_back(Token(TOK_SEMICOLON));
-                }
-
-                toks.push_back(Token(TOK_RWORD_IF));
-                toks.push_back(Token(TOK_EXCLAM));
-                toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
-                toks.push_back(Token(TOK_BRACE_OPEN));
-
-                for (size_t i = 0; i < captureVisitor.captures.size(); i++) {
-                    const auto& capture = captureVisitor.captures[i];
-                    if (!capture.deferred) {
-                        continue;
-                    }
-                    toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, captureVisitor.makeTryCapture(capture.captureName, capture.localBindName, sp).release())));
-                    toks.push_back(Token(TOK_SEMICOLON));
-                }
-
-                for (size_t i = 0; i < conditionText.size(); i++) {
-                    if (conditionText[i] == '{' || conditionText[i] == '}') {
-                        conditionText.insert(conditionText.begin() + i, conditionText[i]);
-                        i += 1;
-                    }
-                }
-                auto message = FMT("Assertion failed: " << conditionText);
-                if (!captureVisitor.captures.empty()) {
-                    message += "\nWith captures:\n";
-                    for (const auto& capture : captureVisitor.captures) {
-                        message += FMT("  " << capture.name << " = {:?}\n");
-                    }
-                }
-                toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
-                toks.push_back(Token(TOK_EXCLAM));
-                toks.push_back(Token(TOK_PAREN_OPEN));
-                toks.push_back(Token(TOK_STRING, message, {}));
-                for (size_t i = 0; i < captureVisitor.captures.size(); i++) {
-                    toks.push_back(Token(TOK_COMMA));
-                    toks.push_back(Token(TOK_IDENT, captureVisitor.captures[i].captureName));
-                }
-                toks.push_back(Token(TOK_PAREN_CLOSE));
-            } else {
-                toks.push_back(Token(TOK_RWORD_IF));
-                toks.push_back(Token(TOK_EXCLAM));
-                toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
-                toks.push_back(Token(TOK_BRACE_OPEN));
-                // Auto-generated message
-                toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
-                toks.push_back(Token(TOK_EXCLAM));
-                toks.push_back(Token(TOK_PAREN_OPEN));
-                toks.push_back(Token(TOK_STRING, std::string("assertion failed: {}"), {}));
-                toks.push_back(Token(TOK_COMMA));
-                toks.push_back(Token(TOK_STRING, ss.str(), {}));
-                toks.push_back(Token(TOK_PAREN_CLOSE));
-            }
-        } else {
-            parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
-        }
-
-        toks.push_back(Token(TOK_BRACE_CLOSE));
-        if (closeOuterBlock) {
-            toks.push_back(Token(TOK_BRACE_CLOSE));
-        }
-
-        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, expansionHygiene, mv$(toks))));
-    }
-};
-
-class CExpanderCompileError: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        ERROR(sp, E0000, "compile_error! " << tt);
-    }
-};
-
-
-class CConcatExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-
-        ::std::string rv;
-        do {
-            if (LOOK_AHEAD(lex) == TOK_EOF) {
-                GET_TOK(tok, lex);
-                break;
-            }
-
-            auto v = ParseExpr0(lex);
-            ExpandBareExpr(wb, crate, mod, v);
-            // TODO: Visitor instead
-            if (auto* vp = cast<ASTExprNodeString>(v.get())) {
-                rv += vp->value;
-            } else if (auto* vp = cast<ASTExprNodeInteger>(v.get())) {
-                if (vp->datatype == CORETYPE_CHAR) {
-                    rv += Codepoint{static_cast<u32>(vp->value.truncateU64())};
-                } else {
-                    rv += FMT(vp->value);
-                }
-            } else if (auto* vp = cast<ASTExprNodeFloat>(v.get())) {
-                // `concat!` uses the literal as written, which always has a
-                // decimal point.
-                rv += formatFloatValueForToken(vp->value);
-            } else if (auto* vp = cast<ASTExprNodeBool>(v.get())) {
-                rv += (vp->value ? "true" : "false");
-            } else if (auto* vp = cast<ASTExprNodeUniOp>(v.get())) {
-                // `concat!(-1.0)`: a negated literal is a unary operation, but
-                // it is still written as one literal.
-                const auto* inner = vp->value.get();
-                if (vp->type != ASTExprNodeUniOp::NEGATE) {
-                    ERROR(sp, E0000, "Unexpected expression type in concat! argument");
-                } else if (const auto* iv = cast<const ASTExprNodeInteger>(inner)) {
-                    rv += FMT("-" << iv->value);
-                } else if (const auto* fv = cast<const ASTExprNodeFloat>(inner)) {
-                    rv += "-";
-                    rv += formatFloatValueForToken(fv->value);
-                } else {
-                    ERROR(sp, E0000, "Unexpected expression type in concat! argument");
-                }
-            } else {
-                ERROR(sp, E0000, "Unexpected expression type in concat! argument");
-            }
-        } while (GET_TOK(tok, lex) == TOK_COMMA);
-        if (tok.type() != TOK_EOF) {
-            parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
-        }
-
-        return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_STRING, mv$(rv), {}))));
-    }
-};
-
-class CConcatBytesExpander: public ExpandProcMacro {
-    static char getArrayByte(const Span& sp, const ASTExprNode& node) {
-        const auto* value = cast<const ASTExprNodeInteger>(&node);
-        if (!value || (value->datatype != CORETYPE_ANY && value->datatype != CORETYPE_U8)
-            || !value->value.isU64() || value->value.truncateU64() > 0xff) {
-            ERROR(sp, E0000, "concat_bytes! array elements must be byte or u8 literals");
-        }
-        return static_cast<char>(value->value.truncateU64());
-    }
-
-    static void append(const Span& sp, ::std::string& output, const ASTExprNode& node) {
-        if (const auto* value = cast<const ASTExprNodeInteger>(&node)) {
-            if (value->datatype != CORETYPE_U8 || !value->value.isU64() || value->value.truncateU64() > 0xff) {
-                ERROR(sp, E0000, "concat_bytes! arguments must be byte string, byte, or byte-array literals");
-            }
-            output.push_back(static_cast<char>(value->value.truncateU64()));
-            return;
-        }
-        if (const auto* value = cast<const ASTExprNodeByteString>(&node)) {
-            output += value->value;
-            return;
-        }
-        if (const auto* value = cast<const ASTExprNodeArray>(&node)) {
-            if (!value->size) {
-                for (const auto& element : value->values) {
-                    output.push_back(getArrayByte(sp, *element));
-                }
-                return;
-            }
-
-            const auto* count = cast<const ASTExprNodeInteger>(value->size.get());
-            if (!count || !count->value.isU64()) {
-                ERROR(sp, E0000, "concat_bytes! repeat count must be an integer literal");
-            }
-            const auto byte = getArrayByte(sp, *value->values.at(0));
-            output.append(static_cast<size_t>(count->value.truncateU64()), byte);
-            return;
-        }
-        ERROR(sp, E0000, "concat_bytes! arguments must be byte string, byte, or byte-array literals");
-    }
-
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-
-        ::std::string output;
-        do {
-            if (LOOK_AHEAD(lex) == TOK_EOF) {
-                GET_TOK(tok, lex);
-                break;
-            }
-
-            auto value = ParseExpr0(lex);
-            ExpandBareExpr(wb, crate, mod, value);
-            append(sp, output, *value);
-        } while (GET_TOK(tok, lex) == TOK_COMMA);
-        if (tok.type() != TOK_EOF) {
-            parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
-        }
-
-        return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_BYTESTRING, mv$(output), {}))));
-    }
-};
-
-class CConcatIdentsExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-
-        ::std::string rv;
-
-        do {
-            if (LOOK_AHEAD(lex) == TOK_EOF) {
-                GET_TOK(tok, lex);
-                break;
-            }
-
-            GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            rv += tok.ident().name.c_str();
-
-        } while (GET_TOK(tok, lex) == TOK_COMMA);
-        if (tok.type() != TOK_EOF) {
-            parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
-        }
-
-        return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_IDENT, Ident(lex.getHygiene(), RcString::newInterned(rv))))));
-    }
-};
-
-
 namespace {
-    // Read a string out of the input stream
-    ::std::string getString(const Span& sp, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const TokenTree& tt) {
+    std::string getString(const Span& sp, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const TokenTree& tt) {
         auto lex = TTStream(sp, ParseState(), tt);
         lex.parseState().wb = &wb;
 
@@ -1506,213 +577,7 @@ namespace {
     }
 }
 
-class CExpanderEnv: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        ::std::string varname = getString(sp, wb, crate, mod, tt);
-
-        const char* varValCstr = getenv(varname.c_str());
-        if (!varValCstr) {
-            ERROR(sp, E0000, "Environment variable '" << varname << "' not defined");
-        }
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, ::std::string(varValCstr), {}))));
-    }
-};
-
-class CExpanderOptionEnv: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        ::std::string varname = getString(sp, wb, crate, mod, tt);
-        ::std::vector<TokenTree> rv;
-
-        const char* varValCstr = getenv(varname.c_str());
-        if (!varValCstr) {
-            rv.reserve(7);
-            rv.push_back(Token(TOK_IDENT, RcString::newInterned("None")));
-            rv.push_back(Token(TOK_DOUBLE_COLON));
-            rv.push_back(Token(TOK_LT));
-            rv.push_back(Token(TOK_AMP));
-            rv.push_back(Token(TOK_LIFETIME, RcString::newInterned("static")));
-            rv.push_back(Token(TOK_IDENT, RcString::newInterned("str")));
-            rv.push_back(Token(TOK_GT));
-        } else {
-            rv.reserve(4);
-            rv.push_back(Token(TOK_IDENT, RcString::newInterned("Some")));
-            rv.push_back(Token(TOK_PAREN_OPEN));
-            rv.push_back(Token(TOK_STRING, ::std::string(varValCstr), {}));
-            rv.push_back(Token(TOK_PAREN_CLOSE));
-        }
-        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, {}, mv$(rv))));
-    }
-};
-
-
-class CExpanderFile: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, ::std::string(SourceLocation(sp).filename.c_str()), {}))));
-    }
-};
-
-class CExpanderLine: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(SourceLocation(sp).line), CORETYPE_U32))));
-    }
-};
-
-class CExpanderColumn: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(SourceLocation(sp).column), CORETYPE_U32))));
-    }
-};
-
-class CExpanderUnstableColumn: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(SourceLocation(sp).column), CORETYPE_U32))));
-    }
-};
-
-class CExpanderModulePath: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        ::std::string pathStr;
-        // A crate may be named after a reserved word, and the path names it the
-        // only way it could be written: `r#override`.
-        if (LexFindReservedWord(crate.crateNameSet, crate.edition) != TOK_NULL) {
-            pathStr += "r#";
-        }
-        pathStr += crate.crateNameSet;
-        for (const auto& comp : mod.path().nodes) {
-            // Items declared in a block are kept in anonymous AST modules.
-            // Those are an implementation detail, not part of the lexical
-            // module path exposed by Rust.
-            if (comp.c_str()[0] == '#') {
-                continue;
-            }
-            pathStr += "::";
-            pathStr += comp.c_str();
-        }
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(pathStr), {}))));
-    }
-};
-
-
 namespace {
-
-    /// Options for a formatting fragment
-    struct FmtArgs {
-        enum class Align {
-            Unspec,
-            Left,
-            Center,
-            Right,
-        };
-        enum class Sign {
-            Unspec,
-            Plus,
-            Minus,
-        };
-        enum class Debug {
-            Normal,
-            LowerHex,
-            UpperHex,
-        };
-
-        Align align = Align::Unspec;
-        u32 alignChar = ' ';
-
-        Sign sign = Sign::Unspec;
-        bool alternate = false;
-        bool zeroPad = false;
-
-        Debug debugTy = Debug::Normal;
-
-        bool widthIsArg = false;
-        unsigned int width = 0;
-
-        /// `{:.0}` is a precision of zero, not an omitted precision.
-        bool precSet = false;
-        bool precIsArg = false;
-        unsigned int prec = 0;
-
-        bool operator==(const FmtArgs& x) const {
-            return ::std::memcmp(this, &x, sizeof(*this)) == 0;
-        }
-
-        bool operator!=(const FmtArgs& x) const {
-#define CMP(f)    \
-    if (f != x.f) \
-    return true
-            CMP(align);
-            CMP(alignChar);
-            CMP(sign);
-            CMP(alternate);
-            CMP(zeroPad);
-            // `{:x?}` differs from `{:?}` only here, and the simple formatting
-            // path ignores everything this comparison does not name.
-            CMP(debugTy);
-            CMP(widthIsArg);
-            CMP(width);
-            CMP(precSet);
-            CMP(precIsArg);
-            CMP(prec);
-            return false;
-        }
-
-        friend ::std::ostream& operator<<(::std::ostream& os, const FmtArgs& x) {
-            os << "Align(";
-            switch (x.align) {
-                case Align::Unspec:
-                    os << "-";
-                    break;
-                case Align::Left:
-                    os << "<";
-                    break;
-                case Align::Center:
-                    os << "^";
-                    break;
-                case Align::Right:
-                    os << ">";
-                    break;
-            }
-            os << "'" << x.alignChar << "'";
-            os << ")";
-            os << "Sign(";
-            switch (x.sign) {
-                case Sign::Unspec:
-                    os << " ";
-                    break;
-                case Sign::Plus:
-                    os << "+";
-                    break;
-                case Sign::Minus:
-                    os << "-";
-                    break;
-            }
-            if (x.alternate) {
-                os << "#";
-            }
-            if (x.zeroPad) {
-                os << "0";
-            }
-            os << ")";
-            os << "Width(" << (x.widthIsArg ? "$" : "") << x.width << ")";
-            os << "Prec(" << (x.precIsArg ? "$" : "") << x.prec << ")";
-            return os;
-        }
-    };
-
-    /// A single formatting fragment
-    struct FmtFrag {
-        /// Literal text preceding the fragment
-        ::std::string leadingText;
-
-        /// Argument index used
-        unsigned int argIndex;
-
-        /// Trait to use for formatting
-        const char* traitName;
-
-        // TODO: Support case where this hasn't been edited (telling the formatter that it has nothing to apply)
-        /// Options
-        FmtArgs args;
-    };
 
     u32 parseUtf8(const char* s, int& outLen) {
         u8 v1 = s[0];
@@ -1720,11 +585,9 @@ namespace {
             outLen = 1;
             return v1;
         } else if ((v1 & 0xC0) == 0x80) {
-            // Invalid (continuation)
             outLen = 1;
             return 0xFFFE;
         } else if ((v1 & 0xE0) == 0xC0) {
-            // Two bytes
             outLen = 2;
 
             u8 e1 = s[1];
@@ -1735,7 +598,6 @@ namespace {
             u32 outval = ((v1 & 0x1F) << 6) | ((e1 & 0x3F) << 0);
             return outval;
         } else if ((v1 & 0xF0) == 0xE0) {
-            // Three bytes
             outLen = 3;
             u8 e1 = s[1];
             if ((e1 & 0xC0) != 0x80) {
@@ -1749,7 +611,6 @@ namespace {
             u32 outval = ((v1 & 0x0F) << 12) | ((e1 & 0x3F) << 6) | ((e2 & 0x3F) << 0);
             return outval;
         } else if ((v1 & 0xF8) == 0xF0) {
-            // Four bytes
             outLen = 4;
             u8 e1 = s[1];
             if ((e1 & 0xC0) != 0x80) {
@@ -1767,32 +628,23 @@ namespace {
             u32 outval = ((v1 & 0x07) << 18) | ((e1 & 0x3F) << 12) | ((e2 & 0x3F) << 6) | ((e3 & 0x3F) << 0);
             return outval;
         } else {
-            UNREACHABLE(); // Should be impossible.
+            UNREACHABLE();
         }
     }
 
-    /// Parse a format string into a sequence of fragments.
-    ///
-    /// Returns a list of fragments, and the remaining free text after the last format sequence
-    ::std::tuple<::std::vector<FmtFrag>, ::std::string> parseFormatString(const Span& sp, const ::std::string& formatString, ::std::map<RcString, unsigned int>& named, unsigned int nFree, std::vector<TokenTree>& namedArgs, const Ident::Hygiene& hygiene) {
+    std::tuple<std::vector<FmtFrag>, std::string> parseFormatString(const Span& sp, const std::string& formatString, std::map<RcString, unsigned int>& named, unsigned int nFree, std::vector<TokenTree>& namedArgs, const Ident::Hygiene& hygiene) {
         unsigned int nextFree = 0;
-        // A named argument can also be reached by position: `{}` counts through the
-        // arguments in source order, and named ones come last. Only the arguments
-        // actually written at the call site count -- the implicit captures that
-        // `getNamed` appends below are not addressable that way.
         const unsigned int nPositional = nFree + static_cast<unsigned>(namedArgs.size());
 
-        ::std::vector<FmtFrag> frags;
-        ::std::string curLiteral;
+        std::vector<FmtFrag> frags;
+        std::string curLiteral;
 
         auto getNamed = [&](RcString ident) -> unsigned {
             auto it = named.find(ident);
             if (it == named.end()) {
-                // Add an implicit named argument
                 it = named.insert(std::make_pair(ident, static_cast<unsigned>(namedArgs.size()))).first;
                 // TODO: Create a token with span information pointing to this location in the string.
                 if (ident == "self") {
-                    // Technically, `self` needs hygiene, but trustme doesn't do that
                     namedArgs.push_back(Token(TOK_RWORD_SELF));
                 } else {
                     namedArgs.push_back(Token(TOK_IDENT, Ident(hygiene, ident)));
@@ -1814,38 +666,31 @@ namespace {
                     s++;
                     if (*s != '}') {
                         // TODO: Error? Warning?
-                        s--; // Step backwards, just in case
+                        s--;
                     }
-                    // Doesn't need escaping
                     curLiteral += '}';
                 } else {
                     curLiteral += *s;
                 }
             } else {
                 s++;
-                // Escaped '{' as "{{"
                 if (*s == '{') {
                     curLiteral += '{';
                     continue;
                 }
-                // `{ }` names the next argument just like `{}` does: the space is
-                // padding in the format string, not part of the argument name.
                 skipWhitespace();
 
-                // Debugging: A view of the formatting fragment
                 const char* s2 = s;
                 while (s2 < sEnd && *s2 != '}') {
                     s2++;
                 }
-                auto fmtFragStr = ::std::string_view{s, s2};
+                auto fmtFragStr = std::string_view{s, s2};
 
                 unsigned int index = ~0u;
                 const char* traitName;
                 FmtArgs args;
 
-                // Formatting parameter
                 if (*s != ':' && *s != '}') {
-                    // Parse either an integer or an identifer
                     if (isdigit(*s)) {
                         unsigned int argIdx = 0;
                         do {
@@ -1865,19 +710,13 @@ namespace {
                         index = getNamed(RcString::newInterned(start, s - start));
                     }
                 } else {
-                    // Leave (for now)
-                    // - If index is ~0u at the end of this block, it's set to the next arg
-                    // - This allows {:.*} to format correctly (taking <prec> then <arg>)
                 }
 
                 skipWhitespace();
 
-                // If next character is ':', parse extra information
                 if (*s == ':') {
-                    s++; // eat ':'
+                    s++;
 
-                    // Alignment
-                    // - Padding character, a single unicode codepoint followed by '<'/'^'/'>'
                     {
                         int nextCI;
                         u32 ch = parseUtf8(s, nextCI);
@@ -1899,7 +738,6 @@ namespace {
                     } else {
                     }
 
-                    // Sign
                     if (*s == '+') {
                         args.sign = FmtArgs::Sign::Plus;
                         s++;
@@ -1916,16 +754,15 @@ namespace {
                     } else {
                     }
 
-                    if (*s == '0' && s[1] != '$') { // Special case `0$` to be an argument index, instead of zero pad
+                    if (*s == '0' && s[1] != '$') {
                         args.zeroPad = true;
                         s++;
                     } else {
                     }
 
-                    // Padded width
-                    if (::std::isdigit(*s) /*|| *s == '*'*/) {
+                    if (std::isdigit(*s) /*|| *s == '*'*/) {
                         unsigned int val = 0;
-                        while (::std::isdigit(*s)) {
+                        while (std::isdigit(*s)) {
                             val *= 10;
                             val += *s - '0';
                             s++;
@@ -1937,10 +774,7 @@ namespace {
                             s++;
                         } else {
                         }
-                    } else if (::std::isalpha(*s) || *s == '_') {
-                        // Parse an ident and if the next character is $, convert to named
-                        // - Otherwise keep the ident around for the formatter
-
+                    } else if (std::isalpha(*s) || *s == '_') {
                         const char* start = s;
                         while (isalnum(*s) || *s == '_' || (*s < 0 || *s > 127)) {
                             s++;
@@ -1955,11 +789,9 @@ namespace {
                         }
                     } else {
                     }
-                    // Precision
                     if (*s == '.') {
                         s++;
                         args.precSet = true;
-                        // '*' - Use next argument
                         if (*s == '*') {
                             args.precIsArg = true;
                             if (nextFree == nPositional) {
@@ -1968,9 +800,9 @@ namespace {
                             args.prec = nextFree;
                             nextFree++;
                             s++;
-                        } else if (::std::isdigit(*s)) {
+                        } else if (std::isdigit(*s)) {
                             unsigned int val = 0;
-                            while (::std::isdigit(*s)) {
+                            while (std::isdigit(*s)) {
                                 val *= 10;
                                 val += *s - '0';
                                 s++;
@@ -1982,10 +814,7 @@ namespace {
                                 s++;
                             } else {
                             }
-                        } else if (::std::isalpha(*s) || *s == '_') {
-                            // Parse an ident and if the next character is $, convert to named
-                            // - Otherwise keep the ident around for the formatter
-
+                        } else if (std::isalpha(*s) || *s == '_') {
                             const char* start = s;
                             while (s != sEnd && (isalnum(*s) || *s == '_' || (*s < 0 || *s > 127))) {
                                 s++;
@@ -1999,7 +828,6 @@ namespace {
                                 s = start;
                             }
                         } else {
-                            // Wut?
                             ERROR(sp, E0000, "Unexpected character in precision");
                         }
                     }
@@ -2010,8 +838,6 @@ namespace {
                         ERROR(sp, E0000, "Unexpected end of formatting string");
                     }
 
-                    // Parse ident?
-                    // - Lazy way is to just handle a single char and ensure that it is just a single char
                     if (s[0] == '}') {
                         traitName = "Display";
                     } else if (s[1] == '}') {
@@ -2053,9 +879,6 @@ namespace {
                         }
                         assert(*s == '}');
                     } else {
-                        // The single-character forms above leave `s` on the
-                        // closing brace; these two must do the same, or the rest
-                        // of the specifier is copied into the output as text.
                         if (strncmp(s, "x?}", 3) == 0) {
                             args.debugTy = FmtArgs::Debug::LowerHex;
                             traitName = "Debug";
@@ -2072,11 +895,9 @@ namespace {
                     if (*s != '}') {
                         ERROR(sp, E0000, "Malformed formatting fragment, unexpected " << *s);
                     }
-                    // Otherwise, it's just a trivial Display call
                     traitName = "Display";
                 }
 
-                // Set index if unspecified
                 if (index == ~0u) {
                     if (nextFree == nPositional) {
                         ERROR(sp, E0000, "Not enough arguments passed, expected at least " << nPositional + 1);
@@ -2089,7 +910,7 @@ namespace {
             }
         }
 
-        return ::std::make_tuple(mv$(frags), mv$(curLiteral));
+        return std::make_tuple(mv$(frags), mv$(curLiteral));
     }
 }
 
@@ -2098,7 +919,7 @@ namespace {
         return Token(TOK_IDENT, RcString::newInterned(s));
     }
 
-    void pushPath(::std::vector<TokenTree>& toks, const ASTCrate& crate, ::std::initializer_list<const char*> il) {
+    void pushPath(std::vector<TokenTree>& toks, const ASTCrate& crate, std::initializer_list<const char*> il) {
         ASTAbsolutePath ap;
         // TODO: Inject a path fragment (interpolated path), to avoid edition parsing quirks
         switch (crate.loadStd) {
@@ -2120,24 +941,23 @@ namespace {
         toks.push_back(Token(InterpolatedFragment(std::move(ap))));
     }
 
-    void pushToks(::std::vector<TokenTree>& toks, Token t1) {
+    void pushToks(std::vector<TokenTree>& toks, Token t1) {
         toks.push_back(mv$(t1));
     }
 
-    void pushToks(::std::vector<TokenTree>& toks, Token t1, Token t2) {
+    void pushToks(std::vector<TokenTree>& toks, Token t1, Token t2) {
         toks.push_back(mv$(t1));
         toks.push_back(mv$(t2));
     }
 
-    //}
-    void pushToks(::std::vector<TokenTree>& toks, Token t1, Token t2, Token t3, Token t4) {
+    void pushToks(std::vector<TokenTree>& toks, Token t1, Token t2, Token t3, Token t4) {
         toks.push_back(mv$(t1));
         toks.push_back(mv$(t2));
         toks.push_back(mv$(t3));
         toks.push_back(mv$(t4));
     }
 
-    ::std::unique_ptr<TokenStream> expandFormatArgs(const Span& sp, const WireBoard& wb, const ASTCrate& crate, TTStream& lex, bool addNewline) {
+    std::unique_ptr<TokenStream> expandFormatArgs(const Span& sp, const WireBoard& wb, const ASTCrate& crate, TTStream& lex, bool addNewline) {
         Token tok;
 
         auto formatStringNode = ParseExprVal(lex);
@@ -2152,18 +972,16 @@ namespace {
         const auto& formatString = formatStringNp->value;
         auto h = formatStringNp->hygiene;
 
-        ::std::map<RcString, unsigned int> namedArgsIndex;
-        ::std::vector<TokenTree> namedArgs;
-        ::std::vector<TokenTree> freeArgs;
+        std::map<RcString, unsigned int> namedArgsIndex;
+        std::vector<TokenTree> namedArgs;
+        std::vector<TokenTree> freeArgs;
 
-        // - Parse the arguments
         while (GET_TOK(tok, lex) == TOK_COMMA) {
             if (lex.lookahead(0) == TOK_EOF) {
                 GET_TOK(tok, lex);
                 break;
             }
 
-            // - Named parameters
             if ((lex.lookahead(0) == TOK_IDENT || Token::typeIsRword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
                 GET_TOK(tok, lex);
                 auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
@@ -2172,35 +990,30 @@ namespace {
 
                 auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
 
-                auto insRv = namedArgsIndex.insert(::std::make_pair(mv$(name), static_cast<unsigned>(namedArgs.size())));
+                auto insRv = namedArgsIndex.insert(std::make_pair(mv$(name), static_cast<unsigned>(namedArgs.size())));
                 if (insRv.second == false) {
                     ERROR(sp, E0000, "Duplicate definition of named argument `" << insRv.first->first << "`");
                 }
                 namedArgs.push_back(mv$(exprTt));
-            }
-            // - Free parameters
-            else {
+            } else {
                 auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
                 freeArgs.push_back(mv$(exprTt));
             }
         }
         CHECK_TOK(tok, TOK_EOF);
 
-        // - Parse the format string
-        ::std::vector<FmtFrag> fragments;
-        ::std::string tail;
-        ::std::tie(fragments, tail) = parseFormatString(formatStringSp, formatString, namedArgsIndex, freeArgs.size(), namedArgs, h);
+        std::vector<FmtFrag> fragments;
+        std::string tail;
+        std::tie(fragments, tail) = parseFormatString(formatStringSp, formatString, namedArgsIndex, freeArgs.size(), namedArgs, h);
         if (addNewline) {
             tail += "\n";
         }
-        // `-Zfmt-debug=none` prints nothing for a `Debug` placeholder, so the
-        // fragment goes and the literal text before it joins the next one.
         if (lex.parseState().wb->settings->fmtDebug == Settings::FmtDebug::None) {
-            ::std::vector<FmtFrag> kept;
-            ::std::string pending;
+            std::vector<FmtFrag> kept;
+            std::string pending;
             for (auto& frag : fragments) {
                 pending += frag.leadingText;
-                if (::std::strcmp(frag.traitName, "Debug") == 0) {
+                if (std::strcmp(frag.traitName, "Debug") == 0) {
                     continue;
                 }
                 frag.leadingText = mv$(pending);
@@ -2221,9 +1034,7 @@ namespace {
             }
         }
 
-        ::std::vector<TokenTree> toks;
-        // This should expand to a `match (a, b, c) { (ref _0, ref _1, ref _2) => ... }` to ensure that the values live long enough?
-        // - Also avoids name collisions
+        std::vector<TokenTree> toks;
         toks.push_back(TokenTree(TOK_RWORD_MATCH));
         toks.push_back(TokenTree(TOK_PAREN_OPEN));
         for (auto& arg : freeArgs) {
@@ -2247,9 +1058,6 @@ namespace {
         toks.push_back(TokenTree(TOK_FATARROW));
         toks.push_back(TokenTree(TOK_BRACE_OPEN));
 
-        // Save fragments into a static
-        // `static FRAGMENTS: [&'static str; N] = [...];`
-        // - Contains N+1 entries, where N is the number of fragments
         {
             toks.push_back(TokenTree(TOK_RWORD_STATIC));
             toks.push_back(ident("FRAGMENTS"));
@@ -2277,13 +1085,11 @@ namespace {
         }
 
         struct H {
-            static void argumentList(::std::vector<TokenTree>& toks, const ::std::vector<FmtFrag>& fragments, const ASTCrate& crate) {
+            static void argumentList(std::vector<TokenTree>& toks, const std::vector<FmtFrag>& fragments, const ASTCrate& crate) {
                 toks.push_back(TokenTree(TOK_AMP));
                 toks.push_back(TokenTree(TOK_SQUARE_OPEN));
                 for (const auto& frag : fragments) {
-                    // In 1.90.0, there's a collection of functions like `new_display`, one for each trait
-                    // Hacky option: Convert `LowerHex` into `_lower_hex`
-                    ::std::stringstream newFnSs;
+                    std::stringstream newFnSs;
                     newFnSs << "new";
                     for (const char* s = frag.traitName; *s; s++) {
                         if (isupper(*s)) {
@@ -2303,9 +1109,7 @@ namespace {
         };
 
         if (isSimple) {
-            // ::fmt::Arguments::new_v1
             pushPath(toks, crate, {"fmt", "Arguments", "new_v1"});
-            // (
             toks.push_back(TokenTree(TOK_PAREN_OPEN));
             {
                 toks.push_back(TokenTree(TOK_AMP));
@@ -2314,17 +1118,9 @@ namespace {
 
                 H::argumentList(toks, fragments, crate);
             }
-            // )
             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
-        } else // if(is_simple)
-        {
-            // 1. Generate a set of arguments+formatters
-            // > Each combination of argument index and fragment type needs a unique entry in the `args` array
-
-            // Use new_v1_formatted
-            // - requires creating more entries in the `args` list to cover multiple formatters for one value
+        } else {
             pushPath(toks, crate, {"fmt", "Arguments", "new_v1_formatted"});
-            // (
             toks.push_back(TokenTree(TOK_PAREN_OPEN));
             {
                 toks.push_back(TokenTree(TOK_AMP));
@@ -2332,7 +1128,7 @@ namespace {
                 toks.push_back(TokenTree(TOK_COMMA));
 
                 // TODO: Fragments to format
-                // - The format stored by trustme doesn't quite work with how rustc (and fmt::rt::v1) works
+
                 H::argumentList(toks, fragments, crate);
                 toks.push_back(TokenTree(TOK_COMMA));
 
@@ -2346,7 +1142,6 @@ namespace {
                     pushToks(toks, Token(U128(&frag - fragments.data()), CORETYPE_UINT));
                     pushToks(toks, TOK_COMMA);
 
-                    // Flags
                     {
                         pushToks(toks, ident("flags"), TOK_COLON);
 
@@ -2362,7 +1157,6 @@ namespace {
                         };
 
                         u64 flags = 0;
-                        // ::core::fmt::FlagV1 (private)
                         switch (frag.args.sign) {
                             case FmtArgs::Sign::Unspec:
                                 break;
@@ -2389,13 +1183,9 @@ namespace {
                                 flags |= 1 << Flag::DebugUpperHex;
                                 break;
                         }
-                        // Flags shifted, with 21 being SignPlus now
-                        // See `rustc-1.90.0-src/library/core/src/fmt/mod.rs` `mod flags`
                         flags <<= 21;
-                        // NOTE: The fill character is in the low 21 bits (max size of a codepoint)
                         flags |= frag.args.alignChar & 0x1FFFFF;
 
-                        // Width and precision flags
                         if (frag.args.widthIsArg || frag.args.width != 0) {
                             flags |= 1 << 27;
                         }
@@ -2403,7 +1193,6 @@ namespace {
                             flags |= 1 << 28;
                         }
 
-                        // Alignment is encoded as a flag.
                         switch (frag.args.align) {
                             case FmtArgs::Align::Unspec:
                                 flags |= 3 << 29;
@@ -2423,7 +1212,6 @@ namespace {
                         pushToks(toks, Token(U128(flags), CORETYPE_U32));
                         pushToks(toks, TOK_COMMA);
                     }
-                    // Counts (precision and width)
                     {
                         auto pushPathCount = [&](const char* variant) {
                             pushPath(toks, crate, {"fmt", "rt", "Count", variant});
@@ -2467,60 +1255,21 @@ namespace {
                 }
                 toks.push_back(TokenTree(TOK_SQUARE_CLOSE));
             }
-            // )
             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
-        } // if(is_simple) else
+        }
 
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(),
-            Ident::Hygiene::newScope(wb.id, *crate.hirPool), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(), Ident::Hygiene::newScope(wb.id, *crate.hirPool), mv$(toks))));
     }
 }
-
-class CFormatArgsExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-        lex.parseState().module = &mod;
-
-        return expandFormatArgs(sp, wb, crate, lex, /*add_newline=*/false);
-    }
-};
-
-class CConstFormatArgsExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-        lex.parseState().module = &mod;
-
-        return expandFormatArgs(sp, wb, crate, lex, /*add_newline=*/false);
-    }
-};
-
-class CFormatArgsNlExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-        lex.parseState().module = &mod;
-
-        return expandFormatArgs(sp, wb, crate, lex, /*add_newline=*/true);
-    }
-};
-
 
 #undef CMP
 
 namespace {
 
-    ::std::string includeGetString(const Span& sp, TokenStream& lex, const ASTCrate& crate, ASTModule& mod) {
+    std::string includeGetString(const Span& sp, TokenStream& lex, const ASTCrate& crate, ASTModule& mod) {
         auto n = ParseExprVal(lex);
         ASSERT_BUG(sp, n, "No expression returned");
         if (lex.lookahead(0) == TOK_COMMA) {
@@ -2535,8 +1284,7 @@ namespace {
         return mv$(stringNp->value);
     }
 
-    ::std::string getPathRelativeTo(const ::std::string& basePath, ::std::string path) {
-        // Absolute
+    std::string getPathRelativeTo(const std::string& basePath, std::string path) {
         if (path[0] == '/') {
             return path;
         }
@@ -2546,11 +1294,11 @@ namespace {
             return basePath + path;
         } else {
             auto slash = basePath.find_last_of('/');
-            if (slash == ::std::string::npos) {
+            if (slash == std::string::npos) {
                 return path;
             } else {
                 slash += 1;
-                ::std::string rv;
+                std::string rv;
                 rv.reserve(slash + path.size());
                 rv.append(basePath.begin(), basePath.begin() + slash);
                 rv.append(path.begin(), path.end());
@@ -2560,228 +1308,7 @@ namespace {
     }
 };
 
-class CIncludeExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-
-        auto path = includeGetString(sp, lex, crate, mod);
-        GET_CHECK_TOK(tok, lex, TOK_EOF);
-
-        //::std::string file_path = get_path_relative_to(mod.m_file_info.path, mv$(path));
-        ::std::string filePath = getPathRelativeTo(sp.getTopFileSpan().filename.c_str(), mv$(path));
-        crate.extraFiles.push_back(filePath);
-
-        ParseState ps;
-        ps.module = &mod;
-        return box$(Lexer(wb.id, *crate.hirPool, filePath, crate.edition, ps));
-    }
-};
-
-class CIncludeBytesExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-
-        auto path = includeGetString(sp, lex, crate, mod);
-        GET_CHECK_TOK(tok, lex, TOK_EOF);
-
-        ::std::string filePath = getPathRelativeTo(sp.getTopFileSpan().filename.c_str(), mv$(path));
-        crate.extraFiles.push_back(filePath);
-
-        ::std::ifstream is(filePath);
-        if (!is.good()) {
-            ERROR(sp, E0000, "Cannot open file " << filePath << " for include_bytes!");
-        }
-        ::std::stringstream ss;
-        ss << is.rdbuf();
-
-        ::std::vector<TokenTree> toks;
-        toks.push_back(Token(TOK_BYTESTRING, mv$(ss.str()), {}));
-        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015,
-            Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
-    }
-};
-
-class CIncludeStrExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-
-        auto path = includeGetString(sp, lex, crate, mod);
-        GET_CHECK_TOK(tok, lex, TOK_EOF);
-
-        ::std::string filePath = getPathRelativeTo(sp.getTopFileSpan().filename.c_str(), mv$(path));
-        crate.extraFiles.push_back(filePath);
-
-        ::std::ifstream is(filePath);
-        if (!is.good()) {
-            ERROR(sp, E0000, "Cannot open file " << filePath << " for include_str!");
-        }
-        ::std::stringstream ss;
-        ss << is.rdbuf();
-
-        ::std::vector<TokenTree> toks;
-        toks.push_back(Token(TOK_STRING, mv$(ss.str()), {}));
-        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015,
-            Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
-    }
-};
-
 // TODO: include_str! and include_bytes!
-
-
-class CExpanderPanic: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-
-        auto edition = crate.edition;
-        if (tt.hygiene().hasModPath() && tt.hygiene().modPath().crate != "") {
-            edition = crate.externCrates.at(tt.hygiene().modPath().crate).hir->edition;
-        }
-        ::std::vector<TokenTree> toks;
-        toks.push_back(Token(TOK_DOUBLE_COLON));
-        const auto& panicCrate = crate.extCratenameStd != "" ? crate.extCratenameStd : crate.extCratenameCore;
-        toks.push_back(Token(TOK_STRING, std::string(panicCrate.c_str()), {}));
-        toks.push_back(Token(TOK_DOUBLE_COLON));
-        toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
-        toks.push_back(Token(TOK_DOUBLE_COLON));
-        switch (edition) {
-            case ASTEdition::Rust2015:
-            case ASTEdition::Rust2018:
-                toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic_2015")));
-                break;
-            case ASTEdition::Rust2021:
-            case ASTEdition::Rust2024:
-                toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic_2021")));
-                break;
-        }
-        toks.push_back(Token(TOK_EXCLAM));
-        toks.push_back(Token(TOK_PAREN_OPEN));
-        if (tt.size() > 0) {
-            toks.push_back(tt.clone());
-        }
-        toks.push_back(Token(TOK_PAREN_CLOSE));
-
-        return box$(TTStreamO(sp, ParseState(), TokenTree(edition,
-            Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
-    }
-};
-
-class CExpanderUnreachable: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-
-        auto edition = crate.edition;
-        if (tt.hygiene().hasModPath() && tt.hygiene().modPath().crate != "") {
-            edition = crate.externCrates.at(tt.hygiene().modPath().crate).hir->edition;
-        }
-        ::std::vector<TokenTree> toks;
-        toks.push_back(Token(TOK_DOUBLE_COLON));
-        toks.push_back(Token(TOK_STRING, std::string(crate.extCratenameCore.c_str()), {}));
-        toks.push_back(Token(TOK_DOUBLE_COLON));
-        toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
-        toks.push_back(Token(TOK_DOUBLE_COLON));
-        switch (crate.edition) {
-            case ASTEdition::Rust2015:
-            case ASTEdition::Rust2018:
-                toks.push_back(Token(TOK_IDENT, RcString::newInterned("unreachable_2015")));
-                break;
-            case ASTEdition::Rust2021:
-            case ASTEdition::Rust2024:
-                toks.push_back(Token(TOK_IDENT, RcString::newInterned("unreachable_2021")));
-                break;
-        }
-        toks.push_back(Token(TOK_EXCLAM));
-        toks.push_back(Token(TOK_PAREN_OPEN));
-        if (tt.size() > 0) {
-            toks.push_back(tt.clone());
-        }
-        toks.push_back(Token(TOK_PAREN_CLOSE));
-
-        return box$(TTStreamO(sp, ParseState(), TokenTree(edition,
-            Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
-    }
-};
-
-class CExpanderRegisterDiagnostic: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        return box$(TTStreamO(sp, ParseState(), TokenTree()));
-    }
-};
-
-class CExpanderDiagnosticUsed: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        return box$(TTStreamO(sp, ParseState(), TokenTree()));
-    }
-};
-
-class CExpanderBuildDiagnosticArray: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-
-        Token tok;
-
-        GET_CHECK_TOK(tok, lex, TOK_IDENT);
-        GET_CHECK_TOK(tok, lex, TOK_COMMA);
-        GET_CHECK_TOK(tok, lex, TOK_IDENT);
-        auto itemName = tok.ident();
-        GET_CHECK_TOK(tok, lex, TOK_EOF);
-
-        ::std::vector<TokenTree> toks;
-        toks.push_back(TOK_RWORD_PUB);
-        toks.push_back(TOK_RWORD_STATIC);
-        toks.push_back(Token(TOK_IDENT, itemName));
-        // : [(&'static str, &'static str); 0]
-        toks.push_back(TOK_COLON);
-        toks.push_back(TOK_SQUARE_OPEN);
-        toks.push_back(TOK_PAREN_OPEN);
-        toks.push_back(TOK_AMP);
-        toks.push_back(Token(TOK_LIFETIME, RcString::newInterned("static")));
-        toks.push_back(Token(TOK_IDENT, RcString::newInterned("str")));
-        toks.push_back(TOK_COMMA);
-        toks.push_back(TOK_AMP);
-        toks.push_back(Token(TOK_LIFETIME, RcString::newInterned("static")));
-        toks.push_back(Token(TOK_IDENT, RcString::newInterned("str")));
-        toks.push_back(TOK_PAREN_CLOSE);
-        toks.push_back(TOK_SEMICOLON);
-        toks.push_back(Token(U128(0), CORETYPE_UINT));
-        toks.push_back(TOK_SQUARE_CLOSE);
-        // = [];
-        toks.push_back(TOK_EQUAL);
-        toks.push_back(TOK_SQUARE_OPEN);
-        toks.push_back(TOK_SQUARE_CLOSE);
-        toks.push_back(TOK_SEMICOLON);
-
-        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, lex.getHygiene(), mv$(toks))));
-    }
-};
-
-
-class CExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        Token tok;
-        ::std::string rv;
-        eTokenType prev = TOK_NULL;
-
-        auto lex = TTStream(sp, ParseState(), tt);
-        lex.parseState().wb = &wb;
-        while (GET_TOK(tok, lex) != TOK_EOF) {
-            if (!rv.empty() && tokensNeedSpace(prev, tok.type())) {
-                rv += " ";
-            }
-            rv += tok.toStr();
-            prev = tok.type();
-        }
-
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(rv), {}))));
-    }
-};
-
 
 void RegisterBuiltinMacros(ExpandRegistry& registry) {
     registry.addMacro<CTraceMacrosExpander>("trace_macros");
@@ -2818,6 +1345,1457 @@ void RegisterBuiltinMacros(ExpandRegistry& registry) {
     registry.addMacro<CExpander>("stringify");
 }
 
-::std::unique_ptr<TokenStream> ExpandProcMacro::expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) {
+std::unique_ptr<TokenStream> ExpandProcMacro::expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) {
     ERROR(sp, E0000, "macro doesn't take an identifier");
+}
+
+auto CTraceMacrosExpander::expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) -> std::unique_ptr<TokenStream> {
+    auto lex = TTStream(sp, ParseState(), tt);
+    const auto setting = lex.getToken();
+    if (setting.type() != TOK_RWORD_TRUE && setting.type() != TOK_RWORD_FALSE) {
+        ERROR(sp, E0000, "trace_macros! expects `true` or `false`");
+    }
+    if (lex.lookahead(0) != TOK_EOF) {
+        ERROR(sp, E0000, "trace_macros! expects exactly one boolean argument");
+    }
+    return makeMacroExpansionPlaceholder(sp);
+}
+
+auto CLogSyntaxExpander::expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) -> std::unique_ptr<TokenStream> {
+    auto lex = TTStream(sp, ParseState(), tt);
+    bool first = true;
+    while (lex.lookahead(0) != TOK_EOF) {
+        if (!first) {
+            std::cout << ' ';
+        }
+        std::cout << lex.getToken().toStr();
+        first = false;
+    }
+    std::cout << std::endl;
+    return makeMacroExpansionPlaceholder(sp);
+}
+
+auto CPatternTypeExpander::expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) -> std::unique_ptr<TokenStream> {
+    return box$(TTStreamO(sp, ParseState(), tt.clone()));
+}
+
+auto CIterExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().crate = &crate;
+    lex.parseState().wb = &wb;
+    lex.parseState().module = &mod;
+
+    auto node = ParseExpr0(lex);
+    GET_CHECK_TOK(tok, lex, TOK_EOF);
+
+    auto* closure = cast<ASTExprNodeClosure>(node.get());
+    if (!closure || closure->isPinned || cast<ASTExprNodeAsyncBlock>(closure->code.get())) {
+        ERROR(sp, E0000, "iter! requires a plain closure");
+    }
+
+    auto* generator = new ASTExprNodeGeneratorBlock(mv$(closure->code), closure->returnType, true, true);
+    generator->setSpan(sp);
+    closure->code = ASTExprNodeP(generator);
+    closure->returnType = mkType(*crate.pool, sp);
+
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
+}
+
+auto CLlvmAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+
+    auto templateText = getString(sp, lex, crate, mod);
+    std::vector<ASTExprNodeAsm::ValRef> outputs;
+    std::vector<ASTExprNodeAsm::ValRef> inputs;
+    std::vector<std::string> clobbers;
+    std::vector<std::string> flags;
+
+    if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
+        GET_TOK(tok, lex);
+        lex.putback(Token(TOK_COLON));
+    } else if (lex.lookahead(0) == TOK_COLON) {
+        GET_TOK(tok, lex);
+
+        while (lex.lookahead(0) == TOK_STRING) {
+            GET_CHECK_TOK(tok, lex, TOK_STRING);
+            auto name = mv$(tok.str());
+
+            GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+            auto val = ParseExpr0(lex);
+            GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+
+            outputs.push_back(ASTExprNodeAsm::ValRef{mv$(name), mv$(val)});
+
+            if (lex.lookahead(0) != TOK_COMMA) {
+                break;
+            }
+
+            GET_TOK(tok, lex);
+        }
+    } else {
+    }
+
+    if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
+        GET_TOK(tok, lex);
+        lex.putback(Token(TOK_COLON));
+    } else if (lex.lookahead(0) == TOK_COLON) {
+        GET_TOK(tok, lex);
+
+        while (lex.lookahead(0) == TOK_STRING) {
+            GET_CHECK_TOK(tok, lex, TOK_STRING);
+            auto name = mv$(tok.str());
+
+            GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+            auto val = ParseExpr0(lex);
+            GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+
+            inputs.push_back(ASTExprNodeAsm::ValRef{mv$(name), mv$(val)});
+
+            if (lex.lookahead(0) != TOK_COMMA) {
+                break;
+            }
+            GET_TOK(tok, lex);
+        }
+    } else {
+    }
+
+    if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
+        GET_TOK(tok, lex);
+        lex.putback(Token(TOK_COLON));
+    } else if (lex.lookahead(0) == TOK_COLON) {
+        GET_TOK(tok, lex);
+
+        while (lex.lookahead(0) == TOK_STRING) {
+            GET_CHECK_TOK(tok, lex, TOK_STRING);
+            clobbers.push_back(mv$(tok.str()));
+
+            if (lex.lookahead(0) != TOK_COMMA) {
+                break;
+            }
+            GET_TOK(tok, lex);
+        }
+    } else {
+    }
+
+    if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
+        GET_TOK(tok, lex);
+        lex.putback(Token(TOK_COLON));
+    } else if (lex.lookahead(0) == TOK_COLON) {
+        GET_TOK(tok, lex);
+
+        while (lex.lookahead(0) == TOK_STRING) {
+            GET_CHECK_TOK(tok, lex, TOK_STRING);
+            flags.push_back(mv$(tok.str()));
+
+            if (lex.lookahead(0) != TOK_COMMA) {
+                break;
+            }
+            GET_TOK(tok, lex);
+        }
+    } else {
+    }
+
+    // trailing `: voltaile` - TODO: Is this valid?
+    if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
+        GET_TOK(tok, lex);
+        lex.putback(Token(TOK_COLON));
+    } else if (lex.lookahead(0) == TOK_COLON) {
+        GET_TOK(tok, lex);
+
+        if (GET_TOK(tok, lex) == TOK_IDENT && tok.ident() == "volatile") {
+            flags.push_back("volatile");
+        } else {
+            PUTBACK(tok, lex);
+        }
+    } else {
+    }
+
+    if (lex.lookahead(0) != TOK_EOF) {
+        ERROR(sp, E0000, "Unexpected token in asm! - " << lex.getToken());
+    }
+
+    ASTExprNodeP rv = ASTExprNodeP(new ASTExprNodeAsm{mv$(templateText), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags)});
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
+}
+
+auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+
+    std::vector<std::pair<Span, std::string>> rawLines;
+    do {
+        auto ps = lex.startSpan();
+        auto attrs = ParseItemAttrs(lex);
+        auto text = getString(sp, lex, crate, mod);
+        auto sp = lex.endSpan(ps);
+        if (checkCfgAttrs(*lex.parseState().wb->settings, attrs)) {
+            rawLines.push_back(std::make_pair(sp, std::move(text)));
+        }
+
+        if (lex.lookahead(0) == TOK_EOF) {
+            GET_TOK(tok, lex);
+            break;
+        }
+        GET_CHECK_TOK(tok, lex, TOK_COMMA);
+    } while (lex.lookahead(0) == TOK_STRING || lex.lookahead(0) == TOK_HASH);
+
+    std::vector<ASTExprNodeAsm2::Param> params;
+    std::vector<RcString> names;
+    std::vector<std::string> clobberAbis;
+    AsmOptions options;
+    while (tok.type() == TOK_COMMA) {
+        if (lex.lookahead(0) == TOK_EOF) {
+            GET_TOK(tok, lex);
+            break;
+        }
+
+        RcString bindingName;
+        auto v = getTokIdentRword(lex);
+        if (v == "clobber_abi") {
+            GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+            do {
+                GET_CHECK_TOK(tok, lex, TOK_STRING);
+                clobberAbis.push_back(tok.str());
+                if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
+                    GET_TOK(tok, lex);
+                    break;
+                }
+            } while (GET_TOK(tok, lex) == TOK_COMMA);
+            CHECK_TOK(tok, TOK_PAREN_CLOSE);
+
+            GET_TOK(tok, lex);
+            continue;
+        }
+        if (v == "options") {
+            GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+            do {
+                GET_CHECK_TOK(tok, lex, TOK_IDENT);
+
+                if (tok.ident().name == "pure") {
+                    if (options.pure) {
+                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                    }
+                    options.pure = 1;
+                } else if (tok.ident().name == "nomem") {
+                    if (options.nomem) {
+                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                    }
+                    options.nomem = 1;
+                } else if (tok.ident().name == "readonly") {
+                    if (options.readonly) {
+                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                    }
+                    options.readonly = 1;
+                } else if (tok.ident().name == "preserves_flags") {
+                    if (options.preservesFlags) {
+                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                    }
+                    options.preservesFlags = 1;
+                } else if (tok.ident().name == "noreturn") {
+                    if (options.noreturn) {
+                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                    }
+                    options.noreturn = 1;
+                } else if (tok.ident().name == "nostack") {
+                    if (options.nostack) {
+                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                    }
+                    options.nostack = 1;
+                } else if (tok.ident().name == "att_syntax") {
+                    if (options.attSyntax) {
+                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                    }
+                    // TODO: x86(-64) only
+                    options.attSyntax = 1;
+                } else if (tok.ident().name == "raw") {
+                    if (options.raw) {
+                        ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                    }
+                    options.raw = 1;
+                } else {
+                    ERROR(lex.pointSpan(), E0000, "Unknown asm option - " << tok.ident().name);
+                }
+
+                if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
+                    GET_TOK(tok, lex);
+                    break;
+                }
+            } while (GET_TOK(tok, lex) == TOK_COMMA);
+            CHECK_TOK(tok, TOK_PAREN_CLOSE);
+
+            GET_TOK(tok, lex);
+            continue;
+        }
+
+        if (lex.lookahead(0) == TOK_EQUAL) {
+            GET_CHECK_TOK(tok, lex, TOK_EQUAL);
+            bindingName = v;
+            v = getTokIdentRword(lex);
+        }
+
+        ASTExprNodeAsm2::Param paramSpec;
+        if (v == "const") {
+            auto e = ParseExpr0(lex);
+            paramSpec = ASTExprNodeAsm2::Param::make_Const(std::move(e));
+        } else if (v == "sym") {
+            auto p = ParsePath(lex, PATH_GENERIC_EXPR);
+            paramSpec = ASTExprNodeAsm2::Param::make_Sym(std::move(p));
+        } else if (v == "label") {
+            auto e = ParseExpr0(lex);
+            if (!cast<ASTExprNodeBlock>(e.get())) {
+                ERROR(sp, E0000, "asm! label operand requires a block");
+            }
+            paramSpec = ASTExprNodeAsm2::Param::make_Label({std::move(e)});
+        } else {
+            AsmDirection dir;
+            if (v == "inlateout") {
+                dir = AsmDirection::InLateOut;
+            } else if (v == "in") {
+                dir = AsmDirection::In;
+            } else if (v == "out") {
+                dir = AsmDirection::Out;
+            } else if (v == "lateout") {
+                dir = AsmDirection::LateOut;
+            } else if (v == "inout") {
+                dir = AsmDirection::InOut;
+            } else {
+                ERROR(sp, E0000, "Unknown asm fragment - `" << v << "`");
+            }
+
+            GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+            GET_TOK(tok, lex);
+            AsmRegisterSpec regSpec;
+            if (tok.type() == TOK_IDENT) {
+                regSpec = AsmRegisterSpec::make_Class(getRegClass(wb, lex.pointSpan(), tok.ident().name));
+            } else if (tok.type() == TOK_STRING) {
+                regSpec = AsmRegisterSpec::make_Explicit(tok.str());
+            } else {
+                parseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_STRING});
+            }
+            GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+
+            if (lex.lookahead(0) == TOK_UNDERSCORE) {
+                GET_TOK(tok, lex);
+                switch (dir) {
+                    case AsmDirection::LateOut:
+                    case AsmDirection::Out:
+                        break;
+                    default:
+                        ERROR(sp, E0000, "Invalid use of _ in asm!");
+                }
+                paramSpec = ASTExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), nullptr, nullptr});
+            } else {
+                auto e = ParseExpr0(lex);
+
+                if (lex.lookahead(0) == TOK_FATARROW) {
+                    switch (dir) {
+                        case AsmDirection::InLateOut:
+                        case AsmDirection::InOut:
+                            break;
+                        default:
+                            ERROR(sp, E0000, "Invalid use of => in asm!");
+                    }
+                    GET_TOK(tok, lex);
+                    if (lex.lookahead(0) == TOK_UNDERSCORE) {
+                        GET_TOK(tok, lex);
+                        paramSpec = ASTExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), mv$(e), nullptr});
+                    } else {
+                        auto e2 = ParseExpr0(lex);
+                        paramSpec = ASTExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), mv$(e), mv$(e2)});
+                    }
+                } else {
+                    paramSpec = ASTExprNodeAsm2::Param::make_RegSingle({dir, std::move(regSpec), mv$(e)});
+                }
+            }
+        }
+
+        names.push_back(bindingName);
+        params.push_back(std::move(paramSpec));
+
+        GET_TOK(tok, lex);
+    }
+    CHECK_TOK(tok, TOK_EOF);
+
+    {
+        bool seenNonPositional = false;
+        for (size_t i = 0; i < params.size(); i++) {
+            const AsmRegisterSpec* spec = nullptr;
+            if (const auto* e = params[i].opt_Reg()) {
+                spec = &e->spec;
+            } else if (const auto* e = params[i].opt_RegSingle()) {
+                spec = &e->spec;
+            }
+            const bool positional = (names[i] == RcString()) && !(spec && spec->is_Explicit());
+            if (!positional) {
+                seenNonPositional = true;
+            } else if (seenNonPositional) {
+                ERROR(sp, E0000, "positional arguments cannot follow named arguments or explicit register arguments");
+            }
+        }
+    }
+
+    {
+        const auto& arch = TargetGetCurSpec(wb).arch.name;
+        const bool isX86 = arch == "x86" || arch == "x86_64";
+        const bool is64Bit = arch == "x86_64";
+        std::map<std::string, std::string> seen;
+        for (const auto& param : params) {
+            const AsmRegisterSpec* spec = nullptr;
+            if (const auto* e = param.opt_Reg()) {
+                spec = &e->spec;
+            } else if (const auto* e = param.opt_RegSingle()) {
+                spec = &e->spec;
+            }
+            if (!spec || !spec->is_Explicit()) {
+                continue;
+            }
+            const auto& name = spec->as_Explicit();
+            if (isX86) {
+                if (const char* what = x86ReservedRegister(name)) {
+                    ERROR(sp, E0000, "invalid register `" << name << "`: " << what << " cannot be used as an operand for inline asm");
+                }
+            }
+            const auto canonical = isX86 ? canonicalX86Register(name, is64Bit) : name;
+            auto inserted = seen.insert(std::make_pair(canonical, name));
+            if (!inserted.second) {
+                ERROR(sp, E0000, "register `" << name << "` conflicts with register `" << inserted.first->second << "`");
+            }
+        }
+    }
+
+    bool hasLabel = false;
+    bool hasOutputValue = false;
+    for (const auto& param : params) {
+        if (param.is_Label()) {
+            hasLabel = true;
+        } else if (const auto* reg = param.opt_RegSingle()) {
+            hasOutputValue |= reg->dir != AsmDirection::In;
+        } else if (const auto* reg = param.opt_Reg()) {
+            hasOutputValue |= bool(reg->valOut);
+        }
+    }
+    if (hasLabel && hasOutputValue) {
+        ERROR(sp, E0000, "using both label and output operands for inline assembly is unstable in Rust 1.90");
+    }
+
+    if (!clobberAbis.empty()) {
+        const auto& arch = TargetGetCurSpec(wb).arch.name;
+        const bool isX86 = arch == "x86" || arch == "x86_64";
+        const bool is64Bit = arch == "x86_64";
+        std::set<std::string> explicitOutputs;
+        for (const auto& param : params) {
+            const AsmRegisterSpec* spec = nullptr;
+            if (const auto* e = param.opt_Reg()) {
+                if (e->dir != AsmDirection::In) {
+                    spec = &e->spec;
+                }
+            } else if (const auto* e = param.opt_RegSingle()) {
+                if (e->dir != AsmDirection::In) {
+                    spec = &e->spec;
+                }
+            }
+            if (spec && spec->is_Explicit()) {
+                explicitOutputs.insert(isX86 ? canonicalX86Register(spec->as_Explicit(), is64Bit) : spec->as_Explicit());
+            } else if (spec) {
+                ERROR(sp, E0000, "asm with `clobber_abi` must specify explicit registers for outputs");
+            }
+        }
+
+        std::set<std::string> added;
+        for (const auto& abi : clobberAbis) {
+            for (auto reg : getClobberAbiRegisters(wb, sp, abi)) {
+                const auto canonical = isX86 ? canonicalX86Register(reg, is64Bit) : reg;
+                if (explicitOutputs.count(canonical) || !added.insert(canonical).second) {
+                    continue;
+                }
+                names.push_back({});
+                params.push_back(ASTExprNodeAsm2::Param::make_Reg({AsmDirection::LateOut, AsmRegisterSpec::make_Explicit(mv$(reg)), nullptr, nullptr}));
+            }
+        }
+    }
+
+    if (options.nomem && options.readonly) {
+        ERROR(sp, E0000, "asm! options `nomem` and `readonly` are mutually exclusive");
+    }
+    if (options.pure && !(options.nomem || options.readonly)) {
+        ERROR(sp, E0000, "asm! marked `pure` without `nomem` or `readonly`");
+    }
+    if (options.noreturn && hasOutputValue) {
+        ERROR(sp, E0000, "asm outputs are not allowed with the `noreturn` option");
+    }
+
+    unsigned nextIndex = 0;
+    std::vector<AsmLine> lines;
+    for (const auto& e : rawLines) {
+        const auto& sp = e.first;
+        const auto& text = e.second;
+
+        AsmLine line;
+
+        const char* c = text.c_str();
+        std::string curString;
+        while (*c) {
+            if (*c == '}') {
+                c++;
+                if (!*c) {
+                    ERROR(sp, E0000, "Unexpected EOF in asm! format string");
+                }
+                if (*c != '}') {
+                    ERROR(sp, E0000, "Closing braces in `asm!` need to be written as `}}`");
+                }
+                c++;
+                curString += '}';
+                continue;
+            }
+
+            if (*c == '{') {
+                c++;
+                if (*c == '{') {
+                    curString += '{';
+                    c++;
+                    continue;
+                }
+
+                std::string name;
+                while (*c && *c != ':' && *c != '}') {
+                    name += *c;
+                    c++;
+                }
+                if (!*c) {
+                    ERROR(sp, E0000, "Unexpected EOF in asm! format string");
+                }
+                AsmLineFragment frag;
+                if (name.empty()) {
+                    frag.index = nextIndex;
+                    if (frag.index >= params.size()) {
+                        ERROR(sp, E0000, "asm! format doesn't have enough arguments");
+                    }
+                    nextIndex++;
+                } else if (std::isdigit(name[0])) {
+                    frag.index = std::stoul(name);
+                    if (frag.index >= params.size()) {
+                        ERROR(sp, E0000, "asm! format string index out of range - " << frag.index);
+                    }
+                } else {
+                    auto it = std::find(names.begin(), names.end(), name);
+                    if (it == names.end()) {
+                        ERROR(sp, E0000, "asm! format string references undefined value - `" << name << "`");
+                    }
+                    frag.index = it - names.begin();
+                }
+                assert(*c == ':' || *c == '}');
+                if (*c == ':') {
+                    c++;
+                    if (!*c) {
+                        ERROR(sp, E0000, "Unexpected EOF in asm! format string");
+                    }
+                    if (*c != '}') {
+                        frag.modifier = *c;
+                        c++;
+                    }
+                }
+                if (!*c) {
+                    ERROR(sp, E0000, "Unexpected EOF in asm! format string");
+                }
+                if (*c != '}') {
+                    ERROR(sp, E0000, "Expected '}' in asm! format string");
+                }
+
+                frag.before = std::move(curString);
+                curString.clear();
+                line.frags.push_back(std::move(frag));
+            } else {
+                curString += *c;
+            }
+            c++;
+        }
+        line.trailing = std::move(curString);
+        lines.push_back(std::move(line));
+    }
+
+    {
+        std::set<unsigned> referenced;
+        for (const auto& line : lines) {
+            for (const auto& frag : line.frags) {
+                referenced.insert(frag.index);
+            }
+        }
+        unsigned unused = 0;
+        for (size_t i = 0; i < params.size(); i++) {
+            if (referenced.count(static_cast<unsigned>(i))) {
+                continue;
+            }
+            const AsmRegisterSpec* spec = nullptr;
+            if (const auto* e = params[i].opt_Reg()) {
+                spec = &e->spec;
+            } else if (const auto* e = params[i].opt_RegSingle()) {
+                spec = &e->spec;
+            }
+            if (spec && spec->is_Explicit()) {
+                continue;
+            }
+            if (params[i].is_Label()) {
+                continue;
+            }
+            unused += 1;
+        }
+        if (unused == 1) {
+            ERROR(sp, E0000, "unused asm argument");
+        } else if (unused > 1) {
+            ERROR(sp, E0000, "multiple unused asm arguments");
+        }
+    }
+
+    for (const auto& line : lines) {
+        for (const auto& frag : line.frags) {
+            if (frag.index == UINT_MAX) {
+                ERROR(sp, E0000, "asm! marked `pure` without `nomem` or `readonly`");
+            }
+            if (frag.modifier != '\0') {
+                // TODO: Check that the modifier is valid for the specifier
+            }
+        }
+    }
+
+    ASTExprNodeP rv = ASTExprNodeP(new ASTExprNodeAsm2{mv$(options), mv$(lines), mv$(params)});
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
+}
+
+auto CGlobalAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    auto o = CAsmExpander().expand(sp, wb, crate, tt, mod);
+
+    auto node = o->getToken().takeFragNode();
+    auto* nodeAp = cast<ASTExprNodeAsm2>(node.get());
+    ASSERT_BUG(sp, nodeAp, "");
+    auto& nodeA = *nodeAp;
+
+    {
+        const auto& o = nodeA.options;
+        const char* bad = o.pure ? "pure" : o.nomem ? "nomem" : o.readonly ? "readonly" : o.preservesFlags ? "preserves_flags" : o.noreturn ? "noreturn" : o.nostack ? "nostack" : nullptr;
+        if (bad) {
+            ERROR(sp, E0000, "the `" << bad << "` option cannot be used with `global_asm!`");
+        }
+    }
+
+    auto globalAsm = ASTGlobalAsm{std::move(nodeA.lines), {}, nodeA.options};
+    globalAsm.operands.reserve(nodeA.params.size());
+    for (auto& param : nodeA.params) {
+        switch (param.tag()) {
+            case ASTAsmParam::TAG_Const: {
+                auto& expr = param.as_Const();
+                globalAsm.operands.push_back(ASTGlobalAsm::Operand::make_Const(std::move(expr)));
+                break;
+            }
+            case ASTAsmParam::TAG_Sym: {
+                auto& path = param.as_Sym();
+                globalAsm.operands.push_back(ASTGlobalAsm::Operand::make_Sym(std::move(path)));
+                break;
+            }
+            case ASTAsmParam::TAG_Label: {
+                ERROR(sp, E0000, "`label` is not allowed in `global_asm!`");
+                break;
+            }
+            case ASTAsmParam::TAG_RegSingle: {
+                ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
+                break;
+            }
+            case ASTAsmParam::TAG_Reg: {
+                ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
+                break;
+            }
+        }
+    }
+    auto namedItem = ASTNamed<ASTItem>(sp, {}, ASTVisibility::makeBarePrivate(), "", ASTItem(std::move(globalAsm)));
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(Token::TagTakeIP(), InterpolatedFragment(std::move(namedItem))))));
+}
+
+auto CNakedAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    auto o = CAsmExpander().expand(sp, wb, crate, tt, mod);
+
+    auto node = o->getToken().takeFragNode();
+    auto* nodeAp = cast<ASTExprNodeAsm2>(node.get());
+    ASSERT_BUG(sp, nodeAp, "");
+    nodeAp->options.naked = true;
+
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
+}
+
+GenericAssertCaptureVisitor::GenericAssertCaptureVisitor(RcString coreCrate, Ident::Hygiene hygiene)
+    : coreCrate(coreCrate)
+    , hygiene(hygiene)
+{
+}
+
+auto GenericAssertCaptureVisitor::manage(ASTExprNodeP& node) -> void {
+    if (!node) {
+        return;
+    }
+    auto* previous = current;
+    current = &node;
+    node->visit(*this);
+    current = previous;
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeArray& node) -> void {
+    manage(node.size);
+    for (auto& value : node.values) {
+        manage(value);
+    }
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeBinOp& node) -> void {
+    const bool wasConsumed = consumed;
+    switch (node.type) {
+        case ASTExprNodeBinOp::CMPEQU:
+        case ASTExprNodeBinOp::CMPNEQU:
+        case ASTExprNodeBinOp::CMPLT:
+        case ASTExprNodeBinOp::CMPLTE:
+        case ASTExprNodeBinOp::CMPGT:
+        case ASTExprNodeBinOp::CMPGTE:
+        case ASTExprNodeBinOp::RANGE:
+        case ASTExprNodeBinOp::RANGE_INC:
+            consumed = false;
+            break;
+        default:
+            consumed = true;
+            break;
+    }
+    manage(node.left);
+    manage(node.right);
+    consumed = wasConsumed;
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeCallPath& node) -> void {
+    for (auto& arg : node.args) {
+        manage(arg);
+    }
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeCallMethod& node) -> void {
+    manage(node.val);
+    for (auto& arg : node.args) {
+        manage(arg);
+    }
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeCallObject& node) -> void {
+    for (auto& arg : node.args) {
+        manage(arg);
+    }
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeCast& node) -> void {
+    manage(node.value);
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeDeref& node) -> void {
+    const bool wasConsumed = consumed;
+    consumed = false;
+    manage(node.value);
+    consumed = wasConsumed;
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeIf& node) -> void {
+    for (auto& arm : node.arms) {
+        for (auto& condition : arm.conditions) {
+            manage(condition.value);
+        }
+    }
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeIndex& node) -> void {
+    manage(node.obj);
+    manage(node.idx);
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeLetBinding& node) -> void {
+    manage(node.value);
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeMatch& node) -> void {
+    manage(node.val);
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeUniOp& node) -> void {
+    const bool wasConsumed = consumed;
+    consumed = node.type != ASTExprNodeUniOp::REF;
+    manage(node.value);
+    consumed = wasConsumed;
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeNamedValue& node) -> void {
+    if (!node.path.isTrivial()) {
+        return;
+    }
+    const auto& name = node.path.asTrivial();
+    for (const auto& capture : captures) {
+        if (capture.path == node.path) {
+            return;
+        }
+    }
+
+    const auto captureIndex = captures.size();
+    const auto captureName = RcString::newInterned(FMT("__capture" << captureIndex));
+    const auto localBindName = RcString::newInterned(FMT("__local_bind" << captureIndex));
+    captures.push_back({ASTPath(node.path), name, captureName, localBindName, !consumed});
+
+    if (consumed) {
+        ASTExprNodeBlock captureBlock;
+        captureBlock.setSpan(node.span());
+        captureBlock.pushStmt(makeTryCapture(captureName, localBindName, node.span()));
+        captureBlock.pushTailExpr(makeGeneratedValue(localBindName, node.span()));
+        *current = ASTExprNodeP(box$(ASTExprNodeDeref(ASTExprNodeP(box$(captureBlock)))));
+    } else {
+        *current = ASTExprNodeP(box$(ASTExprNodeDeref(makeGeneratedValue(localBindName, node.span()))));
+    }
+    (*current)->setSpan(node.span());
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeStructLiteral& node) -> void {
+    for (auto& value : node.values) {
+        manage(value.value);
+    }
+    manage(node.baseValue);
+}
+
+auto GenericAssertCaptureVisitor::visit(ASTExprNodeTuple& node) -> void {
+    for (auto& value : node.values) {
+        manage(value);
+    }
+}
+
+auto GenericAssertCaptureVisitor::makeTryCapture(RcString captureName, RcString localBindName, const Span& sp) const -> ASTExprNodeP {
+    auto wrapper = ASTExprNodeP(box$(ASTExprNodeCallPath(ASTPath(ASTAbsolutePath(coreCrate, {RcString::newInterned("asserting"), RcString::newInterned("Wrapper")})), makeVec1(makeGeneratedValue(localBindName, sp)))));
+    wrapper->setSpan(sp);
+
+    auto wrapperRef = ASTExprNodeP(box$(ASTExprNodeUniOp(ASTExprNodeUniOp::REF, ASTExprNodeP(wrapper.release()))));
+    wrapperRef->setSpan(sp);
+    auto captureRef = ASTExprNodeP(box$(ASTExprNodeUniOp(ASTExprNodeUniOp::REFMUT, makeGeneratedValue(captureName, sp))));
+    captureRef->setSpan(sp);
+    auto call = ASTExprNodeP(box$(ASTExprNodeCallMethod(ASTExprNodeP(wrapperRef.release()), ASTPathNode(hygiene, RcString::newInterned("try_capture")), makeVec1(ASTExprNodeP(captureRef.release())))));
+    call->setSpan(sp);
+    return call;
+}
+
+auto GenericAssertCaptureVisitor::generatedPath(RcString name) const -> ASTPath {
+    return ASTPath::newRelative(hygiene, {ASTPathNode(hygiene, name)});
+}
+
+auto GenericAssertCaptureVisitor::makeGeneratedValue(RcString name, const Span& sp) const -> ASTExprNodeP {
+    auto value = ASTExprNodeP(box$(ASTExprNodeNamedValue(generatedPath(name))));
+    value->setSpan(sp);
+    return value;
+}
+
+auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+    lex.parseState().module = &mod;
+
+    auto n = ParseExpr0(lex);
+    ASSERT_BUG(sp, n, "No expression returned");
+
+    std::vector<TokenTree> toks;
+    const auto expansionHygiene = Ident::Hygiene::newScope(wb.id, *wb.pool);
+
+    bool closeOuterBlock = false;
+
+    GET_TOK(tok, lex);
+    if (tok == TOK_COMMA && lex.lookahead(0) == TOK_EOF) {
+        GET_TOK(tok, lex);
+    }
+    if (tok == TOK_COMMA) {
+        toks.push_back(Token(TOK_RWORD_IF));
+        toks.push_back(Token(TOK_EXCLAM));
+        toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
+        toks.push_back(Token(TOK_BRACE_OPEN));
+        toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
+        toks.push_back(Token(TOK_EXCLAM));
+        toks.push_back(Token(TOK_PAREN_OPEN));
+
+        auto fmt = ParseExpr0(lex);
+        if (lex.getTokenIf(TOK_COMMA)) {
+            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, fmt.release())));
+
+            while (lex.lookahead(0) != TOK_EOF) {
+                toks.push_back(TOK_COMMA);
+
+                if ((lex.lookahead(0) == TOK_IDENT || Token::typeIsRword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
+                    toks.push_back(lex.getToken());
+                    toks.push_back(lex.getToken());
+                    toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
+                } else {
+                    toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
+                }
+                if (lex.lookahead(0) != TOK_COMMA) {
+                    break;
+                }
+                GET_CHECK_TOK(tok, lex, TOK_COMMA);
+            }
+        } else {
+            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, fmt.release())));
+        }
+
+        GET_CHECK_TOK(tok, lex, TOK_EOF);
+        toks.push_back(Token(TOK_PAREN_CLOSE));
+    } else if (tok == TOK_EOF) {
+        std::stringstream ss;
+        n->print(ss);
+        auto conditionText = ss.str();
+
+        const auto genericAssert = RcString::newInterned("generic_assert");
+        if (crate.features.count(genericAssert) != 0) {
+            if (n->nodeKind() == ASTExprNodeBinOp::kind && conditionText.size() >= 2) {
+                conditionText.erase(conditionText.begin());
+                conditionText.pop_back();
+            }
+            GenericAssertCaptureVisitor captureVisitor(crate.extCratenameCore, expansionHygiene);
+            captureVisitor.manage(n);
+
+            toks.push_back(Token(TOK_BRACE_OPEN));
+            closeOuterBlock = true;
+
+            toks.push_back(Token(TOK_RWORD_USE));
+            toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, {RcString::newInterned("asserting"), RcString::newInterned("TryCaptureGeneric")})))));
+            toks.push_back(Token(TOK_SEMICOLON));
+            toks.push_back(Token(TOK_RWORD_USE));
+            toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, {RcString::newInterned("asserting"), RcString::newInterned("TryCapturePrintable")})))));
+            toks.push_back(Token(TOK_SEMICOLON));
+
+            for (size_t i = 0; i < captureVisitor.captures.size(); i++) {
+                const auto& capture = captureVisitor.captures[i];
+                toks.push_back(Token(TOK_RWORD_LET));
+                toks.push_back(Token(TOK_RWORD_MUT));
+                toks.push_back(Token(TOK_IDENT, capture.captureName));
+                toks.push_back(Token(TOK_EQUAL));
+                toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(ASTAbsolutePath(crate.extCratenameCore, {RcString::newInterned("asserting"), RcString::newInterned("Capture"), RcString::newInterned("new")})))));
+                toks.push_back(Token(TOK_PAREN_OPEN));
+                toks.push_back(Token(TOK_PAREN_CLOSE));
+                toks.push_back(Token(TOK_SEMICOLON));
+
+                toks.push_back(Token(TOK_RWORD_LET));
+                toks.push_back(Token(TOK_IDENT, capture.localBindName));
+                toks.push_back(Token(TOK_EQUAL));
+                toks.push_back(Token(TOK_AMP));
+                toks.push_back(Token(Token::TagTakeIP(), InterpolatedFragment(ASTPath(capture.path), sp)));
+                toks.push_back(Token(TOK_SEMICOLON));
+            }
+
+            toks.push_back(Token(TOK_RWORD_IF));
+            toks.push_back(Token(TOK_EXCLAM));
+            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
+            toks.push_back(Token(TOK_BRACE_OPEN));
+
+            for (size_t i = 0; i < captureVisitor.captures.size(); i++) {
+                const auto& capture = captureVisitor.captures[i];
+                if (!capture.deferred) {
+                    continue;
+                }
+                toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, captureVisitor.makeTryCapture(capture.captureName, capture.localBindName, sp).release())));
+                toks.push_back(Token(TOK_SEMICOLON));
+            }
+
+            for (size_t i = 0; i < conditionText.size(); i++) {
+                if (conditionText[i] == '{' || conditionText[i] == '}') {
+                    conditionText.insert(conditionText.begin() + i, conditionText[i]);
+                    i += 1;
+                }
+            }
+            auto message = FMT("Assertion failed: " << conditionText);
+            if (!captureVisitor.captures.empty()) {
+                message += "\nWith captures:\n";
+                for (const auto& capture : captureVisitor.captures) {
+                    message += FMT("  " << capture.name << " = {:?}\n");
+                }
+            }
+            toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
+            toks.push_back(Token(TOK_EXCLAM));
+            toks.push_back(Token(TOK_PAREN_OPEN));
+            toks.push_back(Token(TOK_STRING, message, {}));
+            for (size_t i = 0; i < captureVisitor.captures.size(); i++) {
+                toks.push_back(Token(TOK_COMMA));
+                toks.push_back(Token(TOK_IDENT, captureVisitor.captures[i].captureName));
+            }
+            toks.push_back(Token(TOK_PAREN_CLOSE));
+        } else {
+            toks.push_back(Token(TOK_RWORD_IF));
+            toks.push_back(Token(TOK_EXCLAM));
+            toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
+            toks.push_back(Token(TOK_BRACE_OPEN));
+            toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
+            toks.push_back(Token(TOK_EXCLAM));
+            toks.push_back(Token(TOK_PAREN_OPEN));
+            toks.push_back(Token(TOK_STRING, std::string("assertion failed: {}"), {}));
+            toks.push_back(Token(TOK_COMMA));
+            toks.push_back(Token(TOK_STRING, ss.str(), {}));
+            toks.push_back(Token(TOK_PAREN_CLOSE));
+        }
+    } else {
+        parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
+    }
+
+    toks.push_back(Token(TOK_BRACE_CLOSE));
+    if (closeOuterBlock) {
+        toks.push_back(Token(TOK_BRACE_CLOSE));
+    }
+
+    return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, expansionHygiene, mv$(toks))));
+}
+
+auto CExpanderCompileError::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    ERROR(sp, E0000, "compile_error! " << tt);
+}
+
+auto CConcatExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+
+    std::string rv;
+    do {
+        if (LOOK_AHEAD(lex) == TOK_EOF) {
+            GET_TOK(tok, lex);
+            break;
+        }
+
+        auto v = ParseExpr0(lex);
+        ExpandBareExpr(wb, crate, mod, v);
+        // TODO: Visitor instead
+        if (auto* vp = cast<ASTExprNodeString>(v.get())) {
+            rv += vp->value;
+        } else if (auto* vp = cast<ASTExprNodeInteger>(v.get())) {
+            if (vp->datatype == CORETYPE_CHAR) {
+                rv += Codepoint{static_cast<u32>(vp->value.truncateU64())};
+            } else {
+                rv += FMT(vp->value);
+            }
+        } else if (auto* vp = cast<ASTExprNodeFloat>(v.get())) {
+            rv += formatFloatValueForToken(vp->value);
+        } else if (auto* vp = cast<ASTExprNodeBool>(v.get())) {
+            rv += (vp->value ? "true" : "false");
+        } else if (auto* vp = cast<ASTExprNodeUniOp>(v.get())) {
+            const auto* inner = vp->value.get();
+            if (vp->type != ASTExprNodeUniOp::NEGATE) {
+                ERROR(sp, E0000, "Unexpected expression type in concat! argument");
+            } else if (const auto* iv = cast<const ASTExprNodeInteger>(inner)) {
+                rv += FMT("-" << iv->value);
+            } else if (const auto* fv = cast<const ASTExprNodeFloat>(inner)) {
+                rv += "-";
+                rv += formatFloatValueForToken(fv->value);
+            } else {
+                ERROR(sp, E0000, "Unexpected expression type in concat! argument");
+            }
+        } else {
+            ERROR(sp, E0000, "Unexpected expression type in concat! argument");
+        }
+    } while (GET_TOK(tok, lex) == TOK_COMMA);
+    if (tok.type() != TOK_EOF) {
+        parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
+    }
+
+    return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_STRING, mv$(rv), {}))));
+}
+
+auto CConcatBytesExpander::getArrayByte(const Span& sp, const ASTExprNode& node) -> char {
+    const auto* value = cast<const ASTExprNodeInteger>(&node);
+    if (!value || (value->datatype != CORETYPE_ANY && value->datatype != CORETYPE_U8) || !value->value.isU64() || value->value.truncateU64() > 0xff) {
+        ERROR(sp, E0000, "concat_bytes! array elements must be byte or u8 literals");
+    }
+    return static_cast<char>(value->value.truncateU64());
+}
+
+auto CConcatBytesExpander::append(const Span& sp, std::string& output, const ASTExprNode& node) -> void {
+    if (const auto* value = cast<const ASTExprNodeInteger>(&node)) {
+        if (value->datatype != CORETYPE_U8 || !value->value.isU64() || value->value.truncateU64() > 0xff) {
+            ERROR(sp, E0000, "concat_bytes! arguments must be byte string, byte, or byte-array literals");
+        }
+        output.push_back(static_cast<char>(value->value.truncateU64()));
+        return;
+    }
+    if (const auto* value = cast<const ASTExprNodeByteString>(&node)) {
+        output += value->value;
+        return;
+    }
+    if (const auto* value = cast<const ASTExprNodeArray>(&node)) {
+        if (!value->size) {
+            for (const auto& element : value->values) {
+                output.push_back(getArrayByte(sp, *element));
+            }
+            return;
+        }
+
+        const auto* count = cast<const ASTExprNodeInteger>(value->size.get());
+        if (!count || !count->value.isU64()) {
+            ERROR(sp, E0000, "concat_bytes! repeat count must be an integer literal");
+        }
+        const auto byte = getArrayByte(sp, *value->values.at(0));
+        output.append(static_cast<size_t>(count->value.truncateU64()), byte);
+        return;
+    }
+    ERROR(sp, E0000, "concat_bytes! arguments must be byte string, byte, or byte-array literals");
+}
+
+auto CConcatBytesExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+
+    std::string output;
+    do {
+        if (LOOK_AHEAD(lex) == TOK_EOF) {
+            GET_TOK(tok, lex);
+            break;
+        }
+
+        auto value = ParseExpr0(lex);
+        ExpandBareExpr(wb, crate, mod, value);
+        append(sp, output, *value);
+    } while (GET_TOK(tok, lex) == TOK_COMMA);
+    if (tok.type() != TOK_EOF) {
+        parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
+    }
+
+    return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_BYTESTRING, mv$(output), {}))));
+}
+
+auto CConcatIdentsExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+
+    std::string rv;
+
+    do {
+        if (LOOK_AHEAD(lex) == TOK_EOF) {
+            GET_TOK(tok, lex);
+            break;
+        }
+
+        GET_CHECK_TOK(tok, lex, TOK_IDENT);
+        rv += tok.ident().name.c_str();
+
+    } while (GET_TOK(tok, lex) == TOK_COMMA);
+    if (tok.type() != TOK_EOF) {
+        parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
+    }
+
+    return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_IDENT, Ident(lex.getHygiene(), RcString::newInterned(rv))))));
+}
+
+auto CExpanderEnv::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    std::string varname = getString(sp, wb, crate, mod, tt);
+
+    const char* varValCstr = getenv(varname.c_str());
+    if (!varValCstr) {
+        ERROR(sp, E0000, "Environment variable '" << varname << "' not defined");
+    }
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, std::string(varValCstr), {}))));
+}
+
+auto CExpanderOptionEnv::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    std::string varname = getString(sp, wb, crate, mod, tt);
+    std::vector<TokenTree> rv;
+
+    const char* varValCstr = getenv(varname.c_str());
+    if (!varValCstr) {
+        rv.reserve(7);
+        rv.push_back(Token(TOK_IDENT, RcString::newInterned("None")));
+        rv.push_back(Token(TOK_DOUBLE_COLON));
+        rv.push_back(Token(TOK_LT));
+        rv.push_back(Token(TOK_AMP));
+        rv.push_back(Token(TOK_LIFETIME, RcString::newInterned("static")));
+        rv.push_back(Token(TOK_IDENT, RcString::newInterned("str")));
+        rv.push_back(Token(TOK_GT));
+    } else {
+        rv.reserve(4);
+        rv.push_back(Token(TOK_IDENT, RcString::newInterned("Some")));
+        rv.push_back(Token(TOK_PAREN_OPEN));
+        rv.push_back(Token(TOK_STRING, std::string(varValCstr), {}));
+        rv.push_back(Token(TOK_PAREN_CLOSE));
+    }
+    return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, {}, mv$(rv))));
+}
+
+auto CExpanderFile::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, std::string(SourceLocation(sp).filename.c_str()), {}))));
+}
+
+auto CExpanderLine::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(SourceLocation(sp).line), CORETYPE_U32))));
+}
+
+auto CExpanderColumn::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(SourceLocation(sp).column), CORETYPE_U32))));
+}
+
+auto CExpanderUnstableColumn::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(SourceLocation(sp).column), CORETYPE_U32))));
+}
+
+auto CExpanderModulePath::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    std::string pathStr;
+    if (LexFindReservedWord(crate.crateNameSet, crate.edition) != TOK_NULL) {
+        pathStr += "r#";
+    }
+    pathStr += crate.crateNameSet;
+    for (const auto& comp : mod.path().nodes) {
+        if (comp.c_str()[0] == '#') {
+            continue;
+        }
+        pathStr += "::";
+        pathStr += comp.c_str();
+    }
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(pathStr), {}))));
+}
+
+auto FmtArgs::operator==(const FmtArgs& x) const -> bool {
+    return std::memcmp(this, &x, sizeof(*this)) == 0;
+}
+
+auto FmtArgs::operator!=(const FmtArgs& x) const -> bool {
+#define CMP(f)    \
+    if (f != x.f) \
+    return true
+    CMP(align);
+    CMP(alignChar);
+    CMP(sign);
+    CMP(alternate);
+    CMP(zeroPad);
+    CMP(debugTy);
+    CMP(widthIsArg);
+    CMP(width);
+    CMP(precSet);
+    CMP(precIsArg);
+    CMP(prec);
+    return false;
+}
+
+auto CFormatArgsExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+    lex.parseState().module = &mod;
+
+    return expandFormatArgs(sp, wb, crate, lex, /*add_newline=*/false);
+}
+
+auto CConstFormatArgsExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+    lex.parseState().module = &mod;
+
+    return expandFormatArgs(sp, wb, crate, lex, /*add_newline=*/false);
+}
+
+auto CFormatArgsNlExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+    lex.parseState().module = &mod;
+
+    return expandFormatArgs(sp, wb, crate, lex, /*add_newline=*/true);
+}
+
+auto CIncludeExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+
+    auto path = includeGetString(sp, lex, crate, mod);
+    GET_CHECK_TOK(tok, lex, TOK_EOF);
+
+    std::string filePath = getPathRelativeTo(sp.getTopFileSpan().filename.c_str(), mv$(path));
+    crate.extraFiles.push_back(filePath);
+
+    ParseState ps;
+    ps.module = &mod;
+    return box$(Lexer(wb.id, *crate.hirPool, filePath, crate.edition, ps));
+}
+
+auto CIncludeBytesExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+
+    auto path = includeGetString(sp, lex, crate, mod);
+    GET_CHECK_TOK(tok, lex, TOK_EOF);
+
+    std::string filePath = getPathRelativeTo(sp.getTopFileSpan().filename.c_str(), mv$(path));
+    crate.extraFiles.push_back(filePath);
+
+    std::ifstream is(filePath);
+    if (!is.good()) {
+        ERROR(sp, E0000, "Cannot open file " << filePath << " for include_bytes!");
+    }
+    std::stringstream ss;
+    ss << is.rdbuf();
+
+    std::vector<TokenTree> toks;
+    toks.push_back(Token(TOK_BYTESTRING, mv$(ss.str()), {}));
+    return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
+}
+
+auto CIncludeStrExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+
+    auto path = includeGetString(sp, lex, crate, mod);
+    GET_CHECK_TOK(tok, lex, TOK_EOF);
+
+    std::string filePath = getPathRelativeTo(sp.getTopFileSpan().filename.c_str(), mv$(path));
+    crate.extraFiles.push_back(filePath);
+
+    std::ifstream is(filePath);
+    if (!is.good()) {
+        ERROR(sp, E0000, "Cannot open file " << filePath << " for include_str!");
+    }
+    std::stringstream ss;
+    ss << is.rdbuf();
+
+    std::vector<TokenTree> toks;
+    toks.push_back(Token(TOK_STRING, mv$(ss.str()), {}));
+    return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
+}
+
+auto CExpanderPanic::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+
+    auto edition = crate.edition;
+    if (tt.hygiene().hasModPath() && tt.hygiene().modPath().crate != "") {
+        edition = crate.externCrates.at(tt.hygiene().modPath().crate).hir->edition;
+    }
+    std::vector<TokenTree> toks;
+    toks.push_back(Token(TOK_DOUBLE_COLON));
+    const auto& panicCrate = crate.extCratenameStd != "" ? crate.extCratenameStd : crate.extCratenameCore;
+    toks.push_back(Token(TOK_STRING, std::string(panicCrate.c_str()), {}));
+    toks.push_back(Token(TOK_DOUBLE_COLON));
+    toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
+    toks.push_back(Token(TOK_DOUBLE_COLON));
+    switch (edition) {
+        case ASTEdition::Rust2015:
+        case ASTEdition::Rust2018:
+            toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic_2015")));
+            break;
+        case ASTEdition::Rust2021:
+        case ASTEdition::Rust2024:
+            toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic_2021")));
+            break;
+    }
+    toks.push_back(Token(TOK_EXCLAM));
+    toks.push_back(Token(TOK_PAREN_OPEN));
+    if (tt.size() > 0) {
+        toks.push_back(tt.clone());
+    }
+    toks.push_back(Token(TOK_PAREN_CLOSE));
+
+    return box$(TTStreamO(sp, ParseState(), TokenTree(edition, Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
+}
+
+auto CExpanderUnreachable::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+
+    auto edition = crate.edition;
+    if (tt.hygiene().hasModPath() && tt.hygiene().modPath().crate != "") {
+        edition = crate.externCrates.at(tt.hygiene().modPath().crate).hir->edition;
+    }
+    std::vector<TokenTree> toks;
+    toks.push_back(Token(TOK_DOUBLE_COLON));
+    toks.push_back(Token(TOK_STRING, std::string(crate.extCratenameCore.c_str()), {}));
+    toks.push_back(Token(TOK_DOUBLE_COLON));
+    toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
+    toks.push_back(Token(TOK_DOUBLE_COLON));
+    switch (crate.edition) {
+        case ASTEdition::Rust2015:
+        case ASTEdition::Rust2018:
+            toks.push_back(Token(TOK_IDENT, RcString::newInterned("unreachable_2015")));
+            break;
+        case ASTEdition::Rust2021:
+        case ASTEdition::Rust2024:
+            toks.push_back(Token(TOK_IDENT, RcString::newInterned("unreachable_2021")));
+            break;
+    }
+    toks.push_back(Token(TOK_EXCLAM));
+    toks.push_back(Token(TOK_PAREN_OPEN));
+    if (tt.size() > 0) {
+        toks.push_back(tt.clone());
+    }
+    toks.push_back(Token(TOK_PAREN_CLOSE));
+
+    return box$(TTStreamO(sp, ParseState(), TokenTree(edition, Ident::Hygiene::newScope(wb.id, *wb.pool), mv$(toks))));
+}
+
+auto CExpanderRegisterDiagnostic::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    return box$(TTStreamO(sp, ParseState(), TokenTree()));
+}
+
+auto CExpanderDiagnosticUsed::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    return box$(TTStreamO(sp, ParseState(), TokenTree()));
+}
+
+auto CExpanderBuildDiagnosticArray::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+
+    Token tok;
+
+    GET_CHECK_TOK(tok, lex, TOK_IDENT);
+    GET_CHECK_TOK(tok, lex, TOK_COMMA);
+    GET_CHECK_TOK(tok, lex, TOK_IDENT);
+    auto itemName = tok.ident();
+    GET_CHECK_TOK(tok, lex, TOK_EOF);
+
+    std::vector<TokenTree> toks;
+    toks.push_back(TOK_RWORD_PUB);
+    toks.push_back(TOK_RWORD_STATIC);
+    toks.push_back(Token(TOK_IDENT, itemName));
+    toks.push_back(TOK_COLON);
+    toks.push_back(TOK_SQUARE_OPEN);
+    toks.push_back(TOK_PAREN_OPEN);
+    toks.push_back(TOK_AMP);
+    toks.push_back(Token(TOK_LIFETIME, RcString::newInterned("static")));
+    toks.push_back(Token(TOK_IDENT, RcString::newInterned("str")));
+    toks.push_back(TOK_COMMA);
+    toks.push_back(TOK_AMP);
+    toks.push_back(Token(TOK_LIFETIME, RcString::newInterned("static")));
+    toks.push_back(Token(TOK_IDENT, RcString::newInterned("str")));
+    toks.push_back(TOK_PAREN_CLOSE);
+    toks.push_back(TOK_SEMICOLON);
+    toks.push_back(Token(U128(0), CORETYPE_UINT));
+    toks.push_back(TOK_SQUARE_CLOSE);
+    toks.push_back(TOK_EQUAL);
+    toks.push_back(TOK_SQUARE_OPEN);
+    toks.push_back(TOK_SQUARE_CLOSE);
+    toks.push_back(TOK_SEMICOLON);
+
+    return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, lex.getHygiene(), mv$(toks))));
+}
+
+auto CExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> std::unique_ptr<TokenStream> {
+    Token tok;
+    std::string rv;
+    eTokenType prev = TOK_NULL;
+
+    auto lex = TTStream(sp, ParseState(), tt);
+    lex.parseState().wb = &wb;
+    while (GET_TOK(tok, lex) != TOK_EOF) {
+        if (!rv.empty() && tokensNeedSpace(prev, tok.type())) {
+            rv += " ";
+        }
+        rv += tok.toStr();
+        prev = tok.type();
+    }
+
+    return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(rv), {}))));
 }

@@ -20,7 +20,7 @@ generate(
             ("HIRArraySize", "size"),
         ], copy=False),
         v("Slice", fields=[("HIRTypeRef", "inner")]),
-        v("Tuple", "::std::vector<HIRTypeRef>"),
+        v("Tuple", "std::vector<HIRTypeRef>"),
         v("Borrow", fields=[
             ("HIRBorrowType", "type"),
             ("HIRTypeRef", "inner"),
@@ -64,7 +64,7 @@ generate(
         }
 
         HIRTypeData cloneData() const;
-        void fmt(::std::ostream& os) const;
+        void fmt(std::ostream& os) const;
 
         // Deliberately semantic relations. Plain ASTType* equality is pointer identity.
         bool equalsIgnoringRegions(HIRTypeRef x) const;

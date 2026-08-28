@@ -1,13 +1,13 @@
 #include "hir_typeck_helpers.h"
 
-#include <std/mem/obj_pool.h>
 #include <std/tst/ut.h>
+#include <std/mem/obj_pool.h>
 
 using namespace stl;
 
 STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     STD_TEST(testRollbackRestoresBinding) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -26,14 +26,13 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(table.mutationGeneration == genBefore);
         STD_INSIST(!table.probing());
 
-        // A rolled-back generation never recurs.
         table.setIvarTo(a, types.primitive(HIRCoreType::U8));
         STD_INSIST(table.mutationGeneration != genInside);
         STD_INSIST(table.mutationGeneration != genBefore);
     }
 
     STD_TEST(testRollbackUndoesAliasAndTruncates) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -47,7 +46,6 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto c = table.newIvar();
         const auto temporaryGeneration = table.mutationGeneration;
         STD_INSIST(temporaryGeneration != generationBeforeTemporary);
-        // Alias b to a, then bind a through a fresh probe variable chain.
         table.setIvarTo(a, types.infer(b));
         table.setIvarTo(c, types.primitive(HIRCoreType::I32));
         STD_INSIST(table.ivars.at(b).isAlias());
@@ -65,7 +63,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testRollbackRestoresLiteralClassUpgrade) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -85,7 +83,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testRollbackRestoresValueIvars) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -108,7 +106,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testUnifyingValueWithItselfIsNoop) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -123,7 +121,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testCommitKeepsBindings) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -140,7 +138,6 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         STD_INSIST(!table.getValue(v).is_Infer());
         STD_INSIST(!table.probing());
 
-        // A later probe must not be able to undo the committed state.
         const auto b = table.newIvar();
         auto snap2 = table.snapshot();
         table.setIvarTo(b, types.primitive(HIRCoreType::U8));
@@ -150,7 +147,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testNestedSnapshots) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -173,7 +170,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testUnifyBindsAndUnifies) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -183,7 +180,6 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto b = table.newIvar();
         Unifier unifier(sp, table);
 
-        // ?a := (i32, ?b), then ?b := u8: both propagate through the table.
         const auto pairTy = types.tuple({types.primitive(HIRCoreType::I32), types.infer(b)});
         STD_INSIST(unifier.unify(types.infer(a), pairTy) == Unifier::Outcome::Proven);
         STD_INSIST(unifier.unify(types.infer(b), types.primitive(HIRCoreType::U8)) == Unifier::Outcome::Proven);
@@ -192,7 +188,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testUnifyMismatchRollsBack) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -201,8 +197,6 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
         const auto a = table.newIvar();
         Unifier unifier(sp, table);
 
-        // (?a, i32) vs (u8, u16): ?a binds underway, then the mismatch on
-        // the second element must roll that binding back.
         const auto leftTy = types.tuple({types.infer(a), types.primitive(HIRCoreType::I32)});
         const auto rightTy = types.tuple({types.primitive(HIRCoreType::U8), types.primitive(HIRCoreType::U16)});
         STD_INSIST(unifier.unify(leftTy, rightTy) == Unifier::Outcome::Mismatch);
@@ -210,7 +204,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testUnifyOccursCheck) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -225,7 +219,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testUnifyLiteralClasses) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -242,7 +236,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testUnifyDefersRigidUnknowns) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -250,19 +244,15 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
 
         Unifier unifier(sp, table);
 
-        // A match placeholder is a rigid unknown: the equality is neither
-        // proven nor refuted, it is collected as data.
         const auto placeholder = types.generic(RcString::newInterned("impl_?_test"), GENERICPlaceholder << 8);
         STD_INSIST(unifier.unify(placeholder, types.primitive(HIRCoreType::I32)) == Unifier::Outcome::Ambiguous);
         STD_INSIST(unifier.pending().length() == 1);
         STD_INSIST(unifier.pending()[0].right->is_Primitive() || unifier.pending()[0].left->is_Primitive());
 
-        // A solver-canonical variable stays rigid too.
         const auto canonical = types.infer(HIR_INFER_SOLVER_CANONICAL_MIN);
         STD_INSIST(unifier.unify(canonical, types.primitive(HIRCoreType::U8)) == Unifier::Outcome::Ambiguous);
         STD_INSIST(unifier.pending().length() == 2);
 
-        // Distinct rigid generics can never be equal.
         const auto genericT = types.generic(RcString::newInterned("T"), 0);
         const auto genericU = types.generic(RcString::newInterned("U"), 1);
         STD_INSIST(unifier.unify(genericT, genericU) == Unifier::Outcome::Mismatch);
@@ -270,7 +260,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testUnifyBindsExistentialToCanonicalInput) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -286,7 +276,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testSolverExistentialHasTypedBinderIdentity) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
 
@@ -309,7 +299,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testCanonicalLiteralSlotRejectsStructuralType) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -327,20 +317,13 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testLiteralSlotDefersProjectionBeforeClassCheck) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
         Span sp;
 
-        const auto projection = types.path(
-            HIRPath(
-                types.primitive(HIRCoreType::U8),
-                HIRGenericPath(),
-                RcString::newInterned("Output")
-            ),
-            HIRTypePathBinding::make_Opaque({})
-        );
+        const auto projection = types.path(HIRPath(types.primitive(HIRCoreType::U8), HIRGenericPath(), RcString::newInterned("Output")), HIRTypePathBinding::make_Opaque({}));
 
         const auto canonicalInteger = types.infer(HIR_INFER_SOLVER_CANONICAL_MIN, HIRInferClass::Integer);
         Unifier canonical(sp, table);
@@ -355,7 +338,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testUnifyArrayBindsConstLength) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -425,7 +408,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testCandidateConstExistentialCapturesRigidPlaceholder) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);
@@ -447,7 +430,7 @@ STD_TEST_SUITE(HMTypeInferrenceSnapshot) {
     }
 
     STD_TEST(testRollbackRestoresChangedFlag) {
-        auto pool = stl::ObjPool::fromMemory();
+        auto pool = ObjPool::fromMemory();
         u32 id = 0;
         HIRTypeInterner types(*pool.mutPtr(), id);
         HMTypeInferrence table(types);

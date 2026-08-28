@@ -1,8 +1,12 @@
 #include "ident.h"
-#include <iostream>
-#include "common.h" // vector print
+
+#include "common.h"
 
 #include <std/mem/obj_pool.h>
+
+#include <iostream>
+
+using namespace stl;
 
 namespace {
     constexpr unsigned int ITEM_OPAQUE = 1u << 31;
@@ -19,14 +23,10 @@ bool Ident::Hygiene::isVisible(const Hygiene& srcH) const {
         return false;
     }
     for (size_t i = 0; i < selfSize; i++) {
-        if (inner->contexts[i] != srcH.inner->contexts[i]
-                || inner->macroDefinitions[i] != srcH.inner->macroDefinitions[i]) {
+        if (inner->contexts[i] != srcH.inner->contexts[i] || inner->macroDefinitions[i] != srcH.inner->macroDefinitions[i]) {
             return false;
         }
     }
-    // Ordinary lexical scopes extend visibility. A macro invocation is a
-    // semi-opaque rib: it must be removed at its definition boundary before
-    // bindings outside that definition become visible.
     for (size_t i = selfSize; i < srcSize; i++) {
         if (srcH.inner->macroDefinitions[i] != 0) {
             return false;
@@ -48,7 +48,7 @@ RcString Ident::Hygiene::applyToItemName(const RcString& name) const {
         return name;
     }
 
-    ::std::ostringstream os;
+    std::ostringstream os;
     os << name << "#h";
     for (size_t i = 0; i < h.contexts.size(); i++) {
         if ((h.macroDefinitions[i] & ITEM_OPAQUE) != 0) {
@@ -58,12 +58,12 @@ RcString Ident::Hygiene::applyToItemName(const RcString& name) const {
     return RcString::newInterned(os.str());
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Ident& x) {
+std::ostream& operator<<(std::ostream& os, const Ident& x) {
     os << x.name << x.hygiene;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Ident::Hygiene& x) {
+std::ostream& operator<<(std::ostream& os, const Ident::Hygiene& x) {
     os << "/*[";
     if (x.inner) {
         for (size_t i = 0; i < x.inner->contexts.size(); i++) {
@@ -99,18 +99,18 @@ Ident::Hygiene::Inner Ident::Hygiene::clone() const {
     return inner ? *inner : Inner{};
 }
 
-const Ident::Hygiene::Inner* Ident::Hygiene::store(stl::ObjPool& pool, Inner v) {
-    return pool.make<Inner>(::std::move(v));
+const Ident::Hygiene::Inner* Ident::Hygiene::store(ObjPool& pool, Inner v) {
+    return pool.make<Inner>(std::move(v));
 }
 
-Ident::Hygiene Ident::Hygiene::newScope(u32& id, stl::ObjPool& pool) {
+Ident::Hygiene Ident::Hygiene::newScope(u32& id, ObjPool& pool) {
     Inner v;
     v.contexts.push_back(++id);
     v.macroDefinitions.push_back(0);
-    return Hygiene(store(pool, ::std::move(v)));
+    return Hygiene(store(pool, std::move(v)));
 }
 
-Ident::Hygiene Ident::Hygiene::newScopeChained(u32& id, stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition, bool itemOpaque) {
+Ident::Hygiene Ident::Hygiene::newScopeChained(u32& id, ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition, bool itemOpaque) {
     Inner v;
     if (parent.inner) {
         v.searchModule = parent.inner->searchModule;
@@ -122,10 +122,10 @@ Ident::Hygiene Ident::Hygiene::newScopeChained(u32& id, stl::ObjPool& pool, cons
     v.contexts.push_back(++id);
     assert((macroDefinition & ITEM_OPAQUE) == 0);
     v.macroDefinitions.push_back(macroDefinition | (itemOpaque ? ITEM_OPAQUE : 0));
-    return Hygiene(store(pool, ::std::move(v)));
+    return Hygiene(store(pool, std::move(v)));
 }
 
-Ident::Hygiene Ident::Hygiene::withTailScope(stl::ObjPool& pool, const Hygiene& scope, bool inheritModPath) const {
+Ident::Hygiene Ident::Hygiene::withTailScope(ObjPool& pool, const Hygiene& scope, bool inheritModPath) const {
     assert(scope.inner);
     const auto& s = *scope.inner;
     assert(!s.contexts.empty());
@@ -136,19 +136,19 @@ Ident::Hygiene Ident::Hygiene::withTailScope(stl::ObjPool& pool, const Hygiene& 
     if (inheritModPath && s.searchModule) {
         v.searchModule = s.searchModule;
     }
-    return Hygiene(store(pool, ::std::move(v)));
+    return Hygiene(store(pool, std::move(v)));
 }
 
-Ident::Hygiene Ident::Hygiene::getParent(stl::ObjPool& pool) const {
+Ident::Hygiene Ident::Hygiene::getParent(ObjPool& pool) const {
     assert(inner);
     const auto& c = *inner;
     Inner v;
     v.contexts.insert(v.contexts.begin(), c.contexts.begin(), c.contexts.end() - 1);
     v.macroDefinitions.insert(v.macroDefinitions.begin(), c.macroDefinitions.begin(), c.macroDefinitions.end() - 1);
-    return Hygiene(store(pool, ::std::move(v)));
+    return Hygiene(store(pool, std::move(v)));
 }
 
-bool Ident::Hygiene::leaveMacroDefinition(stl::ObjPool& pool, unsigned int definition, const Hygiene& tokenContext, const Hygiene& definitionContext) {
+bool Ident::Hygiene::leaveMacroDefinition(ObjPool& pool, unsigned int definition, const Hygiene& tokenContext, const Hygiene& definitionContext) {
     if (!inner) {
         return false;
     }
@@ -160,17 +160,17 @@ bool Ident::Hygiene::leaveMacroDefinition(stl::ObjPool& pool, unsigned int defin
     Inner v = clone();
     v.contexts.pop_back();
     v.macroDefinitions.pop_back();
-    *this = Hygiene(store(pool, ::std::move(v)));
+    *this = Hygiene(store(pool, std::move(v)));
     if (*this == tokenContext) {
         *this = definitionContext;
     }
     return true;
 }
 
-void Ident::Hygiene::setModPath(stl::ObjPool& pool, ModPath p) {
+void Ident::Hygiene::setModPath(ObjPool& pool, ModPath p) {
     Inner v = clone();
-    v.searchModule = ::std::make_shared<ModPath>(::std::move(p));
-    *this = Hygiene(store(pool, ::std::move(v)));
+    v.searchModule = std::make_shared<ModPath>(std::move(p));
+    *this = Hygiene(store(pool, std::move(v)));
 }
 
 const Ident::ModPath& Ident::Hygiene::modPath() const {
@@ -194,18 +194,25 @@ Ordering Ident::Hygiene::ord(const Hygiene& x) const {
     ORD(a.macroDefinitions, b.macroDefinitions); /*ORD(*m_inner->search_module, *x->search_module);*/
     return OrdEqual;
 }
+
 Ident::Ident(const char* name)
     : hygiene()
-    , name(name) {
+    , name(name)
+{
 }
+
 Ident::Ident(RcString name)
     : hygiene()
-    , name(::std::move(name)) {
+    , name(std::move(name))
+{
 }
+
 Ident::Ident(Hygiene hygiene, RcString name)
-    : hygiene(::std::move(hygiene))
-    , name(::std::move(name)) {
+    : hygiene(std::move(hygiene))
+    , name(std::move(name))
+{
 }
+
 bool Ident::operator<(const Ident& x) const {
     if (this->name != x.name) {
         return this->name < x.name;

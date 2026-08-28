@@ -2,17 +2,17 @@
 #include "mir_operations.h"
 
 #include "mir_mir.h"
-#include "hir_expr.h" // The optimiser section accesses complete HIR expression nodes.
+#include "hir_expr.h"
 #include "wire_board.h"
 #include "hir_visitor.h"
 #include "mir_helpers.h"
 #include "trans_target.h"
-#include "hir_conv_main_bindings.h"
-#include "hir_conv_constant_evaluation.h"
-#include "trans_trans_list.h" // Note: This is included for inlining after enumeration and monomorph
+#include "trans_trans_list.h"
 #include "hir_typeck_static.h"
 #include "mir_main_bindings.h"
 #include "mir_visit_crate_mir.h"
+#include "hir_conv_main_bindings.h"
+#include "hir_conv_constant_evaluation.h"
 
 #include <std/alg/defer.h>
 
@@ -23,20 +23,156 @@
 #include <unordered_map>
 #include <unordered_set>
 
-class MirOperationsContext {
-public:
+using namespace stl;
+
+struct MirOperationsContext {
     const RcString vtableName = RcString::newInterned("vtable#");
-    ::std::vector<bool> visitedBlocks;
-    ::std::vector<MIRBasicBlockId> pendingBlocks;
-    ::std::vector<::std::vector<unsigned>> blockPredecessors;
+    std::vector<bool> visitedBlocks;
+    std::vector<MIRBasicBlockId> pendingBlocks;
+    std::vector<std::vector<unsigned>> blockPredecessors;
     bool visitingBlocks = false;
 };
 
-MirOperationsContext* MIRCreateOperationsContext(stl::ObjPool& pool) {
+namespace {
+struct MirMutator {
+    MIRFunction& fcn;
+    unsigned int curBlock;
+    unsigned int curStmt;
+    mutable std::vector<MIRStatement> newStatements;
+
+    MirMutator(MIRFunction& fcn, unsigned int bb, unsigned int stmt);
+
+    void updateState(MIRTypeResolve& state);
+
+    MIRLValue newTemporary(HIRTypeRef ty);
+
+    void pushStatement(MIRStatement stmt);
+
+    MIRLValue inTemporary(HIRTypeRef ty, MIRRValue val);
+
+    decltype(newStatements.begin()) flushStmt();
+
+    void flushBlock();
+
+    decltype(newStatements.begin()) flush();
+};
+}
+
+namespace {
+    struct LvalueVisitor {
+        virtual bool visitLvalue(const MIRLValue& lv, MIRValUsage u) = 0;
+    };
+
+    struct LvalueVisitorMut {
+        virtual bool visitLvalue(MIRLValue& lv, MIRValUsage u) = 0;
+    };
+
+    struct LvalueRefVisitorMut {
+        virtual bool visitLvalue(MIRLValue::MRef& lv, MIRValUsage u) = 0;
+    };
+
+    struct LvalueConstAdapter final: public LvalueVisitorMut {
+        LvalueVisitor& inner;
+
+        explicit LvalueConstAdapter(LvalueVisitor& inner);
+
+        bool visitLvalue(MIRLValue& lv, MIRValUsage u) override;
+    };
+
+    struct ParamsSet: public MonomorphiserPP {
+        HIRPathParams implParams;
+        const HIRPathParams* fcnParams;
+        const HIRTypeData* selfTy;
+        const HIRGenericParams* implParamsDef;
+        const HIRGenericParams* fcnParamsDef;
+
+        HIRPathParams fcnParamsTmp;
+
+        explicit ParamsSet(HIRTypeInterner& types);
+
+        const HIRTypeData* getSelfType() const override;
+
+        const HIRPathParams* getImplParams() const override;
+
+        const HIRPathParams* getMethodParams() const override;
+
+        const HIRPathParams* getHrbParams() const override;
+
+        bool hasUnevaluatedValues() const;
+    };
+
+    struct MIRBlockCallback {
+        virtual void run(MIRBasicBlockId bb, MIRBasicBlock& block) const = 0;
+    };
+
+    template <typename F>
+    struct MIRBlockCb final: MIRBlockCallback {
+        F f;
+
+        explicit MIRBlockCb(F f);
+
+        void run(MIRBasicBlockId bb, MIRBasicBlock& block) const override;
+    };
+
+    struct MIRBlockConstCallback {
+        virtual void run(MIRBasicBlockId bb, const MIRBasicBlock& block) const = 0;
+    };
+
+    template <typename F>
+    struct MIRBlockConstCb final: MIRBlockConstCallback {
+        F f;
+
+        explicit MIRBlockConstCb(F f);
+
+        void run(MIRBasicBlockId bb, const MIRBasicBlock& block) const override;
+    };
+
+    struct OptimiseStmtRef {
+        unsigned bbIdx;
+        unsigned stmtIdx;
+
+        OptimiseStmtRef();
+
+        OptimiseStmtRef(unsigned b, unsigned s);
+
+        bool operator==(const OptimiseStmtRef& x) const;
+    };
+
+    struct IterPathCallback {
+        virtual bool visitStatement(OptimiseStmtRef location, const MIRStatement& statement) = 0;
+        virtual bool visitTerminator(OptimiseStmtRef location, const MIRTerminator& terminator) = 0;
+    };
+
+    template <typename S, typename T>
+    struct IterPathCb final: IterPathCallback {
+        S statement;
+        T terminator;
+
+        IterPathCb(S statement, T terminator);
+
+        bool visitStatement(OptimiseStmtRef location, const MIRStatement& value) override;
+
+        bool visitTerminator(OptimiseStmtRef location, const MIRTerminator& value) override;
+    };
+
+    struct CheckInvalidatesLvalue final: public LvalueVisitor {
+        const MIRLValue& val;
+        bool hasIndex;
+        bool isCopy;
+        bool alsoRead;
+
+        CheckInvalidatesLvalue(const MIRLValue& val, bool isCopy, bool alsoRead = false);
+
+        bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override;
+    };
+}
+
+MirOperationsContext* MIRCreateOperationsContext(ObjPool& pool) {
     return pool.make<MirOperationsContext>();
 }
 
 namespace {
+
     MirOperationsContext& operationsContext(const MIRTypeResolve& state) {
         return *state.resolve.board().mirOperations;
     }
@@ -108,80 +244,7 @@ namespace {
     }
 }
 
-//template<typename T>
-//::std::ostream& operator<<(::std::ostream& os, const T& v) {
-//}
-
-// --------------------------------------------------------------------
-
-class MirMutator {
-    MIRFunction& fcn;
-    unsigned int curBlock;
-    unsigned int curStmt;
-    mutable ::std::vector<MIRStatement> newStatements;
-
-public:
-    MirMutator(MIRFunction& fcn, unsigned int bb, unsigned int stmt)
-        : fcn(fcn)
-        , curBlock(bb)
-        , curStmt(stmt)
-    {
-    }
-
-    void updateState(MIRTypeResolve& state) {
-        if (this->curStmt == fcn.blocks[this->curBlock].statements.size()) {
-            state.setCurStmtTerm(this->curBlock);
-        } else {
-            state.setCurStmt(this->curBlock, this->curStmt);
-        }
-    }
-
-    MIRLValue newTemporary(HIRTypeRef ty) {
-        auto rv = MIRLValue::newLocal(static_cast<unsigned int>(fcn.locals.size()));
-        fcn.locals.push_back(mv$(ty));
-        return rv;
-    }
-
-    void pushStatement(MIRStatement stmt) {
-        newStatements.push_back(mv$(stmt));
-    }
-
-    MIRLValue inTemporary(HIRTypeRef ty, MIRRValue val) {
-        auto rv = this->newTemporary(mv$(ty));
-        pushStatement(MIRStatement::make_Assign({rv.clone(), mv$(val)}));
-        return rv;
-    }
-
-    decltype(newStatements.begin()) flushStmt() {
-        auto rv = flush();
-        this->curStmt += 1;
-        return rv;
-    }
-
-    void flushBlock() {
-        flush();
-        fcn.blocks.at(curBlock).statements.shrink_to_fit();
-        this->curStmt = 0;
-        this->curBlock += 1;
-    }
-
-private:
-    decltype(newStatements.begin()) flush() {
-        auto& block = fcn.blocks.at(curBlock);
-        assert(curStmt <= block.statements.size());
-        auto it = block.statements.begin() + curStmt;
-        if (newStatements.size() > 0) {
-            for (auto& stmt : newStatements) {
-                it = block.statements.insert(it, mv$(stmt));
-                ++it;
-                curStmt += 1;
-            }
-            newStatements.clear();
-        }
-        return it;
-    }
-};
-
+namespace {
 void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& lval);
 
 namespace {
@@ -191,7 +254,6 @@ namespace {
 }
 
 const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const HIRPath& path, HIRTypeRef& outTy, MonomorphState& params) {
-
     const HIRGenericParams* implParams = nullptr;
     auto v = state.resolve.getValue(state.sp, path, params, false, &implParams);
     if (const auto* e = v.opt_Constant()) {
@@ -202,8 +264,6 @@ const EncodedLiteral* MIRCleanupGetConstant(const MIRTypeResolve& state, const H
             case HIRConstant::ValueState::Known:
                 return &hirConst.valueRes;
             case HIRConstant::ValueState::Generic: {
-                // Do some form of lookup of a pre-cached evaluated monomorphised constant
-                // - Maybe on the `Constant` entry there can be a list of pre-monomorphised values
                 auto it = hirConst.monomorphCache.find(path);
                 if (it == hirConst.monomorphCache.end() && !monomorphisePathNeeded(path)) {
                     ConvertHIRConstantEvaluateConstant(state.resolve, implParams, HIRItemPath(path), hirConst);
@@ -267,15 +327,16 @@ namespace {
 
 MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mutator, EncodedLiteralSlice lit, HIRTypeRef ty, const MonomorphState& params, HIRPath path) {
     switch ((*ty).tag()) {
-default:
-        if( path == HIRGenericPath() )
-            MIR_TODO(state, "Literal of type " << ty << " - " << lit);
-        return MIRConstant::make_ItemAddr(box$(path));
+        default:
+            if (path == HIRGenericPath()) {
+                MIR_TODO(state, "Literal of type " << ty << " - " << lit);
+            }
+            return MIRConstant::make_ItemAddr(box$(path));
         case HIRTypeData::TAG_Tuple: {
             auto* repr = TargetGetTypeRepr(state.sp, state.resolve, ty);
             MIR_ASSERT(state, repr, "No type repr, but encoded value available? " << ty);
 
-            ::std::vector<MIRParam> lvals;
+            std::vector<MIRParam> lvals;
             lvals.reserve(repr->fields.size());
 
             for (const auto& fld : repr->fields) {
@@ -308,13 +369,12 @@ default:
                 isAllSame = false;
             }
 
-            // If all of the literals are the same value, then optimise into a count-based initialisation
             if (isAllSame) {
                 auto rval = MIRCleanupLiteralToRValue(state, mutator, lit.slice(0, size), te.inner, params, HIRGenericPath());
                 auto dataLval = mutator.inTemporary(te.inner, mv$(rval));
                 return MIRRValue::make_SizedArray({mv$(dataLval), static_cast<unsigned int>(count)});
             } else {
-                ::std::vector<MIRParam> lvals;
+                std::vector<MIRParam> lvals;
                 lvals.reserve(te.size.as_Known());
 
                 size_t ofs = 0;
@@ -334,7 +394,7 @@ default:
             MIR_ASSERT(state, repr, "No type repr, but encoded value available? " << ty);
 
             if (te.binding.is_Struct()) {
-                ::std::vector<MIRParam> lvals;
+                std::vector<MIRParam> lvals;
                 lvals.reserve(repr->fields.size());
 
                 for (const auto& fld : repr->fields) {
@@ -366,7 +426,6 @@ default:
                         vals.push_back(mutator.inTemporary(fld.ty, mv$(rval)));
                     }
                 } else {
-                    // Leave empty
                 }
                 return MIRRValue::make_EnumVariant({te.path.data.as_Generic().clone(), varIdx, mv$(vals)});
             } else if (te.binding.is_Union()) {
@@ -377,19 +436,14 @@ default:
 
                 if (varIdx == ~0u) {
                     for (const auto& e : repr->fields) {
-                        // A byte array covering the entire structure - can just emit
                         if (e.ty->is_Array() && e.ty->as_Array().inner == HIRCoreType::U8 && e.ty->as_Array().size.as_Known() == repr->size) {
                             varIdx = &e - &repr->fields.front();
                             break;
                         }
                     }
                 }
-                // MaybeUninit (1.39) - `union MaybeUninit<T> { uninit: (), data: T }`
-                // - If the body is all zeroes, then emit `uninit` (as that's the default)
-                // - Otherwise, emit the actual value
                 if (varIdx == ~0u) {
                     if (repr->fields.size() == 2 && repr->fields[0].ty == state.crate.types.unit()) {
-                        // If all zeroes, then emit the tuple field, otherwise the other field
                         bool isNonzero = false;
                         for (size_t i = 0; i < repr->size; i++) {
                             if (lit.slice(i, 1).readUint(1) != 0) {
@@ -402,11 +456,9 @@ default:
                     }
                 }
 
-                // If there's a POD field (pointer or integer) of size equal to the whole struct, use that
                 if (varIdx == ~0u) {
                     for (const auto& e : repr->fields) {
                         if (e.ty->is_Pointer() || e.ty->is_Primitive()) {
-                            // If there's a relocation, then we have to use a pointer field
                             if (lit.getReloc() && !e.ty->is_Pointer()) {
                                 continue;
                             }
@@ -414,7 +466,6 @@ default:
                             size_t fldSize = 0;
                             TargetGetSizeOf(state.sp, state.resolve, e.ty, fldSize);
                             if (fldSize == repr->size) {
-                                // Found a suitable field!
                                 varIdx = &e - &repr->fields.front();
                                 break;
                             }
@@ -422,8 +473,6 @@ default:
                     }
                 }
 
-                // A full-size aggregate made entirely from unrestricted scalar types can
-                // represent the storage without knowing which union field initialized it.
                 if (varIdx == ~0u) {
                     const auto literalEnd = lit.ofs + lit.size;
                     const bool hasRelocation = std::any_of(lit.base.relocations.begin(), lit.base.relocations.end(), [&](const auto& relocation) {
@@ -440,9 +489,6 @@ default:
                     }
                 }
 
-                // No field covers the whole union: what is left over is padding
-                // the union's alignment asked for, and no field can read it.
-                // The widest field that takes any bit pattern carries the value.
                 if (varIdx == ~0u) {
                     const auto literalEnd = lit.ofs + lit.size;
                     const bool hasRelocation = std::any_of(lit.base.relocations.begin(), lit.base.relocations.end(), [&](const auto& relocation) {
@@ -452,8 +498,7 @@ default:
                     if (!hasRelocation) {
                         for (const auto& e : repr->fields) {
                             size_t fieldSize = 0;
-                            if (TargetGetSizeOf(state.sp, state.resolve, e.ty, fieldSize) && fieldSize <= repr->size && fieldSize > widest
-                                && typeAcceptsAllBitPatterns(state.sp, state.resolve, e.ty)) {
+                            if (TargetGetSizeOf(state.sp, state.resolve, e.ty, fieldSize) && fieldSize <= repr->size && fieldSize > widest && typeAcceptsAllBitPatterns(state.sp, state.resolve, e.ty)) {
                                 widest = fieldSize;
                                 varIdx = &e - &repr->fields.front();
                             }
@@ -530,8 +575,7 @@ default:
                 if (reloc->p) {
                     auto itemPath = params.monomorphPath(state.sp, *reloc->p);
                     MonomorphState itemParams(state.crate.types);
-                    const auto item = state.resolve.getValue(
-                        state.sp, itemPath, itemParams, /*signature_only=*/true);
+                    const auto item = state.resolve.getValue(state.sp, itemPath, itemParams, /*signature_only=*/true);
                     if (item.is_Function()) {
                         const auto encodedAddress = lit.readUint(TargetGetPointerBits() / 8);
                         MIR_ASSERT(state, encodedAddress >= EncodedLiteral::PTR_BASE, "Invalid function address");
@@ -543,7 +587,6 @@ default:
                         return MIRRValue::make_Cast({mv$(value), mv$(ty)});
                     }
                 }
-                // Share logic with `Borrow` below, but wrap returned value in a cast op
                 auto tyBorrow = state.crate.types.borrow(te.type, te.inner);
                 auto rval = MIRCleanupLiteralToRValue(state, mutator, lit, tyBorrow, params, mv$(path));
                 auto lval = mutator.inTemporary(mv$(tyBorrow), mv$(rval));
@@ -551,8 +594,6 @@ default:
             } else {
                 const auto ptrSize = TargetGetPointerBits() / 8;
                 auto v = lit.readUint(ptrSize);
-                // A raw pointer to a slice carries a length that the address
-                // alone cannot supply, so it is built rather than cast.
                 if (state.resolve.metadataType(state.sp, te.inner) == MetadataType::Slice) {
                     const auto* slice = te.inner->opt_Slice();
                     MIR_ASSERT(state, slice || te.inner == HIRCoreType::Str, "Slice metadata on non-slice type " << te.inner);
@@ -571,8 +612,7 @@ default:
             auto& te = (*ty).as_Borrow();
             const auto* dataReloc = lit.getReloc();
             const auto data_ptr = lit.readUint(TargetGetPointerBits() / 8);
-            MIR_ASSERT(state, dataReloc ? data_ptr >= EncodedLiteral::PTR_BASE : data_ptr != 0,
-                "Bad pointer value - 0x" << std::hex << data_ptr);
+            MIR_ASSERT(state, dataReloc ? data_ptr >= EncodedLiteral::PTR_BASE : data_ptr != 0, "Bad pointer value - 0x" << std::hex << data_ptr);
 
             if (!dataReloc) {
                 HIRTypeRef ptrInner;
@@ -593,8 +633,6 @@ default:
                 auto ptr = mutator.inTemporary(ptrTy, MIRRValue::make_Cast({mv$(addr), ptrTy}));
 
                 switch (metadataType) {
-                    // An extern type carries no metadata at all, so a pointer
-                    // to one is as thin as a pointer to a sized type.
                     case MetadataType::Zero:
                     case MetadataType::None:
                         return MIRRValue::make_Borrow({te.type, false, MIRLValue::newDeref(mv$(ptr))});
@@ -616,11 +654,8 @@ default:
                 HIRTypeRef tmp;
                 const auto& srcTy = state.getStaticType(tmp, path);
 
-                // Get the metadata type (for !Sized wrapper types)
                 auto metaTy = state.resolve.metadataType(state.sp, te.inner);
                 switch (metaTy) {
-                    // An extern type -- the vtable a `DynMetadata` points at is
-                    // one -- carries no metadata, so the pointer is thin.
                     case MetadataType::Zero:
                     case MetadataType::None:
                         // TODO: What if the type doesn't match? Emit a `_Cast foo as &Bar`?
@@ -656,13 +691,12 @@ default:
                         MIR_BUG(state, te.inner << " unknown metadata type");
                 }
             } else {
-                // This is a borrow of a "string"
                 MIR_ASSERT(state, ofs <= dataReloc->bytes.size(), "Offset out of range");
                 auto s = dataReloc->bytes.begin() + ofs.truncateU64();
                 auto e = dataReloc->bytes.end();
 
                 if (te.inner->is_Slice() && te.inner->as_Slice().inner == HIRCoreType::U8) {
-                    ::std::vector<u8> bytestr;
+                    std::vector<u8> bytestr;
                     for (auto it = s; it != e; ++it) {
                         bytestr.push_back(static_cast<u8>(*it));
                     }
@@ -670,7 +704,7 @@ default:
                     return MIRRValue::make_MakeDst({MIRConstant(mv$(bytestr)), std::move(size)});
                 } else if (te.inner->is_Array() && te.inner->as_Array().inner == HIRCoreType::U8) {
                     // TODO: How does this differ at codegen to the above?
-                    ::std::vector<u8> bytestr;
+                    std::vector<u8> bytestr;
                     for (auto it = s; it != e; ++it) {
                         bytestr.push_back(static_cast<u8>(*it));
                     }
@@ -678,20 +712,15 @@ default:
                 } else if (te.inner == HIRCoreType::Str) {
                     return MIRConstant::make_StaticString(std::string(s, e));
                 } else {
-                    // Get repr, assert that there's only one field and it's a `[u8]` or `str`
-                    // Pointer cast
-                    ::std::vector<u8> bytestr;
+                    std::vector<u8> bytestr;
                     for (auto it = s; it != e; ++it) {
                         bytestr.push_back(static_cast<u8>(*it));
                     }
                     auto size = MIRConstant::make_Uint({U128(bytestr.size()), HIRCoreType::Usize});
-                    // Make a `*const [u8]`
-                    auto ptr1 = MIRRValue::make_MakeDst({MIRConstant(mv$(bytestr)), ::std::move(size)});
+                    auto ptr1 = MIRRValue::make_MakeDst({MIRConstant(mv$(bytestr)), std::move(size)});
                     auto lval = mutator.inTemporary(state.crate.types.pointer(HIRBorrowType::Shared, state.crate.types.slice(state.crate.types.primitive(HIRCoreType::U8))), mv$(ptr1));
-                    // Cast to `*const T`
                     auto rawPtrTy = state.crate.types.pointer(HIRBorrowType::Shared, te.inner);
                     auto lval2 = mutator.inTemporary(rawPtrTy, MIRRValue::make_Cast({mv$(lval), rawPtrTy}));
-                    // Reborrow as `&T`
                     return MIRRValue::make_Borrow({HIRBorrowType::Shared, false, MIRLValue::newDeref(mv$(lval2))});
                 }
             }
@@ -699,10 +728,6 @@ default:
         }
         case HIRTypeData::TAG_NamedFunction: {
             auto& te = (*ty).as_NamedFunction();
-            // Function items are zero-sized: their identity is carried by
-            // the NamedFunction type, not by bytes or a relocation in the
-            // evaluated literal.  Reconstruct the ZST function value instead
-            // of treating the lifted inline constant itself as addressable.
             return MIRConstant::make_Function({box$(te.path.clone())});
         }
         case HIRTypeData::TAG_Function: {
@@ -716,28 +741,23 @@ default:
 }
 
 MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& receiverLvp, const HIRPath::Data::Data_UfcsKnown& pe) {
-
     assert(pe.type->is_TraitObject());
     const HIRTypeData::Data_TraitObject& te = pe.type->as_TraitObject();
     assert(te.trait.traitPtr);
     const auto& trait = *te.trait.traitPtr;
 
-    // 1. Get the vtable index for this function
     unsigned int vtableIdx = trait.getVtableValueIndex(pe.trait.path, pe.item);
     if (vtableIdx == 0) {
         BUG(sp, "Calling method '" << pe.item << "' from " << pe.trait << " through " << te.trait.path << " which isn't in the vtable");
     }
 
-    // 2. Load from the vtable
     auto vtableTy = state.crate.types.pointer(HIRBorrowType::Shared, getVtableType(sp, state.resolve, te));
 
-    // If the method is a by-value method, add a `&move`
     const auto& fnDef = state.crate.getTraitByPath(sp, pe.trait.path).values.at(pe.item).as_Function();
     if (fnDef.receiver == HIRFunction::Receiver::Value) {
         receiverLvp = mutator.inTemporary(state.crate.types.borrow(HIRBorrowType::Owned, pe.type), MIRRValue::make_Borrow({HIRBorrowType::Owned, false, mv$(receiverLvp)}));
     }
 
-    // Allocate a temporary for the vtable pointer itself
     auto vtableLv = mutator.newTemporary(mv$(vtableTy));
     auto fcnLval = MIRLValue::newField(MIRLValue::newDeref(vtableLv.clone()), vtableIdx);
     HIRTypeRef tmp;
@@ -755,7 +775,7 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
                 auto monomorph = [&](const auto& t) {
                     return MonomorphStatePtr(state.crate.types, ty, &tyPath.params, nullptr).monomorphType(state.sp, t);
                 };
-                ::std::vector<MIRParam> vals;
+                std::vector<MIRParam> vals;
                 switch (str.data.tag()) {
                     case HIRStructData::TAG_Unit: {
                         break;
@@ -787,7 +807,7 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
                 }
 
                 auto newPath = tyPath.clone();
-                return mutator.inTemporary( mv$(ty), MIRRValue::make_Struct({ mv$(newPath), mv$(vals) }) );
+                return mutator.inTemporary(mv$(ty), MIRRValue::make_Struct({mv$(newPath), mv$(vals)}));
             } else if (ty->is_Borrow() || ty->is_Pointer()) {
                 outInnerPtr = lv.clone();
                 return mutator.inTemporary(mv$(ty), MIRRValue::make_DstPtr({mv$(lv)}));
@@ -801,10 +821,7 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
     MIRLValue innerDynPtr;
 
     if (receiver->is_Path() && receiver->as_Path().binding.is_Struct() && receiver->as_Path().binding.as_Struct()->structMarkings.coerceUnsized != HIRStructMarkings::Coerce::None) {
-        // If the receiver is Box (or anything that implements CoerceUnsized), create a Foo<()> as the value.
-        // - Requires de/restructuring the Box same as CoerceUnsized
-        // - Can use the `coerce_unsized_index` field too
-        receiverLvp = H::getUnitPtr(state, mutator, ::std::move(receiver), receiverLvp.clone(), innerDynPtr);
+        receiverLvp = H::getUnitPtr(state, mutator, std::move(receiver), receiverLvp.clone(), innerDynPtr);
     } else if (receiver->is_Borrow() || receiver->is_Pointer()) {
         innerDynPtr = receiverLvp.clone();
         auto ptrRval = MIRRValue::make_DstPtr({receiverLvp.clone()});
@@ -814,51 +831,47 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
         receiverLvp = mv$(ptrLv);
     } else {
         // TODO: How to handle `Pin`?
-        // - Locate the pointer (similar to unsized path?)
+
         MIR_TODO(state, "Handle virtual call through " << receiver);
     }
 
-    // - Load the vtable and store it
     auto vtableRval = MIRRValue::make_DstMeta({mv$(innerDynPtr)});
     mutator.pushStatement(MIRStatement::make_Assign({vtableLv.clone(), mv$(vtableRval)}));
 
-    // Update the terminator with the new information.
     return fcnLval;
 }
 
 bool MIRCleanupUnsizeGetMetadata(const MIRTypeResolve& state, MirMutator& mutator, const HIRTypeData* dstTy, const HIRTypeData* srcTy, const MIRLValue& ptrValue, MIRParam& outMetaVal, HIRTypeRef& outMetaTy, bool& outSrcIsDst) {
     switch ((*dstTy).tag()) {
-default:
-        MIR_TODO(state, "Obtain metadata converting to " << dstTy);
-        break;
+        default:
+            MIR_TODO(state, "Obtain metadata converting to " << dstTy);
+            break;
         case HIRTypeData::TAG_Generic: {
             // TODO: What should be returned to indicate "no conversion"
             return false;
         }
         case HIRTypeData::TAG_Path: {
             auto& de = (*dstTy).as_Path();
-            // Source must be Path and Unsize
-                if (de.binding.is_Opaque()) {
-                    return false;
-                }
+            if (de.binding.is_Opaque()) {
+                return false;
+            }
 
-                MIR_ASSERT(state, srcTy->is_Path(), "Unsize to path from non-path - " << srcTy);
-                const auto& se = srcTy->as_Path();
-                MIR_ASSERT(state, de.binding.tag() == se.binding.tag(), "Unsize between mismatched types - " << dstTy << " and " << srcTy);
-                MIR_ASSERT(state, de.binding.is_Struct(), "Unsize to non-struct - " << dstTy);
-                MIR_ASSERT(state, de.binding.as_Struct() == se.binding.as_Struct(), "Unsize between mismatched types - " << dstTy << " and " << srcTy);
-                const auto& str = *de.binding.as_Struct();
-                MIR_ASSERT(state, str.structMarkings.unsizedField != ~0u, "Unsize on type that doesn't implement have a ?Sized field - " << dstTy);
+            MIR_ASSERT(state, srcTy->is_Path(), "Unsize to path from non-path - " << srcTy);
+            const auto& se = srcTy->as_Path();
+            MIR_ASSERT(state, de.binding.tag() == se.binding.tag(), "Unsize between mismatched types - " << dstTy << " and " << srcTy);
+            MIR_ASSERT(state, de.binding.is_Struct(), "Unsize to non-struct - " << dstTy);
+            MIR_ASSERT(state, de.binding.as_Struct() == se.binding.as_Struct(), "Unsize between mismatched types - " << dstTy << " and " << srcTy);
+            const auto& str = *de.binding.as_Struct();
+            MIR_ASSERT(state, str.structMarkings.unsizedField != ~0u, "Unsize on type that doesn't implement have a ?Sized field - " << dstTy);
 
-                auto monomorphCbD = MonomorphStatePtr(state.crate.types, dstTy, &de.path.data.as_Generic().params, nullptr);
-                auto monomorphCbS = MonomorphStatePtr(state.crate.types, srcTy, &se.path.data.as_Generic().params, nullptr);
-                auto monomorphField = [&](const MonomorphStatePtr& monomorph, const HIRTypeData* fieldTpl) {
-                    auto fieldTy = monomorph.monomorphType(state.sp, fieldTpl, false);
-                    state.resolve.expandAssociatedTypes(state.sp, fieldTy);
-                    return fieldTy;
-                };
+            auto monomorphCbD = MonomorphStatePtr(state.crate.types, dstTy, &de.path.data.as_Generic().params, nullptr);
+            auto monomorphCbS = MonomorphStatePtr(state.crate.types, srcTy, &se.path.data.as_Generic().params, nullptr);
+            auto monomorphField = [&](const MonomorphStatePtr& monomorph, const HIRTypeData* fieldTpl) {
+                auto fieldTy = monomorph.monomorphType(state.sp, fieldTpl, false);
+                state.resolve.expandAssociatedTypes(state.sp, fieldTy);
+                return fieldTy;
+            };
 
-                // Return GetMetadata on the inner type
             switch (str.data.tag()) {
                 case HIRStructData::TAG_Unit: {
                     MIR_BUG(state, "Unit-like struct Unsize is impossible - " << srcTy);
@@ -884,7 +897,6 @@ default:
             UNREACHABLE();
         }
         case HIRTypeData::TAG_Slice: {
-            // Source must be an array (or generic)
             if (srcTy->is_Array()) {
                 const auto& inArray = srcTy->as_Array();
                 if (!inArray.size.is_Known()) {
@@ -894,7 +906,6 @@ default:
                 outMetaVal = MIRConstant::make_Uint({U128(inArray.size.as_Known()), HIRCoreType::Usize});
                 return true;
             } else if (srcTy->is_Generic() || (srcTy->is_Path() && srcTy->as_Path().binding.is_Opaque())) {
-                // Defer until monomorphisation supplies the concrete source array.
                 return false;
             } else {
                 MIR_BUG(state, "Unsize to slice from non-array - " << srcTy);
@@ -903,19 +914,12 @@ default:
         }
         case HIRTypeData::TAG_TraitObject: {
             auto& de = (*dstTy).as_TraitObject();
-            // Obtain vtable type `::"path"::to::Trait#vtable`
             auto vtableTy = de.trait.path != HIRSimplePath() ? de.trait.traitPtr->getVtableType(state.sp, state.crate, de) : state.crate.types.unit();
             outMetaTy = state.crate.types.pointer(HIRBorrowType::Shared, vtableTy);
 
-            // If the data trait hasn't changed, return the vtable pointer
             if (const auto* se = srcTy->opt_TraitObject()) {
                 outSrcIsDst = true;
                 if (de.trait.path == HIRSimplePath()) {
-                    // A trait object with only auto traits still carries the
-                    // source vtable metadata for drop, size, and alignment.
-                    // Its vtable type is represented as `()`, so retype the
-                    // existing metadata instead of looking for a principal
-                    // trait entry in the source vtable.
                     outMetaVal = mutator.inTemporary(outMetaTy, MIRRValue::make_DstMeta({ptrValue.clone()}));
                 } else if (se->trait.traitPtr != de.trait.traitPtr) {
                     assert(se->trait.traitPtr);
@@ -947,7 +951,6 @@ MIRRValue MIRCleanupUnsize(const MIRTypeResolve& state, MirMutator& mutator, con
     MIRParam metaValue;
     bool sourceIsDst = false;
     if (MIRCleanupUnsizeGetMetadata(state, mutator, dstTyInner, srcTyInner, ptrValue, metaValue, metaType, sourceIsDst)) {
-        // There is a case where the source is already a fat pointer. In that case the pointer of the new DST must be the source DST pointer
         if (sourceIsDst) {
             auto tyUnitPtr = state.crate.types.pointer(HIRBorrowType::Shared, state.crate.types.unit());
             auto thinPtrLval = mutator.inTemporary(mv$(tyUnitPtr), MIRRValue::make_DstPtr({mv$(ptrValue)}));
@@ -957,7 +960,6 @@ MIRRValue MIRCleanupUnsize(const MIRTypeResolve& state, MirMutator& mutator, con
             return MIRRValue::make_MakeDst({mv$(ptrValue), mv$(metaValue)});
         }
     } else {
-        // Re-emit the "unsize" pseudo-op
         return MIRRValue::make_MakeDst({mv$(ptrValue), MIRConstant::make_ItemAddr({})});
     }
 }
@@ -967,14 +969,11 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
         return MIRRValue::make_Use(mv$(value));
     }
 
-    //  > Path -> Path = Unsize
-    // (path being destination is otherwise invalid)
     if (dstTy->is_Path()) {
         MIR_ASSERT(state, srcTy->is_Path(), "CoerceUnsized to Path must have a Path source - " << srcTy << " to " << dstTy);
         const auto& dte = dstTy->as_Path();
         const auto& ste = srcTy->as_Path();
 
-        // - Types must differ only by a single field, and be from the same definition
         MIR_ASSERT(state, dte.binding.is_Struct(), "Note, can't CoerceUnsized non-structs");
         MIR_ASSERT(state, dte.binding.tag() == ste.binding.tag(), "Note, can't CoerceUnsized mismatched structs - " << srcTy << " to " << dstTy);
         MIR_ASSERT(state, dte.binding.as_Struct() == ste.binding.as_Struct(), "Note, can't CoerceUnsized mismatched structs - " << srcTy << " to " << dstTy);
@@ -984,8 +983,7 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
         auto monomorphCbD = MonomorphStatePtr(state.crate.types, dstTy, &dte.path.data.as_Generic().params, nullptr);
         auto monomorphCbS = MonomorphStatePtr(state.crate.types, srcTy, &ste.path.data.as_Generic().params, nullptr);
 
-        // - Destructure and restrucure with the unsized fields
-        ::std::vector<MIRParam> ents;
+        std::vector<MIRParam> ents;
         switch (str.data.tag()) {
             case HIRStructData::TAG_Unit: {
                 MIR_BUG(state, "Unit-like struct CoerceUnsized is impossible - " << srcTy);
@@ -1043,7 +1041,7 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
                 break;
             }
         }
-        return MIRRValue::make_Struct({ dte.path.data.as_Generic().clone(), mv$(ents) });
+        return MIRRValue::make_Struct({dte.path.data.as_Generic().clone(), mv$(ents)});
     }
 
     if (dstTy->is_Borrow()) {
@@ -1051,8 +1049,6 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
         const auto& dte = dstTy->as_Borrow();
         const auto& ste = srcTy->as_Borrow();
 
-        // Only the mutability differs (`Pin<&mut T>` to `Pin<&T>`, say): that is
-        // a reborrow, and the pointer is unchanged.
         if (dte.inner == ste.inner && dte.type != ste.type) {
             return MIRRValue::make_Borrow({dte.type, false, MIRLValue::newDeref(mv$(value))});
         }
@@ -1060,7 +1056,6 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
         return MIRCleanupUnsize(state, mutator, dstTy, ste.inner, mv$(value));
     }
 
-    // Pointer Coercion - Downcast and unsize
     if (dstTy->is_Pointer()) {
         MIR_ASSERT(state, srcTy->is_Pointer(), "CoerceUnsized to Pointer must have a Pointer source - " << srcTy << " to " << dstTy);
         const auto& dte = dstTy->as_Pointer();
@@ -1096,21 +1091,15 @@ void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValu
         }
     }
 
-    for(size_t i = 0; i < lval.wrappers.size(); i ++)
-    {
+    for (size_t i = 0; i < lval.wrappers.size(); i++) {
         if (!lval.wrappers[i].is_Deref()) {
             continue;
         }
 
-        // If this is a deref of Box, unpack and deref the inner pointer
         HIRTypeRef tmp;
         const auto& ty = state.getLvalueType(tmp, lval, lval.wrappers.size() - i);
         if (state.resolve.isTypeOwnedBox(ty)) {
             unsigned numInjectedFldZeros = 0;
-
-            // Handle Box by extracting it to its pointer.
-            // - Locate (or remember) which field in Box is the pointer, and replace the inner by that field
-            // > Dumb idea, assume it's always the first field. Keep accessing until located.
 
             auto typ = ty;
             while (typ->is_Path()) {
@@ -1139,17 +1128,14 @@ void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValu
                 tmp = MonomorphStatePtr(state.crate.types, typ, &te.path.data.as_Generic().params, nullptr).monomorphType(state.sp, tyTpl);
                 typ = tmp;
 
-                numInjectedFldZeros ++;
+                numInjectedFldZeros++;
             }
             MIR_ASSERT(state, typ->is_Pointer(), "First non-path field in Box wasn't a pointer - " << typ);
-            // We have reached the pointer. Good.
 
-            // Inject all of the field zero accesses (before the deref)
             while (numInjectedFldZeros--) {
                 lval.wrappers.insert(lval.wrappers.begin() + i, MIRLValue::Wrapper::newField(0));
             }
         } else {
-            // What about other types?
         }
     }
 }
@@ -1157,7 +1143,6 @@ void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValu
 void MIRCleanupConstant(const MIRTypeResolve& state, MirMutator& mutator, MIRConstant& p) {
     if (auto* e = p.opt_Uint()) {
         switch (e->t) {
-            // Constants use U128 storage; truncate usize values to the target pointer width.
             case HIRCoreType::Usize:
                 if (TargetGetPointerBits() == 32) {
                     e->v &= U128(0xFFFFFFFF);
@@ -1171,14 +1156,14 @@ void MIRCleanupConstant(const MIRTypeResolve& state, MirMutator& mutator, MIRCon
 
 void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam& p);
 
-/// An immediate assembly operand has to be a value, and a named constant
-/// reaches here as the path that names it.
+namespace {
 static void MIRCleanupAsmConst(const MIRTypeResolve& state, MirMutator& mutator, MIRAsmParam& p) {
     auto param = MIRParam(std::move(p.as_Const()));
     MIRCleanupParam(state, mutator, param);
     if (param.is_Constant()) {
         p = MIRAsmParam::make_Const(std::move(param.as_Constant()));
     }
+}
 }
 
 void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam& p) {
@@ -1200,9 +1185,7 @@ void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam&
         }
     }
 
-    // Effectively a copy of the code that handles RValue::Constant below
-    if( p.is_Constant() && p.as_Constant().is_Const() )
-    {
+    if (p.is_Constant() && p.as_Constant().is_Const()) {
         const auto& ce = p.as_Constant().as_Const();
         HIRTypeRef cTy;
         MonomorphState params(state.crate.types);
@@ -1210,25 +1193,27 @@ void MIRCleanupParam(const MIRTypeResolve& state, MirMutator& mutator, MIRParam&
         if (litPtr) {
             auto newRval = MIRCleanupLiteralToRValue(state, mutator, *litPtr, cTy, params, mv$(*ce.p));
             if (auto* lv = newRval.opt_Use()) {
-                p = MIRParam::make_LValue(::std::move(*lv));
+                p = MIRParam::make_LValue(std::move(*lv));
             } else if (auto* c = newRval.opt_Constant()) {
                 MIRCleanupConstant(state, mutator, *c);
-                p = MIRParam::make_Constant(::std::move(*c));
+                p = MIRParam::make_Constant(std::move(*c));
             } else {
                 auto tmpLv = mutator.inTemporary(mv$(cTy), mv$(newRval));
-                p = MIRParam::make_LValue(::std::move(tmpLv));
+                p = MIRParam::make_LValue(std::move(tmpLv));
             }
         } else {
         }
     }
 }
 
+}
+
 void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
     Span sp;
-    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
-    MIRTypeResolve state {
-        sp, resolve, pathCallback, retType, args, fcn
-    };
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
+        os << path;
+    });
+    MIRTypeResolve state{sp, resolve, pathCallback, retType, args, fcn};
 
     MirMutator mutator{fcn, 0, 0};
     for (auto& block : fcn.blocks) {
@@ -1236,7 +1221,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
             mutator.updateState(state);
             auto& stmt = *it;
 
-            // >> Detect use of `!` as a value
             HIRTypeRef tmp;
             if ((stmt.is_Assign() && (stmt.as_Assign().src.is_Borrow())) && state.getLvalueType(tmp, stmt.as_Assign().src.as_Borrow().val)->is_Diverge()) {
             } else {
@@ -1248,7 +1232,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     break;
                 }
             }
-            // >> Elaborate Box dereferences in all LValues
             switch (stmt.tag()) {
                 case MIRStatement::TAG_SetDropFlag: {
                     break;
@@ -1279,28 +1262,28 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 case MIRStatement::TAG_Asm2: {
                     auto& e = stmt.as_Asm2();
                     for (auto& p : e.params) {
-                    switch (p.tag()) {
-                        case MIRAsmParam::TAG_Const: {
-                            MIRCleanupAsmConst(state, mutator, p);
-                            break;
-                        }
-                        case MIRAsmParam::TAG_Sym: {
-                            break;
-                        }
-                        case MIRAsmParam::TAG_Reg: {
-                            auto& v = p.as_Reg();
-                            if (v.input) {
-                                MIRCleanupParam(state, mutator, *v.input);
+                        switch (p.tag()) {
+                            case MIRAsmParam::TAG_Const: {
+                                MIRCleanupAsmConst(state, mutator, p);
+                                break;
                             }
-                            if (v.output) {
-                                MIRCleanupLValue(state, mutator, *v.output);
+                            case MIRAsmParam::TAG_Sym: {
+                                break;
                             }
-                            break;
+                            case MIRAsmParam::TAG_Reg: {
+                                auto& v = p.as_Reg();
+                                if (v.input) {
+                                    MIRCleanupParam(state, mutator, *v.input);
+                                }
+                                if (v.output) {
+                                    MIRCleanupLValue(state, mutator, *v.output);
+                                }
+                                break;
+                            }
+                            case MIRAsmParam::TAG_Label: {
+                                break;
+                            }
                         }
-                        case MIRAsmParam::TAG_Label: {
-                            break;
-                        }
-                    }
                     }
                     break;
                 }
@@ -1349,10 +1332,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             HIRTypeRef tmp;
                             const auto& ty = state.getLvalueType(tmp, re.val);
 
-                            // A DstMeta on an array is its length. Generic MIR can
-                            // retain the operation until monomorphisation makes the
-                            // array size concrete; the second cleanup pass then
-                            // replaces it with the integer constant.
                             if (const auto* array = ty->opt_Array()) {
                                 MIRCleanupLValue(state, mutator, re.val);
                                 if (array->size.is_Known()) {
@@ -1363,16 +1342,11 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                                 break;
                             }
 
-                            // Unsized function arguments are already indirect places carrying
-                            // their metadata. Unlike Box and pointer values, there is no hidden
-                            // dereference to expose to the Box elaboration pass.
                             if (!state.resolve.typeIsSized(state.sp, ty)) {
                                 MIRCleanupLValue(state, mutator, re.val);
                                 break;
                             }
 
-                            // DstMeta consumes the pointer represented by a Box, so expose
-                            // its dereference to the Box elaboration pass before splitting it.
                             re.val.wrappers.push_back(MIRLValue::Wrapper::newDeref());
                             MIRCleanupLValue(state, mutator, re.val);
                             re.val.wrappers.pop_back();
@@ -1384,12 +1358,8 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                                 ityP = te->inner;
                             } else if (const auto* te = cleanedTy->opt_Pointer()) {
                                 ityP = te->inner;
-                            }
-                            // NOTE: This can happen with calling a by-value method on a trait object, e.g. `<dyn Foo as FnOnce>::call_once`
-                            // - That is handled with magic in trans, so needs magic here (for inlining)
-                            else if (cleanedTy->is_TraitObject()) {
+                            } else if (cleanedTy->is_TraitObject()) {
                                 ityP = cleanedTy;
-                                // Remove the deref so downstream doesn't need to care
                                 MIR_ASSERT(state, !re.val.wrappers.empty() && re.val.wrappers.back().is_Deref(), "DstMeta on bare trait object with no deref: " << re.val);
                                 re.val.wrappers.pop_back();
                             } else {
@@ -1406,8 +1376,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                                 break;
                             }
 
-                            // DstPtr consumes the pointer represented by a Box, so expose
-                            // its dereference to the Box elaboration pass before splitting it.
                             re.val.wrappers.push_back(MIRLValue::Wrapper::newDeref());
                             MIRCleanupLValue(state, mutator, re.val);
                             re.val.wrappers.pop_back();
@@ -1419,12 +1387,8 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                                 ityP = te->inner;
                             } else if (const auto* te = cleanedTy->opt_Pointer()) {
                                 ityP = te->inner;
-                            }
-                            // NOTE: This can happen with calling a by-value method on a trait object, e.g. `<dyn Foo as FnOnce>::call_once`
-                            // - That is handled with magic in trans, so needs magic here (for inlining)
-                            else if (cleanedTy->is_TraitObject()) {
+                            } else if (cleanedTy->is_TraitObject()) {
                                 ityP = cleanedTy;
-                                // Remove the deref so downstream doesn't need to care
                                 MIR_ASSERT(state, !re.val.wrappers.empty() && re.val.wrappers.back().is_Deref(), "DstPtr on bare trait object with no deref: " << re.val);
                                 re.val.wrappers.pop_back();
                             } else {
@@ -1477,15 +1441,11 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 }
             }
 
-            // 2. RValue conversions
-            if( stmt.is_Assign() )
-            {
+            if (stmt.is_Assign()) {
                 auto& se = stmt.as_Assign();
 
                 if (auto* e = se.src.opt_Constant()) {
-                    // Replace `Const` with actual values
                     if (auto* ce = e->opt_Const()) {
-                        // 1. Find the constant
                         MonomorphState params(state.crate.types);
                         HIRTypeRef ty;
                         const auto* litPtr = MIRCleanupGetConstant(state, *ce->p, ty, params);
@@ -1499,7 +1459,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     }
                 }
 
-                // Fix up coercions
                 if (auto* e = se.src.opt_MakeDst()) {
                     if ((e->metaVal.is_Constant() && e->metaVal.as_Constant().is_ItemAddr() && e->metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
                         HIRTypeRef tmp, tmp2;
@@ -1513,7 +1472,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 if (auto* e = se.src.opt_MakeDst()) {
                     if ((e->metaVal.is_Constant() && e->metaVal.as_Constant().is_ItemAddr() && e->metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
                         // TODO: Check the validity?
-                        // - Ensure that something is generic in either the destination or source
+
                         HIRTypeRef tmp;
                         const auto& srcTy = state.getParamType(tmp, e->ptrVal);
                         MIR_ASSERT(state, monomorphiseTypeNeeded(srcTy), "MakeDst Unsize with known source - " << srcTy);
@@ -1604,29 +1563,17 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
             }
         }
 
-        // VTable calls
-        if(auto* ep = block.terminator.opt_Call())
-        {
+        if (auto* ep = block.terminator.opt_Call()) {
             auto& e = *ep;
             if (auto* pathP = e.fcn.opt_Path()) {
                 auto& path = *pathP;
-                // Detect calling `<Trait as Trait>::method()` and replace with vtable call
                 if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_TraitObject()) {
                     const auto& pe = path.data.as_UfcsKnown();
                     const auto& te = pe.type->as_TraitObject();
                     // TODO: What if the method is from a supertrait?
 
-                    // An inherent impl on a trait object that asks for
-                    // `Self: Sized` can never be called, so nothing filled in
-                    // the trait it would dispatch through. There is no vtable
-                    // call to build.
-                    // An inherent impl on a trait object that asks for
-                    // `Self: Sized` can never be called, and the method it calls
-                    // takes no receiver -- there is nothing to dispatch through,
-                    // and such a method is not in the vtable either.
                     if (!te.trait.traitPtr || e.args.empty()) {
-                    }
-                    else if (te.trait.path == pe.trait || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *te.trait.traitPtr, te.trait.path.path, te.trait.path.params, pe.type, [](const auto&, auto) {
+                    } else if (te.trait.path == pe.trait || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *te.trait.traitPtr, te.trait.path.path, te.trait.path.params, pe.type, [](const auto&, auto) {
                         return true;
                     })) {
                         auto tgtLvalue = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
@@ -1642,21 +1589,18 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         auto fcnLvalue = mv$(e.args[0].as_LValue());
                         auto argsLvalue = mv$(e.args[1].as_LValue());
 
-
                         e.args.clear();
                         e.args.reserve(fcnTy.argTypes.size());
                         for (unsigned int i = 0; i < fcnTy.argTypes.size(); i++) {
                             e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
                         }
-                        // If the trait is Fn/FnMut, dereference the input value.
                         if (pe.trait.path == resolve.langFnOnce()) {
                             e.fcn = mv$(fcnLvalue);
                         } else {
                             e.fcn = MIRLValue::newDeref(mv$(fcnLvalue));
                         }
                     }
-                }
-                else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_NamedFunction()) {
+                } else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_NamedFunction()) {
                     const auto& pe = path.data.as_UfcsKnown();
                     const auto& fcnTy = pe.type->as_NamedFunction();
                     if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
@@ -1664,7 +1608,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         MIR_ASSERT(state, e.args.size() == 2, "Fn* call requires two arguments");
                         auto fcnLvalue = mv$(e.args[0].as_LValue());
                         auto argsLvalue = mv$(e.args[1].as_LValue());
-
 
                         e.args.clear();
                         e.args.reserve(nArgs);
@@ -1694,7 +1637,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 }
             }
 
-            // NOTE: Would be nice to do this in `Lower_MIR` - but that confuses the validity checks
             if (e.fcn.is_Intrinsic() && e.fcn.as_Intrinsic().name == "read_via_copy") {
                 // TODO: Replace with `res = *ptr;`
                 block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRLValue::newDeref(std::move(e.args.at(0).as_LValue()))}));
@@ -1715,10 +1657,9 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_TraitObject()) {
                     const auto& pe = path.data.as_UfcsKnown();
                     const auto& traitObject = pe.type->as_TraitObject();
-                    if (traitObject.trait.path == pe.trait
-                        || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *traitObject.trait.traitPtr, traitObject.trait.path.path, traitObject.trait.path.params, pe.type, [](const auto&, auto) {
-                            return true;
-                        })) {
+                    if (traitObject.trait.path == pe.trait || resolve.findNamedTraitInTrait(sp, pe.trait.path, pe.trait.params, *traitObject.trait.traitPtr, traitObject.trait.path.path, traitObject.trait.path.params, pe.type, [](const auto&, auto) {
+                        return true;
+                    })) {
                         e.fcn = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
                     }
                 }
@@ -1735,9 +1676,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         for (unsigned int i = 0; i < fcnTy.argTypes.size(); i++) {
                             e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
                         }
-                        e.fcn = pe.trait.path == resolve.langFnOnce()
-                            ? mv$(fcnLvalue)
-                            : MIRLValue::newDeref(mv$(fcnLvalue));
+                        e.fcn = pe.trait.path == resolve.langFnOnce() ? mv$(fcnLvalue) : MIRLValue::newDeref(mv$(fcnLvalue));
                     }
                 }
 
@@ -1789,15 +1728,13 @@ void MIRCleanupCrate(const WireBoard& wb, HIRCrate& crate) {
     ov.visitCrate(crate);
 }
 
-// ----
-// List of optimisations avaliable
-// ----
+namespace {
 bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, const TransList* list = nullptr);
 bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn);
-bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn); // Eliminate useless temporaries
+bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseUnifyTemporaries(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseCommonStatements(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn);
@@ -1809,17 +1746,14 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseUselessReborrows(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseGarbageCollectPartial(MIRTypeResolve& state, MIRFunction& fcn);
 bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn);
+}
 
-/// A minimum set of optimisations:
-/// - Runs only the mandatory-inlining hook, not normal cost-based inlining
-/// - Simplifies the call graph (by removing chained gotos)
-/// - Sorts blocks into a rough flow order
 void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType) {
     Span sp;
-    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
-    MIRTypeResolve state {
-        sp, resolve, pathCallback, retType, args, fcn
-    };
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
+        os << path;
+    });
+    MIRTypeResolve state{sp, resolve, pathCallback, retType, args, fcn};
 
     while (MIROptimiseInlining(state, fcn, true)) {
         MIRCleanup(resolve, path, fcn, args, retType);
@@ -1828,24 +1762,20 @@ void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, 
     MIROptimiseBlockSimplify(state, fcn);
     MIROptimiseUnifyBlocks(state, fcn);
 
-    // NOTE: No check here, this version of optimise is pretty reliable
-    //}
     MIROptimiseGarbageCollect(state, fcn);
     MIRSortBlocks(resolve, path, fcn);
 
     return;
 }
 
-/// Perfom inlining only, using a list of monomorphised functions, then cleans up the flow graph
-///
-/// Returns true if any optimisation was performed
+namespace {
 bool MIROptimiseInline(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType, const TransList& list, unsigned optLevel) {
     Span sp;
     bool rv = false;
-    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
-    MIRTypeResolve state {
-        sp, resolve, pathCallback, retType, args, fcn
-    };
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
+        os << path;
+    });
+    MIRTypeResolve state{sp, resolve, pathCallback, retType, args, fcn};
 
     while (MIROptimiseInlining(state, fcn, false, &list)) {
         MIRCleanup(resolve, path, fcn, args, retType);
@@ -1858,14 +1788,15 @@ bool MIROptimiseInline(const StaticTraitResolve& resolve, const HIRItemPath& pat
 
     return rv;
 }
+}
 
 void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType, unsigned optLevel, bool doInline /*=true*/, bool validate /*=true*/) {
     Span sp;
     assert(optLevel > 0);
-    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) { os << path; });
-    MIRTypeResolve state {
-        sp, resolve, pathCallback, retType, args, fcn
-    };
+    auto pathCallback = makeCallable<MIRPathCb>([&](auto& os) {
+        os << path;
+    });
+    MIRTypeResolve state{sp, resolve, pathCallback, retType, args, fcn};
 
     bool changeHappened;
     unsigned int passNum = 0;
@@ -1874,143 +1805,76 @@ void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIR
 
         changeHappened = false;
 
-        // >> Simplify call graph (removes gotos to blocks with a single use)
         if (MIROptimiseBlockSimplify(state, fcn)) {
-            // NOTE: Don't set `change_happened`, as this is the first pass
         }
-        //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
-        // >> Apply known constants
         if (MIROptimiseConstPropagate(state, fcn)) {
             changeHappened = true;
         }
 
-        // >> Attempt to remove useless temporaries
         if (MIROptimiseDeTemporary(state, fcn)) {
-            // - Run until no changes
             while (MIROptimiseDeTemporary(state, fcn)) {
             }
             changeHappened = true;
         }
-        //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
-        // Level 2 adds the more expensive whole-local/dataflow transformations,
-        // matching rustc's split between basic level-1 cleanup and its SROA/GVN/DSE tier.
-        // >> Split apart aggregates that are never used such (Written once, never used directly)
         if (optLevel >= 2 && MIROptimiseSplitAggregates(state, fcn)) {
             changeHappened = true;
         }
-        //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
-        // >> Replace values from composites if they're known
-        //   - Undoes the inefficiencies from the `match (a, b) { ... }` pattern
         if (optLevel >= 2 && MIROptimisePropagateKnownValues(state, fcn)) {
             changeHappened = true;
         }
-        //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
         // TODO: Convert `&mut *mut_foo` into `mut_foo` if the source is movable and not used afterwards
 
-        // >> Propagate/remove dead assignments
         if (MIROptimisePropagateSingleAssignments(state, fcn)) {
-            // - Run until no changes
             while (MIROptimisePropagateSingleAssignments(state, fcn)) {
             }
             changeHappened = true;
         }
-        //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
-        // >> Move common statements (assignments) across gotos.
-        //if( MIR_Optimise_CommonStatements(state, fcn) )
-        //{
-        //    }
-        //}
-
-        // >> Combine Duplicate Blocks
         if (MIROptimiseUnifyBlocks(state, fcn)) {
             changeHappened = true;
         }
-        // >> Remove assignments of unsed drop flags
         if (MIROptimiseDeadDropFlags(state, fcn)) {
             changeHappened = true;
         }
-        // >> Remove assignments that are never read
         if (optLevel >= 2 && MIROptimiseDeadAssignments(state, fcn)) {
             changeHappened = true;
         }
-        // >> Remove no-op assignments
         if (MIROptimiseNoopRemoval(state, fcn)) {
             changeHappened = true;
         }
 
-        // >> Remove re-borrow operations that don't need to exist
         if (MIROptimiseUselessReborrows(state, fcn)) {
             changeHappened = true;
         }
 
-        // >> If the first statement of a block is an assignment, and the last op of the previous is to that assignment's source, move up.
         if (MIROptimiseGotoAssign(state, fcn)) {
             changeHappened = true;
         }
 
-        // >> Inline short functions
         if (doInline && !changeHappened) {
             if (MIROptimiseInlining(state, fcn, /*minimal=*/false)) {
-                // Apply cleanup again (as monomorpisation in inlining may have exposed a vtable call)
                 MIRCleanup(resolve, path, fcn, args, retType);
                 changeHappened = true;
             }
         }
 
-        //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
-
         if (MIROptimiseGarbageCollectPartial(state, fcn)) {
             changeHappened = true;
         }
-        //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
         passNum += 1;
     } while (changeHappened);
 
-    // Run UnifyTemporaries last, then unify blocks, then run some
-    // optimisations that might be affected
-
-    // GC pass on blocks and variables
-    // - Find unused blocks, then delete and rewrite all references.
     MIROptimiseGarbageCollect(state, fcn);
 
     MIRSortBlocks(resolve, path, fcn);
 }
 
 namespace {
-    // Callback interfaces for the lvalue-visit family: plain virtual structs
-    // (the old erased wrappers allocated per visited statement).
-    struct LvalueVisitor {
-        virtual bool visitLvalue(const MIRLValue& lv, MIRValUsage u) = 0;
-    };
-
-    struct LvalueVisitorMut {
-        virtual bool visitLvalue(MIRLValue& lv, MIRValUsage u) = 0;
-    };
-
-    struct LvalueRefVisitorMut {
-        virtual bool visitLvalue(MIRLValue::MRef& lv, MIRValUsage u) = 0;
-    };
-
-    // Adapts a const visitor to the mutable walkers (the walkers themselves
-    // never mutate through the reference).
-    struct LvalueConstAdapter final: public LvalueVisitorMut {
-        LvalueVisitor& inner;
-
-        explicit LvalueConstAdapter(LvalueVisitor& inner)
-            : inner(inner)
-        {
-        }
-
-        bool visitLvalue(MIRLValue& lv, MIRValUsage u) override {
-            return inner.visitLvalue(lv, u);
-        }
-    };
 
     bool optVisitMirLvaluesInner(const MIRLValue& lv, MIRValUsage u, LvalueVisitor& cb) {
         for (const auto& w : lv.wrappers) {
@@ -2050,7 +1914,6 @@ namespace {
                     u = MIRValUsage::Read;
                 }
             } else {
-                // No change
             }
         } while (lvr.tryUnwrap());
         return false;
@@ -2073,7 +1936,7 @@ namespace {
         switch (rval.tag()) {
             case MIRRValue::TAG_Use: {
                 auto& se = rval.as_Use();
-                rv |= visitMirLvalueRawMut(se, MIRValUsage::Move, cb); // Can move
+                rv |= visitMirLvalueRawMut(se, MIRValUsage::Move, cb);
                 break;
             }
             case MIRRValue::TAG_Constant: {
@@ -2081,7 +1944,7 @@ namespace {
             }
             case MIRRValue::TAG_SizedArray: {
                 auto& se = rval.as_SizedArray();
-                rv |= visitMirLvalueMut(se.val, MIRValUsage::Read, cb); // Has to be Read
+                rv |= visitMirLvalueMut(se.val, MIRValUsage::Read, cb);
                 break;
             }
             case MIRRValue::TAG_Borrow: {
@@ -2091,12 +1954,12 @@ namespace {
             }
             case MIRRValue::TAG_Cast: {
                 auto& se = rval.as_Cast();
-                rv |= visitMirLvalueRawMut(se.val, MIRValUsage::Read, cb); // Also has to be read
+                rv |= visitMirLvalueRawMut(se.val, MIRValUsage::Read, cb);
                 break;
             }
             case MIRRValue::TAG_BinOp: {
                 auto& se = rval.as_BinOp();
-                rv |= visitMirLvalueMut(se.valL, MIRValUsage::Read, cb); // Same
+                rv |= visitMirLvalueMut(se.valL, MIRValUsage::Read, cb);
                 rv |= visitMirLvalueMut(se.valR, MIRValUsage::Read, cb);
                 break;
             }
@@ -2107,7 +1970,7 @@ namespace {
             }
             case MIRRValue::TAG_DstMeta: {
                 auto& se = rval.as_DstMeta();
-                rv |= visitMirLvalueRawMut(se.val, MIRValUsage::Read, cb); // Reads
+                rv |= visitMirLvalueRawMut(se.val, MIRValUsage::Read, cb);
                 break;
             }
             case MIRRValue::TAG_DstPtr: {
@@ -2118,7 +1981,7 @@ namespace {
             case MIRRValue::TAG_MakeDst: {
                 auto& se = rval.as_MakeDst();
                 rv |= visitMirLvalueMut(se.ptrVal, MIRValUsage::Move, cb);
-                rv |= visitMirLvalueMut(se.metaVal, MIRValUsage::Read, cb); // Note, metadata has to be Copy
+                rv |= visitMirLvalueMut(se.metaVal, MIRValUsage::Read, cb);
                 break;
             }
             case MIRRValue::TAG_Tuple: {
@@ -2185,27 +2048,27 @@ namespace {
             case MIRStatement::TAG_Asm2: {
                 auto& e = stmt.as_Asm2();
                 for (auto& p : e.params) {
-                switch (p.tag()) {
-                    case MIRAsmParam::TAG_Const: {
-                        break;
-                    }
-                    case MIRAsmParam::TAG_Sym: {
-                        break;
-                    }
-                    case MIRAsmParam::TAG_Reg: {
-                        auto& v = p.as_Reg();
-                        if (v.input) {
-                            rv |= visitMirLvalueMut(*v.input, MIRValUsage::Read, cb);
+                    switch (p.tag()) {
+                        case MIRAsmParam::TAG_Const: {
+                            break;
                         }
-                        if (v.output) {
-                            rv |= visitMirLvalueRawMut(*v.output, MIRValUsage::Write, cb);
+                        case MIRAsmParam::TAG_Sym: {
+                            break;
                         }
-                        break;
+                        case MIRAsmParam::TAG_Reg: {
+                            auto& v = p.as_Reg();
+                            if (v.input) {
+                                rv |= visitMirLvalueMut(*v.input, MIRValUsage::Read, cb);
+                            }
+                            if (v.output) {
+                                rv |= visitMirLvalueRawMut(*v.output, MIRValUsage::Write, cb);
+                            }
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Label: {
+                            break;
+                        }
                     }
-                    case MIRAsmParam::TAG_Label: {
-                        break;
-                    }
-                }
                 }
                 break;
             }
@@ -2339,50 +2202,6 @@ namespace {
         optVisitMirLvaluesMut(state, const_cast<MIRFunction&>(fcn), adapter);
     }
 
-    struct ParamsSet: public MonomorphiserPP {
-        HIRPathParams implParams;
-        const HIRPathParams* fcnParams;
-        const HIRTypeData* selfTy;
-        const HIRGenericParams* implParamsDef;
-        const HIRGenericParams* fcnParamsDef;
-
-        HIRPathParams fcnParamsTmp;
-
-        explicit ParamsSet(HIRTypeInterner& types)
-            : MonomorphiserPP(types)
-            , fcnParams(nullptr)
-            , selfTy(nullptr)
-            , implParamsDef(nullptr)
-            , fcnParamsDef(nullptr)
-        {
-        }
-
-        const HIRTypeData* getSelfType() const override {
-            return selfTy;
-        }
-
-        const HIRPathParams* getImplParams() const override {
-            return &implParams;
-        }
-
-        const HIRPathParams* getMethodParams() const override {
-            return fcnParams;
-        }
-
-        const HIRPathParams* getHrbParams() const override {
-            return nullptr;
-        }
-
-        bool hasUnevaluatedValues() const {
-            const auto check = [](const HIRPathParams& params) {
-                return ::std::any_of(params.values.begin(), params.values.end(), [](const auto& value) {
-                    return value.is_Unevaluated() || value.is_Infer();
-                });
-            };
-            return check(implParams) || (fcnParams && check(*fcnParams));
-        }
-    };
-
     const MIRFunction* getCalledMir(const MIRTypeResolve& state, const TransList* list, const HIRPath& path, ParamsSet& params) {
         MonomorphState outParams(state.resolve.hirCrate().types);
         StaticTraitResolve::ResolvedTraitImplPath traitImplPath;
@@ -2390,14 +2209,10 @@ namespace {
         params.fcnParams = outParams.getMethodParams();
         params.implParams = outParams.ppImpl == nullptr ? HIRPathParams() : outParams.ppImpl == &outParams.ppImplData ? std::move(outParams.ppImplData) : outParams.ppImpl->clone();
 
-        // A #[rustc_intrinsic] with a body has that body only as its runtime
-        // fallback.  Inlining it would erase the call that CTFE replaces with
-        // intrinsic semantics (notably const_allocate/const_make_global).
         if (e.is_Function() && e.as_Function()->markings.isRustcIntrinsic) {
             return nullptr;
         }
 
-        // If a TransList is avaliable, then all referenced functions must be in it.
         if (list) {
             auto canonicalPath = path.clone();
             if (traitImplPath.type) {
@@ -2410,7 +2225,6 @@ namespace {
                 MIR_BUG(state, "Enumeration failure - Function " << canonicalPath << " not in TransList");
             }
             // TODO: Need identity params for most, but lifetime params need to be from the input.
-            // Except, everything should already be monomorphised, so no identity required!
 
             const auto& hirFcn = *transFcn->ptr;
             if (transFcn->monomorphised.code) {
@@ -2421,7 +2235,6 @@ namespace {
                 return mir;
             } else {
                 MIR_ASSERT(state, !hirFcn.code, "LowerMIR failure - No MIR but HIR is present?! - " << path);
-                // External function (no MIR present)
                 return nullptr;
             }
         }
@@ -2448,9 +2261,9 @@ namespace {
         }
 
         switch (e.tag()) {
-default:
-            MIR_BUG(state, "MIR Call of " << e.tagStr() << " - " << path);
-            break;
+            default:
+                MIR_BUG(state, "MIR Call of " << e.tagStr() << " - " << path);
+                break;
             case TypeckValuePtr::TAG_NotFound: {
                 auto& _ = e.as_NotFound();
                 return nullptr;
@@ -2468,47 +2281,7 @@ default:
         return nullptr;
     }
 
-    // Per-block actions for visitBlocks/visitBlocksMut. Call sites keep their
-    // lambdas via makeCallable<...>; the API sees only these interfaces.
-    struct MIRBlockCallback {
-        virtual void run(MIRBasicBlockId bb, MIRBasicBlock& block) const = 0;
-    };
-
-    template <typename F>
-    struct MIRBlockCb final: MIRBlockCallback {
-        F f;
-
-        explicit MIRBlockCb(F f)
-            : f(f)
-        {
-        }
-
-        void run(MIRBasicBlockId bb, MIRBasicBlock& block) const override {
-            f(bb, block);
-        }
-    };
-
-    struct MIRBlockConstCallback {
-        virtual void run(MIRBasicBlockId bb, const MIRBasicBlock& block) const = 0;
-    };
-
-    template <typename F>
-    struct MIRBlockConstCb final: MIRBlockConstCallback {
-        F f;
-
-        explicit MIRBlockConstCb(F f)
-            : f(f)
-        {
-        }
-
-        void run(MIRBasicBlockId bb, const MIRBasicBlock& block) const override {
-            f(bb, block);
-        }
-    };
-
     void visitBlocksMut(MIRTypeResolve& state, MIRFunction& fcn, const MIRBlockCallback& cb) {
-        // Reused scratch: this walk runs once per optimisation pass per
-        // function, the buffers alone were ~1.5M allocations on libcore.
         auto& context = operationsContext(state);
         auto& visited = context.visitedBlocks;
         auto& toVisit = context.pendingBlocks;
@@ -2532,10 +2305,10 @@ default:
             cb.run(bb, block);
 
             struct QueueUnvisited final: public MIRTargetVisitor {
-                const ::std::vector<bool>& visited;
-                ::std::vector<MIRBasicBlockId>& toVisit;
+                const std::vector<bool>& visited;
+                std::vector<MIRBasicBlockId>& toVisit;
 
-                QueueUnvisited(const ::std::vector<bool>& visited, ::std::vector<MIRBasicBlockId>& toVisit)
+                QueueUnvisited(const std::vector<bool>& visited, std::vector<MIRBasicBlockId>& toVisit)
                     : visited(visited)
                     , toVisit(toVisit)
                 {
@@ -2547,6 +2320,7 @@ default:
                     }
                 }
             } queueUnvisited{visited, toVisit};
+
             visitTerminatorTarget(block.terminator, queueUnvisited);
         }
     }
@@ -2557,7 +2331,6 @@ default:
         }));
     }
 
-    /// Convert a MIR::Param into a MIR::RValue
     MIRRValue paramToRvalue(MIRParam param) {
         switch (param.tag()) {
             case MIRParam::TAG_LValue: {
@@ -2575,11 +2348,9 @@ default:
         }
         throw std::runtime_error("Corrupted MIR::Param");
     }
-} // namespace ""
+}
 
-// --------------------------------------------------------------------
-// Performs basic simplications on the call graph (merging/removing blocks)
-// --------------------------------------------------------------------
+namespace {
 bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
@@ -2601,7 +2372,6 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     };
 
-    // >> Replace targets that point to a block that is just a goto
     for (auto& block : fcn.blocks) {
         struct RewriteGotoChains final: public MIRTargetVisitorMut {
             const MIRTypeResolve& state;
@@ -2627,21 +2397,18 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
                 }
             }
         } rewriteGotoChains{state, fcn, block, changed};
+
         visitTerminatorTargetMut(block.terminator, rewriteGotoChains);
 
-        // Handle chained switches of the same value
-        // - Happens in libcore's atomics
         if (auto* te = block.terminator.opt_Switch()) {
             if (te->validFlag != ~0u) {
                 continue;
             }
             for (auto& t : te->targets) {
                 auto idx = &t - &te->targets.front();
-                // The block must be a terminator only, and be a switch over the same value.
                 if (fcn.blocks[t].statements.empty() && fcn.blocks[t].terminator.is_Switch()) {
                     const auto& nTe = fcn.blocks[t].terminator.as_Switch();
                     if (nTe.validFlag == ~0u && nTe.val == te->val) {
-                        // If that's the case, then update this target with the equivalent from the new switch.
                         t = nTe.targets[idx];
                         changed = true;
                     }
@@ -2650,7 +2417,6 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     }
 
-    // >> Unify sequential `ScopeEnd` statements
     for (auto& block : fcn.blocks) {
         if (block.statements.size() > 1) {
             for (auto it = block.statements.begin() + 1; it != block.statements.end();) {
@@ -2660,7 +2426,7 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
                     for (auto v : src.slots) {
                         dst.slots.push_back(v);
                     }
-                    ::std::sort(dst.slots.begin(), dst.slots.end());
+                    std::sort(dst.slots.begin(), dst.slots.end());
                     it = block.statements.erase(it);
                     changed = true;
                 } else {
@@ -2670,11 +2436,10 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     }
 
-    // >> Merge blocks where a block goto-s to a single-use block.
     {
-        ::std::vector<bool> visited(fcn.blocks.size());
-        ::std::vector<unsigned int> uses(fcn.blocks.size());
-        ::std::vector<MIRBasicBlockId> toVisit;
+        std::vector<bool> visited(fcn.blocks.size());
+        std::vector<unsigned int> uses(fcn.blocks.size());
+        std::vector<MIRBasicBlockId> toVisit;
         toVisit.push_back(0);
         uses[0]++;
         while (toVisit.size() > 0) {
@@ -2687,11 +2452,11 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
             const auto& block = fcn.blocks[bb];
 
             struct CountUses final: public MIRTargetVisitor {
-                const ::std::vector<bool>& visited;
-                ::std::vector<MIRBasicBlockId>& toVisit;
-                ::std::vector<unsigned>& uses;
+                const std::vector<bool>& visited;
+                std::vector<MIRBasicBlockId>& toVisit;
+                std::vector<unsigned>& uses;
 
-                CountUses(const ::std::vector<bool>& visited, ::std::vector<MIRBasicBlockId>& toVisit, ::std::vector<unsigned>& uses)
+                CountUses(const std::vector<bool>& visited, std::vector<MIRBasicBlockId>& toVisit, std::vector<unsigned>& uses)
                     : visited(visited)
                     , toVisit(toVisit)
                     , uses(uses)
@@ -2705,6 +2470,7 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
                     uses[target]++;
                 }
             } countUses{visited, toVisit, uses};
+
             visitTerminatorTarget(block.terminator, countUses);
         }
 
@@ -2721,7 +2487,6 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
                     }
 
                     assert(&fcn.blocks[tgt] != &block);
-                    // Move contents of source block, then revive the dead terminator as Incomplete
                     auto srcBlock = mv$(fcn.blocks[tgt]);
                     fcn.blocks[tgt].terminator = MIRTerminator::make_Incomplete({});
 
@@ -2736,7 +2501,6 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     }
 
-    // >> If a block GOTOs a block that is just a `RETURN` or `DIVERGE`, then change terminator
     for (auto& block : fcn.blocks) {
         state.setCurStmtTerm(&block - &fcn.blocks.front());
         if (block.terminator.is_Goto()) {
@@ -2755,32 +2519,27 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
                 block.terminator = MIRTerminator::make_Unreachable({});
                 changed = true;
             } else {
-                // No replace
             }
         }
     }
 
-    // NOTE: Not strictly true, but these can't trigger other optimisations
     return false;
 }
 
-// --------------------------------------------------------------------
-// If two temporaries don't overlap in lifetime (blocks in which they're valid), unify the two
-// --------------------------------------------------------------------
 bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, const TransList* list /*=nullptr*/) {
     bool inlineHappened = false;
 
     struct InlineEvent {
         HIRPath path;
-        ::std::vector<size_t> bbList;
+        std::vector<size_t> bbList;
 
         InlineEvent(HIRPath p)
-            : path(::std::move(p))
+            : path(std::move(p))
         {
         }
 
         bool hasBb(size_t i) const {
-            return ::std::find(this->bbList.begin(), this->bbList.end(), i) != this->bbList.end();
+            return std::find(this->bbList.begin(), this->bbList.end(), i) != this->bbList.end();
         }
 
         void addRange(size_t start, size_t count) {
@@ -2790,7 +2549,7 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
         }
     };
 
-    ::std::vector<InlineEvent> inlinedFunctions;
+    std::vector<InlineEvent> inlinedFunctions;
 
     struct H {
         struct Source {
@@ -2826,14 +2585,12 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
             return Source(bbIdx, 0);
         }
 
-        /// Checks if the passed lvalue would optimise/expand to a constant value
         static bool valueIsConst(const MIRFunction& fcn, unsigned bbIdx, unsigned stmtIdx, const MIRLValue& val, const std::vector<MIRParam>& params) {
             if (val.root.is_Argument()) {
                 auto a = val.root.as_Argument();
                 return params[a].is_Constant() && !params[a].as_Constant().is_Const();
             }
 
-            // Find the source of this lvalue, chase it backwards
             auto src = H::findSource(fcn, bbIdx, stmtIdx, val);
             if (src.stmt) {
                 if (const auto* se = src.stmt->opt_Assign()) {
@@ -2877,8 +2634,7 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
                 if (fcn.blocks[0].statements.size() + fcn.blocks[1].statements.size() > 10) {
                     return false;
                 }
-                // Detect and avoid simple recursion.
-                // - This won't detect mutual recursion - that also needs prevention.
+
                 // TODO: This is the pre-monomorph path, but we're comparing with the post-monomorph path
                 if (blk0Te.fcn.is_Path() && blk0Te.fcn.as_Path() == path) {
                     return false;
@@ -2895,8 +2651,7 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
                 if (fcn.blocks[0].statements.size() + fcn.blocks[1].statements.size() + fcn.blocks[2].statements.size() > 10) {
                     return false;
                 }
-                // Detect and avoid simple recursion.
-                // - This won't detect mutual recursion - that also needs prevention.
+
                 // TODO: This is the pre-monomorph path, but we're comparing with the post-monomorph path
                 if (blk0Te.fcn.is_Path() && blk0Te.fcn.as_Path() == path) {
                     return false;
@@ -2906,7 +2661,6 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
             }
 
             // TODO: If all inputs are known, then allow larger/complex functions (e.g. allow one call and any number of blocks?)
-            // - Seen `min_by(const, const, fcn)` - that would be a trivial optimisation
 
             if (canInlineSwitchWrapper(path, fcn, params)) {
                 return true;
@@ -2917,7 +2671,6 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
             return false;
         }
 
-        /// Case: A Switch that has all distinct arms that just call a function AND the value is over (effectively) a literal
         static bool canInlineSwitchWrapper(const HIRPath& path, const MIRFunction& fcn, const std::vector<MIRParam>& params) {
             if (fcn.blocks.size() <= 1) {
                 return false;
@@ -2926,30 +2679,23 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
                 return false;
             }
             const auto& teSwitch = fcn.blocks[0].terminator.as_Switch();
-            // Setup + Arms + Return + Panic
-            // - Handles the atomic wrappers
             if (fcn.blocks.size() != teSwitch.targets.size() + 3) {
                 return false;
             }
-            // Check for the switch value being an argument that is also a constant parameter being a Constant
             if (!valueIsConst(fcn, 0, fcn.blocks[0].statements.size(), teSwitch.val, params)) {
                 return false;
             }
-            // Check all arms of the switch are distinct
             for (const auto& tgt : teSwitch.targets) {
                 if (std::find(teSwitch.targets.begin() + (1 + &tgt - teSwitch.targets.data()), teSwitch.targets.end(), tgt) != teSwitch.targets.end()) {
                     return false;
                 }
             }
-            // Check for recursion
             for (size_t i = 1; i < fcn.blocks.size(); i++) {
                 if (fcn.blocks[i].terminator.is_Call()) {
                     const auto& te = fcn.blocks[i].terminator.as_Call();
-                    // Recursion, don't inline.
                     if (te.fcn.is_Path() && te.fcn.as_Path() == path) {
                         return false;
                     }
-                    // Only intrinsic wrapper calls are proven safe before ordinary call paths are monomorphised.
                     if (!te.fcn.is_Intrinsic()) {
                         return false;
                     }
@@ -2958,7 +2704,6 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
             return true;
         }
 
-        /// Case: A SwitchValue that has all distinct arms that just call a function AND the value is over (effectively) a literal
         static bool canInlineSwitchValueWrapper(const HIRPath& path, const MIRFunction& fcn, const std::vector<MIRParam>& params) {
             if (fcn.blocks.size() <= 1) {
                 return false;
@@ -2967,17 +2712,13 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
                 return false;
             }
             const auto& teSwitch = fcn.blocks[0].terminator.as_SwitchValue();
-            // Setup + Arms(+default) + Return + Panic
-            // - Handles some code in crc32-fast that emits a 256-arm SwitchValue
             if (fcn.blocks.size() != teSwitch.targets.size() + 1 + 3) {
                 return false;
             }
-            // Check for the switch value being an argument that is also a constant parameter being a Constant
             if (!valueIsConst(fcn, 0, fcn.blocks[0].statements.size(), teSwitch.val, params)) {
                 return false;
             }
 
-            // Check all arms of the switch are distinct
             if (std::find(teSwitch.targets.begin(), teSwitch.targets.end(), teSwitch.defTarget) != teSwitch.targets.end()) {
                 return false;
             }
@@ -2987,15 +2728,12 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
                 }
             }
 
-            // Check for recursion
             for (size_t i = 1; i < fcn.blocks.size(); i++) {
                 if (fcn.blocks[i].terminator.is_Call()) {
                     const auto& te = fcn.blocks[i].terminator.as_Call();
-                    // Recursion, don't inline.
                     if (te.fcn.is_Path() && te.fcn.as_Path() == path) {
                         return false;
                     }
-                    // Only intrinsic wrapper calls are proven safe before ordinary call paths are monomorphised.
                     if (!te.fcn.is_Intrinsic()) {
                         return false;
                     }
@@ -3009,14 +2747,14 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
     struct Cloner: public MIRCloner {
         const ::StaticTraitResolve& resolve_;
         const MIRTerminator::Data_Call& te;
-        ::std::vector<unsigned> copyArgs; // Local indexes containing copies of Copy args
+        std::vector<unsigned> copyArgs;
         ParamsSet params;
         unsigned int bbBase = ~0u;
         unsigned int varBase = ~0u;
         unsigned int dfBase = ~0u;
 
         size_t tmpEnd = 0;
-        mutable ::std::vector<MIRParam> constAssignments;
+        mutable std::vector<MIRParam> constAssignments;
 
         MIRLValue retval;
 
@@ -3044,10 +2782,10 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
         const HIRTypeData* valueGenericType(HIRGenericRef ce) const override {
             const HIRGenericParams* p;
             switch (ce.group()) {
-                case 0: // impl level
+                case 0:
                     p = params.implParamsDef;
                     break;
-                case 1: // method level
+                case 1:
                     p = params.fcnParamsDef;
                     break;
                 default:
@@ -3116,7 +2854,7 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
                 if (this->copyArgs[se] != ~0u) {
                     return MIRLValue(MIRLValue::Storage::newLocal(this->copyArgs[se]), std::move(rv.wrappers));
                 } else {
-                    assert(!arg.is_Constant()); // Should have been handled in the above
+                    assert(!arg.is_Constant());
                     return arg.as_LValue().cloneWrapped(std::move(rv.wrappers));
                 }
             }
@@ -3150,22 +2888,16 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
                 continue;
             }
 
-            // Check the size of the target function.
-            // Inline IF:
-            // - First BB ends with a call and total count is 3
-            // - Statement count smaller than 10
             if (!H::canInline(path, *calledMir, te->args, minimal)) {
                 continue;
             }
 
-            // Allocate a temporary for the return value
             {
                 cloner.retval = MIRLValue::newLocal(fcn.locals.size());
                 HIRTypeRef tmpTy;
                 fcn.locals.push_back(state.getLvalueType(tmpTy, te->retVal));
             }
 
-            // Monomorph locals and append
             cloner.varBase = fcn.locals.size();
             for (const auto& ty : calledMir->locals) {
                 fcn.locals.push_back(cloner.monomorph(ty));
@@ -3176,7 +2908,6 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
             fcn.dropFlags.insert(fcn.dropFlags.end(), calledMir->dropFlags.begin(), calledMir->dropFlags.end());
             cloner.bbBase = fcn.blocks.size();
 
-            // Store all Copy lvalue arguments and Constants in variables
             for (size_t i = 0; i < te->args.size(); i++) {
                 const auto& a = te->args[i];
                 if (!a.is_LValue() || state.lvalueIsCopy(a.as_LValue())) {
@@ -3185,15 +2916,12 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
                 }
             }
 
-            // Append monomorphised copy of all blocks.
-            // > Arguments replaced by input lvalues
-            ::std::vector<MIRBasicBlock> newBlocks;
+            std::vector<MIRBasicBlock> newBlocks;
             newBlocks.reserve(calledMir->blocks.size());
             for (const auto& bb : calledMir->blocks) {
                 newBlocks.push_back(cloner.cloneBb(bb, (&bb - calledMir->blocks.data()), fcn.blocks.size() + newBlocks.size()));
             }
 
-            // > Append new temporaries
             for (auto& val : cloner.constAssignments) {
                 HIRTypeRef tmp;
                 auto ty = val.is_Constant() ? state.getConstType(val.as_Constant()) : state.getLvalueType(tmp, val.as_LValue());
@@ -3205,7 +2933,6 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
             }
             cloner.constAssignments.clear();
 
-            // Record the inline event
             for (auto& e : inlinedFunctions) {
                 if (e.hasBb(i)) {
                     e.addRange(cloner.bbBase, newBlocks.size());
@@ -3214,7 +2941,6 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
             inlinedFunctions.push_back(InlineEvent(path.clone()));
             inlinedFunctions.back().addRange(cloner.bbBase, newBlocks.size());
 
-            // Apply
             fcn.blocks.reserve(fcn.blocks.size() + newBlocks.size());
             for (auto& b : newBlocks) {
                 fcn.blocks.push_back(mv$(b));
@@ -3223,69 +2949,21 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
             inlineHappened = true;
 
             // TODO: Store the inlined path along with the start and end BBs, and then use that to detect recursive
-            // inlining
-            // - Recursive inlining should be an immediate panic.
         }
     }
     return inlineHappened;
 }
 
 namespace {
-    struct OptimiseStmtRef {
-        unsigned bbIdx;
-        unsigned stmtIdx;
 
-        OptimiseStmtRef()
-            : bbIdx(~0u)
-            , stmtIdx(0)
-        {
-        }
-
-        OptimiseStmtRef(unsigned b, unsigned s)
-            : bbIdx(b)
-            , stmtIdx(s)
-        {
-        }
-
-        bool operator==(const OptimiseStmtRef& x) const {
-            return bbIdx == x.bbIdx && stmtIdx == x.stmtIdx;
-        }
-    };
-
-    ::std::ostream& operator<<(::std::ostream& os, const OptimiseStmtRef& x) {
+    std::ostream& operator<<(std::ostream& os, const OptimiseStmtRef& x) {
         return os << "BB" << x.bbIdx << "/" << x.stmtIdx;
     }
 
-    // Iterates the path between two positions, NOT visiting entry specified by `end`
     enum class IterPathRes {
         Abort,
         EarlyTrue,
         Complete,
-    };
-
-    struct IterPathCallback {
-        virtual bool visitStatement(OptimiseStmtRef location, const MIRStatement& statement) = 0;
-        virtual bool visitTerminator(OptimiseStmtRef location, const MIRTerminator& terminator) = 0;
-    };
-
-    template <typename S, typename T>
-    struct IterPathCb final: IterPathCallback {
-        S statement;
-        T terminator;
-
-        IterPathCb(S statement, T terminator)
-            : statement(statement)
-            , terminator(terminator)
-        {
-        }
-
-        bool visitStatement(OptimiseStmtRef location, const MIRStatement& value) override {
-            return statement(location, value);
-        }
-
-        bool visitTerminator(OptimiseStmtRef location, const MIRTerminator& value) override {
-            return terminator(location, value);
-        }
     };
 
     IterPathRes iterPathWith(const MIRFunction& fcn, const OptimiseStmtRef& start, const OptimiseStmtRef& end, IterPathCallback& cb) {
@@ -3293,8 +2971,7 @@ namespace {
             assert(start.stmtIdx <= end.stmtIdx);
         }
 
-        auto vistedBbs = ::std::set<unsigned>();
-        // Loop while not equal (either not in the right block, or before the statement) to the end point
+        auto vistedBbs = std::set<unsigned>();
         for (auto ref = start; ref.bbIdx != end.bbIdx || ref.stmtIdx < end.stmtIdx;) {
             const auto& bb = fcn.blocks.at(ref.bbIdx);
             if (ref.stmtIdx < bb.statements.size()) {
@@ -3308,26 +2985,17 @@ namespace {
                     return IterPathRes::EarlyTrue;
                 }
 
-                // If this is the end point, break out before checking the terminator for looping
                 if (ref.bbIdx == end.bbIdx) {
-                    // ^ don't need to check the statment index, this is the last "statement"
                     break;
                 }
 
-                // If this terminator is a Goto, follow it (tracking for loops)
                 if (const auto* te = bb.terminator.opt_Goto()) {
-                    // Possibly loop into the next block
                     if (!vistedBbs.insert(*te).second) {
                         return IterPathRes::Abort;
                     }
                     ref.stmtIdx = 0;
                     ref.bbIdx = *te;
-                }
-                // A call's panic edge cannot reach `end`, so only follow the
-                // normal return edge while inspecting a path between two
-                // positions.
-                else if (const auto* te = bb.terminator.opt_Call()) {
-                    // Possibly loop into the next block
+                } else if (const auto* te = bb.terminator.opt_Call()) {
                     if (!vistedBbs.insert(te->retBlock).second) {
                         return IterPathRes::Abort;
                     }
@@ -3347,71 +3015,6 @@ namespace {
         return iterPathWith(fcn, start, end, cb);
     }
 
-    // Value is invalidated if it's used with MIRValUsage::Write or MIRValUsage::Borrow
-    // - Same applies to any component of the lvalue
-    struct CheckInvalidatesLvalue final: public LvalueVisitor {
-        const MIRLValue& val;
-        bool hasIndex;
-        bool isCopy;
-        bool alsoRead;
-
-        CheckInvalidatesLvalue(const MIRLValue& val, bool isCopy, bool alsoRead = false)
-            : val(val)
-            , hasIndex(::std::any_of(val.wrappers.begin(), val.wrappers.end(), [](const auto& w) {
-                return w.is_Index();
-            }))
-            , isCopy(isCopy)
-            , alsoRead(alsoRead)
-        {
-        }
-
-        bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
-            switch (vu) {
-                    // - Ideally this would check if it DOES invalidate
-                case MIRValUsage::Write:
-                case MIRValUsage::Borrow:
-                    // (Possibly) mutating use, check if it impacts the root or one of the indexes
-                    if (lv.root == val.root) {
-                        return true;
-                    }
-                    // If the desired lvalue has an index in it's wrappers, AND the current lvalue is a local
-                    if (hasIndex && lv.root.is_Local()) {
-                        // Search for any wrapper on `val` that Index(lv)
-                        for (const auto& w : val.wrappers) {
-                            if (w.is_Index() && w.as_Index() == lv.root.as_Local()) {
-                                // This lvalue is changed, so the index is invalidated
-                                return true;
-                            }
-                        }
-                    }
-                    break;
-                case MIRValUsage::Move: // A move can invalidate
-                    if (isCopy) {
-                    } else if (lv.root == val.root) {
-                        // Check if `lv`'s wrappers are a subset of `val`'s
-                        auto l = std::min(lv.wrappers.size(), val.wrappers.size());
-                        for (size_t i = 0; i < l; i++) {
-                            // A wrapper differs, won't invalidate
-                            if (lv.wrappers[i] != val.wrappers[i]) {
-                                return false;
-                            }
-                        }
-                        return true;
-                    }
-                    break;
-                case MIRValUsage::Read:
-                    if (alsoRead) {
-                        // NOTE: A read of the same root is a read of this value (what if they're disjoint fields?)
-                        if (lv.root == val.root) {
-                            return true;
-                        }
-                    }
-                    break;
-            }
-            return false;
-        }
-    };
-
     bool checkInvalidatesLvalue(const MIRStatement& stmt, const MIRLValue& val, bool isCopy, bool alsoRead = false) {
         CheckInvalidatesLvalue cb{val, isCopy, alsoRead};
         return optVisitMirLvalues(stmt, cb);
@@ -3423,18 +3026,9 @@ namespace {
     }
 }
 
-// --------------------------------------------------------------------
-// Locates locals that are only set/used once, and replaces them with
-//  their source IF the source isn't invalidated
-// --------------------------------------------------------------------
 bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
-    // Find all single-use/single-write locals
-    // - IF the usage is a RValue::Use, AND the usage destination is not invalidated between set/use
-    //  - Replace initialisation destination with usage destination (delete usage statement)
-    // - IF the source a Use/Constant, AND is not invalidated between set/use
-    //  - Replace usage with the original source
     struct LocalUsage {
         unsigned nWrite;
         unsigned nRead;
@@ -3450,9 +3044,8 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
         }
     };
 
-    ::std::vector<LocalUsage> usageInfo(fcn.locals.size());
+    std::vector<LocalUsage> usageInfo(fcn.locals.size());
 
-    // 1. Enumrate usage
     {
         struct CountUsage final: public LvalueVisitor {
             MIRTypeResolve& state;
@@ -3499,16 +3092,14 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
                 return false;
             }
         } visitCb{state, usageInfo};
+
         optVisitMirLvalues(state, fcn, visitCb);
     }
 
-    // 2. Find any local with 1 write, 1 read, and no borrows
     for (size_t varIdx = 0; varIdx < fcn.locals.size(); varIdx++) {
         const auto& slot = usageInfo[varIdx];
         auto thisVar = MIRLValue::newLocal(varIdx);
         if (slot.nWrite == 1 && slot.nRead == 1 && slot.nBorrow == 0) {
-            // Single-use variable, now check how we can eliminate it
-
             auto& useBb = fcn.blocks[slot.useLoc.bbIdx];
             auto& setBb = fcn.blocks[slot.setLoc.bbIdx];
 
@@ -3520,17 +3111,11 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
                 setLocNext.stmtIdx = 0;
             }
 
-            // If usage is direct assignment of the original value.
-            // - In this case, we can move the usage upwards
             if (slot.useLoc.stmtIdx < useBb.statements.size() && (useBb.statements[slot.useLoc.stmtIdx].is_Assign() && useBb.statements[slot.useLoc.stmtIdx].as_Assign().src.is_Use() && useBb.statements[slot.useLoc.stmtIdx].as_Assign().src.as_Use() == thisVar)) {
-                // Move the usage up to original assignment (if destination isn't invalidated)
                 const auto& dst = useBb.statements[slot.useLoc.stmtIdx].as_Assign().dst;
 
                 // TODO: If the destination slot was ever borrowed mutably, don't move.
-                // - Maybe, if there's a drop skip? (as the drop could be &mut to the target value)
 
-                // - Iterate the path(s) between the two statements to check if the destination would be invalidated
-                //  > The iterate function doesn't (yet) support following BB chains, so assume invalidated if over a jump.
                 // TODO: What if the set location is a call?
                 bool invalidated = IterPathRes::Complete != iterPath(
                                                                 fcn,
@@ -3545,7 +3130,6 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
                 }
                                                             );
                 if (!invalidated) {
-                    // destination not dependent on any statements between the two, move.
                     if (slot.setLoc.stmtIdx < setBb.statements.size()) {
                         auto& setStmt = setBb.statements[slot.setLoc.stmtIdx];
                         switch (setStmt.tag()) {
@@ -3558,12 +3142,11 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
                                 break;
                             }
                             case MIRStatement::TAG_Asm: {
-                                // Initialised from an ASM statement, find the variable in the output parameters
                                 break;
                             }
                             case MIRStatement::TAG_Asm2: {
                                 auto& se = setStmt.as_Asm2();
-                                // Initialised from an ASM statement, find the variable in the output parameters
+
                                 // TODO: Replace the output variable
                                 for (auto& e : se.params) {
                                     if (const auto* ep = e.opt_Reg()) {
@@ -3581,8 +3164,7 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
                                     MIR_BUG(state, "Failed to find usage of _" << varIdx << " in asm! statement");
                                 }
                                 break;
-                            }
-break;
+                            } break;
                             default:
                                 MIR_BUG(state, "Impossibility: Value set in " << setStmt);
                         }
@@ -3599,33 +3181,21 @@ break;
                 continue;
             }
 
-            // Can't move up, can we move down?
-            // - If the source is an Assign(Use) then we can move down
             if (slot.setLoc.stmtIdx < setBb.statements.size() && (setBb.statements[slot.setLoc.stmtIdx].is_Assign() && (setBb.statements[slot.setLoc.stmtIdx].as_Assign().src.is_Use()))) {
                 auto& setStmt = setBb.statements[slot.setLoc.stmtIdx];
                 const auto& src = setStmt.as_Assign().src.as_Use();
                 bool srcCopy = src.wrappers.empty() && state.lvalueIsCopy(src);
 
-                // Check if the source of initial assignment is invalidated in the meantime.
                 auto useLocInc = slot.useLoc;
                 useLocInc.stmtIdx += 1;
-                bool invalidated = IterPathRes::Complete != iterPath(
-                                                                fcn,
-                                                                setLocNext,
-                                                                useLocInc,
-                                                                // NOTE: If a mutable borrow happens, assume it invalidates the source
-                                                                [&](auto loc, const auto& stmt) -> bool {
+                bool invalidated = IterPathRes::Complete != iterPath(fcn, setLocNext, useLocInc, [&](auto loc, const auto& stmt) -> bool {
                     return checkInvalidatesLvalue(stmt, src, srcCopy) || (stmt.is_Assign() && stmt.as_Assign().src.is_Borrow() && stmt.as_Assign().src.as_Borrow().type != HIRBorrowType::Shared);
-                },
-                                                                [&](auto loc, const auto& term) -> bool {
+                }, [&](auto loc, const auto& term) -> bool {
                     return checkInvalidatesLvalue(term, src, srcCopy);
-                }
-                                                            );
-                // If this is a deref, and there are move ops between definition and use - then invalidate
+                });
                 if (!invalidated && std::any_of(src.wrappers.begin(), src.wrappers.end(), [](const MIRLValue::Wrapper& w) {
                     return w.is_Deref();
                 })) {
-                    // If there are any move ops between the set and the usage, invalidate
                     struct CheckMoves final: public LvalueVisitor {
                         MIRTypeResolve& state;
                         const MIRLValue& thisVar;
@@ -3643,16 +3213,15 @@ break;
                                 return false;
                             }
                             if (stop) {
-                                // Once the value is seen, ignore anything else
                                 return false;
                             }
-                            // If a move is seen, check if it's a move (and not a copy)
                             if (vu == MIRValUsage::Move) {
                                 return !state.lvalueIsCopy(lv);
                             }
                             return false;
                         }
                     } checkCb{state, thisVar};
+
                     struct FindThisVar final: public LvalueVisitor {
                         const MIRLValue& thisVar;
 
@@ -3665,6 +3234,7 @@ break;
                             return lv == thisVar;
                         }
                     } findThisVar{thisVar};
+
                     invalidated = IterPathRes::Complete != iterPath(fcn, setLocNext, useLocInc, [&](auto loc, const auto& stmt) -> bool {
                         return optVisitMirLvalues(stmt, checkCb);
                     }, [&](auto loc, const auto& term) -> bool {
@@ -3672,7 +3242,6 @@ break;
                     });
                 }
                 if (!invalidated) {
-                    // Update the usage site and replace.
                     struct ReplaceVar final: public LvalueVisitorMut {
                         MIRTypeResolve& state;
                         const MIRLValue& thisVar;
@@ -3699,6 +3268,7 @@ break;
                             return false;
                         }
                     } replaceCb{state, thisVar, src};
+
                     if (slot.useLoc.stmtIdx < useBb.statements.size()) {
                         auto& useStmt = useBb.statements[slot.useLoc.stmtIdx];
                         bool found = optVisitMirLvaluesMut(useStmt, replaceCb);
@@ -3719,29 +3289,21 @@ break;
             }
 
             // TODO: If the source is a Borrow and the use is a Deref, then propagate forwards
-            // - This would be a simpler version of a var more compliciated algorithm
-
         }
     }
 
     return changed;
 }
 
-// Remove useless borrows (locals assigned with a borrow, and never used by value)
-// ```
-// (*_$1).1 = 0x0;
-// ```
 bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
-    // Find all single-assign borrows that are only ever used via Deref
-    // - Direct drop is ignored for this purpose
     struct LocalUsage {
         unsigned nWrite;
         unsigned nOtherRead;
         unsigned nDerefRead;
         OptimiseStmtRef setLoc;
-        ::std::vector<OptimiseStmtRef> dropLocs;
+        std::vector<OptimiseStmtRef> dropLocs;
 
         LocalUsage()
             : nWrite(0)
@@ -3751,7 +3313,7 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     };
 
-    ::std::vector<LocalUsage> usageInfo(fcn.locals.size());
+    std::vector<LocalUsage> usageInfo(fcn.locals.size());
     for (size_t i = 0; i < fcn.locals.size(); i++) {
         auto& u = usageInfo[i];
         u.nWrite = 0;
@@ -3760,6 +3322,7 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
         u.setLoc = OptimiseStmtRef();
         u.dropLocs.clear();
     }
+
     struct CountBorrowUsage final: public LvalueVisitor {
         const MIRFunction& fcn;
         decltype(usageInfo)& usageInfo;
@@ -3774,26 +3337,21 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
         bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
             if (lv.root.is_Local()) {
                 auto& slot = usageInfo[lv.root.as_Local()];
-                // NOTE: This pass doesn't care about indexing, as we're looking for values that are borrows (which aren't valid indexes)
-                // > Inner-most wrapper is Deref - it's a deref of this variable
                 if (!lv.wrappers.empty() && lv.wrappers.front().is_Deref()) {
                     slot.nDerefRead++;
                     if (fcn.locals[lv.root.as_Local()]->is_Borrow()) {
                     }
-                }
-                // > Write with no wrappers - Assignment
-                else if (lv.wrappers.empty() && vu == MIRValUsage::Write) {
+                } else if (lv.wrappers.empty() && vu == MIRValUsage::Write) {
                     slot.nWrite++;
                     slot.setLoc = curLoc;
-                }
-                // Anything else, count as a read
-                else {
+                } else {
                     slot.nOtherRead++;
                 }
             }
             return false;
         }
     } visitCb{fcn, usageInfo};
+
     for (const auto& bb : fcn.blocks) {
         for (const auto& stmt : bb.statements) {
             visitCb.curLoc = OptimiseStmtRef(&bb - &fcn.blocks.front(), &stmt - &bb.statements.front());
@@ -3809,12 +3367,10 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     }
 
-    // Look single-write/deref-only locals assigned with `_0 = Borrow`
     for (size_t varIdx = 0; varIdx < fcn.locals.size(); varIdx++) {
         const auto& slot = usageInfo[varIdx];
         auto thisVar = MIRLValue::newLocal(varIdx);
 
-        // This rule only applies to single-write variables, with no use other than via derefs
         if (slot.nWrite != 1) {
             continue;
         }
@@ -3822,32 +3378,28 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
             continue;
         }
 
-        // Check that the source was a borrow statement
         auto& srcBb = fcn.blocks[slot.setLoc.bbIdx];
         if (!(slot.setLoc.stmtIdx < srcBb.statements.size() && (srcBb.statements[slot.setLoc.stmtIdx].is_Assign() && (srcBb.statements[slot.setLoc.stmtIdx].as_Assign().src.is_Borrow())))) {
             continue;
         }
         const auto& srcBorrow = srcBb.statements[slot.setLoc.stmtIdx].as_Assign().src.as_Borrow();
         const auto& srcLv = srcBorrow.val;
-        // Check that the borrow isn't too complex (if it's used multiple times)
         if (slot.nDerefRead > 1 && srcLv.wrappers.size() >= 2) {
             continue;
         }
-        // If there are multiple derefs, don't expand. More than one deref makes determining invalidation VERY hard
         if (std::count_if(srcLv.wrappers.begin(), srcLv.wrappers.end(), [](const MIRLValue::Wrapper& w) {
             return w.is_Deref();
         }) > 1) {
             continue;
         }
-        // Keep the complexity down (when not used only once)
         if (slot.nDerefRead + slot.nOtherRead > 1 && srcBorrow.type != HIRBorrowType::Shared) {
             continue;
         }
         bool srcCopy = state.lvalueIsCopy(srcLv);
 
-        // Locate usage sites (by walking forwards) and check for invalidation
         auto curLoc = slot.setLoc;
         curLoc.stmtIdx++;
+
         struct ReplaceDerefs final: public LvalueVisitorMut {
             MIRTypeResolve& state;
             const MIRLValue& thisVar;
@@ -3869,7 +3421,6 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
                 if (lv.root == thisVar.root && !lv.wrappers.empty()) {
                     ASSERT_BUG(Span(), !lv.wrappers.empty(), curLoc << " " << lv);
                     MIR_ASSERT(state, lv.wrappers.front().is_Deref(), "Use of a replacable value that isn't via a deref - " << lv);
-                    // Make a LValue reference, then overwrite it
                     {
                         auto lvr = MIRLValue::MRef(lv);
                         while (lvr.wrapperCount() > 1) {
@@ -3884,18 +3435,16 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
                 return false;
             }
         } replaceCb{state, thisVar, srcLv, curLoc, slot};
+
         for (bool stop = false; !stop;) {
             auto& curBb = fcn.blocks[curLoc.bbIdx];
             for (; curLoc.stmtIdx < curBb.statements.size(); curLoc.stmtIdx++) {
                 auto& stmt = curBb.statements[curLoc.stmtIdx];
-                // Check for invalidation (actual check done before replacement)
                 bool invalidates = checkInvalidatesLvalue(stmt, srcLv, srcCopy);
                 if (invalidates) {
-                    // Invalidated, stop here.
                     stop = true;
                     break;
                 }
-                // Replace usage
                 optVisitMirLvaluesMut(stmt, replaceCb);
                 if (replaceCb.numReplaced == slot.nDerefRead) {
                     stop = true;
@@ -3905,31 +3454,26 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
             if (stop) {
                 break;
             }
-            // Replace usage
             optVisitMirLvaluesMut(curBb.terminator, replaceCb);
             if (replaceCb.numReplaced == slot.nDerefRead) {
                 stop = true;
                 break;
             }
-            // Check for invalidation
             if (checkInvalidatesLvalue(curBb.terminator, srcLv, srcCopy)) {
                 stop = true;
                 break;
             }
 
             switch (curBb.terminator.tag()) {
-default:
-                stop = true;
-                break;
-                // TODO: History is needed to avoid infinite loops from triggering infinite looping here.
-                //    }
-                // TODO: Fork state to handle multi-tagets
-                // NOTE: `Call` can't work in the presense of unwinding, would need to traverse both paths
-                //    }
+                default:
+                    stop = true;
+                    break;
+                    // TODO: History is needed to avoid infinite loops from triggering infinite looping here.
+
+                    // TODO: Fork state to handle multi-tagets
             }
         }
 
-        // If the source was an inner deref, update its counts
         if (srcLv.root.is_Local() && !srcLv.wrappers.empty() && srcLv.wrappers.front().is_Deref()) {
             usageInfo[srcLv.root.as_Local()].nDerefRead += replaceCb.numReplaced;
             if (replaceCb.numReplaced == slot.nDerefRead) {
@@ -3937,8 +3481,6 @@ default:
             }
         }
 
-        // If all usage sites were updated, then remove the original assignment
-        // - Since this code works with `&mut`, can't just leave the assignment for DCE when mut
         if (replaceCb.numReplaced == slot.nDerefRead + slot.nOtherRead) {
             srcBb.statements[slot.setLoc.stmtIdx] = MIRStatement();
             for (const auto& dropLoc : slot.dropLocs) {
@@ -3948,13 +3490,10 @@ default:
                 dropBb.terminator = MIRTerminator::make_Goto(target);
             }
         } else {
-            // The variable is still used, keep the source where it is
         }
 
-        // Any replacements? Then there was an actionable change
         if (replaceCb.numReplaced > 0) {
             changed = true;
-            // Return as soon as a variable has been changed, as this can invalidate the slot information
             return changed;
         }
     }
@@ -3962,10 +3501,6 @@ default:
     return changed;
 }
 
-// --------------------------------------------------------------------
-// Replaces reborrows where the source is never used again (except maybe
-// ...
-// --------------------------------------------------------------------
 bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
@@ -3984,9 +3519,7 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
         }
     };
 
-    ::std::vector<Poss> possible;
-    // Locate reborrows with the same source/destination type
-    // Source lvalue must be a local/argument
+    std::vector<Poss> possible;
     for (const auto& blk : fcn.blocks) {
         for (const auto& stmt : blk.statements) {
             state.setCurStmt(&blk - fcn.blocks.data(), &stmt - blk.statements.data());
@@ -3995,31 +3528,25 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
                 continue;
             }
             const auto& se = stmt.as_Assign();
-            // Must be assigning to a local
             if (!se.dst.is_Local()) {
                 continue;
             }
-            // Soure must be a borrow
             if (!se.src.is_Borrow()) {
                 continue;
             }
             const auto& re = se.src.as_Borrow();
-            // Source must be `<local>*` or `<arg>*`
             if (!(re.val.root.is_Local() || re.val.root.is_Argument())) {
                 continue;
             }
             if (!(re.val.wrappers.size() == 1 && re.val.wrappers[0].is_Deref())) {
                 continue;
             }
-            // Types must match (avoids decaying reborrows or raw pointer accesses)
             const auto& srcTy = re.val.root.is_Local() ? fcn.locals[re.val.root.as_Local()] : state.args[re.val.root.as_Argument()].second;
             const auto& dstTy = fcn.locals[se.dst.as_Local()];
             if (srcTy != dstTy) {
                 continue;
             }
 
-            // Record as a possible useless reborrow
-            // - Depends on the usage of the source
             auto pos = OptimiseStmtRef(state.getCurBlock(), state.getCurStmtOfs());
             possible.push_back(Poss(pos, re.val.root.clone(), se.dst.root.clone()));
         }
@@ -4027,14 +3554,13 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
     if (possible.size() == 0) {
         return false;
     }
-    // The borrow must not be within a loop
     {
         std::vector<unsigned int> incomingEdges(fcn.blocks.size());
         for (const auto& block : fcn.blocks) {
             struct CountIncoming final: public MIRTargetVisitor {
-                ::std::vector<unsigned int>& incomingEdges;
+                std::vector<unsigned int>& incomingEdges;
 
-                explicit CountIncoming(::std::vector<unsigned int>& incomingEdges)
+                explicit CountIncoming(std::vector<unsigned int>& incomingEdges)
                     : incomingEdges(incomingEdges)
                 {
                 }
@@ -4043,6 +3569,7 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
                     incomingEdges[target]++;
                 }
             } countIncoming{incomingEdges};
+
             visitTerminatorTarget(block.terminator, countIncoming);
         }
         std::vector<unsigned int> acyclicBlocks;
@@ -4054,10 +3581,10 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
         }
         for (size_t i = 0; i < acyclicBlocks.size(); i++) {
             struct PeelAcyclic final: public MIRTargetVisitor {
-                ::std::vector<unsigned int>& incomingEdges;
-                ::std::vector<unsigned int>& acyclicBlocks;
+                std::vector<unsigned int>& incomingEdges;
+                std::vector<unsigned int>& acyclicBlocks;
 
-                PeelAcyclic(::std::vector<unsigned int>& incomingEdges, ::std::vector<unsigned int>& acyclicBlocks)
+                PeelAcyclic(std::vector<unsigned int>& incomingEdges, std::vector<unsigned int>& acyclicBlocks)
                     : incomingEdges(incomingEdges)
                     , acyclicBlocks(acyclicBlocks)
                 {
@@ -4069,15 +3596,11 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
                     }
                 }
             } peelAcyclic{incomingEdges, acyclicBlocks};
+
             visitTerminatorTarget(fcn.blocks[acyclicBlocks[i]].terminator, peelAcyclic);
         }
 
         if (acyclicBlocks.size() != fcn.blocks.size()) {
-            // A block "loops" iff it is reachable from itself, i.e. it sits in a
-            // strongly-connected component with more than one block, or has an
-            // edge to itself. Compute that for every block in one pass
-            // (iterative Tarjan) instead of running a whole-CFG search per
-            // candidate block, which made this O(candidates * CFG).
             std::vector<bool> loops(fcn.blocks.size(), false);
             {
                 const size_t nBlocks = fcn.blocks.size();
@@ -4087,17 +3610,17 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
                 std::vector<unsigned> sccStack;
                 unsigned nextIndex = 0;
 
-                // Successor lists, so the walk below can resume mid-block.
                 std::vector<std::vector<unsigned>> succs(nBlocks);
                 for (const auto& block : fcn.blocks) {
                     unsigned bbIdx = &block - fcn.blocks.data();
+
                     struct CollectSuccs final: public MIRTargetVisitor {
                         size_t nBlocks;
                         unsigned bbIdx;
-                        ::std::vector<::std::vector<unsigned>>& succs;
-                        ::std::vector<bool>& loops;
+                        std::vector<std::vector<unsigned>>& succs;
+                        std::vector<bool>& loops;
 
-                        CollectSuccs(size_t nBlocks, unsigned bbIdx, ::std::vector<::std::vector<unsigned>>& succs, ::std::vector<bool>& loops)
+                        CollectSuccs(size_t nBlocks, unsigned bbIdx, std::vector<std::vector<unsigned>>& succs, std::vector<bool>& loops)
                             : nBlocks(nBlocks)
                             , bbIdx(bbIdx)
                             , succs(succs)
@@ -4109,11 +3632,12 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
                             if (target < nBlocks) {
                                 succs[bbIdx].push_back(target);
                                 if (target == bbIdx) {
-                                    loops[bbIdx] = true; // self-edge
+                                    loops[bbIdx] = true;
                                 }
                             }
                         }
                     } collectSuccs{nBlocks, bbIdx, succs, loops};
+
                     visitTerminatorTarget(block.terminator, collectSuccs);
                 }
 
@@ -4121,6 +3645,7 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
                     unsigned bb;
                     size_t next;
                 };
+
                 std::vector<Frame> callStack;
                 for (unsigned root = 0; root < nBlocks; root++) {
                     if (index[root] != ~0u) {
@@ -4150,14 +3675,12 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
                                 lowlink[parent.bb] = std::min(lowlink[parent.bb], lowlink[v]);
                             }
                             if (lowlink[v] == index[v]) {
-                                // Pop one SCC (v and everything above it on the
-                                // stack); sizes > 1 mean every member loops.
                                 size_t vPos = sccStack.size();
                                 while (vPos > 0 && sccStack[vPos - 1] != v) {
                                     vPos--;
                                 }
                                 assert(vPos > 0);
-                                vPos--; // index of `v` itself
+                                vPos--;
                                 bool multi = (sccStack.size() - vPos) > 1;
                                 for (size_t i = vPos; i < sccStack.size(); i++) {
                                     unsigned m = sccStack[i];
@@ -4178,17 +3701,15 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
         }
     }
 
-    // Must be the only use (apart from dropping) of the source lvalue
-    ::std::unordered_map<uintptr_t, ::std::vector<size_t>> possibleBySource;
+    std::unordered_map<uintptr_t, std::vector<size_t>> possibleBySource;
     for (size_t i = 0; i < possible.size(); i++) {
         possibleBySource[possible[i].slot.getInner()].push_back(i);
     }
+
     struct MarkUsed final: public LvalueVisitor {
         MIRTypeResolve& state;
         decltype(possible)& possible;
         const decltype(possibleBySource)& possibleBySource;
-        // Statement scan: skip the possibility at this position. Terminator
-        // scan: skip when the terminator is a plain drop of the slot itself.
         const OptimiseStmtRef* pos = nullptr;
         const MIRTerminator::Data_Drop* dropped = nullptr;
 
@@ -4219,6 +3740,7 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
             return false;
         }
     } markUsed{state, possible, possibleBySource};
+
     for (const auto& blk : fcn.blocks) {
         for (const auto& stmt : blk.statements) {
             state.setCurStmt(&blk - fcn.blocks.data(), &stmt - blk.statements.data());
@@ -4232,7 +3754,6 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
         optVisitMirLvalues(blk.terminator, markUsed);
     }
 
-    // Remove any marked with `used=true` from the list
     {
         auto ne = std::remove_if(possible.begin(), possible.end(), [&](const Poss& p) {
             return p.used;
@@ -4242,9 +3763,8 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
     if (possible.size() == 0) {
         return false;
     }
-    // Rewrite and erase
-    ::std::unordered_set<uintptr_t> sourceSlots;
-    ::std::unordered_map<uintptr_t, uintptr_t> replacements;
+    std::unordered_set<uintptr_t> sourceSlots;
+    std::unordered_map<uintptr_t, uintptr_t> replacements;
     for (auto it = possible.rbegin(); it != possible.rend(); ++it) {
         const auto source = it->slot.getInner();
         const auto destination = it->replace.getInner();
@@ -4253,6 +3773,7 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
         replacements[destination] = next == replacements.end() ? source : next->second;
         fcn.blocks[it->pos.bbIdx].statements[it->pos.stmtIdx] = MIRStatement();
     }
+
     struct ReplaceRoots final: public LvalueVisitorMut {
         MIRTypeResolve& state;
         const decltype(replacements)& replacements;
@@ -4273,6 +3794,7 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
             return false;
         }
     } replaceRoots{state, replacements};
+
     for (auto& blk : fcn.blocks) {
         for (auto& stmt : blk.statements) {
             state.setCurStmt(&blk - fcn.blocks.data(), &stmt - blk.statements.data());
@@ -4289,10 +3811,6 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
     return changed;
 }
 
-// --------------------------------------------------------------------
-// Replaces uses of stack slots with what they were assigned with (when
-// possible)
-// --------------------------------------------------------------------
 bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
@@ -4306,15 +3824,12 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
     }
     changed |= MIROptimiseDeTemporaryReborrowOfUnused(state, fcn);
 
-    // OLD ALGORITHM.
     for (unsigned int bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
         auto& bb = fcn.blocks[bbIdx];
-        ::std::map<unsigned, unsigned> localAssignments; // Local number -> statement index
+        std::map<unsigned, unsigned> localAssignments;
         // TODO: Keep track of what variables would invalidate a local (and compound on assignment)
-        ::std::vector<unsigned> statementsToRemove; // List of statements that have to be removed
+        std::vector<unsigned> statementsToRemove;
 
-        // ----- Helper visitors -----
-        // > Check if a recorded assignment is no longer valid.
         struct CheckInvalidate final: public LvalueVisitor {
             MIRTypeResolve& state;
             const MIRBasicBlock& bb;
@@ -4327,7 +3842,6 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
             {
             }
 
-            // Does the source rvalue mention the same root as `lv`?
             struct SourceMentions final: public LvalueVisitor {
                 const MIRLValue& lv;
                 bool hit = false;
@@ -4351,7 +3865,6 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
                     bool invalidated = false;
                     const auto& srcRvalue = bb.statements[it->second].as_Assign().src;
 
-                    // Destination invalidated?
                     if (lv.root.is_Local() && it->first == lv.root.as_Local()) {
                         switch (vu) {
                             case MIRValUsage::Borrow:
@@ -4361,13 +3874,11 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
                             default:
                                 break;
                         }
-                    }
-                    // Source invalidated?
-                    else {
+                    } else {
                         switch (vu) {
-                            case MIRValUsage::Borrow: // Borrows are annoying, assume they invalidate anything used
-                            case MIRValUsage::Write:  // Mutated? It's invalidated
-                            case MIRValUsage::Move: { // Moved? Now invalid
+                            case MIRValUsage::Borrow:
+                            case MIRValUsage::Write:
+                            case MIRValUsage::Move: {
                                 SourceMentions mentions{lv};
                                 optVisitMirLvalues(srcRvalue, mentions);
                                 if (mentions.hit) {
@@ -4375,7 +3886,7 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
                                 }
                                 break;
                             }
-                            case MIRValUsage::Read: // Read is Ok
+                            case MIRValUsage::Read:
                                 break;
                         }
                     }
@@ -4389,7 +3900,7 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
                 return false;
             }
         } cbCheckInvalidate{state, bb, localAssignments};
-        // ^^^ Check for invalidations
+
         struct ApplyReplacements final: public LvalueVisitorMut {
             MIRTypeResolve& state;
             const MIRBasicBlock& bb;
@@ -4407,64 +3918,44 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
             }
 
             bool visitLvalue(MIRLValue& topLv, MIRValUsage topUsage) override {
-                // NOTE: Visits only the top-level LValues
-                // - The inner `visit_mir_lvalue_mut` handles sub-values
-
                 // TODO: Handle partial moves (only delete assignment if the value is fully used)
-                // > For now, don't do the replacement if it would delete the assignment UNLESS it's directly being used)
 
-                // 2. Search for replacements
                 if (topLv.root.is_Local()) {
                     bool topLevel = topLv.wrappers.empty();
                     auto ilv = MIRLValue::newLocal(topLv.root.as_Local());
                     auto it = localAssignments.find(topLv.root.as_Local());
                     if (it != localAssignments.end()) {
                         const auto& newVal = bb.statements[it->second].as_Assign().src.as_Use();
-                        // - Copy? All is good.
                         if (state.lvalueIsCopy(ilv)) {
                             topLv = newVal.cloneWrapped(topLv.wrappers.begin(), topLv.wrappers.end());
                             changed = true;
-                        }
-                        // - Top-level (directly used) also good.
-                        else if (topLevel && topUsage == MIRValUsage::Move) {
+                        } else if (topLevel && topUsage == MIRValUsage::Move) {
                             // TODO: DstMeta/DstPtr _doesn't_ move, so shouldn't trigger this.
                             topLv = newVal.clone();
                             statementsToRemove.push_back(it->second);
                             localAssignments.erase(it);
                             changed = true;
-                        }
-                        // - Otherwise, remove the record.
-                        else {
+                        } else {
                             localAssignments.erase(it);
                         }
                     }
                 }
-                // Return true to prevent recursion
                 return true;
             }
         } cbApplyReplacements{state, bb, localAssignments, statementsToRemove, changed};
 
-        // ----- Top-level algorithm ------
-        // - Find expressions matching the pattern `Local(N) = Use(...)`
-        //  > Delete entry when destination is mutated
-        //  > Delete entry when source is mutated or invalidated (moved)
         for (unsigned int stmtIdx = 0; stmtIdx < bb.statements.size(); stmtIdx++) {
             auto& stmt = bb.statements[stmtIdx];
             state.setCurStmt(bbIdx, stmtIdx);
 
-            // - Check if this statement mutates or borrows a recorded local
-            //  > (meaning that the slot isn't a temporary)
-            // - Check if this statement mutates or moves the source
-            //  > (thus making it invalid to move the source forwards)
             optVisitMirLvalues(stmt, cbCheckInvalidate);
 
-            // - Apply known relacements
             optVisitMirLvaluesMut(stmt, cbApplyReplacements);
 
-            // - Check if this is a new assignment
             if (stmt.is_Assign() && stmt.as_Assign().dst.is_Local() && stmt.as_Assign().src.is_Use()) {
                 const auto& dstLv = stmt.as_Assign().dst;
                 const auto& srcLv = stmt.as_Assign().src.as_Use();
+
                 struct SameRoot final: public LvalueVisitor {
                     const MIRLValue& dstLv;
 
@@ -4477,30 +3968,26 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
                         return lv.root == dstLv.root;
                     }
                 } sameRoot{dstLv};
-                if (!optVisitMirLvaluesInner(srcLv, MIRValUsage::Read, sameRoot)
-                    && !::std::any_of(srcLv.wrappers.begin(), srcLv.wrappers.end(), [](const auto& w) {
-                        return w.is_Deref();
-                    })) {
-                    localAssignments.insert(::std::make_pair(stmt.as_Assign().dst.as_Local(), stmtIdx));
+
+                if (!optVisitMirLvaluesInner(srcLv, MIRValUsage::Read, sameRoot) && !std::any_of(srcLv.wrappers.begin(), srcLv.wrappers.end(), [](const auto& w) {
+                    return w.is_Deref();
+                })) {
+                    localAssignments.insert(std::make_pair(stmt.as_Assign().dst.as_Local(), stmtIdx));
                 }
             }
-        } // for(stmt in bb.statements)
+        }
 
-        // TERMINATOR
         state.setCurStmtTerm(bbIdx);
-        // > Check for invalidations (e.g. move of a source value)
         optVisitMirLvalues(bb.terminator, cbCheckInvalidate);
-        // > THEN check for replacements
         if (!bb.terminator.is_Switch()) {
             optVisitMirLvaluesMut(bb.terminator, cbApplyReplacements);
         }
 
-        // Remove assignments
-        ::std::sort(statementsToRemove.begin(), statementsToRemove.end());
+        std::sort(statementsToRemove.begin(), statementsToRemove.end());
         while (!statementsToRemove.empty()) {
             // TODO: Handle partial moves here?
             // TODO: Is there some edge case I'm missing where the assignment shouldn't be removed?
-            // > It isn't removed if it's used as a Copy, so that's not a problem.
+
             bb.statements.erase(bb.statements.begin() + statementsToRemove.back());
             statementsToRemove.pop_back();
 
@@ -4511,9 +3998,6 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
     return changed;
 }
 
-// --------------------------------------------------------------------
-// Detect common statements between all source arms of a block
-// --------------------------------------------------------------------
 bool MIROptimiseCommonStatements(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
@@ -4521,8 +4005,7 @@ bool MIROptimiseCommonStatements(MIRTypeResolve& state, MIRFunction& fcn) {
         state.setCurStmt(bbIdx, 0);
 
         bool skip = false;
-        ::std::vector<size_t> sources;
-        // Find source blocks
+        std::vector<size_t> sources;
         for (size_t bb2Idx = 0; bb2Idx < fcn.blocks.size() && !skip; bb2Idx++) {
             const auto& blk = fcn.blocks[bb2Idx];
             // TODO: Handle non-Goto branches? (e.g. calls)
@@ -4556,12 +4039,12 @@ bool MIROptimiseCommonStatements(MIRTypeResolve& state, MIRFunction& fcn) {
                     }
 
                     void visitTarget(const MIRBasicBlockId& target) override {
-                        // If this terminator points to the current BB, don't attempt to merge
                         if (target == bbIdx) {
                             skip = true;
                         }
                     }
                 } checkPointsBack{state, blk, bbIdx, bb2Idx, skip};
+
                 visitTerminatorTarget(blk.terminator, checkPointsBack);
             }
         }
@@ -4569,24 +4052,19 @@ bool MIROptimiseCommonStatements(MIRTypeResolve& state, MIRFunction& fcn) {
         if (!skip && sources.size() > 1) {
             // TODO: Should this search for any common statements?
 
-            // Found a common assignment, add to the start and remove from sources.
-            auto stmt = ::std::move(fcn.blocks[sources.front()].statements.back());
+            auto stmt = std::move(fcn.blocks[sources.front()].statements.back());
             for (auto idx : sources) {
                 fcn.blocks[idx].statements.pop_back();
             }
-            fcn.blocks[bbIdx].statements.insert(fcn.blocks[bbIdx].statements.begin(), ::std::move(stmt));
+            fcn.blocks[bbIdx].statements.insert(fcn.blocks[bbIdx].statements.begin(), std::move(stmt));
         }
     }
     return changed;
 }
 
-// --------------------------------------------------------------------
-// If two temporaries don't overlap in lifetime (blocks in which they're valid), unify the two
-// --------------------------------------------------------------------
 bool MIROptimiseUnifyTemporaries(MIRTypeResolve& state, MIRFunction& fcn) {
     bool replacementNeeded = false;
-    ::std::vector<bool> replacable(fcn.locals.size());
-    // 1. Enumerate which (if any) temporaries share the same type
+    std::vector<bool> replacable(fcn.locals.size());
     {
         unsigned int nFound = 0;
         for (unsigned int tmpidx = 0; tmpidx < fcn.locals.size(); tmpidx++) {
@@ -4611,11 +4089,10 @@ bool MIROptimiseUnifyTemporaries(MIRTypeResolve& state, MIRFunction& fcn) {
 
     // TODO: Only calculate lifetimes for replacable locals
     auto lifetimes = MIRHelperGetLifetimes(state, fcn, /*dump_debug=*/true, /*mask=*/&replacable);
-    ::std::vector<MIRValueLifetime> slotLifetimes = mv$(lifetimes.slots);
+    std::vector<MIRValueLifetime> slotLifetimes = mv$(lifetimes.slots);
 
-    // 2. Unify variables of the same type with distinct non-overlapping lifetimes
-    ::std::map<unsigned int, unsigned int> replacements;
-    ::std::vector<bool> visited(fcn.locals.size());
+    std::map<unsigned int, unsigned int> replacements;
+    std::vector<bool> visited(fcn.locals.size());
     for (unsigned int localIdx = 0; localIdx < fcn.locals.size(); localIdx++) {
         if (!replacable[localIdx]) {
             continue;
@@ -4638,11 +4115,9 @@ bool MIROptimiseUnifyTemporaries(MIRTypeResolve& state, MIRFunction& fcn) {
             if (!slotLifetimes[i].isUsed()) {
                 continue;
             }
-            // Variables are of the same type, check if they overlap
             if (slotLifetimes[localIdx].overlaps(slotLifetimes[i])) {
                 continue;
             }
-            // They don't overlap, unify
             slotLifetimes[localIdx].unify(slotLifetimes[i]);
             replacements[i] = localIdx;
             replacementNeeded = true;
@@ -4672,6 +4147,7 @@ bool MIROptimiseUnifyTemporaries(MIRTypeResolve& state, MIRFunction& fcn) {
                 return false;
             }
         } replaceLocals{state, replacements};
+
         optVisitMirLvaluesMut(state, fcn, replaceLocals);
 
         // TODO: Replace in ScopeEnd too?
@@ -4680,9 +4156,6 @@ bool MIROptimiseUnifyTemporaries(MIRTypeResolve& state, MIRFunction& fcn) {
     return replacementNeeded;
 }
 
-// --------------------------------------------------------------------
-// Combine identical blocks
-// --------------------------------------------------------------------
 bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
@@ -4696,6 +4169,7 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
                 add(statement.tag());
             }
             add(block.terminator.tag());
+
             struct HashTargets final: public MIRTargetVisitor {
                 decltype(add)& add;
 
@@ -4708,6 +4182,7 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
                     add(target);
                 }
             } hashTargets{add};
+
             visitTerminatorTarget(block.terminator, hashTargets);
             return rv;
         }
@@ -4829,12 +4304,13 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     };
 
-    // Locate duplicate blocks and replace
-    ::std::map<unsigned int, unsigned int> replacements;
+    std::map<unsigned int, unsigned int> replacements;
+
     struct HashedBlock {
         size_t hash;
         unsigned int bbIdx;
     };
+
     ThinVector<HashedBlock> hashedBlocks;
     ThinVector<unsigned int> groupReps;
     for (;;) {
@@ -4849,7 +4325,7 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
             }
             hashedBlocks.push_back(HashedBlock{H::blockHash(fcn.blocks[bbIdx]), bbIdx});
         }
-        ::std::sort(hashedBlocks.begin(), hashedBlocks.end(), [](const HashedBlock& a, const HashedBlock& b) {
+        std::sort(hashedBlocks.begin(), hashedBlocks.end(), [](const HashedBlock& a, const HashedBlock& b) {
             return a.hash != b.hash ? a.hash < b.hash : a.bbIdx < b.bbIdx;
         });
         for (size_t i = 0; i < hashedBlocks.size();) {
@@ -4858,7 +4334,6 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
                 j++;
             }
             if (j - i > 1) {
-                // Within a group, the earliest equal block becomes the candidate.
                 groupReps.clear();
                 for (size_t k = i; k < j; k++) {
                     auto bbIdx = hashedBlocks[k].bbIdx;
@@ -4882,7 +4357,6 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
             break;
         }
 
-        //MIR_TODO(state, "Unify blocks - " << replacements);
         auto patchTgt = [&replacements](MIRBasicBlockId& tgt) {
             auto it = replacements.find(tgt);
             if (it != replacements.end()) {
@@ -4893,6 +4367,7 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
             if (bb.terminator.isDead()) {
                 continue;
             }
+
             struct PatchTargets final: public MIRTargetVisitorMut {
                 decltype(patchTgt)& patchTgt;
 
@@ -4905,6 +4380,7 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
                     patchTgt(target);
                 }
             } patchTargets{patchTgt};
+
             visitTerminatorTargetMut(bb.terminator, patchTargets);
         }
 
@@ -4917,18 +4393,15 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
     return changed;
 }
 
-// --------------------------------------------------------------------
-// Propagate source values when a composite (tuple) is read
 // TODO: Is this needed now that SplitAggregates exists?
-// --------------------------------------------------------------------
+
 bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changeHappend = false;
-    // 1. Determine reference counts for blocks (allows reversing up BB tree)
-    ::std::vector<size_t> blockOrigins(fcn.blocks.size(), SIZE_MAX);
+    std::vector<size_t> blockOrigins(fcn.blocks.size(), SIZE_MAX);
     {
-        ::std::vector<unsigned int> blockUses(fcn.blocks.size());
-        ::std::vector<bool> visited(fcn.blocks.size());
-        ::std::vector<MIRBasicBlockId> toVisit;
+        std::vector<unsigned int> blockUses(fcn.blocks.size());
+        std::vector<bool> visited(fcn.blocks.size());
+        std::vector<MIRBasicBlockId> toVisit;
         toVisit.push_back(0);
         blockUses[0]++;
         while (toVisit.size() > 0) {
@@ -4941,13 +4414,13 @@ bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
             const auto& block = fcn.blocks[bb];
 
             struct RecordOrigins final: public MIRTargetVisitor {
-                const ::std::vector<bool>& visited;
-                ::std::vector<MIRBasicBlockId>& toVisit;
-                ::std::vector<unsigned int>& blockUses;
-                ::std::vector<size_t>& blockOrigins;
+                const std::vector<bool>& visited;
+                std::vector<MIRBasicBlockId>& toVisit;
+                std::vector<unsigned int>& blockUses;
+                std::vector<size_t>& blockOrigins;
                 MIRBasicBlockId bb;
 
-                RecordOrigins(const ::std::vector<bool>& visited, ::std::vector<MIRBasicBlockId>& toVisit, ::std::vector<unsigned int>& blockUses, ::std::vector<size_t>& blockOrigins, MIRBasicBlockId bb)
+                RecordOrigins(const std::vector<bool>& visited, std::vector<MIRBasicBlockId>& toVisit, std::vector<unsigned int>& blockUses, std::vector<size_t>& blockOrigins, MIRBasicBlockId bb)
                     : visited(visited)
                     , toVisit(toVisit)
                     , blockUses(blockUses)
@@ -4968,16 +4441,13 @@ bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
                     blockUses[idx]++;
                 }
             } recordOrigins{visited, toVisit, blockUses, blockOrigins, bb};
+
             visitTerminatorTarget(block.terminator, recordOrigins);
         }
     }
 
-    // 2. Find any assignments (or function uses?) of the form FIELD(LOCAL, _)
-    //  > Restricted to simplify logic (and because that's the inefficient pattern observed)
-    // 3. Search backwards from that point until the referenced local is assigned
     auto getField = [&](const MIRLValue& slotLvalue, unsigned field, size_t startBbIdx, size_t startStmtIdx) -> const MIRLValue* {
         bool slotCopy = state.lvalueIsCopy(slotLvalue);
-        // NOTE: An infinite loop is (theoretically) impossible.
         auto bbIdx = startBbIdx;
         auto stmtIdx = startStmtIdx;
         for (;;) {
@@ -5002,7 +4472,6 @@ bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
                         }
                         const auto& srcLval = srcParam.as_LValue();
                         bool srcCopy = state.lvalueIsCopy(srcLval);
-                        // Visit all statements between the start and here, checking for mutation of this value.
                         auto endBbIdx = bbIdx;
                         auto endStmtIdx = stmtIdx;
                         bbIdx = startBbIdx;
@@ -5015,13 +4484,11 @@ bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
                                 }
                                 if (stmtIdx == bb.statements.size()) {
                                     if (checkInvalidatesLvalue(bb.terminator, srcLval, srcCopy)) {
-                                        // Invalidated: Return.
                                         return nullptr;
                                     }
                                     continue;
                                 }
                                 if (checkInvalidatesLvalue(bb.statements[stmtIdx], srcLval, srcCopy)) {
-                                    // Invalidated: Return.
                                     return nullptr;
                                 }
                             }
@@ -5033,7 +4500,6 @@ bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
                     }
                 }
 
-                // Check if the slot is invalidated (mutated)
                 if (checkInvalidatesLvalue(stmt, slotLvalue, slotCopy)) {
                     return nullptr;
                 }
@@ -5050,6 +4516,7 @@ bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
         size_t bbIdx = &block - &fcn.blocks.front();
         for (size_t i = 0; i < block.statements.size(); i++) {
             state.setCurStmt(bbIdx, i);
+
             struct FieldOriginRewrite final: public LvalueVisitorMut {
                 MIRTypeResolve& state;
                 decltype(getField)& getField;
@@ -5068,37 +4535,35 @@ bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
 
                 bool visitLvalue(MIRLValue& lv, MIRValUsage vu) override {
                     if (vu == MIRValUsage::Read && lv.wrappers.size() > 1 && lv.wrappers.front().is_Field() && lv.root.is_Local()) {
-                    auto fieldIndex = lv.wrappers.front().as_Field();
-                    auto innerLv = MIRLValue::newLocal(lv.root.as_Local());
-                    auto outerLv = MIRLValue::newField(innerLv.clone(), fieldIndex);
-                    // TODO: This value _must_ be Copy for this optimisation to work.
-                    // - OR, it has to somehow invalidate the original tuple
-                    HIRTypeRef tmp;
-                    if (!state.resolve.typeIsCopy(state.sp, state.getLvalueType(tmp, innerLv))) {
-                        return false;
-                    }
-                    const auto* sourceLvalue = getField(innerLv, fieldIndex, bbIdx, i);
-                    if (sourceLvalue) {
-                        if (outerLv != *sourceLvalue) {
-                            lv = sourceLvalue->cloneWrapped(lv.wrappers.begin() + 1, lv.wrappers.end());
-                            changeHappend = true;
-                        } else {
+                        auto fieldIndex = lv.wrappers.front().as_Field();
+                        auto innerLv = MIRLValue::newLocal(lv.root.as_Local());
+                        auto outerLv = MIRLValue::newField(innerLv.clone(), fieldIndex);
+                        // TODO: This value _must_ be Copy for this optimisation to work.
+
+                        HIRTypeRef tmp;
+                        if (!state.resolve.typeIsCopy(state.sp, state.getLvalueType(tmp, innerLv))) {
+                            return false;
                         }
+                        const auto* sourceLvalue = getField(innerLv, fieldIndex, bbIdx, i);
+                        if (sourceLvalue) {
+                            if (outerLv != *sourceLvalue) {
+                                lv = sourceLvalue->cloneWrapped(lv.wrappers.begin() + 1, lv.wrappers.end());
+                                changeHappend = true;
+                            } else {
+                            }
                             return false;
                         }
                     }
                     return false;
                 }
             } fieldOriginRewrite{state, getField, bbIdx, i, changeHappend};
+
             optVisitMirLvaluesMut(block.statements[i], fieldOriginRewrite);
         }
     }
     return changeHappend;
 }
 
-// --------------------------------------------------------------------
-// Propagate constants and eliminate known paths
-// --------------------------------------------------------------------
 bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
     auto roundFloatValue = [&](FloatValue value, HIRCoreType type) {
@@ -5123,7 +4588,6 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
         return MIRConstant::make_Float({value, type});
     };
 
-    // - Remove calls to `size_of` and `align_of` (replace with value if known)
     for (auto& bb : fcn.blocks) {
         state.setCurStmtTerm(bb);
         if (!bb.terminator.is_Call()) {
@@ -5161,16 +4625,13 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
         } else if (tef.name == "min_align_of_val") {
             size_t alignVal = 0;
             size_t sizeVal = 0;
-            // Note: Trait object returns align_val = 0 (slice-based types have an alignment)
             if (TargetGetSizeAndAlignOf(state.sp, state.resolve, tef.params.types.at(0), sizeVal, alignVal) && alignVal > 0) {
                 auto val = MIRConstant::make_Uint({U128(alignVal), HIRCoreType::Usize});
                 bb.statements.push_back(MIRStatement::make_Assign({mv$(te.retVal), mv$(val)}));
                 bb.terminator = MIRTerminator::make_Goto(te.retBlock);
                 changed = true;
             }
-        }
-        // NOTE: Quick special-case for bswap<u8/i8> (a no-op)
-        else if (tef.name == "bswap" && (tef.params.types.at(0) == HIRCoreType::U8 || tef.params.types.at(0) == HIRCoreType::I8)) {
+        } else if (tef.name == "bswap" && (tef.params.types.at(0) == HIRCoreType::U8 || tef.params.types.at(0) == HIRCoreType::I8)) {
             if (auto* e = te.args.at(0).opt_LValue()) {
                 bb.statements.push_back(MIRStatement::make_Assign({mv$(te.retVal), mv$(*e)}));
             } else {
@@ -5185,11 +4646,7 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
             bb.terminator = MIRTerminator::make_Goto(te.retBlock);
             changed = true;
         } else if (tef.name == "needs_drop") {
-            // Returns `true` if the actual type given as `T` requires drop glue;
-            // returns `false` if the actual type provided for `T` implements `Copy`. (Either otherwise)
-            // NOTE: libarena assumes that this returns `true` iff T doesn't require drop glue.
             const auto& ty = tef.params.types.at(0);
-            // - Only expand at this stage if there's no generics, and no unbound paths
             if (!visitTyWith(ty, [](const HIRTypeData* ty) -> bool {
                 return ty->is_Generic() || ((*ty).is_Path() && ((*ty).as_Path().binding.is_Unbound()));
             })) {
@@ -5199,24 +4656,17 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                 changed = true;
             }
         } else {
-            // Ignore any other intrinsics
         }
     }
 
-    // - Propage constants within BBs
-    //  > Evaluate BinOp with known values
-    //  > Understand intrinsics like overflowing_* (with correct semantics)
-    //   > NOTE: No need to locally stitch blocks, next pass will do that
     // TODO: Use ValState to do full constant propagation across blocks
 
-    // Remove redundant temporaries and evaluate known binops
     for (auto& bb : fcn.blocks) {
         auto bbidx = &bb - &fcn.blocks.front();
 
-        ::std::map<MIRLValue, MIRConstant> knownValues;
-        // Known enum variants
-        ::std::map<MIRLValue, unsigned> knownValuesVar;
-        ::std::map<unsigned, bool> knownDropFlags;
+        std::map<MIRLValue, MIRConstant> knownValues;
+        std::map<MIRLValue, unsigned> knownValuesVar;
+        std::map<unsigned, bool> knownDropFlags;
 
         auto checkLv = [&](const MIRLValue& lv) -> MIRConstant {
             auto it = knownValues.find(lv);
@@ -5225,31 +4675,16 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
             }
 
             // TODO: If the inner of the value is known,
-            //   AND all indexes are known - expand
-            //if( !lv.m_wrappers.empty() )
-            //{
-            //    if( it != known_values.end() )
-            //    {
-            //        // TODO: Use HIR::Literal instead so composites can be handled.
-            //        for(const auto& w : lv.m_wrappers)
-            //        {
-            //        }
-            //    }
-            //}
 
-            // Reads of statics
+            //        // TODO: Use HIR::Literal instead so composites can be handled.
+
             if (lv.wrappers.empty() && lv.root.is_Static()) {
-                // Look up this static, and see if it's not mutable, and a primitive
-                // - If the static is an immutable primitive: read and save
                 MonomorphState ms(state.resolve.hirCrate().types);
                 auto v = state.resolve.getValue(state.sp, lv.root.as_Static(), ms);
                 if (v.is_Static()) {
                     const auto& stat = *v.as_Static();
                     if (stat.valueGenerated && !stat.isMut && state.resolve.typeIsInteriorMutable(state.sp, stat.type) == HIRCompare::Unequal) {
-                        // Convert the encoded literal into a `MIR::Const`
                         const auto el = EncodedLiteralSlice(stat.valueRes);
-                        // Check the type
-                        // - Primitives
                         if (stat.type->is_Primitive()) {
                             auto ty = stat.type->as_Primitive();
                             switch (ty) {
@@ -5279,24 +4714,19 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                                     MIR_BUG(state, "Constant of type `str`?");
                             }
                         }
-                        // - Pointers
                         if (stat.type->is_Borrow()) {
                             // TODO: Read the borrow, and store
                         }
-                        // - Could traverse the static via the wrappers too?
                     }
                 }
             }
 
-            // Not a known value, and not a known composite
-            // - Use a nullptr ItemAddr to indicate this
             return MIRConstant::make_ItemAddr({});
         };
         auto checkParam = [&](MIRParam& p) {
             if (const auto* pe = p.opt_LValue()) {
                 auto nv = checkLv(*pe);
                 if (nv.is_ItemAddr() && !nv.as_ItemAddr()) {
-                    // ItemAddr with a nullptr inner means "no expansion"
                 } else {
                     p = mv$(nv);
                     changed = true;
@@ -5304,7 +4734,6 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
             }
         };
 
-        // Convert known indexes into field acceses
         struct EditLval final: public LvalueVisitorMut {
             MIRTypeResolve& state;
             decltype(knownValues)& knownValues;
@@ -5318,33 +4747,32 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
             }
 
             bool visitLvalue(MIRLValue& lv, MIRValUsage /*vu*/) override {
-            for (auto& w : lv.wrappers) {
-                if (w.is_Index()) {
-                    auto it = knownValues.find(MIRLValue::newLocal(w.as_Index()));
-                    if (it != knownValues.find(lv) && !it->second.is_Const() && !it->second.is_Generic()) {
-                        MIR_ASSERT(state, it->second.is_Uint(), "Indexing with non-Uint constant - " << it->second);
-                        MIR_ASSERT(state, it->second.as_Uint().t == HIRCoreType::Usize, "Indexing with non-usize constant - " << it->second);
-                        auto idx = it->second.as_Uint().v;
-                        MIR_ASSERT(state, idx < (1 << 30), "Known index is excessively large");
-                        w = MIRLValue::Wrapper::newField(idx.truncateU64());
-                        changed = true;
+                for (auto& w : lv.wrappers) {
+                    if (w.is_Index()) {
+                        auto it = knownValues.find(MIRLValue::newLocal(w.as_Index()));
+                        if (it != knownValues.find(lv) && !it->second.is_Const() && !it->second.is_Generic()) {
+                            MIR_ASSERT(state, it->second.is_Uint(), "Indexing with non-Uint constant - " << it->second);
+                            MIR_ASSERT(state, it->second.as_Uint().t == HIRCoreType::Usize, "Indexing with non-usize constant - " << it->second);
+                            auto idx = it->second.as_Uint().v;
+                            MIR_ASSERT(state, idx < (1 << 30), "Known index is excessively large");
+                            w = MIRLValue::Wrapper::newField(idx.truncateU64());
+                            changed = true;
+                        }
                     }
                 }
-            }
 
-            // If a Deref of a known value is seen, replace with the source of that value.
-            if (!lv.wrappers.empty() && lv.wrappers.front().is_Deref() && !lv.root.is_Static()) {
-                auto ilv = MIRLValue(lv.root.clone(), {});
-                auto it = knownValues.find(ilv);
-                if (it != knownValues.find(lv)) {
-                    if (it->second.is_ItemAddr() && it->second.as_ItemAddr().offset == U128(0)) {
-                        lv.wrappers.erase(lv.wrappers.begin());
-                        lv.root = MIRLValue::Storage::newStatic(it->second.as_ItemAddr()->clone());
-                        changed = true;
+                if (!lv.wrappers.empty() && lv.wrappers.front().is_Deref() && !lv.root.is_Static()) {
+                    auto ilv = MIRLValue(lv.root.clone(), {});
+                    auto it = knownValues.find(ilv);
+                    if (it != knownValues.find(lv)) {
+                        if (it->second.is_ItemAddr() && it->second.as_ItemAddr().offset == U128(0)) {
+                            lv.wrappers.erase(lv.wrappers.begin());
+                            lv.root = MIRLValue::Storage::newStatic(it->second.as_ItemAddr()->clone());
+                            changed = true;
+                        }
                     }
                 }
-            }
-            return true;
+                return true;
             }
         } editLval{state, knownValues, changed};
 
@@ -5354,14 +4782,9 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
 
             optVisitMirLvaluesMut(stmt, editLval);
 
-            // Scan statements forwards:
-            // - If a known temporary is used as Param::LValue, replace LValue with the value
-            // - If a UniOp has its input known, evaluate
-            // - If a BinOp has both values known, evaluate
             if (auto* e = stmt.opt_Assign()) {
                 struct H {
                     static S128 truncateS(HIRCoreType ct, S128 v) {
-                        // Truncate unsigned, then sign extend
                         auto u = H::truncateU(ct, v.getInner());
                         switch (ct) {
                             case HIRCoreType::I8:
@@ -5374,12 +4797,9 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                                 return sext(u, 64);
                             case HIRCoreType::I128:
                                 return v;
-                            // `isize` is as wide as a pointer, which is at most
-                            // as wide as the 64 bits `truncateU` keeps.
                             case HIRCoreType::Isize:
                                 return sext(u, TargetGetPointerBits());
                             default:
-                                // Invalid type for `Constant::Int` literal
                                 break;
                         }
                         return v;
@@ -5410,7 +4830,6 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             case HIRCoreType::I128:
                             case HIRCoreType::U128:
                                 return v;
-                            // usize/size - need to handle <64 pointer bits
                             case HIRCoreType::Isize:
                             case HIRCoreType::Usize:
                                 if (TargetGetPointerBits() < 64) {
@@ -5420,7 +4839,6 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             case HIRCoreType::Char:
                                 break;
                             default:
-                                // Invalid type for Uint literal
                                 break;
                         }
                         return v;
@@ -5432,7 +4850,6 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                         auto& se = e->src.as_Use();
                         auto nv = checkLv(se);
                         if (nv.is_ItemAddr() && !nv.as_ItemAddr()) {
-                            // ItemAddr with a nullptr inner means "no expansion"
                         } else {
                             e->src = MIRRValue::make_Constant(mv$(nv));
                             changed = true;
@@ -5440,7 +4857,6 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                         break;
                     }
                     case MIRRValue::TAG_Constant: {
-                        // Ignore (knowledge done below)
                         break;
                     }
                     case MIRRValue::TAG_SizedArray: {
@@ -5450,7 +4866,6 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                     }
                     case MIRRValue::TAG_Borrow: {
                         auto& se = e->src.as_Borrow();
-                        // Shared borrows of statics can be better represented with the ItemAddr constant
                         if (se.type == HIRBorrowType::Shared && se.val.wrappers.empty() && se.val.root.is_Static()) {
                             e->src = MIRRValue::make_Constant(MIRConstant::make_ItemAddr({box$(se.val.root.as_Static())}));
                             changed = true;
@@ -5464,7 +4879,6 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                         auto& se = e->src.as_Cast();
                         MIRConstant newValue;
 
-                        // If casting a number to a number, do the cast and
                         auto nv = checkLv(se.val);
                         if (!nv.is_ItemAddr()) {
                             if (const auto* te = se.type->opt_Primitive()) {
@@ -5483,11 +4897,9 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                                             newValue = MIRConstant::make_Uint({U128(vp->v ? 1u : 0u), *te});
                                         } else if (const auto* vp = nv.opt_Float()) {
                                             const auto value = roundFloatValue(vp->v, vp->t);
-                                            // NaN fails both comparisons and is left unfolded
                                             if (FloatValue() <= value && value < FloatValue(18446744073709551616.0)) {
                                                 newValue = MIRConstant::make_Uint({H::truncateU(*te, U128(static_cast<u64>(value))), *te});
                                             } else {
-                                                // UB: Casting float out of range?
                                             }
                                         } else {
                                         }
@@ -5530,16 +4942,8 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             const auto& srcTy = state.getLvalueType(tmp, se.val);
                             const HIREnum& enm = *srcTy->as_Path().binding.as_Enum();
 
-                            // Demand exactly the variant being cast: its
-                            // value is computed now if it is not yet known,
-                            // and a variant reading itself through this fold
-                            // is reported as a cycle.
                             ConvertHIRConstantEvaluateEnumVariant(state.resolve.board(), state.resolve.hirCrate(), srcTy->as_Path().path.data.as_Generic().path, enm, variantIdx);
                             auto v = enm.getDiscriminant(variantIdx);
-                            // A cast reads the discriminant at the enum's declared
-                            // representation, which is `isize` unless one is
-                            // given. How narrow the tag ends up in memory is a
-                            // layout choice that says nothing about the value.
                             const auto tagPrimitive = HIREnum::getReprType(enm.tagRepr);
 
                             auto value = S128(U128(v));
@@ -5608,14 +5012,10 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             const auto& valR = se.valR.as_Constant();
 
                             if (valL.is_Const() || valR.is_Const()) {
-                                // One of the arms is a named constant, can't check (they're not an actual value, just a
-                                // reference to one)
                             } else if (valL.is_Generic() || valR.is_Generic()) {
-                                // One of the arms is a generic, can't check either
                             } else {
                                 MIRConstant newValue;
                                 switch (se.op) {
-                                    // Note: f32's bit accuracy is different to f64, so they can't be considered equivalent in behaviour
                                     case MIRBinOp::EQ:
                                         if (!valL.is_Float()) {
                                             newValue = MIRConstant::make_Bool({valL == valR});
@@ -5649,303 +5049,298 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
 
                                     case MIRBinOp::ADD:
                                         MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::ADD - " << valL << " + " << valR);
-                                switch (valL.tag()) {
-default:
-                                    break;
-                                    case MIRConstant::TAG_Float: {
-                                        auto& le = valL.as_Float();
-                                        auto& re = valR.as_Float();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " / " << valR);
-                                        newValue = makeFloatArithmeticResult(
-                                            roundFloatValue(le.v, le.t) + roundFloatValue(re.v, re.t), le.t);
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Int: {
-                                        auto& le = valL.as_Int();
-                                        auto& re = valR.as_Int();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " + " << valR);
-                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v + re.v), le.t});
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Uint: {
-                                        auto& le = valL.as_Uint();
-                                        auto& re = valR.as_Uint();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " + " << valR);
-                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v + re.v), le.t});
-                                        break;
-                                    }
-                                }
-                                break;
-                            case MIRBinOp::SUB:
-                                MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::SUB - " << valL << " + " << valR);
-                                switch (valL.tag()) {
-default:
-                                    break;
-                                    case MIRConstant::TAG_Float: {
-                                        auto& le = valL.as_Float();
-                                        auto& re = valR.as_Float();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " / " << valR);
-                                        newValue = makeFloatArithmeticResult(
-                                            roundFloatValue(le.v, le.t) - roundFloatValue(re.v, re.t), le.t);
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Int: {
-                                        auto& le = valL.as_Int();
-                                        auto& re = valR.as_Int();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " - " << valR);
-                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v - re.v), le.t});
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Uint: {
-                                        auto& le = valL.as_Uint();
-                                        auto& re = valR.as_Uint();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " - " << valR);
-                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v - re.v), le.t});
-                                        break;
-                                    }
-                                }
-                                break;
-                            case MIRBinOp::MUL:
-                                MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::MUL - " << valL << " * " << valR);
-                                switch (valL.tag()) {
-default:
-                                    break;
-                                    case MIRConstant::TAG_Float: {
-                                        auto& le = valL.as_Float();
-                                        auto& re = valR.as_Float();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " / " << valR);
-                                        newValue = makeFloatArithmeticResult(
-                                            roundFloatValue(le.v, le.t) * roundFloatValue(re.v, re.t), le.t);
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Int: {
-                                        auto& le = valL.as_Int();
-                                        auto& re = valR.as_Int();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " * " << valR);
-                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v * re.v), le.t});
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Uint: {
-                                        auto& le = valL.as_Uint();
-                                        auto& re = valR.as_Uint();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " * " << valR);
-                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v * re.v), le.t});
-                                        break;
-                                    }
-                                }
-                                break;
-                            case MIRBinOp::DIV:
-                                MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
-                                switch (valL.tag()) {
-default:
-                                    break;
-                                    case MIRConstant::TAG_Float: {
-                                        auto& le = valL.as_Float();
-                                        auto& re = valR.as_Float();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
-                                        newValue = makeFloatArithmeticResult(
-                                            roundFloatValue(le.v, le.t) / roundFloatValue(re.v, re.t), le.t);
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Int: {
-                                        auto& le = valL.as_Int();
-                                        auto& re = valR.as_Int();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
-                                        if (re.v != 0) {
-                                            newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v / re.v), le.t});
+                                        switch (valL.tag()) {
+                                            default:
+                                                break;
+                                            case MIRConstant::TAG_Float: {
+                                                auto& le = valL.as_Float();
+                                                auto& re = valR.as_Float();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " / " << valR);
+                                                newValue = makeFloatArithmeticResult(roundFloatValue(le.v, le.t) + roundFloatValue(re.v, re.t), le.t);
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Int: {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " + " << valR);
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v + re.v), le.t});
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Uint: {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::ADD - " << valL << " + " << valR);
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v + re.v), le.t});
+                                                break;
+                                            }
                                         }
                                         break;
-                                    }
-                                    case MIRConstant::TAG_Uint: {
-                                        auto& le = valL.as_Uint();
-                                        auto& re = valR.as_Uint();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
-                                        if (re.v != 0) {
-                                            newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v / re.v), le.t});
+                                    case MIRBinOp::SUB:
+                                        MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::SUB - " << valL << " + " << valR);
+                                        switch (valL.tag()) {
+                                            default:
+                                                break;
+                                            case MIRConstant::TAG_Float: {
+                                                auto& le = valL.as_Float();
+                                                auto& re = valR.as_Float();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " / " << valR);
+                                                newValue = makeFloatArithmeticResult(roundFloatValue(le.v, le.t) - roundFloatValue(re.v, re.t), le.t);
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Int: {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " - " << valR);
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v - re.v), le.t});
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Uint: {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::SUB - " << valL << " - " << valR);
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v - re.v), le.t});
+                                                break;
+                                            }
                                         }
                                         break;
-                                    }
-                                }
-                                break;
-                            case MIRBinOp::MOD:
-                                MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::MOD - " << valL << " % " << valR);
-                                switch (valL.tag()) {
-default:
-                                    break;
-                                    case MIRConstant::TAG_Int: {
-                                        auto& le = valL.as_Int();
-                                        auto& re = valR.as_Int();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MOD - " << valL << " % " << valR);
-                                        MIR_ASSERT(state, re.v != 0, "Const eval error: Constant division by zero");
-                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v % re.v), le.t});
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Uint: {
-                                        auto& le = valL.as_Uint();
-                                        auto& re = valR.as_Uint();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MOD - " << valL << " % " << valR);
-                                        MIR_ASSERT(state, re.v != 0, "Const eval error: Constant division by zero");
-                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v % re.v), le.t});
-                                        break;
-                                    }
-                                }
-                                break;
-
-                            case MIRBinOp::BIT_AND:
-                                MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::BIT_AND - " << valL << " & " << valR);
-                                switch (valL.tag()) {
-default:
-                                    break;
-                                    case MIRConstant::TAG_Bool: {
-                                        auto& le = valL.as_Bool();
-                                        auto& re = valR.as_Bool();
-                                        newValue = MIRConstant::make_Bool({le.v && re.v});
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Int: {
-                                        auto& le = valL.as_Int();
-                                        auto& re = valR.as_Int();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_AND - " << valL << " ^ " << valR);
-                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v & re.v), le.t});
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Uint: {
-                                        auto& le = valL.as_Uint();
-                                        auto& re = valR.as_Uint();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_AND - " << valL << " ^ " << valR);
-                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v & re.v), le.t});
-                                        break;
-                                    }
-                                }
-                                break;
-                            case MIRBinOp::BIT_OR:
-                                MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::BIT_OR - " << valL << " | " << valR);
-                                switch (valL.tag()) {
-default:
-                                    break;
-                                    case MIRConstant::TAG_Bool: {
-                                        auto& le = valL.as_Bool();
-                                        auto& re = valR.as_Bool();
-                                        newValue = MIRConstant::make_Bool({le.v || re.v});
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Int: {
-                                        auto& le = valL.as_Int();
-                                        auto& re = valR.as_Int();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_OR - " << valL << " | " << valR);
-                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v | re.v), le.t});
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Uint: {
-                                        auto& le = valL.as_Uint();
-                                        auto& re = valR.as_Uint();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_OR - " << valL << " | " << valR);
-                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v | re.v), le.t});
-                                        break;
-                                    }
-                                }
-                                break;
-                            case MIRBinOp::BIT_XOR:
-                                MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::BIT_XOR - " << valL << " ^ " << valR);
-                                switch (valL.tag()) {
-default:
-                                    break;
-                                    case MIRConstant::TAG_Bool: {
-                                        auto& le = valL.as_Bool();
-                                        auto& re = valR.as_Bool();
-                                        newValue = MIRConstant::make_Bool({le.v != re.v});
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Int: {
-                                        auto& le = valL.as_Int();
-                                        auto& re = valR.as_Int();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_XOR - " << valL << " ^ " << valR);
-                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v ^ re.v), le.t});
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Uint: {
-                                        auto& le = valL.as_Uint();
-                                        auto& re = valR.as_Uint();
-                                        MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_XOR - " << valL << " ^ " << valR);
-                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v ^ re.v), le.t});
-                                        break;
-                                    }
-                                }
-                                break;
-
-                            // --- Bit Shifts ---
-                            case MIRBinOp::BIT_SHL: {
-                                            U128 shiftLenR;
-                                switch (valR.tag()) {
-default:
-                                    MIR_BUG(state, "Mismatched types for eBinOp::BIT_SHL - " << valL << " >> " << valR);
+                                    case MIRBinOp::MUL:
+                                        MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::MUL - " << valL << " * " << valR);
+                                        switch (valL.tag()) {
+                                            default:
                                                 break;
-                                    case MIRConstant::TAG_Int: {
-                                        auto& re = valR.as_Int();
-                                        shiftLenR = re.v.getInner();
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Uint: {
-                                        auto& re = valR.as_Uint();
-                                        shiftLenR = re.v;
-                                        break;
-                                    }
-                                }
-                                MIR_ASSERT(state, shiftLenR <= 128, "Const eval error: Over-sized eBinOp::BIT_SHL - " << valL << " << " << valR);
-                                auto shiftLen = shiftLenR.truncateU64();
-                                switch (valL.tag()) {
-default:
-                                    break;
-                                    case MIRConstant::TAG_Int: {
-                                        auto& le = valL.as_Int();
-                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v << shiftLen), le.t});
-                                        break;
-                                    }
-                                    case MIRConstant::TAG_Uint: {
-                                        auto& le = valL.as_Uint();
-                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v << shiftLen), le.t});
-                                        break;
-                                    }
-                                }
-                                } break;
-                            case MIRBinOp::BIT_SHR:{
-                                            U128 shiftLenR;
-                                switch (valR.tag()) {
-default:
-                                    MIR_BUG(state, "Mismatched types for eBinOp::BIT_SHR - " << valL << " >> " << valR);
+                                            case MIRConstant::TAG_Float: {
+                                                auto& le = valL.as_Float();
+                                                auto& re = valR.as_Float();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " / " << valR);
+                                                newValue = makeFloatArithmeticResult(roundFloatValue(le.v, le.t) * roundFloatValue(re.v, re.t), le.t);
                                                 break;
-                                    case MIRConstant::TAG_Int: {
-                                        auto& re = valR.as_Int();
-                                        shiftLenR = re.v.getInner();
+                                            }
+                                            case MIRConstant::TAG_Int: {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " * " << valR);
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v * re.v), le.t});
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Uint: {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MUL - " << valL << " * " << valR);
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v * re.v), le.t});
+                                                break;
+                                            }
+                                        }
                                         break;
-                                    }
-                                    case MIRConstant::TAG_Uint: {
-                                        auto& re = valR.as_Uint();
-                                        shiftLenR = re.v;
+                                    case MIRBinOp::DIV:
+                                        MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
+                                        switch (valL.tag()) {
+                                            default:
+                                                break;
+                                            case MIRConstant::TAG_Float: {
+                                                auto& le = valL.as_Float();
+                                                auto& re = valR.as_Float();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
+                                                newValue = makeFloatArithmeticResult(roundFloatValue(le.v, le.t) / roundFloatValue(re.v, re.t), le.t);
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Int: {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
+                                                if (re.v != 0) {
+                                                    newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v / re.v), le.t});
+                                                }
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Uint: {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::DIV - " << valL << " / " << valR);
+                                                if (re.v != 0) {
+                                                    newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v / re.v), le.t});
+                                                }
+                                                break;
+                                            }
+                                        }
                                         break;
-                                    }
-                                }
-                                MIR_ASSERT(state, shiftLenR <= 128, "Const eval error: Over-sized shift - " << valL << " >> " << valR);
-                                auto shiftLen = shiftLenR.truncateU64();
-                                switch (valL.tag()) {
-default:
-                                    break;
-                                    case MIRConstant::TAG_Int: {
-                                        auto& le = valL.as_Int();
-                                        newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v >> shiftLen), le.t});
+                                    case MIRBinOp::MOD:
+                                        MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::MOD - " << valL << " % " << valR);
+                                        switch (valL.tag()) {
+                                            default:
+                                                break;
+                                            case MIRConstant::TAG_Int: {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MOD - " << valL << " % " << valR);
+                                                MIR_ASSERT(state, re.v != 0, "Const eval error: Constant division by zero");
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v % re.v), le.t});
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Uint: {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::MOD - " << valL << " % " << valR);
+                                                MIR_ASSERT(state, re.v != 0, "Const eval error: Constant division by zero");
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v % re.v), le.t});
+                                                break;
+                                            }
+                                        }
                                         break;
-                                    }
-                                    case MIRConstant::TAG_Uint: {
-                                        auto& le = valL.as_Uint();
-                                        newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v >> shiftLen), le.t});
+
+                                    case MIRBinOp::BIT_AND:
+                                        MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::BIT_AND - " << valL << " & " << valR);
+                                        switch (valL.tag()) {
+                                            default:
+                                                break;
+                                            case MIRConstant::TAG_Bool: {
+                                                auto& le = valL.as_Bool();
+                                                auto& re = valR.as_Bool();
+                                                newValue = MIRConstant::make_Bool({le.v && re.v});
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Int: {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_AND - " << valL << " ^ " << valR);
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v & re.v), le.t});
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Uint: {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_AND - " << valL << " ^ " << valR);
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v & re.v), le.t});
+                                                break;
+                                            }
+                                        }
                                         break;
-                                    }
-                                }
-                                } break;
-                            // TODO: Other binary operations
-                            // Could emit a TODO?
-                            default:
-                                break;
+                                    case MIRBinOp::BIT_OR:
+                                        MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::BIT_OR - " << valL << " | " << valR);
+                                        switch (valL.tag()) {
+                                            default:
+                                                break;
+                                            case MIRConstant::TAG_Bool: {
+                                                auto& le = valL.as_Bool();
+                                                auto& re = valR.as_Bool();
+                                                newValue = MIRConstant::make_Bool({le.v || re.v});
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Int: {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_OR - " << valL << " | " << valR);
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v | re.v), le.t});
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Uint: {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_OR - " << valL << " | " << valR);
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v | re.v), le.t});
+                                                break;
+                                            }
+                                        }
+                                        break;
+                                    case MIRBinOp::BIT_XOR:
+                                        MIR_ASSERT(state, valL.tag() == valR.tag(), "Mismatched types for eBinOp::BIT_XOR - " << valL << " ^ " << valR);
+                                        switch (valL.tag()) {
+                                            default:
+                                                break;
+                                            case MIRConstant::TAG_Bool: {
+                                                auto& le = valL.as_Bool();
+                                                auto& re = valR.as_Bool();
+                                                newValue = MIRConstant::make_Bool({le.v != re.v});
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Int: {
+                                                auto& le = valL.as_Int();
+                                                auto& re = valR.as_Int();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_XOR - " << valL << " ^ " << valR);
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v ^ re.v), le.t});
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Uint: {
+                                                auto& le = valL.as_Uint();
+                                                auto& re = valR.as_Uint();
+                                                MIR_ASSERT(state, le.t == re.t, "Mismatched types for eBinOp::BIT_XOR - " << valL << " ^ " << valR);
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v ^ re.v), le.t});
+                                                break;
+                                            }
+                                        }
+                                        break;
+
+                                    case MIRBinOp::BIT_SHL: {
+                                        U128 shiftLenR;
+                                        switch (valR.tag()) {
+                                            default:
+                                                MIR_BUG(state, "Mismatched types for eBinOp::BIT_SHL - " << valL << " >> " << valR);
+                                                break;
+                                            case MIRConstant::TAG_Int: {
+                                                auto& re = valR.as_Int();
+                                                shiftLenR = re.v.getInner();
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Uint: {
+                                                auto& re = valR.as_Uint();
+                                                shiftLenR = re.v;
+                                                break;
+                                            }
+                                        }
+                                        MIR_ASSERT(state, shiftLenR <= 128, "Const eval error: Over-sized eBinOp::BIT_SHL - " << valL << " << " << valR);
+                                        auto shiftLen = shiftLenR.truncateU64();
+                                        switch (valL.tag()) {
+                                            default:
+                                                break;
+                                            case MIRConstant::TAG_Int: {
+                                                auto& le = valL.as_Int();
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v << shiftLen), le.t});
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Uint: {
+                                                auto& le = valL.as_Uint();
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v << shiftLen), le.t});
+                                                break;
+                                            }
+                                        }
+                                    } break;
+                                    case MIRBinOp::BIT_SHR: {
+                                        U128 shiftLenR;
+                                        switch (valR.tag()) {
+                                            default:
+                                                MIR_BUG(state, "Mismatched types for eBinOp::BIT_SHR - " << valL << " >> " << valR);
+                                                break;
+                                            case MIRConstant::TAG_Int: {
+                                                auto& re = valR.as_Int();
+                                                shiftLenR = re.v.getInner();
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Uint: {
+                                                auto& re = valR.as_Uint();
+                                                shiftLenR = re.v;
+                                                break;
+                                            }
+                                        }
+                                        MIR_ASSERT(state, shiftLenR <= 128, "Const eval error: Over-sized shift - " << valL << " >> " << valR);
+                                        auto shiftLen = shiftLenR.truncateU64();
+                                        switch (valL.tag()) {
+                                            default:
+                                                break;
+                                            case MIRConstant::TAG_Int: {
+                                                auto& le = valL.as_Int();
+                                                newValue = MIRConstant::make_Int({H::truncateS(le.t, le.v >> shiftLen), le.t});
+                                                break;
+                                            }
+                                            case MIRConstant::TAG_Uint: {
+                                                auto& le = valL.as_Uint();
+                                                newValue = MIRConstant::make_Uint({H::truncateU(le.t, le.v >> shiftLen), le.t});
+                                                break;
+                                            }
+                                        }
+                                    } break;
+                                    // TODO: Other binary operations
+                                    // Could emit a TODO?
+                                    default:
+                                        break;
                                 }
 
                                 if (newValue != MIRConstant()) {
@@ -5955,32 +5350,23 @@ default:
                             }
                         } else {
                             MIRParam newValue;
-                            // No-ops
                             switch (se.op) {
-                                // `foo + 0 == foo`
-                                // `foo - 0 == foo`
                                 case MIRBinOp::ADD:
                                 case MIRBinOp::SUB:
                                     if (se.valR.is_Constant() && se.valR.as_Constant().is_Uint() && se.valR.as_Constant().as_Uint().v == 0) {
                                         newValue = mv$(se.valL);
                                     }
                                     break;
-                                // `foo % 1 == 0`
                                 case MIRBinOp::MOD:
                                     if (se.valR.is_Constant() && se.valR.as_Constant().is_Uint() && se.valR.as_Constant().as_Uint().v == 1) {
                                         newValue = MIRConstant::make_Uint({U128(0), se.valR.as_Constant().as_Uint().t});
                                     }
                                     break;
-                                // `foo / 1 == foo`
                                 case MIRBinOp::DIV:
                                     if (se.valR.is_Constant() && se.valR.as_Constant().is_Uint() && se.valR.as_Constant().as_Uint().v == 1) {
                                         newValue = mv$(se.valL);
                                     }
                                     break;
-                                // `foo * 0 == 0`
-                                // `foo * 1 == foo`
-                                // `0 * foo == 0`
-                                // `1 * foo == foo`
                                 case MIRBinOp::MUL:
                                     if (se.valR.is_Constant() && se.valR.as_Constant().is_Uint()) {
                                         auto& v = se.valR.as_Constant().as_Uint();
@@ -6005,23 +5391,23 @@ default:
                                     break;
                             }
                             if (newValue != MIRParam()) {
-                            switch (newValue.tag()) {
-                                case MIRParam::TAG_LValue: {
-                                    auto& v = newValue.as_LValue();
-                                    e->src = mv$(v);
-                                    break;
+                                switch (newValue.tag()) {
+                                    case MIRParam::TAG_LValue: {
+                                        auto& v = newValue.as_LValue();
+                                        e->src = mv$(v);
+                                        break;
+                                    }
+                                    case MIRParam::TAG_Borrow: {
+                                        auto& _ = newValue.as_Borrow();
+                                        UNREACHABLE();
+                                    }
+                                    case MIRParam::TAG_Constant: {
+                                        auto& v = newValue.as_Constant();
+                                        e->src = mv$(v);
+                                        break;
+                                    }
                                 }
-                                case MIRParam::TAG_Borrow: {
-                                    auto& _ = newValue.as_Borrow();
-                                    UNREACHABLE();
-                                }
-                                case MIRParam::TAG_Constant: {
-                                    auto& v = newValue.as_Constant();
-                                    e->src = mv$(v);
-                                    break;
-                                }
-                            }
-                            changed = true;
+                                changed = true;
                             }
                         }
                         break;
@@ -6035,144 +5421,138 @@ default:
                             bool replace = false;
                             switch (se.op) {
                                 case MIRUniOp::INV:
-                            switch (val.tag()) {
-                                case MIRConstant::TAG_Uint: {
-                                    auto& ve = val.as_Uint();
-                                    auto val = ve.v;
-                                    replace = true;
-                                    switch (ve.t) {
-                                        case HIRCoreType::U8:
-                                        case HIRCoreType::U16:
-                                        case HIRCoreType::U32:
-                                        case HIRCoreType::Usize:
-                                        case HIRCoreType::U64:
-                                            val = H::truncateU(ve.t, ~val);
+                                    switch (val.tag()) {
+                                        case MIRConstant::TAG_Uint: {
+                                            auto& ve = val.as_Uint();
+                                            auto val = ve.v;
+                                            replace = true;
+                                            switch (ve.t) {
+                                                case HIRCoreType::U8:
+                                                case HIRCoreType::U16:
+                                                case HIRCoreType::U32:
+                                                case HIRCoreType::Usize:
+                                                case HIRCoreType::U64:
+                                                    val = H::truncateU(ve.t, ~val);
+                                                    break;
+                                                case HIRCoreType::U128:
+                                                    replace = false;
+                                                    break;
+                                                case HIRCoreType::Char:
+                                                    MIR_BUG(state, "Invalid use of ! on char");
+                                                    break;
+                                                default:
+                                                    replace = false;
+                                                    break;
+                                            }
+                                            newValue = MIRConstant::make_Uint({val, ve.t});
                                             break;
-                                        case HIRCoreType::U128:
-                                            replace = false;
+                                        }
+                                        case MIRConstant::TAG_Int: {
+                                            auto& ve = val.as_Int();
+                                            auto val = ve.v;
+                                            switch (ve.t) {
+                                                case HIRCoreType::I8:
+                                                case HIRCoreType::I16:
+                                                case HIRCoreType::I32:
+                                                case HIRCoreType::Isize:
+                                                case HIRCoreType::I64:
+                                                    val = H::truncateS(ve.t, ~val);
+                                                    replace = true;
+                                                    break;
+                                                case HIRCoreType::I128:
+                                                    // TODO: Are there any cases where sign extension stops being correct here?
+                                                    val = H::truncateS(ve.t, ~val);
+                                                    replace = true;
+                                                    break;
+                                                case HIRCoreType::Char:
+                                                    MIR_BUG(state, "Invalid use of ! on char");
+                                                    break;
+                                                default:
+                                                    replace = false;
+                                                    break;
+                                            }
+                                            newValue = MIRConstant::make_Int({val, ve.t});
                                             break;
-                                        case HIRCoreType::Char:
-                                            MIR_BUG(state, "Invalid use of ! on char");
+                                        }
+                                        case MIRConstant::TAG_Float: {
                                             break;
-                                        default:
-                                            // Invalid type for Uint literal
-                                            replace = false;
-                                            break;
-                                    }
-                                    newValue = MIRConstant::make_Uint({val, ve.t});
-                                    break;
-                                }
-                                case MIRConstant::TAG_Int: {
-                                    auto& ve = val.as_Int();
-                                    // ! is valid on Int, it inverts bits the same way as an uint
-                                    auto val = ve.v;
-                                    switch (ve.t) {
-                                        case HIRCoreType::I8:
-                                        case HIRCoreType::I16:
-                                        case HIRCoreType::I32:
-                                        case HIRCoreType::Isize:
-                                        case HIRCoreType::I64:
-                                            val = H::truncateS(ve.t, ~val);
+                                        }
+                                        case MIRConstant::TAG_Bool: {
+                                            auto& ve = val.as_Bool();
+                                            newValue = MIRConstant::make_Bool({!ve.v});
                                             replace = true;
                                             break;
-                                        case HIRCoreType::I128:
-                                            // TODO: Are there any cases where sign extension stops being correct here?
-                                            val = H::truncateS(ve.t, ~val);
-                                            replace = true;
+                                        }
+                                        case MIRConstant::TAG_Bytes: {
                                             break;
-                                        case HIRCoreType::Char:
-                                            MIR_BUG(state, "Invalid use of ! on char");
+                                        }
+                                        case MIRConstant::TAG_StaticString: {
                                             break;
-                                        default:
-                                            // Invalid type for Uint literal
-                                            replace = false;
+                                        }
+                                        case MIRConstant::TAG_Encoded: {
                                             break;
-                                    }
-                                    newValue = MIRConstant::make_Int({val, ve.t});
-                                    break;
-                                }
-                                case MIRConstant::TAG_Float: {
-                                    // Not valid?
-                                    break;
-                                }
-                                case MIRConstant::TAG_Bool: {
-                                    auto& ve = val.as_Bool();
-                                    newValue = MIRConstant::make_Bool({!ve.v});
-                                    replace = true;
-                                    break;
-                                }
-                                case MIRConstant::TAG_Bytes: {
-                                    break;
-                                }
-                                case MIRConstant::TAG_StaticString: {
-                                    break;
-                                }
-                                case MIRConstant::TAG_Encoded: {
-                                    break;
-                                }
-                                case MIRConstant::TAG_Const: {
-                                    // TODO:
-                                    break;
-                                }
-                                case MIRConstant::TAG_Generic: {
-                                    break;
-                                }
-                                case MIRConstant::TAG_Function: {
-                                    break;
-                                }
-                                case MIRConstant::TAG_ItemAddr: {
-                                    break;
-                                }
-                            }
-                            break;
-                        case MIRUniOp::NEG:
-                            switch (val.tag()) {
-                                case MIRConstant::TAG_Uint: {
-                                    // Not valid?
-                                    break;
-                                }
-                                case MIRConstant::TAG_Int: {
-                                    auto& ve = val.as_Int();
-                                    newValue = MIRConstant::make_Int({ H::truncateS(ve.t, -ve.v), ve.t });
-                                    replace = true;
-                                    break;
-                                }
-                                case MIRConstant::TAG_Float: {
-                                    auto& ve = val.as_Float();
-                                    if (!floatValueIsNan(ve.v)) {
-                                            newValue = MIRConstant::make_Float({-ve.v, ve.t});
-                                            replace = true;
+                                        }
+                                        case MIRConstant::TAG_Const: {
+                                            // TODO:
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_Generic: {
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_Function: {
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_ItemAddr: {
+                                            break;
+                                        }
                                     }
                                     break;
-                                }
-                                case MIRConstant::TAG_Bool: {
-                                    // Not valid?
+                                case MIRUniOp::NEG:
+                                    switch (val.tag()) {
+                                        case MIRConstant::TAG_Uint: {
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_Int: {
+                                            auto& ve = val.as_Int();
+                                            newValue = MIRConstant::make_Int({H::truncateS(ve.t, -ve.v), ve.t});
+                                            replace = true;
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_Float: {
+                                            auto& ve = val.as_Float();
+                                            if (!floatValueIsNan(ve.v)) {
+                                                newValue = MIRConstant::make_Float({-ve.v, ve.t});
+                                                replace = true;
+                                            }
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_Bool: {
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_Bytes: {
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_StaticString: {
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_Encoded: {
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_Const: {
+                                            // TODO:
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_Generic: {
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_Function: {
+                                            break;
+                                        }
+                                        case MIRConstant::TAG_ItemAddr: {
+                                            break;
+                                        }
+                                    }
                                     break;
-                                }
-                                case MIRConstant::TAG_Bytes: {
-                                    break;
-                                }
-                                case MIRConstant::TAG_StaticString: {
-                                    break;
-                                }
-                                case MIRConstant::TAG_Encoded: {
-                                    break;
-                                }
-                                case MIRConstant::TAG_Const: {
-                                    // TODO:
-                                    break;
-                                }
-                                case MIRConstant::TAG_Generic: {
-                                    break;
-                                }
-                                case MIRConstant::TAG_Function: {
-                                    break;
-                                }
-                                case MIRConstant::TAG_ItemAddr: {
-                                    break;
-                                }
-                            }
-                            break;
                             }
                             if (replace) {
                                 e->src = mv$(newValue);
@@ -6189,8 +5569,6 @@ default:
                     }
                     case MIRRValue::TAG_MakeDst: {
                         auto& se = e->src.as_MakeDst();
-                        // NOTE: This disables any checks if the metadata isn't populated.
-                        // This avoids issues with cleanup when optimise is run first
                         if ((se.metaVal.is_Constant() && se.metaVal.as_Constant().is_ItemAddr() && se.metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
                         } else {
                             checkParam(se.ptrVal);
@@ -6244,7 +5622,7 @@ default:
                     }
                 }
             }
-            // - If a known temporary is borrowed mutably or mutated somehow, clear its knowledge
+
             struct ForgetWritten final: public LvalueVisitor {
                 decltype(knownValues)& knownValues;
                 decltype(knownValuesVar)& knownValuesVar;
@@ -6263,34 +5641,28 @@ default:
                     return false;
                 }
             } forgetWritten{knownValues, knownValuesVar};
+
             optVisitMirLvalues(stmt, forgetWritten);
-            // - Locate `temp = SOME_CONST` and record value
+
             if (const auto* e = stmt.opt_Assign()) {
                 if (e->dst.is_Local()) {
-                    // Known constant
                     if (const auto* ce = e->src.opt_Constant()) {
-                        knownValues.insert(::std::make_pair(e->dst.clone(), ce->clone()));
-                    }
-                    // Known variant
-                    else if (const auto* ce = e->src.opt_EnumVariant()) {
-                        knownValuesVar.insert(::std::make_pair(e->dst.clone(), ce->index));
-                    }
-                    // Propagate knowledge through Local=Local assignments
-                    else if (const auto* ce = e->src.opt_Use()) {
+                        knownValues.insert(std::make_pair(e->dst.clone(), ce->clone()));
+                    } else if (const auto* ce = e->src.opt_EnumVariant()) {
+                        knownValuesVar.insert(std::make_pair(e->dst.clone(), ce->index));
+                    } else if (const auto* ce = e->src.opt_Use()) {
                         if (ce->is_Local()) {
                             auto it1 = knownValues.find(*ce);
                             auto it2 = knownValuesVar.find(*ce);
                             assert(!(it1 != knownValues.end() && it2 != knownValuesVar.end()));
                             if (it1 != knownValues.end()) {
-                                knownValues.insert(::std::make_pair(e->dst.clone(), it1->second.clone()));
+                                knownValues.insert(std::make_pair(e->dst.clone(), it1->second.clone()));
                             } else if (it2 != knownValuesVar.end()) {
-                                knownValuesVar.insert(::std::make_pair(e->dst.clone(), it2->second));
+                                knownValuesVar.insert(std::make_pair(e->dst.clone(), it2->second));
                             } else {
-                                // Neither known, don't propagate
                             }
                         }
                     } else {
-                        // No need to clear, the visit above this if block handles it.
                     }
                 }
             }
@@ -6313,53 +5685,48 @@ default:
         }
         optVisitMirLvaluesMut(bb.terminator, editLval);
         switch (bb.terminator.tag()) {
+            break;
+            case MIRTerminator::TAG_Switch: {
+                auto& te = bb.terminator.as_Switch();
+                auto it = knownValuesVar.find(te.val);
+                if (it != knownValuesVar.end()) {
+                    MIR_ASSERT(state, it->second < te.targets.size(), "Terminator::Switch with known variant index out of bounds" << " (#" << it->second << " with " << bb.terminator << ")");
+                    auto newBb = te.targets.at(it->second);
+                    bb.terminator = MIRTerminator::make_Goto(newBb);
+
+                    changed = true;
+                }
+
+            } break;
                 break;
-                case MIRTerminator::TAG_Switch: {
-                    auto& te = bb.terminator.as_Switch();
-                    auto it = knownValuesVar.find(te.val);
-                    if (it != knownValuesVar.end()) {
-                        MIR_ASSERT(state, it->second < te.targets.size(), "Terminator::Switch with known variant index out of bounds" << " (#" << it->second << " with " << bb.terminator << ")");
-                        auto newBb = te.targets.at(it->second);
+            case MIRTerminator::TAG_If: {
+                auto& te = bb.terminator.as_If();
+                auto it = knownValues.find(te.cond);
+                if (it != knownValues.end()) {
+                    if (it->second.is_Const() || it->second.is_Generic()) {
+                    } else {
+                        MIR_ASSERT(state, it->second.is_Bool(), "Terminator::If with known value not Bool - " << it->second);
+                        auto newBb = (it->second.as_Bool().v ? te.bbTrue : te.bbFalse);
                         bb.terminator = MIRTerminator::make_Goto(newBb);
 
                         changed = true;
                     }
-
                 }
-                break;
-                break;
-                case MIRTerminator::TAG_If: {
-                    auto& te = bb.terminator.as_If();
-                    auto it = knownValues.find(te.cond);
-                    if (it != knownValues.end()) {
-                        if (it->second.is_Const() || it->second.is_Generic()) {
-                        } else {
-                            MIR_ASSERT(state, it->second.is_Bool(), "Terminator::If with known value not Bool - " << it->second);
-                            auto newBb = (it->second.as_Bool().v ? te.bbTrue : te.bbFalse);
-                            bb.terminator = MIRTerminator::make_Goto(newBb);
 
-                            changed = true;
-                        }
-                    }
-
+            } break;
+                break;
+            case MIRTerminator::TAG_Call: {
+                auto& te = bb.terminator.as_Call();
+                for (auto& a : te.args) {
+                    checkParam(a);
                 }
-                break;
-                break;
-                case MIRTerminator::TAG_Call: {
-                    auto& te = bb.terminator.as_Call();
-                    for (auto& a : te.args) {
-                        checkParam(a);
-                    }
 
-                }
-                break;
+            } break;
             default:
                 break;
         }
     }
 
-    // - Remove based on known booleans within a single block
-    //  > Eliminates `if false`/`if true` branches
     // TODO: Is this now defunct after the handling of Terminator::If above?
     for (auto& bb : fcn.blocks) {
         auto bbidx = &bb - &fcn.blocks.front();
@@ -6368,7 +5735,6 @@ default:
         }
         const auto& te = bb.terminator.as_If();
 
-        // Restrict condition to being a temporary/variable
         if (te.cond.is_Local())
             ;
         else {
@@ -6387,12 +5753,13 @@ default:
                 return lv == cond;
             }
         } hasCond{te.cond};
+
         bool valKnown = false;
         bool knownVal;
         for (unsigned int i = bb.statements.size(); i--;) {
             if (bb.statements[i].is_Assign()) {
                 const auto& se = bb.statements[i].as_Assign();
-                // If the condition was mentioned, don't assume it has the same value
+
                 // TODO: What if the condition is a field/index and something else is edited?
                 if (optVisitMirLvalues(se.src, hasCond)) {
                     break;
@@ -6423,20 +5790,8 @@ default:
     return changed;
 }
 
-// --------------------------------------------------------------------
-// Split aggregated values that are never used by outer value into inner values
-// --------------------------------------------------------------------
-// NOTE: This is a generalised version of the old de-tuple pass (and fills part of MIR_Optimise_PropagateKnownValues)
-// NOTE: This has a special case rule that disallowes borrows of the first field: Sometimes a borrow of the first
-//       field is used as a proxy for the entire struct.
 bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
-
-    // Find locals that are:
-    // - Assigned once
-    // - From a constructor
-    // - And only ever used via a field access
-    // Replace the construction with assignments of `n` locals instead (which can be optimised by further passes)
 
     struct Potential {
         size_t srcBbIdx;
@@ -6459,7 +5814,6 @@ bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn) {
 
     std::map<unsigned, Potential> potentials;
 
-    // 1. Find locals created from constructors (struct/tuple)
     for (const auto& block : fcn.blocks) {
         size_t bbIdx = &block - &fcn.blocks.front();
         for (size_t i = 0; i < block.statements.size(); i++) {
@@ -6477,38 +5831,28 @@ bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn) {
                     if (sse->vals.size() == 0) {
                         continue;
                     }
-                }
-                // NOTE: Arrays are eligable (as long as they're only accessed using field operator
-                else if (auto* sse = se->src.opt_Array()) {
+                } else if (auto* sse = se->src.opt_Array()) {
                     if (sse->vals.size() == 0) {
                         continue;
                     }
-                }
-                // Variants are allowed, they store the variant index for later checking
-                else if (auto* sse = se->src.opt_EnumVariant()) {
+                } else if (auto* sse = se->src.opt_EnumVariant()) {
                     if (sse->vals.size() == 0) {
                         continue;
                     }
                     potentials.insert(std::make_pair(se->dst.as_Local(), Potential(bbIdx, i, sse->index)));
                     continue;
-                }
-                // NOTE: Union variants need special handling in the replacement
-                else {
+                } else {
                     continue;
                 }
 
-                // Found a potential.
                 potentials.insert(std::make_pair(se->dst.as_Local(), Potential(bbIdx, i)));
             }
         }
     }
-    // - Nothing to do? return early
     if (potentials.empty()) {
         return false;
     }
 
-    // 2. Check how the variables are used (allow one write, and no other direct usage)
-    // - Removes any potentials that are invalidated.
     struct CheckPotentials final: public LvalueVisitor {
         MIRTypeResolve& state;
         const MIRFunction& fcn;
@@ -6522,63 +5866,49 @@ bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn) {
         }
 
         bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
-
-        if (lv.root.is_Local()) {
-            // Is this one of the potentials?
-            auto it = potentials.find(lv.root.as_Local());
-            if (it != potentials.end()) {
-                if (lv.wrappers.empty()) {
-                    // NOTE: A single write is allowed (the assignment)
-                    // - Any other would be a re-assignent or a drop
-                    if (vu == MIRValUsage::Write) {
-                        it->second.nWrite += 1;
+            if (lv.root.is_Local()) {
+                auto it = potentials.find(lv.root.as_Local());
+                if (it != potentials.end()) {
+                    if (lv.wrappers.empty()) {
+                        if (vu == MIRValUsage::Write) {
+                            it->second.nWrite += 1;
+                        } else {
+                            it->second.isDirectUsed = true;
+                        }
+                    } else if (lv.wrappers.front().is_Field()) {
+                        // TODO: Find out what code makes the assumption that `&foo.0` is a good stand-in for `&foo`
+                        if (lv.wrappers.front().as_Field() == 0 && vu == MIRValUsage::Borrow) {
+                            it->second.isDirectUsed = true;
+                        }
+                    } else if (lv.wrappers.front().is_Downcast()) {
+                        if (lv.wrappers.front().as_Downcast() != it->second.variantIdx || lv.wrappers.size() < 2 || !lv.wrappers[1].is_Field()) {
+                            it->second.isDirectUsed = true;
+                        }
                     } else {
-                        // Direct usage!
                         it->second.isDirectUsed = true;
                     }
-                } else if (lv.wrappers.front().is_Field()) {
-                    // Field acess: allowed UNLESS it's a borrow of the first field
-                    // TODO: Find out what code makes the assumption that `&foo.0` is a good stand-in for `&foo`
-                    if (lv.wrappers.front().as_Field() == 0 && vu == MIRValUsage::Borrow) {
-                        it->second.isDirectUsed = true;
-                    }
-                } else if (lv.wrappers.front().is_Downcast()) {
-                    // Downcast to a variant other than the variant it was constructed as, don't do anything.
-                    // - For enums, this is an error (but here we don't know for sure). For unions it's valid behaviour
-                    // A bare downcast uses the complete variant payload, so it cannot be replaced with a field local.
-                    if (lv.wrappers.front().as_Downcast() != it->second.variantIdx || lv.wrappers.size() < 2 || !lv.wrappers[1].is_Field()) {
-                        it->second.isDirectUsed = true;
-                    }
-                } else {
-                    // Index and deref are disallowed
-                    it->second.isDirectUsed = true;
-                }
 
-                // If invalidated, delete.
-                if (it->second.isDirectUsed || it->second.nWrite > 1) {
-                    const auto& stmt = fcn.blocks[it->second.srcBbIdx].statements[it->second.srcStmtIdx];
-                    potentials.erase(it);
+                    if (it->second.isDirectUsed || it->second.nWrite > 1) {
+                        const auto& stmt = fcn.blocks[it->second.srcBbIdx].statements[it->second.srcStmtIdx];
+                        potentials.erase(it);
+                    }
                 }
             }
+            return true;
         }
-        return true;
-    }
     } checkPotentials{state, fcn, potentials};
+
     optVisitMirLvalues(state, fcn, checkPotentials);
-    // - All potentials removed? Return early
     if (potentials.empty()) {
         return false;
     }
 
-    // 3. Explode sources into locals
-    // NOTE: This needs to handle movement of indexes
     for (auto& p : potentials) {
         auto bbIdx = p.second.srcBbIdx;
         auto stmtIdx = p.second.srcStmtIdx;
         state.setCurStmt(bbIdx, stmtIdx);
         auto& block = fcn.blocks[bbIdx];
 
-        // Extract the list of values from the existing statement
         std::vector<MIRParam> vals;
         {
             auto& src = block.statements[stmtIdx].as_Assign().src;
@@ -6599,33 +5929,22 @@ bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn) {
         MIR_ASSERT(state, vals.size() > 0, "Optimisation can't apply to empty lists");
         auto offset = vals.size() - 1;
 
-        //for(size_t i = 0; i < block.statements.size(); i ++)
-
-        // Insert new statements as required
         if (offset > 0) {
             block.statements.resize(block.statements.size() + offset);
-            // Move all elements [stmt_idx+1 .. ] up by `offset`
-            // NOTE: move_backward's third argument is 'past-the-end'
             std::move_backward(block.statements.begin() + stmtIdx + 1, block.statements.end() - offset, block.statements.end());
         }
 
-        // Create new statements (allocating new locals)
         auto newLocalBase = fcn.locals.size();
         fcn.locals.resize(fcn.locals.size() + vals.size());
         p.second.replacements.resize(vals.size());
         for (size_t i = 0; i < vals.size(); i++) {
-            // Allocate a new local
             auto newLocal = static_cast<unsigned>(newLocalBase + i);
             HIRTypeRef tmp;
             fcn.locals[newLocal] = state.getParamType(tmp, vals[i]);
             p.second.replacements[i] = newLocal;
-            // Set the relevant statement to be an assignment to that new local
             block.statements[stmtIdx + i] = MIRStatement::make_Assign({MIRLValue::newLocal(newLocal), paramToRvalue(mv$(vals[i]))});
         }
 
-        //for(size_t i = 0; i < block.statements.size(); i ++)
-
-        // If this replacement changed the number of statements in this block, update all existing references.
         if (offset > 0) {
             for (auto& otherP : potentials) {
                 if (otherP.second.srcBbIdx == bbIdx && otherP.second.srcStmtIdx > stmtIdx) {
@@ -6635,7 +5954,6 @@ bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     }
 
-    // 4. Replace all usages
     struct ReplaceAggregateUses final: public LvalueVisitorMut {
         MIRTypeResolve& state;
         decltype(potentials)& potentials;
@@ -6647,48 +5965,41 @@ bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn) {
         }
 
         bool visitLvalue(MIRLValue& lv, MIRValUsage /*vu*/) override {
-
-        if (lv.root.is_Local()) {
-            // Is this one of the potentials?
-            auto it = potentials.find(lv.root.as_Local());
-            if (it != potentials.end()) {
-                size_t ndel;
-                size_t fieldIdx;
-                if (it->second.variantIdx == ~0u) {
-                    fieldIdx = lv.wrappers.front().as_Field();
-                    ndel = 1;
-                } else {
-                    MIR_ASSERT(state, lv.wrappers[0].is_Downcast(), lv);
-                    MIR_ASSERT(state, lv.wrappers[1].is_Field(), lv);
-                    fieldIdx = lv.wrappers[1].as_Field();
-                    ndel = 2;
+            if (lv.root.is_Local()) {
+                auto it = potentials.find(lv.root.as_Local());
+                if (it != potentials.end()) {
+                    size_t ndel;
+                    size_t fieldIdx;
+                    if (it->second.variantIdx == ~0u) {
+                        fieldIdx = lv.wrappers.front().as_Field();
+                        ndel = 1;
+                    } else {
+                        MIR_ASSERT(state, lv.wrappers[0].is_Downcast(), lv);
+                        MIR_ASSERT(state, lv.wrappers[1].is_Field(), lv);
+                        fieldIdx = lv.wrappers[1].as_Field();
+                        ndel = 2;
+                    }
+                    auto newWrappers = std::vector<MIRLValue::Wrapper>(lv.wrappers.begin() + ndel, lv.wrappers.end());
+                    auto newRoot = MIRLValue::Storage::newLocal(it->second.replacements.at(fieldIdx));
+                    auto newLv = MIRLValue(mv$(newRoot), mv$(newWrappers));
+                    lv = mv$(newLv);
                 }
-                auto newWrappers = std::vector<MIRLValue::Wrapper>(lv.wrappers.begin() + ndel, lv.wrappers.end());
-                auto newRoot = MIRLValue::Storage::newLocal(it->second.replacements.at(fieldIdx));
-                auto newLv = MIRLValue(mv$(newRoot), mv$(newWrappers));
-                lv = mv$(newLv);
             }
+            return true;
         }
-        return true;
-    }
     } replaceAggregateUses{state, potentials};
+
     optVisitMirLvaluesMut(state, fcn, replaceAggregateUses);
 
-    // If we reach this point, a replacement was done.
     changed = true;
     return true;
 }
 
-// --------------------------------------------------------------------
-// Replace `tmp = RValue::Use()` where the temp is only used once
-// --------------------------------------------------------------------
 bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& fcn) {
     bool replacementHappend;
 
     // TODO: This requires kowing that doing so has no effect.
-    // - Can use little heristics like a Call pointing to an assignment of its RV
-    // - Count the read/write count of a variable, if it's 1,1 then this optimisation is correct.
-    // - If the count is read=*,write=1 and the write is of an argument, replace with the argument.
+
     struct ValUse {
         unsigned int read = 0;
         unsigned int write = 0;
@@ -6696,7 +6007,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
     };
 
     struct {
-        ::std::vector<ValUse> localUses;
+        std::vector<ValUse> localUses;
 
         void useLvalue(const MIRLValue& lv, MIRValUsage ut) {
             for (const auto& w : lv.wrappers) {
@@ -6720,7 +6031,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                 }
             }
         }
-    } valUses = {::std::vector<ValUse>(fcn.locals.size())};
+    } valUses = {std::vector<ValUse>(fcn.locals.size())};
 
     struct CollectValUses final: public LvalueVisitor {
         decltype(valUses)& valUses;
@@ -6735,21 +6046,13 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
             return false;
         }
     } collectValUses{valUses};
+
     optVisitMirLvalues(state, fcn, collectValUses);
 
-    // --- Eliminate `tmp = Use(...)` (moves lvalues downwards)
-    // > Find an assignment `tmp = Use(...)` where the temporary is only written and read once
-    // > Locate the usage of this temporary
-    //  - Stop on any conditional terminator
-    // > Any lvalues in the source lvalue must not be mutated between the source assignment and the usage.
-    //  - This includes mutation, borrowing, or moving.
-    // > Replace usage with the inner of the original `Use`
     {
-        // 1. Assignments (forward propagate)
-        //::std::map< ::MIR::LValue::CRef, ::MIR::RValue>    replacements;
-        ::std::vector<::std::pair<MIRLValue, MIRRValue>> replacements;
+        std::vector<std::pair<MIRLValue, MIRRValue>> replacements;
         auto replacementsFind = [&replacements](const MIRLValue::CRef& lv) {
-            return ::std::find_if(replacements.begin(), replacements.end(), [&](const auto& e) {
+            return std::find_if(replacements.begin(), replacements.end(), [&](const auto& e) {
                 return lv == e.first;
             });
         };
@@ -6761,16 +6064,15 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
             for (unsigned int stmtIdx = 0; stmtIdx < block.statements.size(); stmtIdx++) {
                 state.setCurStmt(&block - &fcn.blocks.front(), stmtIdx);
                 const auto& stmt = block.statements[stmtIdx];
-                // > Assignment
                 if (!stmt.is_Assign()) {
                     continue;
                 }
                 const auto& e = stmt.as_Assign();
-                // > Of a temporary from with a RValue::Use
+
                 if (e.dst.is_Local()) {
                     const auto& vu = valUses.localUses[e.dst.as_Local()];
                     // TODO: Allow write many?
-                    // > Where the variable is written once and read once
+
                     if (!(vu.read == 1 && vu.write == 1 && vu.borrow == 0)) {
                         continue;
                     }
@@ -6779,11 +6081,8 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                 }
                 bool onlyOne = false;
                 if (e.src.is_Use()) {
-                    // Keep the complexity down
                     const auto* srcp = &e.src.as_Use();
-                    // If there are deref/index accesses, then only allow one statement
-                    // - This is the lazy option, avoids needing to check for invalidation (could be a write through deref)
-                    if (::std::any_of(srcp->wrappers.begin(), srcp->wrappers.end(), [](auto& w) {
+                    if (std::any_of(srcp->wrappers.begin(), srcp->wrappers.end(), [](auto& w) {
                         return !w.is_Field() && !w.is_Downcast();
                     })) {
                         onlyOne = true;
@@ -6798,7 +6097,6 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                         continue;
                     }
                 } else {
-                    // Not a use
                     continue;
                 }
                 bool srcIsLvalue = e.src.is_Use();
@@ -6821,30 +6119,21 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     }
                 } isLvalueUsage{e.dst};
 
-                // Eligable for replacement
-                // Find where this value is used
-                // - Stop on a conditional block terminator
-                // - Stop if any value mentioned in the source is mutated/invalidated
                 bool stop = false;
                 bool found = false;
                 for (unsigned int si2 = stmtIdx + 1; si2 < block.statements.size(); si2++) {
                     state.setCurStmt(&block - &fcn.blocks.front(), si2);
                     const auto& stmt2 = block.statements[si2];
 
-                    // Check for invalidation (done first, to avoid cases where the source is moved into a struct)
                     if (checkInvalidatesLvalue(stmt2, e.src.as_Use(), false)) {
                         stop = true;
                         break;
                     }
 
-                    // Usage found.
                     if (optVisitMirLvalues(stmt2, isLvalueUsage)) {
-                        // If the source isn't a Use, ensure that this is a Use
                         if (!srcIsLvalue) {
                             if (stmt2.is_Assign() && stmt2.as_Assign().src.is_Use()) {
-                                // Good
                             } else {
-                                // Bad, this has to stay a temporary
                                 stop = true;
                                 break;
                             }
@@ -6919,17 +6208,15 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                         }
                     }
                 }
-                // Schedule a replacement in a future pass
                 if (found) {
-                    replacements.push_back(::std::make_pair(e.dst.clone(), e.src.clone()));
+                    replacements.push_back(std::make_pair(e.dst.clone(), e.src.clone()));
                 }
-            } // for(stmt : block.statements)
+            }
         }
 
-
-        // Apply replacements within replacements
         for (;;) {
             unsigned int innerReplacedCount = 0;
+
             struct InnerReplace final: public LvalueRefVisitorMut {
                 decltype(replacements)& replacements;
                 decltype(replacementsFind)& replacementsFind;
@@ -6951,6 +6238,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     return false;
                 }
             } innerReplace{replacements, replacementsFind, innerReplacedCount};
+
             struct InnerReplaceTop final: public LvalueVisitorMut {
                 InnerReplace& inner;
 
@@ -6966,6 +6254,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     return false;
                 }
             } innerReplaceTop{innerReplace};
+
             for (auto& r : replacements) {
                 optVisitMirLvaluesMut(r.second, innerReplaceTop);
             }
@@ -6974,10 +6263,10 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
             }
         }
 
-        // Apply replacements
         unsigned int replaced = 0;
         while (replaced < replacements.size()) {
             auto oldReplaced = replaced;
+
             struct ReplaceReads final: public LvalueRefVisitorMut {
                 MIRTypeResolve& state;
                 decltype(replacements)& replacements;
@@ -6998,14 +6287,15 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                         if (it != replacements.end()) {
                             MIR_ASSERT(state, !it->second.isDead(), "Replacement of  " << lv << " fired twice");
                             MIR_ASSERT(state, it->second.is_Use(), "Replacing a lvalue with a rvalue - " << lv << " with " << it->second);
-                            auto rval = ::std::move(it->second);
-                            lv.replace(::std::move(rval.as_Use()));
+                            auto rval = std::move(it->second);
+                            lv.replace(std::move(rval.as_Use()));
                             replaced += 1;
                         }
                     }
                     return false;
                 }
             } replaceReads{state, replacements, replacementsFind, replaced};
+
             struct ReplaceReadsTop final: public LvalueVisitorMut {
                 ReplaceReads& inner;
 
@@ -7018,6 +6308,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     return visitMirLvalueMut(lv, vu, inner);
                 }
             } cb{replaceReads};
+
             for (unsigned int blockIdx = 0; blockIdx < fcn.blocks.size(); blockIdx++) {
                 auto& block = fcn.blocks[blockIdx];
                 if (block.terminator.isDead()) {
@@ -7034,11 +6325,10 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
             }
             MIR_ASSERT(state, replaced > oldReplaced, "Temporary eliminations didn't advance");
         }
-        // Remove assignments of replaced values
         for (auto& block : fcn.blocks) {
             for (auto it = block.statements.begin(); it != block.statements.end();) {
                 state.setCurStmt(&block - &fcn.blocks.front(), (it - block.statements.begin()));
-                // If the statement was an assign of a replaced temporary, remove it.
+
                 auto it2 = replacements.end();
                 if (it->is_Assign() && (it2 = replacementsFind(it->as_Assign().dst)) != replacements.end()) {
                     it = block.statements.erase(it);
@@ -7050,7 +6340,6 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
         }
         replacementHappend = (replaced > 0);
     }
-    // --- Eliminate `... = Use(tmp)` (propagate lvalues upwards)
     {
         for (auto& block : fcn.blocks) {
             for (auto it = block.statements.begin(); it != block.statements.end(); ++it) {
@@ -7070,9 +6359,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                 } else {
                     continue;
                 }
-                // ^^^  `tmp[1:1] = some_rvalue`
 
-                // Find where it's used
                 for (auto it2 = it + 1; it2 != block.statements.end(); ++it2) {
                     if (!it2->is_Assign()) {
                         continue;
@@ -7087,7 +6374,6 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                         continue;
                     }
                     const auto& newDstLval = it2->as_Assign().dst;
-                    // `... = Use(to_replace_lval)`
 
                     // TODO: Ensure that the target isn't borrowed.
                     if (newDstLval.is_Local()) {
@@ -7096,15 +6382,12 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                             break;
                         }
                     } else if (newDstLval.is_Return()) {
-                        // Return, can't be borrowed?
                     } else {
                         break;
                     }
 
-                    // Ensure that the target doesn't change in the intervening time.
                     bool wasInvalidated = false;
                     for (auto it3 = it + 1; it3 != it2; it3++) {
-                        // `true` when the visited lvalue is a component of `newDstLval`
                         struct IsLvalueInVal final: public LvalueVisitor {
                             const MIRLValue& newDstLval;
 
@@ -7114,17 +6397,16 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                             }
 
                             bool visitLvalue(const MIRLValue& lv, MIRValUsage /*vu*/) override {
-                                // Don't care about indexing?
                                 return lv.root == newDstLval.root;
                             }
                         } isLvalueInVal{newDstLval};
+
                         if (optVisitMirLvalues(*it3, isLvalueInVal)) {
                             wasInvalidated = true;
                             break;
                         }
                     }
 
-                    // Replacement is valid.
                     if (!wasInvalidated) {
                         it->as_Assign().dst = mv$(it2->as_Assign().dst);
                         block.statements.erase(it2);
@@ -7136,18 +6418,12 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
         }
     }
 
-    // --- Function returns (reverse propagate)
-    // > Find `tmp = <function call>` where the temporary is used 1:1
-    // > Search the following block for `<anything> = Use(this_tmp)`
-    // > Ensure that the target of the above assignment isn't used in the intervening statements
-    // > Replace function call result value with target of assignment
     {
         for (auto& block : fcn.blocks) {
             if (block.terminator.isDead()) {
                 continue;
             }
 
-            // If the terminator is a call that writes to a 1:1 value, replace the destination value with the eventual destination (if that value isn't used in the meantime)
             if (block.terminator.is_Call()) {
                 // TODO: What if the destination located here is a 1:1 and its usage is listed to be replaced by the return value.
                 auto& e = block.terminator.as_Call();
@@ -7159,23 +6435,19 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     continue;
                 }
 
-                // Iterate the target block, looking for where this value is used.
                 const MIRLValue* newDst = nullptr;
                 auto& blk2 = fcn.blocks.at(e.retBlock);
                 for (const auto& stmt : blk2.statements) {
-                    // Find `RValue::Use( this_lvalue )`
                     if (stmt.is_Assign() && stmt.as_Assign().src.is_Use() && stmt.as_Assign().src.as_Use() == e.retVal) {
                         newDst = &stmt.as_Assign().dst;
                         break;
                     }
                 }
 
-                // Ensure that the new destination value isn't used before assignment
                 if (newDst) {
                     auto lvalueImpactsDst = [&](const MIRLValue& lv) -> bool {
-                        // Returns true if the two lvalues share a common root
                         // TODO: Could restrict based on the presence of deref/field accesses?
-                        // If `lv` is a local AND matches the index in `new_dst`, check for indexing
+
                         if (lv.is_Local()) {
                             for (const auto& w : newDst->wrappers) {
                                 if (w.is_Index() && w.as_Index() == lv.as_Local()) {
@@ -7195,6 +6467,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                             replacementHappend = true;
                             break;
                         }
+
                         struct DstTouched final: public LvalueVisitor {
                             const MIRLValue& newDst;
                             decltype(lvalueImpactsDst)& lvalueImpactsDst;
@@ -7209,6 +6482,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                                 return lv == newDst || (vu == MIRValUsage::Write && lvalueImpactsDst(lv));
                             }
                         } dstTouched{*newDst, lvalueImpactsDst};
+
                         if (optVisitMirLvalues(stmt, dstTouched)) {
                             break;
                         }
@@ -7218,15 +6492,11 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
         }
     }
 
-    // Locate values that are written, but not read or borrowed
-    // - Current implementation requires a single write (to avoid issues with drop)
-    // - if T: Drop (or T: !Copy) then the write should become a drop
     {
         for (auto& block : fcn.blocks) {
             for (auto it = block.statements.begin(); it != block.statements.end(); ++it) {
                 state.setCurStmt(&block - &fcn.blocks.front(), it - block.statements.begin());
                 if (const auto& se = it->opt_Assign()) {
-                    // Remove No-op assignments (assignment from a lvalue to itself)
                     if (const auto* srcE = se->src.opt_Use()) {
                         if (se->dst == *srcE) {
                             it = block.statements.erase(it) - 1;
@@ -7234,7 +6504,6 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                         }
                     }
 
-                    // Remove assignments of locals that are never read
                     if (se->dst.is_Local()) {
                         const auto& vu = valUses.localUses[se->dst.as_Local()];
                         if (vu.write == 1 && vu.read == 0 && vu.borrow == 0) {
@@ -7243,7 +6512,6 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     }
                 }
             }
-            // NOTE: Calls can write values, but they also have side-effects
         }
     }
 
@@ -7252,14 +6520,11 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
     return replacementHappend;
 }
 
-// ----------------------------------------
-// Clear all drop flags that are never read
-// ----------------------------------------
 bool MIROptimiseDeadDropFlags(MIRTypeResolve& state, MIRFunction& fcn) {
     bool removedStatement = false;
-    ::std::vector<bool> usedDropFlags(fcn.dropFlags.size());
+    std::vector<bool> usedDropFlags(fcn.dropFlags.size());
     {
-        ::std::vector<bool> readDropFlags(fcn.dropFlags.size());
+        std::vector<bool> readDropFlags(fcn.dropFlags.size());
         visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&readDropFlags, &usedDropFlags](auto, const MIRBasicBlock& block) {
             for (const auto& stmt : block.statements) {
                 if (const auto* e = stmt.opt_SetDropFlag()) {
@@ -7303,27 +6568,22 @@ bool MIROptimiseDeadDropFlags(MIRTypeResolve& state, MIRFunction& fcn) {
         }));
     }
 
-    // Find any drop flags that are never assigned with a value other than their default, then remove those dead assignments.
     {
-        ::std::vector<bool> editedDropFlags(fcn.dropFlags.size());
+        std::vector<bool> editedDropFlags(fcn.dropFlags.size());
         visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&editedDropFlags, &fcn](auto, const MIRBasicBlock& block) {
             for (const auto& stmt : block.statements) {
                 if (const auto* e = stmt.opt_SetDropFlag()) {
                     if (e->other != ~0u) {
-                        // If the drop flag is set based on another, assume it's changed
                         editedDropFlags[e->idx] = true;
                     } else if (e->newVal != fcn.dropFlags[e->idx]) {
-                        // If the new value is not the default, it's changed
                         editedDropFlags[e->idx] = true;
                     } else {
-                        // Set to the default, doesn't change the 'edited' state
                     }
                 }
             }
         }));
         visitBlocksMut(state, fcn, makeCallable<MIRBlockCb>([&editedDropFlags, &removedStatement, &fcn](auto _id, auto& block) {
             for (auto it = block.statements.begin(); it != block.statements.end();) {
-                // If this is a SetDropFlag and the target flag isn't edited, remove
                 if (const auto* e = it->opt_SetDropFlag()) {
                     if (!editedDropFlags[e->idx]) {
                         assert(e->newVal == fcn.dropFlags[e->idx]);
@@ -7342,17 +6602,12 @@ bool MIROptimiseDeadDropFlags(MIRTypeResolve& state, MIRFunction& fcn) {
     return removedStatement;
 }
 
-// --------------------------------------------------------------------
-// Remove unread assignments of locals (and replaced assignments of anything?)
-// --------------------------------------------------------------------
 bool MIROptimiseDeadAssignments(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
-    // Find any locals that are never read, and delete their assignments.
+    std::vector<bool> readLocals(fcn.locals.size());
+    std::vector<bool> droppedLocals(fcn.locals.size());
 
-    // Per-local flag indicating that the particular local is read.
-    ::std::vector<bool> readLocals(fcn.locals.size());
-    ::std::vector<bool> droppedLocals(fcn.locals.size());
     struct RecordReads final: public LvalueVisitor {
         decltype(readLocals)& readLocals;
 
@@ -7373,14 +6628,12 @@ bool MIROptimiseDeadAssignments(MIRTypeResolve& state, MIRFunction& fcn) {
             return false;
         }
     } cb{readLocals};
+
     for (const auto& bb : fcn.blocks) {
         for (const auto& stmt : bb.statements) {
-            // If the assignment is to a local, then just consider the source (the target is writing to a local)
             if (stmt.is_Assign() && stmt.as_Assign().dst.is_Local()) {
                 optVisitMirLvalues(stmt.as_Assign().src, cb);
-            }
-            // For other statment types (e.g. asm) - record anything
-            else {
+            } else {
                 optVisitMirLvalues(stmt, cb);
             }
         }
@@ -7395,13 +6648,11 @@ bool MIROptimiseDeadAssignments(MIRTypeResolve& state, MIRFunction& fcn) {
         for (auto it = bb.statements.begin(); it != bb.statements.end();) {
             state.setCurStmt(&bb - &fcn.blocks.front(), it - bb.statements.begin());
 
-            // Not an assignment, ignore
             if (!(it->is_Assign() && it->as_Assign().dst.is_Local())) {
                 ++it;
                 continue;
             }
             auto idx = it->as_Assign().dst.as_Local();
-            // Local was read, ignore it
             if (readLocals[idx]) {
                 ++it;
                 continue;
@@ -7411,7 +6662,6 @@ bool MIROptimiseDeadAssignments(MIRTypeResolve& state, MIRFunction& fcn) {
                 ++it;
                 continue;
             }
-            // Remove the assignment, as it's unused
             it = bb.statements.erase(it);
             changed = true;
         }
@@ -7425,30 +6675,20 @@ bool MIROptimiseDeadAssignments(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     }
 
-    // Locate assignments of locals then find the next assignment or read.
     return changed;
 }
 
-// --------------------------------------------------------------------
-// Eliminate no-operation assignments that may have appeared
-// --------------------------------------------------------------------
 bool MIROptimiseNoopRemoval(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
     HIRTypeRef tmpTy;
-    // Remove useless operations
     for (auto& bb : fcn.blocks) {
-        // Multi-statement no-ops (round-trip casts, reboorrow+cast)
         for (auto it = bb.statements.begin(); it != bb.statements.end(); ++it) {
             state.setCurStmt(&bb - fcn.blocks.data(), it - bb.statements.begin());
-            // `_0 = &mut *foo`, then `_1 = _0 as *mut T` where `foo: *mut T`
-            // - Note: Accepts `_0 = &*foo; _1 = _0 as T` where `foo: T`
             if (it->is_Assign() && it->as_Assign().dst.is_Local() && it->as_Assign().src.is_Borrow() && it->as_Assign().src.as_Borrow().val.is_Deref()) {
                 const auto& dstLv = it->as_Assign().dst;
                 auto srcLv = it->as_Assign().src.as_Borrow().val.cloneUnwrapped();
-                // Find the next use of this target lvalue
                 for (auto it2 = it + 1; it2 != bb.statements.end(); ++it2) {
-                    // If it's a cast back to the original type, then replace with a direct assignment of the original value
                     if (it2->is_Assign() && it2->as_Assign().src.is_Cast() && it2->as_Assign().src.as_Cast().val == dstLv) {
                         const auto& dstTy = it2->as_Assign().src.as_Cast().type;
                         HIRTypeRef tmp;
@@ -7464,14 +6704,10 @@ bool MIROptimiseNoopRemoval(MIRTypeResolve& state, MIRFunction& fcn) {
                 }
             }
 
-            // `_0 = foo as *const T; _1 = _0 as *mut T` where `foo: *mut T`
-            // - Note: Accepts `_0 = foo as *const T; _1 = _0 as U` where `foo: U`
             if (it->is_Assign() && it->as_Assign().dst.is_Local() && it->as_Assign().src.is_Cast() && it->as_Assign().src.as_Cast().type->is_Pointer()) {
                 const auto& dstLv = it->as_Assign().dst;
                 const auto& srcLv = it->as_Assign().src.as_Cast().val;
-                // Find the next use of this target lvalue
                 for (auto it2 = it + 1; it2 != bb.statements.end(); ++it2) {
-                    // If it's a cast back to the original type, then replace with a direct assignment of the original value
                     if (it2->is_Assign() && it2->as_Assign().src.is_Cast() && it2->as_Assign().src.as_Cast().val == dstLv) {
                         const auto& dstTy = it2->as_Assign().src.as_Cast().type;
                         HIRTypeRef tmp;
@@ -7491,7 +6727,6 @@ bool MIROptimiseNoopRemoval(MIRTypeResolve& state, MIRFunction& fcn) {
         for (auto it = bb.statements.begin(); it != bb.statements.end();) {
             state.setCurStmt(&bb - fcn.blocks.data(), it - bb.statements.begin());
 
-            // Placeholder: Asm block with empty template and no inputs/outputs/flags
             if (*it == MIRStatement::make_Asm({})) {
                 it = bb.statements.erase(it);
                 changed = true;
@@ -7499,7 +6734,6 @@ bool MIROptimiseNoopRemoval(MIRTypeResolve& state, MIRFunction& fcn) {
                 continue;
             }
 
-            // `Value = Use(Value)`
             if (it->is_Assign() && it->as_Assign().src.is_Use() && it->as_Assign().src.as_Use() == it->as_Assign().dst) {
                 it = bb.statements.erase(it);
                 changed = true;
@@ -7507,10 +6741,6 @@ bool MIROptimiseNoopRemoval(MIRTypeResolve& state, MIRFunction& fcn) {
                 continue;
             }
 
-            // Unit has a single value, so retaining a local read cannot carry
-            // any information.  Canonicalising it also handles compiler-built
-            // bodies such as `custom_mir`, where the macro's synthetic RET
-            // binding is intentionally left without a Rust assignment.
             if (it->is_Assign() && it->as_Assign().src.is_Use() && state.getLvalueType(tmpTy, it->as_Assign().src.as_Use()) == state.crate.types.unit()) {
                 it->as_Assign().src = MIRRValue::make_Tuple({});
                 changed = true;
@@ -7519,7 +6749,6 @@ bool MIROptimiseNoopRemoval(MIRTypeResolve& state, MIRFunction& fcn) {
                 continue;
             }
 
-            // `Value = Borrow(Deref(Value))`
             if (it->is_Assign() && it->as_Assign().src.is_Borrow() && it->as_Assign().src.as_Borrow().val.is_Deref() && it->as_Assign().src.as_Borrow().val.cloneUnwrapped() == it->as_Assign().dst) {
                 it = bb.statements.erase(it);
                 changed = true;
@@ -7527,7 +6756,6 @@ bool MIROptimiseNoopRemoval(MIRTypeResolve& state, MIRFunction& fcn) {
                 continue;
             }
 
-            // Cast to the same type
             if (it->is_Assign() && it->as_Assign().src.is_Cast() && it->as_Assign().src.as_Cast().type == state.getLvalueType(tmpTy, it->as_Assign().src.as_Cast().val)) {
                 auto v = mv$(it->as_Assign().src.as_Cast().val);
                 it->as_Assign().src = MIRRValue::make_Use({mv$(v)});
@@ -7550,36 +6778,9 @@ bool MIROptimiseNoopRemoval(MIRTypeResolve& state, MIRFunction& fcn) {
     return changed;
 }
 
-// --------------------------------------------------------------------
-// If the first statement of a block is an assignment from a local, and all sources of that block assign to that local
-// - Move the assigment backwards
-// --------------------------------------------------------------------
 bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
-    // 1. Locate blocks that start with an elligable assignemnt
-    // - Target must be "simple" (not a static, no wrappers)
-    // - Source can be any lvalue? Restrict to locals for now (static/deref assignment is a side-effect)
-    //   > Restrict to single-read locals? Or replace the trigger statement with a reversed copy?
-    // 2. Check all source blocks, and see if they assign to that block
-    // > Terminator must be: GOTO, or CALL <lv> = ... (with the non-panic arm)
-    // 3. If more than half the source blocks assign the source, then move up
-    // - Any IF/SWITCH/... terminator blocks the optimisation
-
-    // Precompute per-local read/borrow counts in a single pass over the whole
-    // function. The eligibility check below needs the read count of one local
-    // per candidate block; scanning every lvalue afresh for each candidate made
-    // this pass O(n^2) in function size (dominant cost on large functions).
-    // Applying the optimisation never changes another candidate's source count
-    // (an eligible source is read exactly once, so no two candidates share one),
-    // so a single snapshot stays valid for the whole block loop.
-    // Likewise, map each block to its predecessors once instead of rescanning
-    // every terminator per candidate. Edges are recorded with the multiplicity
-    // `visitTerminatorTarget` reports them, matching the per-candidate scan this
-    // replaces. The rewrite below only retargets assignment destinations and
-    // call return values, never terminator targets, so this stays valid.
-    // Reused scratch (~70MB of churn on libcore): inner vectors keep their
-    // capacity across calls, only [0, nBlocks) is meaningful this call.
     auto& blockPreds = operationsContext(state).blockPredecessors;
     if (blockPreds.size() < fcn.blocks.size()) {
         blockPreds.resize(fcn.blocks.size());
@@ -7589,11 +6790,12 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
     }
     for (const auto& srcBb : fcn.blocks) {
         unsigned srcIdx = &srcBb - fcn.blocks.data();
+
         struct CollectPreds final: public MIRTargetVisitor {
-            ::std::vector<::std::vector<unsigned>>& blockPreds;
+            std::vector<std::vector<unsigned>>& blockPreds;
             unsigned srcIdx;
 
-            CollectPreds(::std::vector<::std::vector<unsigned>>& blockPreds, unsigned srcIdx)
+            CollectPreds(std::vector<std::vector<unsigned>>& blockPreds, unsigned srcIdx)
                 : blockPreds(blockPreds)
                 , srcIdx(srcIdx)
             {
@@ -7605,11 +6807,13 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
                 }
             }
         } collectPreds{blockPreds, srcIdx};
+
         visitTerminatorTarget(srcBb.terminator, collectPreds);
     }
 
-    ::std::vector<unsigned> localReads(fcn.locals.size(), 0);
-    ::std::vector<unsigned> localBorrows(fcn.locals.size(), 0);
+    std::vector<unsigned> localReads(fcn.locals.size(), 0);
+    std::vector<unsigned> localBorrows(fcn.locals.size(), 0);
+
     struct CountLocalUses final: public LvalueVisitor {
         decltype(localReads)& localReads;
         decltype(localBorrows)& localBorrows;
@@ -7642,6 +6846,7 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
             return true;
         }
     } countLocalUses{localReads, localBorrows};
+
     optVisitMirLvalues(state, fcn, countLocalUses);
 
     for (auto& dstBb : fcn.blocks) {
@@ -7666,33 +6871,26 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
         if (!src.is_Local()) {
             continue;
         }
-        // Source must be a single-read local (so this assignment can be
-        // deleted). Counts come from the whole-function snapshot above.
         unsigned nRead = localReads[src.as_Local()];
         unsigned nBorrow = localBorrows[src.as_Local()];
         if (nRead > 1 || nBorrow > 0) {
             continue;
         }
 
-        // Find source blocks, check terminators/last (predecessors precomputed)
         std::vector<unsigned> sources;
         unsigned numUsed = 0;
         const auto& preds = blockPreds[state.getCurBlock()];
         for (size_t predI = 0; predI < preds.size(); predI++) {
             unsigned bbIdx = preds[predI];
             const auto& srcBb = fcn.blocks[bbIdx];
-            // One entry per edge, as the previous per-terminator scan produced.
             sources.push_back(bbIdx);
-            // ... but only inspect each source block once.
             if (predI > 0 && preds[predI - 1] == bbIdx) {
                 continue;
             }
             {
                 switch (srcBb.terminator.tag()) {
                     case MIRTerminator::TAG_Goto: {
-                        if (!srcBb.statements.empty()
-                            && srcBb.statements.back().is_Assign()
-                            && srcBb.statements.back().as_Assign().dst == src) {
+                        if (!srcBb.statements.empty() && srcBb.statements.back().is_Assign() && srcBb.statements.back().as_Assign().dst == src) {
                             numUsed += 1;
                         }
                         break;
@@ -7703,8 +6901,7 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
                             numUsed += 1;
                         }
                         break;
-                    }
-break;
+                    } break;
                     default:
                         break;
                 }
@@ -7712,15 +6909,13 @@ break;
         }
 
         // TODO: Allow if one arm doesn't update?
-        // - What if a call invalidates the target?
+
         if (numUsed < sources.size()) {
             continue;
         }
 
         changed = true;
 
-        // Time to edit.
-        // 1. Update all sources
         for (auto bbIdx : sources) {
             auto& srcBb = fcn.blocks[bbIdx];
 
@@ -7732,8 +6927,6 @@ break;
                 MIR_TODO(state, "Handle copying assignment to source");
             }
         }
-        // IF the value is `Copy` (i.e. the initial assignment could be expected to survive), then reverse the destination
-        // - Can't do this, it's going to cause infinite recursion!
         if (false && state.lvalueIsCopy(dst)) {
             auto d = dst.clone();
             dst = mv$(src);
@@ -7746,28 +6939,19 @@ break;
     return changed;
 }
 
-// --------------------------------------------------------------------
-// Find re-borrows of values that aren't otherwise used.
-// - Look for `<local> = &[mut] *<local/arg>`
-// - Check if the source is only ever used here (and in a drop)
-// - If that's the case, replace usage with a move and delete the drop
 // TODO: Could allow multiple uses if it's a shared borrow
-// --------------------------------------------------------------------
+
 bool MIROptimiseUselessReborrows(MIRTypeResolve& state, MIRFunction& fcn) {
     bool changed = false;
 
     // TODO: This doesn't work if the assignment happens in a loop (can lead to multiple moves)
-    // - Need to have a way of knowing if a block is a loop member
 
     return changed;
 }
 
-// --------------------------------------------------------------------
-// Clear all unused blocks
-// --------------------------------------------------------------------
 bool MIROptimiseGarbageCollectPartial(MIRTypeResolve& state, MIRFunction& fcn) {
     bool rv = false;
-    ::std::vector<bool> visited(fcn.blocks.size());
+    std::vector<bool> visited(fcn.blocks.size());
     visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&visited](auto bb, const auto& /*block*/) {
         assert(!visited[bb]);
         visited[bb] = true;
@@ -7783,13 +6967,10 @@ bool MIROptimiseGarbageCollectPartial(MIRTypeResolve& state, MIRFunction& fcn) {
     return rv;
 }
 
-// --------------------------------------------------------------------
-// Remove all unused temporaries and blocks
-// --------------------------------------------------------------------
 bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
-    ::std::vector<bool> usedLocals(fcn.locals.size());
-    ::std::vector<bool> usedDfs(fcn.dropFlags.size());
-    ::std::vector<bool> visited(fcn.blocks.size());
+    std::vector<bool> usedLocals(fcn.locals.size());
+    std::vector<bool> usedDfs(fcn.dropFlags.size());
+    std::vector<bool> visited(fcn.blocks.size());
 
     visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&](auto bb, const auto& block) {
         visited[bb] = true;
@@ -7811,31 +6992,22 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
             if (stmt.is_Assign()) {
                 auto& e = stmt.as_Assign();
                 assignedLval(e.dst);
-            }
-            //else if( const auto* e = stmt.opt_Drop() )
-            //{
-            //    //if( e->flag_idx != ~0u )
-            //    //    used_dfs.at(e->flag_idx) = true;
-            //}
-            else if (const auto* e = stmt.opt_Asm()) {
+            } else if (const auto* e = stmt.opt_Asm()) {
                 for (const auto& val : e->outputs) {
                     assignedLval(val.second);
                 }
-            }
-            else if (const auto* e = stmt.opt_Asm2()) {
+            } else if (const auto* e = stmt.opt_Asm2()) {
                 for (const auto& p : e->params) {
                     if (p.is_Reg() && p.as_Reg().output) {
                         assignedLval(*p.as_Reg().output);
                     }
                 }
-            }
-            else if (const auto* e = stmt.opt_SetDropFlag()) {
+            } else if (const auto* e = stmt.opt_SetDropFlag()) {
                 if (e->other != ~0u) {
                     usedDfs.at(e->other) = true;
                 }
                 usedDfs.at(e->idx) = true;
-            }
-            else if (const auto* e = stmt.opt_LoadDropFlag()) {
+            } else if (const auto* e = stmt.opt_LoadDropFlag()) {
                 usedDfs.at(e->idx) = true;
             }
         }
@@ -7853,7 +7025,7 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
         }
     }));
 
-    ::std::vector<unsigned int> localRewriteTable;
+    std::vector<unsigned int> localRewriteTable;
     unsigned int nLocals = fcn.locals.size();
     for (unsigned int i = 0, j = 0; i < nLocals; i++) {
         if (!usedLocals[i]) {
@@ -7861,7 +7033,7 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
         }
         localRewriteTable.push_back(usedLocals[i] ? j++ : ~0u);
     }
-    ::std::vector<unsigned int> dfRewriteTable;
+    std::vector<unsigned int> dfRewriteTable;
     unsigned int nDf = fcn.dropFlags.size();
     for (unsigned int i = 0, j = 0; i < nDf; i++) {
         dfRewriteTable.push_back(usedDfs[i] ? j++ : ~0u);
@@ -7884,7 +7056,6 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
                     if (lv.root.is_Local()) {
                         auto e = lv.root.as_Local();
                         MIR_ASSERT(state, e < localRewriteTable.size(), "Variable out of range - " << lv);
-                        // If the table entry for this variable is !0, it wasn't marked as used
                         MIR_ASSERT(state, localRewriteTable.at(e) != ~0u, "LValue " << lv << " incorrectly marked as unused");
                         lv.root = MIRLValue::Storage::newLocal(localRewriteTable.at(e));
                     }
@@ -7896,7 +7067,8 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
                     return false;
                 }
             } lvalueCb{state, localRewriteTable};
-            ::std::vector<bool> toRemoveStatements(it->statements.size());
+
+            std::vector<bool> toRemoveStatements(it->statements.size());
             for (auto& stmt : it->statements) {
                 auto stmtIdx = &stmt - &it->statements.front();
                 state.setCurStmt(i, stmtIdx);
@@ -7908,7 +7080,6 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
 
                 optVisitMirLvaluesMut(stmt, lvalueCb);
                 if (auto* se = stmt.opt_SetDropFlag()) {
-                    // Rewrite drop flag indexes OR delete
                     if (dfRewriteTable[se->idx] == ~0u) {
                         toRemoveStatements[stmtIdx] = true;
                         continue;
@@ -7966,9 +7137,8 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
                 }
             }
 
-            // Delete all statements flagged in a bitmap for deletion
             assert(it->statements.size() == toRemoveStatements.size());
-            auto newEnd = ::std::remove_if(it->statements.begin(), it->statements.end(), [&](const auto& s) {
+            auto newEnd = std::remove_if(it->statements.begin(), it->statements.end(), [&](const auto& s) {
                 size_t stmtIdx = (&s - &it->statements.front());
                 return toRemoveStatements[stmtIdx];
             });
@@ -7977,15 +7147,12 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
         ++it;
     }
 
-    // Removing a Drop terminator also removes its unwind edge.  Recompute block
-    // reachability after all such rewrites, otherwise the detached cleanup
-    // subgraph is retained and can be sorted ahead of the real entry block.
     visited.assign(fcn.blocks.size(), false);
     visitBlocks(state, fcn, makeCallable<MIRBlockConstCb>([&](auto bb, const auto&) {
         visited[bb] = true;
     }));
 
-    ::std::vector<unsigned int> blockRewriteTable;
+    std::vector<unsigned int> blockRewriteTable;
     for (unsigned int i = 0, j = 0; i < fcn.blocks.size(); i++) {
         blockRewriteTable.push_back(visited[i] ? j++ : ~0u);
     }
@@ -7993,11 +7160,12 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
         if (!visited[i]) {
             continue;
         }
+
         struct ApplyRewriteTable final: public MIRTargetVisitorMut {
             const MIRTypeResolve& state;
-            const ::std::vector<unsigned int>& blockRewriteTable;
+            const std::vector<unsigned int>& blockRewriteTable;
 
-            ApplyRewriteTable(const MIRTypeResolve& state, const ::std::vector<unsigned int>& blockRewriteTable)
+            ApplyRewriteTable(const MIRTypeResolve& state, const std::vector<unsigned int>& blockRewriteTable)
                 : state(state)
                 , blockRewriteTable(blockRewriteTable)
             {
@@ -8009,16 +7177,16 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
                 target = blockRewriteTable[target];
             }
         } applyRewriteTable{state, blockRewriteTable};
+
         visitTerminatorTargetMut(fcn.blocks[i].terminator, applyRewriteTable);
     }
 
-    auto newBlocksEnd = ::std::remove_if(fcn.blocks.begin(), fcn.blocks.end(), [&](const auto& bb) {
+    auto newBlocksEnd = std::remove_if(fcn.blocks.begin(), fcn.blocks.end(), [&](const auto& bb) {
         size_t i = &bb - &fcn.blocks.front();
         return !visited[i];
     });
     fcn.blocks.erase(newBlocksEnd, fcn.blocks.end());
 
-    // Drop flags use vector<bool> proxy storage, so erase them by original and compacted index.
     for (unsigned int i = 0, j = 0; i < nDf; i++) {
         if (!usedDfs[i]) {
             fcn.dropFlags.erase(fcn.dropFlags.begin() + j);
@@ -8031,10 +7199,11 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
     return false;
 }
 
-/// Sort basic blocks to approximate program flow (helps when reading MIR)
+}
+
 void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn) {
-    ::std::vector<bool> visited(fcn.blocks.size());
-    ::std::vector<::std::pair<unsigned, unsigned>> depths(fcn.blocks.size());
+    std::vector<bool> visited(fcn.blocks.size());
+    std::vector<std::pair<unsigned, unsigned>> depths(fcn.blocks.size());
 
     struct Todo {
         size_t bbIdx;
@@ -8043,7 +7212,7 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
     };
 
     unsigned int branches = 0;
-    ::std::vector<Todo> todo;
+    std::vector<Todo> todo;
     todo.push_back(Todo{0, 0, 0});
 
     while (!todo.empty()) {
@@ -8054,7 +7223,7 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
         }
 
         visited[info.bbIdx] = true;
-        depths[info.bbIdx] = ::std::make_pair(info.branchCount, info.level);
+        depths[info.bbIdx] = std::make_pair(info.branchCount, info.level);
         const auto& bb = fcn.blocks[info.bbIdx];
 
         switch (bb.terminator.tag()) {
@@ -8080,22 +7249,32 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
             }
             case MIRTerminator::TAG_If: {
                 auto& te = bb.terminator.as_If();
-                todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1}); todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});
+                todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1});
+                todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});
                 break;
             }
             case MIRTerminator::TAG_Switch: {
                 auto& te = bb.terminator.as_Switch();
-                for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.validFlag != ~0u) todo.push_back(Todo{te.invalidTarget, ++branches, info.level + 1});
+                for (auto dst : te.targets) {
+                    todo.push_back(Todo{dst, ++branches, info.level + 1});
+                }
+                if (te.validFlag != ~0u) {
+                    todo.push_back(Todo{te.invalidTarget, ++branches, info.level + 1});
+                }
                 break;
             }
             case MIRTerminator::TAG_SwitchValue: {
                 auto& te = bb.terminator.as_SwitchValue();
-                for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.defTarget, info.branchCount, info.level + 1});
+                for (auto dst : te.targets) {
+                    todo.push_back(Todo{dst, ++branches, info.level + 1});
+                }
+                todo.push_back(Todo{te.defTarget, info.branchCount, info.level + 1});
                 break;
             }
             case MIRTerminator::TAG_Drop: {
                 auto& te = bb.terminator.as_Drop();
-                todo.push_back(Todo{te.target, info.branchCount, info.level + 1}); if (te.unwind.is_Cleanup()) {
+                todo.push_back(Todo{te.target, info.branchCount, info.level + 1});
+                if (te.unwind.is_Cleanup()) {
                     auto& target = te.unwind.as_Cleanup();
                     todo.push_back(Todo{target, ++branches, info.level + 1});
                 }
@@ -8103,7 +7282,8 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
             }
             case MIRTerminator::TAG_Call: {
                 auto& te = bb.terminator.as_Call();
-                todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); if (te.unwind.is_Cleanup()) {
+                todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1});
+                if (te.unwind.is_Cleanup()) {
                     auto& target = te.unwind.as_Cleanup();
                     todo.push_back(Todo{target, ++branches, info.level + 1});
                 }
@@ -8114,31 +7294,37 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
             }
             case MIRTerminator::TAG_Asm2: {
                 auto& te = bb.terminator.as_Asm2();
-                if (te.retBlock != ~0u) todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); for (const auto& p : te.params) if (const auto* dst = p.opt_Label()) todo.push_back(Todo{*dst, ++branches, info.level + 1});
+                if (te.retBlock != ~0u) {
+                    todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1});
+                }
+                for (const auto& p : te.params) {
+                    if (const auto* dst = p.opt_Label()) {
+                        todo.push_back(Todo{*dst, ++branches, info.level + 1});
+                    }
+                }
                 break;
             }
         }
     }
 
-    // Sort a list of block indexes by `depths`
-    ::std::vector<size_t> idxes;
+    std::vector<size_t> idxes;
     idxes.reserve(fcn.blocks.size());
     for (size_t i = 0; i < fcn.blocks.size(); i++) {
         idxes.push_back(i);
     }
-    ::std::sort(idxes.begin(), idxes.end(), [&](auto a, auto b) {
+    std::sort(idxes.begin(), idxes.end(), [&](auto a, auto b) {
         return depths.at(a) < depths.at(b);
     });
-
 
     decltype(fcn.blocks) newBlockList;
     newBlockList.reserve(fcn.blocks.size());
     for (auto idx : idxes) {
         auto fixBbIdx = [&](auto idx) {
-            return ::std::find(idxes.begin(), idxes.end(), idx) - idxes.begin();
+            return std::find(idxes.begin(), idxes.end(), idx) - idxes.begin();
         };
         newBlockList.push_back(mv$(fcn.blocks[idx]));
-        newBlockList.back().statements.shrink_to_fit(); // Save some memory
+        newBlockList.back().statements.shrink_to_fit();
+
         struct Renumber final: public MIRTargetVisitorMut {
             decltype(fixBbIdx)& fixBbIdx;
 
@@ -8151,6 +7337,7 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
                 target = fixBbIdx(target);
             }
         } renumber{fixBbIdx};
+
         visitTerminatorTargetMut(newBlockList.back().terminator, renumber);
     }
     fcn.blocks = mv$(newBlockList);
@@ -8158,16 +7345,12 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
 
 void MIROptimiseCrate(const WireBoard& wb, HIRCrate& crate, unsigned optLevel, bool enableInlining) {
     auto callback = makeCallable<MIRExprCb>([optLevel, enableInlining](const auto& res, const auto& p, auto& expr, const auto& args, const auto& ty) {
-        //}
         auto& mir = expr.getMirOrErrorMut(Span());
         if (optLevel == 0) {
             MIROptimiseMin(res, p, mir, args, ty);
         } else {
-            // The crate driver validates after this optimisation and its final cleanup.
-            // Preserve explicitly requested diagnostic checks inside the optimiser.
             MIROptimise(res, p, mir, args, ty, optLevel, enableInlining, /*validate=*/getenv("TRUSTME_MIR_CHECK") != nullptr);
         }
-        // Run cleanup to handle now-monomoprhised inlined constants
         MIRCleanup(res, p, mir, args, ty);
     });
     MIROuterVisitor ov{wb, crate, callback};
@@ -8175,13 +7358,9 @@ void MIROptimiseCrate(const WireBoard& wb, HIRCrate& crate, unsigned optLevel, b
 }
 
 void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransList& list, bool postSave, unsigned optLevel, bool enableInlining) {
-
     ::StaticTraitResolve resolve{wb};
 
-    // If running after HIR has been serialised, we can eliminate calls to `const_eval_select` without
-    // impacting constant evaluation in downstream crates
     if (postSave) {
-        // Visit every function in the monomorph list and raplce `const_eval_select` calls with calls to the runtime function
         for (auto& fcnEnt : list.functions) {
             auto& hirFcn = *const_cast<HIRFunction*>(fcnEnt.second->ptr);
             MIRFunction* fcnP;
@@ -8190,7 +7369,6 @@ void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransL
             } else if (hirFcn.code.mir) {
                 fcnP = &hirFcn.code.getMirOrErrorMut(Span());
             } else {
-                // Ignore, this is an external function reference.
                 continue;
             }
 
@@ -8200,7 +7378,6 @@ void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransL
                     if (te->fcn.is_Intrinsic() && te->fcn.as_Intrinsic().name == "const_eval_select") {
                         size_t nArgs = te->fcn.as_Intrinsic().params.types.at(0)->as_Tuple().size();
                         const MIRLValue arg = te->args.at(0).as_LValue().clone();
-                        // Note: arg 1 is the constant function
                         const HIRPath& fcnPath = *te->args.at(2).as_Constant().as_Function().p;
 
                         te->fcn = fcnPath.clone();
@@ -8219,9 +7396,7 @@ void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransL
         return;
     }
 
-    // rustc level 4 removes analysis limits. Preserve a finite cap for normal
-    // level-3 inlining, while level 4+ runs this monotonic pass to its fixed point.
-    const size_t maxIterations = optLevel >= 4 ? ::std::numeric_limits<size_t>::max() : 5;
+    const size_t maxIterations = optLevel >= 4 ? std::numeric_limits<size_t>::max() : 5;
     size_t numIterations = 0;
     bool didInlineOnPass;
     do {
@@ -8232,7 +7407,7 @@ void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransL
             auto& hirFcn = *const_cast<HIRFunction*>(fcnEnt.second->ptr);
             auto& monoFcn = fcnEnt.second->monomorphised;
 
-            ::std::string s = FMT(path);
+            std::string s = FMT(path);
             HIRItemPath ip(s);
 
             if (monoFcn.code) {
@@ -8242,15 +7417,224 @@ void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransL
             } else if (hirFcn.code) {
                 auto& mir = hirFcn.code.getMirOrErrorMut(Span());
                 bool didOpt = MIROptimiseInline(resolve, ip, mir, hirFcn.args, hirFcn.returnType, list, optLevel);
-                mir.transEnumState = MIREnumCachePtr(); // Clear MIR enum cache
+                mir.transEnumState = MIREnumCachePtr();
                 didInlineOnPass |= didOpt;
 
                 MIRCleanup(resolve, ip, mir, hirFcn.args, hirFcn.returnType);
             } else {
-                // Extern, no optimisations
             }
         }
         numIterations += 1;
     } while (didInlineOnPass && numIterations < maxIterations);
+}
 
+MirMutator::MirMutator(MIRFunction& fcn, unsigned int bb, unsigned int stmt)
+    : fcn(fcn)
+    , curBlock(bb)
+    , curStmt(stmt)
+{
+}
+
+auto MirMutator::updateState(MIRTypeResolve& state) -> void {
+    if (this->curStmt == fcn.blocks[this->curBlock].statements.size()) {
+        state.setCurStmtTerm(this->curBlock);
+    } else {
+        state.setCurStmt(this->curBlock, this->curStmt);
+    }
+}
+
+auto MirMutator::newTemporary(HIRTypeRef ty) -> MIRLValue {
+    auto rv = MIRLValue::newLocal(static_cast<unsigned int>(fcn.locals.size()));
+    fcn.locals.push_back(mv$(ty));
+    return rv;
+}
+
+auto MirMutator::pushStatement(MIRStatement stmt) -> void {
+    newStatements.push_back(mv$(stmt));
+}
+
+auto MirMutator::inTemporary(HIRTypeRef ty, MIRRValue val) -> MIRLValue {
+    auto rv = this->newTemporary(mv$(ty));
+    pushStatement(MIRStatement::make_Assign({rv.clone(), mv$(val)}));
+    return rv;
+}
+
+auto MirMutator::flushStmt() -> decltype(newStatements.begin()) {
+    auto rv = flush();
+    this->curStmt += 1;
+    return rv;
+}
+
+auto MirMutator::flushBlock() -> void {
+    flush();
+    fcn.blocks.at(curBlock).statements.shrink_to_fit();
+    this->curStmt = 0;
+    this->curBlock += 1;
+}
+
+auto MirMutator::flush() -> decltype(newStatements.begin()) {
+    auto& block = fcn.blocks.at(curBlock);
+    assert(curStmt <= block.statements.size());
+    auto it = block.statements.begin() + curStmt;
+    if (newStatements.size() > 0) {
+        for (auto& stmt : newStatements) {
+            it = block.statements.insert(it, mv$(stmt));
+            ++it;
+            curStmt += 1;
+        }
+        newStatements.clear();
+    }
+    return it;
+}
+
+LvalueConstAdapter::LvalueConstAdapter(LvalueVisitor& inner)
+    : inner(inner)
+{
+}
+
+auto LvalueConstAdapter::visitLvalue(MIRLValue& lv, MIRValUsage u) -> bool {
+    return inner.visitLvalue(lv, u);
+}
+
+ParamsSet::ParamsSet(HIRTypeInterner& types)
+    : MonomorphiserPP(types)
+    , fcnParams(nullptr)
+    , selfTy(nullptr)
+    , implParamsDef(nullptr)
+    , fcnParamsDef(nullptr)
+{
+}
+
+auto ParamsSet::getSelfType() const -> const HIRTypeData* {
+    return selfTy;
+}
+
+auto ParamsSet::getImplParams() const -> const HIRPathParams* {
+    return &implParams;
+}
+
+auto ParamsSet::getMethodParams() const -> const HIRPathParams* {
+    return fcnParams;
+}
+
+auto ParamsSet::getHrbParams() const -> const HIRPathParams* {
+    return nullptr;
+}
+
+auto ParamsSet::hasUnevaluatedValues() const -> bool {
+    const auto check = [](const HIRPathParams& params) {
+        return std::any_of(params.values.begin(), params.values.end(), [](const auto& value) {
+            return value.is_Unevaluated() || value.is_Infer();
+        });
+    };
+    return check(implParams) || (fcnParams && check(*fcnParams));
+}
+
+template <typename F>
+MIRBlockCb<F>::MIRBlockCb(F f)
+    : f(f)
+{
+}
+
+template <typename F>
+auto MIRBlockCb<F>::run(MIRBasicBlockId bb, MIRBasicBlock& block) const -> void {
+    f(bb, block);
+}
+
+template <typename F>
+MIRBlockConstCb<F>::MIRBlockConstCb(F f)
+    : f(f)
+{
+}
+
+template <typename F>
+auto MIRBlockConstCb<F>::run(MIRBasicBlockId bb, const MIRBasicBlock& block) const -> void {
+    f(bb, block);
+}
+
+OptimiseStmtRef::OptimiseStmtRef()
+    : bbIdx(~0u)
+    , stmtIdx(0)
+{
+}
+
+OptimiseStmtRef::OptimiseStmtRef(unsigned b, unsigned s)
+    : bbIdx(b)
+    , stmtIdx(s)
+{
+}
+
+auto OptimiseStmtRef::operator==(const OptimiseStmtRef& x) const -> bool {
+    return bbIdx == x.bbIdx && stmtIdx == x.stmtIdx;
+}
+
+template <typename S, typename T>
+IterPathCb<S, T>::IterPathCb(S statement, T terminator)
+    : statement(statement)
+    , terminator(terminator)
+{
+}
+
+template <typename S, typename T>
+auto IterPathCb<S, T>::visitStatement(OptimiseStmtRef location, const MIRStatement& value) -> bool {
+    return statement(location, value);
+}
+
+template <typename S, typename T>
+auto IterPathCb<S, T>::visitTerminator(OptimiseStmtRef location, const MIRTerminator& value) -> bool {
+    return terminator(location, value);
+}
+
+CheckInvalidatesLvalue::CheckInvalidatesLvalue(const MIRLValue& val, bool isCopy, bool alsoRead)
+    : val(val)
+    , hasIndex(
+          std::any_of(
+              val.wrappers.begin(),
+              val.wrappers.end(),
+              [](const auto& w) {
+                  return w.is_Index();
+              }
+          )
+      )
+    , isCopy(isCopy)
+    , alsoRead(alsoRead)
+{
+}
+
+auto CheckInvalidatesLvalue::visitLvalue(const MIRLValue& lv, MIRValUsage vu) -> bool {
+    switch (vu) {
+        case MIRValUsage::Write:
+        case MIRValUsage::Borrow:
+            if (lv.root == val.root) {
+                return true;
+            }
+            if (hasIndex && lv.root.is_Local()) {
+                for (const auto& w : val.wrappers) {
+                    if (w.is_Index() && w.as_Index() == lv.root.as_Local()) {
+                        return true;
+                    }
+                }
+            }
+            break;
+        case MIRValUsage::Move:
+            if (isCopy) {
+            } else if (lv.root == val.root) {
+                auto l = std::min(lv.wrappers.size(), val.wrappers.size());
+                for (size_t i = 0; i < l; i++) {
+                    if (lv.wrappers[i] != val.wrappers[i]) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            break;
+        case MIRValUsage::Read:
+            if (alsoRead) {
+                if (lv.root == val.root) {
+                    return true;
+                }
+            }
+            break;
+    }
+    return false;
 }

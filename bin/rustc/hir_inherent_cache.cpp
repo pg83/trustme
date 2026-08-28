@@ -9,14 +9,13 @@
 #include <memory>
 #include <vector>
 
+using namespace stl;
+
 namespace {
-    /// Cached lookup logic for inherent (non-trait) methods on types
-    class InherentCacheImpl final: public HIRInherentCache {
-    public:
+    struct InherentCacheImpl final: public HIRInherentCache {
         struct Lowest {
-            // Same as HIR::Crate::ImplGroup
-            typedef ::std::vector<const HIRTypeImpl*> listT;
-            ::std::map<HIRSimplePath, listT> named;
+            typedef std::vector<const HIRTypeImpl*> listT;
+            std::map<HIRSimplePath, listT> named;
             listT nonNamed; // TODO: use a map of HIR::ASTType*::Data::Tag
             listT generic;
 
@@ -24,11 +23,8 @@ namespace {
             void iterate(const HIRTypeData* ty, Callback& cb) const;
         };
 
-        /// A layer of the cache
         struct Inner {
-            /// Cache content used for just `Self`
             Lowest byvalue;
-            // Sub-caches for different wrappers around `Self` (can recurse)
             std::unique_ptr<Inner> ref;
             std::unique_ptr<Inner> refMut;
             std::unique_ptr<Inner> refMove;
@@ -36,8 +32,6 @@ namespace {
             std::unique_ptr<Inner> ptrMut;
             std::unique_ptr<Inner> ptrMove;
             std::map<HIRSimplePath, Inner> path;
-            /// Receivers that name no `Self` at all (`fn f(self: Bar)`), which
-            /// reach it through their own `Receiver`/`Deref` impl.
             std::map<HIRSimplePath, Lowest::listT> concrete;
 
             void insert(const Span& sp, const HIRTypeData* receiver, const HIRTypeImpl& impl);
@@ -72,8 +66,6 @@ void InherentCacheImpl::Lowest::iterate(const HIRTypeData* type, Callback& cb) c
     visit(this->generic);
 
     if (type->is_Infer() && !type->as_Infer().isLit()) {
-        // An unbound `Self` cannot select a named bucket yet. The full custom
-        // receiver shape is checked before any of these candidates is used.
         for (const auto& entry : this->named) {
             visit(entry.second);
         }
@@ -84,7 +76,6 @@ void InherentCacheImpl::Lowest::iterate(const HIRTypeData* type, Callback& cb) c
             visit(it->second);
         }
     } else if (type->is_Path() || type->is_Generic()) {
-        // Already handled by the unconditional generic
     } else {
         visit(this->nonNamed);
     }
@@ -94,15 +85,15 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
     struct H {
         static void insertInner(const Span& sp, const HIRTypeData* innerTy, const HIRTypeImpl& impl, std::unique_ptr<Inner>& slot) {
             if (!slot) {
-                slot = ::std::make_unique<Inner>();
+                slot = std::make_unique<Inner>();
             }
             slot->insert(sp, innerTy, impl);
         }
     };
 
     switch ((*curTy).tag()) {
-default:
-        BUG(sp, "Unknown receiver type - " << curTy);
+        default:
+            BUG(sp, "Unknown receiver type - " << curTy);
         case HIRTypeData::TAG_Generic: {
             auto& te = (*curTy).as_Generic();
             if (te.isSelf()) {
@@ -163,9 +154,8 @@ void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct,
     const Inner* inner = nullptr;
     const HIRTypeData* innerTy = nullptr;
     switch ((*curTy).tag()) {
-default:
-        // No recursion possible
-        break;
+        default:
+            break;
         case HIRTypeData::TAG_Borrow: {
             auto& te = (*curTy).as_Borrow();
             innerTy = te.inner;
@@ -220,7 +210,7 @@ default:
         }
     }
 
-    if(inner) {
+    if (inner) {
         assert(innerTy);
         inner->find(sp, innerTy, tyRes, cb);
     }
@@ -268,7 +258,6 @@ void InherentCacheImpl::insertAll(const Span& sp, const HIRTypeImpl& impl, const
 }
 
 void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIRTypeData* ty, tCbResolveType tyRes, Callback& cb) const {
-    // Callback that ensures that a potential impl fully matches the required receiver type
     struct FilterCallback final: Callback {
         const Span& sp;
         const RcString& name;
@@ -287,8 +276,9 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
 
         void visit(const HIRTypeData* roughSelfTy, const HIRTypeImpl& impl) override {
             const HIRFunction& fcn = impl.methods.at(name).data;
+
             struct GetSelf: public HIRMatchGenerics {
-                ::std::optional<HIRTypeRef> detectedSelfTy;
+                std::optional<HIRTypeRef> detectedSelfTy;
 
                 GetSelf()
                     : HIRMatchGenerics(BorrowMatchedValues{})
@@ -301,6 +291,7 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
                     }
                     return HIRCompare::Equal;
                 }
+
                 HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) override {
                     TODO(Span(), "GetSelf::match_val " << g << " with " << sz);
                 }
@@ -309,31 +300,25 @@ void InherentCacheImpl::findWith(const Span& sp, const RcString& name, const HIR
             if (fcn.receiver == HIRFunction::Receiver::Custom) {
                 ASSERT_BUG(sp, fcn.receiverType, "Custom receiver without a receiver type");
                 if ((*fcn.receiverType)->matchTestGenerics(sp, ty, HIRResolvePlaceholdersNop(), getself)) {
-                    // A receiver that names no `Self` says nothing about it, and the
-                    // impl it belongs to is the answer.
                     auto selfTy = getself.detectedSelfTy ? *getself.detectedSelfTy : impl.type;
                     const auto* resolvedSelfTy = tyRes.getType(sp, selfTy);
-                    // The matched concrete impl is enough to turn `<_>::method`
-                    // into a resolvable path. Keep generic impls on the old path:
-                    // their parameters have not been monomorphised here.
-                    if (resolvedSelfTy->is_Infer() && !resolvedSelfTy->as_Infer().isLit()
-                        && !impl.type->needsMonomorphisation()) {
+                    if (resolvedSelfTy->is_Infer() && !resolvedSelfTy->as_Infer().isLit() && !impl.type->needsMonomorphisation()) {
                         selfTy = impl.type;
                     }
                     output.visit(selfTy, impl);
                 }
             } else {
-                // No extra checks required?
                 output.visit(roughSelfTy, impl);
             }
         }
     } filter(sp, name, ty, tyRes, cb);
+
     auto it = items.find(name);
     if (it != items.end()) {
         it->second.find(sp, ty, tyRes, filter);
     }
 }
 
-HIRInherentCache* HIRInherentCache::create(stl::ObjPool& pool) {
+HIRInherentCache* HIRInherentCache::create(ObjPool& pool) {
     return pool.make<InherentCacheImpl>();
 }

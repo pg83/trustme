@@ -6,7 +6,7 @@
 class ASTExprNode;
 class ASTNodeVisitor;
 
-extern ::std::ostream& operator<<(::std::ostream& os, const ASTExprNode& node);
+extern std::ostream& operator<<(std::ostream& os, const ASTExprNode& node);
 
 class ASTExprNodeP {
     ASTExprNode* ptr;
@@ -18,7 +18,7 @@ public:
 
     ASTExprNodeP(ASTExprNode* node);
 
-    ASTExprNodeP(std::unique_ptr<ASTExprNode> node); //: m_ptr(node.release()) {}
+    ASTExprNodeP(std::unique_ptr<ASTExprNode> node);
 
     ASTExprNodeP(ASTExprNodeP&& x)
         : ptr(x.ptr)
@@ -72,7 +72,7 @@ public:
 };
 
 class ASTExpr {
-    ::std::shared_ptr<ASTExprNode> node_;
+    std::shared_ptr<ASTExprNode> node_;
 
 public:
     ASTExpr(ASTExprNodeP node);
@@ -91,12 +91,12 @@ public:
 
     ASTExprNode& node();
 
-    ::std::shared_ptr<ASTExprNode> takeNode();
+    std::shared_ptr<ASTExprNode> takeNode();
 
     void visitNodes(ASTNodeVisitor& v);
     void visitNodes(ASTNodeVisitor& v) const;
 
     ASTExpr clone() const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTExpr& pat);
+    friend std::ostream& operator<<(std::ostream& os, const ASTExpr& pat);
 };

@@ -17,7 +17,7 @@ struct SpanInner;
 struct SpanInnerSource;
 
 struct SpanMessageCallback {
-    virtual void write(::std::ostream& os) = 0;
+    virtual void write(std::ostream& os) = 0;
 };
 
 template <typename F>
@@ -29,7 +29,7 @@ struct SpanMessageCb final: SpanMessageCallback {
     {
     }
 
-    void write(::std::ostream& os) override {
+    void write(std::ostream& os) override {
         f(os);
     }
 };
@@ -37,7 +37,7 @@ struct SpanMessageCb final: SpanMessageCallback {
 struct Span {
 private:
     SpanInner* ptr;
-    //static SpanInner    s_empty_span;
+
 public:
     Span();
 
@@ -70,7 +70,6 @@ public:
         return ptr;
     }
 
-    //const SpanInner& operator*() const { return *m_ptr; }
     const SpanInner* operator->() const {
         return ptr;
     }
@@ -106,7 +105,7 @@ public:
         noteCb(cb);
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const Span& sp);
+    friend std::ostream& operator<<(std::ostream& os, const Span& sp);
 
 private:
     void printSpanMessage(SpanMessageCallback& tag, SpanMessageCallback& msg) const;
@@ -118,12 +117,14 @@ struct SourceLocation {
     unsigned int column = 0;
 
     SourceLocation() = default;
+
     SourceLocation(RcString filename, unsigned int line, unsigned int column)
-        : filename(::std::move(filename))
+        : filename(std::move(filename))
         , line(line)
         , column(column)
     {
     }
+
     explicit SourceLocation(const Span& span);
 
     bool operator==(const SourceLocation& other) const {
@@ -136,7 +137,6 @@ struct SourceLocation {
 };
 
 struct ProtoSpan {
-    // If `span` is populated, then this `ProtoSpan` was from a macro expansion
     Span span;
     RcString filename;
 
@@ -154,7 +154,7 @@ public:
     Span parentSpan;
 
     virtual ~SpanInner() = 0;
-    virtual void fmt(::std::ostream& os) const = 0;
+    virtual void fmt(std::ostream& os) const = 0;
     virtual RcString crateName() const = 0;
     virtual unsigned int nodeKind() const = 0;
 };
@@ -173,7 +173,7 @@ public:
     unsigned int endOfs;
 
     ~SpanInnerSource() override;
-    void fmt(::std::ostream& os) const override;
+    void fmt(std::ostream& os) const override;
 
     RcString crateName() const override;
 
@@ -189,7 +189,7 @@ struct SpanInnerMacro: public SpanInner {
     RcString macro;
 
     ~SpanInnerMacro() override;
-    void fmt(::std::ostream& os) const override;
+    void fmt(std::ostream& os) const override;
 
     RcString crateName() const override;
 
@@ -197,7 +197,6 @@ private:
     static SpanInner* alloc(Span parent, RcString crate, RcString macro);
 };
 
-// Control reached a spot the surrounding logic rules out.
 [[noreturn]] void spanUnreachableAt(const char* file, int line);
 #define UNREACHABLE() ::spanUnreachableAt(__FILE__, __LINE__)
 
@@ -209,37 +208,37 @@ struct Spanned {
 
 template <typename T>
 Spanned<T> makeSpanned(Span sp, T val) {
-    return Spanned<T>{::std::move(sp), ::std::move(val)};
+    return Spanned<T>{std::move(sp), std::move(val)};
 }
 
-#define ERROR(span, code, msg)                             \
-    do {                                                    \
-        ::Span(span).error(code, [&](::std::ostream& os) {  \
-            os << msg;                                      \
-        });                                                 \
+#define ERROR(span, code, msg)                           \
+    do {                                                 \
+        ::Span(span).error(code, [&](std::ostream& os) { \
+            os << msg;                                   \
+        });                                              \
     } while (0)
-#define WARNING(span, code, msg)                             \
-    do {                                                     \
-        ::Span(span).warning(code, [&](::std::ostream& os) { \
-            os << msg;                                       \
-        });                                                  \
+#define WARNING(span, code, msg)                           \
+    do {                                                   \
+        ::Span(span).warning(code, [&](std::ostream& os) { \
+            os << msg;                                     \
+        });                                                \
     } while (0)
-#define NOTE(span, msg)                             \
-    do {                                            \
-        ::Span(span).note([&](::std::ostream& os) { \
-            os << msg;                              \
-        });                                         \
+#define NOTE(span, msg)                           \
+    do {                                          \
+        ::Span(span).note([&](std::ostream& os) { \
+            os << msg;                            \
+        });                                       \
     } while (0)
 #define BUG(span, msg)                                        \
     do {                                                      \
-        ::Span(span).bug([&](::std::ostream& os) {            \
+        ::Span(span).bug([&](std::ostream& os) {              \
             os << __FILE__ << ":" << __LINE__ << ": " << msg; \
         });                                                   \
     } while (0)
 #define TODO(span, msg)                                                                     \
     do {                                                                                    \
         const char* __TODO_func = __func__;                                                 \
-        ::Span(span).bug([&](::std::ostream& os) {                                          \
+        ::Span(span).bug([&](std::ostream& os) {                                            \
             os << __FILE__ << ":" << __LINE__ << ": TODO: " << __TODO_func << " - " << msg; \
         });                                                                                 \
     } while (0)
@@ -247,7 +246,7 @@ Spanned<T> makeSpanned(Span sp, T val) {
 #define ASSERT_BUG(span, cnd, msg)                                                               \
     do {                                                                                         \
         if (!(cnd)) {                                                                            \
-            ::Span(span).bug([&](::std::ostream& os) {                                           \
+            ::Span(span).bug([&](std::ostream& os) {                                             \
                 os << "ASSERT FAIL: " << __FILE__ << ":" << __LINE__ << ":" #cnd << ": " << msg; \
             });                                                                                  \
         }                                                                                        \

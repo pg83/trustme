@@ -1,9 +1,7 @@
 #include "main_bindings.h"
 
-#include <pthread.h>
-
 #include "ast_ast.h"
-#include "hir_hir.h" // ABI_RUST
+#include "hir_hir.h"
 #include "version.h"
 #include "ast_dump.h"
 #include "ast_expr.h"
@@ -11,71 +9,148 @@
 #include "ast_crate.h"
 #include "parse_lex.h"
 #include "expand_cfg.h"
+#include "lang_items.h"
 #include "wire_board.h"
+#include "lint_forbid.h"
 #include "memory_dump.h"
-#include "parse_common.h" // For edition checks
+#include "parse_common.h"
 #include "trans_target.h"
-#include "target_detect.h" // tools/common/target_detect.h
+#include "lint_must_use.h"
+#include "target_detect.h"
+#include "lint_unsafe_code.h"
 #include "parse_parseerror.h"
 #include "hir_main_bindings.h"
 #include "mir_main_bindings.h"
-#include "lang_items.h"
 #include "hir_inherent_cache.h"
 #include "trans_main_bindings.h"
 #include "resolve_main_bindings.h"
 #include "hir_conv_main_bindings.h"
 #include "hir_expand_main_bindings.h"
-#include "lint_forbid.h"
-#include "lint_must_use.h"
-#include "lint_unsafe_code.h"
 #include "hir_typeck_main_bindings.h"
 
 #include <std/mem/obj_pool.h>
 
-#include <climits>
-#include <fstream>
-#include <cstdlib>
-#include <cstring>
-#include <iomanip>
-#include <iostream>
 #include <set>
 #include <string>
+#include <climits>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <pthread.h>
+
+using namespace stl;
 
 #define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
+
+namespace {
+struct ProgramParams {
+    enum eLastStage {
+        STAGE_PARSE,
+        STAGE_EXPAND,
+        STAGE_RESOLVE,
+        STAGE_TYPECK,
+        STAGE_BORROWCK,
+        STAGE_HIR,
+        STAGE_MIR,
+        STAGE_ALL,
+    } lastStage = STAGE_ALL;
+
+    bool emitMetadataOnly = false;
+
+    std::string infile;
+    std::string outfile;
+    std::string outputDir = "";
+    std::string target = DEFAULT_TARGET_NAME;
+    RcString crateNameQuery;
+
+    std::string emitDepfile;
+
+    ASTEdition edition = ASTEdition::Rust2015;
+    ASTCrate::Type crateType = ASTCrate::Type::Unknown;
+    std::string crateName;
+    std::string crateNameSuffix;
+
+    OptimizationLevel optLevel = OptimizationLevel::None;
+    bool debugAssertions = false;
+    bool debugAssertionsExplicit = false;
+    bool ubChecks = false;
+    bool ubChecksExplicit = false;
+    Settings::FmtDebug fmtDebug = Settings::FmtDebug::Full;
+    bool overflowChecks = false;
+    bool overflowChecksExplicit = false;
+    unsigned mirOptLevel = 0;
+    bool mirOptLevelExplicit = false;
+    DebugInfoLevel debugInfo = DebugInfoLevel::None;
+
+    bool testHarness = false;
+
+    std::string targetSaveback;
+    bool printCfgs = false;
+
+    std::vector<std::string> crateSearchDirs;
+    std::vector<std::string> nativeLibSearchDirs;
+    std::vector<std::string> frameworkSearchDirs;
+    std::vector<const char*> libraries;
+    std::set<std::string> features;
+
+    struct {
+        bool pause = false;
+
+        bool dumpAst = false;
+        bool dumpHir = false;
+        bool dumpMir = false;
+    } debug;
+
+    struct {
+        std::string codegenType;
+        std::string emitBuildCommand;
+        RcString emitLinkManifest;
+        bool emitCppOnly = false;
+        std::string panicType;
+        std::vector<std::string> linkerArgs;
+    } codegen;
+
+    ProgramParams(Settings& settings, int argc, char* argv[]);
+
+    unsigned effectiveMirOptLevel() const;
+
+    bool enableMirInlining() const;
+
+    bool debugAssertionsEnabled() const;
+
+    bool ubChecksEnabled() const;
+
+    bool overflowChecksEnabled() const;
+
+    void showHelp() const;
+};
+
+    struct CompileArgs {
+        int argc;
+        char** argv;
+        int result;
+    };
+}
 
 void ExpandTestHarness(ASTCrate& crate) {
     ASSERT_BUG(Span(), crate.extCratenameTest != "", "Crate `test` not loaded");
     ASSERT_BUG(Span(), crate.extCratenameStd != "", "Crate `std` not loaded");
     auto cTest = crate.extCratenameTest;
-    // Create the following module:
-    // ```
-    // mod `#test` {
-    //   extern crate std;
-    //   extern crate test;
-    //   }
-    //   static TESTS: [test::TestDescAndFn; _] = [
-    //     test::TestDescAndFn { desc: test::TestDesc { name: "foo", ignore: false, should_panic: test::ShouldPanic::No }, testfn: ::path::to::foo },
-    //     ];
-    // }
-    // ```
 
-    // ---- main function ----
     auto mainFn = ASTFunction{Span(), mkType(*crate.pool, ASTTypeTags::Unit(), Span()), {}};
     {
         auto callNode = NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("test_main_static")}), ::makeVec1(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(NamedValue, ASTPath("", {ASTPathNode("test#"), ASTPathNode("TESTS")})))));
         mainFn.setCode(mv$(callNode));
     }
 
-    // ---- test list ----
-    ::std::vector<ASTExprNodeP> testNodes;
+    std::vector<ASTExprNodeP> testNodes;
 
     for (const auto& test : crate.tests) {
         ASTExprNodeStructLiteral::tValues descVals;
-        // `name: "foo",`
         descVals.push_back({{}, "name", NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("StaticTestName")}), ::makeVec1(NEWNODE(String, test.name)))});
-        // `ignore: false,`
         descVals.push_back({{}, "ignore", NEWNODE(Bool, test.ignore)});
-        // `should_panic: ShouldPanic::No,`
         {
             ASTExprNodeP shouldPanicVal;
             switch (test.panicType) {
@@ -113,15 +188,12 @@ void ExpandTestHarness(ASTCrate& crate) {
 
         auto testFcnNode = NEWNODE(NamedValue, ASTPath(test.path));
         {
-            // Convert `fn()` into `fn()->Result<(),String>`
-            // Use `|| ::test::assert_test_result( fcn() )`
             testFcnNode = NEWNODE(Closure, {}, mkType(*crate.pool, Span()), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, ASTPath(test.path), {}))), false, false, false);
         }
         auto testTypeVarName = test.isBenchmark ? "StaticBenchFn" : "StaticTestFn";
         descandfnVals.push_back({{}, RcString::newInterned("testfn"), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode(testTypeVarName)}), ::makeVec1(std::move(testFcnNode)))});
 
         testNodes.push_back(NEWNODE(StructLiteral, ASTPath(cTest, {ASTPathNode("TestDescAndFn")}), nullptr, mv$(descandfnVals)));
-        // NOTE: 1.39+ needs &TestDescAndFn here
         {
             testNodes.back() = NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(testNodes.back()));
         }
@@ -130,13 +202,11 @@ void ExpandTestHarness(ASTCrate& crate) {
 
     size_t testCount = testsArray->values.size();
     auto listItemTy = mkType(*crate.pool, Span(), ASTPath(cTest, {ASTPathNode("TestDescAndFn")}));
-    // NOTE: 1.39+ needs &TestDescAndFn here
     {
         listItemTy = mkType(*crate.pool, ASTTypeTags::Reference(), Span(), ASTLifetimeRef::newStatic(), false, mv$(listItemTy));
     }
-    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mv$(listItemTy), ::std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mv$(listItemTy), std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
 
-    // ---- module ----
     auto newmod = ASTModule{ASTAbsolutePath("", {"test#"})};
     auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
     // - TODO: These need to be loaded too.
@@ -160,128 +230,20 @@ void ExpandTestHarness(ASTCrate& crate) {
     #define TRUSTME_SANITIZER_BUILD 0
 #endif
 
-struct ProgramParams {
-    enum eLastStage {
-        STAGE_PARSE,
-        STAGE_EXPAND,
-        STAGE_RESOLVE,
-        STAGE_TYPECK,
-        STAGE_BORROWCK,
-        STAGE_HIR,
-        STAGE_MIR,
-        STAGE_ALL,
-    } lastStage = STAGE_ALL;
-
-    /// `--emit=metadata`: analyse the crate, but do not codegen or link it.
-    bool emitMetadataOnly = false;
-
-    ::std::string infile;
-    ::std::string outfile;
-    ::std::string outputDir = "";
-    ::std::string target = DEFAULT_TARGET_NAME;
-    // Metadata inspection used by graph builders. No source compilation is
-    // performed when this is populated.
-    RcString crateNameQuery;
-
-    ::std::string emitDepfile;
-
-    ASTEdition edition = ASTEdition::Rust2015;
-    ASTCrate::Type crateType = ASTCrate::Type::Unknown;
-    ::std::string crateName;
-    ::std::string crateNameSuffix;
-
-    OptimizationLevel optLevel = OptimizationLevel::None;
-    bool debugAssertions = false;
-    bool debugAssertionsExplicit = false;
-    // `-Zub-checks`: whether the library's UB checks are compiled in. Follows
-    // debug assertions unless it is given.
-    bool ubChecks = false;
-    bool ubChecksExplicit = false;
-    Settings::FmtDebug fmtDebug = Settings::FmtDebug::Full;
-    bool overflowChecks = false;
-    bool overflowChecksExplicit = false;
-    // rustc defaults MIR optimisation to 1 at -O0 and to 2 otherwise.
-    // Keep the explicit bit separate so `-Zmir-opt-level=0` is distinguishable
-    // from the implicit default.
-    unsigned mirOptLevel = 0;
-    bool mirOptLevelExplicit = false;
-    DebugInfoLevel debugInfo = DebugInfoLevel::None;
-
-    bool testHarness = false;
-
-    // NOTE: If populated, nothing happens except for loading the target
-    ::std::string targetSaveback;
-    // NOTE: if true, no parse/compilation performed (target is loaded though)
-    bool printCfgs = false;
-
-    ::std::vector<::std::string> crateSearchDirs;
-    ::std::vector<::std::string> nativeLibSearchDirs;
-    ::std::vector<::std::string> frameworkSearchDirs;
-    ::std::vector<const char*> libraries;
-    ::std::set<::std::string> features;
-
-    struct {
-        /// Debugger aid: pause just after startup so a debugger can attach.
-        bool pause = false;
-
-        bool dumpAst = false;
-        bool dumpHir = false;
-        bool dumpMir = false;
-    } debug;
-
-    struct {
-        ::std::string codegenType;
-        ::std::string emitBuildCommand;
-        RcString emitLinkManifest;
-        // Emit the generated C++ source and stop, without invoking the C
-        // compiler (for profiling the trustme front/middle-end in isolation).
-        bool emitCppOnly = false;
-        ::std::string panicType;
-        ::std::vector<::std::string> linkerArgs;
-    } codegen;
-
-    ProgramParams(Settings& settings, int argc, char* argv[]);
-
-    unsigned effectiveMirOptLevel() const {
-        return mirOptLevelExplicit ? mirOptLevel : (optLevel == OptimizationLevel::None ? 1 : 2);
-    }
-
-    bool enableMirInlining() const {
-        const auto level = effectiveMirOptLevel();
-        return level >= 3 || (level == 2 && optLevel != OptimizationLevel::None && optLevel != OptimizationLevel::Less);
-    }
-
-    bool debugAssertionsEnabled() const {
-        return debugAssertionsExplicit ? debugAssertions : optLevel == OptimizationLevel::None;
-    }
-
-    bool ubChecksEnabled() const {
-        return ubChecksExplicit ? ubChecks : debugAssertionsEnabled();
-    }
-
-    bool overflowChecksEnabled() const {
-        return overflowChecksExplicit ? overflowChecks : debugAssertionsEnabled();
-    }
-
-    void showHelp() const;
-};
-
-/// main!
 namespace {
-    /// The crate name rustc derives from the input file when none is given: the
-    /// stem, with `-` written as `_`.
-    ::std::string CrateNameFromFile(const ::std::string& infile) {
+
+    std::string CrateNameFromFile(const std::string& infile) {
         auto s = infile.find_last_of('/');
-        s = (s == ::std::string::npos ? 0 : s + 1);
+        s = (s == std::string::npos ? 0 : s + 1);
         auto s2 = infile.find_last_of('\\');
-        s2 = (s2 == ::std::string::npos ? 0 : s2 + 1);
-        s = ::std::max(s, s2);
+        s2 = (s2 == std::string::npos ? 0 : s2 + 1);
+        s = std::max(s, s2);
         auto e = infile.find_first_of('.', s);
-        if (e == ::std::string::npos) {
+        if (e == std::string::npos) {
             e = infile.size();
         }
 
-        ::std::string rv(infile.begin() + s, infile.begin() + e);
+        std::string rv(infile.begin() + s, infile.begin() + e);
         for (auto& b : rv) {
             if (b == '-') {
                 b = '_';
@@ -291,14 +253,13 @@ namespace {
     }
 }
 
+namespace {
 static int compile(int argc, char* argv[]) {
 #if TRUSTME_SANITIZER_BUILD
-    // Keep teardown out of production, but make sanitizer builds destroy every
-    // pooled object so ASan/LSan can distinguish real leaks from arena lifetime.
-    auto poolOwner = stl::ObjPool::fromMemory();
+    auto poolOwner = ObjPool::fromMemory();
     auto* pool = poolOwner.mutPtr();
 #else
-    auto* pool = stl::ObjPool::fromMemoryRaw();
+    auto* pool = ObjPool::fromMemoryRaw();
 #endif
     WireBoard& wb = *pool->make<WireBoard>(pool);
     unsigned memoryDumpSequence = 0;
@@ -317,13 +278,12 @@ static int compile(int argc, char* argv[]) {
 
     if (params.debug.pause) {
         char c;
-        ::std::cerr << "Pausing to attach a debugger\nType any text to continue" << std::endl;
-        ::std::cin >> c;
+        std::cerr << "Pausing to attach a debugger\nType any text to continue" << std::endl;
+        std::cin >> c;
     }
 
     wb.inherentMethods = HIRInherentCache::create(*pool);
 
-    // Set up cfg values
     {
         CfgSetValue(*wb.settings, "rust_compiler", "trustme");
         CfgSetValue(*wb.settings, "panic", params.codegen.panicType);
@@ -336,11 +296,8 @@ static int compile(int argc, char* argv[]) {
         if (params.ubChecksEnabled()) {
             CfgSetFlag(*wb.settings, "ub_checks");
         }
-        CfgSetValue(*wb.settings, "fmt_debug",
-            params.fmtDebug == Settings::FmtDebug::Shallow ? "shallow"
-                : params.fmtDebug == Settings::FmtDebug::None ? "none"
-                                                             : "full");
-        CfgSetValueCb(*wb.settings, "feature", [&params](const ::std::string& s) {
+        CfgSetValue(*wb.settings, "fmt_debug", params.fmtDebug == Settings::FmtDebug::Shallow ? "shallow" : params.fmtDebug == Settings::FmtDebug::None ? "none" : "full");
+        CfgSetValueCb(*wb.settings, "feature", [&params](const std::string& s) {
             return params.features.count(s) != 0;
         });
     }
@@ -352,7 +309,7 @@ static int compile(int argc, char* argv[]) {
         return 0;
     }
     if (params.crateNameQuery != "") {
-        ::std::cout << HIRDeserialiseJustName(params.crateNameQuery.c_str()) << ::std::endl;
+        std::cout << HIRDeserialiseJustName(params.crateNameQuery.c_str()) << std::endl;
         return 0;
     }
     if (params.targetSaveback != "") {
@@ -361,7 +318,7 @@ static int compile(int argc, char* argv[]) {
     }
 
     if (params.infile == "") {
-        ::std::cerr << "No input file passed" << ::std::endl;
+        std::cerr << "No input file passed" << std::endl;
         return 1;
     }
 
@@ -371,21 +328,15 @@ static int compile(int argc, char* argv[]) {
 
     ExpandInit(*wb.expandRegistry);
 
-    // The AST gets its own pool so parse/expand-lifetime data can be dropped
-    // wholesale right after HIR lowering (the one place a pool dies early).
 #if TRUSTME_SANITIZER_BUILD
-    // Error-path tests can leave before AST Drop. Keep an owner in sanitizer
-    // builds so those paths are leak-checkable; successful production builds
-    // still release this pool at the early drop point below.
-    auto astPoolOwner = stl::ObjPool::fromMemory();
+    auto astPoolOwner = ObjPool::fromMemory();
     auto* astPool = astPoolOwner.mutPtr();
 #else
-    auto* astPool = stl::ObjPool::fromMemoryRaw();
+    auto* astPool = ObjPool::fromMemoryRaw();
 #endif
     wb.astPool = astPool;
 
     {
-        // Parse the crate into AST
         ASTCrate* cratePtr = [&]() {
             return ParseCrate(wb, wb.astPool, params.infile, params.edition);
         }();
@@ -399,7 +350,6 @@ static int compile(int argc, char* argv[]) {
         }
         memoryDump(memoryDumpSequence, "Parsed");
 
-        // Load external crates.
         {
             for (const auto& ld : params.crateSearchDirs) {
                 wb.settings->crateLoadDirs.push_back(ld);
@@ -411,26 +361,19 @@ static int compile(int argc, char* argv[]) {
             }
         }
         {
-            // Extract the crate type and name from the crate attributes
             auto crateType = params.crateType;
             if (crateType == ASTCrate::Type::Unknown) {
                 crateType = crate.crateType;
             }
             if (crateType == ASTCrate::Type::Unknown) {
-                // Assume to be executable
                 crateType = ASTCrate::Type::Executable;
             }
             crate.crateType = crateType;
 
-            // `module_path!` is expanded below and needs the name already, so
-            // the file-stem fallback is applied here rather than only once the
-            // expansion is done. A `#![crate_name]` attribute is seen during
-            // that expansion and overrides this.
             crate.setCrateName(params.crateName != "" ? params.crateName : CrateNameFromFile(params.infile));
             crate.crateType = ASTCrate::Type::Unknown;
         }
 
-        // Iterate all items in the AST, applying syntax extensions
         {
             Expand(wb, crate);
 
@@ -438,18 +381,14 @@ static int compile(int argc, char* argv[]) {
                 ExpandTestHarness(crate);
             }
         }
-        // Once `cfg` has removed what it removes, the lint attributes that are
-        // left have to agree with each other.
         {
             LintCheckForbid(wb, crate);
         }
-        // Extract the crate type and name from the crate attributes
         auto crateType = params.crateType;
         if (crateType == ASTCrate::Type::Unknown) {
             crateType = crate.crateType;
         }
         if (crateType == ASTCrate::Type::Unknown) {
-            // Assume to be executable
             crateType = ASTCrate::Type::Executable;
         }
         crate.crateType = crateType;
@@ -498,7 +437,6 @@ static int compile(int argc, char* argv[]) {
         }
         memoryDump(memoryDumpSequence, "Expanded");
 
-        // Allocator and panic strategies
         {
             if (crate.crateType == ASTCrate::Type::Executable || params.testHarness || crate.crateType == ASTCrate::Type::ProcMacro) {
                 bool allocatorCrateLoaded = false;
@@ -526,7 +464,6 @@ static int compile(int argc, char* argv[]) {
                         panicRuntimeNeeded = true;
                     }
                 }
-                // The default (system) allocator is provided by liballoc.
                 allocatorCrateLoaded = true;
                 if (!allocatorCrateLoaded) {
                     crate.loadExternCrate(*wb.settings, Span(), "alloc_system");
@@ -537,24 +474,21 @@ static int compile(int argc, char* argv[]) {
                     crate.loadExternCrate(*wb.settings, Span(), panicCrate.c_str());
                 }
 
-                // - `trustme-main` lang item default
                 if (!crate.noMain) {
-                    crate.langItems.insert(::std::make_pair(::std::string("trustme-main"), ASTAbsolutePath("", {"main"})));
+                    crate.langItems.insert(std::make_pair(std::string("trustme-main"), ASTAbsolutePath("", {"main"})));
                 }
             }
         }
-        /// Emit the dependency files
         if (params.emitDepfile != "") {
-            // - Iterate all loaded files for modules
             struct PathEnumerator {
-                ::std::vector<::std::string> out;
+                std::vector<std::string> out;
 
                 void visitModule(ASTModule& mod) {
                     if (mod.fileInfo.path != "!" && mod.fileInfo.path.back() != '/') {
                         out.push_back(mod.fileInfo.path);
                     }
                     // TODO: Should we check anon modules?
-                    //}
+
                     for (auto& i : mod.items) {
                         if (i->data.is_Module()) {
                             this->visitModule(i->data.as_Module());
@@ -562,36 +496,32 @@ static int compile(int argc, char* argv[]) {
                     }
                 }
             };
+
             PathEnumerator pe;
             pe.visitModule(crate.rootModule_);
 
-            ::std::ofstream of{params.emitDepfile};
+            std::ofstream of{params.emitDepfile};
             // TODO: Escape spaces and colons in these paths
             of << params.outfile << ": " << params.infile;
             for (const auto& modPath : pe.out) {
                 of << " " << modPath;
             }
-            of << ::std::endl;
+            of << std::endl;
 
             of << params.outfile << ":";
-            // - Iterate all loaded crates files
             for (const auto& ec : crate.externCrates) {
                 of << " " << ec.second.filename;
             }
-            // - Iterate all extra files (include! and friends)
         }
 
-        // Resolve names to be absolute names (include references to the relevant struct/global/function)
-        // - This does name checking on types and free functions.
-        // - Resolves all identifiers/paths to references
         {
-            ResolveUse(wb, crate); // - Absolutise and resolve use statements
+            ResolveUse(wb, crate);
         }
         {
-            ResolveIndex(crate); // - Build up a per-module index of avalable names (faster and simpler later resolve)
+            ResolveIndex(crate);
         }
         {
-            ResolveAbsolutise(wb, crate); // - Convert all paths to Absolute or UFCS, and resolve variables
+            ResolveAbsolutise(wb, crate);
         }
         memoryDump(memoryDumpSequence, "Resolved");
 
@@ -605,10 +535,6 @@ static int compile(int argc, char* argv[]) {
             return 0;
         }
 
-        // --------------------------------------
-        // HIR Section
-        // --------------------------------------
-        // Construct the HIR beside the AST in the compilation object pool.
         HIRCrate* hirCrate = [&]() {
             return LowerHIRFromAST(wb, pool, crate);
         }();
@@ -616,7 +542,6 @@ static int compile(int argc, char* argv[]) {
         wb.langItems = LangItems::create(*pool, *hirCrate);
         memoryDump(memoryDumpSequence, "HIR Gen");
 
-        // The AST is dead from here on: drop it physically.
         {
             wb.astCrate = nullptr;
             wb.astPool = nullptr;
@@ -628,60 +553,49 @@ static int compile(int argc, char* argv[]) {
         memoryDump(memoryDumpSequence, "AST Dropped");
         if (params.debug.dumpHir) {
             {
-                ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
+                std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hirCrate);
             }
         }
         memoryDump(memoryDumpSequence, "HIR");
 
-        // Replace type aliases (`type`) into the actual type
-        // - Does simple replacements
-        // - Done before bind so type alises can be used in patterns?
         {
             ConvertHIRExpandAliases(wb, *hirCrate);
         }
         {
             ConvertHIRValidateReceivers(wb, *hirCrate);
         }
-        // Set up bindings and other useful information.
         {
             ConvertHIRBind(wb, *hirCrate);
         }
-        // A method call resolved in an outer scope still has to find an
-        // inherent method, so the index of them comes first.
         {
             ConvertHIRIndexInherentMethods(wb, *hirCrate);
         }
-        // Determine what trait to use for <T>::Foo in outer scope
-        // - Also inserts defaults in trait impls
         {
             ConvertHIRResolveUFCSOuter(wb, *hirCrate);
         }
-        // Expand `Self` into the true type
+
         // - TODO: Move this later on, but that requires fixing some of the resolve logic around trait impl lookup
         {
             ConvertHIRExpandAliasesSelf(*hirCrate);
         }
-        // Enumerate marker impls on types and other useful metadata
         {
             ConvertHIRMarkings(wb, *hirCrate);
         }
         {
             ConvertHIRResolveUFCSSortImpls(wb, *hirCrate);
         }
-        // Determine what trait to use for <T>::Foo (and does some associated type expansion)
         {
             ConvertHIRResolveUFCS(wb, *hirCrate);
         }
         if (params.debug.dumpHir) {
             {
-                ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
+                std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hirCrate);
             }
         }
         // TODO: Expand vtables here?
-        // - Some parts of constant evaluate require it
-        // Basic constant evalulation (intergers/floats only)
+
         if (params.lastStage == ProgramParams::STAGE_HIR) {
             return 0;
         }
@@ -690,53 +604,41 @@ static int compile(int argc, char* argv[]) {
             ConvertHIRConstantEvaluate(wb, *hirCrate);
         }
         if (params.debug.dumpHir) {
-            // DUMP after initial consteval
             {
-                ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
+                std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hirCrate);
             }
         }
 
-        // === Type checking ===
-        // - This can recurse and call the MIR lower to evaluate constants
-
-        // Check outer items first (types of constants/functions/statics/impls/...)
-        // - Doesn't do any expressions except those in types
         {
             TypecheckModuleLevel(wb, *hirCrate);
         }
-        // Check the rest of the expressions (including function bodies)
         {
             TypecheckExpressions(wb, *hirCrate);
         }
-        // Lints that need resolved types, but must see the code as written.
         {
             LintUnusedMustUse(wb, *hirCrate);
             LintUnsafeCode(wb, *hirCrate);
         }
-        // === HIR Expansion ===
-        // Annotate how each node's result is used
         {
             HIRExpandAnnotateUsage(wb, *hirCrate);
         }
         {
             HIRExpandStaticBorrowConstantsMark(wb, *hirCrate);
         }
-        // - Now that all types are known, closures can be desugared
         {
             HIRExpandClosures(wb, *hirCrate);
         }
         {
             HIRExpandStaticBorrowConstants(wb, *hirCrate);
         }
-        // - Construct VTables for all traits and impls.
+
         //  TODO: How early can this be done?
-        //  > Requires consteval completed for types to be fully valid?
+
         //  TODO: Would prefer to have this done before consteval, as consteval might reference a vtable
         {
             HIRExpandVTables(wb, *hirCrate);
         }
-        // - And calls can be turned into UFCS
         {
             HIRExpandUfcsEverything(wb, *hirCrate);
         }
@@ -747,9 +649,8 @@ static int compile(int argc, char* argv[]) {
             HIRExpandErasedType(wb, *hirCrate);
         }
         if (params.debug.dumpHir) {
-            // DUMP after typecheck (before validation)
             {
-                ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
+                std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hirCrate);
             }
         }
@@ -758,34 +659,26 @@ static int compile(int argc, char* argv[]) {
         }
         memoryDump(memoryDumpSequence, "Typecheck");
 
-        // Lower expressions into MIR
         {
             HIRGenerateMIR(wb, *hirCrate);
         }
         if (params.debug.dumpMir) {
-            // DUMP after generation
             {
-                ::std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
+                std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
                 MIRDump(os, *hirCrate);
             }
         }
         memoryDump(memoryDumpSequence, "MIR Gen");
 
-        // LowerMIR validates every function before returning. The next validation is
-        // performed after MIR_Cleanup has actually changed the crate.
-
-        // - Expand constants in HIR and virtualise calls
         {
             MIRCleanupCrate(wb, *hirCrate);
         }
-        // Optimise the MIR
         {
             MIROptimiseCrate(wb, *hirCrate, mirOptLevel, enableMirInlining);
         }
         if (params.debug.dumpMir) {
-            // DUMP: After optimisation
             {
-                ::std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
+                std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
                 MIRDump(os, *hirCrate);
             }
         }
@@ -795,9 +688,7 @@ static int compile(int argc, char* argv[]) {
         memoryDump(memoryDumpSequence, "MIR Opt");
 
         // TODO: Pass to mark items that are..
-        // - Signature Exportable (public)
-        // - MIR Exportable (public generic, #[inline], or used by a either of those)
-        // - Require codegen (public or used by an exported function)
+
         TransOptions transOpt;
         transOpt.mode = params.codegen.codegenType == "" ? "c" : params.codegen.codegenType;
         transOpt.buildCommandFile = params.codegen.emitBuildCommand;
@@ -812,11 +703,8 @@ static int compile(int argc, char* argv[]) {
         }
         transOpt.debugInfo = params.debugInfo;
 
-        // Cargo owns C++ compilation and linking. Give it this crate's native
-        // link contribution as data instead of hiding it in an emitted shell
-        // command.
         if (params.codegen.emitLinkManifest != "") {
-            ::std::ofstream manifest(params.codegen.emitLinkManifest.c_str());
+            std::ofstream manifest(params.codegen.emitLinkManifest.c_str());
             ASSERT_BUG(Span(), manifest.is_open(), "Failed to open link manifest `" << params.codegen.emitLinkManifest << "`");
             for (const auto& path : params.nativeLibSearchDirs) {
                 manifest << "search\t" << path << "\n";
@@ -835,8 +723,7 @@ static int compile(int argc, char* argv[]) {
                 if (ext.objectPath == "" || ext.isProcMacro) {
                     continue;
                 }
-                if (ext.data->langItems.count("trustme-panic_runtime")
-                    && strncmp(crateName.c_str(), transOpt.panicCrate.c_str(), transOpt.panicCrate.size()) != 0) {
+                if (ext.data->langItems.count("trustme-panic_runtime") && strncmp(crateName.c_str(), transOpt.panicCrate.c_str(), transOpt.panicCrate.size()) != 0) {
                     continue;
                 }
                 manifest << "object\t" << ext.objectPath << "\n";
@@ -845,15 +732,12 @@ static int compile(int argc, char* argv[]) {
             ASSERT_BUG(Span(), !manifest.bad(), "Failed to write link manifest `" << params.codegen.emitLinkManifest << "`");
         }
 
-        // Generate code for non-generic public items (if requested)
         if (params.testHarness) {
-            // If the test harness is enabled, override crate type to "Executable"
             crateType = ASTCrate::Type::Executable;
         }
 
         // TODO: For 1.29 executables/dylibs, add oom/panic shims
         if (crateType == ASTCrate::Type::ProcMacro) {
-            // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `trustme-main`)
             {
                 HIRCrate crateForSer(pool, *wb.types);
                 crateForSer.crateName = hirCrate->crateName;
@@ -868,23 +752,21 @@ static int compile(int argc, char* argv[]) {
             }
         }
 
-        // `--emit=metadata` stops here: the crate has been analysed, and what
-        // is left only builds it.
         if (params.emitMetadataOnly) {
             if (crateType == ASTCrate::Type::RustLib) {
                 HIRSerialise(params.outfile, *hirCrate);
             } else {
-                // Non-library metadata-only invocations have no loadable rlib.
-                { ::std::ofstream marker(params.outfile); }
+                {
+                    std::ofstream marker(params.outfile);
+                }
             }
             return 0;
         }
 
-        // Enumerate items to be passed to codegen
         TransList items = [&]() {
             switch (crateType) {
                 case ASTCrate::Type::Unknown:
-                    ::std::cerr << "BUG? Unknown crate type" << ::std::endl;
+                    std::cerr << "BUG? Unknown crate type" << std::endl;
                     exit(1);
                     break;
                 case ASTCrate::Type::RustLib:
@@ -895,22 +777,18 @@ static int compile(int argc, char* argv[]) {
                 case ASTCrate::Type::Executable:
                     return TransEnumerateMain(wb, *hirCrate);
             }
-            throw ::std::runtime_error("Invalid crate_type value");
+            throw std::runtime_error("Invalid crate_type value");
         }();
-        // - Generate automatic impls (mainly Clone for 1.29)
         {
             // TODO: Drop glue generation?
             TransAutoImpls(wb, *hirCrate, items);
         }
-        // - Generate monomorphised versions of all functions
         {
             TransMonomorphiseList(wb, *hirCrate, items, mirOptLevel);
         }
-        // - Do post-monomorph inlining
         {
             MIROptimiseCrateInlining(wb, *hirCrate, items, false, mirOptLevel, enableMirInlining);
         }
-        // - Expand constants in HIR (using ones that were monomorphised above)
         {
             MIRCleanupCrate(wb, *hirCrate);
         }
@@ -919,14 +797,12 @@ static int compile(int argc, char* argv[]) {
         std::string hirFile;
         switch (crateType) {
             case ASTCrate::Type::RustLib:
-                // Save a loadable HIR dump
                 hirFile = params.outfile;
                 {
                     HIRSerialise(hirFile, *hirCrate);
                 }
                 break;
             case ASTCrate::Type::RustDylib:
-                // Save a loadable HIR dump
                 hirFile = params.outfile + ".rlib";
                 {
                     HIRSerialise(hirFile, *hirCrate);
@@ -936,81 +812,57 @@ static int compile(int argc, char* argv[]) {
                 break;
         }
 
-        // - Do post-monomorph inlining
         {
             MIROptimiseCrateInlining(wb, *hirCrate, items, true, mirOptLevel, enableMirInlining);
         }
-        // - Clean up ununused functions
         {
             TransEnumerateCleanup(wb, *hirCrate, items);
         }
         switch (crateType) {
             case ASTCrate::Type::Unknown:
                 UNREACHABLE();
-            case ASTCrate::Type::RustLib:
-                // Generate a linkable .o
-                {
-                    TransCodegen(wb, params.outfile, CodegenOutput::StaticLibrary, transOpt, hirCrate, std::move(items), hirFile);
-                }
-                break;
+            case ASTCrate::Type::RustLib: {
+                TransCodegen(wb, params.outfile, CodegenOutput::StaticLibrary, transOpt, hirCrate, std::move(items), hirFile);
+            } break;
             case ASTCrate::Type::RustDylib:
-            case ASTCrate::Type::CDylib:
-                // Generate a shared library
-                {
-                    TransCodegen(wb, params.outfile, CodegenOutput::DynamicLibrary, transOpt, hirCrate, std::move(items), hirFile);
-                }
-                break;
+            case ASTCrate::Type::CDylib: {
+                TransCodegen(wb, params.outfile, CodegenOutput::DynamicLibrary, transOpt, hirCrate, std::move(items), hirFile);
+            } break;
             case ASTCrate::Type::ProcMacro: {
-                // Needs: An executable (the actual macro handler), metadata (for `extern crate foo;`)
-                // - Metadata was done before enumerate
                 {
                     TransCodegen(wb, params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), hirFile);
                 }
                 break;
             }
-            case ASTCrate::Type::Executable:
-                {
-                    TransCodegen(wb, params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), "");
-                }
-                break;
+            case ASTCrate::Type::Executable: {
+                TransCodegen(wb, params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), "");
+            } break;
         }
     }
 
     return 0;
 }
+}
 
 namespace {
-    struct CompileArgs {
-        int argc;
-        char** argv;
-        int result;
-    };
 
     void* compileOnThread(void* raw) {
         auto& args = *static_cast<CompileArgs*>(raw);
         try {
             args.result = compile(args.argc, args.argv);
-        } catch (const ::std::exception& e) {
-            // The one place a real runtime error (I/O, corrupt metadata, bad
-            // TOML, bad CLI) is allowed to land; everything else aborts at
-            // its site.
-            ::std::cerr << "error: " << e.what() << ::std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "error: " << e.what() << std::endl;
             ::exit(1);
         }
         return nullptr;
     }
 }
 
-/// The compiler recurses over the syntax tree, so its stack depth follows how
-/// deeply the input nests -- generated code can nest very deeply. Run the work on
-/// a thread with a stack far larger than the usual 8MB default, which is what
-/// rustc does for the same reason. `TRUSTME_MIN_STACK` overrides the size, as
-/// `RUST_MIN_STACK` does there.
 int main(int argc, char* argv[]) {
     size_t stackSize = 1024u * 1024 * 1024;
-    if (const char* text = ::std::getenv("TRUSTME_MIN_STACK")) {
+    if (const char* text = std::getenv("TRUSTME_MIN_STACK")) {
         char* end = nullptr;
-        const auto value = ::std::strtoull(text, &end, 10);
+        const auto value = std::strtoull(text, &end, 10);
         if (*end == '\0' && value > 0) {
             stackSize = static_cast<size_t>(value);
         }
@@ -1019,10 +871,7 @@ int main(int argc, char* argv[]) {
     pthread_attr_t attr;
     CompileArgs args{argc, argv, 1};
     pthread_t thread;
-    if (pthread_attr_init(&attr) != 0 || pthread_attr_setstacksize(&attr, stackSize) != 0
-        || pthread_create(&thread, &attr, compileOnThread, &args) != 0) {
-        // No thread to be had: the work still has to happen, just with whatever
-        // stack this one has.
+    if (pthread_attr_init(&attr) != 0 || pthread_attr_setstacksize(&attr, stackSize) != 0 || pthread_create(&thread, &attr, compileOnThread, &args) != 0) {
         return compile(argc, argv);
     }
     pthread_join(thread, nullptr);
@@ -1030,35 +879,37 @@ int main(int argc, char* argv[]) {
     return args.result;
 }
 
+namespace {
 static void printRustcVersion(bool verbose) {
     const char* rustcTarget = RUSTC_TARGET_VERSION;
 
-    ::std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << ::std::endl;
+    std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << std::endl;
     if (!verbose) {
         return;
     }
-    ::std::cout << "binary: rustc" << ::std::endl;
-    ::std::cout << "commit-hash: " << VersionGetGitHash() << ::std::endl;
-    ::std::cout << "commit-date: UNKNOWN" << ::std::endl;
-    ::std::cout << "build-date: " << VersionGetBuildTime() << ::std::endl;
-    ::std::cout << "host: UNKNOWN" << ::std::endl;
-    ::std::cout << "release: " << rustcTarget << ".100" << ::std::endl;
+    std::cout << "binary: rustc" << std::endl;
+    std::cout << "commit-hash: " << VersionGetGitHash() << std::endl;
+    std::cout << "commit-date: UNKNOWN" << std::endl;
+    std::cout << "build-date: " << VersionGetBuildTime() << std::endl;
+    std::cout << "host: UNKNOWN" << std::endl;
+    std::cout << "release: " << rustcTarget << ".100" << std::endl;
+}
 }
 
 ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
     auto addLibrarySearchDir = [this](const char* value) {
-        ::std::string spec(value);
+        std::string spec(value);
         auto equals = spec.find('=');
-        ::std::string kind;
-        ::std::string path;
-        if (equals == ::std::string::npos) {
+        std::string kind;
+        std::string path;
+        if (equals == std::string::npos) {
             path = std::move(spec);
         } else {
             kind = spec.substr(0, equals);
             path = spec.substr(equals + 1);
         }
         if (path.empty()) {
-            ::std::cerr << "Option -L requires a non-empty path" << ::std::endl;
+            std::cerr << "Option -L requires a non-empty path" << std::endl;
             exit(1);
         }
 
@@ -1072,7 +923,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
         } else if (kind == "framework") {
             this->frameworkSearchDirs.push_back(std::move(path));
         } else {
-            ::std::cerr << "Unknown -L search path kind '" << kind << "'" << ::std::endl;
+            std::cerr << "Unknown -L search path kind '" << kind << "'" << std::endl;
             exit(1);
         }
     };
@@ -1096,7 +947,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
         }
     }
 
-    // Parse the rustc-compatible command-line subset supported by this driver.
     for (int i = 1; i < argc; i++) {
         const char* arg = argv[i];
 
@@ -1104,17 +954,17 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             if (this->infile == "") {
                 this->infile = arg;
             } else {
-                ::std::cerr << "Unexpected free argument" << ::std::endl;
+                std::cerr << "Unexpected free argument" << std::endl;
                 exit(1);
             }
         } else if (arg[1] != '-') {
-            arg++; // eat '-'
+            arg++;
 
             switch (*arg) {
                 case 'L':
                     if (arg[1] == '\0') {
                         if (i == argc - 1) {
-                            ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                            std::cerr << "Option " << arg << " requires an argument" << std::endl;
                             exit(1);
                         }
                         addLibrarySearchDir(argv[++i]);
@@ -1125,7 +975,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 case 'l':
                     if (arg[1] == '\0') {
                         if (i == argc - 1) {
-                            ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                            std::cerr << "Option " << arg << " requires an argument" << std::endl;
                             exit(1);
                         }
                         this->libraries.push_back(argv[++i]);
@@ -1141,7 +991,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     const char* lintName;
                     if (arg[1] == '\0') {
                         if (i == argc - 1) {
-                            ::std::cerr << "Option -" << flag << " requires an argument" << ::std::endl;
+                            std::cerr << "Option -" << flag << " requires an argument" << std::endl;
                             exit(1);
                         }
                         lintName = argv[++i];
@@ -1149,7 +999,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         lintName = arg + 1;
                     }
                     if (lintName[0] == '\0') {
-                        ::std::cerr << "Option -" << flag << " requires an argument" << ::std::endl;
+                        std::cerr << "Option -" << flag << " requires an argument" << std::endl;
                         exit(1);
                     }
                     const auto level = flag == 'A' ? CfgLintLevel::Allow : flag == 'W' ? CfgLintLevel::Warn : flag == 'D' ? CfgLintLevel::Deny : CfgLintLevel::Forbid;
@@ -1157,11 +1007,11 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     continue;
                 }
                 case 'C': {
-                    ::std::string optname;
-                    ::std::string optval;
+                    std::string optname;
+                    std::string optval;
                     if (arg[1] == '\0') {
                         if (i == argc - 1) {
-                            ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                            std::cerr << "Option " << arg << " requires an argument" << std::endl;
                             exit(1);
                         }
                         optname = argv[++i];
@@ -1169,18 +1019,16 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         optname = arg + 1;
                     }
                     auto eqPos = optname.find('=');
-                    if (eqPos != ::std::string::npos) {
+                    if (eqPos != std::string::npos) {
                         optval = optname.substr(eqPos + 1);
                         optname.resize(eqPos);
                     }
                     auto getOptval = [&]() {
-                        if (eqPos == ::std::string::npos) {
-                            ::std::cerr << "Flag -C " << optname << " requires an argument" << ::std::endl;
+                        if (eqPos == std::string::npos) {
+                            std::cerr << "Flag -C " << optname << " requires an argument" << std::endl;
                             exit(1);
                         }
                     };
-                    //        ::std::cerr << "Flag -C " << optname << " doesn't take an argument" << ::std::endl;
-                    //    }
 
                     if (optname == "emit-cpp-only") {
                         this->codegen.emitCppOnly = true;
@@ -1225,7 +1073,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
                             this->overflowChecks = true;
                         } else {
-                            ::std::cerr << "invalid value for -C " << optname << ": '" << optval << "'" << ::std::endl;
+                            std::cerr << "invalid value for -C " << optname << ": '" << optval << "'" << std::endl;
                             exit(1);
                         }
                         this->overflowChecksExplicit = true;
@@ -1244,16 +1092,16 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "z") {
                             this->optLevel = OptimizationLevel::SizeMin;
                         } else {
-                            ::std::cerr << "optimization level needs to be between 0-3, s or z (instead was '" << optval << "')" << ::std::endl;
+                            std::cerr << "optimization level needs to be between 0-3, s or z (instead was '" << optval << "')" << std::endl;
                             exit(1);
                         }
                     } else if (optname == "debug-assertions" || optname == "debug_assertions") {
-                        if (eqPos == ::std::string::npos || optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
+                        if (eqPos == std::string::npos || optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
                             this->debugAssertions = true;
                         } else if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
                             this->debugAssertions = false;
                         } else {
-                            ::std::cerr << "invalid value for -C debug-assertions: '" << optval << "'" << ::std::endl;
+                            std::cerr << "invalid value for -C debug-assertions: '" << optval << "'" << std::endl;
                             exit(1);
                         }
                         this->debugAssertionsExplicit = true;
@@ -1262,13 +1110,12 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         size_t start = 0;
                         while (start <= optval.size()) {
                             const auto end = optval.find(',', start);
-                            const auto feature = optval.substr(start, end == ::std::string::npos ? ::std::string::npos : end - start);
+                            const auto feature = optval.substr(start, end == std::string::npos ? std::string::npos : end - start);
                             if (feature != "-crt-static") {
-                                ::std::cerr << "unsupported value for -C target-feature: '" << feature
-                                            << "' (trustme only supports -crt-static)" << ::std::endl;
+                                std::cerr << "unsupported value for -C target-feature: '" << feature << "' (trustme only supports -crt-static)" << std::endl;
                                 exit(1);
                             }
-                            if (end == ::std::string::npos) {
+                            if (end == std::string::npos) {
                                 break;
                             }
                             start = end + 1;
@@ -1286,21 +1133,21 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "2" || optval == "full") {
                             this->debugInfo = DebugInfoLevel::Full;
                         } else {
-                            ::std::cerr << "invalid value for -C debuginfo: '" << optval << "'" << ::std::endl;
+                            std::cerr << "invalid value for -C debuginfo: '" << optval << "'" << std::endl;
                             exit(1);
                         }
                     } else {
-                        ::std::cerr << "Unknown codegen option: '" << optname << "'" << ::std::endl;
+                        std::cerr << "Unknown codegen option: '" << optname << "'" << std::endl;
                         exit(1);
                     }
                 }
                     continue;
                 case 'Z': {
-                    ::std::string optname;
-                    ::std::string optval;
+                    std::string optname;
+                    std::string optval;
                     if (arg[1] == '\0') {
                         if (i == argc - 1) {
-                            ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                            std::cerr << "Option " << arg << " requires an argument" << std::endl;
                             exit(1);
                         }
                         optname = argv[++i];
@@ -1308,19 +1155,19 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         optname = arg + 1;
                     }
                     auto eqPos = optname.find('=');
-                    if (eqPos != ::std::string::npos) {
+                    if (eqPos != std::string::npos) {
                         optval = optname.substr(eqPos + 1);
                         optname.resize(eqPos);
                     }
                     auto getOptval = [&]() {
-                        if (eqPos == ::std::string::npos) {
-                            ::std::cerr << "Flag -Z " << optname << " requires an argument" << ::std::endl;
+                        if (eqPos == std::string::npos) {
+                            std::cerr << "Flag -Z " << optname << " requires an argument" << std::endl;
                             exit(1);
                         }
                     };
                     auto noOptval = [&]() {
-                        if (eqPos != ::std::string::npos) {
-                            ::std::cerr << "Flag -Z " << optname << " doesn't take an argument" << ::std::endl;
+                        if (eqPos != std::string::npos) {
+                            std::cerr << "Flag -Z " << optname << " doesn't take an argument" << std::endl;
                             exit(1);
                         }
                     };
@@ -1332,18 +1179,18 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     } else if (optname == "mir-opt-level") {
                         getOptval();
                         if (optval.empty()) {
-                            ::std::cerr << "Invalid number for -Z mir-opt-level: '" << optval << "'" << ::std::endl;
+                            std::cerr << "Invalid number for -Z mir-opt-level: '" << optval << "'" << std::endl;
                             exit(1);
                         }
                         unsigned value = 0;
                         for (const char c : optval) {
                             if (c < '0' || c > '9') {
-                                ::std::cerr << "Invalid number for -Z mir-opt-level: '" << optval << "'" << ::std::endl;
+                                std::cerr << "Invalid number for -Z mir-opt-level: '" << optval << "'" << std::endl;
                                 exit(1);
                             }
                             const unsigned digit = c - '0';
                             if (value > (UINT_MAX - digit) / 10) {
-                                ::std::cerr << "Number for -Z mir-opt-level is too large: '" << optval << "'" << ::std::endl;
+                                std::cerr << "Number for -Z mir-opt-level is too large: '" << optval << "'" << std::endl;
                                 exit(1);
                             }
                             value = value * 10 + digit;
@@ -1351,12 +1198,12 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         this->mirOptLevel = value;
                         this->mirOptLevelExplicit = true;
                     } else if (optname == "ub-checks" || optname == "ub_checks") {
-                        if (eqPos == ::std::string::npos || optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
+                        if (eqPos == std::string::npos || optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
                             this->ubChecks = true;
                         } else if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
                             this->ubChecks = false;
                         } else {
-                            ::std::cerr << "invalid value for -Z ub-checks: '" << optval << "'" << ::std::endl;
+                            std::cerr << "invalid value for -Z ub-checks: '" << optval << "'" << std::endl;
                             exit(1);
                         }
                         this->ubChecksExplicit = true;
@@ -1369,7 +1216,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "none") {
                             this->fmtDebug = Settings::FmtDebug::None;
                         } else {
-                            ::std::cerr << "invalid value for -Z fmt-debug: '" << optval << "' (expected 'full', 'shallow', or 'none')" << ::std::endl;
+                            std::cerr << "invalid value for -Z fmt-debug: '" << optval << "' (expected 'full', 'shallow', or 'none')" << std::endl;
                             exit(1);
                         }
                     } else if (optname == "link-directives") {
@@ -1379,14 +1226,12 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "no") {
                             settings.linkDirectives = false;
                         } else {
-                            ::std::cerr << "invalid value for -Z link-directives: '" << optval << "' (expected 'yes' or 'no')" << ::std::endl;
+                            std::cerr << "invalid value for -Z link-directives: '" << optval << "' (expected 'yes' or 'no')" << std::endl;
                             exit(1);
                         }
                     } else if (optname == "next-solver") {
-                        // The goal solver is the only solver; the flag is
-                        // accepted for compatibility but selects nothing.
-                        if (!(eqPos == ::std::string::npos || optval == "globally" || optval == "coherence")) {
-                            ::std::cerr << "Invalid value for -Z next-solver: '" << optval << "' (the legacy trait solver has been removed)" << ::std::endl;
+                        if (!(eqPos == std::string::npos || optval == "globally" || optval == "coherence")) {
+                            std::cerr << "Invalid value for -Z next-solver: '" << optval << "' (the legacy trait solver has been removed)" << std::endl;
                             exit(1);
                         }
                     } else if (optname == "dump-ast") {
@@ -1399,7 +1244,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         noOptval();
                         this->debug.dumpMir = true;
                     } else if (optname == "parse-crate-root-only") {
-                        // rustc's spelling of "stop once the crate root parses".
                         noOptval();
                         this->lastStage = STAGE_PARSE;
                     } else if (optname == "stop-after") {
@@ -1417,60 +1261,41 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (optval == "mir") {
                             this->lastStage = STAGE_MIR;
                         } else {
-                            ::std::cerr << "Unknown argument to -Z stop-after - '" << optval << "'" << ::std::endl;
+                            std::cerr << "Unknown argument to -Z stop-after - '" << optval << "'" << std::endl;
                             exit(1);
                         }
                     } else if (optname == "pause-after-start") {
                         this->debug.pause = true;
                     } else if (optname == "unpretty") {
-                        // A pretty-printer selects how far the compiler runs
-                        // before printing.  `normal` prints the parsed source
-                        // and `expanded`/`ast-tree` the expanded crate, so
-                        // neither reaches name resolution -- code that only
-                        // makes sense before it is still a valid input.
                         getOptval();
                         auto form = optval.substr(0, optval.find(','));
                         if (form == "normal" || form == "identified") {
                             this->lastStage = STAGE_PARSE;
                         } else if (form == "expanded" || form == "ast-tree") {
                             this->lastStage = STAGE_EXPAND;
-                        } else if ((form == "hir" || form == "hir-tree") && optval.find("typed") == ::std::string::npos) {
-                            // The HIR is printed once names are resolved; only
-                            // the `typed` variant needs the types as well.
+                        } else if ((form == "hir" || form == "hir-tree") && optval.find("typed") == std::string::npos) {
                             this->lastStage = STAGE_HIR;
                         } else {
-                            // `hir`, `thir` and `mir` forms need the passes
-                            // that build them, so they run the whole compiler.
                         }
                     } else if (optname == "print-cfgs") {
                         noOptval();
                         this->printCfgs = true;
                     } else if (optname == "check-cfg-all-expected") {
-                        // This only controls how many expected cfg values rustc
-                        // prints in diagnostics.  trustme emits a compact
-                        // diagnostic and has no corresponding display limit.
                         noOptval();
                     } else {
-                        // Unstable rustc switches are routinely attached to
-                        // upstream tests to select a rustc pass, diagnostic,
-                        // or pretty-printer.  They are not language input and
-                        // an unsupported one must not make an otherwise valid
-                        // crate unusable by this compiler.
                     }
                 }
                     continue;
 
                 default:
-                    // Fall through to the for loop below
                     break;
             }
 
             for (; *arg; arg++) {
                 switch (*arg) {
-                    // "-o <file>" : Set output file
                     case 'o':
                         if (i == argc - 1) {
-                            ::std::cerr << "Option -" << *arg << " requires an argument" << ::std::endl;
+                            std::cerr << "Option -" << *arg << " requires an argument" << std::endl;
                             exit(1);
                         }
                         this->outfile = argv[++i];
@@ -1482,7 +1307,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         this->debugInfo = DebugInfoLevel::Full;
                         break;
                     default:
-                        ::std::cerr << "Unknown option: '-" << *arg << "'" << ::std::endl;
+                        std::cerr << "Unknown option: '-" << *arg << "'" << std::endl;
                         exit(1);
                 }
             }
@@ -1490,7 +1315,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             auto checkWithArg = [&](const char* name) -> const char* {
                 if (strcmp(arg + 2, name) == 0) {
                     if (i == argc - 1) {
-                        ::std::cerr << "Flag " << arg << " requires an argument" << ::std::endl;
+                        std::cerr << "Flag " << arg << " requires an argument" << std::endl;
                         exit(1);
                     }
                     return argv[++i];
@@ -1509,99 +1334,76 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 if (this->outputDir != "" && this->outputDir.back() != '/') {
                     this->outputDir += '/';
                 }
-            }
-            // --crate-name-of <metadata> >> Print the exact name stored in a
-            // metadata artifact. Cargo uses this when importing a prebuilt
-            // sysroot whose filenames need not contain the crate tag.
-            else if (const char* metadata = checkWithArg("crate-name-of")) {
+            } else if (const char* metadata = checkWithArg("crate-name-of")) {
                 this->crateNameQuery = metadata;
-            }
-            // --crate <unique-name>=<metadata-path> >> Make one exact crate artifact available.
-            else if (strcmp(arg, "--crate") == 0) {
+            } else if (strcmp(arg, "--crate") == 0) {
                 if (i == argc - 1) {
-                    ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                    std::cerr << "Option " << arg << " requires an argument" << std::endl;
                     exit(1);
                 }
                 const char* desc = argv[++i];
-                const char* pos = ::std::strchr(desc, '=');
+                const char* pos = std::strchr(desc, '=');
                 if (!pos || pos == desc || !pos[1]) {
-                    ::std::cerr << "Option --crate requires <unique-name>=<metadata-path>" << ::std::endl;
+                    std::cerr << "Option --crate requires <unique-name>=<metadata-path>" << std::endl;
                     exit(1);
                 }
                 auto name = RcString::newInterned(desc, pos - desc);
                 settings.crateOverride(name).metadataPath = pos + 1;
-            }
-            // --crate-object <unique-name>=<object-path> >> Exact link object for standalone linking.
-            else if (strcmp(arg, "--crate-object") == 0) {
+            } else if (strcmp(arg, "--crate-object") == 0) {
                 if (i == argc - 1) {
-                    ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                    std::cerr << "Option " << arg << " requires an argument" << std::endl;
                     exit(1);
                 }
                 const char* desc = argv[++i];
-                const char* pos = ::std::strchr(desc, '=');
+                const char* pos = std::strchr(desc, '=');
                 if (!pos || pos == desc || !pos[1]) {
-                    ::std::cerr << "Option --crate-object requires <unique-name>=<object-path>" << ::std::endl;
+                    std::cerr << "Option --crate-object requires <unique-name>=<object-path>" << std::endl;
                     exit(1);
                 }
                 auto name = RcString::newInterned(desc, pos - desc);
                 settings.crateOverride(name).objectPath = pos + 1;
-            }
-            // --proc-macro <unique-name>=<executable-path> >> Exact host executable for a proc macro crate.
-            else if (strcmp(arg, "--proc-macro") == 0) {
+            } else if (strcmp(arg, "--proc-macro") == 0) {
                 if (i == argc - 1) {
-                    ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                    std::cerr << "Option " << arg << " requires an argument" << std::endl;
                     exit(1);
                 }
                 const char* desc = argv[++i];
-                const char* pos = ::std::strchr(desc, '=');
+                const char* pos = std::strchr(desc, '=');
                 if (!pos || pos == desc || !pos[1]) {
-                    ::std::cerr << "Option --proc-macro requires <unique-name>=<executable-path>" << ::std::endl;
+                    std::cerr << "Option --proc-macro requires <unique-name>=<executable-path>" << std::endl;
                     exit(1);
                 }
                 auto name = RcString::newInterned(desc, pos - desc);
                 settings.crateOverride(name).procMacroPath = pos + 1;
-            }
-            // --crate-alias <source-name>=<unique-name> >> Resolve a source
-            // name through the availability table without eagerly importing
-            // it into the extern prelude.
-            else if (strcmp(arg, "--crate-alias") == 0) {
+            } else if (strcmp(arg, "--crate-alias") == 0) {
                 if (i == argc - 1) {
-                    ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                    std::cerr << "Option " << arg << " requires an argument" << std::endl;
                     exit(1);
                 }
                 const char* desc = argv[++i];
-                const char* pos = ::std::strchr(desc, '=');
+                const char* pos = std::strchr(desc, '=');
                 if (!pos || pos == desc || !pos[1]) {
-                    ::std::cerr << "Option --crate-alias requires <source-name>=<unique-name>" << ::std::endl;
+                    std::cerr << "Option --crate-alias requires <source-name>=<unique-name>" << std::endl;
                     exit(1);
                 }
                 auto name = RcString::newInterned(desc, pos - desc);
                 settings.crateOverride(name).target = pos + 1;
-            }
-            // --extern <alias>=<unique-name> >> Bind a source name to an exact crate entry.
-            // A path on the right remains accepted for compatibility with old callers.
-            else if (strcmp(arg, "--extern") == 0) {
+            } else if (strcmp(arg, "--extern") == 0) {
                 if (i == argc - 1) {
-                    ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
+                    std::cerr << "Option " << arg << " requires an argument" << std::endl;
                     exit(1);
                 }
                 const char* desc = argv[++i];
-                const char* pos = ::std::strchr(desc, '=');
+                const char* pos = std::strchr(desc, '=');
                 auto name = RcString::newInterned(desc, pos ? pos - desc : strlen(desc));
                 auto& spec = settings.crateOverride(name);
                 spec.isExtern = true;
                 spec.target = pos ? RcString::newInterned(pos + 1) : RcString{};
-            }
-            // --crate-tag <name>  >> Specify a version/identifier suffix for the crate
-            else if (const auto* nameStr = checkWithArg("crate-tag")) {
+            } else if (const auto* nameStr = checkWithArg("crate-tag")) {
                 this->crateNameSuffix = nameStr;
-            }
-            // --crate-name <name>  >> Specify the crate name (overrides `#![crate_name="<name>"]`)
-            else if (const auto* nameStr = checkWithArg("crate-name")) {
+            } else if (const auto* nameStr = checkWithArg("crate-name")) {
                 this->crateName = nameStr;
-            }
-            // `--crate-type <name>`    - Specify the crate type (overrides `#![crate_type="<name>"]`)
-            else if (const char* typeStr = checkWithArg("crate-type")) {
+            } else if (const char* typeStr = checkWithArg("crate-type")) {
                 if (strcmp(typeStr, "lib") == 0 || strcmp(typeStr, "rlib") == 0) {
                     this->crateType = ASTCrate::Type::RustLib;
                 } else if (strcmp(typeStr, "dylib") == 0) {
@@ -1613,15 +1415,12 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 } else if (strcmp(typeStr, "proc-macro") == 0) {
                     this->crateType = ASTCrate::Type::ProcMacro;
                 } else {
-                    ::std::cerr << "Unknown value for --crate-type: " << typeStr << ::std::endl;
+                    std::cerr << "Unknown value for --crate-type: " << typeStr << std::endl;
                     exit(1);
                 }
-            }
-            // `--cfg <flag>` / `--cfg=<flag>`
-            // `--cfg <var>=<value>` / `--cfg=<var>=<value>`
-            else if (const char* cfgSpec = checkWithArg("cfg")) {
-                ::std::string name;
-                ::std::string value;
+            } else if (const char* cfgSpec = checkWithArg("cfg")) {
+                std::string name;
+                std::string value;
                 bool has_value = false;
                 CfgParseOption(cfgSpec, name, has_value, value);
                 if (has_value) {
@@ -1634,25 +1433,25 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     CfgSetFlag(settings, mv$(name));
                 }
             } else if (const char* checkCfgSpec = checkWithArg("check-cfg")) {
-                ::std::string error;
+                std::string error;
                 if (!CfgSetCheckSpec(settings, checkCfgSpec, error)) {
-                    ::std::cerr << "invalid `--check-cfg` argument: `" << checkCfgSpec << "`: " << error << ::std::endl;
+                    std::cerr << "invalid `--check-cfg` argument: `" << checkCfgSpec << "`: " << error << std::endl;
                     exit(1);
                 }
             } else if (const char* envSpec = checkWithArg("env-set")) {
-                const char* separator = ::std::strchr(envSpec, '=');
+                const char* separator = std::strchr(envSpec, '=');
                 if (separator == nullptr || separator == envSpec) {
-                    ::std::cerr << "--env-set takes an argument of the form NAME=VALUE" << ::std::endl;
+                    std::cerr << "--env-set takes an argument of the form NAME=VALUE" << std::endl;
                     exit(1);
                 }
-                const ::std::string name(envSpec, separator);
+                const std::string name(envSpec, separator);
                 if (::setenv(name.c_str(), separator + 1, 1) != 0) {
-                    ::std::cerr << "failed to set compile-time environment variable '" << name << "'" << ::std::endl;
+                    std::cerr << "failed to set compile-time environment variable '" << name << "'" << std::endl;
                     exit(1);
                 }
             } else if (const char* forceWarn = checkWithArg("force-warn")) {
                 if (forceWarn[0] == '\0') {
-                    ::std::cerr << "Flag --force-warn requires an argument" << ::std::endl;
+                    std::cerr << "Flag --force-warn requires an argument" << std::endl;
                     exit(1);
                 }
                 CfgSetLintLevel(settings, forceWarn, CfgLintLevel::ForceWarn);
@@ -1667,26 +1466,21 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 } else if (strcmp(lintCap, "forbid") == 0) {
                     level = CfgLintLevel::Forbid;
                 } else {
-                    ::std::cerr << "unknown lint level: `" << lintCap << "`" << ::std::endl;
+                    std::cerr << "unknown lint level: `" << lintCap << "`" << std::endl;
                     exit(1);
                 }
                 CfgSetLintCap(settings, level);
             } else if (const char* emit = checkWithArg("emit")) {
-                // `--emit=metadata` asks for the crate to be analysed but not
-                // built: nothing is codegenned and nothing is linked, so a
-                // crate that only declares an external symbol is still valid.
-                if (::std::strcmp(emit, "metadata") == 0) {
+                if (std::strcmp(emit, "metadata") == 0) {
                     this->emitMetadataOnly = true;
                 } else {
-                    ::std::cerr << "Ignoring `--emit " << emit << "` for compatability with rustc" << std::endl;
+                    std::cerr << "Ignoring `--emit " << emit << "` for compatability with rustc" << std::endl;
                 }
-            }
-            // `--target <triple>`  - Override the default compiler target
-            else if (const char* targetName = checkWithArg("target")) {
+            } else if (const char* targetName = checkWithArg("target")) {
                 this->target = targetName;
             } else if (strcmp(arg, "--dump-target-spec") == 0) {
                 if (i == argc - 1) {
-                    ::std::cerr << "Flag " << arg << " requires an argument" << ::std::endl;
+                    std::cerr << "Flag " << arg << " requires an argument" << std::endl;
                     exit(1);
                 }
                 this->targetSaveback = argv[++i];
@@ -1702,11 +1496,11 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 } else if (strcmp(editionStr, "2024") == 0) {
                     this->edition = ASTEdition::Rust2024;
                 } else {
-                    ::std::cerr << "Unknown value for " << arg << " - '" << editionStr << "'" << ::std::endl;
+                    std::cerr << "Unknown value for " << arg << " - '" << editionStr << "'" << std::endl;
                     exit(1);
                 }
             } else {
-                ::std::cerr << "Unknown option '" << arg << "'" << ::std::endl;
+                std::cerr << "Unknown option '" << arg << "'" << std::endl;
                 exit(1);
             }
         }
@@ -1716,18 +1510,17 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
         while (a[0]) {
             const char* end = strchr(a, ':');
 
-            ::std::string_view s;
+            std::string_view s;
             if (end) {
-                s = ::std::string_view{a, end};
+                s = std::string_view{a, end};
                 a = end + 1;
             } else {
                 end = a + strlen(a);
-                s = ::std::string_view{a, end};
+                s = std::string_view{a, end};
                 a = end;
             }
 
             if (s == "") {
-                // Ignore
             } else if (s == "ast") {
                 this->debug.dumpAst = true;
             } else if (s == "hir") {
@@ -1735,41 +1528,61 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             } else if (s == "mir") {
                 this->debug.dumpMir = true;
             } else {
-                ::std::cerr << "Unknown option in $TRUSTME_DUMP '" << s << "'" << ::std::endl;
-                // - No terminate, just warn
+                std::cerr << "Unknown option in $TRUSTME_DUMP '" << s << "'" << std::endl;
             }
         }
     }
 }
 
 void ProgramParams::showHelp() const {
-    ::std::cout << "USAGE: rustc <sourcefile>\n"
-                   "\n"
-                   "OPTIONS:\n"
-                   "-L [kind=]<dir>    : Search for crates or native libraries in this directory\n"
-                   "-o <filename>      : Write compiler output (library or executable) to this file\n"
-                   "-O                 : Enable optimisation\n"
-                   "-g                 : Emit debugging information\n"
-                   "--out-dir <dir>    : Specify the output directory (alternative to `-o`)\n"
-                   "--crate <unique>=<rlib>\n"
-                   "                   : Make an exact crate metadata artifact available\n"
-                   "--crate-name-of <rlib>\n"
-                   "                   : Print the exact crate name stored in metadata\n"
-                   "--crate-alias <source>=<unique>\n"
-                   "                   : Resolve a source name through the crate table\n"
-                   "--crate-object <unique>=<object>\n"
-                   "                   : Supply the exact object used by standalone linking\n"
-                   "--proc-macro <unique>=<executable>\n"
-                   "                   : Supply the exact proc-macro host executable\n"
-                   "--extern <alias>=<unique>\n"
-                   "                   : Bind a source crate name to an available unique crate\n"
-                   "--crate-tag <str>  : Specify a suffix for symbols and output files\n"
-                   "--crate-name <str> : Override/set the crate name\n"
-                   "--crate-type <ty>  : Override/set the crate type (rlib, dylib, cdylib, bin, proc-macro)\n"
-                   "--cfg flag         : Set a boolean #[cfg]/cfg! flag\n"
-                   "--cfg flag=\"val\"   : Set a string #[cfg]/cfg! flag\n"
-                   "--target <name>    : Compile code for the given target\n"
-                   "--test             : Generate a unit test executable\n"
-                   "-C <option>        : Code-generation options\n"
-                   "-Z <option>        : Debugging/experimental options\n";
+    std::cout << "USAGE: rustc <sourcefile>\n"
+                 "\n"
+                 "OPTIONS:\n"
+                 "-L [kind=]<dir>    : Search for crates or native libraries in this directory\n"
+                 "-o <filename>      : Write compiler output (library or executable) to this file\n"
+                 "-O                 : Enable optimisation\n"
+                 "-g                 : Emit debugging information\n"
+                 "--out-dir <dir>    : Specify the output directory (alternative to `-o`)\n"
+                 "--crate <unique>=<rlib>\n"
+                 "                   : Make an exact crate metadata artifact available\n"
+                 "--crate-name-of <rlib>\n"
+                 "                   : Print the exact crate name stored in metadata\n"
+                 "--crate-alias <source>=<unique>\n"
+                 "                   : Resolve a source name through the crate table\n"
+                 "--crate-object <unique>=<object>\n"
+                 "                   : Supply the exact object used by standalone linking\n"
+                 "--proc-macro <unique>=<executable>\n"
+                 "                   : Supply the exact proc-macro host executable\n"
+                 "--extern <alias>=<unique>\n"
+                 "                   : Bind a source crate name to an available unique crate\n"
+                 "--crate-tag <str>  : Specify a suffix for symbols and output files\n"
+                 "--crate-name <str> : Override/set the crate name\n"
+                 "--crate-type <ty>  : Override/set the crate type (rlib, dylib, cdylib, bin, proc-macro)\n"
+                 "--cfg flag         : Set a boolean #[cfg]/cfg! flag\n"
+                 "--cfg flag=\"val\"   : Set a string #[cfg]/cfg! flag\n"
+                 "--target <name>    : Compile code for the given target\n"
+                 "--test             : Generate a unit test executable\n"
+                 "-C <option>        : Code-generation options\n"
+                 "-Z <option>        : Debugging/experimental options\n";
+}
+
+auto ProgramParams::effectiveMirOptLevel() const -> unsigned {
+    return mirOptLevelExplicit ? mirOptLevel : (optLevel == OptimizationLevel::None ? 1 : 2);
+}
+
+auto ProgramParams::enableMirInlining() const -> bool {
+    const auto level = effectiveMirOptLevel();
+    return level >= 3 || (level == 2 && optLevel != OptimizationLevel::None && optLevel != OptimizationLevel::Less);
+}
+
+auto ProgramParams::debugAssertionsEnabled() const -> bool {
+    return debugAssertionsExplicit ? debugAssertions : optLevel == OptimizationLevel::None;
+}
+
+auto ProgramParams::ubChecksEnabled() const -> bool {
+    return ubChecksExplicit ? ubChecks : debugAssertionsEnabled();
+}
+
+auto ProgramParams::overflowChecksEnabled() const -> bool {
+    return overflowChecksExplicit ? overflowChecks : debugAssertionsEnabled();
 }

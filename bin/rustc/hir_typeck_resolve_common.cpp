@@ -1,17 +1,16 @@
 #include "hir_typeck_resolve_common.h"
 
 #include "wire_board.h"
-#include "hir_typeck_monomorph.h" // MonomorphStatePtr
+#include "hir_typeck_monomorph.h"
 
 void TraitResolveCommon::prepIndexes(const Span& sp) {
-
     typeEqualities.clear();
     traitBounds.clear();
 
     this->iterateBounds([&](const HIRGenericBound& b) -> bool {
         switch (b.tag()) {
-default:
-            break;
+            default:
+                break;
             case HIRGenericBound::TAG_TraitBound: {
                 auto& be = b.as_TraitBound();
                 this->prepIndexesAddTraitBound(sp, be.type, be.trait.clone());
@@ -29,14 +28,13 @@ default:
 
 void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, HIRTypeRef longTy, HIRTypeRef shortTy) {
     // TODO: Sort the two types by "complexity" (most of the time long >= short)
-    this->typeEqualities.insert(::std::make_pair(mv$(longTy), CachedEquality{mv$(shortTy)}));
+    this->typeEqualities.insert(std::make_pair(mv$(longTy), CachedEquality{mv$(shortTy)}));
 }
 
 void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, HIRTypeRef type, HIRTraitPath traitPath, bool addParents /*=true*/) {
-
     const auto boundConstness = traitPath.constness;
     auto getOrAddTraitBound = [&](const HIRGenericPath& genericPath) -> CachedBound& {
-        auto it = ::std::find_if(traitBounds.begin(), traitBounds.end(), [&](const auto& entry) {
+        auto it = std::find_if(traitBounds.begin(), traitBounds.end(), [&](const auto& entry) {
             const auto& boundType = entry.first.first;
             const auto& boundTrait = entry.first.second;
             return (boundType == type || boundType->equalsIgnoringRegions(type)) && boundTrait.equalsIgnoringRegions(genericPath);
@@ -74,7 +72,6 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, HIRTypeRef typ
         prepIndexesAddEquality(sp, tyL, tb.second.type);
     }
 
-    // ATY Trait bounds
     for (const auto& tb : traitPath.traitBounds) {
         for (const auto& trait : tb.second.traits) {
             auto tyL = crate.types.path(HIRPath(type, tb.second.sourceTrait.clone(), tb.first, tb.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
@@ -83,7 +80,6 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, HIRTypeRef typ
     }
 
     for (const auto& aTy : trait.types) {
-        // if no bounds, don't bother making the type
         if (aTy.second.traitBounds.empty()) {
             continue;
         }
@@ -102,7 +98,6 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, HIRTypeRef typ
         for (const auto& aTyB : aTy.second.traitBounds) {
             auto traitMono = monomorph.monomorphTraitpath(sp, aTyB, false);
             for (auto& tb : traitMono.typeBounds) {
-
                 auto tyL = crate.types.path(HIRPath(tyA, tb.second.sourceTrait.clone(), tb.first, tb.second.atyParams.clone()), HIRTypePathBinding::make_Opaque({}));
 
                 prepIndexesAddEquality(sp, mv$(tyL), std::move(tb.second.type));
@@ -117,14 +112,13 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, HIRTypeRef typ
     }
 }
 
-/// Obtain the type for a given constant parameter
 const HIRTypeData* TraitResolveCommon::getConstParamType(const Span& sp, unsigned binding) const {
     const HIRGenericParams* p;
     switch (binding >> 8) {
-        case 0: // impl level
+        case 0:
             p = implGenerics_;
             break;
-        case 1: // method level
+        case 1:
             p = itemGenerics_;
             break;
         default:
@@ -136,7 +130,7 @@ const HIRTypeData* TraitResolveCommon::getConstParamType(const Span& sp, unsigne
     return p->values.at(slot).type;
 }
 
-::std::ostream& operator<<(::std::ostream& s, const TraitResolveCommon::CachedEquality& x) {
+std::ostream& operator<<(std::ostream& s, const TraitResolveCommon::CachedEquality& x) {
     s << x.ty;
     return s;
 }
@@ -152,8 +146,6 @@ Ordering TraitResolveCommon::CachedBoundCmp::ord(const keyT& a, const refSpT& b)
     ORD(a.second.path, b.second);
     return OrdEqual;
 }
-
-// 1.90 (well, added earlier)
 
 TraitResolveCommon::TraitResolveCommon(const WireBoard& wb)
     : wb(wb)
@@ -171,7 +163,6 @@ const HIRGenericParams& TraitResolveCommon::itemGenerics() const {
     return itemGenerics_ ? *itemGenerics_ : emptyGenerics_;
 }
 
-/// Iterate over in-scope bounds (function then type)
 bool TraitResolveCommon::iterateBoundsCb(HIRGenericBoundCallback& cb) const {
     const HIRGenericParams* v[2] = {itemGenerics_, implGenerics_};
     for (auto p : v) {

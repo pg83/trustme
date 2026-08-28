@@ -2,23 +2,23 @@
 
 #include "settings.h"
 
+#include <std/mem/obj_pool.h>
+
 #include <iosfwd>
 #include <string>
 #include <vector>
-#include <std/mem/obj_pool.h>
 
 struct Span;
 struct CfgState;
 
 class TokenStream;
 
-
 class ASTAttribute;
 class ASTAttributeList;
 
 extern CfgState* CfgCreateState(stl::ObjPool& pool);
 
-using CfgString = ::std::string;
+using CfgString = std::string;
 
 struct CfgValueCallback {
     virtual bool matches(const CfgString& value) = 0;
@@ -51,16 +51,16 @@ void CfgSetValueCb(Settings& settings, CfgString name, F f) {
     CfgSetValueCallback(settings, name, cb);
 }
 
-extern void CfgDump(const Settings& settings, ::std::ostream& os);
-extern void CfgSetFlag(Settings& settings, ::std::string name);
-extern void CfgSetValue(Settings& settings, ::std::string name, ::std::string val);
-extern void CfgParseOption(const ::std::string& spec, ::std::string& name, bool& hasValue, ::std::string& value);
-extern bool CfgSetCheckSpec(Settings& settings, const ::std::string& spec, ::std::string& error);
-extern void CfgSetLintLevel(Settings& settings, ::std::string name, CfgLintLevel level);
+extern void CfgDump(const Settings& settings, std::ostream& os);
+extern void CfgSetFlag(Settings& settings, std::string name);
+extern void CfgSetValue(Settings& settings, std::string name, std::string val);
+extern void CfgParseOption(const std::string& spec, std::string& name, bool& hasValue, std::string& value);
+extern bool CfgSetCheckSpec(Settings& settings, const std::string& spec, std::string& error);
+extern void CfgSetLintLevel(Settings& settings, std::string name, CfgLintLevel level);
 extern void CfgSetLintCap(Settings& settings, CfgLintLevel level);
 extern bool checkCfgAttrs(const Settings& settings, const ASTAttributeList& attrs);
 extern bool checkCfg(const Settings& settings, const Span& sp, const ASTAttribute& mi);
-/// Check a parenthesised list of cfg rules (treated as `all()`)
+
 extern bool checkCfgStream(const Settings& settings, TokenStream& lex);
-/// Parse an attribute from a `cfg_attr()` attribute. Returns with an empty name if check failed
+
 extern std::vector<ASTAttribute> checkCfgAttr(const Settings& settings, const ASTAttribute& mi);

@@ -24,40 +24,39 @@ enum class DebugInfoLevel : unsigned {
 };
 
 struct TransOptions {
-    ::std::string mode = "c";
+    std::string mode = "c";
     OptimizationLevel optLevel = OptimizationLevel::None;
     DebugInfoLevel debugInfo = DebugInfoLevel::None;
-    ::std::string buildCommandFile;
-    // Emit the generated C++ source and stop, without invoking the C compiler.
+    std::string buildCommandFile;
+
     bool emitCppOnly = false;
-    ::std::vector<::std::string> linkerArgs;
+    std::vector<std::string> linkerArgs;
 
-    ::std::string panicCrate;
+    std::string panicCrate;
 
-    ::std::vector<::std::string> librarySearchDirs;
-    ::std::vector<::std::string> frameworkSearchDirs;
-    ::std::vector<::std::string> libraries;
+    std::vector<std::string> librarySearchDirs;
+    std::vector<std::string> frameworkSearchDirs;
+    std::vector<std::string> libraries;
 };
 
 enum class CodegenOutput {
-    Object,         // .o
-    StaticLibrary,  // .a
-    DynamicLibrary, // .so
-    Executable,     // no suffix, includes main stub (TODO: Can't that just be added earlier?)
+    Object,
+    StaticLibrary,
+    DynamicLibrary,
+    Executable, // no suffix, includes main stub (TODO: Can't that just be added earlier?)
 };
 
 extern TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate);
-// NOTE: This also sets the saveout flags
+
 extern TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate);
 
-/// Re-run enumeration on monomorphised functions, removing now-unused items
 extern void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList& list);
 
 extern void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList);
 
-extern void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const ::std::vector<HIRPath>& paths);
+extern void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const std::vector<HIRPath>& paths);
 extern bool TransEnumerateGeneratedLiteral(const WireBoard& wb, TransList& list, const EncodedLiteral& literal);
 extern bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const stl::Vector<const TransListFunction*>& functions);
 extern void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list, unsigned mirOptLevel);
 
-extern void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* crate, TransList list, const ::std::string& hirFile);
+extern void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* crate, TransList list, const std::string& hirFile);

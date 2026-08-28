@@ -1,9 +1,10 @@
 #pragma once
 
-#include <vector>
-#include <string>
-#include <memory>
 #include "rc_string.h"
+
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace stl {
     class ObjPool;
@@ -13,24 +14,19 @@ struct Ident {
     // TODO: Use AST::AbsolutePath instead
     struct ModPath {
         RcString crate;
-        ::std::vector<RcString> ents;
+        std::vector<RcString> ents;
         friend std::ostream& operator<<(std::ostream& os, const ModPath& x);
     };
 
     // TODO: make this a reference-counted pointer instead (so it's cheaper to copy)
-    // - Presents challenges with setting the module path, and how this is used in macros.
+
     class Hygiene {
     public:
-        // Immutable once built: every mutating operation clones the node into
-        // the pool and re-points, so a Hygiene value is just a pointer and
-        // copies are free. A null pointer is the empty hygiene, which is by
-        // far the most common case and costs no allocation at all.
         struct Inner {
-            ::std::vector<unsigned int> contexts;
-            // Zero for lexical scopes, otherwise the macro definition whose
-            // invocation introduced the corresponding context.
-            ::std::vector<unsigned int> macroDefinitions;
-            ::std::shared_ptr<ModPath> searchModule;
+            std::vector<unsigned int> contexts;
+
+            std::vector<unsigned int> macroDefinitions;
+            std::shared_ptr<ModPath> searchModule;
         };
 
     private:
@@ -41,7 +37,6 @@ struct Ident {
         {
         }
 
-        // Copy of the current contents, for a mutation to modify and re-intern.
         Inner clone() const;
         static const Inner* store(stl::ObjPool& pool, Inner v);
 
@@ -70,7 +65,6 @@ struct Ident {
 
         void setModPath(stl::ObjPool& pool, ModPath p);
 
-        // Returns true if an ident with hygine `source` can see an ident with this hygine
         bool isVisible(const Hygiene& source) const;
 
         RcString applyToItemName(const RcString& name) const;
@@ -89,14 +83,12 @@ struct Ident {
             return ord(x) == OrdLess;
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const Hygiene& v);
+        friend std::ostream& operator<<(std::ostream& os, const Hygiene& v);
     };
 
     Hygiene hygiene;
     RcString name;
-    /// Was this written as `r#name`? The name is the same either way, but a raw
-    /// identifier prints back as it was written and is a distinct token to a
-    /// macro matcher.
+
     bool isRaw = false;
 
     Ident(const char* name);
@@ -111,7 +103,7 @@ struct Ident {
     Ident& operator=(const Ident& x) = default;
 
     RcString intoString() {
-        return ::std::move(name);
+        return std::move(name);
     }
 
     RcString hygienicName() const {
@@ -140,5 +132,5 @@ struct Ident {
 
     bool operator<(const Ident& x) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const Ident& x);
+    friend std::ostream& operator<<(std::ostream& os, const Ident& x);
 };

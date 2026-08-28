@@ -5,50 +5,47 @@
 #include "ast_edition.h"
 #include "parse_token.h"
 
-#include <algorithm>
 #include <vector>
 #include <iostream>
+#include <algorithm>
 
 class ASTModule;
 class ASTCrate;
 class ASTAttributeList;
 struct WireBoard;
+
 namespace stl {
     class ObjPool;
 }
 
-/// State the parser needs to pass down via a second channel.
 struct ParseState {
 public:
     ParseState();
 
-    // Used for "for/if/while" to handle ambiguity
     bool disallowStructLiteral = false;
-    // Used for match arms to disallow `foo => if false {} (bar) => ...`
+
     bool disallowCallOrIndex = false;
-    // A debugging hook that disables expansion of macros
+
     bool noExpandMacros = false;
-    // Lifetimes an `unsafe<..>` binder hides. This compiler erases lifetimes, so
-    // a reference to one of them inside the binder is an elided lifetime rather
-    // than a name to resolve.
-    ::std::vector<RcString> erasedLifetimes;
+
+    std::vector<RcString> erasedLifetimes;
 
     bool lifetimeIsErased(const RcString& name) const {
-        return ::std::find(erasedLifetimes.begin(), erasedLifetimes.end(), name) != erasedLifetimes.end();
+        return std::find(erasedLifetimes.begin(), erasedLifetimes.end(), name) != erasedLifetimes.end();
     }
 
     const ASTCrate* crate = nullptr; // TODO: Remove this (needed for MetaItem)
-    const WireBoard* wb = nullptr;   // cfg!() evaluation and expansion read components through the board
+    const WireBoard* wb = nullptr;
     ASTModule* module = nullptr;
     ASTAttributeList* parentAttrs = nullptr;
 
     ASTModule& getCurrentMod();
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ParseState& ps);
+    friend std::ostream& operator<<(std::ostream& os, const ParseState& ps);
 };
 
 class TokenStream {
-    friend class TTLexer; // needs access to internals to know what was consumed
+    friend class TTLexer;
 
     bool cacheValid;
     Token cache;
@@ -61,7 +58,7 @@ class TokenStream {
         Ident::Hygiene hygiene;
     };
 
-    ::std::vector<LookaheadEnt> lookahead_;
+    std::vector<LookaheadEnt> lookahead_;
     ParseState parseState_;
     bool macroExpansionPlaceholder_ = false;
 
@@ -70,19 +67,14 @@ public:
     virtual ~TokenStream();
     Token getToken();
 
-    /// <summary>Consumes a token if it is of the specified type</summary>
     bool getTokenIf(eTokenType exp);
 
-    /// <summary>Consumes a token if it is of the specified type</summary>
     bool getTokenIf(eTokenType exp, Token& dst);
 
-    /// <summary>Obtains a token, asserting that it's of the specified type</summary>
     Token getTokenCheck(eTokenType exp);
     void putback(Token tok);
     eTokenType lookahead(unsigned int count);
 
-    /// Whether the token at a lookahead position is a given identifier -- for a
-    /// contextual keyword, whose type alone does not say which word it is.
     bool lookaheadIdentIs(unsigned int count, const char* name);
 
     Ident::Hygiene getHygiene() const;
@@ -99,7 +91,6 @@ public:
 
     bool isMacroExpansionPlaceholder() const;
 
-    // The pool that owns AST type nodes created while parsing this stream.
     stl::ObjPool& typePool() const;
 
     ASTEdition getEdition() const {

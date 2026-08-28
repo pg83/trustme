@@ -1,31 +1,22 @@
 #pragma once
 
-// Encoding protocol ideas:
-// > Semi-typed data format (encode length in the format)
-// Purpose: Allows internal consistency checking and recovery (recovery not needed here)
-// 0x00-0xBF are literal integer values.
-// 0xC0-0xFB <data>: Short encoded length prefixed data (lengths 0 to 59 bytes)
-// 0xFC <len+> <data>: Length prefixed literal data
-// 0xFD indicates start of a named object (string index follows)
-// 0xFE indicates start of an unnamed object
-// 0xFF indicates end of an object
-
-#include "int128.h"
 #include "floats.h"
-#include <vector>
-#include <string>
-#include <map>
-#include <stddef.h>
-#include <assert.h>
+#include "int128.h"
 #include "rc_string.h"
+
+#include <map>
+#include <string>
+#include <vector>
+#include <assert.h>
+#include <stddef.h>
 
 class HIRSerialiseWriterInner;
 class HIRSerialiseReaderInner;
 
 class HIRSerialiseWriter {
     HIRSerialiseWriterInner* inner;
-    ::std::map<RcString, unsigned> istringCache;
-    ::std::map<const char*, unsigned> objnameCache;
+    std::map<RcString, unsigned> istringCache;
+    std::map<const char*, unsigned> objnameCache;
 
 public:
     HIRSerialiseWriter();
@@ -33,7 +24,7 @@ public:
     HIRSerialiseWriter(HIRSerialiseWriter&&) = delete;
     ~HIRSerialiseWriter();
 
-    void open(const ::std::string& filename);
+    void open(const std::string& filename);
     void write(const void* data, size_t count);
 
     void writeU8(u8 v) {
@@ -50,7 +41,6 @@ public:
         writeU64(static_cast<u64>(v));
     }
 
-    // Variable-length encoded u64 (for array sizes)
     void writeU64c(u64 v);
 
     void writeI64c(i64 v);
@@ -73,13 +63,12 @@ public:
 
     void writeString(size_t len, const char* s);
 
-    void writeString(const ::std::string& v) {
+    void writeString(const std::string& v) {
         writeString(v.size(), v.c_str());
     }
 
     void writeBool(bool v);
 
-    // Core protocol
     void rawWriteUint(u64 val);
 
     void rawWriteLen(size_t len);
@@ -108,7 +97,7 @@ public:
 };
 
 class HIRSerialiseReadBuffer {
-    ::std::vector<u8> backing;
+    std::vector<u8> backing;
     unsigned int ofs;
 
 public:
@@ -126,12 +115,12 @@ class HIRSerialiseReader {
     HIRSerialiseReaderInner* inner;
     HIRSerialiseReadBuffer buffer;
     size_t pos;
-    ::std::vector<RcString> strings;
+    std::vector<RcString> strings;
 
-    ::std::vector<std::string> objnameCache;
+    std::vector<std::string> objnameCache;
 
 public:
-    HIRSerialiseReader(const ::std::string& path);
+    HIRSerialiseReader(const std::string& path);
     HIRSerialiseReader(const HIRSerialiseWriter&) = delete;
     HIRSerialiseReader(HIRSerialiseWriter&&) = delete;
     ~HIRSerialiseReader();
@@ -160,7 +149,6 @@ public:
         return S128(readU128());
     }
 
-    // Variable-length encoded u64 (for array sizes)
     u64 readU64c();
 
     i64 readI64c();
@@ -177,11 +165,10 @@ public:
 
     RcString readIstring();
 
-    ::std::string readString();
+    std::string readString();
 
     bool readBool();
 
-    // Core protocol
     u64 rawReadUint();
 
     size_t rawReadLen();

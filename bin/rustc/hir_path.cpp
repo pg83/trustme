@@ -3,11 +3,27 @@
 #include "hir_expr.h"
 #include "hir_type.h"
 
-#include <algorithm>
-
 #include <std/sym/i_map.h>
 #include <std/mem/obj_pool.h>
 #include <std/rng/split_mix_64.h>
+
+#include <algorithm>
+
+using namespace stl;
+
+namespace {
+    struct PathNode: public HIRSimplePathData {
+        PathNode* next;
+
+        PathNode(u64 h1, u64 h2, ThinVector<RcString> m, PathNode* next);
+    };
+
+    struct PathInterner {
+        ObjPool::Ref poolRef = ObjPool::fromMemory();
+        ObjPool* pool = poolRef.mutPtr();
+        IntMap<PathNode*> table{pool};
+    };
+}
 
 HIRTraitPath::HIRTraitPath()
     : traitPtr(nullptr)
@@ -15,15 +31,15 @@ HIRTraitPath::HIRTraitPath()
 }
 
 HIRTraitPath::HIRTraitPath(HIRGenericPath path)
-    : path(::std::move(path))
+    : path(std::move(path))
     , traitPtr(nullptr)
 {
 }
 
-HIRTraitPath::HIRTraitPath(HIRGenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr, HIRBoundConstness constness)
-    : path(::std::move(path))
-    , typeBounds(::std::move(typeBounds))
-    , traitBounds(::std::move(traitBounds))
+HIRTraitPath::HIRTraitPath(HIRGenericPath path, assocListT typeBounds, std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr, HIRBoundConstness constness)
+    : path(std::move(path))
+    , typeBounds(std::move(typeBounds))
+    , traitBounds(std::move(traitBounds))
     , constness(constness)
     , traitPtr(traitPtr)
 {
@@ -33,7 +49,7 @@ HIRTraitPath::~HIRTraitPath() = default;
 HIRTraitPath::HIRTraitPath(HIRTraitPath&&) = default;
 HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
 
-::std::ostream& operator<<(::std::ostream& os, const HIRSimplePath& x) {
+std::ostream& operator<<(std::ostream& os, const HIRSimplePath& x) {
     if (x.crateName() != "") {
         os << "::\"" << x.crateName() << "\"";
     } else if (x.components().size() == 0) {
@@ -46,7 +62,7 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRPathParams& x) {
+std::ostream& operator<<(std::ostream& os, const HIRPathParams& x) {
     bool hasArgs = (x.types.size() > 0 || x.values.size() > 0);
 
     if (hasArgs) {
@@ -64,12 +80,12 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRGenericPath& x) {
+std::ostream& operator<<(std::ostream& os, const HIRGenericPath& x) {
     os << x.path << x.params;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRTraitPath& x) {
+std::ostream& operator<<(std::ostream& os, const HIRTraitPath& x) {
     if (x.constness == HIRBoundConstness::Always) {
         os << "const ";
     } else if (x.constness == HIRBoundConstness::Maybe) {
@@ -101,7 +117,7 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
     return os;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRPath& x) {
+std::ostream& operator<<(std::ostream& os, const HIRPath& x) {
     switch (x.data.tag()) {
         case HIRPath::Data::TAG_Generic: {
             auto& e = x.data.as_Generic();
@@ -113,7 +129,9 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
         }
         case HIRPath::Data::TAG_UfcsKnown: {
             auto& e = x.data.as_UfcsKnown();
-            os << "<" << e.type << " as "; os << e.trait << ">::" << e.item << e.params; return os;
+            os << "<" << e.type << " as ";
+            os << e.trait << ">::" << e.item << e.params;
+            return os;
             break;
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
@@ -124,48 +142,21 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
     return os;
 }
 
-// The simple-path interner. A process-wide table (like the RcString intern
-// table: path constructors have no access to the wiring board) maps the
-// first Zobrist hash to entries; a lookup compares the second hash only,
-// never the component content — the combined 128 bits make a false match
-// impossible in practice.
 namespace {
-    // Component keys must be content-based, not allocation-order-based;
-    // the string interner's stored xxh128 half is exactly that, for free.
+
     u64 contentHash(const RcString& s) {
         return s.contentHash();
     }
 
-    // The two Zobrist keys of a component at a position. Position goes
-    // through the mixer (a plain XOR fold would make the hash symmetric).
     const u64 POS_STEP = 0x9E3779B97F4A7C15;
 
     u64 key1(u64 ch, size_t i) {
-        return stl::splitMix64(ch + (i + 1) * POS_STEP);
+        return splitMix64(ch + (i + 1) * POS_STEP);
     }
 
     u64 key2(u64 ch, size_t i) {
-        return stl::splitMix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
+        return splitMix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
     }
-
-    // A stored path: the shared data plus the link of the per-hash1 chain.
-    // IntHasher is splitMix64 (a bijection), so a chain only ever holds
-    // entries with the same hash1; they are told apart by hash2 alone.
-    struct PathNode: public HIRSimplePathData {
-        PathNode* next;
-
-        PathNode(u64 h1, u64 h2, ThinVector<RcString> m, PathNode* next)
-            : HIRSimplePathData{h1, h2, std::move(m)}
-            , next(next)
-        {
-        }
-    };
-
-    struct PathInterner {
-        stl::ObjPool::Ref poolRef = stl::ObjPool::fromMemory();
-        stl::ObjPool* pool = poolRef.mutPtr();
-        stl::IntMap<PathNode*> table{pool};
-    };
 
     PathInterner& interner() {
         static PathInterner in;
@@ -183,7 +174,6 @@ namespace {
         return nullptr;
     }
 
-    // Entries live as long as the interner pool, so member references stay valid.
     const HIRSimplePathData* addPath(u64 h1, u64 h2, ThinVector<RcString> members) {
         auto& in = interner();
         auto* head = in.table.find(h1);
@@ -334,7 +324,6 @@ bool HIRSimplePath::startsWith(const HIRSimplePath& x, bool skipLast /*=false*/)
     }
     const auto& m = p->members;
     const auto& xm = x.p->members;
-    // This path can't start with `x` if it's shorter than `x`
     if (m.size() < xm.size() - (skipLast ? 1 : 0)) {
         return false;
     }
@@ -417,10 +406,10 @@ HIRTraitPath HIRTraitPath::clone() const {
     HIRTraitPath rv{path.clone(), {}, {}, traitPtr, constness};
 
     for (const auto& assoc : typeBounds) {
-        rv.typeBounds.insert(::std::make_pair(assoc.first, assoc.second.clone()));
+        rv.typeBounds.insert(std::make_pair(assoc.first, assoc.second.clone()));
     }
     for (const auto& assoc : traitBounds) {
-        rv.traitBounds.insert(::std::make_pair(assoc.first, assoc.second.clone()));
+        rv.traitBounds.insert(std::make_pair(assoc.first, assoc.second.clone()));
     }
 
     return rv;
@@ -459,7 +448,6 @@ bool HIRTraitPath::equalsIgnoringRegions(const HIRTraitPath& x) const {
 }
 
 Ordering HIRTraitPath::ord(const HIRTraitPath& x) const {
-    // NOTE: An empty set is treated as the same as none
     ORD(path, x.path);
     ORD(traitBounds, x.traitBounds);
     ORD(typeBounds, x.typeBounds);
@@ -586,9 +574,6 @@ HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathPar
                 return HIRCompare::Fuzzy;
             }
 
-            // An unevaluated value that is a plain integer literal can still be compared
-            // exactly; treating it as fuzzy made impl selection on const generics pick the
-            // first candidate (harfrust's `SelectAtomic<8/16/32>`).
             struct H2 {
                 static bool getLiteral(const HIRConstGeneric& v, U128& out) {
                     if (const auto* ev = v.opt_Evaluated()) {
@@ -621,7 +606,6 @@ HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathPar
                 if (litT != litX) {
                     return HIRCompare::Unequal;
                 }
-                // Equal literals: continue (leaves `rv` as-is)
             } else if (valT != valX) {
                 if (valT.is_Unevaluated() || valX.is_Unevaluated()) {
                     return HIRCompare::Fuzzy;
@@ -749,19 +733,26 @@ Ordering HIRPath::ord(const HIRPath& x) const {
         case HIRPath::Data::TAG_UfcsInherent: {
             auto& tpe = this->data.as_UfcsInherent();
             auto& xpe = x.data.as_UfcsInherent();
-            ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);
+            ORD(tpe.type, xpe.type);
+            ORD(tpe.item, xpe.item);
+            return ::ord(tpe.params, xpe.params);
             break;
         }
         case HIRPath::Data::TAG_UfcsKnown: {
             auto& tpe = this->data.as_UfcsKnown();
             auto& xpe = x.data.as_UfcsKnown();
-            ORD(tpe.type, xpe.type); ORD(tpe.trait, xpe.trait); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);
+            ORD(tpe.type, xpe.type);
+            ORD(tpe.trait, xpe.trait);
+            ORD(tpe.item, xpe.item);
+            return ::ord(tpe.params, xpe.params);
             break;
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
             auto& tpe = this->data.as_UfcsUnknown();
             auto& xpe = x.data.as_UfcsUnknown();
-            ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);
+            ORD(tpe.type, xpe.type);
+            ORD(tpe.item, xpe.item);
+            return ::ord(tpe.params, xpe.params);
             break;
         }
     }
@@ -801,7 +792,7 @@ bool HIRPath::operator==(const HIRPath& x) const {
     return this->ord(x) == ::OrdEqual;
 }
 
-const EncodedLiteral* freezeEncodedLiteral(stl::ObjPool& pool, EncodedLiteral e) {
+const EncodedLiteral* freezeEncodedLiteral(ObjPool& pool, EncodedLiteral e) {
     return pool.make<EncodedLiteral>(mv$(e));
 }
 
@@ -816,22 +807,21 @@ HIRSimplePath::HIRSimplePath()
 }
 
 HIRSimplePath::HIRSimplePath(RcString crate)
-    : HIRSimplePath(crate, ::std::span<const RcString>())
+    : HIRSimplePath(crate, std::span<const RcString>())
 {
 }
 
-HIRSimplePath::HIRSimplePath(RcString crate, ::std::vector<RcString> components)
-    : HIRSimplePath(crate, ::std::span<const RcString>(components))
+HIRSimplePath::HIRSimplePath(RcString crate, std::vector<RcString> components)
+    : HIRSimplePath(crate, std::span<const RcString>(components))
 {
 }
 
-HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<RcString> components)
-    : HIRSimplePath(crate, ::std::span<const RcString>(components.begin(), components.end()))
+HIRSimplePath::HIRSimplePath(RcString crate, std::span<RcString> components)
+    : HIRSimplePath(crate, std::span<const RcString>(components.begin(), components.end()))
 {
 }
 
-HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<const RcString> components) {
-    // NOTE: Ensure that it's impossible for the crate name to be empty with only one value in `members`, simplifies comparison logic
+HIRSimplePath::HIRSimplePath(RcString crate, std::span<const RcString> components) {
     if (crate.c_str()[0] == '\0' && components.empty()) {
         p = nullptr;
         return;
@@ -857,8 +847,8 @@ HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<const RcString> compone
     p = addPath(h1, h2, std::move(members));
 }
 
-HIRSimplePath::HIRSimplePath(RcString crate, ::std::initializer_list<RcString> components)
-    : HIRSimplePath(std::move(crate), ::std::span<const RcString>(components.begin(), components.end()))
+HIRSimplePath::HIRSimplePath(RcString crate, std::initializer_list<RcString> components)
+    : HIRSimplePath(std::move(crate), std::span<const RcString>(components.begin(), components.end()))
 {
 }
 
@@ -866,7 +856,7 @@ RcString HIRSimplePath::crateName() const {
     return p ? p->members.front() : RcString();
 }
 
-::std::vector<RcString> HIRSimplePath::componentsVec() const {
+std::vector<RcString> HIRSimplePath::componentsVec() const {
     const auto values = components();
     return {values.begin(), values.end()};
 }
@@ -901,7 +891,7 @@ HIRTraitPath::AtyBound HIRTraitPath::AtyBound::clone() const {
     for (const auto& t : traits) {
         newTraits.push_back(t.clone());
     }
-    return AtyBound{sourceTrait.clone(), atyParams.clone(), ::std::move(newTraits)};
+    return AtyBound{sourceTrait.clone(), atyParams.clone(), std::move(newTraits)};
 }
 
 HIRPath::HIRPath(Data data)
@@ -912,7 +902,7 @@ HIRPath::HIRPath(Data data)
 HIRConstGenericUnevaluated::HIRConstGenericUnevaluated() {
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRCompare& x) {
+std::ostream& operator<<(std::ostream& os, const HIRCompare& x) {
     switch (x) {
         case HIRCompare::Equal:
             os << "Equal";
@@ -934,12 +924,17 @@ HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y) {
     } else if (y == HIRCompare::Fuzzy) {
         x = HIRCompare::Fuzzy;
     } else {
-        // keep as-is
     }
     return x;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const HIRTraitPath::AtyEqual& x) {
+std::ostream& operator<<(std::ostream& os, const HIRTraitPath::AtyEqual& x) {
     os << x.type;
     return os;
+}
+
+PathNode::PathNode(u64 h1, u64 h2, ThinVector<RcString> m, PathNode* next)
+    : HIRSimplePathData{h1, h2, std::move(m)}
+    , next(next)
+{
 }

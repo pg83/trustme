@@ -13,7 +13,7 @@ generate(
         v("Macro", fields=[("ASTMacroInvocation*", "inv")]),
         v("Primitive", fields=[("enum eCoreType", "coreType")]),
         v("Function", fields=[("TypeFunction", "info")]),
-        v("Tuple", fields=[("::std::vector<ASTType*>", "innerTypes")]),
+        v("Tuple", fields=[("std::vector<ASTType*>", "innerTypes")]),
         v("Borrow", fields=[
             ("ASTLifetimeRef", "lifetime"),
             ("bool", "isMut"),
@@ -28,7 +28,7 @@ generate(
         ]),
         v("Array", fields=[
             ("ASTType*", "inner"),
-            ("::std::shared_ptr<ASTExprNode>", "size"),
+            ("std::shared_ptr<ASTExprNode>", "size"),
         ], doc="A nullptr size means an inferred size"),
         v("Slice", fields=[("ASTType*", "inner")]),
         v("Pattern", fields=[
@@ -41,8 +41,8 @@ generate(
         ]),
         v("Path", "ASTPath*"),
         v("TraitObject", fields=[
-            ("::std::vector<TypeTraitPath>", "traits"),
-            ("::std::vector<ASTLifetimeRef>", "lifetimes"),
+            ("std::vector<TypeTraitPath>", "traits"),
+            ("std::vector<ASTLifetimeRef>", "lifetimes"),
         ]),
         v("ErasedType", "TypeErasedType*"),
     ],

@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-using ::std::move;
-using ::std::unique_ptr;
+using std::move;
+using std::unique_ptr;
 class ASTMacroInvocation;
 
 class ASTPatternBinding {
@@ -41,17 +41,14 @@ public:
 struct ASTStructPatternEntry;
 class ASTPattern;
 
-/// True if `!` appears anywhere in the pattern, which makes the alternative it
-/// belongs to unmatchable.
 extern bool PatternContainsNever(const ASTPattern& pat);
 
 struct ASTPatternTuplePat {
-    ::std::vector<ASTPattern> start;
+    std::vector<ASTPattern> start;
     bool hasWildcard;
-    ::std::vector<ASTPattern> end;
+    std::vector<ASTPattern> end;
 };
 
-// Definitions generated from ast_pattern.tu.
 #include "ast_pattern_tu.h"
 
 class ASTPattern {
@@ -108,19 +105,19 @@ public:
 
     struct TagTuple {};
 
-    ASTPattern(TagTuple, Span sp, ::std::vector<ASTPattern> pats);
+    ASTPattern(TagTuple, Span sp, std::vector<ASTPattern> pats);
 
     ASTPattern(TagTuple, Span sp, TuplePat pat);
 
     struct TagNamedTuple {};
 
-    ASTPattern(TagNamedTuple, Span sp, ASTPath path, ::std::vector<ASTPattern> pats);
+    ASTPattern(TagNamedTuple, Span sp, ASTPath path, std::vector<ASTPattern> pats);
 
     ASTPattern(TagNamedTuple, Span sp, ASTPath path, TuplePat pat = TuplePat{{}, false, {}});
 
     struct TagStruct {};
 
-    ASTPattern(TagStruct, Span sp, ASTPath path, ::std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive);
+    ASTPattern(TagStruct, Span sp, ASTPath path, std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive);
 
     const Span& span() const {
         return span_;
@@ -128,7 +125,6 @@ public:
 
     ASTPattern clone() const;
 
-    // Accessors
     std::vector<ASTPatternBinding>& bindings() {
         return bindings_;
     }
@@ -153,7 +149,7 @@ public:
         return data_.as_StructTuple().path;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTPattern& pat);
+    friend std::ostream& operator<<(std::ostream& os, const ASTPattern& pat);
 };
 
 struct ASTStructPatternEntry {
@@ -162,6 +158,6 @@ struct ASTStructPatternEntry {
     ASTPattern pat;
 };
 
-extern ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::Value& val);
-extern ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::TuplePat& val);
+extern std::ostream& operator<<(std::ostream& os, const ASTPattern::Value& val);
+extern std::ostream& operator<<(std::ostream& os, const ASTPattern::TuplePat& val);
 extern Ordering ord(const ASTPattern& a, const ASTPattern& b);

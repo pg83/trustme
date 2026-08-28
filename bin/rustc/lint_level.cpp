@@ -1,18 +1,11 @@
 #include "lint_level.h"
 
-#include "hir_hir.h"
 #include "span.h"
+#include "hir_hir.h"
 
-CfgLintLevel ApplyLintLevelOverrides(
-    const Settings& settings,
-    const LintLevelOverrides& overrides,
-    const char* name,
-    CfgLintLevel inherited
-) {
+CfgLintLevel ApplyLintLevelOverrides(const Settings& settings, const LintLevelOverrides& overrides, const char* name, CfgLintLevel inherited) {
     auto level = inherited;
 
-    // A group the lint belongs to, but not `warnings` -- that one is applied
-    // last, so that it can lift whatever is still at warn.
     for (const auto& entry : overrides.entries) {
         if (!entry.isGroup || entry.name == "warnings") {
             continue;
@@ -27,8 +20,7 @@ CfgLintLevel ApplyLintLevelOverrides(
         level = exact->level;
     }
 
-    if (const auto* warnings = overrides.find(RcString::newInterned("warnings"), true);
-        warnings && (level == CfgLintLevel::Warn || level == CfgLintLevel::ForceWarn)) {
+    if (const auto* warnings = overrides.find(RcString::newInterned("warnings"), true); warnings && (level == CfgLintLevel::Warn || level == CfgLintLevel::ForceWarn)) {
         level = warnings->level;
     }
 
@@ -38,13 +30,7 @@ CfgLintLevel ApplyLintLevelOverrides(
     return level;
 }
 
-CfgLintLevel LintLevelForModulePath(
-    const Settings& settings,
-    const HIRCrate& crate,
-    const HIRSimplePath& path,
-    const char* name,
-    CfgLintLevel builtin
-) {
+CfgLintLevel LintLevelForModulePath(const Settings& settings, const HIRCrate& crate, const HIRSimplePath& path, const char* name, CfgLintLevel builtin) {
     auto level = settings.lintLevel(name, builtin);
     const HIRModule* module = &crate.rootModule;
     level = ApplyLintLevelOverrides(settings, module->lintLevels, name, level);

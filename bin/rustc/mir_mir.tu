@@ -14,13 +14,13 @@ generate(
         v("Float", fields=[("FloatValue", "v"), ("HIRCoreType", "t")]),
         v("Bool", fields=[("bool", "v")],
           doc="The dedicated struct is defensive: it prevents implicit casts"),
-        v("Bytes", "::std::vector<u8>", doc="Byte string"),
-        v("StaticString", "::std::string", doc="String"),
-        v("Const", fields=[("::std::unique_ptr<HIRPath>", "p")], copy=False,
+        v("Bytes", "std::vector<u8>", doc="Byte string"),
+        v("StaticString", "std::string", doc="String"),
+        v("Const", fields=[("std::unique_ptr<HIRPath>", "p")], copy=False,
           doc="`const`. Behind a pointer to save inline space (HIRPath is ~11"
               " words, compared to 4 for MIRConstant without it)"),
         v("Generic", "HIRGenericRef"),
-        v("Function", fields=[("::std::unique_ptr<HIRPath>", "p")], copy=False,
+        v("Function", fields=[("std::unique_ptr<HIRPath>", "p")], copy=False,
           doc="ZST function type, NOT its address"),
         v("ItemAddr", "ItemAddress", copy=False,
           doc="Address within a named allocation"),
@@ -30,7 +30,7 @@ generate(
         ], copy=False),
     ],
     extra="""
-        friend ::std::ostream& operator<<(::std::ostream& os, const MIRConstant& v);
+        friend std::ostream& operator<<(std::ostream& os, const MIRConstant& v);
         ::Ordering ord(const MIRConstant& b) const;
         bool operator==(const MIRConstant& b) const {
             return ord(b) == ::OrdEqual;
@@ -72,7 +72,7 @@ generate(
     ],
     extra="""
         MIRParam clone() const;
-        friend ::std::ostream& operator<<(::std::ostream& os, const MIRParam& v);
+        friend std::ostream& operator<<(std::ostream& os, const MIRParam& v);
         bool operator==(const MIRParam& b) const;
         bool operator!=(const MIRParam& b) const {
             return !(*this == b);
@@ -122,8 +122,8 @@ generate(
                            " metadata OR (if `metaVal` is"
                            " `Constant::ItemAddr(nullptr)`) a still-to-be-"
                            "resolved unsizing coercion"),
-        v("Tuple", fields=[("::std::vector<MIRParam>", "vals")], copy=False),
-        v("Array", fields=[("::std::vector<MIRParam>", "vals")], copy=False,
+        v("Tuple", fields=[("std::vector<MIRParam>", "vals")], copy=False),
+        v("Array", fields=[("std::vector<MIRParam>", "vals")], copy=False,
           doc="Array literal"),
         v("UnionVariant", fields=[
             ("HIRGenericPath", "path"),
@@ -133,13 +133,13 @@ generate(
         v("EnumVariant", fields=[
             ("HIRGenericPath", "path"),
             ("unsigned int", "index"),
-            ("::std::vector<MIRParam>", "vals"),
+            ("std::vector<MIRParam>", "vals"),
         ], copy=False, doc="Create a new instance of an enum. Separate from"
                            " UnionVariant, as the contents is needed when"
                            " creating the body"),
         v("Struct", fields=[
             ("HIRGenericPath", "path"),
-            ("::std::vector<MIRParam>", "vals"),
+            ("std::vector<MIRParam>", "vals"),
         ], copy=False, doc="Create a new instance of a struct"),
     ],
     extra="""
@@ -166,10 +166,10 @@ generate(
     default="Unsigned",
     clone=False,
     variants=[
-        v("Unsigned", "::std::vector<u64>"),
-        v("Signed", "::std::vector<i64>"),
-        v("String", "::std::vector<::std::string>"),
-        v("ByteString", "::std::vector<::std::vector<u8>>"),
+        v("Unsigned", "std::vector<u64>"),
+        v("Signed", "std::vector<i64>"),
+        v("String", "std::vector<std::string>"),
+        v("ByteString", "std::vector<std::vector<u8>>"),
     ],
     extra="""
         MIRSwitchValues clone() const;
@@ -227,14 +227,14 @@ generate(
         ], copy=False),
         v("Switch", fields=[
             ("MIRLValue", "val"),
-            ("::std::vector<MIRBasicBlockId>", "targets"),
+            ("std::vector<MIRBasicBlockId>", "targets"),
             ("unsigned int", "validFlag", "~0u"),
             ("MIRBasicBlockId", "invalidTarget", "~0u"),
         ], copy=False),
         v("SwitchValue", fields=[
             ("MIRLValue", "val"),
             ("MIRBasicBlockId", "defTarget"),
-            ("::std::vector<MIRBasicBlockId>", "targets"),
+            ("std::vector<MIRBasicBlockId>", "targets"),
             ("MIRSwitchValues", "values"),
         ], copy=False),
         v("Drop", fields=[
@@ -249,20 +249,20 @@ generate(
             ("MIRUnwindAction", "unwind"),
             ("MIRLValue", "retVal"),
             ("MIRCallTarget", "fcn"),
-            ("::std::vector<MIRParam>", "args"),
+            ("std::vector<MIRParam>", "args"),
             ("SourceLocation", "source"),
             ("bool", "tracksCaller", "false"),
         ], copy=False),
         v("TailCall", fields=[
             ("MIRCallTarget", "fcn"),
-            ("::std::vector<MIRParam>", "args"),
+            ("std::vector<MIRParam>", "args"),
             ("SourceLocation", "source"),
             ("bool", "tracksCaller", "false"),
         ], copy=False),
         v("Asm2", fields=[
             ("AsmOptions", "options"),
             ("std::vector<AsmLine>", "lines"),
-            ("::std::vector<MIRAsmParam>", "params"),
+            ("std::vector<MIRAsmParam>", "params"),
             ("MIRBasicBlockId", "retBlock"),
         ], copy=False, doc="Inline assembly with label operands. Unlike"
                            " statement-form Asm2, this is a terminator because"
@@ -280,16 +280,16 @@ generate(
             ("MIRRValue", "src"),
         ], copy=False, doc="Value assignment"),
         v("Asm", fields=[
-            ("::std::string", "tpl"),
-            ("::std::vector<::std::pair<::std::string, MIRLValue>>", "outputs"),
-            ("::std::vector<::std::pair<::std::string, MIRLValue>>", "inputs"),
-            ("::std::vector<::std::string>", "clobbers"),
-            ("::std::vector<::std::string>", "flags"),
+            ("std::string", "tpl"),
+            ("std::vector<std::pair<std::string, MIRLValue>>", "outputs"),
+            ("std::vector<std::pair<std::string, MIRLValue>>", "inputs"),
+            ("std::vector<std::string>", "clobbers"),
+            ("std::vector<std::string>", "flags"),
         ], copy=False, doc="Inline assembly (`llvm_asm!`)"),
         v("Asm2", fields=[
             ("AsmOptions", "options"),
             ("std::vector<AsmLine>", "lines"),
-            ("::std::vector<MIRAsmParam>", "params"),
+            ("std::vector<MIRAsmParam>", "params"),
         ], copy=False, doc="Inline assembly (stabilised)"),
         v("SetDropFlag", fields=[
             ("unsigned int", "idx"),
@@ -310,6 +310,6 @@ generate(
             ("unsigned int", "bitIndex"),
         ], copy=False, doc="Load drop flag `idx` from bit `bitIndex` of the"
                            " bit-set array `slot` (nominally `u8`s)"),
-        v("ScopeEnd", fields=[("::std::vector<unsigned>", "slots")]),
+        v("ScopeEnd", fields=[("std::vector<unsigned>", "slots")]),
     ],
 )

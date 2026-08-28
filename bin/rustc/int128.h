@@ -1,9 +1,10 @@
 #pragma once
 
-#include <stdint.h>
-#include <iostream>
 #include "common.h"
-#include <cstring> // memcpy
+
+#include <cstring>
+#include <iostream>
+#include <stdint.h>
 
 class U128 {
     friend class S128;
@@ -206,7 +207,7 @@ public:
 
     bool bit(unsigned idx) const;
 
-    friend std::ostream& operator<<(::std::ostream& os, const U128& x);
+    friend std::ostream& operator<<(std::ostream& os, const U128& x);
 
 private:
     // TODO: All of these are functionally identical to code in `codegen_c.cpp` - could it be shared?
@@ -218,7 +219,6 @@ private:
 
     static bool mul128O(U128 a, U128 b, U128* o);
 
-    // Long division
     static bool div128O(U128 a, U128 b, U128* q, U128* r);
 };
 
@@ -304,7 +304,6 @@ public:
         return (inner >> 127).truncateU64() != 0;
     }
 
-    /// Unsigned absolute value (handles MIN correctly)
     U128 uAbs() const;
 
     Ordering ord(const S128& x) const;
@@ -367,9 +366,9 @@ public:
 
     S128 operator>>(unsigned bits) const;
 
-    void fmt(::std::ostream& os) const;
+    void fmt(std::ostream& os) const;
 
-    friend std::ostream& operator<<(::std::ostream& os, const S128& x);
+    friend std::ostream& operator<<(std::ostream& os, const S128& x);
 
 private:
     static int cmp128s(U128 a, U128 b);

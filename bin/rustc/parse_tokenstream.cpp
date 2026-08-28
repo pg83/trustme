@@ -1,9 +1,11 @@
 #include "parse_tokenstream.h"
 
 #include "common.h"
-#include "ast_crate.h" // Edition lookup
-#include "wire_board.h" // typePool() reads the pool off the board
+#include "ast_crate.h"
+#include "wire_board.h"
 #include "parse_parseerror.h"
+
+using namespace stl;
 
 TokenStream::TokenStream(ParseState ps)
     : cacheValid(false)
@@ -22,7 +24,7 @@ bool TokenStream::isMacroExpansionPlaceholder() const {
     return macroExpansionPlaceholder_;
 }
 
-stl::ObjPool& TokenStream::typePool() const {
+ObjPool& TokenStream::typePool() const {
     return *parseState_.wb->pool;
 }
 
@@ -125,7 +127,7 @@ Span TokenStream::endSpan(ProtoSpan ps) const {
         assert(this->outerSpan());
         return this->outerSpan();
     }
-    return Span(this->outerSpan(), ::std::move(ps.filename), ps.startLine, ps.startOfs, p.line, p.ofs);
+    return Span(this->outerSpan(), std::move(ps.filename), ps.startLine, ps.startOfs, p.line, p.ofs);
 }
 
 Span TokenStream::pointSpan() const {
@@ -160,8 +162,7 @@ ASTModule& ParseState::getCurrentMod() {
     return *this->module;
 }
 
-/// <summary>Consumes a token if it is of the specified type</summary>
-bool TokenStream::getTokenIf(eTokenType exp) { // I'd like std::optional, but not available
+bool TokenStream::getTokenIf(eTokenType exp) {
     if (lookahead(0) == exp) {
         getToken();
         return true;
@@ -170,8 +171,7 @@ bool TokenStream::getTokenIf(eTokenType exp) { // I'd like std::optional, but no
     }
 }
 
-/// <summary>Consumes a token if it is of the specified type</summary>
-bool TokenStream::getTokenIf(eTokenType exp, Token& dst) { // I'd like std::optional, but not available
+bool TokenStream::getTokenIf(eTokenType exp, Token& dst) {
     if (lookahead(0) == exp) {
         dst = getToken();
         return true;
@@ -190,7 +190,7 @@ SavedParseState::~SavedParseState() {
     lex.parseState() = state;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const ParseState& ps) {
+std::ostream& operator<<(std::ostream& os, const ParseState& ps) {
     os << "ParseState {";
     if (ps.disallowStructLiteral) {
         os << " disallow_struct_literal";

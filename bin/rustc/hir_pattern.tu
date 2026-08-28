@@ -8,24 +8,24 @@ generate(
     variants=[
         v("Any", doc="Irrefutable / destructuring"),
         v("Box", fields=[
-            ("::std::unique_ptr<HIRPattern>", "sub"),
+            ("std::unique_ptr<HIRPattern>", "sub"),
         ], copy=False),
         v("Deref", fields=[
             ("HIRPatternDerefKind", "kind"),
             ("HIRTypeRef", "targetType"),
-            ("::std::unique_ptr<HIRPattern>", "sub"),
+            ("std::unique_ptr<HIRPattern>", "sub"),
         ], copy=False),
         v("Ref", fields=[
             ("HIRBorrowType", "type"),
             ("bool", "isSkipped"),
-            ("::std::unique_ptr<HIRPattern>", "sub"),
+            ("std::unique_ptr<HIRPattern>", "sub"),
         ], copy=False),
         v("Tuple", fields=[
-            ("::std::vector<HIRPattern>", "subPatterns"),
+            ("std::vector<HIRPattern>", "subPatterns"),
         ], copy=False),
         v("SplitTuple", fields=[
-            ("::std::vector<HIRPattern>", "leading"),
-            ("::std::vector<HIRPattern>", "trailing"),
+            ("std::vector<HIRPattern>", "leading"),
+            ("std::vector<HIRPattern>", "trailing"),
             ("unsigned int", "totalSize"),
         ], copy=False),
         v("PathValue", fields=[
@@ -36,9 +36,9 @@ generate(
         v("PathTuple", fields=[
             ("HIRPath", "path"),
             ("HIRPatternPathBinding", "binding"),
-            ("::std::vector<HIRPattern>", "leading"),
+            ("std::vector<HIRPattern>", "leading"),
             ("bool", "isSplit"),
-            ("::std::vector<HIRPattern>", "trailing"),
+            ("std::vector<HIRPattern>", "trailing"),
             ("unsigned int", "totalSize"),
         ], copy=False, doc="Tuple-like enum/struct value. totalSize caches"
                            " the arity, making MIR gen easier for split"
@@ -55,12 +55,12 @@ generate(
             ("bool", "isInclusive"),
         ], copy=False),
         v("Slice", fields=[
-            ("::std::vector<HIRPattern>", "subPatterns"),
+            ("std::vector<HIRPattern>", "subPatterns"),
         ], copy=False),
         v("SplitSlice", fields=[
-            ("::std::vector<HIRPattern>", "leading"),
+            ("std::vector<HIRPattern>", "leading"),
             ("HIRPatternBinding", "extraBind"),
-            ("::std::vector<HIRPattern>", "trailing"),
+            ("std::vector<HIRPattern>", "trailing"),
         ], copy=False),
     ],
 )

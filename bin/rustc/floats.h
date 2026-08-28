@@ -1,15 +1,12 @@
 #pragma once
 
-#include <std/sys/types.h>
-
 #include "float128.h"
+
+#include <std/sys/types.h>
 
 #include <cstdint>
 #include <sstream>
 
-// Every float value in the compiler is a software binary128 (see
-// float128.h), so f32/f64 arithmetic sees no double rounding, f128
-// semantics are exact, and no host float128 toolchain support is needed.
 using FloatValue = Float128;
 
 FloatValue parseFloatValue(const char* text);
@@ -25,11 +22,10 @@ FloatValue floatValueRemainder(FloatValue lhs, FloatValue rhs);
 FloatValue floatValueMinimumNumber(FloatValue lhs, FloatValue rhs);
 FloatValue floatValueMaximumNumber(FloatValue lhs, FloatValue rhs);
 FloatValue positiveNanFloatValue();
-::std::string formatFloatValueForToken(FloatValue value);
+std::string formatFloatValueForToken(FloatValue value);
 
 std::ostringstream&& operator<<(std::ostringstream&& os, const FloatValue& value);
 
-// IEEE binary16 (1.5.10), converted through binary32
 struct F16 {
     u16 v;
 
@@ -39,7 +35,6 @@ struct F16 {
     operator float() const;
 };
 
-// Raw binary128 bits, the on-disk and codegen representation
 struct F128 {
     u64 lo;
     u64 hi;

@@ -84,7 +84,6 @@ public:
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override;
 };
 
-// Wrappers to only monomorphise if required
 static inline const HIRTypeData* monomorphiseTypeWithOpt(const Span& sp, HIRTypeRef& tmp, const HIRTypeData* tpl, const Monomorphiser& mono, bool allowInfer = true) {
     return (monomorphiseTypeNeeded(tpl) ? tmp = mono.monomorphType(sp, tpl, allowInfer) : tpl);
 }
@@ -105,12 +104,11 @@ static inline const HIRPathParams& monomorphisePathparamsWithOpt(const Span& sp,
     return (monomorphisePathparamsNeeded(tpl) ? tmp = mono.monomorphPathParams(sp, tpl, allowInfer) : tpl);
 }
 
-// Helper for passing a group of params around
 struct MonomorphStatePtr: public MonomorphiserPP {
     const HIRTypeData* selfTy;
     const HIRPathParams* ppImpl;
     const HIRPathParams* ppMethod;
-    //const ::HIR::PathParams*    pp_placeholder;
+
     const HIRPathParams* ppHrb;
 
     explicit MonomorphStatePtr(HIRTypeInterner& types);
@@ -132,7 +130,6 @@ struct MonomorphStatePtr: public MonomorphiserPP {
     const HIRPathParams* getHrbParams() const override;
 };
 
-// Helper for passing a group of params around
 struct MonomorphState: public MonomorphiserPP {
     HIRTypeRef selfTy;
     const HIRPathParams* ppImpl;
@@ -163,4 +160,4 @@ struct MonomorphState: public MonomorphiserPP {
     const HIRPathParams* getHrbParams() const override;
 };
 
-extern ::std::ostream& operator<<(::std::ostream& os, const MonomorphState& ms);
+extern std::ostream& operator<<(std::ostream& os, const MonomorphState& ms);

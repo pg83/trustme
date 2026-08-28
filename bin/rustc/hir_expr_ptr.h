@@ -93,16 +93,13 @@ public:
 };
 
 class HIRExprPtr {
-    //::HIR::Path m_path;
     HIRExprNodeP node;
 
 public:
-    //::std::vector< ::HIR::ASTType*>  m_type_table;
-    ::std::vector<HIRTypeRef> bindings;
-    ::std::vector<HIRTypeRef> erasedTypes;
-    ::std::vector<HIRSimplePath> defineOpaque;
+    std::vector<HIRTypeRef> bindings;
+    std::vector<HIRTypeRef> erasedTypes;
+    std::vector<HIRSimplePath> defineOpaque;
 
-    // Public because too much relies on access to it
     MIRFunctionPointer mir;
 
     HIRExprStatePtr state;
@@ -147,11 +144,10 @@ public:
         return &*node;
     }
 
-    /// Get MIR (checks if the MIR should be available)
     const MIRFunction* getMirOpt() const;
     const MIRFunction& getMirOrError(const Span& sp) const;
     MIRFunction& getMirOrErrorMut(const Span& sp);
-    /// Get external MIR, returns nullptr if none
+
     const MIRFunction* getExtMir() const;
     MIRFunction* getExtMirMut();
 

@@ -7,9 +7,8 @@
 #include <string>
 #include <vector>
 
-// ABI and builtin crate names are shared by the AST and HIR assembly representations.
 #define ABI_RUST "Rust"
-#define CRATE_BUILTINS "#builtins" // used for macro re-exports of builtins
+#define CRATE_BUILTINS "#builtins"
 
 enum class AsmDirection {
     In,
@@ -28,40 +27,13 @@ enum class AsmRegisterClass {
     x86Xmm,
     x86Ymm,
     x86Zmm,
-    //x86_mm, // Requires
+
     x86Kreg,
-
-    //aarch64_reg,
-    //aarch64_vreg,
-
-    //arm_reg,
-    //arm_sreg,
-    //arm_dreg,
-    //arm_qreg,
-
-    //mips_reg,
-    //mips_freg,
-
-    //nvptx_reg16,
-    //nvptx_reg32,
-    //nvptx_reg64,
 
     riscvReg,
     riscvFreg,
-
-    //hexagon_reg,
-
-    //powerpc_reg,
-    //powerpc_reg_nonzero,
-    //powerpc_freg,
-
-    //wasm32_local,
-
-    //bpf_reg,
-    //bpf_wreg,
 };
 
-// Definitions generated from hir_asm.tu.
 #include "hir_asm_tu.h"
 
 bool operator==(const AsmRegisterSpec& a, const AsmRegisterSpec& b);
@@ -106,9 +78,9 @@ struct AsmOptions {
     unsigned noreturn : 1;
     unsigned nostack : 1;
     unsigned attSyntax : 1;
-    /// The template is the assembly as written: no `{}` substitution.
+
     unsigned raw : 1;
-    // Indicates `naked_asm!`
+
     unsigned naked : 1;
 
     AsmOptions();

@@ -6,7 +6,7 @@
 #include <iostream>
 
 Span::Span(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs)
-    : ptr(SpanInnerSource::alloc(parent, ::std::move(filename), startLine, startOfs, endLine, endOfs))
+    : ptr(SpanInnerSource::alloc(parent, std::move(filename), startLine, startOfs, endLine, endOfs))
 {
 }
 
@@ -62,20 +62,20 @@ const SpanInnerSource& Span::getTopFileSpan() const {
 
 void Span::printSpanMessage(SpanMessageCallback& tag, SpanMessageCallback& msg) const {
     const Span& sp = *this;
-    auto& sink = ::std::cerr;
+    auto& sink = std::cerr;
     sink << sp << " ";
     tag.write(sink);
     sink << ": ";
     msg.write(sink);
-    sink << ::std::endl;
+    sink << std::endl;
 
     if (sp.get()) {
         for (auto parent = sp->parentSpan; parent != Span(); parent = parent->parentSpan) {
-            sink << parent << ": note: From here" << ::std::endl;
+            sink << parent << ": note: From here" << std::endl;
         }
     }
 
-    sink << ::std::flush;
+    sink << std::flush;
 }
 
 void spanUnreachableAt(const char* file, int line) {
@@ -123,7 +123,7 @@ unsigned int SpanInnerSource::nodeKind() const {
     return SpanInnerSource::kind;
 }
 
-void SpanInnerSource::fmt(::std::ostream& os) const {
+void SpanInnerSource::fmt(std::ostream& os) const {
     os << this->filename;
     if (this->startLine != this->endLine) {
         os << ":" << this->startLine << "-" << this->endLine;
@@ -141,7 +141,7 @@ unsigned int SpanInnerMacro::nodeKind() const {
     return SpanInnerMacro::kind;
 }
 
-void SpanInnerMacro::fmt(::std::ostream& os) const {
+void SpanInnerMacro::fmt(std::ostream& os) const {
     os << "MACRO<::\"" << this->crate << "\"::" << this->macro << ">";
 }
 
@@ -154,7 +154,7 @@ void SpanInnerMacro::fmt(::std::ostream& os) const {
     return rv;
 }
 
-::std::ostream& operator<<(::std::ostream& os, const Span& sp) {
+std::ostream& operator<<(std::ostream& os, const Span& sp) {
     if (sp.ptr) {
         sp.ptr->fmt(os);
     } else {
@@ -164,8 +164,8 @@ void SpanInnerMacro::fmt(::std::ostream& os) const {
 }
 
 Span::Span()
-    //: m_ptr(&s_empty_span)
-    : ptr(nullptr) {
+    : ptr(nullptr)
+{
 }
 
 Span::Span(Span&& x)
@@ -190,7 +190,7 @@ SpanInner* SpanInnerSource::alloc(Span parent, RcString filename, unsigned int s
     auto* rv = new SpanInnerSource();
     rv->referenceCount = 1;
     rv->parentSpan = parent;
-    rv->filename = ::std::move(filename);
+    rv->filename = std::move(filename);
     rv->startLine = startLine;
     rv->startOfs = startOfs;
     rv->endLine = endLine;

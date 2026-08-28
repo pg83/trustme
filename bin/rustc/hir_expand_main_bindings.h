@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-#include <utility> // std::pair
+#include <utility>
 
 class HIRCrate;
 struct WireBoard;

@@ -7,12 +7,6 @@ namespace stl {
     class ObjPool;
 }
 
-/// The crate's lang-item paths, resolved once. Wired on the WireBoard.
-///
-/// These are constant for a crate, but every trait resolver used to look all
-/// of them up by name in its constructor — with a resolver built per function
-/// (and per expression) in each pipeline phase that is tens of thousands of
-/// map lookups per compilation. Resolve them once here instead.
 class LangItems {
 public:
     virtual const HIRSimplePath& copy() const = 0;

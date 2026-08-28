@@ -1,5 +1,7 @@
 #include "ast_generics.h"
 
+using namespace stl;
+
 ASTTypeParam::ASTTypeParam(const ASTTypeParam& x)
     : attrs_(x.attrs_)
     , span_(x.span_)
@@ -8,32 +10,32 @@ ASTTypeParam::ASTTypeParam(const ASTTypeParam& x)
 {
 }
 
-ASTTypeParam::ASTTypeParam(stl::ObjPool& pool, Span sp, ASTAttributeList attrs, RcString name)
-    : attrs_(::std::move(attrs))
-    , span_(::std::move(sp))
-    , name_(::std::move(name))
+ASTTypeParam::ASTTypeParam(ObjPool& pool, Span sp, ASTAttributeList attrs, RcString name)
+    : attrs_(std::move(attrs))
+    , span_(std::move(sp))
+    , name_(std::move(name))
     , defaultValue_(mkType(pool, span_))
 {
 }
 
 void ASTTypeParam::setDefault(ASTType* type) {
     assert(defaultValue_->isWildcard());
-    defaultValue_ = ::std::move(type);
+    defaultValue_ = std::move(type);
 }
 
 ASTLifetimeParam::ASTLifetimeParam(Span sp, ASTAttributeList attrs, Ident name)
-    : attrs_(::std::move(attrs))
-    , span_(::std::move(sp))
-    , name_(::std::move(name))
+    : attrs_(std::move(attrs))
+    , span_(std::move(sp))
+    , name_(std::move(name))
 {
 }
 
 ASTValueParam::ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* type, ASTExpr val)
-    : attrs_(::std::move(attrs))
-    , span_(::std::move(sp))
-    , name_(::std::move(name))
-    , type_(::std::move(type))
-    , defaultValue_(::std::move(val))
+    : attrs_(std::move(attrs))
+    , span_(std::move(sp))
+    , name_(std::move(name))
+    , type_(std::move(type))
+    , defaultValue_(std::move(val))
 {
 }
 
@@ -67,7 +69,7 @@ ASTGenericParams ASTGenericParams::clone() const {
 }
 
 void ASTGenericParams::addParam(GenericParam gp, size_t boundsStart, size_t boundsEnd) {
-    params.push_back(::std::move(gp));
+    params.push_back(std::move(gp));
     params.back().boundsStart = boundsStart;
     params.back().boundsEnd = boundsEnd;
 }

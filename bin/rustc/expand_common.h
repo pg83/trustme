@@ -2,6 +2,7 @@
 
 #include "ast_attrs.h"
 #include "macro_rules_macro_rules.h"
+
 #include <std/mem/obj_pool.h>
 
 class HIRProcMacro;
@@ -13,9 +14,6 @@ class ASTPath;
 class ExpandProcMacro;
 class ExpandDecorator;
 
-// Compiler-owned registry of built-in attributes and macros. Entries and
-// handlers have the lifetime of the root WireBoard pool; registration is an
-// explicit startup step, never a namespace-static constructor side effect.
 class ExpandRegistry {
     struct DecoratorEntry {
         const char* name;
@@ -79,7 +77,6 @@ public:
     }
 };
 
-// Definitions generated from expand_common.tu.
 #include "expand_common_tu.h"
 extern MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTAttributeName& path);
 extern MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTPath& path);

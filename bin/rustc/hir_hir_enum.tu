@@ -8,9 +8,9 @@ generate(
     default="Data",
     clone=False,
     variants=[
-        v("Data", "::std::vector<HIREnumDataVariant>", copy=False),
+        v("Data", "std::vector<HIREnumDataVariant>", copy=False),
         v("Value", fields=[
-            ("::std::vector<HIREnumValueVariant>", "variants"),
+            ("std::vector<HIREnumValueVariant>", "variants"),
         ], copy=False),
     ],
 )

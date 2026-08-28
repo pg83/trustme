@@ -23,10 +23,10 @@ class MIRParam;
 
 typedef unsigned int MIRBasicBlockId;
 
-struct CheckFailure: public ::std::exception {};
+struct CheckFailure: public std::exception {};
 
 struct MIRPathCallback {
-    virtual void write(::std::ostream& os) const = 0;
+    virtual void write(std::ostream& os) const = 0;
 };
 
 template <typename F>
@@ -38,7 +38,7 @@ struct MIRPathCb final: MIRPathCallback {
     {
     }
 
-    void write(::std::ostream& os) const override {
+    void write(std::ostream& os) const override {
         f(os);
     }
 };
@@ -49,7 +49,7 @@ struct MIRPathCb final: MIRPathCallback {
         (state).printBug([&](auto& _os) {        \
             _os << __fcn << ": " << __VA_ARGS__; \
         });                                      \
-        UNREACHABLE();                                \
+        UNREACHABLE();                           \
     } while (0)
 #define MIR_ASSERT(state, cnd, ...)                                                                \
     do {                                                                                           \
@@ -63,11 +63,12 @@ struct MIRPathCb final: MIRPathCallback {
         (state).printTodo([&](auto& _os) {                             \
             _os << __FILE__ << ":" << __LINE__ << ": " << __VA_ARGS__; \
         });                                                            \
-        UNREACHABLE();                                                      \
+        UNREACHABLE();                                                 \
     } while (0)
+
 class MIRTypeResolve {
 public:
-    typedef ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> argsT;
+    typedef std::vector<std::pair<HIRPattern, HIRTypeRef>> argsT;
     using TypeNameString = std::string;
 
 private:
@@ -86,9 +87,8 @@ public:
     const argsT& args;
     const MIRFunction& fcn;
 
-    // If set, these override the list in `m_fcn`
     const HIRTypeData* monomorphedRettype;
-    const ::std::vector<HIRTypeRef>* monomorphedLocals;
+    const std::vector<HIRTypeRef>* monomorphedLocals;
 
 private:
     const HIRSimplePath* langBox_ = nullptr;
@@ -120,7 +120,7 @@ public:
 
     unsigned int getCurStmtOfs() const;
 
-    void fmtPos(::std::ostream& os, bool includePath = false) const;
+    void fmtPos(std::ostream& os, bool includePath = false) const;
 
     template <typename F>
     void printBug(F f) const {
@@ -157,33 +157,23 @@ public:
     bool lvalueIsCopy(const MIRLValue& val) const;
     const HIRTypeData* isTypeOwnedBox(const HIRTypeData* ty) const;
 
-    /// @brief Handler for the `offset_of` intrinsic
-    /// @param ty Type
-    /// @param params Field names (must be Const::String)
-    /// @return Offset in bytes
-    size_t intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vector<MIRParam>& params) const;
-    /// @brief Handler for the `type_name` intrinsic, strips out trustme's helper comments
-    /// @param ty Type
-    /// @return Clean string form of the type
+    size_t intrinsicOffsetOf(const HIRTypeData* ty, const std::vector<MIRParam>& params) const;
+
     TypeNameString intrinsicTypeName(const HIRTypeData* ty) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const MIRTypeResolve& x);
+    friend std::ostream& operator<<(std::ostream& os, const MIRTypeResolve& x);
 };
 
-// --------------------------------------------------------------------
-// MIR_Helper_GetLifetimes
-// --------------------------------------------------------------------
 class MIRValueLifetime {
-    ::std::vector<bool> statements;
+    std::vector<bool> statements;
 
 public:
-    MIRValueLifetime(::std::vector<bool> stmts);
+    MIRValueLifetime(std::vector<bool> stmts);
 
     bool validAt(size_t ofs) const {
         return statements.at(ofs);
     }
 
-    // true if this value is used at any point
     bool isUsed() const;
 
     bool overlaps(const MIRValueLifetime& x) const;
@@ -192,8 +182,8 @@ public:
 };
 
 struct MIRValueLifetimes {
-    ::std::vector<size_t> blockOffsets;
-    ::std::vector<MIRValueLifetime> slots;
+    std::vector<size_t> blockOffsets;
+    std::vector<MIRValueLifetime> slots;
 
     bool slotValid(unsigned idx, unsigned bbIdx, unsigned stmtIdx) const {
         return slots.at(idx).validAt(blockOffsets[bbIdx] + stmtIdx);
@@ -261,9 +251,6 @@ bool visitMirLvalues(const MIRTerminator& term, F f) {
     return visitMirLvaluesWith(term, cb);
 }
 
-/// Callbacks for visitTerminatorTarget(Mut): invoked once per branch target
-/// of the terminator. The visit is called for every terminator of every block
-/// in several optimise passes, so the adapter must stay allocation-free.
 struct MIRTargetVisitorMut {
     virtual void visitTarget(MIRBasicBlockId& target) = 0;
 };
@@ -290,39 +277,38 @@ public:
 template <template <typename> class Dec>
 class MIRVisitorBase {
 public:
-    using TypeVisitArg = ::std::conditional_t<::std::is_const_v<typename Dec<int>::Type>, HIRTypeRef, HIRTypeRef&>;
+    using TypeVisitArg = std::conditional_t<std::is_const_v<typename Dec<int>::Type>, HIRTypeRef, HIRTypeRef&>;
 
     virtual void visitType(TypeVisitArg t) {
-        // NOTE: Doesn't recurse
     }
 
     virtual void visitPath(typename Dec<HIRPath>::Type& path) {
-            switch (path.data.tag()) {
-                case HIRPathData::TAG_Generic: {
-                    auto& e = path.data.as_Generic();
-                    visitPathParams(e.params);
-                    break;
-                }
-                case HIRPathData::TAG_UfcsInherent: {
-                    auto& e = path.data.as_UfcsInherent();
-                    visitType(e.type);
-                    visitPathParams(e.params);
-                    break;
-                }
-                case HIRPathData::TAG_UfcsKnown: {
-                    auto& e = path.data.as_UfcsKnown();
-                    visitType(e.type);
-                    visitPathParams(e.trait.params);
-                    visitPathParams(e.params);
-                    break;
-                }
-                case HIRPathData::TAG_UfcsUnknown: {
-                    auto& e = path.data.as_UfcsUnknown();
-                    visitType(e.type);
-                    visitPathParams(e.params);
-                    break;
-                }
+        switch (path.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                auto& e = path.data.as_Generic();
+                visitPathParams(e.params);
+                break;
             }
+            case HIRPathData::TAG_UfcsInherent: {
+                auto& e = path.data.as_UfcsInherent();
+                visitType(e.type);
+                visitPathParams(e.params);
+                break;
+            }
+            case HIRPathData::TAG_UfcsKnown: {
+                auto& e = path.data.as_UfcsKnown();
+                visitType(e.type);
+                visitPathParams(e.trait.params);
+                visitPathParams(e.params);
+                break;
+            }
+            case HIRPathData::TAG_UfcsUnknown: {
+                auto& e = path.data.as_UfcsUnknown();
+                visitType(e.type);
+                visitPathParams(e.params);
+                break;
+            }
+        }
     }
 
     virtual void visitGenericpath(typename Dec<HIRGenericPath>::Type& p) {
@@ -338,210 +324,210 @@ public:
     virtual bool visitLvalue(typename Dec<MIRLValue>::Type& lv, MIRValUsage u) = 0;
 
     virtual bool visitConst(typename Dec<MIRConstant>::Type& c) {
-            switch (c.tag()) {
-default:
+        switch (c.tag()) {
+            default:
                 break;
-                case MIRConstant::TAG_ItemAddr: {
-                    auto& e = c.as_ItemAddr();
-                    visitPath(*e);
-                    break;
-                }
-                case MIRConstant::TAG_Const: {
-                    auto& e = c.as_Const();
-                    visitPath(*e.p);
-                    break;
-                }
+            case MIRConstant::TAG_ItemAddr: {
+                auto& e = c.as_ItemAddr();
+                visitPath(*e);
+                break;
             }
-            return false;
+            case MIRConstant::TAG_Const: {
+                auto& e = c.as_Const();
+                visitPath(*e.p);
+                break;
+            }
+        }
+        return false;
     }
 
     virtual bool visitParam(typename Dec<MIRParam>::Type& p, MIRValUsage u) {
-            switch (p.tag()) {
-                case MIRParam::TAG_LValue: {
-                    auto& e = p.as_LValue();
-                    return visitLvalue(e, u);
-                }
-                case MIRParam::TAG_Borrow: {
-                    auto& e = p.as_Borrow();
-                    return visitLvalue(e.val, MIRValUsage::Borrow);
-                }
-                case MIRParam::TAG_Constant: {
-                    auto& e = p.as_Constant();
-                    return visitConst(e);
-                }
+        switch (p.tag()) {
+            case MIRParam::TAG_LValue: {
+                auto& e = p.as_LValue();
+                return visitLvalue(e, u);
             }
-            UNREACHABLE();
+            case MIRParam::TAG_Borrow: {
+                auto& e = p.as_Borrow();
+                return visitLvalue(e.val, MIRValUsage::Borrow);
+            }
+            case MIRParam::TAG_Constant: {
+                auto& e = p.as_Constant();
+                return visitConst(e);
+            }
+        }
+        UNREACHABLE();
     }
 
     virtual bool visitRvalue(typename Dec<MIRRValue>::Type& rval) {
         bool rv = false;
-            switch (rval.tag()) {
-                case MIRRValue::TAG_Use: {
-                    auto& se = rval.as_Use();
-                    rv |= visitLvalue(se, MIRValUsage::Move);
-                    break;
-                }
-                case MIRRValue::TAG_Constant: {
-                    auto& se = rval.as_Constant();
-                    rv |= visitConst(se);
-                    break;
-                }
-                case MIRRValue::TAG_SizedArray: {
-                    auto& se = rval.as_SizedArray();
-                    rv |= visitParam(se.val, MIRValUsage::Read);
-                    break;
-                }
-                case MIRRValue::TAG_Borrow: {
-                    auto& se = rval.as_Borrow();
-                    rv |= visitLvalue(se.val, MIRValUsage::Borrow);
-                    break;
-                }
-                case MIRRValue::TAG_Cast: {
-                    auto& se = rval.as_Cast();
-                    rv |= visitLvalue(se.val, MIRValUsage::Move);
-                    visitType(se.type);
-                    break;
-                }
-                case MIRRValue::TAG_BinOp: {
-                    auto& se = rval.as_BinOp();
-                    rv |= visitParam(se.valL, MIRValUsage::Read);
-                    rv |= visitParam(se.valR, MIRValUsage::Read);
-                    break;
-                }
-                case MIRRValue::TAG_UniOp: {
-                    auto& se = rval.as_UniOp();
-                    rv |= visitLvalue(se.val, MIRValUsage::Read);
-                    break;
-                }
-                case MIRRValue::TAG_DstMeta: {
-                    auto& se = rval.as_DstMeta();
-                    rv |= visitLvalue(se.val, MIRValUsage::Read);
-                    break;
-                }
-                case MIRRValue::TAG_DstPtr: {
-                    auto& se = rval.as_DstPtr();
-                    rv |= visitLvalue(se.val, MIRValUsage::Read);
-                    break;
-                }
-                case MIRRValue::TAG_MakeDst: {
-                    auto& se = rval.as_MakeDst();
-                    rv |= visitParam(se.ptrVal, MIRValUsage::Move);
-                    if ((se.metaVal.is_Constant() && se.metaVal.as_Constant().is_ItemAddr() && se.metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
-                    } else {
-                        rv |= visitParam(se.metaVal, MIRValUsage::Move);
-                    }
-                    break;
-                }
-                case MIRRValue::TAG_Tuple: {
-                    auto& se = rval.as_Tuple();
-                    for (auto& v : se.vals) {
-                        rv |= visitParam(v, MIRValUsage::Move);
-                    }
-                    break;
-                }
-                case MIRRValue::TAG_Array: {
-                    auto& se = rval.as_Array();
-                    for (auto& v : se.vals) {
-                        rv |= visitParam(v, MIRValUsage::Move);
-                    }
-                    break;
-                }
-                case MIRRValue::TAG_UnionVariant: {
-                    auto& se = rval.as_UnionVariant();
-                    visitGenericpath(se.path);
-                    rv |= visitParam(se.val, MIRValUsage::Move);
-                    break;
-                }
-                case MIRRValue::TAG_EnumVariant: {
-                    auto& se = rval.as_EnumVariant();
-                    visitGenericpath(se.path);
-                    for (auto& v : se.vals) {
-                        rv |= visitParam(v, MIRValUsage::Move);
-                    }
-                    break;
-                }
-                case MIRRValue::TAG_Struct: {
-                    auto& se = rval.as_Struct();
-                    visitGenericpath(se.path);
-                    for (auto& v : se.vals) {
-                        rv |= visitParam(v, MIRValUsage::Move);
-                    }
-                    break;
-                }
+        switch (rval.tag()) {
+            case MIRRValue::TAG_Use: {
+                auto& se = rval.as_Use();
+                rv |= visitLvalue(se, MIRValUsage::Move);
+                break;
             }
-            return rv;
+            case MIRRValue::TAG_Constant: {
+                auto& se = rval.as_Constant();
+                rv |= visitConst(se);
+                break;
+            }
+            case MIRRValue::TAG_SizedArray: {
+                auto& se = rval.as_SizedArray();
+                rv |= visitParam(se.val, MIRValUsage::Read);
+                break;
+            }
+            case MIRRValue::TAG_Borrow: {
+                auto& se = rval.as_Borrow();
+                rv |= visitLvalue(se.val, MIRValUsage::Borrow);
+                break;
+            }
+            case MIRRValue::TAG_Cast: {
+                auto& se = rval.as_Cast();
+                rv |= visitLvalue(se.val, MIRValUsage::Move);
+                visitType(se.type);
+                break;
+            }
+            case MIRRValue::TAG_BinOp: {
+                auto& se = rval.as_BinOp();
+                rv |= visitParam(se.valL, MIRValUsage::Read);
+                rv |= visitParam(se.valR, MIRValUsage::Read);
+                break;
+            }
+            case MIRRValue::TAG_UniOp: {
+                auto& se = rval.as_UniOp();
+                rv |= visitLvalue(se.val, MIRValUsage::Read);
+                break;
+            }
+            case MIRRValue::TAG_DstMeta: {
+                auto& se = rval.as_DstMeta();
+                rv |= visitLvalue(se.val, MIRValUsage::Read);
+                break;
+            }
+            case MIRRValue::TAG_DstPtr: {
+                auto& se = rval.as_DstPtr();
+                rv |= visitLvalue(se.val, MIRValUsage::Read);
+                break;
+            }
+            case MIRRValue::TAG_MakeDst: {
+                auto& se = rval.as_MakeDst();
+                rv |= visitParam(se.ptrVal, MIRValUsage::Move);
+                if ((se.metaVal.is_Constant() && se.metaVal.as_Constant().is_ItemAddr() && se.metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
+                } else {
+                    rv |= visitParam(se.metaVal, MIRValUsage::Move);
+                }
+                break;
+            }
+            case MIRRValue::TAG_Tuple: {
+                auto& se = rval.as_Tuple();
+                for (auto& v : se.vals) {
+                    rv |= visitParam(v, MIRValUsage::Move);
+                }
+                break;
+            }
+            case MIRRValue::TAG_Array: {
+                auto& se = rval.as_Array();
+                for (auto& v : se.vals) {
+                    rv |= visitParam(v, MIRValUsage::Move);
+                }
+                break;
+            }
+            case MIRRValue::TAG_UnionVariant: {
+                auto& se = rval.as_UnionVariant();
+                visitGenericpath(se.path);
+                rv |= visitParam(se.val, MIRValUsage::Move);
+                break;
+            }
+            case MIRRValue::TAG_EnumVariant: {
+                auto& se = rval.as_EnumVariant();
+                visitGenericpath(se.path);
+                for (auto& v : se.vals) {
+                    rv |= visitParam(v, MIRValUsage::Move);
+                }
+                break;
+            }
+            case MIRRValue::TAG_Struct: {
+                auto& se = rval.as_Struct();
+                visitGenericpath(se.path);
+                for (auto& v : se.vals) {
+                    rv |= visitParam(v, MIRValUsage::Move);
+                }
+                break;
+            }
+        }
+        return rv;
     }
 
     virtual bool visitStmt(typename Dec<MIRStatement>::Type& stmt) {
         bool rv = false;
-            switch (stmt.tag()) {
-                case MIRStatement::TAG_Assign: {
-                    auto& e = stmt.as_Assign();
-                    rv |= visitRvalue(e.src);
-                    rv |= visitLvalue(e.dst, MIRValUsage::Write);
-                    break;
+        switch (stmt.tag()) {
+            case MIRStatement::TAG_Assign: {
+                auto& e = stmt.as_Assign();
+                rv |= visitRvalue(e.src);
+                rv |= visitLvalue(e.dst, MIRValUsage::Write);
+                break;
+            }
+            case MIRStatement::TAG_Asm: {
+                auto& e = stmt.as_Asm();
+                for (auto& v : e.inputs) {
+                    rv |= visitLvalue(v.second, MIRValUsage::Read);
                 }
-                case MIRStatement::TAG_Asm: {
-                    auto& e = stmt.as_Asm();
-                    for (auto& v : e.inputs) {
-                        rv |= visitLvalue(v.second, MIRValUsage::Read);
-                    }
-                    for (auto& v : e.outputs) {
-                        rv |= visitLvalue(v.second, MIRValUsage::Write);
-                    }
-                    break;
+                for (auto& v : e.outputs) {
+                    rv |= visitLvalue(v.second, MIRValUsage::Write);
                 }
-                case MIRStatement::TAG_Asm2: {
-                    auto& e = stmt.as_Asm2();
-                    for (auto& p : e.params) {
-                        switch (p.tag()) {
-                            case MIRAsmParam::TAG_Const: {
-                                auto& v = p.as_Const();
-                                rv |= visitConst(v);
-                                break;
+                break;
+            }
+            case MIRStatement::TAG_Asm2: {
+                auto& e = stmt.as_Asm2();
+                for (auto& p : e.params) {
+                    switch (p.tag()) {
+                        case MIRAsmParam::TAG_Const: {
+                            auto& v = p.as_Const();
+                            rv |= visitConst(v);
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Sym: {
+                            auto& v = p.as_Sym();
+                            visitPath(v);
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Reg: {
+                            auto& v = p.as_Reg();
+                            if (v.input) {
+                                rv |= visitParam(*v.input, MIRValUsage::Read);
                             }
-                            case MIRAsmParam::TAG_Sym: {
-                                auto& v = p.as_Sym();
-                                visitPath(v);
-                                break;
+                            if (v.output) {
+                                rv |= visitLvalue(*v.output, MIRValUsage::Write);
                             }
-                            case MIRAsmParam::TAG_Reg: {
-                                auto& v = p.as_Reg();
-                                if (v.input) {
-                                    rv |= visitParam(*v.input, MIRValUsage::Read);
-                                }
-                                if (v.output) {
-                                    rv |= visitLvalue(*v.output, MIRValUsage::Write);
-                                }
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Label: {
-                                auto& v = p.as_Label();
-                                rv |= visitBlockId(v);
-                                break;
-                            }
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Label: {
+                            auto& v = p.as_Label();
+                            rv |= visitBlockId(v);
+                            break;
                         }
                     }
-                    break;
                 }
-                case MIRStatement::TAG_SetDropFlag: {
-                    break;
-                }
-                case MIRStatement::TAG_SaveDropFlag: {
-                    auto& e = stmt.as_SaveDropFlag();
-                    rv |= visitLvalue(e.slot, MIRValUsage::Write);
-                    break;
-                }
-                case MIRStatement::TAG_LoadDropFlag: {
-                    auto& e = stmt.as_LoadDropFlag();
-                    rv |= visitLvalue(e.slot, MIRValUsage::Read);
-                    break;
-                }
-                case MIRStatement::TAG_ScopeEnd: {
-                    break;
-                }
+                break;
             }
-            return rv;
+            case MIRStatement::TAG_SetDropFlag: {
+                break;
+            }
+            case MIRStatement::TAG_SaveDropFlag: {
+                auto& e = stmt.as_SaveDropFlag();
+                rv |= visitLvalue(e.slot, MIRValUsage::Write);
+                break;
+            }
+            case MIRStatement::TAG_LoadDropFlag: {
+                auto& e = stmt.as_LoadDropFlag();
+                rv |= visitLvalue(e.slot, MIRValUsage::Read);
+                break;
+            }
+            case MIRStatement::TAG_ScopeEnd: {
+                break;
+            }
+        }
+        return rv;
     }
 
     virtual bool visitBlockId(typename Dec<MIRBasicBlockId>::Type& bbId) {
@@ -550,149 +536,156 @@ default:
 
     virtual bool visitTerminator(typename Dec<MIRTerminator>::Type& term) {
         bool rv = false;
-            switch (term.tag()) {
-                case MIRTerminator::TAG_Incomplete: {
-                    break;
-                }
-                case MIRTerminator::TAG_Return: {
-                    break;
-                }
-                case MIRTerminator::TAG_UnwindResume: {
-                    break;
-                }
-                case MIRTerminator::TAG_UnwindTerminate: {
-                    break;
-                }
-                case MIRTerminator::TAG_Unreachable: {
-                    break;
-                }
-                case MIRTerminator::TAG_Goto: {
-                    auto& e = term.as_Goto();
-                    visitBlockId(e);
-                    break;
-                }
-                case MIRTerminator::TAG_If: {
-                    auto& e = term.as_If();
-                    rv |= visitLvalue(e.cond, MIRValUsage::Read);
-                    rv |= visitBlockId(e.bbTrue);
-                    rv |= visitBlockId(e.bbFalse);
-                    break;
-                }
-                case MIRTerminator::TAG_Switch: {
-                    auto& e = term.as_Switch();
-                    rv |= visitLvalue(e.val, MIRValUsage::Read);
-                    for (auto& target : e.targets) {
-                        rv |= visitBlockId(target);
-                    }
-                    if (e.validFlag != ~0u) {
-                        rv |= visitBlockId(e.invalidTarget);
-                    }
-                    break;
-                }
-                case MIRTerminator::TAG_SwitchValue: {
-                    auto& e = term.as_SwitchValue();
-                    rv |= visitLvalue(e.val, MIRValUsage::Read);
-                    for (auto& target : e.targets) {
-                        rv |= visitBlockId(target);
-                    }
-                    rv |= visitBlockId(e.defTarget);
-                    break;
-                }
-                case MIRTerminator::TAG_Drop: {
-                    auto& e = term.as_Drop();
-                    rv |= visitLvalue(e.slot, MIRValUsage::Move);
-                    rv |= visitBlockId(e.target);
-                    if (e.unwind.is_Cleanup()) {
-                        auto& target = e.unwind.as_Cleanup();
-                        rv |= visitBlockId(target);
-                    }
-                    break;
-                }
-                case MIRTerminator::TAG_Call: {
-                    auto& e = term.as_Call();
-                    switch (e.fcn.tag()) {
-                        case MIRCallTarget::TAG_Value: {
-                            auto& ce = e.fcn.as_Value();
-                            rv |= visitLvalue(ce, MIRValUsage::Read);
-                            break;
-                        }
-                        case MIRCallTarget::TAG_Path: {
-                            auto& ce = e.fcn.as_Path();
-                            visitPath(ce);
-                            break;
-                        }
-                        case MIRCallTarget::TAG_Intrinsic: {
-                            auto& ce = e.fcn.as_Intrinsic();
-                            visitPathParams(ce.params);
-                            break;
-                        }
-                    }
-                    for(auto& v : e.args)
-                        rv |= visitParam(v, MIRValUsage::Read);
-                    rv |= visitLvalue(e.retVal, MIRValUsage::Write);
-                    rv |= visitBlockId(e.retBlock);
-                    if (e.unwind.is_Cleanup()) {
-                        auto& target = e.unwind.as_Cleanup();
-                        rv |= visitBlockId(target);
-                    }
-                    break;
-                }
-                case MIRTerminator::TAG_TailCall: {
-                    auto& e = term.as_TailCall();
-                    switch (e.fcn.tag()) {
-                        case MIRCallTarget::TAG_Value: {
-                            auto& ce = e.fcn.as_Value();
-                            rv |= visitLvalue(ce, MIRValUsage::Read);
-                            break;
-                        }
-                        case MIRCallTarget::TAG_Path: {
-                            auto& ce = e.fcn.as_Path();
-                            visitPath(ce);
-                            break;
-                        }
-                        case MIRCallTarget::TAG_Intrinsic: {
-                            auto& ce = e.fcn.as_Intrinsic();
-                            visitPathParams(ce.params);
-                            break;
-                        }
-                    }
-                    for (auto& v : e.args) {
-                        rv |= visitParam(v, MIRValUsage::Move);
-                    }
-                    break;
-                }
-                case MIRTerminator::TAG_Asm2: {
-                    auto& e = term.as_Asm2();
-                    for (auto& p : e.params) {
-                        switch (p.tag()) {
-                            case MIRAsmParam::TAG_Const: {
-                                auto& v = p.as_Const();
-                                rv |= visitConst(v);
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Sym: {
-                                auto& v = p.as_Sym();
-                                visitPath(v);
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Reg: {
-                                auto& v = p.as_Reg();
-                                if (v.input) rv |= visitParam(*v.input, MIRValUsage::Read);
-                                if (v.output) rv |= visitLvalue(*v.output, MIRValUsage::Write);
-                                break;
-                            }
-                            case MIRAsmParam::TAG_Label: {
-                                auto& v = p.as_Label();
-                                rv |= visitBlockId(v);
-                                break;
-                            }
-                        }
-                    }
-                    if (e.retBlock != ~0u) rv |= visitBlockId(e.retBlock);
-                    break;
-                }
+        switch (term.tag()) {
+            case MIRTerminator::TAG_Incomplete: {
+                break;
             }
-            return rv;
+            case MIRTerminator::TAG_Return: {
+                break;
+            }
+            case MIRTerminator::TAG_UnwindResume: {
+                break;
+            }
+            case MIRTerminator::TAG_UnwindTerminate: {
+                break;
+            }
+            case MIRTerminator::TAG_Unreachable: {
+                break;
+            }
+            case MIRTerminator::TAG_Goto: {
+                auto& e = term.as_Goto();
+                visitBlockId(e);
+                break;
+            }
+            case MIRTerminator::TAG_If: {
+                auto& e = term.as_If();
+                rv |= visitLvalue(e.cond, MIRValUsage::Read);
+                rv |= visitBlockId(e.bbTrue);
+                rv |= visitBlockId(e.bbFalse);
+                break;
+            }
+            case MIRTerminator::TAG_Switch: {
+                auto& e = term.as_Switch();
+                rv |= visitLvalue(e.val, MIRValUsage::Read);
+                for (auto& target : e.targets) {
+                    rv |= visitBlockId(target);
+                }
+                if (e.validFlag != ~0u) {
+                    rv |= visitBlockId(e.invalidTarget);
+                }
+                break;
+            }
+            case MIRTerminator::TAG_SwitchValue: {
+                auto& e = term.as_SwitchValue();
+                rv |= visitLvalue(e.val, MIRValUsage::Read);
+                for (auto& target : e.targets) {
+                    rv |= visitBlockId(target);
+                }
+                rv |= visitBlockId(e.defTarget);
+                break;
+            }
+            case MIRTerminator::TAG_Drop: {
+                auto& e = term.as_Drop();
+                rv |= visitLvalue(e.slot, MIRValUsage::Move);
+                rv |= visitBlockId(e.target);
+                if (e.unwind.is_Cleanup()) {
+                    auto& target = e.unwind.as_Cleanup();
+                    rv |= visitBlockId(target);
+                }
+                break;
+            }
+            case MIRTerminator::TAG_Call: {
+                auto& e = term.as_Call();
+                switch (e.fcn.tag()) {
+                    case MIRCallTarget::TAG_Value: {
+                        auto& ce = e.fcn.as_Value();
+                        rv |= visitLvalue(ce, MIRValUsage::Read);
+                        break;
+                    }
+                    case MIRCallTarget::TAG_Path: {
+                        auto& ce = e.fcn.as_Path();
+                        visitPath(ce);
+                        break;
+                    }
+                    case MIRCallTarget::TAG_Intrinsic: {
+                        auto& ce = e.fcn.as_Intrinsic();
+                        visitPathParams(ce.params);
+                        break;
+                    }
+                }
+                for (auto& v : e.args) {
+                    rv |= visitParam(v, MIRValUsage::Read);
+                }
+                rv |= visitLvalue(e.retVal, MIRValUsage::Write);
+                rv |= visitBlockId(e.retBlock);
+                if (e.unwind.is_Cleanup()) {
+                    auto& target = e.unwind.as_Cleanup();
+                    rv |= visitBlockId(target);
+                }
+                break;
+            }
+            case MIRTerminator::TAG_TailCall: {
+                auto& e = term.as_TailCall();
+                switch (e.fcn.tag()) {
+                    case MIRCallTarget::TAG_Value: {
+                        auto& ce = e.fcn.as_Value();
+                        rv |= visitLvalue(ce, MIRValUsage::Read);
+                        break;
+                    }
+                    case MIRCallTarget::TAG_Path: {
+                        auto& ce = e.fcn.as_Path();
+                        visitPath(ce);
+                        break;
+                    }
+                    case MIRCallTarget::TAG_Intrinsic: {
+                        auto& ce = e.fcn.as_Intrinsic();
+                        visitPathParams(ce.params);
+                        break;
+                    }
+                }
+                for (auto& v : e.args) {
+                    rv |= visitParam(v, MIRValUsage::Move);
+                }
+                break;
+            }
+            case MIRTerminator::TAG_Asm2: {
+                auto& e = term.as_Asm2();
+                for (auto& p : e.params) {
+                    switch (p.tag()) {
+                        case MIRAsmParam::TAG_Const: {
+                            auto& v = p.as_Const();
+                            rv |= visitConst(v);
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Sym: {
+                            auto& v = p.as_Sym();
+                            visitPath(v);
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Reg: {
+                            auto& v = p.as_Reg();
+                            if (v.input) {
+                                rv |= visitParam(*v.input, MIRValUsage::Read);
+                            }
+                            if (v.output) {
+                                rv |= visitLvalue(*v.output, MIRValUsage::Write);
+                            }
+                            break;
+                        }
+                        case MIRAsmParam::TAG_Label: {
+                            auto& v = p.as_Label();
+                            rv |= visitBlockId(v);
+                            break;
+                        }
+                    }
+                }
+                if (e.retBlock != ~0u) {
+                    rv |= visitBlockId(e.retBlock);
+                }
+                break;
+            }
+        }
+        return rv;
     }
 
     virtual void visitFunction(MIRTypeResolve& state, typename Dec<MIRFunction>::Type& fcn) {
@@ -725,4 +718,4 @@ public:
     virtual bool visitLvalue(MIRLValue& lv, MIRValUsage u) override;
 };
 
-extern MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const ::std::vector<bool>* mask = nullptr);
+extern MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug, const std::vector<bool>* mask = nullptr);

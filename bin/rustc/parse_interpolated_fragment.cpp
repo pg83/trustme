@@ -1,7 +1,7 @@
 #include "parse_interpolated_fragment.h"
 
 #include "ast_ast.h"
-#include "ast_expr.h" // For definition of ExprNode
+#include "ast_expr.h"
 
 #include <iostream>
 
@@ -109,7 +109,7 @@ InterpolatedFragment::InterpolatedFragment(ASTVisibility v)
 {
 }
 
-::std::ostream& operator<<(::std::ostream& os, InterpolatedFragment const& x) {
+std::ostream& operator<<(std::ostream& os, InterpolatedFragment const& x) {
     switch (x.type) {
         case InterpolatedFragment::TT:
             os << "tt[" << x.asTt() << "]";
@@ -151,8 +151,6 @@ InterpolatedFragment::InterpolatedFragment(ASTVisibility v)
     }
     return os;
 }
-
-// :vis
 
 TokenTree& InterpolatedFragment::asTt() {
     assert(type == TT);

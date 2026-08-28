@@ -41,11 +41,11 @@ class ASTExternCrate;
 
 struct ASTAbsolutePath {
     RcString crate;
-    ::std::vector<RcString> nodes;
+    std::vector<RcString> nodes;
 
     ASTAbsolutePath();
 
-    ASTAbsolutePath(RcString crate, ::std::vector<RcString> nodes);
+    ASTAbsolutePath(RcString crate, std::vector<RcString> nodes);
 
     ASTAbsolutePath operator+(RcString n) const;
 
@@ -55,9 +55,8 @@ struct ASTAbsolutePath {
         return !(*this == x);
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTAbsolutePath& x);
+    friend std::ostream& operator<<(std::ostream& os, const ASTAbsolutePath& x);
 
-    // Returns true if this path is a prefix of the other path (or equal)
     bool isParentOf(const ASTAbsolutePath& other) const;
 };
 
@@ -66,17 +65,12 @@ struct ASTPathBindingModuleHir {
     const HIRModule* mod;
 };
 
-// Definitions generated from ast_path_binding.tu.
 #include "ast_path_binding_tu.h"
 
-extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingValue& x);
-extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingType& x);
-extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingMacro& x);
+extern std::ostream& operator<<(std::ostream& os, const ASTPathBindingValue& x);
+extern std::ostream& operator<<(std::ostream& os, const ASTPathBindingType& x);
+extern std::ostream& operator<<(std::ostream& os, const ASTPathBindingMacro& x);
 
-/// <summary>
-/// Wrapper for PathBinding_* that also includes an item path
-/// </summary>
-/// <typeparam name="T">PathBinding_*</typeparam>
 template <typename T>
 struct ASTPathBinding {
     ASTAbsolutePath path;
@@ -86,14 +80,14 @@ struct ASTPathBinding {
     }
 
     ASTPathBinding(ASTAbsolutePath p, T b)
-        : path(::std::move(p))
-        , binding(::std::move(b))
+        : path(std::move(p))
+        , binding(std::move(b))
     {
     }
 
     void set(ASTAbsolutePath p, T b) {
-        path = ::std::move(p);
-        binding = ::std::move(b);
+        path = std::move(p);
+        binding = std::move(b);
     }
 
     bool is_Unbound() const {
@@ -104,7 +98,7 @@ struct ASTPathBinding {
         return ASTPathBinding(path, binding.clone());
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTPathBinding<T>& x) {
+    friend std::ostream& operator<<(std::ostream& os, const ASTPathBinding<T>& x) {
         if (!x.is_Unbound()) {
             os << x.binding << "[" << x.path << "]";
         } else {
@@ -117,7 +111,7 @@ struct ASTPathBinding {
 class ASTPathParamEnt;
 
 struct ASTPathParams {
-    ::std::vector<ASTPathParamEnt> entries;
+    std::vector<ASTPathParamEnt> entries;
     bool isParen = false;
     bool isRtn = false;
 
@@ -135,7 +129,7 @@ struct ASTPathParams {
 
     Ordering ord(const ASTPathParams& x) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTPathParams& x);
+    friend std::ostream& operator<<(std::ostream& os, const ASTPathParams& x);
 };
 
 class ASTPathNode {
@@ -166,34 +160,15 @@ public:
     }
 
     Ordering ord(const ASTPathNode& x) const;
-    void printPretty(::std::ostream& os, bool isTypeContext) const;
+    void printPretty(std::ostream& os, bool isTypeContext) const;
 
     bool operator==(const ASTPathNode& x) const {
         return ord(x) == OrdEqual;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTPathNode& pn);
+    friend std::ostream& operator<<(std::ostream& os, const ASTPathNode& pn);
 };
 
-/*
-* TODO: New Path structure:
-* - Local(Ident): a resolved local name (variable, generic, ...)
-* - Relative(Ident, vector<RcString>, Generics): `foo::bar<...>`
-* - ModRelative(unsigned, vector<RcString>, Generics): `super::foo::bar<...>` or `self::foo`
-* - Absolute(RcString, vector<RcString>, Generics): `::foocrate::bar<...>`
-* - FullyQualified(Type, Path, Ident, Generics): `<Foo as Bar>::baz<...>`
-* - TypeQualified(Type, Ident, Generics): `<FooType>::baz<...>`
-* - UnknownQualified(Path, Ident, Generics): `FooTrait<...>::baz<...>` 
-* 
-* Goal:
-* - Reduce memory usage of AST (avoids `PathParams` everywhere)
-* - Simplify manipulation?
-* 
-* Downsides:
-* - Resolve uses append methods etc
-*/
-
-// Definitions generated from ast_path_class.tu.
 #include "ast_path_class_tu.h"
 
 class ASTPath {
@@ -224,7 +199,6 @@ public:
 
     ASTPath(Class c);
 
-    // INVALID
     ASTPath();
 
     ASTPath(ASTPath&&) = default;
@@ -233,8 +207,7 @@ public:
     /*explicit*/ ASTPath(const ASTPath& x);
     ASTPath& operator=(const ASTPath&) = delete;
 
-    // ABSOLUTE
-    ASTPath(RcString crate, ::std::vector<ASTPathNode> nodes);
+    ASTPath(RcString crate, std::vector<ASTPathNode> nodes);
 
     ASTPath(const ASTAbsolutePath& p);
 
@@ -246,31 +219,27 @@ public:
 
     ASTPath(const ASTAbsolutePath& p, ASTPathParams pp);
 
-    // Local (variable/type param)
     ASTPath(RcString name)
         : cls(Class::make_Local({mv$(name)}))
     {
     }
 
-    // UFCS
-    static ASTPath newUfcsTy(ASTType* type, ::std::vector<ASTPathNode> nodes = {});
-    static ASTPath newUfcsTrait(ASTType* type, ASTPath trait, ::std::vector<ASTPathNode> nodes = {});
+    static ASTPath newUfcsTy(ASTType* type, std::vector<ASTPathNode> nodes = {});
+    static ASTPath newUfcsTrait(ASTType* type, ASTPath trait, std::vector<ASTPathNode> nodes = {});
 
-    // VARIABLE
     static ASTPath newLocal(RcString name) {
         return ASTPath(mv$(name));
     }
 
-    // RELATIVE
-    static ASTPath newRelative(Ident::Hygiene hygiene, ::std::vector<ASTPathNode> nodes) {
+    static ASTPath newRelative(Ident::Hygiene hygiene, std::vector<ASTPathNode> nodes) {
         return ASTPath(Class::make_Relative({mv$(hygiene), mv$(nodes)}));
     }
 
-    static ASTPath newSelf(::std::vector<ASTPathNode> nodes) {
+    static ASTPath newSelf(std::vector<ASTPathNode> nodes) {
         return ASTPath(Class::make_Self({mv$(nodes)}));
     }
 
-    static ASTPath newSuper(unsigned int count, ::std::vector<ASTPathNode> nodes) {
+    static ASTPath newSuper(unsigned int count, std::vector<ASTPathNode> nodes) {
         return ASTPath(Class::make_Super({count, mv$(nodes)}));
     }
 
@@ -323,9 +292,9 @@ public:
 
     void bindVariable(unsigned int slot);
 
-    ::std::vector<ASTPathNode>& nodes();
+    std::vector<ASTPathNode>& nodes();
 
-    const ::std::vector<ASTPathNode>& nodes() const {
+    const std::vector<ASTPathNode>& nodes() const {
         return ((ASTPath*)this)->nodes();
     }
 
@@ -343,15 +312,13 @@ public:
         return ord(x) != OrdLess;
     }
 
-    void printPretty(::std::ostream& os, bool isTypeContext, bool isDebug = false) const;
-    friend ::std::ostream& operator<<(::std::ostream& os, const ASTPath& path);
+    void printPretty(std::ostream& os, bool isTypeContext, bool isDebug = false) const;
+    friend std::ostream& operator<<(std::ostream& os, const ASTPath& path);
 
 private:
     void checkParamCounts(const ASTGenericParams& params, bool expectParams, ASTPathNode& node);
 
 public:
-    //}
 };
 
-// Definitions generated from ast_path.tu.
 #include "ast_path_tu.h"

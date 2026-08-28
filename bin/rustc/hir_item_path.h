@@ -14,7 +14,7 @@ public:
 
     HIRItemPath(const char* crate);
 
-    HIRItemPath(const ::std::string& crate);
+    HIRItemPath(const std::string& crate);
 
     HIRItemPath(const RcString& crate);
 
@@ -46,7 +46,7 @@ public:
 
     const HIRItemPath& getTopIp() const;
 
-    HIRItemPath operator+(const ::std::string& name) const {
+    HIRItemPath operator+(const std::string& name) const {
         return HIRItemPath(*this, name.c_str());
     }
 
@@ -56,5 +56,5 @@ public:
 
     bool operator==(const HIRSimplePath& sp) const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const HIRItemPath& x);
+    friend std::ostream& operator<<(std::ostream& os, const HIRItemPath& x);
 };

@@ -5,6 +5,8 @@
 
 #include <std/mem/obj_pool.h>
 
+using namespace stl;
+
 HIRExprPtr::HIRExprPtr() = default;
 
 HIRExprPtr::HIRExprPtr(HIRExprNodeP v)
@@ -20,14 +22,14 @@ HIRExprNodeP HIRExprPtr::takeNode() {
     return HIRExprNodeP(node.release());
 }
 
-HIRExprStatePtr::HIRExprStatePtr(stl::ObjPool* pool, HIRExprState x)
-    : ptr(pool->make<HIRExprState>(::std::move(x)))
+HIRExprStatePtr::HIRExprStatePtr(ObjPool* pool, HIRExprState x)
+    : ptr(pool->make<HIRExprState>(std::move(x)))
 {
 }
 
 HIRExprStatePtr::~HIRExprStatePtr() = default;
 
-HIRExprStatePtr HIRExprStatePtr::clone(stl::ObjPool* pool) const {
+HIRExprStatePtr HIRExprStatePtr::clone(ObjPool* pool) const {
     auto rv = HIRExprStatePtr(pool, HIRExprState((*this)->types, (*this)->module, (*this)->modPath));
     rv->traits = (*this)->traits;
     rv->implGenerics = (*this)->implGenerics;
@@ -90,7 +92,7 @@ MIRFunction* HIRExprPtr::getExtMirMut() {
 
 void HIRExprPtr::setMir(MIRFunctionPointer mir) {
     assert(!this->mir);
-    this->mir = ::std::move(mir);
+    this->mir = std::move(mir);
 }
 
 HIRExprNodeP::HIRExprNodeP()

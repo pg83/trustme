@@ -54,24 +54,17 @@ FloatValue positiveNanFloatValue() {
     return Float128::quietNan();
 }
 
-::std::string formatFloatValueForToken(FloatValue value) {
-    // A macro fragment is reparsed after expansion, so the text has to read
-    // back as the same value -- but no more than that: `2.15` printed with the
-    // 36 digits binary128 can need becomes `2.14999999999999999999999999999999992`,
-    // and `concat!` would report that. Take the shortest that round-trips.
-    ::std::string rv;
+std::string formatFloatValueForToken(FloatValue value) {
+    std::string rv;
     for (int precision = 1; precision <= 36; precision++) {
-        ::std::ostringstream os;
-        os << ::std::setprecision(precision) << value;
+        std::ostringstream os;
+        os << std::setprecision(precision) << value;
         rv = os.str();
         if (parseFloatValue(rv.c_str()) == value) {
             break;
         }
     }
-    // A float token always carries a decimal point in the source, and must keep
-    // one: `4.0` rendered as `4` reparses as an integer, and `concat!`/
-    // `stringify!` would report the wrong text.
-    if (rv.find_first_of(".eEni") == ::std::string::npos) {
+    if (rv.find_first_of(".eEni") == std::string::npos) {
         rv += ".0";
     }
     return rv;

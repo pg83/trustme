@@ -1,6 +1,3 @@
-// Driver for the compiler's C++ unit tests: every bin/rustc/*_ut.cpp is
-// linked into this binary and registers its STD_TEST cases with the libstd
-// test framework.
 #include <std/tst/ctx.h>
 
 namespace {

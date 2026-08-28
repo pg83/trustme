@@ -8,20 +8,19 @@ class HIRSimplePath;
 class HIRTypeData;
 
 enum class AllocatorDataTy {
-    // - Return
-    Unit,      // ()
-    ResultPtr, // (..., *mut i8) + *mut u8
-    // - Args
-    Layout, // usize, usize
-    Ptr,    // *mut u8
-    Usize,  // usize
+    Unit,
+    ResultPtr,
+
+    Layout,
+    Ptr,
+    Usize,
 };
 
 struct AllocatorMethod {
     const char* name;
     AllocatorDataTy ret;
     size_t nArgs;
-    const AllocatorDataTy* args; // Terminated by Never
+    const AllocatorDataTy* args;
 };
 enum class AllocatorKind {
     Global,
