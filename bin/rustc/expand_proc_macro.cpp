@@ -164,9 +164,7 @@ namespace {
         u64 recvV128u();
         U128 recvV128uU128();
     };
-}
 
-namespace {
     struct ProcMacroVisitor {
         const WireBoard& wb;
         const Span& sp;
@@ -241,60 +239,7 @@ namespace {
 
         void visitItem(const RcString& name, const ASTVisibility& vis, const ASTItem& item);
     };
-}
 
-void RegisterProcMacroBuiltins(ExpandRegistry& registry) {
-    registry.addDecorator<DecoratorProcMacroDerive>("proc_macro_derive");
-    registry.addDecorator<DecoratorProcMacroAttribute>("proc_macro_attribute");
-    registry.addDecorator<DecoratorProcMacro>("proc_macro");
-}
-
-void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
-    auto pmCrateName = RcString::newInterned("proc_macro");
-    wb.settings->implicitCrates.insert(std::make_pair(pmCrateName, const_cast<ASTCrate&>(crate).loadExternCrate(*wb.settings, Span(), pmCrateName)));
-
-    auto mainFn = ASTFunction{Span(), mkType(*crate.pool, ASTTypeTags::Unit(), Span()), {}};
-    {
-        auto callNode = NEWNODE(CallPath, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("main")}), ::makeVec1(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(NamedValue, ASTPath("", {ASTPathNode("proc_macro#"), ASTPathNode("MACROS")})))));
-        mainFn.setCode(mv$(callNode));
-    }
-
-    std::vector<ASTExprNodeP> testNodes;
-
-    for (const auto& desc : crate.procMacros) {
-        const char* typeName = "SingleStream";
-        switch (desc.ty) {
-            case ASTProcMacroTy::Attribute:
-                typeName = "Attribute";
-                break;
-            default:
-                break;
-        }
-        ASTExprNodeStructLiteral::tValues descVals;
-        descVals.push_back({{}, "name", NEWNODE(String, desc.name.c_str())});
-        descVals.push_back({{}, "handler", NEWNODE(CallPath, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroType"), ASTPathNode(typeName)}), ::makeVec1(NEWNODE(NamedValue, ASTPath(desc.path))))});
-
-        testNodes.push_back(NEWNODE(StructLiteral, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")}), nullptr, mv$(descVals)));
-    }
-    auto* testsArray = new ASTExprNodeArray(mv$(testNodes));
-
-    size_t testCount = testsArray->values.size();
-    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
-
-    auto newmod = ASTModule{ASTAbsolutePath("", {"proc_macro#"})};
-    // - TODO: These need to be loaded too.
-
-    auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
-    newmod.addExtCrate(Span(), visPrivate, crate.extCratenameProcmacro, "proc_macro", {});
-
-    newmod.addItem(Span(), visPrivate, "main", mv$(mainFn), {});
-    newmod.addItem(Span(), visPrivate, "MACROS", mv$(testsList), {});
-
-    crate.rootModule_.addItem(Span(), visPrivate, "proc_macro#", mv$(newmod), {});
-    crate.langItems["trustme-main"] = ASTAbsolutePath("", {"proc_macro#", "main"});
-}
-
-namespace {
     ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath) {
         const auto& crateName = macPath.front();
         ASSERT_BUG(sp, crate.externCrates.count(crateName), "Crate not loaded for macro: [" << macPath << "]");
@@ -354,6 +299,57 @@ namespace {
         pmi.sendDone();
         return box$(pmi);
     }
+}
+
+void RegisterProcMacroBuiltins(ExpandRegistry& registry) {
+    registry.addDecorator<DecoratorProcMacroDerive>("proc_macro_derive");
+    registry.addDecorator<DecoratorProcMacroAttribute>("proc_macro_attribute");
+    registry.addDecorator<DecoratorProcMacro>("proc_macro");
+}
+
+void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
+    auto pmCrateName = RcString::newInterned("proc_macro");
+    wb.settings->implicitCrates.insert(std::make_pair(pmCrateName, const_cast<ASTCrate&>(crate).loadExternCrate(*wb.settings, Span(), pmCrateName)));
+
+    auto mainFn = ASTFunction{Span(), mkType(*crate.pool, ASTTypeTags::Unit(), Span()), {}};
+    {
+        auto callNode = NEWNODE(CallPath, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("main")}), ::makeVec1(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(NamedValue, ASTPath("", {ASTPathNode("proc_macro#"), ASTPathNode("MACROS")})))));
+        mainFn.setCode(mv$(callNode));
+    }
+
+    std::vector<ASTExprNodeP> testNodes;
+
+    for (const auto& desc : crate.procMacros) {
+        const char* typeName = "SingleStream";
+        switch (desc.ty) {
+            case ASTProcMacroTy::Attribute:
+                typeName = "Attribute";
+                break;
+            default:
+                break;
+        }
+        ASTExprNodeStructLiteral::tValues descVals;
+        descVals.push_back({{}, "name", NEWNODE(String, desc.name.c_str())});
+        descVals.push_back({{}, "handler", NEWNODE(CallPath, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroType"), ASTPathNode(typeName)}), ::makeVec1(NEWNODE(NamedValue, ASTPath(desc.path))))});
+
+        testNodes.push_back(NEWNODE(StructLiteral, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")}), nullptr, mv$(descVals)));
+    }
+    auto* testsArray = new ASTExprNodeArray(mv$(testNodes));
+
+    size_t testCount = testsArray->values.size();
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
+
+    auto newmod = ASTModule{ASTAbsolutePath("", {"proc_macro#"})};
+    // - TODO: These need to be loaded too.
+
+    auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
+    newmod.addExtCrate(Span(), visPrivate, crate.extCratenameProcmacro, "proc_macro", {});
+
+    newmod.addItem(Span(), visPrivate, "main", mv$(mainFn), {});
+    newmod.addItem(Span(), visPrivate, "MACROS", mv$(testsList), {});
+
+    crate.rootModule_.addItem(Span(), visPrivate, "proc_macro#", mv$(newmod), {});
+    crate.langItems["trustme-main"] = ASTAbsolutePath("", {"proc_macro#", "main"});
 }
 
 std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {
@@ -537,7 +533,7 @@ void ProcMacroInv::recvBytesRaw(void* outVoid, size_t len) {
         if (n < 0) {
             BUG(this->parentSpan, "Error while reading from child process");
         }
-        assert(static_cast<size_t>(n) <= rem);
+        BUG_ASSERT(static_cast<size_t>(n) <= rem);
         ofs += n;
         rem -= n;
     }
@@ -1841,7 +1837,7 @@ auto ProcMacroVisitor::visitPath(const ASTPath& path, bool isExpr) -> void {
         }
         case ASTPathClass::TAG_Super: {
             auto& pe = path.cls.as_Super();
-            assert(pe.count > 0);
+            BUG_ASSERT(pe.count > 0);
             for (unsigned i = 0; i < pe.count; i++) {
                 if (i > 0) {
                     pmi.sendSymbol("::");
@@ -1860,7 +1856,7 @@ auto ProcMacroVisitor::visitPath(const ASTPath& path, bool isExpr) -> void {
                 pmi.sendRword("crate");
             } else {
                 pmi.sendSymbol("::");
-                assert(pe.crate.c_str()[0] == '=');
+                BUG_ASSERT(pe.crate.c_str()[0] == '=');
                 pmi.sendIdent(pe.crate.c_str() + 1);
             }
             pmi.sendSymbol("::");
@@ -1964,7 +1960,7 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                                 }
                                 case ASTGenericBound::TAG_IsTrait: {
                                     auto& be = tuMatch.as_IsTrait();
-                                    assert(be.outerHrbs.empty());
+                                    BUG_ASSERT(be.outerHrbs.empty());
                                     if (!be.innerHrbs.empty()) {
                                         TODO(sp, "be.inner_hrbs");
                                     }
@@ -1994,7 +1990,7 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
                     pmi.sendIdent(p.name().name.c_str());
                     pmi.sendSymbol(":");
                     visitType(p.type());
-                    assert(param.boundsStart == param.boundsEnd);
+                    BUG_ASSERT(param.boundsStart == param.boundsEnd);
                     break;
                 }
             }

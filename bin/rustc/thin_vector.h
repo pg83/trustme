@@ -5,11 +5,9 @@
 #include <new>
 #include <cstdio>
 #include <vector>
-#include <cassert>
 #include <cstdlib>
 #include <ostream>
 #include <utility>
-#include <stdexcept>
 
 template <typename T>
 class ThinVector {
@@ -113,16 +111,14 @@ public:
                 ptr[m->len].~T();
             }
             while (m->len < len) {
-                assert(meta() == m);
+                BUG_ASSERT(meta() == m);
                 this->push_back(T());
             }
         }
     }
 
     void reserveInit(size_t cap) {
-        if (ptr) {
-            throw std::runtime_error("Initialising an initialised ThinVector");
-        }
+        BUG_ASSERT(!ptr);
         if (cap > 0) {
             auto* p = static_cast<T*>(malloc(sizeof(T) * (cap + metadataLen())));
             if (!p) {

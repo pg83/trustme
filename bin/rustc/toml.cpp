@@ -6,7 +6,6 @@
 
 #include <sstream>
 #include <cstdio>
-#include <cassert>
 #include <string>
 #include <iostream>
 
@@ -179,7 +178,7 @@ TomlKeyValue TomlFile::getNextValue() {
         t = lexer_.getToken();
     }
 
-    assert(t.type == TomlToken::Type::Assign);
+    BUG_ASSERT(t.type == TomlToken::Type::Assign);
     t = lexer_.getToken();
 
     TomlKeyValue rv;
@@ -776,6 +775,6 @@ TomlLexer::TomlToken::TomlToken(Type ty, i64 i)
 }
 
 auto TomlLexer::TomlToken::asString() const -> const std::string& {
-    assert(type == Type::Ident || type == Type::String);
+    BUG_ASSERT(type == Type::Ident || type == Type::String);
     return data;
 }

@@ -24,5 +24,5 @@ enum eCoreType {
     CORETYPE_F128,
 };
 
-extern enum eCoreType coretypeFromstring(const char* name);
-extern const char* coretypeName(const eCoreType ct);
+enum eCoreType coretypeFromstring(const char* name);
+const char* coretypeName(const eCoreType ct);

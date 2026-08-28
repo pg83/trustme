@@ -10,9 +10,7 @@
 #include <string>
 #include <string>
 #include <vector>
-#include <cassert>
 #include <cstdint>
-#include <stdexcept>
 #include <initializer_list>
 
 class MacroRules;
@@ -67,9 +65,9 @@ struct ASTPathBindingModuleHir {
 
 #include "ast_path_binding_tu.h"
 
-extern std::ostream& operator<<(std::ostream& os, const ASTPathBindingValue& x);
-extern std::ostream& operator<<(std::ostream& os, const ASTPathBindingType& x);
-extern std::ostream& operator<<(std::ostream& os, const ASTPathBindingMacro& x);
+std::ostream& operator<<(std::ostream& os, const ASTPathBindingValue& x);
+std::ostream& operator<<(std::ostream& os, const ASTPathBindingType& x);
+std::ostream& operator<<(std::ostream& os, const ASTPathBindingMacro& x);
 
 template <typename T>
 struct ASTPathBinding {

@@ -1,9 +1,10 @@
 #include "memory_dump.h"
 
+#include "compile_error.h"
+
 #include <std/sys/types.h>
 
 #include <vector>
-#include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -150,7 +151,7 @@ void memoryDump(unsigned& sequence, const char* phase) {
             zstream.next_in = reinterpret_cast<unsigned char*>(buf.data());
 
             while (zstream.avail_in > 0) {
-                assert(zstream.avail_out != 0);
+                BUG_ASSERT(zstream.avail_out != 0);
 
                 int ret = deflate(&zstream, Z_NO_FLUSH);
                 if (ret == Z_STREAM_ERROR)
@@ -190,7 +191,7 @@ void memoryDump(unsigned& sequence, const char* phase) {
                         flushChunk(lastVaddr / chunkSize * chunkSize);
                     }
                 }
-                assert(chunkCountFlushed == r.firstChunk);
+                BUG_ASSERT(chunkCountFlushed == r.firstChunk);
     #if DEBUG_MEM_DUMP
                 std::cout << chunkCountFlushed << "/" << chunkCount << ": " << std::hex << r.vStart << " -- " << r.vEnd << "(" << (r.vEnd - r.vStart) << ")" << std::dec << " " << r.flagsStr << " : " << r.name << "\n";
     #endif
@@ -220,7 +221,7 @@ void memoryDump(unsigned& sequence, const char* phase) {
             flushChunk(lastVaddr / chunkSize * chunkSize);
         }
         if (chunkCountFlushed != chunkCount) {
-            assert(false);
+            BUG_ASSERT(false);
         }
 
         struct RegState {

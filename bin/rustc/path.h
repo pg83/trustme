@@ -7,7 +7,6 @@
 #include <cstring>
 #include <string>
 #include <string_view>
-#include <stdexcept>
 
 class FsPath {
     static const char SEP = '/';

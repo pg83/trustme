@@ -113,7 +113,7 @@ namespace {
 
 MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const TransParams& params, const MIRFunctionPointer& tpl) {
     Span sp;
-    assert(tpl);
+    BUG_ASSERT(tpl);
 
     if (const auto* marker = asyncDropPollMarker(tpl)) {
         ASSERT_BUG(sp, marker->params.types.size() == 2, "async-drop poll marker has " << marker->params.types.size() << " type arguments");
@@ -143,13 +143,11 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
                 case MIRStatement::TAG_SaveDropFlag: {
                     auto& e = stmt.as_SaveDropFlag();
                     statements.push_back(MIRStatement::make_SaveDropFlag({e.slot.clone(), e.bitIndex, e.idx}));
-
                 } break;
                     break;
                 case MIRStatement::TAG_LoadDropFlag: {
                     auto& e = stmt.as_LoadDropFlag();
                     statements.push_back(MIRStatement::make_LoadDropFlag({e.idx, e.slot.clone(), e.bitIndex}));
-
                 } break;
                 default:
                     statements.push_back(c.cloneStmt(stmt));
@@ -301,7 +299,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
 
                 // TODO: Get the item params too
                 if (pp.ppImpl.hasParams()) {
-                    assert(pp.gdefImpl);
+                    BUG_ASSERT(pp.gdefImpl);
                 }
                 resolve.setBothGenericsRaw(pp.gdefImpl, &fcn.params);
 

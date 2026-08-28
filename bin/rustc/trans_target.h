@@ -127,25 +127,25 @@ struct TypeRepr {
 std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x);
 
 struct WireBoard;
-extern void TargetCreateLayoutContext(WireBoard& wb, stl::ObjPool& pool);
-extern const TargetSpec& TargetGetCurSpec(const WireBoard& wb);
-extern void TargetSetCfg(WireBoard& wb, const std::string& targetName);
-extern void TargetExportCurSpec(const WireBoard& wb, const std::string& filename);
+void TargetCreateLayoutContext(WireBoard& wb, stl::ObjPool& pool);
+const TargetSpec& TargetGetCurSpec(const WireBoard& wb);
+void TargetSetCfg(WireBoard& wb, const std::string& targetName);
+void TargetExportCurSpec(const WireBoard& wb, const std::string& filename);
 
 static inline unsigned TargetGetPointerBits() {
     return 64;
 }
 
-extern bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize);
-extern bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outAlign);
-extern bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
+bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize);
+bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outAlign);
+bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
 
-extern bool TargetCapsMemberAlignment();
+bool TargetCapsMemberAlignment();
 
-extern bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty);
+bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty);
 
-extern const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty);
+const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty);
 
-extern bool TargetTypesAreTransmutable(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* src, const HIRTypeData* dst, bool assumeAlignment, bool assumeLifetimes, bool assumeSafety, bool assumeValidity);
+bool TargetTypesAreTransmutable(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* src, const HIRTypeData* dst, bool assumeAlignment, bool assumeLifetimes, bool assumeSafety, bool assumeValidity);
 
-extern const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const std::vector<size_t>& subFields = {}, size_t ofs = 0);
+const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const std::vector<size_t>& subFields = {}, size_t ofs = 0);

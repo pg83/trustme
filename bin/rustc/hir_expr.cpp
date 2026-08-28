@@ -179,7 +179,7 @@ const char* HIRExprNode::typeName() const {
 }
 
 void HIRExprVisitor::visitNodePtr(HIRExprNodeP& nodePtr) {
-    assert(nodePtr);
+    BUG_ASSERT(nodePtr);
     nodePtr->visit(*this);
 }
 
@@ -187,7 +187,7 @@ void HIRExprVisitor::visitNode(HIRExprNode& node) {
 }
 
 void HIRExprVisitorDef::visitNodePtr(HIRExprNodeP& nodePtr) {
-    assert(nodePtr);
+    BUG_ASSERT(nodePtr);
     nodePtr->visit(*this);
     if (nodePtr->resType != HIRTypeRef()) {
         updateType(nodePtr->resType);
@@ -1053,9 +1053,7 @@ HIRExprNodeCallMethod::HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString
     , fallbackMethod(mv$(fallbackMethod))
     , params(mv$(params))
     , args(mv$(args))
-    ,
-
-    methodPath(HIRSimplePath("", {}))
+    , methodPath(HIRSimplePath("", {}))
 {
     if (this->fallbackMethod == "") {
         this->fallbackMethod = this->method;

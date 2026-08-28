@@ -1,8 +1,9 @@
 #include "float128.h"
 
+#include "compile_error.h"
+
 #include <string>
 #include <vector>
-#include <cassert>
 #include <cstring>
 #include <ostream>
 
@@ -58,7 +59,7 @@ namespace {
     };
 
     static int clz128(u128 v) {
-        assert(v != 0);
+        BUG_ASSERT(v != 0);
         u64 hi = static_cast<u64>(v >> 64);
         if (hi != 0) {
             return __builtin_clzll(hi);
@@ -106,11 +107,11 @@ namespace {
     static Float128 packFinite(bool negative, i32 exponent, u128 significand) {
         u64 biased;
         if (significand >= implicitBit) {
-            assert(min_exponent <= exponent && exponent <= max_exponent);
+            BUG_ASSERT(min_exponent <= exponent && exponent <= max_exponent);
             biased = static_cast<u64>(exponent + exponentBias);
             significand &= fractionMask;
         } else {
-            assert(exponent == min_exponent);
+            BUG_ASSERT(exponent == min_exponent);
             biased = 0;
         }
         const u64 hi = (negative ? 0x8000'0000'0000'0000ull : 0) | (biased << 48) | static_cast<u64>(significand >> 64);
@@ -249,7 +250,7 @@ namespace {
     }
 
     static std::string digitsAt(const Unpacked& value, i64 lowestExponent10) {
-        assert(value.kind == Kind::Finite);
+        BUG_ASSERT(value.kind == Kind::Finite);
         const i64 scale10 = -lowestExponent10 + 1;
         const i32 exponent2 = value.exponent - significandBits;
         bool sticky = false;
@@ -300,10 +301,10 @@ namespace {
     }
 
     static std::string decimalDigits(const Unpacked& value, int digitCount, i32& decimalExponent) {
-        assert(digitCount >= 1);
+        BUG_ASSERT(digitCount >= 1);
         i32 estimate = static_cast<i32>((static_cast<i64>(value.exponent) * 30103) / 100000);
         for (int attempt = 0;; attempt++) {
-            assert(attempt < 4);
+            BUG_ASSERT(attempt < 4);
             std::string digits = digitsAt(value, static_cast<i64>(estimate) - digitCount + 1);
             if (static_cast<int>(digits.size()) != digitCount) {
                 estimate += static_cast<int>(digits.size()) - digitCount;
@@ -913,7 +914,7 @@ Float128 Float128::remainder(const Float128& numerator, const Float128& denomina
             return packFinite(a.negative, min_exponent, rem << (b.exponent - min_exponent));
         }
         const i32 shift = min_exponent - b.exponent;
-        assert(shift >= 128 || (rem & ((u128(1) << shift) - 1)) == 0);
+        BUG_ASSERT(shift >= 128 || (rem & ((u128(1) << shift) - 1)) == 0);
         return packFinite(a.negative, min_exponent, rem >> shift);
     }
     return packFinite(a.negative, exponent, rem << shortfall);
@@ -950,7 +951,7 @@ Float128 Float128::parseDecimal(const char* text) {
     BigUint digits;
     i64 fractionDigits = 0;
     i64 significantDigits = 0;
-    assert(*cursor == '.' || ('0' <= *cursor && *cursor <= '9'));
+    BUG_ASSERT(*cursor == '.' || ('0' <= *cursor && *cursor <= '9'));
     for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
         digits.multiplyAddSmall(10, static_cast<u64>(*cursor - '0'));
         if (!digits.isZero()) {
@@ -976,7 +977,7 @@ Float128 Float128::parseDecimal(const char* text) {
             cursor++;
         }
         i64 explicitExponent = 0;
-        assert('0' <= *cursor && *cursor <= '9');
+        BUG_ASSERT('0' <= *cursor && *cursor <= '9');
         for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
             explicitExponent = explicitExponent * 10 + (*cursor - '0');
             if (explicitExponent > 1'000'000'000) {
@@ -985,7 +986,7 @@ Float128 Float128::parseDecimal(const char* text) {
         }
         exponent10 += exponentNegative ? -explicitExponent : explicitExponent;
     }
-    assert(*cursor == '\0');
+    BUG_ASSERT(*cursor == '\0');
     if (digits.isZero()) {
         return packZero(false);
     }
@@ -1073,7 +1074,7 @@ auto BigUint::multiplyAddSmall(u64 factor, u64 addend) -> void {
 }
 
 auto BigUint::divideSmall(u64 divisor) -> u64 {
-    assert(divisor != 0);
+    BUG_ASSERT(divisor != 0);
     u128 remainder = 0;
     for (size_t i = limbs_.size(); i-- > 0;) {
         const u128 cur = (remainder << 64) | limbs_[i];
@@ -1147,7 +1148,7 @@ auto BigUint::bitLength() const -> size_t {
 }
 
 auto BigUint::topBits(size_t bits, bool& sticky) const -> u128 {
-    assert(bits <= 128);
+    BUG_ASSERT(bits <= 128);
     const size_t length = bitLength();
     BigUint copy = *this;
     if (length > bits) {

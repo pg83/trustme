@@ -46,17 +46,17 @@ enum class CodegenOutput {
     Executable, // no suffix, includes main stub (TODO: Can't that just be added earlier?)
 };
 
-extern TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate);
+TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate);
 
-extern TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate);
+TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate);
 
-extern void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList& list);
+void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList& list);
 
-extern void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList);
+void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList);
 
-extern void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const std::vector<HIRPath>& paths);
-extern bool TransEnumerateGeneratedLiteral(const WireBoard& wb, TransList& list, const EncodedLiteral& literal);
-extern bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const stl::Vector<const TransListFunction*>& functions);
-extern void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list, unsigned mirOptLevel);
+void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const std::vector<HIRPath>& paths);
+bool TransEnumerateGeneratedLiteral(const WireBoard& wb, TransList& list, const EncodedLiteral& literal);
+bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const stl::Vector<const TransListFunction*>& functions);
+void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list, unsigned mirOptLevel);
 
-extern void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* crate, TransList list, const std::string& hirFile);
+void TransCodegen(const WireBoard& wb, const std::string& outfile, CodegenOutput outTy, const TransOptions& opt, HIRCrate* crate, TransList list, const std::string& hirFile);

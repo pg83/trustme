@@ -21,6 +21,209 @@ namespace {
             cb(*impl);
         }
     }
+
+    bool walkTypesInConstgeneric(HIRVisitor& v, const HIRConstGeneric& c, HIRConstGeneric& out);
+    bool walkTypesInPathParams(HIRVisitor& v, const HIRPathParams& p, HIRPathParams& out);
+    bool walkTypesInGenericPath(HIRVisitor& v, const HIRGenericPath& p, HIRGenericPath& out);
+    bool walkTypesInPath(HIRVisitor& v, const HIRPath& p, HIRPath& out);
+    bool walkTypesInTraitPath(HIRVisitor& v, const HIRTraitPath& p, HIRTraitPath& out);
+
+    bool walkTypesInPathParams(HIRVisitor& v, const HIRPathParams& p, HIRPathParams& out) {
+        for (size_t i = 0; i < p.types.size(); i++) {
+            auto nt = v.visitType(p.types[i]);
+            if (nt != p.types[i]) {
+                out = p.clone();
+                out.types[i] = nt;
+                for (size_t j = i + 1; j < out.types.size(); j++) {
+                    out.types[j] = v.visitType(out.types[j]);
+                }
+                for (auto& val : out.values) {
+                    HIRConstGeneric nv;
+                    if (walkTypesInConstgeneric(v, val, nv)) {
+                        val = mv$(nv);
+                    }
+                }
+                return true;
+            }
+        }
+        for (size_t i = 0; i < p.values.size(); i++) {
+            HIRConstGeneric nv;
+            if (walkTypesInConstgeneric(v, p.values[i], nv)) {
+                out = p.clone();
+                out.values[i] = mv$(nv);
+                for (size_t j = i + 1; j < out.values.size(); j++) {
+                    HIRConstGeneric nv2;
+                    if (walkTypesInConstgeneric(v, out.values[j], nv2)) {
+                        out.values[j] = mv$(nv2);
+                    }
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool walkTypesInConstgeneric(HIRVisitor& v, const HIRConstGeneric& c, HIRConstGeneric& out) {
+        const auto* unevaluated = c.opt_Unevaluated();
+        if (!unevaluated) {
+            return false;
+        }
+        const auto& u = **unevaluated;
+        auto nself = u.selfType ? v.visitType(u.selfType) : nullptr;
+        HIRPathParams nimpl;
+        HIRPathParams nitem;
+        bool cimpl = walkTypesInPathParams(v, u.paramsImpl, nimpl);
+        bool citem = walkTypesInPathParams(v, u.paramsItem, nitem);
+        v.visitExpr(*u.expr);
+        if (nself == u.selfType && !cimpl && !citem) {
+            return false;
+        }
+        out = HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(u.clone()));
+        auto& ou = *out.as_Unevaluated();
+        ou.selfType = nself;
+        if (cimpl) {
+            ou.paramsImpl = mv$(nimpl);
+        }
+        if (citem) {
+            ou.paramsItem = mv$(nitem);
+        }
+        return true;
+    }
+
+    bool walkTypesInGenericPath(HIRVisitor& v, const HIRGenericPath& p, HIRGenericPath& out) {
+        HIRPathParams np;
+        if (!walkTypesInPathParams(v, p.params, np)) {
+            return false;
+        }
+        out = HIRGenericPath(p.path, mv$(np));
+        return true;
+    }
+
+    bool walkTypesInPath(HIRVisitor& v, const HIRPath& p, HIRPath& out) {
+        switch (p.data.tag()) {
+            case HIRPathData::TAG_Generic: {
+                HIRGenericPath ng;
+                if (!walkTypesInGenericPath(v, p.data.as_Generic(), ng)) {
+                    return false;
+                }
+                out = HIRPath(mv$(ng));
+                return true;
+            }
+            case HIRPathData::TAG_UfcsInherent: {
+                const auto& e = p.data.as_UfcsInherent();
+                auto ntype = v.visitType(e.type);
+                HIRPathParams nparams;
+                HIRPathParams nimplParams;
+                bool cparams = walkTypesInPathParams(v, e.params, nparams);
+                bool cimpl = walkTypesInPathParams(v, e.implParams, nimplParams);
+                if (ntype == e.type && !cparams && !cimpl) {
+                    return false;
+                }
+                out = p.clone();
+                auto& oe = out.data.as_UfcsInherent();
+                oe.type = ntype;
+                if (cparams) {
+                    oe.params = mv$(nparams);
+                }
+                if (cimpl) {
+                    oe.implParams = mv$(nimplParams);
+                }
+                return true;
+            }
+            case HIRPathData::TAG_UfcsKnown: {
+                const auto& e = p.data.as_UfcsKnown();
+                auto ntype = v.visitType(e.type);
+                HIRGenericPath ntrait;
+                HIRPathParams nparams;
+                bool ctrait = walkTypesInGenericPath(v, e.trait, ntrait);
+                bool cparams = walkTypesInPathParams(v, e.params, nparams);
+                if (ntype == e.type && !ctrait && !cparams) {
+                    return false;
+                }
+                out = p.clone();
+                auto& oe = out.data.as_UfcsKnown();
+                oe.type = ntype;
+                if (ctrait) {
+                    oe.trait = mv$(ntrait);
+                }
+                if (cparams) {
+                    oe.params = mv$(nparams);
+                }
+                return true;
+            }
+            case HIRPathData::TAG_UfcsUnknown: {
+                const auto& e = p.data.as_UfcsUnknown();
+                auto ntype = v.visitType(e.type);
+                HIRPathParams nparams;
+                bool cparams = walkTypesInPathParams(v, e.params, nparams);
+                if (ntype == e.type && !cparams) {
+                    return false;
+                }
+                out = p.clone();
+                auto& oe = out.data.as_UfcsUnknown();
+                oe.type = ntype;
+                if (cparams) {
+                    oe.params = mv$(nparams);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool walkTypesInTraitPath(HIRVisitor& v, const HIRTraitPath& p, HIRTraitPath& out) {
+        bool changed = false;
+        auto ensureOut = [&]() {
+            if (!changed) {
+                out = p.clone();
+                changed = true;
+            }
+        };
+        {
+            HIRGenericPath ng;
+            if (walkTypesInGenericPath(v, p.path, ng)) {
+                ensureOut();
+                out.path = mv$(ng);
+            }
+        }
+        for (const auto& assoc : p.typeBounds) {
+            HIRGenericPath ns;
+            if (walkTypesInGenericPath(v, assoc.second.sourceTrait, ns)) {
+                ensureOut();
+                out.typeBounds.at(assoc.first).sourceTrait = mv$(ns);
+            }
+            HIRPathParams np;
+            if (walkTypesInPathParams(v, assoc.second.atyParams, np)) {
+                ensureOut();
+                out.typeBounds.at(assoc.first).atyParams = mv$(np);
+            }
+            auto nt = v.visitType(assoc.second.type);
+            if (nt != assoc.second.type) {
+                ensureOut();
+                out.typeBounds.at(assoc.first).type = nt;
+            }
+        }
+        for (const auto& assoc : p.traitBounds) {
+            HIRGenericPath ns;
+            if (walkTypesInGenericPath(v, assoc.second.sourceTrait, ns)) {
+                ensureOut();
+                out.traitBounds.at(assoc.first).sourceTrait = mv$(ns);
+            }
+            HIRPathParams np;
+            if (walkTypesInPathParams(v, assoc.second.atyParams, np)) {
+                ensureOut();
+                out.traitBounds.at(assoc.first).atyParams = mv$(np);
+            }
+            for (size_t i = 0; i < assoc.second.traits.size(); i++) {
+                HIRTraitPath ntp;
+                if (walkTypesInTraitPath(v, assoc.second.traits[i], ntp)) {
+                    ensureOut();
+                    out.traitBounds.at(assoc.first).traits[i] = mv$(ntp);
+                }
+            }
+        }
+        return changed;
+    }
 }
 
 void HIRVisitor::visitCrate(HIRCrate& crate) {
@@ -355,7 +558,7 @@ void HIRVisitor::visitUnion(HIRItemPath p, HIRUnion& item) {
     this->visitParams(item.params);
     for (auto& var : item.variants) {
         updateType(var.ty);
-        assert(!var.defaultValue);
+        BUG_ASSERT(!var.defaultValue);
     }
     if (resolve_) {
         resolve_->clearImplGenerics();
@@ -569,213 +772,8 @@ void HIRVisitor::visitPatternVal(HIRPattern::Value& val) {
     }
 }
 
-namespace {
-    bool walkTypesInConstgeneric(HIRVisitor& v, const HIRConstGeneric& c, HIRConstGeneric& out);
-    bool walkTypesInPathParams(HIRVisitor& v, const HIRPathParams& p, HIRPathParams& out);
-    bool walkTypesInGenericPath(HIRVisitor& v, const HIRGenericPath& p, HIRGenericPath& out);
-    bool walkTypesInPath(HIRVisitor& v, const HIRPath& p, HIRPath& out);
-    bool walkTypesInTraitPath(HIRVisitor& v, const HIRTraitPath& p, HIRTraitPath& out);
-
-    bool walkTypesInPathParams(HIRVisitor& v, const HIRPathParams& p, HIRPathParams& out) {
-        for (size_t i = 0; i < p.types.size(); i++) {
-            auto nt = v.visitType(p.types[i]);
-            if (nt != p.types[i]) {
-                out = p.clone();
-                out.types[i] = nt;
-                for (size_t j = i + 1; j < out.types.size(); j++) {
-                    out.types[j] = v.visitType(out.types[j]);
-                }
-                for (auto& val : out.values) {
-                    HIRConstGeneric nv;
-                    if (walkTypesInConstgeneric(v, val, nv)) {
-                        val = mv$(nv);
-                    }
-                }
-                return true;
-            }
-        }
-        for (size_t i = 0; i < p.values.size(); i++) {
-            HIRConstGeneric nv;
-            if (walkTypesInConstgeneric(v, p.values[i], nv)) {
-                out = p.clone();
-                out.values[i] = mv$(nv);
-                for (size_t j = i + 1; j < out.values.size(); j++) {
-                    HIRConstGeneric nv2;
-                    if (walkTypesInConstgeneric(v, out.values[j], nv2)) {
-                        out.values[j] = mv$(nv2);
-                    }
-                }
-                return true;
-            }
-        }
-        return false;
-    }
-
-    bool walkTypesInConstgeneric(HIRVisitor& v, const HIRConstGeneric& c, HIRConstGeneric& out) {
-        const auto* unevaluated = c.opt_Unevaluated();
-        if (!unevaluated) {
-            return false;
-        }
-        const auto& u = **unevaluated;
-        auto nself = u.selfType ? v.visitType(u.selfType) : nullptr;
-        HIRPathParams nimpl;
-        HIRPathParams nitem;
-        bool cimpl = walkTypesInPathParams(v, u.paramsImpl, nimpl);
-        bool citem = walkTypesInPathParams(v, u.paramsItem, nitem);
-        v.visitExpr(*u.expr);
-        if (nself == u.selfType && !cimpl && !citem) {
-            return false;
-        }
-        out = HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(u.clone()));
-        auto& ou = *out.as_Unevaluated();
-        ou.selfType = nself;
-        if (cimpl) {
-            ou.paramsImpl = mv$(nimpl);
-        }
-        if (citem) {
-            ou.paramsItem = mv$(nitem);
-        }
-        return true;
-    }
-
-    bool walkTypesInGenericPath(HIRVisitor& v, const HIRGenericPath& p, HIRGenericPath& out) {
-        HIRPathParams np;
-        if (!walkTypesInPathParams(v, p.params, np)) {
-            return false;
-        }
-        out = HIRGenericPath(p.path, mv$(np));
-        return true;
-    }
-
-    bool walkTypesInPath(HIRVisitor& v, const HIRPath& p, HIRPath& out) {
-        switch (p.data.tag()) {
-            case HIRPathData::TAG_Generic: {
-                HIRGenericPath ng;
-                if (!walkTypesInGenericPath(v, p.data.as_Generic(), ng)) {
-                    return false;
-                }
-                out = HIRPath(mv$(ng));
-                return true;
-            }
-            case HIRPathData::TAG_UfcsInherent: {
-                const auto& e = p.data.as_UfcsInherent();
-                auto ntype = v.visitType(e.type);
-                HIRPathParams nparams;
-                HIRPathParams nimplParams;
-                bool cparams = walkTypesInPathParams(v, e.params, nparams);
-                bool cimpl = walkTypesInPathParams(v, e.implParams, nimplParams);
-                if (ntype == e.type && !cparams && !cimpl) {
-                    return false;
-                }
-                out = p.clone();
-                auto& oe = out.data.as_UfcsInherent();
-                oe.type = ntype;
-                if (cparams) {
-                    oe.params = mv$(nparams);
-                }
-                if (cimpl) {
-                    oe.implParams = mv$(nimplParams);
-                }
-                return true;
-            }
-            case HIRPathData::TAG_UfcsKnown: {
-                const auto& e = p.data.as_UfcsKnown();
-                auto ntype = v.visitType(e.type);
-                HIRGenericPath ntrait;
-                HIRPathParams nparams;
-                bool ctrait = walkTypesInGenericPath(v, e.trait, ntrait);
-                bool cparams = walkTypesInPathParams(v, e.params, nparams);
-                if (ntype == e.type && !ctrait && !cparams) {
-                    return false;
-                }
-                out = p.clone();
-                auto& oe = out.data.as_UfcsKnown();
-                oe.type = ntype;
-                if (ctrait) {
-                    oe.trait = mv$(ntrait);
-                }
-                if (cparams) {
-                    oe.params = mv$(nparams);
-                }
-                return true;
-            }
-            case HIRPathData::TAG_UfcsUnknown: {
-                const auto& e = p.data.as_UfcsUnknown();
-                auto ntype = v.visitType(e.type);
-                HIRPathParams nparams;
-                bool cparams = walkTypesInPathParams(v, e.params, nparams);
-                if (ntype == e.type && !cparams) {
-                    return false;
-                }
-                out = p.clone();
-                auto& oe = out.data.as_UfcsUnknown();
-                oe.type = ntype;
-                if (cparams) {
-                    oe.params = mv$(nparams);
-                }
-                return true;
-            }
-        }
-        return false;
-    }
-
-    bool walkTypesInTraitPath(HIRVisitor& v, const HIRTraitPath& p, HIRTraitPath& out) {
-        bool changed = false;
-        auto ensureOut = [&]() {
-            if (!changed) {
-                out = p.clone();
-                changed = true;
-            }
-        };
-        {
-            HIRGenericPath ng;
-            if (walkTypesInGenericPath(v, p.path, ng)) {
-                ensureOut();
-                out.path = mv$(ng);
-            }
-        }
-        for (const auto& assoc : p.typeBounds) {
-            HIRGenericPath ns;
-            if (walkTypesInGenericPath(v, assoc.second.sourceTrait, ns)) {
-                ensureOut();
-                out.typeBounds.at(assoc.first).sourceTrait = mv$(ns);
-            }
-            HIRPathParams np;
-            if (walkTypesInPathParams(v, assoc.second.atyParams, np)) {
-                ensureOut();
-                out.typeBounds.at(assoc.first).atyParams = mv$(np);
-            }
-            auto nt = v.visitType(assoc.second.type);
-            if (nt != assoc.second.type) {
-                ensureOut();
-                out.typeBounds.at(assoc.first).type = nt;
-            }
-        }
-        for (const auto& assoc : p.traitBounds) {
-            HIRGenericPath ns;
-            if (walkTypesInGenericPath(v, assoc.second.sourceTrait, ns)) {
-                ensureOut();
-                out.traitBounds.at(assoc.first).sourceTrait = mv$(ns);
-            }
-            HIRPathParams np;
-            if (walkTypesInPathParams(v, assoc.second.atyParams, np)) {
-                ensureOut();
-                out.traitBounds.at(assoc.first).atyParams = mv$(np);
-            }
-            for (size_t i = 0; i < assoc.second.traits.size(); i++) {
-                HIRTraitPath ntp;
-                if (walkTypesInTraitPath(v, assoc.second.traits[i], ntp)) {
-                    ensureOut();
-                    out.traitBounds.at(assoc.first).traits[i] = mv$(ntp);
-                }
-            }
-        }
-        return changed;
-    }
-}
-
 HIRTypeRef HIRVisitor::visitType(HIRTypeRef ty) {
-    assert(ty);
+    BUG_ASSERT(ty);
     switch (ty->tag()) {
         case HIRTypeData::TAG_Infer:
         case HIRTypeData::TAG_Diverge:

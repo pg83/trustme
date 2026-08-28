@@ -27,42 +27,42 @@ enum eParsePathGenericMode {
     PATH_GENERIC_TYPE
 };
 
-extern ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode);
-extern ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMode);
-extern std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode genericMode);
-extern ASTPathParams ParsePathGenericList(TokenStream& lex);
+ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode);
+ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMode);
+std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode genericMode);
+ASTPathParams ParsePathGenericList(TokenStream& lex);
 
-extern ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted = true);
-extern ASTHigherRankedBounds ParseHRB(TokenStream& lex);
-extern ASTHigherRankedBounds ParseHRBOpt(TokenStream& lex);
-extern ASTAttributeList ParseItemAttrs(TokenStream& lex);
-extern void ParseParentAttrs(TokenStream& lex, ASTAttributeList& out);
-extern ASTAttribute ParseMetaItem(TokenStream& lex);
-extern ASTMacroInvocation ParseMacroInvocation(ProtoSpan ps, ASTPath path, TokenStream& lex);
-extern ASTType* ParseType(TokenStream& lex, bool allowTraitList = true);
+ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted = true);
+ASTHigherRankedBounds ParseHRB(TokenStream& lex);
+ASTHigherRankedBounds ParseHRBOpt(TokenStream& lex);
+ASTAttributeList ParseItemAttrs(TokenStream& lex);
+void ParseParentAttrs(TokenStream& lex, ASTAttributeList& out);
+ASTAttribute ParseMetaItem(TokenStream& lex);
+ASTMacroInvocation ParseMacroInvocation(ProtoSpan ps, ASTPath path, TokenStream& lex);
+ASTType* ParseType(TokenStream& lex, bool allowTraitList = true);
 enum class AllowOrPattern {
     No,
     Yes,
 };
-extern ASTPattern ParsePattern(TokenStream& lex, AllowOrPattern allowOr = AllowOrPattern::Yes);
+ASTPattern ParsePattern(TokenStream& lex, AllowOrPattern allowOr = AllowOrPattern::Yes);
 
-extern void ParseImplItem(TokenStream& lex, ASTImpl& impl);
-extern ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex);
-extern void ParseModItem(TokenStream& lex, ASTModule& mod, ASTAttributeList metaItems);
-extern ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& modFileinfo, const ASTAbsolutePath& modPath, ASTAttributeList metaItems);
-extern void ParseModRootItems(TokenStream& lex, ASTModule& mod);
-extern ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi);
+void ParseImplItem(TokenStream& lex, ASTImpl& impl);
+ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex);
+void ParseModItem(TokenStream& lex, ASTModule& mod, ASTAttributeList metaItems);
+ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& modFileinfo, const ASTAbsolutePath& modPath, ASTAttributeList metaItems);
+void ParseModRootItems(TokenStream& lex, ASTModule& mod);
+ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi);
 
-extern ASTExpr ParseExpr(TokenStream& lex);
-extern ASTExpr ParseExprBlock(TokenStream& lex);
-extern ASTExprNodeP ParseExpr0(TokenStream& lex);
-extern ASTExprNodeP ParseExpr13(TokenStream& lex);
-extern ASTExprNodeP ParseExprVal(TokenStream& lex);
-extern ASTExprNodeP ParseExprBlockNode(TokenStream& lex);
-extern ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence);
-extern ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTModule>& localMod, bool& addSilenceIfEnd);
-extern ASTExprNodeP ParseStmt(TokenStream& lex);
+ASTExpr ParseExpr(TokenStream& lex);
+ASTExpr ParseExprBlock(TokenStream& lex);
+ASTExprNodeP ParseExpr0(TokenStream& lex);
+ASTExprNodeP ParseExpr13(TokenStream& lex);
+ASTExprNodeP ParseExprVal(TokenStream& lex);
+ASTExprNodeP ParseExprBlockNode(TokenStream& lex);
+ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence);
+ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTModule>& localMod, bool& addSilenceIfEnd);
+ASTExprNodeP ParseStmt(TokenStream& lex);
 
-extern TokenTree ParseTT(TokenStream& lex, bool unwrapped);
+TokenTree ParseTT(TokenStream& lex, bool unwrapped);
 
-extern bool ParseIsTokValue(eTokenType tokType);
+bool ParseIsTokValue(eTokenType tokType);

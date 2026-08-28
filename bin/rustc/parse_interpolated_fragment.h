@@ -3,7 +3,6 @@
 #include "span.h"
 
 #include <iosfwd>
-#include <cassert>
 
 struct ASTType;
 class TokenTree;

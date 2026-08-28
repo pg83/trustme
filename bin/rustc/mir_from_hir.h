@@ -41,7 +41,7 @@ enum class InvalidType {
 };
 
 #include "mir_from_hir_tu.h"
-extern std::ostream& operator<<(std::ostream& os, const VarState& x);
+std::ostream& operator<<(std::ostream& os, const VarState& x);
 
 struct SplitArm {
     bool hasEarlyTerminated = false;
@@ -261,7 +261,7 @@ public:
     }
 
     MIRBasicBlockId activeBlock() const {
-        assert(blockActive_);
+        BUG_ASSERT(blockActive_);
         return currentBlock;
     }
 
@@ -448,10 +448,10 @@ public:
     virtual SaveAndEditVal<const ScopeHandle*> disableBorrowExtension() = 0;
 };
 
-extern void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
-extern void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRPattern& pat, MIRLValue val, const HIRExprNode* elseNode);
+void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
+void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRPattern& pat, MIRLValue val, const HIRExprNode* elseNode);
 
-extern void MIRLowerHIRGetTypeValueForPath(
+void MIRLowerHIRGetTypeValueForPath(
     const Span& sp,
     MirBuilder& builder,
     const HIRTypeData* topTy,

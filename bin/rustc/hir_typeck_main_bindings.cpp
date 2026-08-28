@@ -10,7 +10,6 @@
 #include <algorithm>
 
 namespace {
-
     struct Visitor: public HIRVisitor {
         HIRCrate& crate;
         StaticTraitResolve resolve_;
@@ -303,7 +302,7 @@ auto Visitor::visitPathParams(HIRPathParams& pp) -> void {
     Span _sp;
     const Span& sp = _sp;
 
-    assert(ty);
+    BUG_ASSERT(ty);
     auto data = ty->cloneData();
 
     auto self = crate.types.self();
@@ -561,8 +560,8 @@ auto Visitor::makeGenericPath(HIRSimplePath sp, const HIRTrait& trait) -> HIRGen
 }
 
 auto Visitor::getCurrentTraitGp() const -> HIRGenericPath {
-    assert(currentTraitPath_);
-    assert(currentTrait);
+    BUG_ASSERT(currentTraitPath_);
+    BUG_ASSERT(currentTrait);
     auto traitPath = HIRGenericPath(currentTraitPath_->getSimplePath());
     for (unsigned int i = 0; i < currentTrait->params.types.size(); i++) {
         traitPath.params.types.push_back(crate.types.generic(currentTrait->params.types[i].name, i));

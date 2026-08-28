@@ -2,8 +2,10 @@
  * Generic representation of a filesystem path
  */
 #include "path.h"
+#include "compile_error.h"
 #include <unistd.h>
 #include <limits.h>
+#include <stdexcept>
 
 FsPath::FsPath(const char* s)
     : str_(s)
@@ -28,7 +30,7 @@ FsPath::FsPath(const char* s)
 
 FsPath FsPath::toAbsolute() const {
     if (!this->isValid()) {
-        throw std::runtime_error("Calling to_absolute() on an invalid path");
+        compileErrorBugCheck("Calling to_absolute() on an invalid path");
     }
 
     if (this->str_[0] == SEP) {
@@ -103,7 +105,7 @@ FsPath::FsPath(const std::string& s)
 
 FsPath& FsPath::operator/=(const FsPath& p) {
     if (!p.isValid()) {
-        throw std::runtime_error("Appending from an invalid path");
+        compileErrorBugCheck("Appending from an invalid path");
     }
 
     return *this /= p.str_.c_str();
@@ -111,10 +113,10 @@ FsPath& FsPath::operator/=(const FsPath& p) {
 
 FsPath& FsPath::operator/=(const char* o) {
     if (!this->isValid()) {
-        throw std::runtime_error("Appending to an invalid path");
+        compileErrorBugCheck("Appending to an invalid path");
     }
     if (o[0] == '/') {
-        throw std::runtime_error("Appending an absolute path to another path");
+        compileErrorBugCheck("Appending an absolute path to another path");
     }
     this->str_.push_back(SEP);
     this->str_.append(o);
@@ -123,10 +125,10 @@ FsPath& FsPath::operator/=(const char* o) {
 
 FsPath& FsPath::operator/=(std::string_view o) {
     if (!this->isValid()) {
-        throw std::runtime_error("Appending to an invalid path");
+        compileErrorBugCheck("Appending to an invalid path");
     }
     if (o[0] == '/') {
-        throw std::runtime_error("Appending an absolute path to another path");
+        compileErrorBugCheck("Appending an absolute path to another path");
     }
     this->str_.push_back(SEP);
     this->str_.append(o);
@@ -147,10 +149,10 @@ FsPath FsPath::operator/(const char* o) const {
 
 FsPath FsPath::operator+(const char* o) const {
     if (!this->isValid()) {
-        throw std::runtime_error("Appending a string to an invalid path");
+        compileErrorBugCheck("Appending a string to an invalid path");
     }
     if (std::strchr(o, SEP) != nullptr) {
-        throw std::runtime_error("Appending a string containing the path separator (with operator+)");
+        compileErrorBugCheck("Appending a string containing the path separator (with operator+)");
     }
     auto rv = *this;
     rv.str_.append(o);
@@ -159,7 +161,7 @@ FsPath FsPath::operator+(const char* o) const {
 
 bool FsPath::popComponent() {
     if (!this->isValid()) {
-        throw std::runtime_error("Calling pop_component() on an invalid path");
+        compileErrorBugCheck("Calling pop_component() on an invalid path");
     }
     auto pos = str_.find_last_of(SEP);
     if (pos == std::string::npos || pos == 0) {
@@ -172,7 +174,7 @@ bool FsPath::popComponent() {
 
 FsPath FsPath::parent() const {
     if (!this->isValid()) {
-        throw std::runtime_error("Calling parent() on an invalid path");
+        compileErrorBugCheck("Calling parent() on an invalid path");
     }
     auto pos = str_.find_last_of(SEP);
     if (pos == std::string::npos) {
@@ -186,7 +188,7 @@ FsPath FsPath::parent() const {
 
 std::string FsPath::basename() const {
     if (!this->isValid()) {
-        throw std::runtime_error("Calling basename() on an invalid path");
+        compileErrorBugCheck("Calling basename() on an invalid path");
     }
 
     auto pos = str_.find_last_of(SEP);

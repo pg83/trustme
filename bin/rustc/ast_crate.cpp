@@ -247,7 +247,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
 
     auto ec = ASTExternCrate{wb.id, hirPool, types, name, path};
     auto realName = ec.hir->crateName;
-    assert(realName != "");
+    BUG_ASSERT(realName != "");
     if (expectedName != "" && realName != expectedName) {
         ERROR(sp, E0000, "Crate artifact " << path << " contains '" << realName << "', expected '" << expectedName << "'");
     }

@@ -1,5 +1,7 @@
 #include "ast_expr_ptr.h"
 
+#include "compile_error.h"
+
 ASTExprNodeP::ASTExprNodeP()
     : ptr(nullptr)
 {
@@ -29,16 +31,16 @@ void ASTExprNodeP::reset(ASTExprNode* n) {
 }
 
 const ASTExprNode& ASTExpr::node() const {
-    assert(node_.get());
+    BUG_ASSERT(node_.get());
     return *node_;
 }
 
 ASTExprNode& ASTExpr::node() {
-    assert(node_.get());
+    BUG_ASSERT(node_.get());
     return *node_;
 }
 
 std::shared_ptr<ASTExprNode> ASTExpr::takeNode() {
-    assert(node_.get());
+    BUG_ASSERT(node_.get());
     return std::move(node_);
 }

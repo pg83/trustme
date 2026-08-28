@@ -16,7 +16,6 @@
 #include <set>
 #include <memory>
 #include <vector>
-#include <cassert>
 #include <optional>
 #include <unordered_map>
 
@@ -213,7 +212,7 @@ public:
     HIRFunction(Receiver receiver, HIRGenericParams params, argsT args, HIRTypeRef retTy, HIRExprPtr code);
 
     size_t fixedArgCount() const {
-        assert(!hasNamedVariadic || (variadic && !args.empty()));
+        BUG_ASSERT(!hasNamedVariadic || (variadic && !args.empty()));
         return args.size() - hasNamedVariadic;
     }
 
@@ -242,7 +241,7 @@ struct HIRStructField {
 
 typedef std::vector<HIRStructField> tStructFields;
 
-extern HIRTypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIRTypeRef retTy, const tTupleFields& types);
+HIRTypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIRTypeRef retTy, const tTupleFields& types);
 
 struct HIRTraitMarkings {
     bool hasADeref = false;
@@ -417,7 +416,7 @@ public:
     bool mustUse = false;
 };
 
-extern std::ostream& operator<<(std::ostream& os, const HIRStruct::Repr& x);
+std::ostream& operator<<(std::ostream& os, const HIRStruct::Repr& x);
 
 class HIRUnion {
 public:

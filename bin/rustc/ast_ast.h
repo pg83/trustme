@@ -20,7 +20,6 @@
 #include <string>
 #include <vector>
 #include <algorithm>
-#include <stdexcept>
 #include <unordered_map>
 
 class ASTCrate;

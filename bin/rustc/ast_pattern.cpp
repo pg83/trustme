@@ -69,7 +69,7 @@ std::ostream& operator<<(std::ostream& os, const ASTPattern::TuplePat& val) {
         os << val.end;
     } else {
         os << val.start;
-        assert(val.end.size() == 0);
+        BUG_ASSERT(val.end.size() == 0);
     }
     return os;
 }

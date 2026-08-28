@@ -33,26 +33,6 @@ namespace {
         HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& value) override;
     };
 
-}
-
-struct StaticTraitResolve::NextSolverBridge {
-    HMTypeInferrence ivars;
-    HIRSimplePath visibility;
-    TraitResolution resolve_;
-
-    explicit NextSolverBridge(const WireBoard& wb);
-
-    bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, StaticImplCallback& callback);
-
-    bool findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const char* valueName, StaticImplCallback& callback);
-
-    bool normalize(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* projection, HIRTypeRef& output);
-
-    bool typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* type);
-};
-
-namespace {
-
     bool specializationLookupNeedsResolution(const HIRTypeData* type, const HIRPathParams& params) {
         auto typeNeedsResolution = [](const HIRTypeData* inner) {
             return inner->hasTypeInfer() || inner->needsMonomorphisation() || inner->mayHaveAssociatedType();
@@ -71,6 +51,22 @@ namespace {
         });
     }
 }
+
+struct StaticTraitResolve::NextSolverBridge {
+    HMTypeInferrence ivars;
+    HIRSimplePath visibility;
+    TraitResolution resolve_;
+
+    explicit NextSolverBridge(const WireBoard& wb);
+
+    bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, StaticImplCallback& callback);
+
+    bool findValue(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const char* valueName, StaticImplCallback& callback);
+
+    bool normalize(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* projection, HIRTypeRef& output);
+
+    bool typeIsCopy(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRTypeData* type);
+};
 
 bool StaticTraitResolve::findImplCb(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, StaticImplCallback& foundCb) const {
     if (traitPath.components().empty()) {
@@ -367,7 +363,7 @@ bool StaticTraitResolve::findImplCheckCrateRawCb(const Span& sp, const HIRSimple
         }
     }
 
-    assert(implParamsDef.types.size() == implParams.types.size());
+    BUG_ASSERT(implParamsDef.types.size() == implParams.types.size());
     for (size_t i = 0; i < implParamsDef.types.size(); i++) {
         if (implParamsDef.types.at(i).isSized) {
             if (!implParams.types[i]->is_Infer()) {
@@ -999,8 +995,6 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTy
     input = MonomorphStatePtr(crate.types, pe.type, &implParams, &itemParams).monomorphType(sp, alias->type);
     return true;
 }
-
-namespace {}
 
 bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeRef& input, bool recurse /*=true*/) const {
     ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsKnown(), input);
@@ -2012,7 +2006,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             return false;
         }
     }
-    assert(!"Fell off the end of type_needs_drop_glue");
+    BUG_ASSERT(!"Fell off the end of type_needs_drop_glue");
     UNREACHABLE();
 }
 
@@ -2552,7 +2546,7 @@ NullOnDrop<const HIRGenericParams> StaticTraitResolve::setImplGenerics(const HIR
 }
 
 void StaticTraitResolve::updateImplSelfMetadata(const HIRTypeData* selfTy) {
-    assert(implGenerics_);
+    BUG_ASSERT(implGenerics_);
     selfMetadata = metadataType(Span(), selfTy);
 }
 
@@ -2562,7 +2556,7 @@ NullOnDrop<const HIRGenericParams> StaticTraitResolve::setItemGenerics(const HIR
 }
 
 void StaticTraitResolve::setImplGenericsRaw(MetadataType selfMetaType, const HIRGenericParams& gps) {
-    assert(!implGenerics_);
+    BUG_ASSERT(!implGenerics_);
     selfMetadata = selfMetaType;
     implGenerics_ = &gps;
     prepIndexes();
@@ -2575,7 +2569,7 @@ void StaticTraitResolve::clearImplGenerics() {
 }
 
 void StaticTraitResolve::setItemGenericsRaw(const HIRGenericParams& gps) {
-    assert(!itemGenerics_);
+    BUG_ASSERT(!itemGenerics_);
     itemGenerics_ = &gps;
     prepIndexes();
 }
@@ -2586,8 +2580,8 @@ void StaticTraitResolve::clearItemGenerics() {
 }
 
 void StaticTraitResolve::setBothGenericsRaw(const HIRGenericParams* gpsImpl, const HIRGenericParams* gpsFcn) {
-    assert(!implGenerics_);
-    assert(!itemGenerics_);
+    BUG_ASSERT(!implGenerics_);
+    BUG_ASSERT(!itemGenerics_);
     implGenerics_ = gpsImpl;
     itemGenerics_ = gpsFcn;
     prepIndexes();

@@ -43,7 +43,7 @@ void ASTExpr::visitNodes(ASTNodeVisitor& v) {
 
 void ASTExpr::visitNodes(ASTNodeVisitor& v) const {
     if (node_) {
-        assert(v.isConst());
+        BUG_ASSERT(v.isConst());
         node_->visit(v);
     }
 }
@@ -65,7 +65,7 @@ std::ostream& operator<<(std::ostream& os, const ASTExpr& pat) {
 }
 
 std::ostream& operator<<(std::ostream& os, const ASTExprNode& node) {
-    assert(static_cast<const void*>(&node) != nullptr);
+    BUG_ASSERT(static_cast<const void*>(&node) != nullptr);
     node.print(os);
     return os;
 }
@@ -295,6 +295,62 @@ namespace {
     }
 
 #define NEWNODE(type, ...) mkExprnodep(span(), new type(__VA_ARGS__))
+
+    void printFmtString(std::ostream& os, const std::string& s) {
+        static const char* hex = "0123456789ABCDEF";
+        for (auto c : s) {
+            if (c == '{') {
+                os << "{{";
+            } else if (c == '\\') {
+                os << "\\\\";
+            } else if (c == '"') {
+                os << "\\\"";
+            } else if (std::isprint(c)) {
+                os << c;
+            } else {
+                os << "\\x" << hex[c >> 4] << hex[c & 15];
+            }
+        }
+    }
+
+    void fmtIfletConditions(std::ostream& os, const std::vector<ASTIfLetCondition>& conditions) {
+        for (const auto& cond : conditions) {
+            if (&cond != &conditions.front()) {
+                os << " && ";
+            }
+            if (cond.optPat) {
+                os << "let ";
+                os << *cond.optPat << " = ";
+            }
+            os << "(" << *cond.value << ")";
+        }
+    }
+
+    std::vector<ASTIfLetCondition> cloneIfletConditions(const std::vector<ASTIfLetCondition>& conditions) {
+        std::vector<ASTIfLetCondition> newConds;
+        newConds.reserve(conditions.size());
+        for (const auto& cond : conditions) {
+            ASTIfLetCondition newCond;
+            if (cond.optPat) {
+                newCond.optPat = std::make_unique<ASTPattern>(cond.optPat->clone());
+            }
+            newCond.value = cond.value->clone();
+            newConds.push_back(std::move(newCond));
+        }
+        return newConds;
+    }
+
+    static void printClosureParameterPattern(std::ostream& os, const ASTPattern& pattern) {
+        if (pattern.bindings().empty() && pattern.data().is_MaybeBind()) {
+            const auto& ident = pattern.data().as_MaybeBind().name;
+            if (ident.isRaw) {
+                os << "r#";
+            }
+            os << ident.name;
+            return;
+        }
+        os << pattern;
+    }
 }
 
 NODE(
@@ -370,25 +426,6 @@ NODE(
         return NEWNODE(ASTExprNodeAsm, text, mv$(outputs), mv$(inputs), clobbers, flags);
     }
 )
-
-namespace {
-    void printFmtString(std::ostream& os, const std::string& s) {
-        static const char* hex = "0123456789ABCDEF";
-        for (auto c : s) {
-            if (c == '{') {
-                os << "{{";
-            } else if (c == '\\') {
-                os << "\\\\";
-            } else if (c == '"') {
-                os << "\\\"";
-            } else if (std::isprint(c)) {
-                os << c;
-            } else {
-                os << "\\x" << hex[c >> 4] << hex[c & 15];
-            }
-        }
-    }
-}
 
 void AsmLine::fmt(std::ostream& os) const {
     os << "\"";
@@ -649,35 +686,6 @@ NODE(
     { return NEWNODE(ASTExprNodeFor, label, pattern.clone(), value->clone(), code->clone(), isAwait); }
 )
 
-namespace {
-    void fmtIfletConditions(std::ostream& os, const std::vector<ASTIfLetCondition>& conditions) {
-        for (const auto& cond : conditions) {
-            if (&cond != &conditions.front()) {
-                os << " && ";
-            }
-            if (cond.optPat) {
-                os << "let ";
-                os << *cond.optPat << " = ";
-            }
-            os << "(" << *cond.value << ")";
-        }
-    }
-
-    std::vector<ASTIfLetCondition> cloneIfletConditions(const std::vector<ASTIfLetCondition>& conditions) {
-        std::vector<ASTIfLetCondition> newConds;
-        newConds.reserve(conditions.size());
-        for (const auto& cond : conditions) {
-            ASTIfLetCondition newCond;
-            if (cond.optPat) {
-                newCond.optPat = std::make_unique<ASTPattern>(cond.optPat->clone());
-            }
-            newCond.value = cond.value->clone();
-            newConds.push_back(std::move(newCond));
-        }
-        return newConds;
-    }
-}
-
 NODE(
     ASTExprNodeWhile,
     {
@@ -782,20 +790,6 @@ NODE(ASTExprNodeString, { printEscapedLiteral(os, TOK_STRING, reinterpret_cast<c
 NODE(ASTExprNodeByteString, { printEscapedLiteral(os, TOK_BYTESTRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, { return NEWNODE(ASTExprNodeByteString, value); })
 NODE(ASTExprNodeCString, { printEscapedLiteral(os, TOK_CSTRING, reinterpret_cast<const u8*>(value.data()), value.size()); }, { return NEWNODE(ASTExprNodeCString, value); })
 NODE(ASTExprNodeSuffixedLiteral, { os << text; }, { return NEWNODE(ASTExprNodeSuffixedLiteral, text); })
-
-namespace {
-    static void printClosureParameterPattern(std::ostream& os, const ASTPattern& pattern) {
-        if (pattern.bindings().empty() && pattern.data().is_MaybeBind()) {
-            const auto& ident = pattern.data().as_MaybeBind().name;
-            if (ident.isRaw) {
-                os << "r#";
-            }
-            os << ident.name;
-            return;
-        }
-        os << pattern;
-    }
-}
 
 NODE(
     ASTExprNodeClosure,

@@ -45,16 +45,16 @@ HIRItemPath::HIRItemPath(const HIRSimplePath& path)
 
 HIRSimplePath HIRItemPath::getSimplePath() const {
     if (wrapped) {
-        assert(wrapped->data.is_Generic());
+        BUG_ASSERT(wrapped->data.is_Generic());
         return wrapped->data.as_Generic().path;
     } else if (trait && !name) {
         return trait->clone();
     } else if (parent) {
-        assert(name);
+        BUG_ASSERT(name);
         return parent->getSimplePath() + RcString::newInterned(name);
     } else {
-        assert(!name);
-        assert(crateName);
+        BUG_ASSERT(!name);
+        BUG_ASSERT(crateName);
         return HIRSimplePath(RcString::newInterned(crateName));
     }
 }
@@ -63,17 +63,17 @@ HIRPath HIRItemPath::getFullPath() const {
     if (wrapped) {
         return wrapped->clone();
     }
-    assert(parent);
-    assert(name);
+    BUG_ASSERT(parent);
+    BUG_ASSERT(name);
 
     if (parent->name || !parent->ty) {
         return getSimplePath();
     } else if (parent->trait) {
-        assert(parent->ty);
-        assert(parent->traitParams);
+        BUG_ASSERT(parent->ty);
+        BUG_ASSERT(parent->traitParams);
         return HIRPath(parent->ty, HIRGenericPath(parent->trait->clone(), parent->traitParams->clone()), RcString::newInterned(name));
     } else {
-        assert(parent->ty);
+        BUG_ASSERT(parent->ty);
         return HIRPath(parent->ty, RcString::newInterned(name));
     }
 }

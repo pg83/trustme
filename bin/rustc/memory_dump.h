@@ -1,3 +1,3 @@
 #pragma once
 
-extern void memoryDump(unsigned& sequence, const char* phase);
+void memoryDump(unsigned& sequence, const char* phase);

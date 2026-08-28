@@ -9,4 +9,4 @@
 struct WireBoard;
 class HIRCrate;
 
-extern void LintUnsafeCode(const WireBoard& wb, HIRCrate& crate);
+void LintUnsafeCode(const WireBoard& wb, HIRCrate& crate);

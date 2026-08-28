@@ -38,12 +38,12 @@ struct Codepoint {
     }
 };
 
-extern std::string& operator+=(std::string& s, const Codepoint& cp);
-extern std::ostream& operator<<(std::ostream& s, const Codepoint& cp);
+std::string& operator+=(std::string& s, const Codepoint& cp);
+std::ostream& operator<<(std::ostream& s, const Codepoint& cp);
 
-extern Token LexFindOperator(stl::StringView s);
-extern Token LexFindOperator(const std::string& s);
-extern Token LexFindReservedWord(const std::string& s, ASTEdition edition);
+Token LexFindOperator(stl::StringView s);
+Token LexFindOperator(const std::string& s);
+Token LexFindReservedWord(const std::string& s, ASTEdition edition);
 
 typedef Codepoint uchar;
 

@@ -211,7 +211,7 @@ void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct,
     }
 
     if (inner) {
-        assert(innerTy);
+        BUG_ASSERT(innerTy);
         inner->find(sp, innerTy, tyRes, cb);
     }
 }

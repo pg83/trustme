@@ -11,7 +11,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdarg.h>
-#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -25,10 +24,7 @@ namespace {
 #define TRUSTME_TARGET_U128_ALIGN 16
 #define TRUSTME_TARGET_HAS_NATIVE_F128 1
 #include "prelude.inc"
-}
-}
 
-namespace {
     uint128_t u128(u64 hi, u64 lo) {
         return make128_raw(hi, lo);
     }
@@ -47,6 +43,7 @@ namespace {
 
     const uint128_t U128_MAX = make128_raw(UINT64_MAX, UINT64_MAX);
     const uint128_t U128_ZERO = make128(0);
+}
 }
 
 STD_TEST_SUITE(PreludeInt128) {

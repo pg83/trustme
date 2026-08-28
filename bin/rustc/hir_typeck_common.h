@@ -29,12 +29,12 @@ struct HIRTypeVisitorCb final: HIRTypeVisitorCallback {
     }
 };
 
-extern bool visitTyWithCb(const HIRTypeData*, HIRTypeVisitorCallback& callback);
-extern bool visitTraitPathTysWithCb(const HIRTraitPath&, HIRTypeVisitorCallback& callback);
-extern bool visitPathTysWithCb(const HIRPath&, HIRTypeVisitorCallback& callback);
+bool visitTyWithCb(const HIRTypeData*, HIRTypeVisitorCallback& callback);
+bool visitTraitPathTysWithCb(const HIRTraitPath&, HIRTypeVisitorCallback& callback);
+bool visitPathTysWithCb(const HIRPath&, HIRTypeVisitorCallback& callback);
 
-extern bool typeContainsGenericGroup(const HIRTypeData*, HIRGenericGroup group);
-extern bool pathParamsContainGenericGroup(const HIRPathParams&, HIRGenericGroup group);
+bool typeContainsGenericGroup(const HIRTypeData*, HIRGenericGroup group);
+bool pathParamsContainGenericGroup(const HIRPathParams&, HIRGenericGroup group);
 
 template <typename F>
 bool visitTyWith(const HIRTypeData* type, F f) {
@@ -72,8 +72,8 @@ struct HIRTypeRewriteCb final: HIRTypeRewriteCallback {
     }
 };
 
-extern bool rewriteTyWithCb(HIRTypeInterner& types, HIRTypeRef& ty, HIRTypeRewriteCallback& callback);
-extern bool rewritePathTysWithCb(HIRTypeInterner& types, HIRPath& path, HIRTypeRewriteCallback& callback);
+bool rewriteTyWithCb(HIRTypeInterner& types, HIRTypeRef& ty, HIRTypeRewriteCallback& callback);
+bool rewritePathTysWithCb(HIRTypeInterner& types, HIRPath& path, HIRTypeRewriteCallback& callback);
 
 template <typename F>
 bool rewriteTyWith(HIRTypeInterner& types, HIRTypeRef& ty, F f) {
@@ -105,8 +105,8 @@ struct HIRTypeCloneCb final: HIRTypeCloneCallback {
     }
 };
 
-extern HIRTypeRef cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, HIRTypeCloneCallback& callback);
-extern HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, HIRTypeCloneCallback& callback);
+HIRTypeRef cloneTyWithCb(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, HIRTypeCloneCallback& callback);
+HIRPathParams clonePathParamsWithCb(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, HIRTypeCloneCallback& callback);
 
 template <typename F>
 HIRTypeRef cloneTyWith(HIRTypeInterner& types, const Span& sp, const HIRTypeData* tpl, F f) {
@@ -120,9 +120,9 @@ HIRPathParams clonePathParamsWith(HIRTypeInterner& types, const Span& sp, const 
     return clonePathParamsWithCb(types, sp, tpl, cb);
 }
 
-extern void checkTypeClassPrimitive(const Span& sp, const HIRTypeData* type, HIRInferClass ic, HIRCoreType ct);
+void checkTypeClassPrimitive(const Span& sp, const HIRTypeData* type, HIRInferClass ic, HIRCoreType ct);
 
-extern bool typeClassPrimitiveCompatible(HIRInferClass ic, HIRCoreType ct);
+bool typeClassPrimitiveCompatible(HIRInferClass ic, HIRCoreType ct);
 
 enum class TypeckPrimitiveOperator {
     None,

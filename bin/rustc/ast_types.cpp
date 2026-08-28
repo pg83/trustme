@@ -297,7 +297,7 @@ Ordering ASTType::ord(const ASTType& x) const {
                 return rv;
             }
             if (ent.size.get()) {
-                throw std::runtime_error("TODO: Sized array comparisons");
+                TODO(Span(), "Sized array comparisons");
             }
             return OrdEqual;
             break;
@@ -347,7 +347,7 @@ Ordering ASTType::ord(const ASTType& x) const {
             break;
         }
     }
-    throw std::runtime_error(FMT("BUGCHECK - Unhandled ASTType* class '" << data.tag() << "'"));
+    BUG(Span(), "Unhandled ASTType* class '" << data.tag() << "'");
 }
 
 std::ostream& operator<<(std::ostream& os, const eCoreType ct) {
@@ -395,7 +395,6 @@ void ASTType::print(std::ostream& os, bool isDebug /*=false*/) const {
             if (!ent.info.rettype->isUnit()) {
                 os << " -> " << *ent.info.rettype;
             }
-
         } break;
             _(Tuple, os << "( "; for (const auto& it : ent.innerTypes) {
                 it->print(os, isDebug);
@@ -410,7 +409,6 @@ void ASTType::print(std::ostream& os, bool isDebug /*=false*/) const {
             }
             os << (ent.isMut ? "mut " : "");
             ent.inner->print(os, isDebug);
-
         } break;
             _(Pointer, os << "*" << (ent.isMut ? "mut " : "const "); ent.inner->print(os, isDebug);)
             _(Array, os << "["; ent.inner->print(os, isDebug); os << "; "; if (ent.size.get()) { os << *ent.size; } else { os << "_"; } os << "]";)

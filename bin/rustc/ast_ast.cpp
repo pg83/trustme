@@ -527,8 +527,8 @@ void ASTModule::addMacroInvocation(ASTMacroInvocation item) {
 }
 
 void ASTModule::addMacro(bool isExported, RcString name, MacroRulesPtr macro) {
-    assert(macro);
-    assert(macro->rules.size() > 0);
+    BUG_ASSERT(macro);
+    BUG_ASSERT(macro->rules.size() > 0);
     macros_.push_back(
         ASTNamed<MacroRulesPtr>(
             Span(),

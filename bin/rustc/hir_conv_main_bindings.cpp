@@ -20,7 +20,6 @@
 void ConvertHIRBind(HIRCrate& crate);
 
 namespace {
-
     enum class Target {
         TypeItem,
         Struct,
@@ -209,9 +208,6 @@ namespace {
         void visitStruct(HIRItemPath ip, HIRStruct& str) override;
     };
 
-}
-
-namespace {
     struct Expander: public HIRVisitor {
         const WireBoard& wb;
         const HIRCrate& crate;
@@ -433,9 +429,6 @@ namespace {
 
         void visitPatternValue(const Span& sp, const HIRPattern& pat, HIRPattern::Value& val);
     };
-}
-
-namespace {
 
     const void* getTypePointer(const Span& sp, const HIRCrate& crate, const HIRSimplePath& path, Target t) {
         if (t == Target::EnumVariant) {
@@ -537,93 +530,7 @@ namespace {
             }
         }
     }
-}
 
-void ConvertHIRBind(const WireBoard& wb, HIRCrate& crate) {
-    {
-        BindVisitor exp{wb};
-        for (auto& ec : crate.extCrates) {
-            exp.visitCrate(*ec.second.data);
-        }
-        exp.visitCrate(crate);
-    }
-
-    {
-        VisitorPost v{wb};
-        for (auto& ec : crate.extCrates) {
-            v.visitCrate(*ec.second.data);
-        }
-        v.visitCrate(crate);
-    }
-
-    VisitorEnumSuperTraits(crate).visitCrate(crate);
-}
-
-HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, const HIRGenericPath& path, bool isExpr) {
-    auto pp = path.params.clone();
-
-    auto newAliasInputInfer = [&]() {
-        const auto index = types.newAliasInputInfer();
-        ASSERT_BUG(sp, isAliasInputInfer(index), "exhausted alias inference placeholder range");
-        return index;
-    };
-
-    if (isExpr && pp.types.empty()) {
-        while (pp.types.size() < paramsDef.types.size()) {
-            pp.types.push_back(types.infer());
-        }
-    }
-    if (isExpr && pp.values.empty()) {
-        pp.values.resize(paramsDef.values.size());
-    }
-
-    if (isExpr) {
-        for (auto& type : pp.types) {
-            if (const auto* infer = type->opt_Infer(); infer && infer->index == ~0u) {
-                type = types.infer(newAliasInputInfer(), infer->tyClass);
-            }
-        }
-        for (auto& value : pp.values) {
-            if (value.is_Infer() && value.as_Infer().index == ~0u) {
-                value.as_Infer().index = newAliasInputInfer();
-            }
-        }
-    }
-
-    pp.types.reserve(paramsDef.types.size());
-    while (pp.types.size() < paramsDef.types.size() && paramsDef.types[pp.types.size()].defaultValue != HIRTypeRef()) {
-        auto monomorph = MonomorphStatePtr(types, nullptr, &pp, nullptr);
-        pp.types.push_back(monomorph.monomorphType(sp, paramsDef.types[pp.types.size()].defaultValue));
-    }
-    if (pp.types.size() != paramsDef.types.size()) {
-        ERROR(sp, E0000, "Mismatched type-generic count in " << path << ", expected " << paramsDef.types.size() << " got " << pp.types.size());
-    }
-
-    pp.values.reserve(paramsDef.values.size());
-    while (pp.values.size() < paramsDef.values.size() && !paramsDef.values[pp.values.size()].defaultValue.is_Infer()) {
-        auto monomorph = MonomorphStatePtr(types, nullptr, &pp, nullptr);
-        pp.values.push_back(monomorph.monomorphConstgeneric(sp, paramsDef.values[pp.values.size()].defaultValue, false));
-    }
-    if (pp.values.size() != paramsDef.values.size()) {
-        ERROR(sp, E0000, "Mismatched const-generic count in " << path << ", expected " << paramsDef.values.size() << " got " << pp.values.size());
-    }
-
-    return pp;
-}
-
-HIRTypeRef ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr) {
-    const auto& ti = crate.getTypeitemByPath(sp, path.path);
-    if (const auto* ep = ti.opt_TypeAlias()) {
-        const auto& ta = *ep;
-        auto pp = ConvertHIRCompleteAliasParams(crate.types, sp, ta.params, path, isExpr);
-        auto ms = MonomorphStatePtr(crate.types, nullptr, &pp, nullptr);
-        HIRTypeRef rv = ms.monomorphType(sp, ta.type);
-        return rv;
-    }
-    return crate.types.infer();
-}
-
-namespace {
     HIRTypeRef ConvertHIRExpandAliasesGetExpansion(const HIRCrate& crate, const HIRPath& path, bool isExpr) {
         Span sp;
         switch (path.data.tag()) {
@@ -711,42 +618,7 @@ namespace {
         }
         return rv;
     }
-}
 
-void ConvertHIRExpandAliases(const WireBoard& wb, HIRCrate& crate) {
-    AliasConstGenericParamBinder(crate.types).visitCrate(crate);
-    Expander exp{wb, crate};
-    exp.visitCrate(crate);
-}
-
-void ConvertHIRValidateReceivers(const WireBoard& wb, HIRCrate& crate) {
-    ReceiverValidator(wb, crate).validate();
-}
-
-void ConvertHIRExpandAliasesSelf(HIRCrate& crate) {
-    ExpanderSelf exp{crate};
-    exp.visitCrate(crate);
-}
-
-void ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRTypeData* implType, std::vector<std::pair<HIRPattern, HIRTypeRef>>& args, HIRTypeRef& retTy, HIRExprPtr& expr) {
-    ExpanderSelf exp{crate, implType};
-    for (auto& arg : args) {
-        exp.visitPattern(arg.first);
-        arg.second = exp.visitType(arg.second);
-    }
-    retTy = exp.visitType(retTy);
-    exp.visitExpr(expr);
-}
-
-void ConvertHIRMarkings(const WireBoard& wb, HIRCrate& crate) {
-    MarkingsVisitor exp{wb};
-    exp.visitCrate(crate);
-
-    Visitor2 exp2{wb};
-    exp2.visitCrate(crate);
-}
-
-namespace {
     void expandTraitImplDefaults(const HIRCrate& crate, const HIRSimplePath& traitPath, HIRTraitImpl& impl) {
         Span sp;
         const auto& trait = crate.getTraitByPath(sp, traitPath);
@@ -832,6 +704,123 @@ namespace {
         pushIndexInherentMethodsList(icache, langBox, src.typeImpls.nonNamed);
         pushIndexInherentMethodsList(icache, langBox, src.typeImpls.generic);
     }
+}
+
+void ConvertHIRBind(const WireBoard& wb, HIRCrate& crate) {
+    {
+        BindVisitor exp{wb};
+        for (auto& ec : crate.extCrates) {
+            exp.visitCrate(*ec.second.data);
+        }
+        exp.visitCrate(crate);
+    }
+
+    {
+        VisitorPost v{wb};
+        for (auto& ec : crate.extCrates) {
+            v.visitCrate(*ec.second.data);
+        }
+        v.visitCrate(crate);
+    }
+
+    VisitorEnumSuperTraits(crate).visitCrate(crate);
+}
+
+HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, const HIRGenericPath& path, bool isExpr) {
+    auto pp = path.params.clone();
+
+    auto newAliasInputInfer = [&]() {
+        const auto index = types.newAliasInputInfer();
+        ASSERT_BUG(sp, isAliasInputInfer(index), "exhausted alias inference placeholder range");
+        return index;
+    };
+
+    if (isExpr && pp.types.empty()) {
+        while (pp.types.size() < paramsDef.types.size()) {
+            pp.types.push_back(types.infer());
+        }
+    }
+    if (isExpr && pp.values.empty()) {
+        pp.values.resize(paramsDef.values.size());
+    }
+
+    if (isExpr) {
+        for (auto& type : pp.types) {
+            if (const auto* infer = type->opt_Infer(); infer && infer->index == ~0u) {
+                type = types.infer(newAliasInputInfer(), infer->tyClass);
+            }
+        }
+        for (auto& value : pp.values) {
+            if (value.is_Infer() && value.as_Infer().index == ~0u) {
+                value.as_Infer().index = newAliasInputInfer();
+            }
+        }
+    }
+
+    pp.types.reserve(paramsDef.types.size());
+    while (pp.types.size() < paramsDef.types.size() && paramsDef.types[pp.types.size()].defaultValue != HIRTypeRef()) {
+        auto monomorph = MonomorphStatePtr(types, nullptr, &pp, nullptr);
+        pp.types.push_back(monomorph.monomorphType(sp, paramsDef.types[pp.types.size()].defaultValue));
+    }
+    if (pp.types.size() != paramsDef.types.size()) {
+        ERROR(sp, E0000, "Mismatched type-generic count in " << path << ", expected " << paramsDef.types.size() << " got " << pp.types.size());
+    }
+
+    pp.values.reserve(paramsDef.values.size());
+    while (pp.values.size() < paramsDef.values.size() && !paramsDef.values[pp.values.size()].defaultValue.is_Infer()) {
+        auto monomorph = MonomorphStatePtr(types, nullptr, &pp, nullptr);
+        pp.values.push_back(monomorph.monomorphConstgeneric(sp, paramsDef.values[pp.values.size()].defaultValue, false));
+    }
+    if (pp.values.size() != paramsDef.values.size()) {
+        ERROR(sp, E0000, "Mismatched const-generic count in " << path << ", expected " << paramsDef.values.size() << " got " << pp.values.size());
+    }
+
+    return pp;
+}
+
+HIRTypeRef ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr) {
+    const auto& ti = crate.getTypeitemByPath(sp, path.path);
+    if (const auto* ep = ti.opt_TypeAlias()) {
+        const auto& ta = *ep;
+        auto pp = ConvertHIRCompleteAliasParams(crate.types, sp, ta.params, path, isExpr);
+        auto ms = MonomorphStatePtr(crate.types, nullptr, &pp, nullptr);
+        HIRTypeRef rv = ms.monomorphType(sp, ta.type);
+        return rv;
+    }
+    return crate.types.infer();
+}
+
+void ConvertHIRExpandAliases(const WireBoard& wb, HIRCrate& crate) {
+    AliasConstGenericParamBinder(crate.types).visitCrate(crate);
+    Expander exp{wb, crate};
+    exp.visitCrate(crate);
+}
+
+void ConvertHIRValidateReceivers(const WireBoard& wb, HIRCrate& crate) {
+    ReceiverValidator(wb, crate).validate();
+}
+
+void ConvertHIRExpandAliasesSelf(HIRCrate& crate) {
+    ExpanderSelf exp{crate};
+    exp.visitCrate(crate);
+}
+
+void ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRTypeData* implType, std::vector<std::pair<HIRPattern, HIRTypeRef>>& args, HIRTypeRef& retTy, HIRExprPtr& expr) {
+    ExpanderSelf exp{crate, implType};
+    for (auto& arg : args) {
+        exp.visitPattern(arg.first);
+        arg.second = exp.visitType(arg.second);
+    }
+    retTy = exp.visitType(retTy);
+    exp.visitExpr(expr);
+}
+
+void ConvertHIRMarkings(const WireBoard& wb, HIRCrate& crate) {
+    MarkingsVisitor exp{wb};
+    exp.visitCrate(crate);
+
+    Visitor2 exp2{wb};
+    exp2.visitCrate(crate);
 }
 
 void ConvertHIRResolveUFCSOuter(const WireBoard& wb, HIRCrate& crate) {
@@ -1196,7 +1185,7 @@ auto BindVisitor::traitRequiresSizedSelf(const HIRTrait& trait) const -> bool {
         if (auto* ee = te->inner.opt_Fcn()) {
             if (ee->origin != HIRSimplePath()) {
             } else if (fcnPath) {
-                assert(fcnPtr);
+                BUG_ASSERT(fcnPtr);
 
                 HIRPathParams params = fcnPtr->params.makeNopParams(crate.types, 1);
                 ee->origin = fcnPath->getFullPath();
@@ -1563,7 +1552,7 @@ auto BindVisitor::visitExpr(HIRExprPtr& expr) -> void {
                     } else if (node.args.size() == fcn.args.size() + fcn.markings.rustcLegacyConstGenerics.size()) {
                         for (auto idx : fcn.markings.rustcLegacyConstGenerics) {
                             auto& argNode = node.args.at(idx);
-                            assert(argNode);
+                            BUG_ASSERT(argNode);
                             // TODO: Check that the expression is a valid const (no locals referenced, no function calls?)
 
                             HIRExprPtr ep{std::move(argNode)};
@@ -3188,7 +3177,7 @@ auto Visitor2::getCoerceType(const Span& sp, HIRItemPath ip, const HIRStruct& st
             break;
         }
     }
-    assert(fieldTy);
+    BUG_ASSERT(fieldTy);
     HIRTypeRef normalizedFieldTy;
 tryAgain:
     normalizedFieldTy = fieldTy;
@@ -3708,7 +3697,7 @@ auto UfcsVisitor::setFromTraitImpl(const Span& sp, HIRVisitor::PathContext pc, c
 
         pp = KillPlaceholders(crate.types).monomorphPathParams(sp, pp, true);
         if (auto* innerE = pd.opt_UfcsKnown()) {
-            assert(pp.types.size() == innerE->trait.params.types.size());
+            BUG_ASSERT(pp.types.size() == innerE->trait.params.types.size());
             for (unsigned int i = 0; i < pp.types.size(); i++) {
                 auto& eTy = innerE->trait.params.types[i];
                 const auto& thisTy = pp.types[i];
@@ -3952,7 +3941,7 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
                 traitPath.params = currentTrait->params.makeNopParams(crate.types, 0);
             }
             if (locateInTraitAndSet(pc, traitPath, *currentTrait, p.data)) {
-                assert(!p.data.is_UfcsUnknown());
+                BUG_ASSERT(!p.data.is_UfcsUnknown());
                 if (inExpr && !inTraitDef_) {
                     for (auto& t : p.data.as_UfcsKnown().trait.params.types) {
                         t = crate.types.infer();
@@ -3972,18 +3961,18 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
         }
 
         if (resolve_.itemGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *resolve_.itemGenericsPtr(), p.data)) {
-            assert(!p.data.is_UfcsUnknown());
+            BUG_ASSERT(!p.data.is_UfcsUnknown());
             return;
         }
         if (resolve_.implGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *resolve_.implGenericsPtr(), p.data)) {
-            assert(!p.data.is_UfcsUnknown());
+            BUG_ASSERT(!p.data.is_UfcsUnknown());
             return;
         }
 
         if (const auto* traitObject = e.type->opt_TraitObject()) {
             const auto& principal = traitObject->trait;
             if (principal.traitPtr && locateInTraitAndSet(pc, principal.path, *principal.traitPtr, p.data)) {
-                assert(!p.data.is_UfcsUnknown());
+                BUG_ASSERT(!p.data.is_UfcsUnknown());
                 return;
             }
         }
@@ -3991,10 +3980,10 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
         // TODO: Control ordering with a flag in UfcsUnknown
 
         if (this->resolve_UfcsUnknown_inherent(curModPath, p, pc, p.data)) {
-            assert(!p.data.is_UfcsUnknown());
+            BUG_ASSERT(!p.data.is_UfcsUnknown());
             return;
         }
-        assert(p.data.is_UfcsUnknown());
+        BUG_ASSERT(p.data.is_UfcsUnknown());
 
         // TODO: Should this look up in-scope traits instead of hard-coding this hack?
         if (currentType_ && currentTrait && e.type == currentType_) {
@@ -4008,7 +3997,7 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
             }
 
             if (locateInTraitAndSet(pc, traitPath, *currentTrait, p.data)) {
-                assert(!p.data.is_UfcsUnknown());
+                BUG_ASSERT(!p.data.is_UfcsUnknown());
                 if (inExpr) {
                     for (auto& t : p.data.as_UfcsKnown().trait.params.types) {
                         t = crate.types.infer();
@@ -4026,7 +4015,7 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
             for (const auto& t : atyDef.traitBounds) {
                 auto traitPath = mstate.monomorphGenericpath(sp, t.path, /*allow_infer*/ true);
                 if (this->locateInTraitImplAndSet(sp, pc, mv$(traitPath), *t.traitPtr, p.data)) {
-                    assert(!p.data.is_UfcsUnknown());
+                    BUG_ASSERT(!p.data.is_UfcsUnknown());
                     return;
                 }
             }
@@ -4034,10 +4023,10 @@ auto UfcsVisitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
         }
 
         if (this->resolve_UfcsUnknown_trait(p, pc, p.data)) {
-            assert(!p.data.is_UfcsUnknown());
+            BUG_ASSERT(!p.data.is_UfcsUnknown());
             return;
         }
-        assert(p.data.is_UfcsUnknown());
+        BUG_ASSERT(p.data.is_UfcsUnknown());
 
         if ((pc == HIRVisitor::PathContext::VALUE /*|| pc == HIR::Visitor::PathContext::PATTERN*/) && e.type->is_Path() && e.type->as_Path().binding.is_Enum()) {
             const auto& enm = *e.type->as_Path().binding.as_Enum();

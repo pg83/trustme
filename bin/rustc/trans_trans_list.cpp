@@ -4,7 +4,7 @@
 #include "hir_typeck_static.h"
 
 TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
-    assert(wb_);
+    BUG_ASSERT(wb_);
     auto symbol = FMT(TransMangleValue(*wb_, p));
     auto existing = functionSymbols.find(symbol);
     if (existing != functionSymbols.end()) {
@@ -15,7 +15,7 @@ TransListFunction* TransList::addFunction(HIRTypeInterner& types, HIRPath p) {
     auto rv = functions.insert(std::make_pair(mv$(p), nullptr));
     if (rv.second) {
         functionSymbols.emplace(mv$(symbol), rv.first->first.clone());
-        assert(!rv.first->second);
+        BUG_ASSERT(!rv.first->second);
         rv.first->second.reset(new TransListFunction(types, rv.first->first));
         return &*rv.first->second;
     } else {
@@ -29,7 +29,7 @@ const TransListFunction* TransList::findFunction(const HIRPath& p) const {
         return exact->second.get();
     }
 
-    assert(wb_);
+    BUG_ASSERT(wb_);
     const auto symbol = FMT(TransMangleValue(*wb_, p));
     auto canonical = functionSymbols.find(symbol);
     if (canonical == functionSymbols.end()) {
@@ -46,7 +46,7 @@ TransListFunction* TransList::findFunction(const HIRPath& p) {
 }
 
 bool TransList::hasType(HIRTypeRef type, bool shallow) const {
-    assert(wb_);
+    BUG_ASSERT(wb_);
     const auto symbol = FMT(TransMangle(*wb_, type));
     const auto existing = typeSymbols.find(symbol);
     if (existing == typeSymbols.end()) {
@@ -57,7 +57,7 @@ bool TransList::hasType(HIRTypeRef type, bool shallow) const {
 }
 
 bool TransList::addType(HIRTypeRef type, bool shallow) {
-    assert(wb_);
+    BUG_ASSERT(wb_);
     auto symbol = FMT(TransMangle(*wb_, type));
     auto existing = typeSymbols.find(symbol);
     if (existing == typeSymbols.end()) {
@@ -81,7 +81,7 @@ void TransList::clearTypes() {
 }
 
 TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
-    assert(wb_);
+    BUG_ASSERT(wb_);
     auto symbol = FMT(TransMangleValue(*wb_, p));
     auto existing = staticSymbols.find(symbol);
     if (existing != staticSymbols.end()) {
@@ -92,7 +92,7 @@ TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
     auto rv = statics.insert(std::make_pair(mv$(p), nullptr));
     if (rv.second) {
         staticSymbols.emplace(mv$(symbol), rv.first->first.clone());
-        assert(!rv.first->second);
+        BUG_ASSERT(!rv.first->second);
         rv.first->second.reset(new TransListStatic(types));
         return &*rv.first->second;
     } else {
@@ -103,7 +103,7 @@ TransListStatic* TransList::addStatic(HIRTypeInterner& types, HIRPath p) {
 TransListConst* TransList::addConst(HIRTypeInterner& types, HIRPath p) {
     auto rv = constants.insert(std::make_pair(mv$(p), nullptr));
     if (rv.second) {
-        assert(!rv.first->second);
+        BUG_ASSERT(!rv.first->second);
         rv.first->second.reset(new TransListConst(types));
         return &*rv.first->second;
     } else {

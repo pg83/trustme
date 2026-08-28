@@ -40,6 +40,17 @@ namespace {
 
         ResolveItemRef findItemHir(const HIRModule& mod, const RcString& itemName, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr, const HIRSimplePath* visPathP = nullptr);
     };
+
+    ASTAbsolutePath spToAp(const HIRSimplePath& sp) {
+        return ASTAbsolutePath(sp.crateName(), sp.componentsVec());
+    }
+
+    ResolveItemRefType as_Namespace(ResolveItemRef ir) {
+        if (ir.is_None()) {
+            return ResolveItemRefType::make_None({});
+        }
+        return std::move(ir.as_Namespace());
+    }
 }
 
 std::ostream& operator<<(std::ostream& os, ResolveNamespace ns) {
@@ -52,20 +63,6 @@ std::ostream& operator<<(std::ostream& os, ResolveNamespace ns) {
             return os << "Macro";
     }
     return os << "?";
-}
-
-namespace {
-
-    ASTAbsolutePath spToAp(const HIRSimplePath& sp) {
-        return ASTAbsolutePath(sp.crateName(), sp.componentsVec());
-    }
-
-    ResolveItemRefType as_Namespace(ResolveItemRef ir) {
-        if (ir.is_None()) {
-            return ResolveItemRefType::make_None({});
-        }
-        return std::move(ir.as_Namespace());
-    }
 }
 
 // TODO: Function that turns a relative path into a canonical absolute path to the containing module

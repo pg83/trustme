@@ -47,8 +47,8 @@ bool ImplRef::moreSpecificThan(HIRTypeInterner& types, const ImplRef& other) con
                 return false;
             }
             const auto& oe = other.data.as_BoundedPtr();
-            assert(te.type == oe.type);
-            assert(pathParamsEqual(te.traitArgs, oe.traitArgs));
+            BUG_ASSERT(te.type == oe.type);
+            BUG_ASSERT(pathParamsEqual(te.traitArgs, oe.traitArgs));
             if (associatedSize(te.assoc) > associatedSize(oe.assoc)) {
                 return true;
             }
@@ -61,8 +61,8 @@ bool ImplRef::moreSpecificThan(HIRTypeInterner& types, const ImplRef& other) con
                 return false;
             }
             const auto& oe = other.data.as_Bounded();
-            assert(te.type == oe.type);
-            assert(te.traitArgs == oe.traitArgs);
+            BUG_ASSERT(te.type == oe.type);
+            BUG_ASSERT(te.traitArgs == oe.traitArgs);
             if (te.assoc.size() > oe.assoc.size()) {
                 return true;
             }
@@ -345,7 +345,7 @@ std::ostream& operator<<(std::ostream& os, const ImplRef& x) {
         }
         case ImplRefData::TAG_BoundedPtr: {
             auto& e = x.data.as_BoundedPtr();
-            assert(e.type);
+            BUG_ASSERT(e.type);
             os << "bound (ptr) " << e.type << " : ?";
             if (e.traitArgs) {
                 os << *e.traitArgs;

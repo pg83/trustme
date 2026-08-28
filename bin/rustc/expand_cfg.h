@@ -15,7 +15,7 @@ class TokenStream;
 class ASTAttribute;
 class ASTAttributeList;
 
-extern Settings::CfgState* CfgCreateState(stl::ObjPool& pool);
+Settings::CfgState* CfgCreateState(stl::ObjPool& pool);
 
 using CfgString = std::string;
 
@@ -42,7 +42,7 @@ struct CfgValueCb final: CfgValueCallback {
     }
 };
 
-extern void CfgSetValueCallback(Settings& settings, CfgString name, const CfgValueCallback& cb);
+void CfgSetValueCallback(Settings& settings, CfgString name, const CfgValueCallback& cb);
 
 template <typename F>
 void CfgSetValueCb(Settings& settings, CfgString name, F f) {
@@ -50,16 +50,16 @@ void CfgSetValueCb(Settings& settings, CfgString name, F f) {
     CfgSetValueCallback(settings, name, cb);
 }
 
-extern void CfgDump(const Settings& settings, std::ostream& os);
-extern void CfgSetFlag(Settings& settings, std::string name);
-extern void CfgSetValue(Settings& settings, std::string name, std::string val);
-extern void CfgParseOption(const std::string& spec, std::string& name, bool& hasValue, std::string& value);
-extern bool CfgSetCheckSpec(Settings& settings, const std::string& spec, std::string& error);
-extern void CfgSetLintLevel(Settings& settings, std::string name, CfgLintLevel level);
-extern void CfgSetLintCap(Settings& settings, CfgLintLevel level);
-extern bool checkCfgAttrs(const Settings& settings, const ASTAttributeList& attrs);
-extern bool checkCfg(const Settings& settings, const Span& sp, const ASTAttribute& mi);
+void CfgDump(const Settings& settings, std::ostream& os);
+void CfgSetFlag(Settings& settings, std::string name);
+void CfgSetValue(Settings& settings, std::string name, std::string val);
+void CfgParseOption(const std::string& spec, std::string& name, bool& hasValue, std::string& value);
+bool CfgSetCheckSpec(Settings& settings, const std::string& spec, std::string& error);
+void CfgSetLintLevel(Settings& settings, std::string name, CfgLintLevel level);
+void CfgSetLintCap(Settings& settings, CfgLintLevel level);
+bool checkCfgAttrs(const Settings& settings, const ASTAttributeList& attrs);
+bool checkCfg(const Settings& settings, const Span& sp, const ASTAttribute& mi);
 
-extern bool checkCfgStream(const Settings& settings, TokenStream& lex);
+bool checkCfgStream(const Settings& settings, TokenStream& lex);
 
-extern std::vector<ASTAttribute> checkCfgAttr(const Settings& settings, const ASTAttribute& mi);
+std::vector<ASTAttribute> checkCfgAttr(const Settings& settings, const ASTAttribute& mi);

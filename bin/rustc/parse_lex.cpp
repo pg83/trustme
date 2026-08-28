@@ -10,7 +10,6 @@
 
 #include <cctype>
 #include <limits>
-#include <cassert>
 #include <cstdlib>
 #include <iostream>
 #include <typeinfo>
@@ -100,61 +99,7 @@ namespace {
         const char* chars;
         signed int type;
     };
-}
 
-Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edition, ParseState ps)
-    : TokenStream(ps)
-    , id(id)
-    , path_(filename.c_str())
-    , line(1)
-    , lineOfs(0)
-    , istreamFp(filename != "-" ? new std::ifstream(filename.c_str()) : nullptr)
-    , istream(filename != "-" ? *istreamFp : std::cin)
-    , lastCharValid(false)
-    , initialShebangChecked(false)
-    , initialFrontmatterAllowed(true)
-    , initialFrontmatterPrecededByWhitespace(false)
-    , replayCharOffset(0)
-    , edition(edition)
-    , hygiene_(Ident::Hygiene::newScope(id, pool))
-{
-    if (istreamFp) {
-        if (!istreamFp->is_open()) {
-            throw std::runtime_error("Unable to open file '" + filename + "'");
-        }
-        if (this->getcByte() == '\xef') {
-            if (this->getcByte() != '\xbb') {
-                throw std::runtime_error("Incomplete BOM - missing \\xBB in second position");
-            }
-            if (this->getcByte() != '\xbf') {
-                throw std::runtime_error("Incomplete BOM - missing \\xBF in third position");
-            }
-            lineOfs = 0;
-        } else {
-            istream.unget();
-        }
-    }
-}
-
-Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition, ParseState ps)
-    : TokenStream(ps)
-    , id(id)
-    , path_("-")
-    , line(1)
-    , lineOfs(0)
-    , istreamFp(nullptr)
-    , istream(ss)
-    , lastCharValid(false)
-    , initialShebangChecked(false)
-    , initialFrontmatterAllowed(true)
-    , initialFrontmatterPrecededByWhitespace(false)
-    , replayCharOffset(0)
-    , edition(edition)
-    , hygiene_(Ident::Hygiene::newScope(id, pool))
-{
-}
-
-namespace {
     static const sRWORD RWORDS_2015[] = {
         TOKENT("_", TOK_UNDERSCORE),
         TOKENT("abstract", TOK_RWORD_ABSTRACT),
@@ -259,6 +204,73 @@ namespace {
         TOKENT("yield", TOK_RWORD_YIELD),
     };
 
+    bool issym(Codepoint ch) {
+        if ('0' <= ch.v && ch.v <= '9') {
+            return true;
+        }
+        if (std::isalpha(ch.v)) {
+            return true;
+        }
+        if (ch == '_') {
+            return true;
+        }
+        if (ch.v >= 128) {
+            return !ch.isspace();
+        }
+        return false;
+    }
+}
+
+Lexer::Lexer(u32& id, ObjPool& pool, const std::string& filename, ASTEdition edition, ParseState ps)
+    : TokenStream(ps)
+    , id(id)
+    , path_(filename.c_str())
+    , line(1)
+    , lineOfs(0)
+    , istreamFp(filename != "-" ? new std::ifstream(filename.c_str()) : nullptr)
+    , istream(filename != "-" ? *istreamFp : std::cin)
+    , lastCharValid(false)
+    , initialShebangChecked(false)
+    , initialFrontmatterAllowed(true)
+    , initialFrontmatterPrecededByWhitespace(false)
+    , replayCharOffset(0)
+    , edition(edition)
+    , hygiene_(Ident::Hygiene::newScope(id, pool))
+{
+    if (istreamFp) {
+        if (!istreamFp->is_open()) {
+            throw std::runtime_error("Unable to open file '" + filename + "'");
+        }
+        if (this->getcByte() == '\xef') {
+            if (this->getcByte() != '\xbb') {
+                throw std::runtime_error("Incomplete BOM - missing \\xBB in second position");
+            }
+            if (this->getcByte() != '\xbf') {
+                throw std::runtime_error("Incomplete BOM - missing \\xBF in third position");
+            }
+            lineOfs = 0;
+        } else {
+            istream.unget();
+        }
+    }
+}
+
+Lexer::Lexer(u32& id, ObjPool& pool, std::istringstream& ss, ASTEdition edition, ParseState ps)
+    : TokenStream(ps)
+    , id(id)
+    , path_("-")
+    , line(1)
+    , lineOfs(0)
+    , istreamFp(nullptr)
+    , istream(ss)
+    , lastCharValid(false)
+    , initialShebangChecked(false)
+    , initialFrontmatterAllowed(true)
+    , initialFrontmatterPrecededByWhitespace(false)
+    , replayCharOffset(0)
+    , edition(edition)
+    , hygiene_(Ident::Hygiene::newScope(id, pool))
+{
 }
 
 signed int Lexer::getSymbol() {
@@ -292,24 +304,6 @@ signed int Lexer::getSymbol() {
         this->ungetc();
     }
     return best;
-}
-
-namespace {
-    bool issym(Codepoint ch) {
-        if ('0' <= ch.v && ch.v <= '9') {
-            return true;
-        }
-        if (std::isalpha(ch.v)) {
-            return true;
-        }
-        if (ch == '_') {
-            return true;
-        }
-        if (ch.v >= 128) {
-            return !ch.isspace();
-        }
-        return false;
-    }
 }
 
 Token Lexer::withLiteralSuffix(Token tok) {
@@ -741,7 +735,7 @@ Token Lexer::getTokenInt() {
                     this->ungetc();
                     FloatValue fval = this->parseFloat(val);
                     if (fval != fval) {
-                        assert(!this->nextTokens.empty());
+                        BUG_ASSERT(!this->nextTokens.empty());
                         auto t = std::move(this->nextTokens.back());
                         this->nextTokens.pop_back();
                         return t;
@@ -772,7 +766,6 @@ Token Lexer::getTokenInt() {
                         this->ungetc();
                     }
                     return Token::makeFloat(fval, numType);
-
                 } else if (issym(ch)) {
                     std::string suffix;
                     while (issym(ch)) {
@@ -834,7 +827,7 @@ Token Lexer::getTokenInt() {
                 if (ch == 'r') {
                     return this->getTokenIntRawString(isByte ? TOK_BYTESTRING : TOK_STRING);
                 } else {
-                    assert(isByte);
+                    BUG_ASSERT(isByte);
 
                     if (ch == '"') {
                         std::string str;
@@ -867,7 +860,7 @@ Token Lexer::getTokenInt() {
                             return this->withLiteralSuffix(Token(U128(ch.v), CORETYPE_U8));
                         }
                     } else {
-                        assert(isByte);
+                        BUG_ASSERT(isByte);
                         this->ungetc();
                         return this->getTokenIntIdentifier('b');
                     }
@@ -1082,7 +1075,7 @@ Token Lexer::getTokenInt() {
                     return this->withLiteralSuffix(Token(TOK_STRING, mv$(str), realGetHygiene()));
                 }
                 default:
-                    assert(!"bugcheck");
+                    BUG_ASSERT(!"bugcheck");
             }
         }
     } catch (const Lexer::EndOfFile& /*e*/) {
@@ -1127,7 +1120,7 @@ Token Lexer::getTokenIntRawString(eTokenType kind) {
         }
 
         if (terminatingHashes > 0) {
-            assert(terminatingHashes > 0);
+            BUG_ASSERT(terminatingHashes > 0);
             if (ch != '#') {
                 val += terminator;
                 while (terminatingHashes < hashes) {
@@ -1276,7 +1269,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
     auto ch = this->getcNum();
 #define PUTC(ch)                                                                                                                          \
     do {                                                                                                                                  \
-        assert(ch.v < 127);                                                                                                               \
+        BUG_ASSERT(ch.v < 127);                                                                                                           \
         sbuf += char(ch.v); /* if( ofs < MAX_SIG ) { buf[ofs] = ch.v; ofs ++; } else { throw ParseError::Generic("Oversized float"); } */ \
     } while (0)
     while (ch.isdigit()) {
@@ -1563,7 +1556,7 @@ void Lexer::ungetc() {
 #ifdef TRACE_CHARS
     std::cout << "ungetc(): cache U+" << std::hex << lastChar.v << std::endl;
 #endif
-    assert(!lastCharValid);
+    BUG_ASSERT(!lastCharValid);
     lastCharValid = true;
 }
 
@@ -1610,7 +1603,7 @@ std::string& operator+=(std::string& s, const Codepoint& cp) {
         s += (char)(0x80 | ((cp.v >> 6) & 0x3F));
         s += (char)(0x80 | ((cp.v >> 0) & 0x3F));
     } else {
-        throw std::runtime_error(FMT("BUGCHECK: Bad unicode codepoint encountered - " << std::hex << cp.v));
+        BUG(Span(), "Bad unicode codepoint encountered - " << std::hex << cp.v);
     }
     return s;
 }
@@ -1631,7 +1624,7 @@ std::ostream& operator<<(std::ostream& os, const Codepoint& cp) {
         os << (char)(0x80 | ((cp.v >> 6) & 0x3F));
         os << (char)(0x80 | ((cp.v >> 0) & 0x3F));
     } else {
-        throw std::runtime_error("BUGCHECK: Bad unicode codepoint encountered");
+        BUG(Span(), "Bad unicode codepoint encountered");
     }
     return os;
 }
@@ -1676,14 +1669,14 @@ Token LexFindReservedWord(const std::string& s, ASTEdition edition) {
             RWORDS = RWORDS_2018;
             break;
     }
-    assert(len > 0);
+    BUG_ASSERT(len > 0);
     for (size_t i = 0; i < len; i++) {
         const auto& e = RWORDS[i];
         if (s < e.chars) {
             break;
         }
         if (s == e.chars) {
-            assert(e.type > 0);
+            BUG_ASSERT(e.type > 0);
             return static_cast<eTokenType>(e.type);
         }
     }

@@ -1,7 +1,5 @@
 #include "hir_pattern.h"
 
-#include <cassert>
-
 std::ostream& operator<<(std::ostream& os, const HIRPattern::Value& x) {
     switch (x.tag()) {
         case HIRPattern::Value::TAG_Integer: {
@@ -291,7 +289,7 @@ namespace {
             }
             case HIRPatternData::TAG_Or: {
                 auto& e = pattern.data.as_Or();
-                assert(!e.empty());
+                BUG_ASSERT(!e.empty());
                 visitPatternDeclarationSlots(e.front(), slots);
                 break;
             }
@@ -384,7 +382,7 @@ namespace {
                     break;
                 }
                 case HIRPatternData::TAG_Or: {
-                    assert(!current.data.as_Or().empty());
+                    BUG_ASSERT(!current.data.as_Or().empty());
                     deferredOrPatterns.push_back(&current);
                     break;
                 }
@@ -401,25 +399,7 @@ namespace {
             visitPatternCandidateSlots(useLastAlternative ? alternatives.back() : alternatives.front(), useLastAlternative, slots);
         }
     }
-}
 
-std::vector<unsigned> patternBindingSlots(const HIRPattern& pattern, HIRPatternBindingOrder order) {
-    std::vector<unsigned> slots;
-    switch (order) {
-        case HIRPatternBindingOrder::Declaration:
-            visitPatternDeclarationSlots(pattern, slots);
-            break;
-        case HIRPatternBindingOrder::FirstCandidate:
-            visitPatternCandidateSlots(pattern, false, slots);
-            break;
-        case HIRPatternBindingOrder::LastCandidate:
-            visitPatternCandidateSlots(pattern, true, slots);
-            break;
-    }
-    return slots;
-}
-
-namespace {
     std::vector<HIRPattern> clonePatVec(const std::vector<HIRPattern>& pats) {
         std::vector<HIRPattern> rv;
         rv.reserve(pats.size());
@@ -465,9 +445,7 @@ namespace {
         }
         UNREACHABLE();
     }
-}
 
-namespace {
     HIRPattern::Data clonePatternData(const HIRPattern::Data& data) {
         switch (data.tag()) {
             case HIRPatternData::TAG_Any: {
@@ -529,6 +507,22 @@ namespace {
 
         UNREACHABLE();
     }
+}
+
+std::vector<unsigned> patternBindingSlots(const HIRPattern& pattern, HIRPatternBindingOrder order) {
+    std::vector<unsigned> slots;
+    switch (order) {
+        case HIRPatternBindingOrder::Declaration:
+            visitPatternDeclarationSlots(pattern, slots);
+            break;
+        case HIRPatternBindingOrder::FirstCandidate:
+            visitPatternCandidateSlots(pattern, false, slots);
+            break;
+        case HIRPatternBindingOrder::LastCandidate:
+            visitPatternCandidateSlots(pattern, true, slots);
+            break;
+    }
+    return slots;
 }
 
 HIRPattern HIRPattern::clone() const {

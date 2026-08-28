@@ -1,12 +1,11 @@
 #pragma once
 
 #include <memory>
-#include <cassert>
 
 class ASTExprNode;
 class ASTNodeVisitor;
 
-extern std::ostream& operator<<(std::ostream& os, const ASTExprNode& node);
+std::ostream& operator<<(std::ostream& os, const ASTExprNode& node);
 
 class ASTExprNodeP {
     ASTExprNode* ptr;

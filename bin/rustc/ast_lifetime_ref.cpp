@@ -17,6 +17,6 @@ ASTLifetimeRef::ASTLifetimeRef(Ident name)
 }
 
 void ASTLifetimeRef::setBinding(u16 b) {
-    assert(binding_ == BINDING_UNBOUND);
+    BUG_ASSERT(binding_ == BINDING_UNBOUND);
     binding_ = b;
 }

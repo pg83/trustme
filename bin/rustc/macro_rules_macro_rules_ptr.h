@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cassert>
-
 class MacroRules;
 
 class MacroRulesPtr {

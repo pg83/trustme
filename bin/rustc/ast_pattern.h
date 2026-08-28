@@ -41,7 +41,7 @@ public:
 struct ASTStructPatternEntry;
 class ASTPattern;
 
-extern bool PatternContainsNever(const ASTPattern& pat);
+bool PatternContainsNever(const ASTPattern& pat);
 
 struct ASTPatternTuplePat {
     std::vector<ASTPattern> start;
@@ -158,6 +158,6 @@ struct ASTStructPatternEntry {
     ASTPattern pat;
 };
 
-extern std::ostream& operator<<(std::ostream& os, const ASTPattern::Value& val);
-extern std::ostream& operator<<(std::ostream& os, const ASTPattern::TuplePat& val);
-extern Ordering ord(const ASTPattern& a, const ASTPattern& b);
+std::ostream& operator<<(std::ostream& os, const ASTPattern::Value& val);
+std::ostream& operator<<(std::ostream& os, const ASTPattern::TuplePat& val);
+Ordering ord(const ASTPattern& a, const ASTPattern& b);

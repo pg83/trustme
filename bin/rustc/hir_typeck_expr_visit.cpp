@@ -55,7 +55,7 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
                 const auto& mod = H::getModForIp(crate, *ip.parent);
                 return mod.modItems.at(ip.name)->ent.as_Module();
             } else {
-                assert(ip.crateName);
+                BUG_ASSERT(ip.crateName);
                 return (ip.crateName[0] ? crate.extCrates.at(ip.crateName).data->rootModule : crate.rootModule);
             }
         }
@@ -143,25 +143,25 @@ TypeckModuleState::TypeckModuleState(const WireBoard& wb)
 }
 
 TypeckModuleState::NullOnDrop<const HIRGenericPath> TypeckModuleState::setCurrentTrait(const HIRGenericPath& p) {
-    assert(!currentTrait);
+    BUG_ASSERT(!currentTrait);
     currentTrait = &p;
     return NullOnDrop<const HIRGenericPath>(currentTrait);
 }
 
 TypeckModuleState::NullOnDrop<const HIRTraitImpl> TypeckModuleState::setCurrentTraitImpl(const HIRTraitImpl& impl) {
-    assert(!currentTraitImpl);
+    BUG_ASSERT(!currentTraitImpl);
     currentTraitImpl = &impl;
     return NullOnDrop<const HIRTraitImpl>(currentTraitImpl);
 }
 
 TypeckModuleState::NullOnDrop<const HIRGenericParams> TypeckModuleState::setImplGenerics(const HIRGenericParams& gps) {
-    assert(!implGenerics);
+    BUG_ASSERT(!implGenerics);
     implGenerics = &gps;
     return NullOnDrop<const HIRGenericParams>(implGenerics);
 }
 
 TypeckModuleState::NullOnDrop<const HIRGenericParams> TypeckModuleState::setItemGenerics(const HIRGenericParams& gps) {
-    assert(!itemGenerics);
+    BUG_ASSERT(!itemGenerics);
     itemGenerics = &gps;
     return NullOnDrop<const HIRGenericParams>(itemGenerics);
 }

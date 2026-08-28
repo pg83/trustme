@@ -1,7 +1,6 @@
 #pragma once
 
 #include <iosfwd>
-#include <stdexcept>
 
 struct Span;
 class ExpandProcMacro;
@@ -28,9 +27,9 @@ enum class ResolveNamespace {
     Value,
     Macro,
 };
-extern std::ostream& operator<<(std::ostream& os, ResolveNamespace ns);
+std::ostream& operator<<(std::ostream& os, ResolveNamespace ns);
 
-extern ResolveModuleRef ResolveLookupGetModule(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, bool ignoreLast, ASTAbsolutePath* outPath);
-extern ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, ASTAbsolutePath* outPath);
+ResolveModuleRef ResolveLookupGetModule(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, bool ignoreLast, ASTAbsolutePath* outPath);
+ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, ASTAbsolutePath* outPath);
 
-extern ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, const ASTPath& path, ResolveNamespace ns, ASTAbsolutePath* outPath);
+ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, const ASTPath& path, ResolveNamespace ns, ASTAbsolutePath* outPath);

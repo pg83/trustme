@@ -396,174 +396,7 @@ namespace {
         }
         UNREACHABLE();
     }
-}
 
-HIRPublicity AST2HIR::LowerHIRVis(const HIRSimplePath& modPath, const ASTVisibility& vis) {
-    if (vis.isGlobal()) {
-        return HIRPublicity::newGlobal();
-    }
-    const auto* ap = &vis.visPath();
-    return HIRPublicity::newPriv(HIRSimplePath((ap->crate == "" ? crateName : ap->crate), ap->nodes));
-}
-
-HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsSized) {
-    HIRGenericParams rv;
-    const bool implicitSized = !astCrate->attrs.has("rustc_no_implicit_bounds");
-
-    for (const auto& param : gp.params) {
-        switch (param.tag()) {
-            case GenericParam::TAG_None: {
-                auto& _ = param.as_None();
-                break;
-            }
-            case GenericParam::TAG_Lifetime: {
-                break;
-            }
-            case GenericParam::TAG_Type: {
-                auto& tp = param.as_Type();
-                rv.paramKinds.pushBack(HIRGenericParamKind::Type);
-                rv.types.push_back({tp.name(), LowerHIRType(tp.getDefault()), implicitSized});
-                break;
-            }
-            case GenericParam::TAG_Value: {
-                auto& tp = param.as_Value();
-                rv.paramKinds.pushBack(HIRGenericParamKind::Value);
-                rv.values.push_back(HIRValueParamDef{tp.name().name, LowerHIRType(tp.type()), tp.defaultValue() ? LowerHIRConstGeneric(tp.defaultValue().node()) : HIRConstGeneric::make_Infer({})});
-                break;
-            }
-        }
-    }
-
-    for (const auto& bound : gp.bounds) {
-        switch (bound.tag()) {
-            case ASTGenericBound::TAG_None: {
-                break;
-            }
-            case ASTGenericBound::TAG_Lifetime: {
-                break;
-            }
-            case ASTGenericBound::TAG_TypeLifetime: {
-                break;
-            }
-            case ASTGenericBound::TAG_IsTrait: {
-                auto& e = bound.as_IsTrait();
-                auto type = LowerHIRType(e.type);
-
-                bool usesGenericLifetime = false;
-                auto noteLifetime = [&](const ASTLifetimeRef& lifetime) {
-                    unsigned int lifetimeIndex = 0;
-                    for (const auto& param : gp.params) {
-                        const auto* lifetimeParam = param.opt_Lifetime();
-                        if (!lifetimeParam) {
-                            continue;
-                        }
-                        const auto binding = lifetime.binding();
-                        if (lifetime.name().name == lifetimeParam->name().name && (binding == lifetimeIndex || binding == 0x100 + lifetimeIndex)) {
-                            usesGenericLifetime = true;
-                            return;
-                        }
-                        lifetimeIndex++;
-                    }
-                };
-                collectTypeLifetimes(e.type, noteLifetime);
-                collectPathLifetimes(e.trait, noteLifetime);
-
-                // TODO: Check if this trait is `Sized` and ignore if it is? (It's a useless bound)
-
-                if (!e.outerHrbs.empty() && !e.innerHrbs.empty()) {
-                    TODO(bound.span, "Handle two layers of HRBs in a bound");
-                }
-
-                auto boundTraitPath = LowerHIRTraitPath(bound.span, e.trait, e.innerHrbs, /*allow_bounds=*/true, e.constness);
-                const bool isTrivial = !usesGenericLifetime && !monomorphiseTypeNeeded(type) && !monomorphiseTraitpathNeeded(boundTraitPath);
-                auto tpBounds = mv$(boundTraitPath.traitBounds);
-                boundTraitPath.traitBounds.clear();
-
-                if (boundTraitPath.path.path == pathPointeeSized || boundTraitPath.path.path == pathMetadataSized) {
-                    if (const auto* ge = type->opt_Generic()) {
-                        if (ge->binding == GENERICSelf) {
-                            *selfIsSized = false;
-                        } else {
-                            auto idx = ge->idx();
-                            ASSERT_BUG(bound.span, idx < rv.types.size(), "Bounded type out of bounds: " << ge->binding << " " << type);
-                            rv.types[idx].isSized = false;
-                        }
-                    }
-                }
-
-                rv.bounds.push_back(HIRGenericBound::make_TraitBound({type, mv$(boundTraitPath), LowerHIRBoundConstness(e.constness), isTrivial}));
-
-                for (auto& bound : tpBounds) {
-                    const auto& name = bound.first;
-                    const auto& srcTrait = bound.second.sourceTrait;
-                    const auto& params = bound.second.atyParams;
-                    for (auto& trait : bound.second.traits) {
-                        rv.bounds.push_back(HIRGenericBound::make_TraitBound({crate->types.path(HIRPath(type, srcTrait.clone(), name, params.clone()), {}), std::move(trait), HIRBoundConstness::Never, isTrivial}));
-                    }
-                    bound.second.traits.clear();
-                }
-                break;
-            }
-            case ASTGenericBound::TAG_MaybeTrait: {
-                auto& e = bound.as_MaybeTrait();
-                auto type = LowerHIRType(e.type);
-                if (!type->is_Generic()) {
-                    BUG(bound.span, "MaybeTrait on non-param - " << type);
-                }
-                const auto& ge = type->as_Generic();
-                unsigned paramIdx;
-                if (ge.binding == 0xFFFF) {
-                    if (!selfIsSized) {
-                        BUG(bound.span, "MaybeTrait on parameter on Self when not allowed");
-                    }
-                    paramIdx = 0xFFFF;
-                } else {
-                    paramIdx = ge.idx();
-                    if (paramIdx >= rv.types.size()) {
-                        BUG(bound.span, "MaybeTrait on parameter not in parameter list (#" << ge.binding << ")");
-                    }
-                }
-
-                auto trait = LowerHIRGenericPath(bound.span, e.trait, FromASTPathClass::Type);
-                if (trait.path == pathSized) {
-                    if (paramIdx == 0xFFFF) {
-                        assert(selfIsSized);
-                        *selfIsSized = false;
-                    } else {
-                        assert(paramIdx < rv.types.size());
-                        rv.types[paramIdx].isSized = false;
-                    }
-                } else {
-                    ERROR(bound.span, E0000, "MaybeTrait on unknown trait " << trait.path);
-                }
-                break;
-            }
-            case ASTGenericBound::TAG_NotTrait: {
-                TODO(bound.span, "Negative trait bounds");
-                break;
-            }
-            case ASTGenericBound::TAG_Equality: {
-                auto& e = bound.as_Equality();
-                rv.bounds.push_back(HIRGenericBound::make_TypeEquality({LowerHIRType(e.type), LowerHIRType(e.replacement)}));
-                break;
-            }
-        }
-    }
-
-    return rv;
-}
-
-HIRPath AST2HIR::LowerHIRPatternPath(const Span& sp, const ASTPath& path, FromASTPathClass pc) {
-    if (const auto* be = path.bindings.type.binding.opt_TypeParameter()) {
-        if (be->slot == GENERICSelf) {
-            // HACK: Return `<Self>::` (to be expanded later on)
-            return HIRPath(crate->types.self(), "");
-        }
-    }
-    return LowerHIRPath(sp, path, pc);
-}
-
-namespace {
     HIRPatternBinding::Type convertBindingType(ASTPatternBinding::Type pbt) {
         switch (pbt) {
             case ASTPatternBinding::Type::MOVE:
@@ -575,293 +408,7 @@ namespace {
         }
         UNREACHABLE();
     }
-}
 
-HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
-    std::vector<HIRPatternBinding> bindings;
-    for (const auto& pb : pat.bindings()) {
-        bindings.push_back(HIRPatternBinding(pb.isMutable, convertBindingType(pb.type), pb.name.name, pb.slot));
-    }
-
-    struct H {
-        AST2HIR& ctx;
-
-        explicit H(AST2HIR& ctx)
-            : ctx(ctx)
-        {
-        }
-
-        std::vector<HIRPattern> lowerhirPatternvec(const std::vector<ASTPattern>& subPatterns) {
-            std::vector<HIRPattern> rv;
-            for (const auto& sp : subPatterns) {
-                rv.push_back(ctx.LowerHIRPattern(sp));
-            }
-            return rv;
-        }
-
-        HIRCoreType getIntType(const Span& sp, const ::eCoreType ct) {
-            switch (ct) {
-                case CORETYPE_ANY:
-                    return HIRCoreType::Str;
-
-                case CORETYPE_I8:
-                    return HIRCoreType::I8;
-                case CORETYPE_U8:
-                    return HIRCoreType::U8;
-                case CORETYPE_I16:
-                    return HIRCoreType::I16;
-                case CORETYPE_U16:
-                    return HIRCoreType::U16;
-                case CORETYPE_I32:
-                    return HIRCoreType::I32;
-                case CORETYPE_U32:
-                    return HIRCoreType::U32;
-                case CORETYPE_I64:
-                    return HIRCoreType::I64;
-                case CORETYPE_U64:
-                    return HIRCoreType::U64;
-
-                case CORETYPE_INT:
-                    return HIRCoreType::Isize;
-                case CORETYPE_UINT:
-                    return HIRCoreType::Usize;
-
-                case CORETYPE_CHAR:
-                    return HIRCoreType::Char;
-
-                case CORETYPE_BOOL:
-                    return HIRCoreType::Bool;
-
-                default:
-                    BUG(sp, "Unknown type for integer literal in pattern - " << ct);
-            }
-        }
-
-        HIRCoreType getFloatType(const Span& sp, const ::eCoreType ct) {
-            switch (ct) {
-                case CORETYPE_ANY:
-                    return HIRCoreType::Str;
-                case CORETYPE_F16:
-                    return HIRCoreType::F16;
-                case CORETYPE_F32:
-                    return HIRCoreType::F32;
-                case CORETYPE_F64:
-                    return HIRCoreType::F64;
-                case CORETYPE_F128:
-                    return HIRCoreType::F128;
-                default:
-                    BUG(sp, "Unknown type for float literal in pattern - " << ct);
-            }
-        }
-
-        HIRPattern::Value lowerhirPatternValue(const Span& sp, const ASTPattern::Value& v) {
-            switch (v.tag()) {
-                case ASTPatternValue::TAG_Invalid: {
-                    BUG(sp, "Encountered Invalid value in Pattern");
-                    break;
-                }
-                case ASTPatternValue::TAG_Integer: {
-                    auto& e = v.as_Integer();
-                    return HIRPattern::Value::make_Integer({getIntType(sp, e.type), e.value});
-                }
-                case ASTPatternValue::TAG_Float: {
-                    auto& e = v.as_Float();
-                    return HIRPattern::Value::make_Float({getFloatType(sp, e.type), e.value});
-                }
-                case ASTPatternValue::TAG_String: {
-                    auto& e = v.as_String();
-                    return HIRPattern::Value::make_String(e);
-                }
-                case ASTPatternValue::TAG_ByteString: {
-                    auto& e = v.as_ByteString();
-                    return HIRPattern::Value::make_ByteString({e.v});
-                }
-                case ASTPatternValue::TAG_Named: {
-                    auto& e = v.as_Named();
-                    return HIRPattern::Value::make_Named({ctx.LowerHIRPatternPath(sp, e, FromASTPathClass::Value), nullptr});
-                }
-            }
-            UNREACHABLE();
-        }
-    };
-
-    switch (pat.data().tag()) {
-        case ASTPatternData::TAG_MaybeBind: {
-            BUG(pat.span(), "Encountered MaybeBind pattern");
-            break;
-        }
-        case ASTPatternData::TAG_Macro: {
-            BUG(pat.span(), "Encountered Macro pattern");
-            break;
-        }
-        case ASTPatternData::TAG_Any: {
-            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
-        }
-        case ASTPatternData::TAG_Never: {
-            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
-        }
-        case ASTPatternData::TAG_Guard: {
-            BUG(pat.span(), "Guard pattern was not lifted before HIR lowering");
-            break;
-        }
-        case ASTPatternData::TAG_Box: {
-            auto& e = pat.data().as_Box();
-            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Box({box$(LowerHIRPattern(*e.sub))})};
-        }
-        case ASTPatternData::TAG_Deref: {
-            auto& e = pat.data().as_Deref();
-            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Deref({HIRPattern::DerefKind::Unknown, nullptr, box$(LowerHIRPattern(*e.sub))})};
-        }
-        case ASTPatternData::TAG_Ref: {
-            auto& e = pat.data().as_Ref();
-            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Ref({(e.mut ? HIRBorrowType::Unique : HIRBorrowType::Shared), false, box$(LowerHIRPattern(*e.sub))})};
-        }
-        case ASTPatternData::TAG_Tuple: {
-            auto& e = pat.data().as_Tuple();
-            auto leading = H(*this).lowerhirPatternvec(e.start);
-            auto trailing = H(*this).lowerhirPatternvec(e.end);
-
-            if (e.hasWildcard) {
-                return HIRPattern(mv$(bindings), HIRPattern::Data::make_SplitTuple({mv$(leading), mv$(trailing)}));
-            } else {
-                assert(trailing.size() == 0);
-                return HIRPattern(mv$(bindings), HIRPattern::Data::make_Tuple({mv$(leading)}));
-            }
-            break;
-        }
-        case ASTPatternData::TAG_StructTuple: {
-            auto& e = pat.data().as_StructTuple();
-            auto leading = H(*this).lowerhirPatternvec(e.tupPat.start);
-            auto trailing = H(*this).lowerhirPatternvec(e.tupPat.end);
-
-            if (!e.tupPat.hasWildcard) {
-                assert(trailing.size() == 0);
-            }
-
-            return HIRPattern(mv$(bindings), HIRPattern::Data::make_PathTuple({LowerHIRPatternPath(pat.span(), e.path, FromASTPathClass::Value), HIRPattern::PathBinding(), mv$(leading), e.tupPat.hasWildcard, mv$(trailing), 0}));
-        }
-        case ASTPatternData::TAG_Struct: {
-            auto& e = pat.data().as_Struct();
-            std::vector<std::pair<RcString, HIRPattern>> subPatterns;
-            for (const auto& sp : e.subPatterns) {
-                subPatterns.push_back(std::make_pair(sp.name, LowerHIRPattern(sp.pat)));
-            }
-
-            if (e.subPatterns.empty() /*&& !e.is_exhaustive*/) {
-                if (/*const auto* pbp =*/e.path.bindings.value.binding.opt_EnumVar()) {
-                    return HIRPattern{mv$(bindings), HIRPattern::Data::make_PathNamed({LowerHIRGenericPath(pat.span(), e.path, FromASTPathClass::Value), HIRPattern::PathBinding(), mv$(subPatterns), e.isExhaustive})};
-                }
-            }
-
-            return HIRPattern(mv$(bindings), HIRPattern::Data::make_PathNamed({LowerHIRPatternPath(pat.span(), e.path, FromASTPathClass::Type), HIRPattern::PathBinding(), mv$(subPatterns), e.isExhaustive}));
-        }
-        case ASTPatternData::TAG_Value: {
-            auto& e = pat.data().as_Value();
-            if (e.end.is_Invalid()) {
-                return HIRPattern{mv$(bindings), HIRPattern::Data::make_Value({H(*this).lowerhirPatternValue(pat.span(), e.start)})};
-            } else if (e.start.is_Invalid()) {
-                return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({{}, box$(H(*this).lowerhirPatternValue(pat.span(), e.end)), true})};
-            } else {
-                return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({box$(H(*this).lowerhirPatternValue(pat.span(), e.start)), box$(H(*this).lowerhirPatternValue(pat.span(), e.end)), true})};
-            }
-            break;
-        }
-        case ASTPatternData::TAG_ValueLeftInc: {
-            auto& e = pat.data().as_ValueLeftInc();
-            if (e.end.is_Invalid()) {
-                return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({box$(H(*this).lowerhirPatternValue(pat.span(), e.start)), {}, false})};
-            }
-            if (e.start.is_Invalid()) {
-                return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({{}, box$(H(*this).lowerhirPatternValue(pat.span(), e.end)), false})};
-            }
-            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({box$(H(*this).lowerhirPatternValue(pat.span(), e.start)), box$(H(*this).lowerhirPatternValue(pat.span(), e.end)), false})};
-        }
-        case ASTPatternData::TAG_Slice: {
-            auto& e = pat.data().as_Slice();
-            std::vector<HIRPattern> leading;
-            for (const auto& sp : e.subPats) {
-                leading.push_back(LowerHIRPattern(sp));
-            }
-            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Slice({mv$(leading)})};
-        }
-        case ASTPatternData::TAG_SplitSlice: {
-            auto& e = pat.data().as_SplitSlice();
-            std::vector<HIRPattern> leading;
-            for (const auto& sp : e.leading) {
-                leading.push_back(LowerHIRPattern(sp));
-            }
-
-            std::vector<HIRPattern> trailing;
-            for (const auto& sp : e.trailing) {
-                trailing.push_back(LowerHIRPattern(sp));
-            }
-
-            if (e.extraRest) {
-                ERROR(pat.span(), E0000, "A slice pattern takes at most one `..`");
-            }
-
-            auto extraBind = e.extraBind.isValid() ? HIRPatternBinding(false, convertBindingType(e.extraBind.type), e.extraBind.name.name, e.extraBind.slot) : HIRPatternBinding();
-
-            return HIRPattern{mv$(bindings), HIRPattern::Data::make_SplitSlice({mv$(leading), mv$(extraBind), mv$(trailing)})};
-        }
-        case ASTPatternData::TAG_Or: {
-            auto& e = pat.data().as_Or();
-            std::vector<HIRPattern> subpats;
-            for (const auto& sp : e) {
-                subpats.push_back(LowerHIRPattern(sp));
-            }
-            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Or(mv$(subpats))};
-        }
-    }
-    UNREACHABLE();
-}
-
-HIRExprPtr AST2HIR::LowerHIRExpr(const std::shared_ptr<ASTExprNode>& e) {
-    if (e.get()) {
-        return LowerHIRExprNode(*e);
-    } else {
-        return HIRExprPtr();
-    }
-}
-
-HIRExprPtr AST2HIR::LowerHIRExpr(const ASTExpr& e) {
-    if (e.isValid()) {
-        return LowerHIRExprNode(e.node());
-    } else {
-        return HIRExprPtr();
-    }
-}
-
-HIRSimplePath AST2HIR::LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric) {
-    if (!allowFinalGeneric) {
-        ASSERT_BUG(sp, path.cls.is_Absolute(), "Encountered non-Absolute path when creating ::HIR::SimplePath");
-        if (path.cls.as_Absolute().nodes.size() > 0) {
-            ASSERT_BUG(sp, path.cls.as_Absolute().nodes.back().args().isEmpty(), "Encountered path with parameters when creating ::HIR::SimplePath");
-        }
-    } else {
-        ASSERT_BUG(sp, path.cls.is_Absolute(), "Encountered non-Absolute path when creating ::HIR::GenericPath");
-    }
-
-    const ASTAbsolutePath* ap = nullptr;
-    switch (pc) {
-        case FromASTPathClass::Value:
-            ASSERT_BUG(sp, !path.bindings.value.is_Unbound(), "Encountered unbound value path - " << path);
-            ap = &path.bindings.value.path;
-            break;
-        case FromASTPathClass::Type:
-            ASSERT_BUG(sp, !path.bindings.type.is_Unbound(), "Encountered unbound type path - " << path);
-            ap = &path.bindings.type.path;
-            break;
-        case FromASTPathClass::Macro:
-            ASSERT_BUG(sp, !path.bindings.macro.is_Unbound(), "Encountered unbound macro path - " << path);
-            ap = &path.bindings.macro.path;
-            break;
-    }
-    assert(ap);
-    return HIRSimplePath((ap->crate == "" ? crateName : ap->crate), ap->nodes);
-}
-
-namespace {
     GenericParamLayout getPathGenericParams(const Span& sp, const HIRCrate& crate, const HIRSimplePath& hirPath, const ASTPath& path, FromASTPathClass pc) {
         if (pc == FromASTPathClass::Value) {
             const auto& binding = path.bindings.value.binding;
@@ -1018,6 +565,638 @@ namespace {
         }
         return false;
     }
+
+    template <typename T>
+    HIRVisEnt<T> newVisent(HIRPublicity pub, T v) {
+        return HIRVisEnt<T>{pub, mv$(v)};
+    }
+
+    HIRSimplePath getParentModule(const HIRItemPath& p) {
+        const HIRItemPath* parentIp = p.parent;
+        BUG_ASSERT(parentIp);
+        while (parentIp->name && parentIp->name[0] == '#') {
+            parentIp = parentIp->parent;
+            BUG_ASSERT(parentIp);
+        }
+        return parentIp->getSimplePath();
+    }
+
+    void collectUsedTypeParams(HIRTypeInterner& types, const Span& sp, const HIRTypeData* ty, std::set<unsigned>& used, bool& opaque) {
+        cloneTyWith(types, sp, ty, [&](const HIRTypeData* tpl, HIRTypeRef&) {
+            if (const auto* ge = tpl->opt_Generic()) {
+                if (ge->isSelf()) {
+                    opaque = true;
+                } else if (ge->group() == GENERICImpl) {
+                    used.insert(ge->idx());
+                }
+            }
+            if (const auto* ae = tpl->opt_Array()) {
+                if (ae->size.is_Unevaluated() && ae->size.as_Unevaluated().is_Unevaluated()) {
+                    opaque = true;
+                }
+            }
+            if (const auto* pe = tpl->opt_Path()) {
+                if (!pe->path.data.is_Generic()) {
+                    opaque = true;
+                }
+            }
+            return false;
+        });
+    }
+
+    void collectUsedTypeParamsInBounds(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& params, std::set<unsigned>& used, bool& opaque) {
+        for (const auto& bound : params.bounds) {
+            switch (bound.tag()) {
+                case HIRGenericBound::TAG_TraitBound: {
+                    auto& be = bound.as_TraitBound();
+                    collectUsedTypeParams(types, sp, be.type, used, opaque);
+                    for (const auto& ty : be.trait.path.params.types) {
+                        collectUsedTypeParams(types, sp, ty, used, opaque);
+                    }
+                    for (const auto& assoc : be.trait.typeBounds) {
+                        collectUsedTypeParams(types, sp, assoc.second.type, used, opaque);
+                    }
+                    break;
+                }
+                case HIRGenericBound::TAG_TypeEquality: {
+                    auto& be = bound.as_TypeEquality();
+                    collectUsedTypeParams(types, sp, be.type, used, opaque);
+                    collectUsedTypeParams(types, sp, be.otherType, used, opaque);
+                    break;
+                }
+            }
+        }
+    }
+
+    void checkTypeParamsUsed(const Span& sp, const HIRGenericParams& params, const std::set<unsigned>& used, const char* what) {
+        for (size_t i = 0; i < params.types.size(); i++) {
+            if (used.count(static_cast<unsigned>(i))) {
+                continue;
+            }
+            ERROR(sp, E0000, "parameter `" << params.types[i].name << "` is never used in this " << what << " - consider a `PhantomData` field");
+        }
+    }
+
+    void _add_mod_ns_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRTypeItem ti) {
+        mod.modItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{isPub, mv$(ti)})));
+    }
+
+    void _add_mod_val_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRValueItem ti) {
+        mod.valueItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{isPub, mv$(ti)})));
+    }
+
+    void _add_mod_mac_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRMacroItem ti) {
+        mod.macroItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{isPub, mv$(ti)})));
+    }
+
+    template <typename Cb>
+    void collectPathLifetimes(const ASTPath& path, const Cb& cb) {
+        if (path.cls.is_Local() || !path.isValid()) {
+            return;
+        }
+        for (const auto& node : path.nodes()) {
+            for (const auto& ent : node.args().entries) {
+                switch (ent.tag()) {
+                    case ASTPathParamEnt::TAG_Lifetime:
+                        cb(ent.as_Lifetime());
+                        break;
+                    case ASTPathParamEnt::TAG_Type:
+                        collectTypeLifetimes(ent.as_Type(), cb);
+                        break;
+                    case ASTPathParamEnt::TAG_AssociatedTyEqual:
+                        collectTypeLifetimes(ent.as_AssociatedTyEqual().second, cb);
+                        break;
+                    case ASTPathParamEnt::TAG_AssociatedTyBound:
+                        for (const auto& trait : ent.as_AssociatedTyBound().second) {
+                            if (trait.path) {
+                                collectPathLifetimes(*trait.path, cb);
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
+    template <typename Cb>
+    void collectTypeLifetimes(const ASTType* ty, const Cb& cb) {
+        if (!ty) {
+            return;
+        }
+        switch (ty->data.tag()) {
+            case TypeData::TAG_Borrow: {
+                const auto& e = ty->data.as_Borrow();
+                cb(e.lifetime);
+                collectTypeLifetimes(e.inner, cb);
+                break;
+            }
+            case TypeData::TAG_Pointer:
+                collectTypeLifetimes(ty->data.as_Pointer().inner, cb);
+                break;
+            case TypeData::TAG_Array:
+                collectTypeLifetimes(ty->data.as_Array().inner, cb);
+                break;
+            case TypeData::TAG_Slice:
+                collectTypeLifetimes(ty->data.as_Slice().inner, cb);
+                break;
+            case TypeData::TAG_Pattern:
+                collectTypeLifetimes(ty->data.as_Pattern().inner, cb);
+                break;
+            case TypeData::TAG_Tuple:
+                for (const auto* inner : ty->data.as_Tuple().innerTypes) {
+                    collectTypeLifetimes(inner, cb);
+                }
+                break;
+            case TypeData::TAG_Function: {
+                const auto& e = ty->data.as_Function().info;
+                for (const auto* arg : e.argTypes) {
+                    collectTypeLifetimes(arg, cb);
+                }
+                collectTypeLifetimes(e.rettype, cb);
+                break;
+            }
+            case TypeData::TAG_Path:
+                collectPathLifetimes(*ty->data.as_Path(), cb);
+                break;
+            case TypeData::TAG_TraitObject: {
+                const auto& e = ty->data.as_TraitObject();
+                for (const auto& lft : e.lifetimes) {
+                    cb(lft);
+                }
+                for (const auto& tr : e.traits) {
+                    if (tr.path) {
+                        collectPathLifetimes(*tr.path, cb);
+                    }
+                }
+                break;
+            }
+            case TypeData::TAG_ErasedType: {
+                const auto* e = ty->data.as_ErasedType();
+                for (const auto& lft : e->lifetimes) {
+                    cb(lft);
+                }
+                for (const auto& tr : e->traits) {
+                    if (tr.path) {
+                        collectPathLifetimes(*tr.path, cb);
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
+HIRPublicity AST2HIR::LowerHIRVis(const HIRSimplePath& modPath, const ASTVisibility& vis) {
+    if (vis.isGlobal()) {
+        return HIRPublicity::newGlobal();
+    }
+    const auto* ap = &vis.visPath();
+    return HIRPublicity::newPriv(HIRSimplePath((ap->crate == "" ? crateName : ap->crate), ap->nodes));
+}
+
+HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsSized) {
+    HIRGenericParams rv;
+    const bool implicitSized = !astCrate->attrs.has("rustc_no_implicit_bounds");
+
+    for (const auto& param : gp.params) {
+        switch (param.tag()) {
+            case GenericParam::TAG_None: {
+                auto& _ = param.as_None();
+                break;
+            }
+            case GenericParam::TAG_Lifetime: {
+                break;
+            }
+            case GenericParam::TAG_Type: {
+                auto& tp = param.as_Type();
+                rv.paramKinds.pushBack(HIRGenericParamKind::Type);
+                rv.types.push_back({tp.name(), LowerHIRType(tp.getDefault()), implicitSized});
+                break;
+            }
+            case GenericParam::TAG_Value: {
+                auto& tp = param.as_Value();
+                rv.paramKinds.pushBack(HIRGenericParamKind::Value);
+                rv.values.push_back(HIRValueParamDef{tp.name().name, LowerHIRType(tp.type()), tp.defaultValue() ? LowerHIRConstGeneric(tp.defaultValue().node()) : HIRConstGeneric::make_Infer({})});
+                break;
+            }
+        }
+    }
+
+    for (const auto& bound : gp.bounds) {
+        switch (bound.tag()) {
+            case ASTGenericBound::TAG_None: {
+                break;
+            }
+            case ASTGenericBound::TAG_Lifetime: {
+                break;
+            }
+            case ASTGenericBound::TAG_TypeLifetime: {
+                break;
+            }
+            case ASTGenericBound::TAG_IsTrait: {
+                auto& e = bound.as_IsTrait();
+                auto type = LowerHIRType(e.type);
+
+                bool usesGenericLifetime = false;
+                auto noteLifetime = [&](const ASTLifetimeRef& lifetime) {
+                    unsigned int lifetimeIndex = 0;
+                    for (const auto& param : gp.params) {
+                        const auto* lifetimeParam = param.opt_Lifetime();
+                        if (!lifetimeParam) {
+                            continue;
+                        }
+                        const auto binding = lifetime.binding();
+                        if (lifetime.name().name == lifetimeParam->name().name && (binding == lifetimeIndex || binding == 0x100 + lifetimeIndex)) {
+                            usesGenericLifetime = true;
+                            return;
+                        }
+                        lifetimeIndex++;
+                    }
+                };
+                collectTypeLifetimes(e.type, noteLifetime);
+                collectPathLifetimes(e.trait, noteLifetime);
+
+                // TODO: Check if this trait is `Sized` and ignore if it is? (It's a useless bound)
+
+                if (!e.outerHrbs.empty() && !e.innerHrbs.empty()) {
+                    TODO(bound.span, "Handle two layers of HRBs in a bound");
+                }
+
+                auto boundTraitPath = LowerHIRTraitPath(bound.span, e.trait, e.innerHrbs, /*allow_bounds=*/true, e.constness);
+                const bool isTrivial = !usesGenericLifetime && !monomorphiseTypeNeeded(type) && !monomorphiseTraitpathNeeded(boundTraitPath);
+                auto tpBounds = mv$(boundTraitPath.traitBounds);
+                boundTraitPath.traitBounds.clear();
+
+                if (boundTraitPath.path.path == pathPointeeSized || boundTraitPath.path.path == pathMetadataSized) {
+                    if (const auto* ge = type->opt_Generic()) {
+                        if (ge->binding == GENERICSelf) {
+                            *selfIsSized = false;
+                        } else {
+                            auto idx = ge->idx();
+                            ASSERT_BUG(bound.span, idx < rv.types.size(), "Bounded type out of bounds: " << ge->binding << " " << type);
+                            rv.types[idx].isSized = false;
+                        }
+                    }
+                }
+
+                rv.bounds.push_back(HIRGenericBound::make_TraitBound({type, mv$(boundTraitPath), LowerHIRBoundConstness(e.constness), isTrivial}));
+
+                for (auto& bound : tpBounds) {
+                    const auto& name = bound.first;
+                    const auto& srcTrait = bound.second.sourceTrait;
+                    const auto& params = bound.second.atyParams;
+                    for (auto& trait : bound.second.traits) {
+                        rv.bounds.push_back(HIRGenericBound::make_TraitBound({crate->types.path(HIRPath(type, srcTrait.clone(), name, params.clone()), {}), std::move(trait), HIRBoundConstness::Never, isTrivial}));
+                    }
+                    bound.second.traits.clear();
+                }
+                break;
+            }
+            case ASTGenericBound::TAG_MaybeTrait: {
+                auto& e = bound.as_MaybeTrait();
+                auto type = LowerHIRType(e.type);
+                if (!type->is_Generic()) {
+                    BUG(bound.span, "MaybeTrait on non-param - " << type);
+                }
+                const auto& ge = type->as_Generic();
+                unsigned paramIdx;
+                if (ge.binding == 0xFFFF) {
+                    if (!selfIsSized) {
+                        BUG(bound.span, "MaybeTrait on parameter on Self when not allowed");
+                    }
+                    paramIdx = 0xFFFF;
+                } else {
+                    paramIdx = ge.idx();
+                    if (paramIdx >= rv.types.size()) {
+                        BUG(bound.span, "MaybeTrait on parameter not in parameter list (#" << ge.binding << ")");
+                    }
+                }
+
+                auto trait = LowerHIRGenericPath(bound.span, e.trait, FromASTPathClass::Type);
+                if (trait.path == pathSized) {
+                    if (paramIdx == 0xFFFF) {
+                        BUG_ASSERT(selfIsSized);
+                        *selfIsSized = false;
+                    } else {
+                        BUG_ASSERT(paramIdx < rv.types.size());
+                        rv.types[paramIdx].isSized = false;
+                    }
+                } else {
+                    ERROR(bound.span, E0000, "MaybeTrait on unknown trait " << trait.path);
+                }
+                break;
+            }
+            case ASTGenericBound::TAG_NotTrait: {
+                TODO(bound.span, "Negative trait bounds");
+                break;
+            }
+            case ASTGenericBound::TAG_Equality: {
+                auto& e = bound.as_Equality();
+                rv.bounds.push_back(HIRGenericBound::make_TypeEquality({LowerHIRType(e.type), LowerHIRType(e.replacement)}));
+                break;
+            }
+        }
+    }
+
+    return rv;
+}
+
+HIRPath AST2HIR::LowerHIRPatternPath(const Span& sp, const ASTPath& path, FromASTPathClass pc) {
+    if (const auto* be = path.bindings.type.binding.opt_TypeParameter()) {
+        if (be->slot == GENERICSelf) {
+            // HACK: Return `<Self>::` (to be expanded later on)
+            return HIRPath(crate->types.self(), "");
+        }
+    }
+    return LowerHIRPath(sp, path, pc);
+}
+
+HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
+    std::vector<HIRPatternBinding> bindings;
+    for (const auto& pb : pat.bindings()) {
+        bindings.push_back(HIRPatternBinding(pb.isMutable, convertBindingType(pb.type), pb.name.name, pb.slot));
+    }
+
+    struct H {
+        AST2HIR& ctx;
+
+        explicit H(AST2HIR& ctx)
+            : ctx(ctx)
+        {
+        }
+
+        std::vector<HIRPattern> lowerhirPatternvec(const std::vector<ASTPattern>& subPatterns) {
+            std::vector<HIRPattern> rv;
+            for (const auto& sp : subPatterns) {
+                rv.push_back(ctx.LowerHIRPattern(sp));
+            }
+            return rv;
+        }
+
+        HIRCoreType getIntType(const Span& sp, const ::eCoreType ct) {
+            switch (ct) {
+                case CORETYPE_ANY:
+                    return HIRCoreType::Str;
+
+                case CORETYPE_I8:
+                    return HIRCoreType::I8;
+                case CORETYPE_U8:
+                    return HIRCoreType::U8;
+                case CORETYPE_I16:
+                    return HIRCoreType::I16;
+                case CORETYPE_U16:
+                    return HIRCoreType::U16;
+                case CORETYPE_I32:
+                    return HIRCoreType::I32;
+                case CORETYPE_U32:
+                    return HIRCoreType::U32;
+                case CORETYPE_I64:
+                    return HIRCoreType::I64;
+                case CORETYPE_U64:
+                    return HIRCoreType::U64;
+
+                case CORETYPE_INT:
+                    return HIRCoreType::Isize;
+                case CORETYPE_UINT:
+                    return HIRCoreType::Usize;
+
+                case CORETYPE_CHAR:
+                    return HIRCoreType::Char;
+
+                case CORETYPE_BOOL:
+                    return HIRCoreType::Bool;
+
+                default:
+                    BUG(sp, "Unknown type for integer literal in pattern - " << ct);
+            }
+        }
+
+        HIRCoreType getFloatType(const Span& sp, const ::eCoreType ct) {
+            switch (ct) {
+                case CORETYPE_ANY:
+                    return HIRCoreType::Str;
+                case CORETYPE_F16:
+                    return HIRCoreType::F16;
+                case CORETYPE_F32:
+                    return HIRCoreType::F32;
+                case CORETYPE_F64:
+                    return HIRCoreType::F64;
+                case CORETYPE_F128:
+                    return HIRCoreType::F128;
+                default:
+                    BUG(sp, "Unknown type for float literal in pattern - " << ct);
+            }
+        }
+
+        HIRPattern::Value lowerhirPatternValue(const Span& sp, const ASTPattern::Value& v) {
+            switch (v.tag()) {
+                case ASTPatternValue::TAG_Invalid: {
+                    BUG(sp, "Encountered Invalid value in Pattern");
+                    break;
+                }
+                case ASTPatternValue::TAG_Integer: {
+                    auto& e = v.as_Integer();
+                    return HIRPattern::Value::make_Integer({getIntType(sp, e.type), e.value});
+                }
+                case ASTPatternValue::TAG_Float: {
+                    auto& e = v.as_Float();
+                    return HIRPattern::Value::make_Float({getFloatType(sp, e.type), e.value});
+                }
+                case ASTPatternValue::TAG_String: {
+                    auto& e = v.as_String();
+                    return HIRPattern::Value::make_String(e);
+                }
+                case ASTPatternValue::TAG_ByteString: {
+                    auto& e = v.as_ByteString();
+                    return HIRPattern::Value::make_ByteString({e.v});
+                }
+                case ASTPatternValue::TAG_Named: {
+                    auto& e = v.as_Named();
+                    return HIRPattern::Value::make_Named({ctx.LowerHIRPatternPath(sp, e, FromASTPathClass::Value), nullptr});
+                }
+            }
+            UNREACHABLE();
+        }
+    };
+
+    switch (pat.data().tag()) {
+        case ASTPatternData::TAG_MaybeBind: {
+            BUG(pat.span(), "Encountered MaybeBind pattern");
+            break;
+        }
+        case ASTPatternData::TAG_Macro: {
+            BUG(pat.span(), "Encountered Macro pattern");
+            break;
+        }
+        case ASTPatternData::TAG_Any: {
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
+        }
+        case ASTPatternData::TAG_Never: {
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
+        }
+        case ASTPatternData::TAG_Guard: {
+            BUG(pat.span(), "Guard pattern was not lifted before HIR lowering");
+            break;
+        }
+        case ASTPatternData::TAG_Box: {
+            auto& e = pat.data().as_Box();
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Box({box$(LowerHIRPattern(*e.sub))})};
+        }
+        case ASTPatternData::TAG_Deref: {
+            auto& e = pat.data().as_Deref();
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Deref({HIRPattern::DerefKind::Unknown, nullptr, box$(LowerHIRPattern(*e.sub))})};
+        }
+        case ASTPatternData::TAG_Ref: {
+            auto& e = pat.data().as_Ref();
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Ref({(e.mut ? HIRBorrowType::Unique : HIRBorrowType::Shared), false, box$(LowerHIRPattern(*e.sub))})};
+        }
+        case ASTPatternData::TAG_Tuple: {
+            auto& e = pat.data().as_Tuple();
+            auto leading = H(*this).lowerhirPatternvec(e.start);
+            auto trailing = H(*this).lowerhirPatternvec(e.end);
+
+            if (e.hasWildcard) {
+                return HIRPattern(mv$(bindings), HIRPattern::Data::make_SplitTuple({mv$(leading), mv$(trailing)}));
+            } else {
+                BUG_ASSERT(trailing.size() == 0);
+                return HIRPattern(mv$(bindings), HIRPattern::Data::make_Tuple({mv$(leading)}));
+            }
+            break;
+        }
+        case ASTPatternData::TAG_StructTuple: {
+            auto& e = pat.data().as_StructTuple();
+            auto leading = H(*this).lowerhirPatternvec(e.tupPat.start);
+            auto trailing = H(*this).lowerhirPatternvec(e.tupPat.end);
+
+            if (!e.tupPat.hasWildcard) {
+                BUG_ASSERT(trailing.size() == 0);
+            }
+
+            return HIRPattern(mv$(bindings), HIRPattern::Data::make_PathTuple({LowerHIRPatternPath(pat.span(), e.path, FromASTPathClass::Value), HIRPattern::PathBinding(), mv$(leading), e.tupPat.hasWildcard, mv$(trailing), 0}));
+        }
+        case ASTPatternData::TAG_Struct: {
+            auto& e = pat.data().as_Struct();
+            std::vector<std::pair<RcString, HIRPattern>> subPatterns;
+            for (const auto& sp : e.subPatterns) {
+                subPatterns.push_back(std::make_pair(sp.name, LowerHIRPattern(sp.pat)));
+            }
+
+            if (e.subPatterns.empty() /*&& !e.is_exhaustive*/) {
+                if (/*const auto* pbp =*/e.path.bindings.value.binding.opt_EnumVar()) {
+                    return HIRPattern{mv$(bindings), HIRPattern::Data::make_PathNamed({LowerHIRGenericPath(pat.span(), e.path, FromASTPathClass::Value), HIRPattern::PathBinding(), mv$(subPatterns), e.isExhaustive})};
+                }
+            }
+
+            return HIRPattern(mv$(bindings), HIRPattern::Data::make_PathNamed({LowerHIRPatternPath(pat.span(), e.path, FromASTPathClass::Type), HIRPattern::PathBinding(), mv$(subPatterns), e.isExhaustive}));
+        }
+        case ASTPatternData::TAG_Value: {
+            auto& e = pat.data().as_Value();
+            if (e.end.is_Invalid()) {
+                return HIRPattern{mv$(bindings), HIRPattern::Data::make_Value({H(*this).lowerhirPatternValue(pat.span(), e.start)})};
+            } else if (e.start.is_Invalid()) {
+                return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({{}, box$(H(*this).lowerhirPatternValue(pat.span(), e.end)), true})};
+            } else {
+                return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({box$(H(*this).lowerhirPatternValue(pat.span(), e.start)), box$(H(*this).lowerhirPatternValue(pat.span(), e.end)), true})};
+            }
+            break;
+        }
+        case ASTPatternData::TAG_ValueLeftInc: {
+            auto& e = pat.data().as_ValueLeftInc();
+            if (e.end.is_Invalid()) {
+                return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({box$(H(*this).lowerhirPatternValue(pat.span(), e.start)), {}, false})};
+            }
+            if (e.start.is_Invalid()) {
+                return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({{}, box$(H(*this).lowerhirPatternValue(pat.span(), e.end)), false})};
+            }
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({box$(H(*this).lowerhirPatternValue(pat.span(), e.start)), box$(H(*this).lowerhirPatternValue(pat.span(), e.end)), false})};
+        }
+        case ASTPatternData::TAG_Slice: {
+            auto& e = pat.data().as_Slice();
+            std::vector<HIRPattern> leading;
+            for (const auto& sp : e.subPats) {
+                leading.push_back(LowerHIRPattern(sp));
+            }
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Slice({mv$(leading)})};
+        }
+        case ASTPatternData::TAG_SplitSlice: {
+            auto& e = pat.data().as_SplitSlice();
+            std::vector<HIRPattern> leading;
+            for (const auto& sp : e.leading) {
+                leading.push_back(LowerHIRPattern(sp));
+            }
+
+            std::vector<HIRPattern> trailing;
+            for (const auto& sp : e.trailing) {
+                trailing.push_back(LowerHIRPattern(sp));
+            }
+
+            if (e.extraRest) {
+                ERROR(pat.span(), E0000, "A slice pattern takes at most one `..`");
+            }
+
+            auto extraBind = e.extraBind.isValid() ? HIRPatternBinding(false, convertBindingType(e.extraBind.type), e.extraBind.name.name, e.extraBind.slot) : HIRPatternBinding();
+
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_SplitSlice({mv$(leading), mv$(extraBind), mv$(trailing)})};
+        }
+        case ASTPatternData::TAG_Or: {
+            auto& e = pat.data().as_Or();
+            std::vector<HIRPattern> subpats;
+            for (const auto& sp : e) {
+                subpats.push_back(LowerHIRPattern(sp));
+            }
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Or(mv$(subpats))};
+        }
+    }
+    UNREACHABLE();
+}
+
+HIRExprPtr AST2HIR::LowerHIRExpr(const std::shared_ptr<ASTExprNode>& e) {
+    if (e.get()) {
+        return LowerHIRExprNode(*e);
+    } else {
+        return HIRExprPtr();
+    }
+}
+
+HIRExprPtr AST2HIR::LowerHIRExpr(const ASTExpr& e) {
+    if (e.isValid()) {
+        return LowerHIRExprNode(e.node());
+    } else {
+        return HIRExprPtr();
+    }
+}
+
+HIRSimplePath AST2HIR::LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric) {
+    if (!allowFinalGeneric) {
+        ASSERT_BUG(sp, path.cls.is_Absolute(), "Encountered non-Absolute path when creating ::HIR::SimplePath");
+        if (path.cls.as_Absolute().nodes.size() > 0) {
+            ASSERT_BUG(sp, path.cls.as_Absolute().nodes.back().args().isEmpty(), "Encountered path with parameters when creating ::HIR::SimplePath");
+        }
+    } else {
+        ASSERT_BUG(sp, path.cls.is_Absolute(), "Encountered non-Absolute path when creating ::HIR::GenericPath");
+    }
+
+    const ASTAbsolutePath* ap = nullptr;
+    switch (pc) {
+        case FromASTPathClass::Value:
+            ASSERT_BUG(sp, !path.bindings.value.is_Unbound(), "Encountered unbound value path - " << path);
+            ap = &path.bindings.value.path;
+            break;
+        case FromASTPathClass::Type:
+            ASSERT_BUG(sp, !path.bindings.type.is_Unbound(), "Encountered unbound type path - " << path);
+            ap = &path.bindings.type.path;
+            break;
+        case FromASTPathClass::Macro:
+            ASSERT_BUG(sp, !path.bindings.macro.is_Unbound(), "Encountered unbound macro path - " << path);
+            ap = &path.bindings.macro.path;
+            break;
+    }
+    BUG_ASSERT(ap);
+    return HIRSimplePath((ap->crate == "" ? crateName : ap->crate), ap->nodes);
 }
 
 HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc, GenericParamLayout paramDefs) {
@@ -1226,10 +1405,10 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             if (pb.is_Trait()) {
                 const auto& pbe = pb.as_Trait();
                 if (pbe.hir) {
-                    assert(pbe.hir);
+                    BUG_ASSERT(pbe.hir);
                     return findSourceTraitHir(sp, path, *pbe.hir, name, ns, ms);
                 } else if (pbe.trait_) {
-                    assert(pbe.trait_);
+                    BUG_ASSERT(pbe.trait_);
                     return findSourceTraitAst(sp, path, *pbe.trait_, name, ns, ms);
                 } else {
                     BUG(sp, "Unbound path");
@@ -1695,7 +1874,7 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
         }
         case TypeData::TAG_Generic: {
             auto& e = ty->data.as_Generic();
-            assert(e.index < 0x10000);
+            BUG_ASSERT(e.index < 0x10000);
             return crate->types.generic(e.name, e.index);
         }
     }
@@ -1703,29 +1882,12 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
 }
 
 HIRTypeAlias AST2HIR::LowerHIRTypeAlias(const HIRItemPath& p, const ASTTypeAlias& ta) {
-    assert(!implTraitSource.path);
+    BUG_ASSERT(!implTraitSource.path);
     auto params = LowerHIRGenericParams(ta.params(), nullptr);
     implTraitSource = ImplTraitSource(&p, &params);
     auto ty = LowerHIRType(ta.type());
     implTraitSource = ImplTraitSource();
     return HIRTypeAlias{std::move(params), std::move(ty)};
-}
-
-namespace {
-    template <typename T>
-    HIRVisEnt<T> newVisent(HIRPublicity pub, T v) {
-        return HIRVisEnt<T>{pub, mv$(v)};
-    }
-
-    HIRSimplePath getParentModule(const HIRItemPath& p) {
-        const HIRItemPath* parentIp = p.parent;
-        assert(parentIp);
-        while (parentIp->name && parentIp->name[0] == '#') {
-            parentIp = parentIp->parent;
-            assert(parentIp);
-        }
-        return parentIp->getSimplePath();
-    }
 }
 
 tStructFields AST2HIR::LowerHIRStructFields(HIRItemPath path, const HIRGenericParams& params, const std::vector<ASTStructItem>& inFields, HIRModule& outMod) {
@@ -1752,64 +1914,6 @@ tStructFields AST2HIR::LowerHIRStructFields(HIRItemPath path, const HIRGenericPa
         fields.push_back(HIRStructField{field.name, LowerHIRVis(getParentModule(path), field.vis), std::move(type), std::move(fieldDefault)});
     }
     return fields;
-}
-
-namespace {
-    void collectUsedTypeParams(HIRTypeInterner& types, const Span& sp, const HIRTypeData* ty, std::set<unsigned>& used, bool& opaque) {
-        cloneTyWith(types, sp, ty, [&](const HIRTypeData* tpl, HIRTypeRef&) {
-            if (const auto* ge = tpl->opt_Generic()) {
-                if (ge->isSelf()) {
-                    opaque = true;
-                } else if (ge->group() == GENERICImpl) {
-                    used.insert(ge->idx());
-                }
-            }
-            if (const auto* ae = tpl->opt_Array()) {
-                if (ae->size.is_Unevaluated() && ae->size.as_Unevaluated().is_Unevaluated()) {
-                    opaque = true;
-                }
-            }
-            if (const auto* pe = tpl->opt_Path()) {
-                if (!pe->path.data.is_Generic()) {
-                    opaque = true;
-                }
-            }
-            return false;
-        });
-    }
-
-    void collectUsedTypeParamsInBounds(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& params, std::set<unsigned>& used, bool& opaque) {
-        for (const auto& bound : params.bounds) {
-            switch (bound.tag()) {
-                case HIRGenericBound::TAG_TraitBound: {
-                    auto& be = bound.as_TraitBound();
-                    collectUsedTypeParams(types, sp, be.type, used, opaque);
-                    for (const auto& ty : be.trait.path.params.types) {
-                        collectUsedTypeParams(types, sp, ty, used, opaque);
-                    }
-                    for (const auto& assoc : be.trait.typeBounds) {
-                        collectUsedTypeParams(types, sp, assoc.second.type, used, opaque);
-                    }
-                    break;
-                }
-                case HIRGenericBound::TAG_TypeEquality: {
-                    auto& be = bound.as_TypeEquality();
-                    collectUsedTypeParams(types, sp, be.type, used, opaque);
-                    collectUsedTypeParams(types, sp, be.otherType, used, opaque);
-                    break;
-                }
-            }
-        }
-    }
-
-    void checkTypeParamsUsed(const Span& sp, const HIRGenericParams& params, const std::set<unsigned>& used, const char* what) {
-        for (size_t i = 0; i < params.types.size(); i++) {
-            if (used.count(static_cast<unsigned>(i))) {
-                continue;
-            }
-            ERROR(sp, E0000, "parameter `" << params.types[i].name << "` is never used in this " << what << " - consider a `PhantomData` field");
-        }
-    }
 }
 
 HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStruct& ent, const ASTAttributeList& attrs, HIRModule& outMod) {
@@ -2001,7 +2105,7 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
         if (var.data.is_Tuple() || var.data.is_Struct()) {
             hasData = true;
         } else {
-            assert(var.data.is_Unit());
+            BUG_ASSERT(var.data.is_Unit());
         }
     }
 
@@ -2770,20 +2874,6 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     return rv;
 }
 
-namespace {
-    void _add_mod_ns_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRTypeItem ti) {
-        mod.modItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{isPub, mv$(ti)})));
-    }
-
-    void _add_mod_val_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRValueItem ti) {
-        mod.valueItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{isPub, mv$(ti)})));
-    }
-
-    void _add_mod_mac_item(ObjPool& pool, HIRModule& mod, RcString name, HIRPublicity isPub, HIRMacroItem ti) {
-        mod.macroItems.insert(std::make_pair(mv$(name), pool.make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{isPub, mv$(ti)})));
-    }
-}
-
 HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attrs, const ASTStatic& e, const Span& sp, const RcString& name) {
     auto params = LowerHIRGenericParams(e.params(), nullptr);
     auto value = LowerHIRExpr(e.value());
@@ -3043,7 +3133,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
 
         if (ie.second.isImport) {
             auto hirPath = LowerHIRSimplePath(sp, ie.second.path, FromASTPathClass::Type);
-            assert(hirPath.components().empty() || hirPath.components().back() != "");
+            BUG_ASSERT(hirPath.components().empty() || hirPath.components().back() != "");
             HIRTypeItem ti;
             if (const auto* pb = ie.second.path.bindings.type.binding.opt_EnumVar()) {
                 ti = HIRTypeItem::make_Import({mv$(hirPath), true, pb->idx});
@@ -3064,8 +3154,8 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
                 continue;
             }
             auto hirPath = LowerHIRSimplePath(sp, ie.second.path, FromASTPathClass::Value);
-            assert(!hirPath.components().empty());
-            assert(hirPath.components().back() != "");
+            BUG_ASSERT(!hirPath.components().empty());
+            BUG_ASSERT(hirPath.components().back() != "");
             HIRValueItem vi;
 
             switch (ie.second.path.bindings.value.binding.tag()) {
@@ -3089,8 +3179,8 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
         }
         auto hirPath = LowerHIRSimplePath(sp, ie.second.path, FromASTPathClass::Macro);
         if (ie.second.isImport) {
-            assert(!hirPath.components().empty());
-            assert(hirPath.components().back() != "");
+            BUG_ASSERT(!hirPath.components().empty());
+            BUG_ASSERT(hirPath.components().back() != "");
 
             auto mi = HIRMacroItem::make_Import({mv$(hirPath)});
             _add_mod_mac_item(*crate->pool, mod, ie.first, getVis(ie.second.vis), mv$(mi));
@@ -3098,109 +3188,6 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, std
     }
 
     return mod;
-}
-
-namespace {
-
-    template <typename Cb>
-    void collectPathLifetimes(const ASTPath& path, const Cb& cb) {
-        if (path.cls.is_Local() || !path.isValid()) {
-            return;
-        }
-        for (const auto& node : path.nodes()) {
-            for (const auto& ent : node.args().entries) {
-                switch (ent.tag()) {
-                    case ASTPathParamEnt::TAG_Lifetime:
-                        cb(ent.as_Lifetime());
-                        break;
-                    case ASTPathParamEnt::TAG_Type:
-                        collectTypeLifetimes(ent.as_Type(), cb);
-                        break;
-                    case ASTPathParamEnt::TAG_AssociatedTyEqual:
-                        collectTypeLifetimes(ent.as_AssociatedTyEqual().second, cb);
-                        break;
-                    case ASTPathParamEnt::TAG_AssociatedTyBound:
-                        for (const auto& trait : ent.as_AssociatedTyBound().second) {
-                            if (trait.path) {
-                                collectPathLifetimes(*trait.path, cb);
-                            }
-                        }
-                        break;
-                    default:
-                        break;
-                }
-            }
-        }
-    }
-
-    template <typename Cb>
-    void collectTypeLifetimes(const ASTType* ty, const Cb& cb) {
-        if (!ty) {
-            return;
-        }
-        switch (ty->data.tag()) {
-            case TypeData::TAG_Borrow: {
-                const auto& e = ty->data.as_Borrow();
-                cb(e.lifetime);
-                collectTypeLifetimes(e.inner, cb);
-                break;
-            }
-            case TypeData::TAG_Pointer:
-                collectTypeLifetimes(ty->data.as_Pointer().inner, cb);
-                break;
-            case TypeData::TAG_Array:
-                collectTypeLifetimes(ty->data.as_Array().inner, cb);
-                break;
-            case TypeData::TAG_Slice:
-                collectTypeLifetimes(ty->data.as_Slice().inner, cb);
-                break;
-            case TypeData::TAG_Pattern:
-                collectTypeLifetimes(ty->data.as_Pattern().inner, cb);
-                break;
-            case TypeData::TAG_Tuple:
-                for (const auto* inner : ty->data.as_Tuple().innerTypes) {
-                    collectTypeLifetimes(inner, cb);
-                }
-                break;
-            case TypeData::TAG_Function: {
-                const auto& e = ty->data.as_Function().info;
-                for (const auto* arg : e.argTypes) {
-                    collectTypeLifetimes(arg, cb);
-                }
-                collectTypeLifetimes(e.rettype, cb);
-                break;
-            }
-            case TypeData::TAG_Path:
-                collectPathLifetimes(*ty->data.as_Path(), cb);
-                break;
-            case TypeData::TAG_TraitObject: {
-                const auto& e = ty->data.as_TraitObject();
-                for (const auto& lft : e.lifetimes) {
-                    cb(lft);
-                }
-                for (const auto& tr : e.traits) {
-                    if (tr.path) {
-                        collectPathLifetimes(*tr.path, cb);
-                    }
-                }
-                break;
-            }
-            case TypeData::TAG_ErasedType: {
-                const auto* e = ty->data.as_ErasedType();
-                for (const auto& lft : e->lifetimes) {
-                    cb(lft);
-                }
-                for (const auto& tr : e->traits) {
-                    if (tr.path) {
-                        collectPathLifetimes(*tr.path, cb);
-                    }
-                }
-                break;
-            }
-            default:
-                break;
-        }
-    }
 }
 
 void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
@@ -3333,7 +3320,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                             auto atyParams = LowerHIRGenericParams(e.params(), nullptr);
                             //ASSERT_BUG(Span(), aty_params.is_empty(), "TODO: GATs");
 
-                            assert(!implTraitSource.path);
+                            BUG_ASSERT(!implTraitSource.path);
                             HIRItemPath ip1(modPath);
                             std::string name2 = std::string("#impl_") + std::to_string((uintptr_t)&impl) + "_" + item.name.c_str();
                             HIRItemPath ip2(ip1, name2.c_str());
@@ -3356,34 +3343,14 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                     }
                 }
 
-                auto hirImpl = std::make_unique<HIRTraitImpl>(HIRTraitImpl{
-                    mv$(params),
-                    mv$(traitArgs),
-                    mv$(type),
-
-                    mv$(methods),
-                    mv$(constants),
-                    {},
-                    mv$(types),
-
-                    modPath
-                });
+                auto hirImpl = std::make_unique<HIRTraitImpl>(HIRTraitImpl{mv$(params), mv$(traitArgs), mv$(type), mv$(methods), mv$(constants), {}, mv$(types), modPath});
                 hirImpl->isConst = impl.def().isConst();
                 hirImpl->isReservation = i->attrs.has("rustc_reservation_impl");
                 hirCrate.traitImpls[mv$(traitName)].generic.push_back(mv$(hirImpl));
             } else if (impl.def().type()->data.is_None()) {
             } else {
                 auto type = LowerHIRType(impl.def().type());
-                hirCrate.markerImpls[mv$(traitName)].generic.push_back(box$(
-                    HIRMarkerImpl{
-                        mv$(params),
-                        mv$(traitArgs),
-                        true,
-                        mv$(type),
-
-                        modPath
-                    }
-                ));
+                hirCrate.markerImpls[mv$(traitName)].generic.push_back(box$(HIRMarkerImpl{mv$(params), mv$(traitArgs), true, mv$(type), modPath}));
             }
         } else {
             auto type = LowerHIRType(impl.def().type());
@@ -3422,7 +3389,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                         auto& e = (*item.data).as_Type();
                         auto atyParams = LowerHIRGenericParams(e.params(), nullptr);
 
-                        assert(!implTraitSource.path);
+                        BUG_ASSERT(!implTraitSource.path);
                         implTraitSource = ImplTraitSource(&itemPath, &params, &atyParams);
                         auto atyType = LowerHIRType(e.type());
                         implTraitSource = ImplTraitSource();
@@ -3438,17 +3405,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 }
             }
 
-            hirCrate.typeImpls.generic.push_back(box$(
-                HIRTypeImpl{
-                    mv$(params),
-                    mv$(type),
-                    mv$(methods),
-                    mv$(constants),
-                    mv$(types),
-
-                    modPath
-                }
-            ));
+            hirCrate.typeImpls.generic.push_back(box$(HIRTypeImpl{mv$(params), mv$(type), mv$(methods), mv$(constants), mv$(types), modPath}));
         }
     }
     for (const auto& i : astMod.items) {
@@ -3463,16 +3420,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
         auto traitName = mv$(trait.path);
         auto traitArgs = mv$(trait.params);
 
-        hirCrate.markerImpls[mv$(traitName)].generic.push_back(box$(
-            HIRMarkerImpl{
-                mv$(params),
-                mv$(traitArgs),
-                false,
-                mv$(type),
-
-                modPath
-            }
-        ));
+        hirCrate.markerImpls[mv$(traitName)].generic.push_back(box$(HIRMarkerImpl{mv$(params), mv$(traitArgs), false, mv$(type), modPath}));
     }
 }
 
@@ -3524,8 +3472,8 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
                     if (&mod == &crate.rootModule_) {
                         mi = mv$(mac.data);
                     } else {
-                        assert(mac.data);
-                        assert(!mac.data->rules.empty());
+                        BUG_ASSERT(mac.data);
+                        BUG_ASSERT(!mac.data->rules.empty());
                         auto pc = mod.path().nodes;
                         pc.push_back(mac.name);
                         mi = HIRMacroItem::make_Import({HIRSimplePath(crateName, std::move(pc))});
@@ -3598,7 +3546,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, ObjPool* pool, ASTCrate& crat
 
     auto sp = Span();
     for (const auto& langItemPath : crate.langItems) {
-        assert(langItemPath.second.crate == "");
+        BUG_ASSERT(langItemPath.second.crate == "");
         rv.langItems.insert(std::make_pair(langItemPath.first, HIRSimplePath(crateName, langItemPath.second.nodes)));
     }
     rv.extCratesOrdered = crate.externCratesOrd;
@@ -4285,8 +4233,8 @@ auto LowerHIRExprNodeVisitor::leaveLoopLabel(const RcString& lowered) -> void {
     if (lowered == "") {
         return;
     }
-    assert(!loopLabels.empty());
-    assert(loopLabels.back().lowered == lowered);
+    BUG_ASSERT(!loopLabels.empty());
+    BUG_ASSERT(loopLabels.back().lowered == lowered);
     loopLabels.pop_back();
 }
 
@@ -4309,7 +4257,7 @@ auto LowerHIRExprNodeVisitor::resolveLoopLabel(const Span& sp, const Ident& targ
 }
 
 auto LowerHIRExprNodeVisitor::lower(ASTExprNodeP& ep) -> HIRExprNodeP {
-    assert(ep);
+    BUG_ASSERT(ep);
     ep->visit(*this);
     ASSERT_BUG(ep->span(), rv, ep.typeName() << " - Yielded a nullptr HIR node");
     rv->resType = ctx.crate->types.infer();
@@ -4328,7 +4276,7 @@ auto LowerHIRExprNodeVisitor::lowerIsolated(ASTExprNodeP& ep) -> HIRExprNodeP {
     std::vector<LoopLabel> outerLabels;
     outerLabels.swap(loopLabels);
     auto rv = lower(ep);
-    assert(loopLabels.empty());
+    BUG_ASSERT(loopLabels.empty());
     outerLabels.swap(loopLabels);
     return rv;
 }
@@ -5360,7 +5308,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeNamedValue& v) -> void {
                     auto it = std::find_if(enm.variants().begin(), enm.variants().end(), [&](const auto& x) {
                         return x.name == varName;
                     });
-                    assert(it != enm.variants().end());
+                    BUG_ASSERT(it != enm.variants().end());
 
                     varIdx = static_cast<unsigned int>(it - enm.variants().begin());
                     if (it->data.is_Struct()) {
@@ -5370,7 +5318,7 @@ auto LowerHIRExprNodeVisitor::visit(ASTExprNodeNamedValue& v) -> void {
                 } else {
                     const auto& enm = *e.hir;
                     auto idx = enm.findVariant(varName);
-                    assert(idx != SIZE_MAX);
+                    BUG_ASSERT(idx != SIZE_MAX);
 
                     varIdx = idx;
                     if (const auto* ee = enm.data.opt_Data()) {

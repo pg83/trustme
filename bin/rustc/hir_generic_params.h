@@ -34,7 +34,7 @@ enum class HIRGenericParamKind : u8 {
 class HIRGenericParams;
 
 #include "hir_generic_params_tu.h"
-extern std::ostream& operator<<(std::ostream& os, const HIRGenericBound& x);
+std::ostream& operator<<(std::ostream& os, const HIRGenericBound& x);
 
 class HIRGenericParams {
 public:

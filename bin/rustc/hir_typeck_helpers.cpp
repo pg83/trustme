@@ -22,6 +22,224 @@ using namespace stl;
 
 namespace {
     struct CanonicalizeTraitGoal;
+
+    using NextTraitGoalEvaluator = TraitResolution::NextTraitGoalEvaluator;
+
+    struct CanonicalizeTraitGoal final: public Monomorphiser {
+        mutable std::vector<std::pair<RcString, RcString>> placeholderNames_;
+        mutable Vector<const HIRTypeData*> ivarNodes_;
+        mutable Vector<unsigned> valueIvarIndexes_;
+        mutable size_t inputPlaceholderCount_ = 0;
+        const HMTypeInferrence* ivarTable_ = nullptr;
+        mutable bool frozen_ = false;
+        mutable bool sawForeignIvar_ = false;
+
+        RcString canonicalPlaceholderName(const RcString& name) const;
+
+        explicit CanonicalizeTraitGoal(HIRTypeInterner& types, const HMTypeInferrence* ivarTable = nullptr);
+
+        HIRTypeRef canonicalIvar(const HIRTypeData* infer) const;
+
+        void freeze() const;
+
+        bool sawForeignIvar() const;
+
+        const HIRTypeData* originalIvar(unsigned index) const;
+
+        HIRConstGeneric canonicalValueIvar(unsigned original) const;
+
+        const unsigned* originalValueIvar(unsigned index) const;
+
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
+
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
+
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override;
+
+        const std::vector<std::pair<RcString, RcString>>& placeholderNames() const;
+
+        const RcString* originalPlaceholderName(const RcString& canonical) const;
+
+        const RcString* originalResponsePlaceholderName(const RcString& canonical) const;
+
+        const Vector<const HIRTypeData*>& ivarNodes() const;
+
+        size_t typeSlotCount() const;
+
+        size_t valueSlotCount() const;
+
+        HIRTypeRef canonicalTypeSlot(size_t slot) const;
+
+        HIRConstGeneric canonicalValueSlot(size_t slot) const;
+    };
+
+    struct InstantiateCanonicalTraitResponse final: public Monomorphiser {
+        const std::vector<std::pair<RcString, RcString>>& goalNames;
+        const struct CanonicalizeTraitGoal* goalCanonicalizer = nullptr;
+        const u64 instance;
+        mutable std::vector<std::pair<RcString, RcString>> freshNames;
+
+        RcString instantiatePlaceholderName(const RcString& canonical) const;
+
+        InstantiateCanonicalTraitResponse(HIRTypeInterner& types, const std::vector<std::pair<RcString, RcString>>& goalNames, u64 instance, const CanonicalizeTraitGoal* goalCanonicalizer = nullptr);
+
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
+
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override;
+
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
+    };
+
+    struct InstantiateTraitResponseForCaller final: public Monomorphiser {
+        HMTypeInferrence& ivars;
+        const std::vector<std::pair<RcString, RcString>>& goalNames;
+        const CanonicalizeTraitGoal* goalCanonicalizer = nullptr;
+        mutable std::vector<std::pair<HIRGenericRef, HIRTypeRef>> typeValues;
+        mutable std::vector<std::pair<HIRGenericRef, HIRConstGeneric>> values;
+
+        bool isGoalPlaceholder(const HIRGenericRef& generic) const;
+
+        InstantiateTraitResponseForCaller(HIRTypeInterner& types, HMTypeInferrence& ivars, const std::vector<std::pair<RcString, RcString>>& goalNames, const CanonicalizeTraitGoal* goalCanonicalizer = nullptr);
+
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override;
+
+        HIRGenericRef callerGeneric(const HIRGenericRef& generic) const;
+
+        HIRTypeRef getType(const Span&, const HIRGenericRef& raw) const override;
+
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& raw) const override;
+    };
+
+    struct CorrelateSolverResponseSlots final: public MonomorphiserNop {
+        const SolverSlotValues& slots_;
+        Vector<std::pair<HIRTypeRef, HIRTypeRef>> structuralTypes_;
+
+        void correlateParams(const HIRPathParams& input, const HIRPathParams& response);
+
+        void correlateGenericPath(const HIRGenericPath& input, const HIRGenericPath& response);
+
+        void correlatePath(const HIRPath& input, const HIRPath& response);
+
+        CorrelateSolverResponseSlots(HIRTypeInterner& interner, const SolverSlotValues& slots);
+
+        void correlateType(const HIRTypeData* input, const HIRTypeData* response);
+
+        void correlateImpl(const ImplRef& input, const SolverImpl& response);
+
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override;
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override;
+    };
+
+    struct DecanonicalizeSolverInfers final: public MonomorphiserNop {
+        const CanonicalizeTraitGoal& canonicalizer_;
+
+        DecanonicalizeSolverInfers(HIRTypeInterner& types, const CanonicalizeTraitGoal& canonicalizer);
+
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
+
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
+
+        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override;
+
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
+    };
+
+    HIRTypeRef InstantiateCanonicalTraitResponse::getType(const Span&, const HIRGenericRef& generic) const {
+        return generic.isPlaceholder() && !generic.isSolverExistential() ? types.generic(instantiatePlaceholderName(generic.name), generic.binding) : types.generic(generic);
+    }
+
+    bool typeListEqual(const HMTypeInferrence& context, const std::vector<HIRTypeRef>& l, const std::vector<HIRTypeRef>& r) {
+        if (l.size() != r.size()) {
+            return false;
+        }
+
+        for (unsigned int i = 0; i < l.size(); i++) {
+            if (!context.typesEqual(l[i], r[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool typeListEqual(const HMTypeInferrence& context, const ThinVector<HIRTypeRef>& l, const ThinVector<HIRTypeRef>& r) {
+        if (l.size() != r.size()) {
+            return false;
+        }
+
+        for (unsigned int i = 0; i < l.size(); i++) {
+            if (!context.typesEqual(l[i], r[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool inferIsLive(const HIRTypeData* type) {
+        const auto* infer = type->opt_Infer();
+        return infer && infer->index != ~0u && !isAliasInputInfer(infer->index);
+    }
+
+    bool typeIsRigidUnknown(const HIRTypeData* type) {
+        if (const auto* path = type->opt_Path()) {
+            if (!path->path.data.is_Generic()) {
+                return true;
+            }
+            return path->binding.is_Unbound() || path->binding.is_Opaque();
+        }
+        return false;
+    }
+
+    bool literalClassAccepts(const HMTypeInferrence& table, HIRInferClass tyClass, const HIRTypeData* type) {
+        if (tyClass == HIRInferClass::None) {
+            return true;
+        }
+        if (const auto* primitive = type->opt_Primitive()) {
+            return typeClassPrimitiveCompatible(tyClass, *primitive);
+        }
+        if (const auto* pattern = type->opt_Pattern()) {
+            const auto* primitive = table.getType(pattern->inner)->opt_Primitive();
+            return primitive && typeClassPrimitiveCompatible(tyClass, *primitive);
+        }
+        return false;
+    }
+
+    HIRCompare compareValue(const Span& sp, const HIRConstGeneric& leftRaw, const HIRConstGeneric& rightRaw, const HMTypeInferrence& infer) {
+        const auto& left = infer.getValue(leftRaw);
+        const auto& right = infer.getValue(rightRaw);
+        if (left == right) {
+            return HIRCompare::Equal;
+        }
+        if (left.is_Infer() || right.is_Infer()) {
+            return HIRCompare::Fuzzy;
+        }
+        if (left.is_Generic() && left.as_Generic().isPlaceholder()) {
+            return HIRCompare::Fuzzy;
+        }
+        if (right.is_Generic() && right.as_Generic().isPlaceholder()) {
+            return HIRCompare::Fuzzy;
+        }
+        //TODO(sp, "compare_value: " << left << " == " << right);
+        return HIRCompare::Unequal;
+    }
+
+    bool traitContainsMethodInner(const HIRTrait& traitPtr, const RcString& name, const HIRFunction*& outFcnPtr) {
+        auto it = traitPtr.values.find(name);
+        if (it != traitPtr.values.end()) {
+            if (it->second.is_Function()) {
+                const auto& v = it->second.as_Function();
+                outFcnPtr = &v;
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 struct TraitResolution::NextTraitGoalEvaluator {
@@ -348,138 +566,6 @@ struct TraitResolution::NextTraitGoalEvaluator {
     bool evaluateNormalizesTo(const Span& callSpan, const NormalizesTo& goal, NormalizesToCallback& callback, bool callerBoundary = false);
 };
 
-namespace {
-    using NextTraitGoalEvaluator = TraitResolution::NextTraitGoalEvaluator;
-}
-
-namespace {
-    struct CanonicalizeTraitGoal final: public Monomorphiser {
-        mutable std::vector<std::pair<RcString, RcString>> placeholderNames_;
-        mutable Vector<const HIRTypeData*> ivarNodes_;
-        mutable Vector<unsigned> valueIvarIndexes_;
-        mutable size_t inputPlaceholderCount_ = 0;
-        const HMTypeInferrence* ivarTable_ = nullptr;
-        mutable bool frozen_ = false;
-        mutable bool sawForeignIvar_ = false;
-
-        RcString canonicalPlaceholderName(const RcString& name) const;
-
-        explicit CanonicalizeTraitGoal(HIRTypeInterner& types, const HMTypeInferrence* ivarTable = nullptr);
-
-        HIRTypeRef canonicalIvar(const HIRTypeData* infer) const;
-
-        void freeze() const;
-
-        bool sawForeignIvar() const;
-
-        const HIRTypeData* originalIvar(unsigned index) const;
-
-        HIRConstGeneric canonicalValueIvar(unsigned original) const;
-
-        const unsigned* originalValueIvar(unsigned index) const;
-
-        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
-
-        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
-
-        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
-
-        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override;
-
-        const std::vector<std::pair<RcString, RcString>>& placeholderNames() const;
-
-        const RcString* originalPlaceholderName(const RcString& canonical) const;
-
-        const RcString* originalResponsePlaceholderName(const RcString& canonical) const;
-
-        const Vector<const HIRTypeData*>& ivarNodes() const;
-
-        size_t typeSlotCount() const;
-
-        size_t valueSlotCount() const;
-
-        HIRTypeRef canonicalTypeSlot(size_t slot) const;
-
-        HIRConstGeneric canonicalValueSlot(size_t slot) const;
-    };
-
-    struct InstantiateCanonicalTraitResponse final: public Monomorphiser {
-        const std::vector<std::pair<RcString, RcString>>& goalNames;
-        const struct CanonicalizeTraitGoal* goalCanonicalizer = nullptr;
-        const u64 instance;
-        mutable std::vector<std::pair<RcString, RcString>> freshNames;
-
-        RcString instantiatePlaceholderName(const RcString& canonical) const;
-
-        InstantiateCanonicalTraitResponse(HIRTypeInterner& types, const std::vector<std::pair<RcString, RcString>>& goalNames, u64 instance, const CanonicalizeTraitGoal* goalCanonicalizer = nullptr);
-
-        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
-
-        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
-
-        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override;
-
-        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
-    };
-
-    struct InstantiateTraitResponseForCaller final: public Monomorphiser {
-        HMTypeInferrence& ivars;
-        const std::vector<std::pair<RcString, RcString>>& goalNames;
-        const CanonicalizeTraitGoal* goalCanonicalizer = nullptr;
-        mutable std::vector<std::pair<HIRGenericRef, HIRTypeRef>> typeValues;
-        mutable std::vector<std::pair<HIRGenericRef, HIRConstGeneric>> values;
-
-        bool isGoalPlaceholder(const HIRGenericRef& generic) const;
-
-        InstantiateTraitResponseForCaller(HIRTypeInterner& types, HMTypeInferrence& ivars, const std::vector<std::pair<RcString, RcString>>& goalNames, const CanonicalizeTraitGoal* goalCanonicalizer = nullptr);
-
-        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
-
-        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override;
-
-        HIRGenericRef callerGeneric(const HIRGenericRef& generic) const;
-
-        HIRTypeRef getType(const Span&, const HIRGenericRef& raw) const override;
-
-        HIRConstGeneric getValue(const Span&, const HIRGenericRef& raw) const override;
-    };
-
-    struct CorrelateSolverResponseSlots final: public MonomorphiserNop {
-        const SolverSlotValues& slots_;
-        Vector<std::pair<HIRTypeRef, HIRTypeRef>> structuralTypes_;
-
-        void correlateParams(const HIRPathParams& input, const HIRPathParams& response);
-
-        void correlateGenericPath(const HIRGenericPath& input, const HIRGenericPath& response);
-
-        void correlatePath(const HIRPath& input, const HIRPath& response);
-
-        CorrelateSolverResponseSlots(HIRTypeInterner& interner, const SolverSlotValues& slots);
-
-        void correlateType(const HIRTypeData* input, const HIRTypeData* response);
-
-        void correlateImpl(const ImplRef& input, const SolverImpl& response);
-
-        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override;
-
-        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override;
-    };
-
-    struct DecanonicalizeSolverInfers final: public MonomorphiserNop {
-        const CanonicalizeTraitGoal& canonicalizer_;
-
-        DecanonicalizeSolverInfers(HIRTypeInterner& types, const CanonicalizeTraitGoal& canonicalizer);
-
-        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const override;
-
-        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override;
-
-        HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override;
-
-        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override;
-    };
-}
-
 SolverImpl SolverImpl::fromLegacy(ImplRef impl) {
     SolverImpl result;
     result.ambiguousIdentity = impl.isAmbiguousIdentity();
@@ -529,14 +615,6 @@ ImplRef SolverImpl::legacy() const {
     return result;
 }
 
-namespace {
-
-    HIRTypeRef InstantiateCanonicalTraitResponse::getType(const Span&, const HIRGenericRef& generic) const {
-        return generic.isPlaceholder() && !generic.isSolverExistential() ? types.generic(instantiatePlaceholderName(generic.name), generic.binding) : types.generic(generic);
-    }
-
-}
-
 void HMTypeInferrence::checkForLoops() {
     struct LoopChecker {
         Vector<unsigned int>& indexes;
@@ -549,7 +627,7 @@ void HMTypeInferrence::checkForLoops() {
                         ASSERT_BUG(Span(), e.index != idx, "Recursion in ivar #" << indexes[0] << " " << ivars.ivars[indexes[0]].type << " - loop with " << idx << " " << ivars.ivars[idx].type);
                     }
                     const auto& ivd = ivars.getPointedIvar(e.index);
-                    assert(!ivd.isAlias());
+                    BUG_ASSERT(!ivd.isAlias());
                     if (!ivd.type->is_Infer()) {
                         indexes.pushBack(e.index);
                         this->checkTy(ivars, ivd.type);
@@ -585,7 +663,7 @@ void HMTypeInferrence::compactIvars() {
         } else {
             auto index = v.alias;
             unsigned int count = 0;
-            assert(index < ivars.size());
+            BUG_ASSERT(index < ivars.size());
             while (ivars.at(index).isAlias()) {
                 index = ivars.at(index).alias;
 
@@ -1371,7 +1449,7 @@ const HIRTypeData* HMTypeInferrence::getType(const HIRTypeData* type) const {
 }
 
 HIRTypeRef& HMTypeInferrence::getType(unsigned idx) {
-    assert(idx != ~0u);
+    BUG_ASSERT(idx != ~0u);
     auto* current = &getPointedIvar(idx).type;
     for (size_t count = 0; count <= ivars.size(); count++) {
         const auto* e = (*current)->opt_Infer();
@@ -1388,7 +1466,7 @@ HIRTypeRef& HMTypeInferrence::getType(unsigned idx) {
 }
 
 const HIRTypeData* HMTypeInferrence::getType(unsigned idx) const {
-    assert(idx != ~0u);
+    BUG_ASSERT(idx != ~0u);
     const auto* current = &getPointedIvar(idx).type;
     for (size_t count = 0; count <= ivars.size(); count++) {
         const auto* e = (*current)->opt_Infer();
@@ -1410,7 +1488,7 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
     auto& rootIvar = ivars.at(rootIndex);
 
     if (const auto* lE = type->opt_Infer(); lE && !isAliasInputInfer(lE->index)) {
-        assert(lE->index != slot);
+        BUG_ASSERT(lE->index != slot);
         if (lE->tyClass != HIRInferClass::None) {
             switch ((*rootIvar.type).tag()) {
                 case HIRTypeData::TAG_Primitive: {
@@ -1571,7 +1649,7 @@ const HIRConstGeneric& HMTypeInferrence::getValue(unsigned slot) const {
 unsigned int HMTypeInferrence::rootIvarIndex(unsigned int slot) const {
     auto index = slot;
     unsigned int count = 0;
-    assert(index < ivars.size());
+    BUG_ASSERT(index < ivars.size());
     while (ivars.at(index).isAlias()) {
         index = ivars.at(index).alias;
 
@@ -1726,34 +1804,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
         }
     }
     UNREACHABLE();
-}
-
-namespace {
-    bool typeListEqual(const HMTypeInferrence& context, const std::vector<HIRTypeRef>& l, const std::vector<HIRTypeRef>& r) {
-        if (l.size() != r.size()) {
-            return false;
-        }
-
-        for (unsigned int i = 0; i < l.size(); i++) {
-            if (!context.typesEqual(l[i], r[i])) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    bool typeListEqual(const HMTypeInferrence& context, const ThinVector<HIRTypeRef>& l, const ThinVector<HIRTypeRef>& r) {
-        if (l.size() != r.size()) {
-            return false;
-        }
-
-        for (unsigned int i = 0; i < l.size(); i++) {
-            if (!context.typesEqual(l[i], r[i])) {
-                return false;
-            }
-        }
-        return true;
-    }
 }
 
 bool HMTypeInferrence::pathparamsEqual(const HIRPathParams& ppsL, const HIRPathParams& ppsR) const {
@@ -1970,37 +2020,6 @@ bool HMTypeInferrence::containsLiveIvar(const HIRTypeData* type, unsigned int ro
         const auto* bound = this->getType(inner);
         return bound != inner && this->containsLiveIvar(bound, rootIndex);
     });
-}
-
-namespace {
-    bool inferIsLive(const HIRTypeData* type) {
-        const auto* infer = type->opt_Infer();
-        return infer && infer->index != ~0u && !isAliasInputInfer(infer->index);
-    }
-
-    bool typeIsRigidUnknown(const HIRTypeData* type) {
-        if (const auto* path = type->opt_Path()) {
-            if (!path->path.data.is_Generic()) {
-                return true;
-            }
-            return path->binding.is_Unbound() || path->binding.is_Opaque();
-        }
-        return false;
-    }
-
-    bool literalClassAccepts(const HMTypeInferrence& table, HIRInferClass tyClass, const HIRTypeData* type) {
-        if (tyClass == HIRInferClass::None) {
-            return true;
-        }
-        if (const auto* primitive = type->opt_Primitive()) {
-            return typeClassPrimitiveCompatible(tyClass, *primitive);
-        }
-        if (const auto* pattern = type->opt_Pattern()) {
-            const auto* primitive = table.getType(pattern->inner)->opt_Primitive();
-            return primitive && typeClassPrimitiveCompatible(tyClass, *primitive);
-        }
-        return false;
-    }
 }
 
 Unifier::Unifier(const Span& sp, HMTypeInferrence& table, const TraitResolution* resolve, bool bindRigidValues)
@@ -2498,27 +2517,6 @@ Unifier::Outcome Unifier::unifyValuesResolved(const HIRConstGeneric& leftRaw, co
     return deferValue();
 }
 
-namespace {
-    HIRCompare compareValue(const Span& sp, const HIRConstGeneric& leftRaw, const HIRConstGeneric& rightRaw, const HMTypeInferrence& infer) {
-        const auto& left = infer.getValue(leftRaw);
-        const auto& right = infer.getValue(rightRaw);
-        if (left == right) {
-            return HIRCompare::Equal;
-        }
-        if (left.is_Infer() || right.is_Infer()) {
-            return HIRCompare::Fuzzy;
-        }
-        if (left.is_Generic() && left.as_Generic().isPlaceholder()) {
-            return HIRCompare::Fuzzy;
-        }
-        if (right.is_Generic() && right.as_Generic().isPlaceholder()) {
-            return HIRCompare::Fuzzy;
-        }
-        //TODO(sp, "compare_value: " << left << " == " << right);
-        return HIRCompare::Unequal;
-    }
-}
-
 HIRCompare TraitResolution::comparePp(const Span& sp, const HIRPathParams& left, const HIRPathParams& right) const {
     ASSERT_BUG(sp, left.types.size() == right.types.size(), "Parameter count mismatch - `" << left << "` vs `" << right << "`");
     ASSERT_BUG(sp, left.values.size() == right.values.size(), "Parameter count mismatch - `" << left << "` vs `" << right << "`");
@@ -2858,7 +2856,7 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         };
         auto cmp = this->canUnsize(sp, dstTy, type, cb);
         if (cmp == HIRCompare::Equal) {
-            assert(!rv);
+            BUG_ASSERT(!rv);
             rv = callback.visit(ImplRef(type, params.clone(), {}));
         }
         return rv;
@@ -3529,7 +3527,7 @@ void TraitResolution::compactIvars(HMTypeInferrence& ivars, SolverResponseCallba
         } else {
             auto index = ivars.ivars[i].alias;
             unsigned int count = 0;
-            assert(index < ivars.ivars.size());
+            BUG_ASSERT(index < ivars.ivars.size());
             while (ivars.ivars.at(index).isAlias()) {
                 index = ivars.ivars.at(index).alias;
 
@@ -4228,7 +4226,7 @@ HIRCompare TraitResolution::fticCheckParams(
         }
 
         HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) override {
-            assert(g.binding < outImplParams.types.size());
+            BUG_ASSERT(g.binding < outImplParams.types.size());
             if (outImplParams.types[g.binding] == HIRTypeRef()) {
                 outImplParams.types[g.binding] = ty;
                 return HIRCompare::Equal;
@@ -4679,25 +4677,11 @@ HIRCompare TraitResolution::fticCheckParams(
     return match;
 }
 
-namespace {
-    bool traitContainsMethodInner(const HIRTrait& traitPtr, const RcString& name, const HIRFunction*& outFcnPtr) {
-        auto it = traitPtr.values.find(name);
-        if (it != traitPtr.values.end()) {
-            if (it->second.is_Function()) {
-                const auto& v = it->second.as_Function();
-                outFcnPtr = &v;
-                return true;
-            }
-        }
-        return false;
-    }
-}
-
 const HIRFunction* TraitResolution::traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const {
     const HIRFunction* rv = nullptr;
 
     if (traitContainsMethodInner(traitPtr, name, rv)) {
-        assert(rv);
+        BUG_ASSERT(rv);
         outPath = traitPath.clone();
         return rv;
     }
@@ -4705,7 +4689,7 @@ const HIRFunction* TraitResolution::traitContainsMethod(const Span& sp, const HI
     auto monomorphCb = MonomorphStatePtr(crate.types, self, &traitPath.params, nullptr);
     for (const auto& st : traitPtr.allParentTraits) {
         if (traitContainsMethodInner(*st.traitPtr, name, rv)) {
-            assert(rv);
+            BUG_ASSERT(rv);
             outPath.path = st.path.path;
             outPath.params = monomorphCb.monomorphPathParams(sp, st.path.params, false);
             return rv;
@@ -5109,7 +5093,7 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                     const auto& srcInner = ivars.getType(srcGp.params.types.at(str.structMarkings.unsizedParam));
 
                     auto cb = [&](auto d) {
-                        assert(newTypeCallback);
+                        BUG_ASSERT(newTypeCallback);
 
                         auto dstGpNew = dstGp.clone();
                         dstGpNew.params.types.at(str.structMarkings.unsizedParam) = mv$(d);
@@ -5828,7 +5812,7 @@ unsigned int TraitResolution::autoderefFindMethod(
             return ~0u;
         }
 
-        assert(possibilities.empty());
+        BUG_ASSERT(possibilities.empty());
         return 0;
     }
 }
@@ -6111,7 +6095,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
         const auto& eTraitGp = tb.first.second;
         const auto& eTraitInfo = tb.second;
 
-        assert(eTraitInfo.traitPtr);
+        BUG_ASSERT(eTraitInfo.traitPtr);
         HIRGenericPath finalTraitPath;
         const HIRFunction* fcnPtr;
         if (!(fcnPtr = this->traitContainsMethod(sp, eTraitGp, *eTraitInfo.traitPtr, eType, methodName, finalTraitPath))) {
@@ -6228,7 +6212,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
         const HIRFunction* fcnPtr = nullptr;
         if (traitContainsMethodInner(trait, methodName, fcnPtr)) {
-            assert(fcnPtr);
+            BUG_ASSERT(fcnPtr);
             addTraitObjectMethod(*fcnPtr, e.trait.path.clone());
         } else {
             const auto selfTy = crate.types.self();
@@ -6238,7 +6222,7 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 if (!traitContainsMethodInner(*st.traitPtr, methodName, fcnPtr)) {
                     continue;
                 }
-                assert(fcnPtr);
+                BUG_ASSERT(fcnPtr);
                 auto finalTraitPath = HIRGenericPath(st.path.path, monomorphCb.monomorphPathParams(sp, st.path.params, false));
                 addTraitObjectMethod(*fcnPtr, std::move(finalTraitPath));
             }
@@ -8444,7 +8428,7 @@ auto NextTraitGoalEvaluator::pushActiveGoal(size_t hash, const HIRSimplePath& tr
 }
 
 auto NextTraitGoalEvaluator::popActiveGoal(GoalKey* goal) -> void {
-    assert(!goalStack.empty() && goalStack.back() == goal);
+    BUG_ASSERT(!goalStack.empty() && goalStack.back() == goal);
     const auto range = activeGoalIndex.equal_range(goal->hash);
     for (auto it = range.first; it != range.second; ++it) {
         if (it->second == goal) {
@@ -8454,7 +8438,7 @@ auto NextTraitGoalEvaluator::popActiveGoal(GoalKey* goal) -> void {
             return;
         }
     }
-    assert(!"next-solver active goal missing from hash index");
+    BUG_ASSERT(!"next-solver active goal missing from hash index");
     std::abort();
 }
 
@@ -10057,7 +10041,7 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     STD_DEFER {
         const bool encounteredOverflow = frames[frameIndex]->encounteredOverflow;
         frames[frameIndex]->clear(candidateNodes);
-        assert(frameDepth == frameIndex + 1);
+        BUG_ASSERT(frameDepth == frameIndex + 1);
         frameDepth--;
         if (encounteredOverflow && frameIndex > 0) {
             frames[frameIndex - 1]->encounteredOverflow = true;
@@ -10421,8 +10405,8 @@ auto NextTraitGoalEvaluator::evaluateCertainty(const Span& callSpan, const HIRSi
 
     STD_DEFER {
         if (outermost) {
-            assert(goalStack.empty());
-            assert(activeGoalIndex.empty());
+            BUG_ASSERT(goalStack.empty());
+            BUG_ASSERT(activeGoalIndex.empty());
             if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
                 ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
                 solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
@@ -10473,8 +10457,8 @@ auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const
     coherenceMode = true;
 
     STD_DEFER {
-        assert(goalStack.empty());
-        assert(activeGoalIndex.empty());
+        BUG_ASSERT(goalStack.empty());
+        BUG_ASSERT(activeGoalIndex.empty());
         clearGoalCache();
         frameDepth = 0;
         coherenceMode = false;
@@ -10505,7 +10489,7 @@ auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const
     STD_DEFER {
         const bool encounteredOverflow = frames[frameIndex]->encounteredOverflow;
         frames[frameIndex]->clear(candidateNodes);
-        assert(frameDepth == frameIndex + 1);
+        BUG_ASSERT(frameDepth == frameIndex + 1);
         frameDepth--;
         if (encounteredOverflow && frameIndex > 0) {
             frames[frameIndex - 1]->encounteredOverflow = true;
@@ -10560,8 +10544,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
 
     STD_DEFER {
         if (outermost) {
-            assert(goalStack.empty());
-            assert(activeGoalIndex.empty());
+            BUG_ASSERT(goalStack.empty());
+            BUG_ASSERT(activeGoalIndex.empty());
             if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
                 ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
                 solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
@@ -11021,7 +11005,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     STD_DEFER {
         const bool encounteredOverflow = frames[frameIndex]->encounteredOverflow;
         frames[frameIndex]->clear(candidateNodes);
-        assert(frameDepth == frameIndex + 1);
+        BUG_ASSERT(frameDepth == frameIndex + 1);
         frameDepth--;
         if (encounteredOverflow && frameIndex > 0) {
             frames[frameIndex - 1]->encounteredOverflow = true;

@@ -16,9 +16,7 @@ namespace {
 
         bool visitLvalue(const MIRLValue& lv, MIRValUsage u) override;
     };
-}
 
-namespace {
     struct ValueLifetime {
         std::vector<bool> stmtBitmap;
 
@@ -28,6 +26,440 @@ namespace {
 
         void dumpDebug(const char* suffix, unsigned i, const std::vector<size_t>& blockOffsets);
     };
+
+    void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& state, const MIRFunction& fcn, size_t bbIdx, size_t stmtIdx, const MIRLValue& lv, const std::vector<size_t>& blockOffsets, const std::vector<bool>& useBitmap, ValueLifetime& vl);
+
+    void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& localMirRes, const MIRFunction& fcn, size_t bbIdx, size_t stmtIdx, const MIRLValue& lv, const std::vector<size_t>& blockOffsets, const std::vector<bool>& useBitmap, ValueLifetime& vl) {
+        struct State {
+            const std::vector<size_t>& blockOffsets;
+            ValueLifetime& outVl;
+
+            std::vector<unsigned int> bbHistory;
+            size_t lastReadOfs;
+            bool isBorrowed_;
+
+            State(const std::vector<size_t>& blockOffsets, ValueLifetime& vl, size_t initBbIdx, size_t initStmtIdx)
+                : blockOffsets(blockOffsets)
+                , outVl(vl)
+                , bbHistory()
+                , lastReadOfs(initStmtIdx)
+                , isBorrowed_(false)
+            {
+                bbHistory.push_back(initBbIdx);
+            }
+
+            State(State&& x)
+                : blockOffsets(x.blockOffsets)
+                , outVl(x.outVl)
+                , bbHistory(mv$(x.bbHistory))
+                , lastReadOfs(x.lastReadOfs)
+                , isBorrowed_(x.isBorrowed_)
+            {
+            }
+
+            State& operator=(State&& x) {
+                this->bbHistory = mv$(x.bbHistory);
+                this->lastReadOfs = x.lastReadOfs;
+                this->isBorrowed_ = x.isBorrowed_;
+                return *this;
+            }
+
+            State clone() const {
+                State rv{blockOffsets, outVl, 0, lastReadOfs};
+                rv.bbHistory = bbHistory;
+                rv.isBorrowed_ = isBorrowed_;
+                return rv;
+            }
+
+            bool isBorrowed() const {
+                return this->isBorrowed_;
+            }
+
+            void markBorrowed(size_t stmtIdx) {
+                if (!isBorrowed_) {
+                    isBorrowed_ = false;
+                    this->fillTo(stmtIdx);
+                }
+                isBorrowed_ = true;
+            }
+
+            void markRead(size_t stmtIdx) {
+                if (!isBorrowed_) {
+                    this->fillTo(stmtIdx);
+                } else {
+                    isBorrowed_ = false;
+                    this->fillTo(stmtIdx);
+                    isBorrowed_ = true;
+                }
+            }
+
+            void fmt(std::ostream& os) const {
+                os << "BB" << bbHistory.front() << "/" << lastReadOfs << "--";
+                os << "[" << bbHistory << "]";
+            }
+
+            void finalise(size_t stmtIdx) {
+                if (isBorrowed_) {
+                    isBorrowed_ = false;
+                    this->fillTo(stmtIdx);
+                    isBorrowed_ = true;
+                }
+            }
+
+            void fillTo(size_t stmtIdx) {
+                BUG_ASSERT(!isBorrowed_);
+                BUG_ASSERT(bbHistory.size() > 0);
+                if (bbHistory.size() == 1) {
+                    outVl.fill(blockOffsets, bbHistory[0], lastReadOfs, stmtIdx);
+                } else {
+                    auto initBbIdx = bbHistory[0];
+                    auto limit0 = blockOffsets[initBbIdx + 1] - blockOffsets[initBbIdx] - 1;
+                    outVl.fill(blockOffsets, initBbIdx, lastReadOfs, limit0);
+
+                    for (size_t i = 1; i < bbHistory.size() - 1; i++) {
+                        size_t bbIdx = bbHistory[i];
+                        BUG_ASSERT(bbIdx + 1 < blockOffsets.size());
+                        size_t limit = blockOffsets[bbIdx + 1] - blockOffsets[bbIdx] - 1;
+                        outVl.fill(blockOffsets, bbIdx, 0, limit);
+                    }
+
+                    auto bbIdx = bbHistory.back();
+                    outVl.fill(blockOffsets, bbIdx, 0, stmtIdx);
+                }
+
+                lastReadOfs = stmtIdx;
+
+                auto cur = this->bbHistory.back();
+                this->bbHistory.clear();
+                this->bbHistory.push_back(cur);
+            }
+        };
+
+        struct Runner {
+            MIRTypeResolve& mirRes;
+            const MIRFunction& fcn;
+            size_t initBbIdx;
+            size_t initStmtIdx;
+            const MIRLValue& lv;
+            const std::vector<size_t>& blockOffsets;
+            ValueLifetime& lifetimes;
+            bool isCopy;
+
+            std::vector<bool> visitedStatements;
+
+            std::vector<std::pair<size_t, State>> statesToDo;
+
+            Runner(MIRTypeResolve& localMirRes, const MIRFunction& fcn, size_t initBbIdx, size_t initStmtIdx, const MIRLValue& lv, const std::vector<size_t>& blockOffsets, ValueLifetime& vl)
+                : mirRes(localMirRes)
+                , fcn(fcn)
+                , initBbIdx(initBbIdx)
+                , initStmtIdx(initStmtIdx)
+                , lv(lv)
+                , blockOffsets(blockOffsets)
+                , lifetimes(vl)
+                , visitedStatements(lifetimes.stmtBitmap.size())
+            {
+                HIRTypeRef tmp;
+                isCopy = mirRes.resolve.typeIsCopy(localMirRes.sp, mirRes.getLvalueType(tmp, lv));
+            }
+
+            void runBlock(size_t bbIdx, size_t stmtIdx, State state) {
+                const auto& bb = fcn.blocks.at(bbIdx);
+                BUG_ASSERT(stmtIdx <= bb.statements.size());
+
+                bool wasMoved = false;
+                bool wasUpdated = false;
+                auto visitCb = [&](const auto& lv, auto vu) {
+                    if (lv.root == this->lv.root) {
+                        switch (vu) {
+                            case MIRValUsage::Read:
+                                state.markRead(stmtIdx);
+                                wasUpdated = true;
+                                break;
+                            case MIRValUsage::Move:
+                                if (lv.wrappers.size() == this->lv.wrappers.size()) {
+                                    state.markRead(stmtIdx);
+                                    wasMoved = !isCopy;
+                                } else {
+                                    state.markRead(stmtIdx);
+                                    wasUpdated = true;
+                                }
+                                break;
+                            case MIRValUsage::Borrow:
+                                state.markBorrowed(stmtIdx);
+                                wasUpdated = true;
+                                break;
+                            case MIRValUsage::Write:
+                                break;
+                        }
+                    }
+                    for (const auto& w : lv.wrappers) {
+                        if (w.is_Index() && this->lv.is_Local() && w.as_Index() == this->lv.as_Local()) {
+                            state.markRead(stmtIdx);
+                            wasUpdated = true;
+                        }
+                    }
+                    return false;
+                };
+
+                for (; stmtIdx < bb.statements.size(); stmtIdx++) {
+                    const auto& stmt = bb.statements[stmtIdx];
+                    mirRes.setCurStmt(bbIdx, stmtIdx);
+                    visitedStatements[blockOffsets.at(bbIdx) + stmtIdx] = true;
+
+                    wasUpdated = false;
+                    visitMirLvalues(stmt, visitCb);
+                    if (wasUpdated || wasMoved) {
+                    }
+
+                    if (wasMoved) {
+                        state.markRead(stmtIdx);
+                        state.finalise(stmtIdx);
+                        return;
+                    }
+
+                    switch (stmt.tag()) {
+                        case MIRStatement::TAG_Assign: {
+                            auto& se = stmt.as_Assign();
+                            if (se.dst == lv) {
+                                state.finalise(stmtIdx);
+                                return;
+                            }
+                            break;
+                        }
+                        case MIRStatement::TAG_Asm: {
+                            auto& se = stmt.as_Asm();
+                            for (const auto& e : se.outputs) {
+                                if (e.second == lv) {
+                                    state.finalise(stmtIdx);
+                                    return;
+                                }
+                            }
+                            break;
+                        }
+                        case MIRStatement::TAG_Asm2: {
+                            auto& se = stmt.as_Asm2();
+                            for (const auto& p : se.params) {
+                                switch (p.tag()) {
+                                    case MIRAsmParam::TAG_Const: {
+                                        break;
+                                    }
+                                    case MIRAsmParam::TAG_Sym: {
+                                        break;
+                                    }
+                                    case MIRAsmParam::TAG_Reg: {
+                                        auto& v = p.as_Reg();
+                                        if (v.output) {
+                                            if (*v.output == lv) {
+                                                state.finalise(stmtIdx);
+                                                return;
+                                            }
+                                        }
+                                        break;
+                                    }
+                                    case MIRAsmParam::TAG_Label: {
+                                        break;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                        case MIRStatement::TAG_SetDropFlag: {
+                            break;
+                        }
+                        case MIRStatement::TAG_SaveDropFlag: {
+                            break;
+                        }
+                        case MIRStatement::TAG_LoadDropFlag: {
+                            break;
+                        }
+                        case MIRStatement::TAG_ScopeEnd: {
+                            break;
+                        }
+                    }
+                }
+                mirRes.setCurStmtTerm(bbIdx);
+                visitedStatements[blockOffsets.at(bbIdx) + stmtIdx] = true;
+
+                wasUpdated = false;
+                visitMirLvalues(bb.terminator, visitCb);
+
+                if (wasMoved) {
+                    state.markRead(stmtIdx);
+                    state.finalise(stmtIdx);
+                    return;
+                }
+
+                switch (bb.terminator.tag()) {
+                    case MIRTerminator::TAG_Incomplete: {
+                        // TODO: Isn't this a bug?
+                        state.finalise(stmtIdx);
+                        break;
+                    }
+                    case MIRTerminator::TAG_Return: {
+                        state.finalise(stmtIdx);
+                        break;
+                    }
+                    case MIRTerminator::TAG_UnwindResume: {
+                        state.finalise(stmtIdx);
+                        break;
+                    }
+                    case MIRTerminator::TAG_UnwindTerminate: {
+                        state.finalise(stmtIdx);
+                        break;
+                    }
+                    case MIRTerminator::TAG_Unreachable: {
+                        state.finalise(stmtIdx);
+                        break;
+                    }
+                    case MIRTerminator::TAG_Goto: {
+                        auto& te = bb.terminator.as_Goto();
+                        statesToDo.push_back(std::make_pair(te, mv$(state)));
+                        break;
+                    }
+                    case MIRTerminator::TAG_If: {
+                        auto& te = bb.terminator.as_If();
+                        statesToDo.push_back(std::make_pair(te.bbTrue, state.clone()));
+                        statesToDo.push_back(std::make_pair(te.bbFalse, mv$(state)));
+                        break;
+                    }
+                    case MIRTerminator::TAG_Switch: {
+                        auto& te = bb.terminator.as_Switch();
+                        for (size_t i = 0; i < te.targets.size(); i++) {
+                            statesToDo.push_back(std::make_pair(te.targets[i], state.clone()));
+                        }
+                        if (te.validFlag != ~0u) {
+                            statesToDo.push_back(std::make_pair(te.invalidTarget, mv$(state)));
+                        }
+                        break;
+                    }
+                    case MIRTerminator::TAG_SwitchValue: {
+                        auto& te = bb.terminator.as_SwitchValue();
+                        for (size_t i = 0; i < te.targets.size(); i++) {
+                            statesToDo.push_back(std::make_pair(te.targets[i], state.clone()));
+                        }
+                        statesToDo.push_back(std::make_pair(te.defTarget, mv$(state)));
+                        break;
+                    }
+                    case MIRTerminator::TAG_Drop: {
+                        auto& te = bb.terminator.as_Drop();
+                        if (te.slot == lv) {
+                            state.markRead(stmtIdx);
+                            state.finalise(stmtIdx);
+                            return;
+                        }
+                        if (te.unwind.is_Cleanup()) {
+                            auto& target = te.unwind.as_Cleanup();
+                            statesToDo.push_back(std::make_pair(target, state.clone()));
+                        }
+                        statesToDo.push_back(std::make_pair(te.target, mv$(state)));
+                        break;
+                    }
+                    case MIRTerminator::TAG_Call: {
+                        auto& te = bb.terminator.as_Call();
+                        if (te.retVal == lv) {
+                            state.finalise(stmtIdx);
+                            return;
+                        }
+                        if (te.unwind.is_Cleanup()) {
+                            auto& target = te.unwind.as_Cleanup();
+                            statesToDo.push_back(std::make_pair(target, state.clone()));
+                        }
+                        statesToDo.push_back(std::make_pair(te.retBlock, mv$(state)));
+                        break;
+                    }
+                    case MIRTerminator::TAG_TailCall: {
+                        state.finalise(stmtIdx);
+                        break;
+                    }
+                    case MIRTerminator::TAG_Asm2: {
+                        auto& te = bb.terminator.as_Asm2();
+                        for (const auto& p : te.params) {
+                            if (const auto* reg = p.opt_Reg()) {
+                                if (reg->output && *reg->output == lv) {
+                                    state.finalise(stmtIdx);
+                                    return;
+                                }
+                            }
+                        }
+                        bool hasTarget = false;
+                        if (te.retBlock != ~0u) {
+                            statesToDo.push_back(std::make_pair(te.retBlock, state.clone()));
+                            hasTarget = true;
+                        }
+                        for (const auto& p : te.params) {
+                            if (const auto* target = p.opt_Label()) {
+                                statesToDo.push_back(std::make_pair(*target, state.clone()));
+                                hasTarget = true;
+                            }
+                        }
+                        if (!hasTarget) {
+                            state.finalise(stmtIdx);
+                        }
+                        break;
+                    }
+                }
+            }
+        };
+
+        Runner runner(localMirRes, fcn, bbIdx, stmtIdx, lv, blockOffsets, vl);
+        std::vector<std::pair<size_t, State>> postCheckList;
+
+        // TODO: Have a bitmap of visited statements. If a visted statement is hit, stop the current state
+
+        runner.runBlock(bbIdx, stmtIdx, State(blockOffsets, vl, bbIdx, stmtIdx));
+
+        while (!runner.statesToDo.empty()) {
+            auto bbIdx = runner.statesToDo.back().first;
+            auto state = mv$(runner.statesToDo.back().second);
+            runner.statesToDo.pop_back();
+
+            state.bbHistory.push_back(bbIdx);
+
+            if (runner.visitedStatements.at(blockOffsets.at(bbIdx) + 0)) {
+                if (vl.stmtBitmap.at(blockOffsets.at(bbIdx) + 0)) {
+                    state.markRead(0);
+                    state.finalise(0);
+                    continue;
+                } else if (state.isBorrowed()) {
+                    state.markRead(0);
+                    state.finalise(0);
+                    continue;
+                } else {
+                    postCheckList.push_back(std::make_pair(bbIdx, mv$(state)));
+                    continue;
+                }
+            }
+
+            if (vl.stmtBitmap.at(blockOffsets.at(bbIdx) + 0)) {
+                state.markRead(0);
+                state.finalise(0);
+                continue;
+            }
+
+            runner.runBlock(bbIdx, 0, mv$(state));
+        }
+
+        while (!postCheckList.empty()) {
+            bool change = false;
+            for (auto it = postCheckList.begin(); it != postCheckList.end();) {
+                auto bbIdx = it->first;
+                auto& state = it->second;
+                if (vl.stmtBitmap.at(blockOffsets.at(bbIdx) + 0)) {
+                    change = true;
+                    state.markRead(0);
+                    state.finalise(0);
+
+                    it = postCheckList.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+            if (!change) {
+                break;
+            }
+        }
+    }
 }
 
 void MIRTypeResolve::fmtPos(std::ostream& os, bool includePath /*=false*/) const {
@@ -110,7 +542,7 @@ const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValu
         }
     }
     if (val.wrappers.size() > 0) {
-        assert(wrapperSkipCount <= val.wrappers.size());
+        BUG_ASSERT(wrapperSkipCount <= val.wrappers.size());
         const auto* stopWrapper = val.wrappers.data() + (val.wrappers.size() - wrapperSkipCount);
         for (const auto& w : val.wrappers) {
             if (&w == stopWrapper) {
@@ -119,7 +551,7 @@ const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValu
             rv = this->getUnwrappedType(tmp, w, rv);
         }
     } else {
-        assert(wrapperSkipCount == 0);
+        BUG_ASSERT(wrapperSkipCount == 0);
     }
     return rv;
 }
@@ -814,9 +1246,6 @@ void visitTerminatorTarget(const MIRTerminator& term, MIRTargetVisitor& cb) {
 }
 
 #if 1
-namespace {
-    void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& state, const MIRFunction& fcn, size_t bbIdx, size_t stmtIdx, const MIRLValue& lv, const std::vector<size_t>& blockOffsets, const std::vector<bool>& useBitmap, ValueLifetime& vl);
-}
 
 // TODO: Improved algorithm
 
@@ -905,443 +1334,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         rv.slots.push_back(MIRValueLifetime(mv$(lft.stmtBitmap)));
     }
     return rv;
-}
-
-namespace {
-    void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& localMirRes, const MIRFunction& fcn, size_t bbIdx, size_t stmtIdx, const MIRLValue& lv, const std::vector<size_t>& blockOffsets, const std::vector<bool>& useBitmap, ValueLifetime& vl) {
-        struct State {
-            const std::vector<size_t>& blockOffsets;
-            ValueLifetime& outVl;
-
-            std::vector<unsigned int> bbHistory;
-            size_t lastReadOfs;
-            bool isBorrowed_;
-
-            State(const std::vector<size_t>& blockOffsets, ValueLifetime& vl, size_t initBbIdx, size_t initStmtIdx)
-                : blockOffsets(blockOffsets)
-                , outVl(vl)
-                , bbHistory()
-                , lastReadOfs(initStmtIdx)
-                , isBorrowed_(false)
-            {
-                bbHistory.push_back(initBbIdx);
-            }
-
-            State(State&& x)
-                : blockOffsets(x.blockOffsets)
-                , outVl(x.outVl)
-                , bbHistory(mv$(x.bbHistory))
-                , lastReadOfs(x.lastReadOfs)
-                , isBorrowed_(x.isBorrowed_)
-            {
-            }
-
-            State& operator=(State&& x) {
-                this->bbHistory = mv$(x.bbHistory);
-                this->lastReadOfs = x.lastReadOfs;
-                this->isBorrowed_ = x.isBorrowed_;
-                return *this;
-            }
-
-            State clone() const {
-                State rv{blockOffsets, outVl, 0, lastReadOfs};
-                rv.bbHistory = bbHistory;
-                rv.isBorrowed_ = isBorrowed_;
-                return rv;
-            }
-
-            bool isBorrowed() const {
-                return this->isBorrowed_;
-            }
-
-            void markBorrowed(size_t stmtIdx) {
-                if (!isBorrowed_) {
-                    isBorrowed_ = false;
-                    this->fillTo(stmtIdx);
-                }
-                isBorrowed_ = true;
-            }
-
-            void markRead(size_t stmtIdx) {
-                if (!isBorrowed_) {
-                    this->fillTo(stmtIdx);
-                } else {
-                    isBorrowed_ = false;
-                    this->fillTo(stmtIdx);
-                    isBorrowed_ = true;
-                }
-            }
-
-            void fmt(std::ostream& os) const {
-                os << "BB" << bbHistory.front() << "/" << lastReadOfs << "--";
-                os << "[" << bbHistory << "]";
-            }
-
-            void finalise(size_t stmtIdx) {
-                if (isBorrowed_) {
-                    isBorrowed_ = false;
-                    this->fillTo(stmtIdx);
-                    isBorrowed_ = true;
-                }
-            }
-
-            void fillTo(size_t stmtIdx) {
-                assert(!isBorrowed_);
-                assert(bbHistory.size() > 0);
-                if (bbHistory.size() == 1) {
-                    outVl.fill(blockOffsets, bbHistory[0], lastReadOfs, stmtIdx);
-                } else {
-                    auto initBbIdx = bbHistory[0];
-                    auto limit0 = blockOffsets[initBbIdx + 1] - blockOffsets[initBbIdx] - 1;
-                    outVl.fill(blockOffsets, initBbIdx, lastReadOfs, limit0);
-
-                    for (size_t i = 1; i < bbHistory.size() - 1; i++) {
-                        size_t bbIdx = bbHistory[i];
-                        assert(bbIdx + 1 < blockOffsets.size());
-                        size_t limit = blockOffsets[bbIdx + 1] - blockOffsets[bbIdx] - 1;
-                        outVl.fill(blockOffsets, bbIdx, 0, limit);
-                    }
-
-                    auto bbIdx = bbHistory.back();
-                    outVl.fill(blockOffsets, bbIdx, 0, stmtIdx);
-                }
-
-                lastReadOfs = stmtIdx;
-
-                auto cur = this->bbHistory.back();
-                this->bbHistory.clear();
-                this->bbHistory.push_back(cur);
-            }
-        };
-
-        struct Runner {
-            MIRTypeResolve& mirRes;
-            const MIRFunction& fcn;
-            size_t initBbIdx;
-            size_t initStmtIdx;
-            const MIRLValue& lv;
-            const std::vector<size_t>& blockOffsets;
-            ValueLifetime& lifetimes;
-            bool isCopy;
-
-            std::vector<bool> visitedStatements;
-
-            std::vector<std::pair<size_t, State>> statesToDo;
-
-            Runner(MIRTypeResolve& localMirRes, const MIRFunction& fcn, size_t initBbIdx, size_t initStmtIdx, const MIRLValue& lv, const std::vector<size_t>& blockOffsets, ValueLifetime& vl)
-                : mirRes(localMirRes)
-                , fcn(fcn)
-                , initBbIdx(initBbIdx)
-                , initStmtIdx(initStmtIdx)
-                , lv(lv)
-                , blockOffsets(blockOffsets)
-                , lifetimes(vl)
-                ,
-
-                visitedStatements(lifetimes.stmtBitmap.size())
-            {
-                HIRTypeRef tmp;
-                isCopy = mirRes.resolve.typeIsCopy(localMirRes.sp, mirRes.getLvalueType(tmp, lv));
-            }
-
-            void runBlock(size_t bbIdx, size_t stmtIdx, State state) {
-                const auto& bb = fcn.blocks.at(bbIdx);
-                assert(stmtIdx <= bb.statements.size());
-
-                bool wasMoved = false;
-                bool wasUpdated = false;
-                auto visitCb = [&](const auto& lv, auto vu) {
-                    if (lv.root == this->lv.root) {
-                        switch (vu) {
-                            case MIRValUsage::Read:
-                                state.markRead(stmtIdx);
-                                wasUpdated = true;
-                                break;
-                            case MIRValUsage::Move:
-                                if (lv.wrappers.size() == this->lv.wrappers.size()) {
-                                    state.markRead(stmtIdx);
-                                    wasMoved = !isCopy;
-                                } else {
-                                    state.markRead(stmtIdx);
-                                    wasUpdated = true;
-                                }
-                                break;
-                            case MIRValUsage::Borrow:
-                                state.markBorrowed(stmtIdx);
-                                wasUpdated = true;
-                                break;
-                            case MIRValUsage::Write:
-                                break;
-                        }
-                    }
-                    for (const auto& w : lv.wrappers) {
-                        if (w.is_Index() && this->lv.is_Local() && w.as_Index() == this->lv.as_Local()) {
-                            state.markRead(stmtIdx);
-                            wasUpdated = true;
-                        }
-                    }
-                    return false;
-                };
-
-                for (; stmtIdx < bb.statements.size(); stmtIdx++) {
-                    const auto& stmt = bb.statements[stmtIdx];
-                    mirRes.setCurStmt(bbIdx, stmtIdx);
-                    visitedStatements[blockOffsets.at(bbIdx) + stmtIdx] = true;
-
-                    wasUpdated = false;
-                    visitMirLvalues(stmt, visitCb);
-                    if (wasUpdated || wasMoved) {
-                    }
-
-                    if (wasMoved) {
-                        state.markRead(stmtIdx);
-                        state.finalise(stmtIdx);
-                        return;
-                    }
-
-                    switch (stmt.tag()) {
-                        case MIRStatement::TAG_Assign: {
-                            auto& se = stmt.as_Assign();
-                            if (se.dst == lv) {
-                                state.finalise(stmtIdx);
-                                return;
-                            }
-                            break;
-                        }
-                        case MIRStatement::TAG_Asm: {
-                            auto& se = stmt.as_Asm();
-                            for (const auto& e : se.outputs) {
-                                if (e.second == lv) {
-                                    state.finalise(stmtIdx);
-                                    return;
-                                }
-                            }
-                            break;
-                        }
-                        case MIRStatement::TAG_Asm2: {
-                            auto& se = stmt.as_Asm2();
-                            for (const auto& p : se.params) {
-                                switch (p.tag()) {
-                                    case MIRAsmParam::TAG_Const: {
-                                        break;
-                                    }
-                                    case MIRAsmParam::TAG_Sym: {
-                                        break;
-                                    }
-                                    case MIRAsmParam::TAG_Reg: {
-                                        auto& v = p.as_Reg();
-                                        if (v.output) {
-                                            if (*v.output == lv) {
-                                                state.finalise(stmtIdx);
-                                                return;
-                                            }
-                                        }
-                                        break;
-                                    }
-                                    case MIRAsmParam::TAG_Label: {
-                                        break;
-                                    }
-                                }
-                            }
-                            break;
-                        }
-                        case MIRStatement::TAG_SetDropFlag: {
-                            break;
-                        }
-                        case MIRStatement::TAG_SaveDropFlag: {
-                            break;
-                        }
-                        case MIRStatement::TAG_LoadDropFlag: {
-                            break;
-                        }
-                        case MIRStatement::TAG_ScopeEnd: {
-                            break;
-                        }
-                    }
-                }
-                mirRes.setCurStmtTerm(bbIdx);
-                visitedStatements[blockOffsets.at(bbIdx) + stmtIdx] = true;
-
-                wasUpdated = false;
-                visitMirLvalues(bb.terminator, visitCb);
-
-                if (wasMoved) {
-                    state.markRead(stmtIdx);
-                    state.finalise(stmtIdx);
-                    return;
-                }
-
-                switch (bb.terminator.tag()) {
-                    case MIRTerminator::TAG_Incomplete: {
-                        // TODO: Isn't this a bug?
-                        state.finalise(stmtIdx);
-                        break;
-                    }
-                    case MIRTerminator::TAG_Return: {
-                        state.finalise(stmtIdx);
-                        break;
-                    }
-                    case MIRTerminator::TAG_UnwindResume: {
-                        state.finalise(stmtIdx);
-                        break;
-                    }
-                    case MIRTerminator::TAG_UnwindTerminate: {
-                        state.finalise(stmtIdx);
-                        break;
-                    }
-                    case MIRTerminator::TAG_Unreachable: {
-                        state.finalise(stmtIdx);
-                        break;
-                    }
-                    case MIRTerminator::TAG_Goto: {
-                        auto& te = bb.terminator.as_Goto();
-                        statesToDo.push_back(std::make_pair(te, mv$(state)));
-                        break;
-                    }
-                    case MIRTerminator::TAG_If: {
-                        auto& te = bb.terminator.as_If();
-                        statesToDo.push_back(std::make_pair(te.bbTrue, state.clone()));
-                        statesToDo.push_back(std::make_pair(te.bbFalse, mv$(state)));
-                        break;
-                    }
-                    case MIRTerminator::TAG_Switch: {
-                        auto& te = bb.terminator.as_Switch();
-                        for (size_t i = 0; i < te.targets.size(); i++) {
-                            statesToDo.push_back(std::make_pair(te.targets[i], state.clone()));
-                        }
-                        if (te.validFlag != ~0u) {
-                            statesToDo.push_back(std::make_pair(te.invalidTarget, mv$(state)));
-                        }
-                        break;
-                    }
-                    case MIRTerminator::TAG_SwitchValue: {
-                        auto& te = bb.terminator.as_SwitchValue();
-                        for (size_t i = 0; i < te.targets.size(); i++) {
-                            statesToDo.push_back(std::make_pair(te.targets[i], state.clone()));
-                        }
-                        statesToDo.push_back(std::make_pair(te.defTarget, mv$(state)));
-                        break;
-                    }
-                    case MIRTerminator::TAG_Drop: {
-                        auto& te = bb.terminator.as_Drop();
-                        if (te.slot == lv) {
-                            state.markRead(stmtIdx);
-                            state.finalise(stmtIdx);
-                            return;
-                        }
-                        if (te.unwind.is_Cleanup()) {
-                            auto& target = te.unwind.as_Cleanup();
-                            statesToDo.push_back(std::make_pair(target, state.clone()));
-                        }
-                        statesToDo.push_back(std::make_pair(te.target, mv$(state)));
-                        break;
-                    }
-                    case MIRTerminator::TAG_Call: {
-                        auto& te = bb.terminator.as_Call();
-                        if (te.retVal == lv) {
-                            state.finalise(stmtIdx);
-                            return;
-                        }
-                        if (te.unwind.is_Cleanup()) {
-                            auto& target = te.unwind.as_Cleanup();
-                            statesToDo.push_back(std::make_pair(target, state.clone()));
-                        }
-                        statesToDo.push_back(std::make_pair(te.retBlock, mv$(state)));
-                        break;
-                    }
-                    case MIRTerminator::TAG_TailCall: {
-                        state.finalise(stmtIdx);
-                        break;
-                    }
-                    case MIRTerminator::TAG_Asm2: {
-                        auto& te = bb.terminator.as_Asm2();
-                        for (const auto& p : te.params) {
-                            if (const auto* reg = p.opt_Reg()) {
-                                if (reg->output && *reg->output == lv) {
-                                    state.finalise(stmtIdx);
-                                    return;
-                                }
-                            }
-                        }
-                        bool hasTarget = false;
-                        if (te.retBlock != ~0u) {
-                            statesToDo.push_back(std::make_pair(te.retBlock, state.clone()));
-                            hasTarget = true;
-                        }
-                        for (const auto& p : te.params) {
-                            if (const auto* target = p.opt_Label()) {
-                                statesToDo.push_back(std::make_pair(*target, state.clone()));
-                                hasTarget = true;
-                            }
-                        }
-                        if (!hasTarget) {
-                            state.finalise(stmtIdx);
-                        }
-                        break;
-                    }
-                }
-            }
-        };
-
-        Runner runner(localMirRes, fcn, bbIdx, stmtIdx, lv, blockOffsets, vl);
-        std::vector<std::pair<size_t, State>> postCheckList;
-
-        // TODO: Have a bitmap of visited statements. If a visted statement is hit, stop the current state
-
-        runner.runBlock(bbIdx, stmtIdx, State(blockOffsets, vl, bbIdx, stmtIdx));
-
-        while (!runner.statesToDo.empty()) {
-            auto bbIdx = runner.statesToDo.back().first;
-            auto state = mv$(runner.statesToDo.back().second);
-            runner.statesToDo.pop_back();
-
-            state.bbHistory.push_back(bbIdx);
-
-            if (runner.visitedStatements.at(blockOffsets.at(bbIdx) + 0)) {
-                if (vl.stmtBitmap.at(blockOffsets.at(bbIdx) + 0)) {
-                    state.markRead(0);
-                    state.finalise(0);
-                    continue;
-                } else if (state.isBorrowed()) {
-                    state.markRead(0);
-                    state.finalise(0);
-                    continue;
-                } else {
-                    postCheckList.push_back(std::make_pair(bbIdx, mv$(state)));
-                    continue;
-                }
-            }
-
-            if (vl.stmtBitmap.at(blockOffsets.at(bbIdx) + 0)) {
-                state.markRead(0);
-                state.finalise(0);
-                continue;
-            }
-
-            runner.runBlock(bbIdx, 0, mv$(state));
-        }
-
-        while (!postCheckList.empty()) {
-            bool change = false;
-            for (auto it = postCheckList.begin(); it != postCheckList.end();) {
-                auto bbIdx = it->first;
-                auto& state = it->second;
-                if (vl.stmtBitmap.at(blockOffsets.at(bbIdx) + 0)) {
-                    change = true;
-                    state.markRead(0);
-                    state.finalise(0);
-
-                    it = postCheckList.erase(it);
-                } else {
-                    ++it;
-                }
-            }
-            if (!change) {
-                break;
-            }
-        }
-    }
-
 }
 
 #else
@@ -1502,8 +1494,8 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 
         // TODO: Maybe also store the range (as a sequence of {block,start,end})
         auto addLifetimeS = [&](State& valState, const MIRLValue& lv, const Position& start, const Position& end) {
-            assert(start.pathIndex <= end.pathIndex);
-            assert(start.pathIndex < end.pathIndex || start.stmtIdx <= end.stmtIdx);
+            BUG_ASSERT(start.pathIndex <= end.pathIndex);
+            BUG_ASSERT(start.pathIndex < end.pathIndex || start.stmtIdx <= end.stmtIdx);
             if (start.pathIndex == end.pathIndex && start.stmtIdx == end.stmtIdx) {
                 return;
             }
@@ -1607,7 +1599,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                 if (valState.blockChangeIdx[idx] == valState.curChangeIdx) {
                     continue;
                 } else {
-                    assert(valState.blockChangeIdx[idx] < valState.curChangeIdx);
+                    BUG_ASSERT(valState.blockChangeIdx[idx] < valState.curChangeIdx);
                 }
             } else {
             }
@@ -1815,14 +1807,14 @@ MIRTypeResolve::MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resol
 }
 
 void MIRTypeResolve::setCurStmt(const MIRBasicBlock& bb, const MIRStatement& stmt) {
-    assert(&stmt >= &bb.statements.front());
-    assert(&stmt <= &bb.statements.back());
+    BUG_ASSERT(&stmt >= &bb.statements.front());
+    BUG_ASSERT(&stmt <= &bb.statements.back());
     this->setCurStmt(bb, &stmt - bb.statements.data());
 }
 
 void MIRTypeResolve::setCurStmt(const MIRBasicBlock& bb, unsigned int stmtIdx) {
-    assert(&bb >= &fcn.blocks.front());
-    assert(&bb <= &fcn.blocks.back());
+    BUG_ASSERT(&bb >= &fcn.blocks.front());
+    BUG_ASSERT(&bb <= &fcn.blocks.back());
     this->setCurStmt(&bb - fcn.blocks.data(), stmtIdx);
 }
 
@@ -1832,8 +1824,8 @@ void MIRTypeResolve::setCurStmt(unsigned int bbIdx, unsigned int stmtIdx) {
 }
 
 void MIRTypeResolve::setCurStmtTerm(const MIRBasicBlock& bb) {
-    assert(&bb >= &fcn.blocks.front());
-    assert(&bb <= &fcn.blocks.back());
+    BUG_ASSERT(&bb >= &fcn.blocks.front());
+    BUG_ASSERT(&bb <= &fcn.blocks.back());
     this->setCurStmtTerm(&bb - fcn.blocks.data());
 }
 
@@ -1857,7 +1849,7 @@ bool MIRValueLifetime::isUsed() const {
 }
 
 bool MIRValueLifetime::overlaps(const MIRValueLifetime& x) const {
-    assert(statements.size() == x.statements.size());
+    BUG_ASSERT(statements.size() == x.statements.size());
     for (unsigned int i = 0; i < statements.size(); i++) {
         if (statements[i] && x.statements[i]) {
             return true;
@@ -1867,7 +1859,7 @@ bool MIRValueLifetime::overlaps(const MIRValueLifetime& x) const {
 }
 
 void MIRValueLifetime::unify(const MIRValueLifetime& x) {
-    assert(statements.size() == x.statements.size());
+    BUG_ASSERT(statements.size() == x.statements.size());
     for (unsigned int i = 0; i < statements.size(); i++) {
         if (x.statements[i]) {
             statements[i] = true;
@@ -1932,8 +1924,8 @@ ValueLifetime::ValueLifetime(size_t stmtCount)
 
 auto ValueLifetime::fill(const std::vector<size_t>& blockOffsets, size_t bb, size_t firstStmt, size_t lastStmt) -> void {
     size_t limit = blockOffsets[bb + 1] - blockOffsets[bb] - 1;
-    assert(firstStmt <= limit);
-    assert(lastStmt <= limit);
+    BUG_ASSERT(firstStmt <= limit);
+    BUG_ASSERT(lastStmt <= limit);
     for (size_t stmt = firstStmt; stmt <= lastStmt; stmt++) {
         stmtBitmap[blockOffsets[bb] + stmt] = true;
     }

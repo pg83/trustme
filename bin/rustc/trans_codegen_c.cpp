@@ -114,9 +114,7 @@ namespace {
 
         void emit() override;
     };
-}
 
-namespace {
     struct CodeGeneratorC: public CodeGenerator {
         Span sp;
 
@@ -528,9 +526,7 @@ namespace {
 
         bool isDst(const HIRTypeData* ty) const;
     };
-}
 
-namespace {
     std::ostream& operator<<(std::ostream& os, const FmtShell& x) {
         for (char c : x.s) {
             switch (c) {
@@ -544,9 +540,7 @@ namespace {
         }
         return os;
     }
-}
 
-namespace {
     std::ostream& operator<<(std::ostream& os, const FmtGccAsm& x) {
         bool inComment = false;
         for (const char& ch : x.s) {
@@ -588,9 +582,7 @@ namespace {
         }
         return os;
     }
-}
 
-namespace {
     enum class AtomicOp {
         Add,
         Sub,
@@ -598,7 +590,6 @@ namespace {
         Or,
         Xor
     };
-
 }
 
 std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile) { // escape: existing factory interface exposed by declaration reordering
@@ -1880,7 +1871,7 @@ auto CodeGeneratorC::emitUnion(const Span& sp, const HIRGenericPath& p, const HI
 
     of << "union u_" << TransMangle(p) << " {\n";
     for (unsigned int i = 0; i < repr->fields.size(); i++) {
-        assert(repr->fields[i].offset == 0);
+        BUG_ASSERT(repr->fields[i].offset == 0);
         of << "\t";
         emitCtype(repr->fields[i].ty, FMT_CB(ss, ss << "var_" << i;));
         of << ";\n";
@@ -1919,7 +1910,7 @@ auto CodeGeneratorC::emitEnumPath(const TypeRepr* repr, const TypeRepr::FieldPat
             of << ".DATA";
         }
         of << ".TAG";
-        assert(path.subFields.empty());
+        BUG_ASSERT(path.subFields.empty());
     } else {
         of << ".DATA.var_" << path.index;
     }
@@ -1927,7 +1918,7 @@ auto CodeGeneratorC::emitEnumPath(const TypeRepr* repr, const TypeRepr::FieldPat
     for (const auto& fld : path.subFields) {
         if (fld == TypeRepr::FieldPath::ARRAY_ELEMENT) {
             const auto* array = (*ty)->opt_Array();
-            assert(array && array->size.is_Known() && array->size.as_Known() > 0);
+            BUG_ASSERT(array && array->size.is_Known() && array->size.as_Known() > 0);
             of << ".DATA[0]";
             ty = &array->inner;
             continue;
@@ -1938,7 +1929,7 @@ auto CodeGeneratorC::emitEnumPath(const TypeRepr* repr, const TypeRepr::FieldPat
                 of << ".DATA";
             }
             of << ".TAG";
-            assert(&fld == &path.subFields.back());
+            BUG_ASSERT(&fld == &path.subFields.back());
         } else if (/*!repr->variants.is_None() ||*/ ((**ty).is_Path() && ((**ty).as_Path().binding.is_Enum()))) {
             of << ".DATA.var_" << fld;
         } else {
@@ -2010,10 +2001,10 @@ auto CodeGeneratorC::emitEnum(const Span& sp, const HIRGenericPath& p, const HIR
     } else if (unionFields.size() > 0) {
         if (unionFields.size() == repr->fields.size()) {
         } else {
-            assert(unionFields.size() + 1 == repr->fields.size());
-            assert(isEnumTag(repr, repr->fields.size() - 1));
+            BUG_ASSERT(unionFields.size() + 1 == repr->fields.size());
+            BUG_ASSERT(isEnumTag(repr, repr->fields.size() - 1));
 
-            assert(repr->fields.back().offset == 0);
+            BUG_ASSERT(repr->fields.back().offset == 0);
 
             of << "\t";
             emitCtype(repr->fields.back().ty, FMT_CB(os, os << "TAG"));
@@ -3060,7 +3051,6 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << "\tu32 lo, hi;\n";
             of << "\t__asm__ __volatile__ (\"xgetbv\" : \"=a\" (lo), \"=d\" (hi) : \"c\" (arg0) );\n";
             of << "\treturn lo | ((u64)hi << 32);\n";
-
         } else if (item.linkage.name == "llvm.x86.sse2.pause") {
             of << "\t__asm__ __volatile__ (\"pause\");\n";
 
@@ -4074,7 +4064,7 @@ auto CodeGeneratorC::emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType
     }
     if (!special && options.disallowEmptyStructs && zstField.is_Field() && this->typeIsBadZst(ty)) {
         auto valFp = zstField;
-        assert(valFp.is_Field());
+        BUG_ASSERT(valFp.is_Field());
         while (valFp.innerRef().is_Field()) {
             HIRTypeRef tmp;
             const auto& ty = localMirRes.getLvalueType(tmp, valFp.innerRef());
@@ -4083,7 +4073,7 @@ auto CodeGeneratorC::emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType
             }
             valFp.tryUnwrap();
         }
-        assert(valFp.is_Field());
+        BUG_ASSERT(valFp.is_Field());
 
         auto fieldInner = valFp.innerRef();
         if (fieldInner.is_Downcast()) {
@@ -4125,7 +4115,7 @@ auto CodeGeneratorC::emitBorrow(const MIRTypeResolve& localMirRes, HIRBorrowType
                 of << " + " << elementSize * valFp.as_Field() << ")";
             } else {
                 auto* repr = TargetGetTypeRepr(sp, resolve_, parentTy);
-                assert(repr);
+                BUG_ASSERT(repr);
                 size_t nParentFields = repr->fields.size();
                 auto tmpLv = MIRLValue::newField(fieldInner.clone(), valFp.as_Field() + 1);
                 bool found = false;
@@ -4244,7 +4234,6 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
             emitLvalue(e.slot);
             of << ".DATA[" << (e.bitIndex / 8) << "] &= ~(1 << " << (e.bitIndex % 8) << ");";
             of << " }\n";
-
         } break;
             break;
         case MIRStatement::TAG_LoadDropFlag: {
@@ -4253,7 +4242,6 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
             emitLvalue(e.slot);
             of << ".DATA[" << (e.bitIndex / 8) << "] & (1 << " << (e.bitIndex % 8) << ")) != 0)";
             of << ";\n";
-
         } break;
         case MIRStatement::TAG_Asm:
             this->emitAsmGcc(localMirRes, stmt.as_Asm(), indentLevel);
@@ -6410,7 +6398,7 @@ auto CodeGeneratorC::emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOpt
                             }
                         }
                     }
-                    assert(r.input);
+                    BUG_ASSERT(r.input);
                     of << "\" (";
                     const auto shimIdx = paramIndexOf(&r);
                     if (const auto* regnameP = p.as_Reg().spec.opt_Explicit()) {
@@ -7017,7 +7005,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                 if (const auto* te = innerTy->opt_Slice()) {
                     MIR_ASSERT(localMirRes, TargetGetSizeAndAlignOf(sp, resolve_, te->inner, itemSize, itemAlign), "Can't get size of " << te->inner);
                 } else {
-                    assert(innerTy == HIRCoreType::Str);
+                    BUG_ASSERT(innerTy == HIRCoreType::Str);
                     itemSize = 1;
                     itemAlign = 1;
                 }
@@ -7151,11 +7139,11 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                 of << ".META = ";
                 switch (dstMeta) {
                     case MetadataType::Unknown:
-                        assert(!"Impossible");
+                        BUG_ASSERT(!"Impossible");
                     case MetadataType::None:
-                        assert(!"Impossible");
+                        BUG_ASSERT(!"Impossible");
                     case MetadataType::Zero:
-                        assert(!"Impossible");
+                        BUG_ASSERT(!"Impossible");
                     case MetadataType::Slice:
                         of << "(size_t)";
                         break;
@@ -7501,7 +7489,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                     emitParam(e.args.at(0));
                     of << ")";
                     emitEnumPath(repr, ve.field);
-
                 } break;
                     break;
                 case TypeReprVariantMode::TAG_Linear: {
@@ -7535,7 +7522,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                     } else {
                         emitTag();
                     }
-
                 } break;
                     break;
                 case TypeReprVariantMode::TAG_NonZero: {
@@ -7547,13 +7533,11 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                     of << " ";
                     of << (ve.zeroVariant ? "==" : "!=");
                     of << " 0";
-
                 } break;
             }
         }
     } else if (name == "unreachable") {
         of << "__builtin_unreachable()";
-
     } else if (name == "assume") {
     } else if (name == "likely" || name == "unlikely") {
         emitLvalue(e.retVal);
@@ -7588,9 +7572,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             of << ", &";
             emitLvalue(e.retVal);
             of << "._0)";
-        } else
-
-        {
+        } else {
             emitLvalue(e.retVal);
             of << "._1 = __builtin_add_overflow";
             of << "(";
@@ -8641,7 +8623,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             emitAtomicCast();
             emitParam(e.args.at(0));
             of << ", " << getAtomicTyGcc(ordering) << ")";
-
         } else if (name == "atomic_store" || name.compare(0, 7 + 5 + 1, "atomic_store_") == 0) {
             auto ordering = getAtomicOrdering(name, 7 + 5 + 1);
             of << "__atomic_store_n(";
@@ -8650,7 +8631,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             of << ", ";
             emitParam(e.args.at(1));
             of << ", " << getAtomicTyGcc(ordering) << ")";
-
         } else if (name == "atomic_cxchg_acq_failrelaxed") {
             emitAtomicCxchg(e, Ordering::Acquire, Ordering::Relaxed, false);
         } else if (name == "atomic_cxchg_acqrel_failrelaxed") {
@@ -8695,11 +8675,9 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             of << ", ";
             emitParam(e.args.at(1));
             of << ", " << getAtomicTyGcc(ordering) << ")";
-
         } else if (name == "atomic_fence" || name.compare(0, 7 + 6, "atomic_fence_") == 0) {
             auto ordering = getAtomicOrdering(name, 7 + 6);
             of << "__atomic_thread_fence(" << getAtomicTyGcc(ordering) << ")";
-
         } else if (name == "atomic_singlethreadfence" || name.compare(0, 7 + 18, "atomic_singlethreadfence_") == 0) {
             // TODO: Does this matter?
         } else {
@@ -9236,9 +9214,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             emitParam(e.args.at(2));
             of << ")[i]";
             of << ")";
-        }
-
-        else {
+        } else {
             // TODO: Platform intrinsics
             of << "assert(!\"TODO: Platform intrinsic \\\"" << name << "\\\"\")";
         }
@@ -9836,7 +9812,7 @@ auto CodeGeneratorC::emitConstant(const MIRConstant& ve, const MIRLValue* dstPtr
                     }
                     break;
                 case HIRCoreType::Char:
-                    assert(c.v <= 0x10FFFF);
+                    BUG_ASSERT(c.v <= 0x10FFFF);
                     if (c.v < 256) {
                         of << c.v;
                     } else {

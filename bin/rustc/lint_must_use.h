@@ -9,6 +9,6 @@
 struct WireBoard;
 class HIRCrate;
 
-extern CfgLintLevel LintUnusedMustUseLevel(const Settings& settings);
+CfgLintLevel LintUnusedMustUseLevel(const Settings& settings);
 
-extern void LintUnusedMustUse(const WireBoard& wb, HIRCrate& crate);
+void LintUnusedMustUse(const WireBoard& wb, HIRCrate& crate);

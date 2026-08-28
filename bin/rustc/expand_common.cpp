@@ -170,64 +170,14 @@ namespace {
 
         void visit(ASTExprNodeMacroDefinition&) override;
     };
-}
 
-void ExpandRegistry::addDecorator(const char* name, ExpandDecorator* handler) {
-    decorators = pool->make<DecoratorEntry>(DecoratorEntry{name, handler, decorators});
-}
-
-void ExpandRegistry::addMacro(const char* name, ExpandProcMacro* handler) {
-    macros = pool->make<MacroEntry>(MacroEntry{name, handler, macros});
-}
-
-ExpandProcMacro* ExpandRegistry::findMacro(const RcString& name) const {
-    for (auto* entry = macros; entry; entry = entry->next) {
-        if (name == entry->name) {
-            return entry->handler;
-        }
-    }
-    return nullptr;
-}
-
-ExpandDecorator* ExpandRegistry::findDecorator(const RcString& name) const {
-    for (auto* entry = decorators; entry; entry = entry->next) {
-        if (name == entry->name) {
-            return entry->handler;
-        }
-    }
-    return nullptr;
-}
-
-void ExpandInit(ExpandRegistry& registry) {
-    RegisterBuiltinDecorators(registry);
-    RegisterBuiltinMacros(registry);
-    RegisterSynextBuiltins(registry);
-    RegisterCfgBuiltins(registry);
-    RegisterProcMacroBuiltins(registry);
-}
-
-void ExpandDecorator::unexpected(const Span& sp, const ASTAttribute& mi, const char* locStr) const {
-    WARNING(sp, W0000, "Unexpected attribute " << mi.name() << " on " << locStr);
-}
-
-ExpandProcMacro* ExpandFindProcMacro(const WireBoard& wb, const RcString& name) {
-    return wb.expandRegistry->findMacro(name);
-}
-
-ExpandDecorator* ExpandFindDecorator(const WireBoard& wb, const RcString& name) {
-    return wb.expandRegistry->findDecorator(name);
-}
-
-namespace {
     void ParseModRootItemsInto(ASTModule& mod, size_t idx, TokenStream& lex) {
         auto oldItems = std::move(mod.items);
         ParseModRootItems(lex, mod);
         oldItems.insert(oldItems.begin() + idx + 1, std::make_move_iterator(mod.items.begin()), std::make_move_iterator(mod.items.end()));
         mod.items = std::move(oldItems);
     }
-}
 
-namespace {
     void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, AttrStage stage, const ExpandAttrCallback& f) {
         bool found = false;
         if (a.name().elems.empty()) {
@@ -349,7 +299,7 @@ namespace {
                             auto lex = ProcMacroInvoke(sp, wb, crate, this->macPath, attr.data(), attrs, vis, name, i);
                             if (lex) {
                                 i = ASTItem::make_None({});
-                                assert(currentMod);
+                                BUG_ASSERT(currentMod);
                                 lex->parseState().module = currentMod;
                                 while (lex->lookahead(0) != TOK_EOF) {
                                     ParseImplItem(*lex, impl);
@@ -382,9 +332,7 @@ namespace {
             //TODO(sp, "Unknown attribute #[" << a.name() << "]");
         }
     }
-}
 
-namespace {
     void ExpandAttrs(const ExpandState& es, const ASTAttributeList& attrs, AttrStage stage, const ExpandAttrCallback& f) {
         for (auto& a : attrs.items) {
             const RcString rcstringCfg = RcString::newInterned("cfg");
@@ -467,9 +415,7 @@ namespace {
             }
         }));
     }
-}
 
-namespace {
     bool ExpandAttrsCfgOnly(const ExpandState& es, ASTAttributeList& attrs) {
         bool remove = false;
         ExpandAttrsCfgAttr(*es.wb.settings, attrs);
@@ -487,89 +433,7 @@ namespace {
         }));
         return !remove;
     }
-}
 
-MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTAttributeName& path) {
-    ASTPath p = ASTPath::newRelative({}, {});
-    for (const auto& ent : path.elems) {
-        p += ASTPathNode(ent);
-    }
-    return ExpandLookupMacro(miSpan, wb, crate, modstack, p);
-}
-
-MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTPath& path) {
-    ASSERT_BUG(miSpan, path.size() > 0, "Path should have nodes: " << path);
-
-    const bool hasDefinitionModule = path.cls.is_Relative() && path.cls.as_Relative().hygiene.hasModPath();
-    if (path.isTrivial() && !hasDefinitionModule) {
-        const auto& name = path.asTrivial();
-
-        for (const auto* ll = &modstack; ll; ll = ll->prev) {
-            if (!ll->item) {
-                break;
-            }
-            const auto& macMod = *ll->item;
-            for (const auto& mr : reverse(macMod.macros())) {
-                if (mr.name == name) {
-                    if (!mr.data->exported && mr.data->definitionSpan && miSpan) {
-                        const auto& definition = mr.data->definitionSpan.getTopFileSpan();
-                        const auto& invocation = miSpan.getTopFileSpan();
-                        if (definition.filename == invocation.filename && (definition.startLine > invocation.startLine || (definition.startLine == invocation.startLine && definition.startOfs > invocation.startOfs))) {
-                            continue;
-                        }
-                    }
-                    return MacroRef(&*mr.data);
-                }
-            }
-
-            MacroRef rv;
-            for (const auto& mri : macMod.macroImports) {
-                if (mri.name == name) {
-                    rv = mri.ref.clone();
-                }
-            }
-            if (!rv.is_None()) {
-                return rv;
-            }
-        }
-        if (auto* pm = ExpandFindProcMacro(wb, name)) {
-            return MacroRef(pm);
-        }
-        if (path.cls.is_Local()) {
-            return MacroRef();
-        }
-    }
-
-    // HACK: If the crate name is empty, look up builtins
-    if (path.isAbsolute() && path.cls.as_Absolute().crate == "" && path.nodes().size() == 1) {
-        const auto& name = path.nodes()[0].name();
-        if (auto* pm = ExpandFindProcMacro(wb, name)) {
-            return MacroRef(pm);
-        }
-    }
-
-    auto rv = ResolveLookupMacro(miSpan, *wb.settings, crate, modstack.item->path(), path, /*out_path=*/nullptr);
-    switch (rv.tag()) {
-        case ResolveItemRefMacro::TAG_None: {
-            return MacroRef();
-        }
-        case ResolveItemRefMacro::TAG_InternalMacro: {
-            auto& pm = rv.as_InternalMacro();
-            return pm;
-        }
-        case ResolveItemRefMacro::TAG_ProcMacro: {
-            auto& pm = rv.as_ProcMacro();
-            return pm;
-        }
-        case ResolveItemRefMacro::TAG_MacroRules: {
-            auto& p = rv.as_MacroRules();
-            return p;
-        }
-    }
-    return MacroRef();
-}
-
-namespace {
     std::unique_ptr<TokenStream> ExpandMacroInner(const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, ASTModule& mod, Span miSpan, const ASTPath& path, const RcString& inputIdent, TokenTree& inputTt) {
         ASSERT_BUG(miSpan, path.isValid(), "Macro invocation with invalid path");
 
@@ -619,9 +483,7 @@ namespace {
         ASSERT_BUG(miSpan, rv, "Macro invocation returned null tokentree");
         return rv;
     }
-}
 
-namespace {
     std::unique_ptr<TokenStream> ExpandMacro(const ExpandState& es, ASTModule& mod, Span miSpan, const ASTPath& path, const RcString& inputIdent, TokenTree& inputTt) {
         auto rv = ExpandMacroInner(es.wb, es.crate, es.modstack, mod, miSpan, path, inputIdent, inputTt);
         if (rv) {
@@ -1099,24 +961,6 @@ namespace {
         }
     }
 
-}
-
-void ExpandBareExpr(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, ASTExprNodeP& node) {
-    ExpandState es{wb, const_cast<ASTCrate&>(crate), LList<const ASTModule*>(nullptr, &mod), ExpandMode::FirstPass, const_cast<ASTModule*>(&mod)};
-    ExpandExpr(es, node);
-    es.mode = ExpandMode::Final;
-}
-
-ASTExprNodeP ExpandParseAndExpandExprVal(const ASTCrate& crate, const ASTModule& mod, TokenStream& lex) {
-    auto sp = lex.pointSpan();
-    auto n = ParseExprVal(lex);
-    ASSERT_BUG(sp, n, "No expression returned");
-    ExpandBareExpr(*lex.parseState().wb, crate, mod, n);
-    return n;
-}
-
-namespace {
-
     void ExpandFunction(const ExpandState& es, ASTModule& mod, ASTFunction& e) {
         if (auto* delegation = e.delegation()) {
             for (auto& target : delegation->targets) {
@@ -1260,7 +1104,7 @@ namespace {
                     auto miOwned = mv$(e);
 
                     if (!miOwned.isExpanded()) {
-                        assert(miOwned.span());
+                        BUG_ASSERT(miOwned.span());
 
                         auto ttl = ExpandMacro(es, mod, miOwned);
                         if (ttl) {
@@ -1456,7 +1300,7 @@ namespace {
                     auto miOwned = mv$(e);
 
                     if (!miOwned.isExpanded()) {
-                        assert(miOwned.span());
+                        BUG_ASSERT(miOwned.span());
 
                         auto ttl = ExpandMacro(es, mod, miOwned);
                         if (ttl) {
@@ -1854,7 +1698,6 @@ namespace {
                     const auto& macInv = i->data.as_MacroInv();
                     newRootItems.push_back(box$(*i));
                     i->data = ASTItem();
-
                 } else if (i->data.is_Macro()) {
                     // TODO: `#[macro_export] macro foo { ... }` DOESN'T move the item to the root
 
@@ -1883,12 +1726,11 @@ namespace {
                     ExpandState es{wb, crate, {}, ExpandMode::Iterate, &mod};
                     auto ttl = ExpandMacro(es, mod, miOwned);
                     ASSERT_BUG(miOwned.span(), ttl, "BUG: macro_rules not expanded");
-                    assert(miOwned.path().isValid());
+                    BUG_ASSERT(miOwned.path().isValid());
 
                     if (ttl.get()) {
-                        assert(ttl.get());
+                        BUG_ASSERT(ttl.get());
                         ParseModRootItemsInto(mod, idx, *ttl);
-
                     } else {
                     }
                     mod.items[idx]->data.as_MacroInv() = mv$(miOwned);
@@ -1896,7 +1738,146 @@ namespace {
             }
         }
     }
+}
 
+void ExpandRegistry::addDecorator(const char* name, ExpandDecorator* handler) {
+    decorators = pool->make<DecoratorEntry>(DecoratorEntry{name, handler, decorators});
+}
+
+void ExpandRegistry::addMacro(const char* name, ExpandProcMacro* handler) {
+    macros = pool->make<MacroEntry>(MacroEntry{name, handler, macros});
+}
+
+ExpandProcMacro* ExpandRegistry::findMacro(const RcString& name) const {
+    for (auto* entry = macros; entry; entry = entry->next) {
+        if (name == entry->name) {
+            return entry->handler;
+        }
+    }
+    return nullptr;
+}
+
+ExpandDecorator* ExpandRegistry::findDecorator(const RcString& name) const {
+    for (auto* entry = decorators; entry; entry = entry->next) {
+        if (name == entry->name) {
+            return entry->handler;
+        }
+    }
+    return nullptr;
+}
+
+void ExpandInit(ExpandRegistry& registry) {
+    RegisterBuiltinDecorators(registry);
+    RegisterBuiltinMacros(registry);
+    RegisterSynextBuiltins(registry);
+    RegisterCfgBuiltins(registry);
+    RegisterProcMacroBuiltins(registry);
+}
+
+void ExpandDecorator::unexpected(const Span& sp, const ASTAttribute& mi, const char* locStr) const {
+    WARNING(sp, W0000, "Unexpected attribute " << mi.name() << " on " << locStr);
+}
+
+ExpandProcMacro* ExpandFindProcMacro(const WireBoard& wb, const RcString& name) {
+    return wb.expandRegistry->findMacro(name);
+}
+
+ExpandDecorator* ExpandFindDecorator(const WireBoard& wb, const RcString& name) {
+    return wb.expandRegistry->findDecorator(name);
+}
+
+MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTAttributeName& path) {
+    ASTPath p = ASTPath::newRelative({}, {});
+    for (const auto& ent : path.elems) {
+        p += ASTPathNode(ent);
+    }
+    return ExpandLookupMacro(miSpan, wb, crate, modstack, p);
+}
+
+MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTPath& path) {
+    ASSERT_BUG(miSpan, path.size() > 0, "Path should have nodes: " << path);
+
+    const bool hasDefinitionModule = path.cls.is_Relative() && path.cls.as_Relative().hygiene.hasModPath();
+    if (path.isTrivial() && !hasDefinitionModule) {
+        const auto& name = path.asTrivial();
+
+        for (const auto* ll = &modstack; ll; ll = ll->prev) {
+            if (!ll->item) {
+                break;
+            }
+            const auto& macMod = *ll->item;
+            for (const auto& mr : reverse(macMod.macros())) {
+                if (mr.name == name) {
+                    if (!mr.data->exported && mr.data->definitionSpan && miSpan) {
+                        const auto& definition = mr.data->definitionSpan.getTopFileSpan();
+                        const auto& invocation = miSpan.getTopFileSpan();
+                        if (definition.filename == invocation.filename && (definition.startLine > invocation.startLine || (definition.startLine == invocation.startLine && definition.startOfs > invocation.startOfs))) {
+                            continue;
+                        }
+                    }
+                    return MacroRef(&*mr.data);
+                }
+            }
+
+            MacroRef rv;
+            for (const auto& mri : macMod.macroImports) {
+                if (mri.name == name) {
+                    rv = mri.ref.clone();
+                }
+            }
+            if (!rv.is_None()) {
+                return rv;
+            }
+        }
+        if (auto* pm = ExpandFindProcMacro(wb, name)) {
+            return MacroRef(pm);
+        }
+        if (path.cls.is_Local()) {
+            return MacroRef();
+        }
+    }
+
+    // HACK: If the crate name is empty, look up builtins
+    if (path.isAbsolute() && path.cls.as_Absolute().crate == "" && path.nodes().size() == 1) {
+        const auto& name = path.nodes()[0].name();
+        if (auto* pm = ExpandFindProcMacro(wb, name)) {
+            return MacroRef(pm);
+        }
+    }
+
+    auto rv = ResolveLookupMacro(miSpan, *wb.settings, crate, modstack.item->path(), path, /*out_path=*/nullptr);
+    switch (rv.tag()) {
+        case ResolveItemRefMacro::TAG_None: {
+            return MacroRef();
+        }
+        case ResolveItemRefMacro::TAG_InternalMacro: {
+            auto& pm = rv.as_InternalMacro();
+            return pm;
+        }
+        case ResolveItemRefMacro::TAG_ProcMacro: {
+            auto& pm = rv.as_ProcMacro();
+            return pm;
+        }
+        case ResolveItemRefMacro::TAG_MacroRules: {
+            auto& p = rv.as_MacroRules();
+            return p;
+        }
+    }
+    return MacroRef();
+}
+
+void ExpandBareExpr(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, ASTExprNodeP& node) {
+    ExpandState es{wb, const_cast<ASTCrate&>(crate), LList<const ASTModule*>(nullptr, &mod), ExpandMode::FirstPass, const_cast<ASTModule*>(&mod)};
+    ExpandExpr(es, node);
+    es.mode = ExpandMode::Final;
+}
+
+ASTExprNodeP ExpandParseAndExpandExprVal(const ASTCrate& crate, const ASTModule& mod, TokenStream& lex) {
+    auto sp = lex.pointSpan();
+    auto n = ParseExprVal(lex);
+    ASSERT_BUG(sp, n, "No expression returned");
+    ExpandBareExpr(*lex.parseState().wb, crate, mod, n);
+    return n;
 }
 
 void Expand(const WireBoard& wb, ASTCrate& crate) {
@@ -2086,7 +2067,7 @@ auto CExpandExpr::visit(ASTExprNodeP& cnode) -> void {
             cnode->attrs() = mv$(attrs);
         }
     }
-    assert(!this->replacement);
+    BUG_ASSERT(!this->replacement);
 }
 
 auto CExpandExpr::visitNodelete(const ASTExprNode& parent, ASTExprNodeP& cnode) -> void {
@@ -2096,12 +2077,12 @@ auto CExpandExpr::visitNodelete(const ASTExprNode& parent, ASTExprNodeP& cnode) 
             ERROR(parent.span(), E0000, "#[cfg] not allowed in this position");
         }
     }
-    assert(!this->replacement);
+    BUG_ASSERT(!this->replacement);
 }
 
 auto CExpandExpr::visitVector(std::vector<ASTExprNodeP>& cnodes) -> void {
     for (auto it = cnodes.begin(); it != cnodes.end();) {
-        assert(it->get());
+        BUG_ASSERT(it->get());
         this->visit(*it);
         if (it->get() == nullptr) {
             it = cnodes.erase(it);
@@ -2199,7 +2180,7 @@ auto CExpandExpr::visit(ASTExprNodeMacro& node) -> void {
         auto n = mv$(this->replacement);
         this->visit(n);
         if (n) {
-            assert(!this->replacement);
+            BUG_ASSERT(!this->replacement);
             this->replacement = mv$(n);
         }
     }
@@ -2226,7 +2207,7 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
     this->currentBlock = &node;
 
     for (auto it = node.nodes.begin(); it != node.nodes.end();) {
-        assert(it->node.get());
+        BUG_ASSERT(it->node.get());
 
         if (auto* nodeMac = cast<ASTExprNodeMacro>(it->node.get())) {
             const bool definesMacro = nodeMac->path.isTrivial() && nodeMac->path.asTrivial() == "macro_rules";
@@ -2242,7 +2223,7 @@ auto CExpandExpr::visit(ASTExprNodeBlock& node) -> void {
             }
             it->node->attrs() = std::move(attrs);
 
-            assert(it->node.get() == nodeMac);
+            BUG_ASSERT(it->node.get() == nodeMac);
 
             std::vector<ASTExprNodeBlock::Line> newNodes;
             this->visitMacro(*nodeMac, &newNodes);
@@ -2409,12 +2390,12 @@ auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
             bool isSlot = false;
 
             ASTPattern lower(ASTExprNodeP& ep) {
-                assert(ep);
+                BUG_ASSERT(ep);
                 ep->visit(*this);
                 ASSERT_BUG(ep->span(), rvSet, ep.typeName() << " - Didn't yield a pattern");
                 if (isSlot) {
-                    assert(!slots.empty());
-                    assert(!slots.back().second);
+                    BUG_ASSERT(!slots.empty());
+                    BUG_ASSERT(!slots.back().second);
                     slots.back().second = std::move(ep);
                     isSlot = false;
                 }
@@ -2423,10 +2404,10 @@ auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
             }
 
             void pat(ASTPattern rv) {
-                assert(!rvSet);
-                assert(!isSlot);
+                BUG_ASSERT(!rvSet);
+                BUG_ASSERT(!isSlot);
                 rvSet = true;
-                assert(rv.bindings().empty());
+                BUG_ASSERT(rv.bindings().empty());
                 this->rv = std::move(rv);
             }
 
@@ -2668,9 +2649,9 @@ auto CExpandExpr::visit(ASTExprNodeAssign& node) -> void {
 
         auto pat = v.lower(node.slot);
         if (pat.bindings().size() > 0) {
-            assert(pat.bindings().size() == 1);
-            assert(!node.slot);
-            assert(v.slots.front().second);
+            BUG_ASSERT(pat.bindings().size() == 1);
+            BUG_ASSERT(!node.slot);
+            BUG_ASSERT(v.slots.front().second);
             node.slot = std::move(v.slots.front().second);
         } else {
             auto rv = new ASTExprNodeBlock();
