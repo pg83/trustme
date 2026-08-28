@@ -11182,7 +11182,7 @@ default: {
             const RcString& methodName,
             const HIRTypeData* expectedResult,
             bool mustDecide,
-            /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities
+            /* Out -> */ ::std::vector<MethodCandidate>& possibilities
         ) const {
             {
                 unsigned int derefCount = 0;
@@ -11205,7 +11205,7 @@ default: {
                     ::std::vector<HIRSimplePath> candidateTraits;
                     candidateTraits.reserve(possibilities.size());
                     for (const auto& possibility : possibilities) {
-                        const auto* path = possibility.second.data.opt_UfcsKnown();
+                        const auto* path = possibility.path.data.opt_UfcsKnown();
                         if (!path) {
                             // RFC 3624 only collapses extension-trait picks.
                             return;
@@ -11504,7 +11504,7 @@ default: {
             return ::std::nullopt;
         }
 
-        bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities, /* Out -> */ bool* outUndecided) const {
+        bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided) const {
             bool rv = false;
 
             auto getIvaredParams = [&](const HIRGenericParams& tpl) -> HIRPathParams {
@@ -11591,10 +11591,18 @@ default: {
                                 *outUndecided = true;
                             }
                         }
-                        possibilities.push_back(::std::make_pair(borrowType, HIRPath(selfTy, methodName, {})));
+                        possibilities.push_back({borrowType, HIRPath(selfTy, methodName, {}), &impl});
                         rv = true;
                     }
                 });
+            }
+
+            // Inherent methods have priority over trait methods at the same
+            // receiver adjustment. Keep every applicable inherent impl so an
+            // unresolved overlap remains ambiguous, but do not mix lower-
+            // priority trait candidates into the result.
+            if (rv) {
+                return true;
             }
 
             // TODO: Handle custom recievers by finding the bottom of a deref chain (or take the top-level reciever as an argument here?)
@@ -11681,7 +11689,7 @@ default: {
 
                     // TODO: Re-monomorphise final trait using `ty`?
                     // - Could collide with legitimate uses of `Self`
-                    possibilities.push_back(::std::make_pair(borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
+                    possibilities.push_back({borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}})), nullptr});
                     rv = true;
                     foundBound = true;
                     recordBoundGlobalness(eType, eTraitGp, eTraitInfo);
@@ -11723,7 +11731,7 @@ default: {
                                 return response.hasImpl && response.certainty == SolverCertainty::Proven;
                             }, {.assocName = ""});
                             if (crateImplFound) {
-                                possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTy, HIRGenericPath(finalTraitPath.path, mv$(traitParams)), methodName, {})));
+                                possibilities.push_back({borrowType, HIRPath(*selfTy, HIRGenericPath(finalTraitPath.path, mv$(traitParams)), methodName, {}), nullptr});
                                 return true;
                             } else {
                             }
@@ -11764,7 +11772,7 @@ default: {
                 auto addTraitObjectMethod = [&](const HIRFunction& fcn, HIRGenericPath finalTraitPath) {
                     // - If the receiver is valid, then it's correct (no need to check the type again)
                     if (auto selfTyP = checkMethodReceiver(sp, fcn, ty, access)) {
-                        possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
+                        possibilities.push_back({borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {}), nullptr});
                         rv = true;
                         foundTraitObject = true;
                     }
@@ -11807,7 +11815,7 @@ default: {
                     if (const auto* fcnPtr = this->traitContainsMethod(sp, traitPath.path, trait, crate.types.self(), methodName, finalTraitPath)) {
 
                         if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
-                            possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
+                            possibilities.push_back({borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {}), nullptr});
                             rv = true;
                         }
                     }
@@ -11847,7 +11855,7 @@ default: {
                                 finalTraitPath = monomorphCb.monomorphGenericpath(sp, finalTraitPath, false);
 
                                 // Found the method, return the UFCS path for it
-                                possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
+                                possibilities.push_back({borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {}), nullptr});
                                 rv = true;
                             }
                         }
@@ -11891,7 +11899,7 @@ default: {
                                 }
 
                                 // Found the method, return the UFCS path for it
-                                possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
+                                possibilities.push_back({borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {}), nullptr});
                                 rv = true;
                             }
                         }
@@ -11988,7 +11996,7 @@ default: {
                         return true;
                     }, methodQuery);
                     if (implFound) {
-                        possibilities.push_back(::std::make_pair(borrowType, HIRPath(selfTy, HIRGenericPath(*traitRef.first, mv$(traitParams)), methodName, {})));
+                        possibilities.push_back({borrowType, HIRPath(selfTy, HIRGenericPath(*traitRef.first, mv$(traitParams)), methodName, {}), nullptr});
                         rv = true;
                     }
                     if (undecided && outUndecided) {

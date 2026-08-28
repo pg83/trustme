@@ -843,6 +843,14 @@ public:
         /// The pin-ergonomics reborrow from `Pin<&mut T>` to `Pin<&T>`.
         PinShared,
     };
+    struct MethodCandidate {
+        AutoderefBorrow borrow;
+        HIRPath path;
+        /// Present only while an inherent method selected by this lookup is
+        /// being committed.  The crate owns the impl; the pointer never
+        /// becomes part of HIR or a solver cache.
+        const HIRTypeImpl* inherentImpl;
+    };
     friend ::std::ostream& operator<<(::std::ostream& os, const AutoderefBorrow& x);
     /// Locate the named method by applying auto-dereferencing.
     /// \return Number of times deref was applied (or ~0 if _ was hit)
@@ -855,7 +863,7 @@ public:
         const RcString& methodName,
         const HIRTypeData* expectedResult,
         bool mustDecide,
-        /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities
+        /* Out -> */ ::std::vector<MethodCandidate>& possibilities
     ) const;
     /// Locate the named field by applying auto-dereferencing.
     /// \return Number of times deref was applied (or ~0 if _ was hit)
@@ -895,7 +903,7 @@ public:
         Box,
     };
     friend ::std::ostream& operator<<(::std::ostream& os, const AllowedReceivers& x);
-    bool findMethod(const Span& sp, const tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
+    bool findMethod(const Span& sp, const tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, const HIRTypeData* expectedResult, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<MethodCandidate>& possibilities, /* Out -> */ bool* outUndecided = nullptr) const;
 
     /// Locates a named method in a trait, and returns the path of the trait that contains it (with fixed parameters)
     const HIRFunction* traitContainsMethod(const Span& sp, const HIRGenericPath& traitPath, const HIRTrait& traitPtr, const HIRTypeData* self, const RcString& name, HIRGenericPath& outPath) const;

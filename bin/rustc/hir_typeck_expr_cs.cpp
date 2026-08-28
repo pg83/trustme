@@ -19,6 +19,14 @@
 #include <optional>
 #include <algorithm> // std::find_if
 
+bool visitCallPopulateCache(
+    Context& context,
+    const Span& sp,
+    HIRPath& path,
+    HIRExprCallCache& cache,
+    const HIRTypeImpl* selectedInherentImpl
+) __attribute__((warn_unused_result));
+
 namespace {
     inline HIRExprNodeP mkExprnodep(HIRExprNode* en, HIRTypeRef ty) {
         en->resType = mv$(ty);
@@ -1033,9 +1041,7 @@ default: {
 
             // Using autoderef, locate this method on the type
             // TODO: Obtain a list of avaliable methods at that level?
-            // - If running in a mode after stablise (before defaults), fall
-            //   back to trait if the inherent is still ambigious.
-            ::std::vector<::std::pair<TraitResolution::AutoderefBorrow, HIRPath>> possibleMethods;
+            ::std::vector<TraitResolution::MethodCandidate> possibleMethods;
             // Once type checking has stabilised there is nothing left to wait
             // for, so the probe answers from what is known.
             unsigned int derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.method, this->context.getType(node.resType), this->isFallback, possibleMethods);
@@ -1046,12 +1052,11 @@ default: {
                     node.method = node.fallbackMethod;
                 }
             }
-        tryAgain:
             if (derefCount != ~0u) {
                 // HACK: In fallback mode, remove inherent impls from bounded ivars
                 if (ty->is_Infer() && this->isFallback) {
                     auto newEnd = std::remove_if(possibleMethods.begin(), possibleMethods.end(), [](const auto& e) {
-                        return e.second.data.is_UfcsInherent();
+                        return e.path.data.is_UfcsInherent();
                     });
                     if (newEnd != possibleMethods.begin()) {
                         possibleMethods.erase(newEnd, possibleMethods.end());
@@ -1080,21 +1085,21 @@ default: {
                     //   ivars (node.m_trait_param_ivars)
                     for (auto it1 = possibleMethods.begin(); it1 != possibleMethods.end(); ++it1) {
                         // Only consider trait impls (UfcsKnown path)
-                        if (!it1->second.data.is_UfcsKnown()) {
+                        if (!it1->path.data.is_UfcsKnown()) {
                             continue;
                         }
 
-                        auto& e1 = it1->second.data.as_UfcsKnown();
+                        auto& e1 = it1->path.data.as_UfcsKnown();
                         for (auto it2 = it1 + 1; it2 != possibleMethods.end(); ++it2) {
-                            if (!it2->second.data.is_UfcsKnown()) {
+                            if (!it2->path.data.is_UfcsKnown()) {
                                 continue;
                             }
                             // If it's a complete duplicate, immediately ignore.
-                            if (it2->second == it1->second) {
+                            if (it2->path == it1->path) {
                                 it2 = possibleMethods.erase(it2) - 1;
                                 continue;
                             }
-                            const auto& e2 = it2->second.data.as_UfcsKnown();
+                            const auto& e2 = it2->path.data.as_UfcsKnown();
 
                             // TODO: If the trait is the same, but the type differs, pick the first?
                             if (e1.trait == e2.trait) {
@@ -1148,8 +1153,8 @@ default: {
                         auto found = possibleMethods.end();
                         bool hadInherent = false;
                         for (auto it = possibleMethods.begin(); it != possibleMethods.end(); ++it) {
-                            hadInherent |= it->second.data.is_UfcsInherent();
-                            if (it->second.data.is_UfcsKnown() && it->second.data.as_UfcsKnown().trait.path == tp.path) {
+                            hadInherent |= it->path.data.is_UfcsInherent();
+                            if (it->path.data.is_UfcsKnown() && it->path.data.as_UfcsKnown().trait.path == tp.path) {
                                 found = it;
                             }
                         }
@@ -1161,12 +1166,13 @@ default: {
 
                 }
                 assert(!possibleMethods.empty());
-                if (possibleMethods.size() != 1 && possibleMethods.front().second.data.is_UfcsKnown()) {
+                if (possibleMethods.size() != 1) {
                     // TODO: If the type is fully known, then this is an error.
                     return;
                 }
-                auto& adBorrow = possibleMethods.front().first;
-                auto& fcnPath = possibleMethods.front().second;
+                auto& selectedMethod = possibleMethods.front();
+                auto& adBorrow = selectedMethod.borrow;
+                auto& fcnPath = selectedMethod.path;
 
                 // Inside a trait impl, unconstrained trait arguments on a
                 // call through the current Self default to this impl's
@@ -1217,41 +1223,11 @@ default: {
                     }
                 }
 
-                // TODO: If this is ambigious, and it's an inherent, and in fallback mode - fall down to the next trait method.
-                if (!visitCallPopulateCache(this->context, node.span(), node.methodPath, node.cache)) {
-                    // Move the params back
-                    switch (node.methodPath.data.tag()) {
-                        case HIRPath::Data::TAG_Generic: {
-                            break;
-                        }
-                        case HIRPath::Data::TAG_UfcsUnknown: {
-                            break;
-                        }
-                        case HIRPath::Data::TAG_UfcsKnown: {
-                            auto& e = node.methodPath.data.as_UfcsKnown();
-                            node.params = mv$(e.params);
-                            break;
-                        }
-                        case HIRPath::Data::TAG_UfcsInherent: {
-                            auto& e = node.methodPath.data.as_UfcsInherent();
-                            node.params = mv$(e.params);
-                            break;
-                        }
-                    }
-                    if (this->isFallback && node.methodPath.data.is_UfcsInherent()) {
-                        unsigned nRemove = 1;
-                        while (nRemove < possibleMethods.size() && possibleMethods[nRemove].second.data.is_UfcsInherent()) {
-                            nRemove += 1;
-                        }
-                        if (nRemove < possibleMethods.size()) {
-                            possibleMethods.erase(possibleMethods.begin() + nRemove);
-                            goto tryAgain;
-                        } else {
-                        }
-                    } else {
-                    }
-                    return;
-                }
+                ASSERT_BUG(
+                    sp,
+                    visitCallPopulateCache(this->context, node.span(), node.methodPath, node.cache, selectedMethod.inherentImpl),
+                    "Selected method became ambiguous while populating its cache: " << node.methodPath
+                );
                 assert(node.cache.argTypes.size() >= 1);
 
                 if (node.args.size() + 1 != node.cache.argTypes.size() - 1) {
@@ -10219,8 +10195,14 @@ namespace {
     }
 }
 
-bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) __attribute__((warn_unused_result));
-bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr);
+bool visitCallPopulateCacheUfcsInherent(
+    Context& context,
+    const Span& sp,
+    HIRPath& path,
+    HIRExprCallCache& cache,
+    const HIRFunction*& fcnPtr,
+    const HIRTypeImpl* selectedImpl
+);
 
 bool inherentImplMatchesReceiver(
     Context& context,
@@ -10359,8 +10341,11 @@ void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams
 }
 
 /// (HELPER) Populate the cache for nodes that use visit_call
-/// TODO: If the function has multiple mismatched options, tell the caller to try again later?
 bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) {
+    return visitCallPopulateCache(context, sp, path, cache, nullptr);
+}
+
+bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRTypeImpl* selectedInherentImpl) {
     assert(cache.argTypes.size() == 0);
 
     const HIRFunction* fcnPtr = nullptr;
@@ -10492,7 +10477,7 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
             }
             case HIRPathData::TAG_UfcsInherent: {
                 // NOTE: This case is kinda long, so it's refactored out into a helper
-                if (!visitCallPopulateCacheUfcsInherent(context, sp, path, cache, fcnPtr)) {
+                if (!visitCallPopulateCacheUfcsInherent(context, sp, path, cache, fcnPtr, selectedInherentImpl)) {
                     return false;
                 }
                 break;
@@ -10536,29 +10521,44 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
         return true;
 }
 
-bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr) {
+bool visitCallPopulateCacheUfcsInherent(
+    Context& context,
+    const Span& sp,
+    HIRPath& path,
+    HIRExprCallCache& cache,
+    const HIRFunction*& fcnPtr,
+    const HIRTypeImpl* selectedImpl
+) {
     auto& e = path.data.as_UfcsInherent();
     context.selectWellFormed(sp, e.type);
     auto lookupType = context.revealOpaqueTypes(e.type);
     lookupType = context.expandAssociatedTypes(sp, mv$(lookupType));
     e.type = lookupType;
 
-    const HIRTypeImpl* implPtr = nullptr;
-    // Detect multiple applicable methods and get the caller to try again later if there are multiple
+    const HIRTypeImpl* implPtr = selectedImpl;
     unsigned int count = 0;
-    context.crate.findTypeImpls(lookupType, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
-        if (!inherentImplMatchesReceiver(context, sp, impl, lookupType)) {
+    if (implPtr) {
+        auto method = implPtr->methods.find(e.item);
+        ASSERT_BUG(sp, method != implPtr->methods.end(), "Selected inherent impl has no method " << e.item);
+        fcnPtr = &method->second.data;
+        count = 1;
+    } else {
+        // Explicit UFCS paths do not come from method lookup and therefore
+        // have no ephemeral impl identity. Resolve those here as before.
+        context.crate.findTypeImpls(lookupType, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
+            if (!inherentImplMatchesReceiver(context, sp, impl, lookupType)) {
+                return false;
+            }
+            auto it = impl.methods.find(e.item);
+            if (it == impl.methods.end()) {
+                return false;
+            }
+            fcnPtr = &it->second.data;
+            implPtr = &impl;
+            count++;
             return false;
-        }
-        auto it = impl.methods.find(e.item);
-        if (it == impl.methods.end()) {
-            return false;
-        }
-        fcnPtr = &it->second.data;
-        implPtr = &impl;
-        count++;
-        return false;
-    });
+        });
+    }
     if (!fcnPtr) {
         ERROR(sp, E0000, "Failed to locate function " << path);
     }
