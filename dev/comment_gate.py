@@ -12,6 +12,7 @@ MARKER = re.compile(
     re.IGNORECASE,
 )
 ERROR = "СУКА В ЭТОМ ПРОЕКТЕ ЗАПРЕЩЕНЫ НОВЫЕ КОММЕНТАРИИ"
+CLASS_ERROR = "В .CPP ЗАПРЕЩЕН CLASS; ИСПОЛЬЗУЙ STRUCT"
 
 
 def is_identifier_char(char: str) -> bool:
@@ -90,6 +91,56 @@ def line_comments(text: str):
         cursor += 1
 
 
+def code_tokens(text: str):
+    cursor = 0
+    line = 1
+    while cursor < len(text):
+        if text.startswith("//", cursor):
+            end = text.find("\n", cursor + 2)
+            cursor = len(text) if end < 0 else end
+            continue
+        if text.startswith("/*", cursor):
+            end = text.find("*/", cursor + 2)
+            if end < 0:
+                return
+            line += text.count("\n", cursor, end + 2)
+            cursor = end + 2
+            continue
+        raw_end = skip_raw_string(text, cursor)
+        if raw_end is not None:
+            yield line, "<literal>"
+            line += text.count("\n", cursor, raw_end)
+            cursor = raw_end
+            continue
+        char = text[cursor]
+        if char == '"' or char == "'" and is_char_literal(text, cursor):
+            end = skip_quoted(text, cursor, char)
+            yield line, "<literal>"
+            line += text.count("\n", cursor, end)
+            cursor = end
+            continue
+        if char.isalpha() or char == "_":
+            end = cursor + 1
+            while end < len(text) and is_identifier_char(text[end]):
+                end += 1
+            yield line, text[cursor:end]
+            cursor = end
+            continue
+        if not char.isspace():
+            yield line, char
+        if char == "\n":
+            line += 1
+        cursor += 1
+
+
+def forbidden_classes(text: str):
+    previous = None
+    for line, token in code_tokens(text):
+        if token == "class" and previous != "enum":
+            yield line
+        previous = token
+
+
 def main() -> int:
     args = sys.argv[1:]
     if len(args) < 3 or args[0] != "--stamp":
@@ -98,12 +149,16 @@ def main() -> int:
     violations = []
     for name in args[2:]:
         path = Path(name)
-        for line, comment in line_comments(path.read_text(errors="replace")):
+        text = path.read_text(errors="replace")
+        for line, comment in line_comments(text):
             if not MARKER.search(comment):
-                violations.append((path, line))
+                violations.append((path, line, ERROR))
+        if path.suffix == ".cpp":
+            for line in forbidden_classes(text):
+                violations.append((path, line, CLASS_ERROR))
     if violations:
-        for path, line in violations:
-            print(f"{path}:{line}: {ERROR}", file=sys.stderr)
+        for path, line, error in violations:
+            print(f"{path}:{line}: {error}", file=sys.stderr)
         return 1
     stamp.parent.mkdir(parents=True, exist_ok=True)
     stamp.touch()

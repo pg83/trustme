@@ -857,8 +857,8 @@ if not system_rustc_mode:
         color="green",
     ))
 COMMENT_SOURCES = [
-    *build.glob("$(S)/**/*.h"),
-    *build.glob("$(S)/**/*.cpp"),
+    *build.glob("$(S)/bin/**/*.h"),
+    *build.glob("$(S)/bin/**/*.cpp"),
 ]
 style = [
     command(
