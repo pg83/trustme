@@ -54,8 +54,6 @@ struct CHandlerRustcLegacyConstGenerics: public CommonFunction {
 struct CHandlerRepr: public ExpandDecorator {
     AttrStage stage() const override;
 
-    /// The name of one representation. `#[repr($t)]` with a `ty` fragment names
-    /// it through an interpolated type, which is a plain path.
     static RcString getReprName(TokenStream& lex);
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
@@ -67,7 +65,6 @@ struct CHandlerRustcNonnullOptimizationGuaranteed: public ExpandDecorator {
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
-// 1.39
 struct CHandlerRustcLayoutScalarValidRangeStart: public ExpandDecorator {
     AttrStage stage() const override;
 
@@ -258,7 +255,6 @@ static inline ASTExprNodeP mkExprnodep(ASTExprNode* en) {
     return ASTExprNodeP(en);
 }
 
-//#define NEWNODE(type, ...)  mk_exprnodep(new type(__VA_ARGS__))
 #define NEWNODE(type, ...) mkExprnodep(new ASTExprNode##type(__VA_ARGS__))
 
 template <typename F>
@@ -309,14 +305,10 @@ static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, ::std::vector<
 
 struct DeriveOpts {
     RcString coreName;
-    /// The item also derives `Copy`, which makes a derived `Clone` a copy
-    /// rather than a field-by-field clone.
     bool derivesCopy = false;
-    /// How much a derived `Debug` prints (`-Zfmt-debug`).
     Settings::FmtDebug fmtDebug = Settings::FmtDebug::Full;
 };
 
-/// Interface for derive handlers
 struct Deriver {
     virtual ~Deriver() = default;
     virtual const char* traitName() const = 0;
@@ -341,16 +333,11 @@ struct Deriver {
     void addFieldBound(::std::vector<ASTType*>& outList, ASTType* type) const;
 };
 
-/// 'Debug' derive handler
 struct DeriverDebug: public Deriver {
     ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const;
 
     const char* traitName() const override;
 
-    // The derived code calls the formatter helpers by path rather than as
-    // methods. A method call is resolved against whatever is in scope, so a
-    // user trait with a `field`, `finish` or `debug_struct` method on a blanket
-    // impl would capture the call.
     static ASTExprNodeP callPath(ASTPath path, const char* method, ::std::vector<ASTExprNodeP> args);
 
     static ASTExprNodeP builderRef();
@@ -362,24 +349,15 @@ struct DeriverDebug: public Deriver {
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 };
 
-// ---- Comparisons
-
 struct DeriverInnerCompare: public Deriver {
-    /// Create a final output impl block
     virtual ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const = 0;
-    /// Compare two values, early returning if no more comparisons should happen
     virtual ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const = 0;
-    /// Get the return value for if `compare_and_ret` didn't return early
     virtual ASTExprNodeP equalValue(Span sp, const RcString& coreName) const = 0;
-    /// Get the return value for a mismatch in enum variants
     virtual ASTExprNodeP enumMismatch(Span sp, const RcString& coreName) const = 0;
-    /// Compare an enum whose variants carry no fields.
     virtual ASTExprNodeP compareFieldlessEnum(Span sp, const RcString& coreName) const;
 
-    // Struct
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    // Enum
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 };
 
@@ -518,14 +496,12 @@ struct DeriverHash: public Deriver {
 
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override;
 
-    /// The type of an enum's discriminant: whatever `#[repr]` names, or `isize`.
     static eCoreType discriminantCoreType(const ASTEnum& enm);
 
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 };
 
 struct DeriverRustcEncodable: public Deriver {
-    // NOTE: This emits paths like `::rustc_serialize::Encodable` - rustc and crates.io have subtly different crate names
     ASTPath getTraitPath() const;
 
     ASTPath getTraitPathEncoder() const;
@@ -554,7 +530,6 @@ struct DeriverRustcEncodable: public Deriver {
 };
 
 struct DeriverRustcDecodable: public Deriver {
-    // NOTE: This emits paths like `::rustc_serialize::Encodable` - rustc and crates.io have subtly different crate names
     ASTPath getTraitPath() const;
 
     ASTPath getTraitPathDecoder() const;
@@ -602,9 +577,6 @@ struct DeriverUnsizedConstParamTy: public Deriver {
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override;
 };
 
-// --------------------------------------------------------------------
-// Select and dispatch the correct derive() handler
-// --------------------------------------------------------------------
 struct DeriveRegistry {
     DeriverDebug debug;
     DeriverPartialEq partialEq;
@@ -661,8 +633,6 @@ namespace {
                 ASSERT_BUG(lex.pointSpan(), ty->data.as_Path(), "" << ty);
                 rv.push_back(*ty->data.as_Path());
             } else if (lex.getTokenIf(TOK_INTERPOLATED_META, tok)) {
-                // `#[derive($i)]` with a `meta` fragment: the meta item is a
-                // bare path naming the trait to derive.
                 const auto& mi = tok.fragMeta();
                 ASSERT_BUG(lex.pointSpan(), !mi.name().elems.empty(), "Empty meta item in derive");
                 auto item = ASTPath::newRelative({}, {});
@@ -1054,7 +1024,6 @@ namespace {
 
             switch (mac.tag()) {
                 case MacroRef::TAG_None: {
-                    // Leave `mac_path` empty, triggering an error in caller
                     break;
                 }
                 case MacroRef::TAG_ExternalProcMacro: {
@@ -1089,8 +1058,6 @@ static void deriveItem(const DeriveRegistry& registry, const Span& sp, const Wir
 
     DeriveOpts opts = {crate.extCratenameCore};
     opts.fmtDebug = wb.settings->fmtDebug;
-    // `#[derive(Copy)]` changes what a derived `Clone` means, and it may be
-    // written in a separate attribute from the `Clone`.
     for (const auto& a : attrs) {
         if (a.name() != "derive") {
             continue;
@@ -1152,9 +1119,6 @@ struct DecoratorDerive: public ExpandDecorator {
 
     AttrStage stage() const override;
 
-    // A derive macro must see every attribute on the item (e.g. a `#[repr(C)]` written
-    // above the derive, which bytemuck's `Pod` checks for); the input serialiser strips
-    // `derive` attributes themselves.
     bool wantsAllAttrs() const override;
 
     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
@@ -1238,7 +1202,6 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
     {
         add("clone", Handler(ITEM_TRAIT, handleSave));
     }
-    // ops traits
     add("drop", Handler(ITEM_TRAIT, handleSave));
     add("add", Handler(ITEM_TRAIT, handleSave));
     add("sub", Handler(ITEM_TRAIT, handleSave));
@@ -1330,14 +1293,12 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
     }
     {
         add("transmute_trait", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `BikeshedIntrinsicFrom` trait
-        // - Markers
-        add("destruct", Handler(ITEM_TRAIT, handleSave));       // 1.74 - `Destruct` trait
-        add("tuple_trait", Handler(ITEM_TRAIT, handleSave));    // 1.74 - `Tuple` trait (must be implemented for all tuples)
-        add("pointer_like", Handler(ITEM_TRAIT, handleSave));   // 1.74 - `PointerLike` trait
-        add("const_param_ty", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `ConstParamTy` trait
-        add("fn_ptr_trait", Handler(ITEM_TRAIT, handleSave));   // 1.74 - `FnPtr` trait
+        add("destruct", Handler(ITEM_TRAIT, handleSave));        // 1.74 - `Destruct` trait
+        add("tuple_trait", Handler(ITEM_TRAIT, handleSave));     // 1.74 - `Tuple` trait (must be implemented for all tuples)
+        add("pointer_like", Handler(ITEM_TRAIT, handleSave));    // 1.74 - `PointerLike` trait
+        add("const_param_ty", Handler(ITEM_TRAIT, handleSave));  // 1.74 - `ConstParamTy` trait
+        add("fn_ptr_trait", Handler(ITEM_TRAIT, handleSave));    // 1.74 - `FnPtr` trait
 
-        // Structs
         add("transmute_opts", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `Assume` struct
         add("ptr_unique", Handler(ITEM_STRUCT, handleSave));     // 1.74 - `::core::ptr::Unique`
         add("CStr", Handler(ITEM_STRUCT, handleSave));           // 1.74 - `::core::ffi::CStr` - Why? (miri?)
@@ -1352,11 +1313,9 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
         add("panic_in_cleanup", Handler(ITEM_FN, handleSave));                     // 1.74 - `::core::panicking::panic_in_cleanup `
         add("const_panic_fmt", Handler(ITEM_FN, handleSave));                      // 1.74 - `::core::panicking::const_panic_fmt`
 
-        // Enums
         add("c_void", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::ffi::c_void` - Why? (miri?)
         add("Option", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::option::Option`
 
-        // - Formatting
         add("format_arguments", Handler(ITEM_STRUCT, handleSave));   // 1.74 - `::core::fmt::Arguments`
         add("format_placeholder", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::fmt::rt::Placeholder`
         add("format_argument", Handler(ITEM_STRUCT, handleSave));    // 1.74 - `::core::fmt::rt::Argument`
@@ -1364,7 +1323,6 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
         add("format_alignment", Handler(ITEM_ENUM, handleSave));     // 1.74 - `::core::fmt::rt::Alignment`
         add("format_count", Handler(ITEM_ENUM, handleSave));         // 1.74 - `::core::fmt::rt::Count`
 
-        // - Futures
         add("ResumeTy", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::future::ResumeTy`
         add("Poll", Handler(ITEM_ENUM, handleSave));       // 1.74 - `::core::task::poll::Poll`
         add("Context", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::task::wake::Context`
@@ -1383,9 +1341,6 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
         add("unsafe_unpin", Handler(ITEM_TRAIT, handleSave));                // ::core::marker::UnsafeUnpin
         add("unsized_const_param_ty", Handler(ITEM_TRAIT, handleSave));      // ::core::marker::UnsizedConstParamTy
         add("coerce_pointee_validated", Handler(ITEM_TRAIT, handleSave));    // ::core::marker::CoercePointeeValidated
-        // `-Zexperimental-default-bounds` names auto traits that every type
-        // is bounded by. Nothing here adds those bounds; the names are known
-        // so that a crate declaring them still compiles.
         add("default_trait1", Handler(ITEM_TRAIT, handleSave));
         add("default_trait2", Handler(ITEM_TRAIT, handleSave));
         add("default_trait3", Handler(ITEM_TRAIT, handleSave));
@@ -1406,7 +1361,6 @@ LangItemRegistry::LangItemRegistry(ObjPool* pool)
         add("async_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::async_iter::async_iter::AsyncIterator
         add("fused_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::iter::traits::marker::FusedIterator
 
-        // Various panic handlers
         add("panic_const_add_overflow", Handler(ITEM_FN, handleSave));
         add("panic_const_sub_overflow", Handler(ITEM_FN, handleSave));
         add("panic_const_mul_overflow", Handler(ITEM_FN, handleSave));
@@ -1459,7 +1413,6 @@ void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& 
         return;
     }
 
-    // Structs
     else if (name == "alloc_layout") {
     } else if (name == "panic_info") {
     } // Struct
@@ -1476,7 +1429,6 @@ void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& 
     else if (name == "maybe_uninit") {
     } // Union
 
-    // Futures
     else if (name == "unpin") {
     } // Trait
     else if (name == "pin") {
@@ -1488,37 +1440,30 @@ void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& 
     else if (name == "get_context") {
     } // Function
 
-    // Variable argument lists
     else if (name == "va_list") {
     } // Struct
 
-    // Arbitary receivers
     else if (name == "receiver") {
     } // Trait
     else if (name == "dispatch_from_dyn") {
     } // Trait
 
-    // Generators
     else if (name == "generator") {
     } // - Trait
     else if (name == "generator_state") {
     } // - State enum
 
-    // Try
     else if (name == "Try") {
         realName = "try";
     }
 
-    // Statics
     else if (name == "msvc_try_filter") {
     }
 
-    // Extern functions
     else if (name == "panic_impl") {
     } else if (name == "oom") {
     }
 
-    // Functions
     else if (name == "panic") {
     } else if (name == "panic_bounds_check") {
     } else if (name == "panic_fmt") {
@@ -1529,22 +1474,15 @@ void handleLangItem(const LangItemRegistry& registry, const Span& sp, ASTCrate& 
     } else if (name == "begin_panic") {
     } // Function
     else if (name == "panic_str") {
-    }
-    // - builtin `box` support
-    else if (name == "exchange_malloc") {
+    } else if (name == "exchange_malloc") {
     } else if (name == "exchange_free") {
     } else if (name == "box_free") {
     } else if (name == "owned_box") {
-    }
-    // - start
-    else if (name == "start") {
+    } else if (name == "start") {
     }
 
     else if (name == "eh_personality") {
-    }
-    // libcompiler_builtins
-    // - i128/u128 helpers (not used by trustme)
-    else if (name == "i128_add") {
+    } else if (name == "i128_add") {
     } else if (name == "i128_addo") {
     } else if (name == "u128_add") {
     } else if (name == "u128_addo") {
@@ -1648,7 +1586,6 @@ struct DecoratorGlobalAllocator: public ExpandDecorator {
 };
 
 struct CMultiHandlerLint: public ExpandDecorator {
-    /// The level this attribute sets.
     virtual CfgLintLevel level() const = 0;
 
     AttrStage stage() const override;
@@ -1664,8 +1601,6 @@ struct CMultiHandlerLint: public ExpandDecorator {
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override;
 
-    /// A lint attribute on a module is inherited by its contents; one on a
-    /// function applies to that function and its body.
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
@@ -1701,7 +1636,6 @@ struct CHandlerForbid: public CMultiHandlerLint {
     CfgLintLevel level() const override;
 };
 
-// #[must_use] - Marks a type needing to be consumed
 struct CHandlerMustUse: public ExpandDecorator {
     AttrStage stage() const override;
 
@@ -1712,21 +1646,18 @@ struct CHandlerMustUse: public ExpandDecorator {
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 };
 
-// #[non_exhaustive] - Tag an enum as being extensible
 struct CHandlerNonExhaustive: public ExpandDecorator {
     AttrStage stage() const override;
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
-// #[path] - Already used by this stage
 struct CHandlerPath: public ExpandDecorator {
     AttrStage stage() const override;
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
-// #[rustc_promotable] - ?
 struct CHandlerRustcPromotable: public ExpandDecorator {
     AttrStage stage() const override;
 
@@ -1737,7 +1668,6 @@ struct CHandlerRustcPromotable: public ExpandDecorator {
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override;
 };
 
-// #[rustc_inherit_overflow_checks]
 struct CHandlerRustcInheritOverflowChecks: public ExpandDecorator {
     AttrStage stage() const override;
 
@@ -1750,14 +1680,12 @@ struct CHandlerRustcInheritOverflowChecks: public ExpandDecorator {
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override;
 };
 
-// #[rustc_on_unimplemented]
 struct CHandlerRustcOnUnimiplemented: public ExpandDecorator {
     AttrStage stage() const override;
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override;
 };
 
-// #[rustc_box] - Marks the `Box::new` inner constructor
 struct CHandlerRustBox: public ExpandDecorator {
     AttrStage stage() const override;
 
@@ -1788,7 +1716,6 @@ struct CHandlerUnstable: public CMultiHandlerStability {};
 
 struct CHandlerRustcDeprecated: public CMultiHandlerStability {};
 
-// #[rustc_const_unstable] - Unstable in const context
 struct CHandlerRustcConstUnstable: public CMultiHandlerStability {};
 
 struct CHandlerDeprecated: public CMultiHandlerStability {};
@@ -1816,11 +1743,6 @@ struct DecoratorNoMain: public ExpandDecorator {
 
     void handle(const Span&, const ASTAttribute&, const WireBoard&, ASTCrate& crate) const override;
 };
-
-//struct Decorator_Prelude:
-//    public ExpandDecorator
-//{
-//    AttrStage stage() const override { return AttrStage::Pre; }
 
 struct DecoratorNoPrelude: public ExpandDecorator {
     AttrStage stage() const override;
@@ -1920,8 +1842,6 @@ bool ExpandDecorator::runDuringIter() const {
     return false;
 }
 
-// Whether `handle` should receive the item's full attribute list instead of only the
-// attributes written after the invoking one (derive macros need the full set).
 bool ExpandDecorator::wantsAllAttrs() const {
     return false;
 }
@@ -1942,17 +1862,14 @@ void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireB
     unexpected(sp, mi, "trait item");
 }
 
-// NOTE: To delete, clear the name
 void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const {
     unexpected(sp, mi, "struct item");
 }
 
-// NOTE: To delete, make the type invalid
 void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const {
     unexpected(sp, mi, "tuple item");
 }
 
-// NOTE: To delete, clear the name
 void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const {
     unexpected(sp, mi, "enum variant");
 }
@@ -1961,12 +1878,10 @@ void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireB
     unexpected(sp, mi, "expression");
 }
 
-// NOTE: To delete, clear the patterns vector
 void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const {
     unexpected(sp, mi, "match arm");
 }
 
-// NOTE: To delete, clear the value
 void ExpandDecorator::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const {
     unexpected(sp, mi, "struct literal ent");
 }
@@ -2073,13 +1988,10 @@ auto CHandlerRepr::getReprName(TokenStream& lex) -> RcString {
 
 auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (i.is_None()) {
-    }
-    // --- struct ---
-    else if (auto* s = i.opt_Struct()) {
+    } else if (auto* s = i.opt_Struct()) {
         TTStream lex(sp, ParseState(), mi.data());
         lex.parseState().wb = &wb;
         lex.getTokenCheck(TOK_PAREN_OPEN);
-        // `#[repr()]` names no representation at all, which is allowed.
         if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
             lex.getTokenCheck(TOK_PAREN_CLOSE);
             return;
@@ -2136,8 +2048,6 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
                 s->markings.alignValue = std::max(s->markings.alignValue, v.truncateU64());
                 lex.getTokenCheck(TOK_PAREN_CLOSE);
             } else if (reprType == "Rust") {
-                // The default representation, which is what a struct with
-                // no `repr` already has.
             } else if (reprType == "no_niche") {
                 // TODO: rust-lang/rust#68303 happens with UnsafeCell and niche optionisations
                 // - Would trustme also have this?
@@ -2147,14 +2057,11 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
         } while (lex.getTokenIf(TOK_COMMA));
         lex.getTokenCheck(TOK_PAREN_CLOSE);
         lex.getTokenCheck(TOK_EOF);
-    }
-    // --- enum ---
-    else if (auto* e = i.opt_Enum()) {
+    } else if (auto* e = i.opt_Enum()) {
         TTStream lex(sp, ParseState(), mi.data());
         lex.parseState().wb = &wb;
         lex.getTokenCheck(TOK_PAREN_OPEN);
 
-        // Loop, so `repr(C, u8)` is valid
         while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
             auto setRepr = [&](ASTEnum::Markings::Repr r) {
                 ASSERT_BUG(lex.pointSpan(), e->markings.repr == ASTEnum::Markings::Repr::Rust, "Multiple enum reprs set");
@@ -2162,7 +2069,6 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
             };
             auto reprStr = getReprName(lex);
             if (reprStr == "C") {
-                // Repeated is OK
                 e->markings.isReprC = true;
             } else if (reprStr == "u8") {
                 setRepr(ASTEnum::Markings::Repr::U8);
@@ -2199,10 +2105,7 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
                 e->markings.alignValue = std::max(e->markings.alignValue, v.truncateU64());
                 lex.getTokenCheck(TOK_PAREN_CLOSE);
             } else if (reprStr == "Rust") {
-                // The default representation.
             } else if (reprStr == "transparent") {
-                // The enum lays out as its one variant, which is what a
-                // single-variant enum already does here.
                 ASSERT_BUG(lex.pointSpan(), e->variants().size() == 1, "#[repr(transparent)] needs exactly one variant");
             } else {
                 ERROR(lex.pointSpan(), E0000, "Unknown enum repr '" << reprStr << "'");
@@ -2214,9 +2117,7 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
 
         lex.getTokenCheck(TOK_PAREN_CLOSE);
         lex.getTokenCheck(TOK_EOF);
-    }
-    // --- union ---
-    else if (auto* e = i.opt_Union()) {
+    } else if (auto* e = i.opt_Union()) {
         TTStream lex(sp, ParseState(), mi.data());
         lex.parseState().wb = &wb;
         lex.getTokenCheck(TOK_PAREN_OPEN);
@@ -2226,7 +2127,6 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
             if (reprStr == "C") {
                 e->markings.repr = ASTUnion::Markings::Repr::C;
             } else if (reprStr == "Rust") {
-                // The default representation.
             } else if (reprStr == "transparent") {
                 e->markings.repr = ASTUnion::Markings::Repr::Transparent;
             } else if (reprStr == "packed") {
@@ -2446,14 +2346,9 @@ auto CHandlerLinkage::handle(const Span& sp, const ASTAttribute& mi, const WireB
     } else if (linkageStr == "weak") {
         linkage = ASTLinkage::Weak;
     } else if (linkageStr == "linkonce" || linkageStr == "linkonce_odr" || linkageStr == "weak_odr") {
-        // One definition is kept and the rest discarded, which is what a
-        // weak definition already does here.
         linkage = ASTLinkage::Weak;
     } else if (linkageStr == "external") {
     } else if (linkageStr == "internal" || linkageStr == "private") {
-        // The symbol is local to the object it is emitted in. Nothing here
-        // exports a definition that was not asked for, so an ordinary
-        // definition is what this means.
     } else {
         TODO(sp, "#[linkage=\"" << linkageStr << "\"]");
     }
@@ -2499,7 +2394,6 @@ auto CHandlerRustcIntrinsic::handle(const Span& sp, const ASTAttribute& mi, cons
         if (e->abi() != ABI_RUST) {
             ERROR(sp, E0000, "#[rustc_intrinsic] on function with ABI already set (`" << e->abi() << "`)");
         }
-        // Only add if there's no body
         if (!e->code()) {
             e->setAbi("rust-intrinsic");
         }
@@ -2514,11 +2408,8 @@ auto CHandlerTrackCaller::stage() const -> AttrStage {
 
 auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (/*auto* e =*/i.opt_Function()) {
-        // Handled by HIR lower
     } else if (i.opt_Macro()) {
-        // Accepted and ignored, matching rustc.
     } else if (const auto* invocation = i.opt_MacroInv(); invocation && invocation->path().isTrivial() && invocation->path().asTrivial() == "macro_rules") {
-        // macro_rules! is still an invocation at the pre-expansion stage.
     } else {
         ERROR(sp, E0000, "#[track_caller] on non-function");
     }
@@ -2526,7 +2417,6 @@ auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const W
 
 auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (/*auto* e =*/i.opt_Function()) {
-        // Handled by HIR lower
     } else {
         ERROR(sp, E0000, "#[track_caller] on non-function");
     }
@@ -2534,7 +2424,6 @@ auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const W
 
 auto CHandlerTrackCaller::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const -> void {
     if (/*auto* e =*/i.opt_Function()) {
-        // Handled by HIR lower
     } else {
         ERROR(sp, E0000, "#[track_caller] on non-function");
     }
@@ -2593,14 +2482,11 @@ auto CHandlerUnsafe::handleItem(const Span& sp, const ASTAttribute& mi, const Wi
             }
         } else if (ident == "ffi_const") {
             if (/*auto* e =*/i.opt_Function()) {
-                // A hint to the optimiser that a FFI function always returns the same value
-                // - Don't care here
             } else {
                 ERROR(sp, E0000, "#[unsafe(" << ident << ")] on non-function");
             }
         } else if (ident == "naked") {
             if (auto* e = i.opt_Function()) {
-                // Flag this function as being a bare symbol (no prologue/epilogue)
                 e->markings.isNaked = true;
             } else {
                 ERROR(sp, E0000, "#[unsafe(" << ident << ")] on non-function");
@@ -2646,8 +2532,6 @@ auto DecoratorCrateType::handle(const Span& sp, const ASTAttribute& mi, const Wi
     } else if (name == "bin") {
         crate.crateType = ASTCrate::Type::Executable;
     } else if (name == "staticlib") {
-        // A static library holds the same items as an rlib; what differs is
-        // how it is linked, which the driver decides.
         crate.crateType = ASTCrate::Type::RustLib;
     } else {
         ERROR(sp, E0000, "Unknown crate type '" << name << "'");
@@ -2671,8 +2555,6 @@ auto DecoratorRecursionLimit::handle(const Span& sp, const ASTAttribute& mi, con
     const auto text = mi.parseEqualsString(wb, crate, crate.rootModule_);
     char* end = nullptr;
     const auto value = ::std::strtoul(text.c_str(), &end, 10);
-    // Zero is allowed: it forbids recursion outright rather than being an
-    // error in itself.
     if (text.empty() || *end != '\0') {
         ERROR(sp, E0000, "#![recursion_limit] needs a number, got `" << text << "`");
     }
@@ -2768,8 +2650,6 @@ auto Deriver::getParamsWithBounds(ObjPool& pool, const Span& sp, const ASTGeneri
         }
     }
 
-    // For each field type
-    // - Locate used generic parameters in the type (and sub-types that directly use said parameter)
     for (auto& ty : additionalBoundedTypes) {
         params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mv$(ty), {}, traitPath}));
     }
@@ -2864,11 +2744,9 @@ auto Deriver::addFieldBoundFromTy(const ASTGenericParams& params, ::std::vector<
     // TODO: Locate type that is directly related to the type param.
     switch (ty->data.tag()) {
         case TypeData::TAG_None: {
-            // Wat?
             break;
         }
         case TypeData::TAG_Any: {
-            // Nope.
             break;
         }
         case TypeData::TAG_Unit: {
@@ -2878,7 +2756,6 @@ auto Deriver::addFieldBoundFromTy(const ASTGenericParams& params, ::std::vector<
             break;
         }
         case TypeData::TAG_Macro: {
-            // not allowed
             break;
         }
         case TypeData::TAG_Primitive: {
@@ -2921,14 +2798,12 @@ auto Deriver::addFieldBoundFromTy(const ASTGenericParams& params, ::std::vector<
             break;
         }
         case TypeData::TAG_Generic: {
-            // Although this is what we're looking for, it's already handled.
             break;
         }
         case TypeData::TAG_Path: {
             auto& e = ty->data.as_Path();
             switch (e->cls.tag()) {
                 case ASTPathClass::TAG_Invalid: {
-                    // wut.
                     break;
                 }
                 case ASTPathClass::TAG_Local: {
@@ -2937,7 +2812,6 @@ auto Deriver::addFieldBoundFromTy(const ASTGenericParams& params, ::std::vector<
                 case ASTPathClass::TAG_Relative: {
                     auto& pe = e->cls.as_Relative();
                     if (pe.nodes.size() > 1) {
-                        // Check if the first node of a relative is a generic param.
                         for (const auto& param : params.params) {
                             if ((param.is_Type() && (param.as_Type().name() == pe.nodes.front().name()))) {
                                 addFieldBound(outList, ty);
@@ -3019,10 +2893,7 @@ auto DeriverDebug::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
     const ASTPath pathDebugStruct = getPath(opts.coreName, "fmt", "DebugStruct");
     const ASTPath pathDebugTuple = getPath(opts.coreName, "fmt", "DebugTuple");
 
-    // Generate code for Debug
     ASTExprNodeP node;
-    // `-Zfmt-debug` cuts the output down: `shallow` keeps only the name,
-    // `none` prints nothing at all.
     if (opts.fmtDebug != Settings::FmtDebug::Full) {
         const char* text = opts.fmtDebug == Settings::FmtDebug::Shallow ? name.c_str() : "";
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, ::std::string(text)))));
@@ -3066,7 +2937,6 @@ auto DeriverDebug::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
     const ASTPath pathDebugStruct = getPath(opts.coreName, "fmt", "DebugStruct");
     const ASTPath pathDebugTuple = getPath(opts.coreName, "fmt", "DebugTuple");
 
-    // `-Zfmt-debug=none` prints nothing, so the variant does not matter.
     if (opts.fmtDebug == Settings::FmtDebug::None) {
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, ::std::string()))));
     }
@@ -3078,8 +2948,6 @@ auto DeriverDebug::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
 
         ASTPath variantPath = basePath + v.name;
 
-        // `-Zfmt-debug=shallow` keeps only the variant name, so the fields
-        // are not bound at all.
         if (opts.fmtDebug == Settings::FmtDebug::Shallow) {
             code = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(RcString("f"))), NEWNODE(String, v.name.c_str())));
             switch (v.data.tag()) {
@@ -3160,10 +3028,6 @@ auto DeriverInnerCompare::handleItem(Span sp, const DeriveOpts& opts, const ASTG
         auto lhs = NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("self"))), fldName);
         auto rhs = NEWNODE(Field, NEWNODE(NamedValue, ASTPath(RcString("v"))), fldName);
 
-        // Comparing a field normally autoref-borrows it. A packed field
-        // may not satisfy that reference's alignment, so rustc first
-        // evaluates the field in its own block. This makes a Copy field a
-        // value before the comparison takes references to the operands.
         if (str.markings.maxFieldAlign != 0) {
             auto lhsBlock = newBlock(sp);
             lhsBlock->pushTailExpr(mv$(lhs));
@@ -3255,7 +3119,6 @@ auto DeriverInnerCompare::handleItem(Span sp, const DeriveOpts& opts, const ASTG
         arms.push_back(ASTExprNodeMatchArm(mv$(pats), {}, mv$(code)));
     }
 
-    // Default arm
     {
         arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern()), {}, this->enumMismatch(sp, opts.coreName)));
     }
@@ -3435,7 +3298,6 @@ auto DeriverEq::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericPara
 }
 
 auto DeriverEq::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const -> ASTImpl {
-    // Eq is just a marker, so it's valid to derive for union
     const ASTPath assertMethodPath = this->getTraitPath(opts.coreName) + RcString("assert_receiver_is_total_eq");
     auto block = newBlock(sp);
 
@@ -3530,10 +3392,6 @@ auto DeriverClone::traitName() const -> const char* {
 auto DeriverClone::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const -> ASTImpl {
     const ASTPath& tyPath = *type->data.as_Path();
 
-    // A `Copy` type clones by copying. Cloning field by field would call a
-    // field's own `Clone` impl, which is observable when it does more than
-    // copy. A generic type is left alone: `*self` needs `Self: Copy`, which
-    // the derived `Clone` bounds do not give.
     if (opts.derivesCopy && p.params.empty()) {
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(RcString("self"))))));
     }
@@ -3631,8 +3489,6 @@ auto DeriverClone::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericP
 }
 
 auto DeriverClone::makeCopyClone(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> fieldBounds) const -> ASTImpl {
-    // Clone on a union can only be a bitwise copy.
-    // - This requires a Copy impl. That's up to the user
     auto ret = this->makeRet(sp, opts.coreName, p, type, ::std::move(fieldBounds), NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(RcString("self")))));
 
     // TODO: What if the type is only conditionally copy? (generic over something)
@@ -3746,7 +3602,6 @@ auto DeriverDefault::handleItem(Span sp, const DeriveOpts& opts, const ASTGeneri
 }
 
 auto DeriverDefault::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const -> ASTImpl {
-    // 1.74: #[default]
     const ASTEnumVariant* defaultVar = nullptr;
     for (const auto& v : enm.variants()) {
         if (v.attrs.has("default")) {
@@ -3793,9 +3648,6 @@ auto DeriverDefault::handleItem(Span sp, const DeriveOpts& opts, const ASTGeneri
             break;
         }
     }
-    // Only the `#[default]` variant is constructed, so the other variants'
-    // types need no bound -- `MyOption<NotDefault>::default()` is fine when
-    // the default variant carries nothing.
     return this->makeRet(sp, opts.coreName, p, type, std::move(boundTys), std::move(node), /*boundTypeParams=*/false);
 }
 
@@ -3914,8 +3766,6 @@ auto DeriverHash::handleItem(Span sp, const DeriveOpts& opts, const ASTGenericPa
         ASTPattern patA;
 
         auto varPath = basePath + v.name;
-        // The discriminant is hashed at its own width: an `#[repr(u8)]` enum
-        // writes one byte, not a whole `isize`.
         auto varIdxHash = enm.variants().size() > 1 ? this->hashValRef(opts.coreName, NEWNODE(Integer, U128(varIdx), discriminantCoreType(enm))) : NEWNODE(Tuple, {});
 
         auto block = newBlock(sp);
@@ -4142,14 +3992,7 @@ auto DeriverRustcDecodable::makeRet(Span sp, const RcString& coreName, const AST
     resultPath.nodes()[1].args().entries.push_back(mktypeSelf(*type->pool, sp));
     resultPath.nodes()[1].args().entries.push_back(mkType(*type->pool, sp, ASTPath::newUfcsTrait(mkType(*type->pool, sp, "D", 0x100 | 0), this->getTraitPathDecoder(), {ASTPathNode("Error", {})})));
 
-    ASTFunction fcn(
-        sp,
-        mkType(*type->pool, sp, resultPath),
-        vec$(
-            //AST::Function::Arg( AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), mkType(*type->pool, ASTTypeTags::Reference(), sp, false, AST::LifetimeRef(), mktype_Self(sp)) ),
-            ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, "d"), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, "D", 0x100 | 0)))
-        )
-    );
+    ASTFunction fcn(sp, mkType(*type->pool, sp, resultPath), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, "d"), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, "D", 0x100 | 0)))));
     fcn.params().addTyParam(ASTTypeParam(*type->pool, sp, {}, "D"));
     fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, "D", 0x100 | 0), {}, this->getTraitPathDecoder()}));
     fcn.setCode(NEWNODE(Block, mv$(node)));
@@ -4254,10 +4097,8 @@ auto DeriverRustcDecodable::handleItem(Span sp, const DeriveOpts& opts, const AS
     basePath.nodes().back().args() = ASTPathParams();
     ::std::vector<ASTExprNodeMatchArm> arms;
 
-    // 1. Variant names
     ::std::vector<ASTExprNodeP> varNameStrs;
 
-    // 2. Decoding arms
     for (unsigned int varIdx = 0; varIdx < enm.variants().size(); varIdx++) {
         const auto& v = enm.variants()[varIdx];
         ASTExprNodeP code;
@@ -4299,7 +4140,6 @@ auto DeriverRustcDecodable::handleItem(Span sp, const DeriveOpts& opts, const AS
         varNameStrs.push_back(NEWNODE(String, v.name.c_str()));
     }
 
-    // Default arm
     {
         arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern()), {}, this->getValErrStr(opts.coreName, "enum value unknown")));
     }
@@ -4407,7 +4247,6 @@ auto DecoratorDerive::wantsAllAttrs() const -> bool {
 auto DecoratorDerive::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     switch (i.tag()) {
         case ASTItem::TAG_None: {
-            // Ignore, it's been deleted
             break;
         }
         case ASTItem::TAG_Union: {
@@ -4486,7 +4325,6 @@ auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& attr, const W
             TODO(sp, "Unknown item type " << i.tagStr() << " with #[" << attr << "] attached at " << path);
             break;
         case ASTItem::TAG_None: {
-            // NOTE: Can happen when #[cfg] removed this
             break;
         }
         case ASTItem::TAG_Impl: {
@@ -4508,12 +4346,8 @@ auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& attr, const W
             } else if (name == "mut_slice_ptr") {
             } else if (name == "array") {
             } else if (name == "bool") {
-            }
-            // rustc_unicode
-            else if (name == "char") {
-            }
-            // collections
-            else if (name == "str") {
+            } else if (name == "char") {
+            } else if (name == "str") {
             } else if (name == "slice") {
             } else if (name == "slice_u8") {
             } // libcore now, `impl [u8]`
@@ -4523,7 +4357,6 @@ auto DecoratorLangItem::handle(const Span& sp, const ASTAttribute& attr, const W
             } // liballoc's impls on [u8]
             else if (name == "str_alloc") {
             } // liballoc's impls on str
-            // std - interestingly
             else if (name == "f32") {
             } else if (name == "f64") {
             } else if (name == "f32_runtime") {
@@ -4594,7 +4427,6 @@ auto DecoratorMain::stage() const -> AttrStage {
 
 auto DecoratorMain::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
     if (i.is_None()) {
-        // Ignore.
     } else if (/*const auto* e =*/i.opt_Function()) {
         auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-main"), path));
         if (!rv.second) {
@@ -4660,7 +4492,6 @@ auto DecoratorRustcStdInternalSymbol::stage() const -> AttrStage {
 }
 
 auto DecoratorRustcStdInternalSymbol::handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
-    // Attribute that acts as like `#[no_mangle]` `#[linkage="external"]`
 }
 
 auto DecoratorAllocErrorHandler::stage() const -> AttrStage {
@@ -4868,7 +4699,6 @@ auto CHandlerRustcOnUnimiplemented::stage() const -> AttrStage {
 }
 
 auto CHandlerRustcOnUnimiplemented::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const -> void {
-    // Trait only.
 }
 
 auto CHandlerRustBox::stage() const -> AttrStage {
@@ -5046,9 +4876,6 @@ auto CTestHandlerSP::handle(const Span& sp, const ASTAttribute& mi, const WireBo
                 if (lex.getTokenIf(TOK_EQUAL)) {
                     parseMessage();
                 } else {
-                    // Anything other than exactly `expected = "..."` is a
-                    // lint in rustc, and the attribute still means "this
-                    // test panics" -- just without a message to match.
                     bool gotMessage = false;
                     if (lex.getTokenIf(TOK_PAREN_OPEN) && lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_EQUAL) {
                         auto n = lex.getTokenCheck(TOK_IDENT).ident().name;
@@ -5068,7 +4895,6 @@ auto CTestHandlerSP::handle(const Span& sp, const ASTAttribute& mi, const WireBo
             }
             return;
         }
-        //ERROR()
     }
 }
 
@@ -5090,6 +4916,5 @@ auto CTestHandlerIgnore::handle(const Span& sp, const ASTAttribute& mi, const Wi
             td.ignore = true;
             return;
         }
-        //ERROR()
     }
 }

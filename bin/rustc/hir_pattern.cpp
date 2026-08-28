@@ -60,145 +60,145 @@
     if (x.implicitDerefCount > 0) {
         os << "&*" << x.implicitDerefCount;
     }
-        switch (x.data.tag()) {
-            case HIRPatternData::TAG_Any: {
-                os << "_";
-                break;
+    switch (x.data.tag()) {
+        case HIRPatternData::TAG_Any: {
+            os << "_";
+            break;
+        }
+        case HIRPatternData::TAG_Box: {
+            auto& e = x.data.as_Box();
+            os << "box " << *e.sub;
+            break;
+        }
+        case HIRPatternData::TAG_Deref: {
+            auto& e = x.data.as_Deref();
+            os << "deref!(" << *e.sub << ")";
+            break;
+        }
+        case HIRPatternData::TAG_Ref: {
+            auto& e = x.data.as_Ref();
+            switch (e.type) {
+                case HIRBorrowType::Shared:
+                    os << "&";
+                    break;
+                case HIRBorrowType::Unique:
+                    os << "&mut ";
+                    break;
+                case HIRBorrowType::Owned:
+                    os << "&move ";
+                    break;
             }
-            case HIRPatternData::TAG_Box: {
-                auto& e = x.data.as_Box();
-                os << "box " << *e.sub;
-                break;
+            os << *e.sub;
+            break;
+        }
+        case HIRPatternData::TAG_Tuple: {
+            auto& e = x.data.as_Tuple();
+            os << "(";
+            for (const auto& s : e.subPatterns) {
+                os << s << ", ";
             }
-            case HIRPatternData::TAG_Deref: {
-                auto& e = x.data.as_Deref();
-                os << "deref!(" << *e.sub << ")";
-                break;
+            os << ")";
+            break;
+        }
+        case HIRPatternData::TAG_SplitTuple: {
+            auto& e = x.data.as_SplitTuple();
+            os << "(";
+            for (const auto& s : e.leading) {
+                os << s << ", ";
             }
-            case HIRPatternData::TAG_Ref: {
-                auto& e = x.data.as_Ref();
-                switch (e.type) {
-                    case HIRBorrowType::Shared:
-                        os << "&";
-                        break;
-                    case HIRBorrowType::Unique:
-                        os << "&mut ";
-                        break;
-                    case HIRBorrowType::Owned:
-                        os << "&move ";
-                        break;
-                }
-                os << *e.sub;
-                break;
+            os << ".., ";
+            for (const auto& s : e.trailing) {
+                os << s << ", ";
             }
-            case HIRPatternData::TAG_Tuple: {
-                auto& e = x.data.as_Tuple();
-                os << "(";
-                for (const auto& s : e.subPatterns) {
-                    os << s << ", ";
-                }
-                os << ")";
-                break;
+            os << ")";
+            break;
+        }
+        case HIRPatternData::TAG_PathValue: {
+            auto& e = x.data.as_PathValue();
+            os << e.path;
+            break;
+        }
+        case HIRPatternData::TAG_PathTuple: {
+            auto& e = x.data.as_PathTuple();
+            os << e.path;
+            os << "(";
+            for (const auto& s : e.leading) {
+                os << s << ", ";
             }
-            case HIRPatternData::TAG_SplitTuple: {
-                auto& e = x.data.as_SplitTuple();
-                os << "(";
-                for (const auto& s : e.leading) {
-                    os << s << ", ";
-                }
-                os << ".., ";
-                for (const auto& s : e.trailing) {
-                    os << s << ", ";
-                }
-                os << ")";
-                break;
-            }
-            case HIRPatternData::TAG_PathValue: {
-                auto& e = x.data.as_PathValue();
-                os << e.path;
-                break;
-            }
-            case HIRPatternData::TAG_PathTuple: {
-                auto& e = x.data.as_PathTuple();
-                os << e.path;
-                os << "(";
-                for (const auto& s : e.leading) {
-                    os << s << ", ";
-                }
-                if (e.isSplit) {
-                    os << "..";
-                    for (const auto& s : e.trailing) {
-                        os << ", " << s;
-                    }
-                }
-                os << ")";
-                break;
-            }
-            case HIRPatternData::TAG_PathNamed: {
-                auto& e = x.data.as_PathNamed();
-                os << e.path;
-                os << "{ ";
-                for (const auto& ns : e.subPatterns) {
-                    os << ns.first << ": " << ns.second << ", ";
-                }
-                os << "}";
-                break;
-            }
-            case HIRPatternData::TAG_Value: {
-                auto& e = x.data.as_Value();
-                os << e.val;
-                break;
-            }
-            case HIRPatternData::TAG_Range: {
-                auto& e = x.data.as_Range();
-                if (e.start) {
-                    os << *e.start;
-                }
-                os << " .." << (e.isInclusive ? "=" : "") << " ";
-                if (e.end) {
-                    os << *e.end;
-                }
-                break;
-            }
-            case HIRPatternData::TAG_Slice: {
-                auto& e = x.data.as_Slice();
-                os << "[";
-                for (const auto& s : e.subPatterns) {
-                    os << s << ", ";
-                }
-                os << "]";
-                break;
-            }
-            case HIRPatternData::TAG_SplitSlice: {
-                auto& e = x.data.as_SplitSlice();
-                os << "[ ";
-                for (const auto& s : e.leading) {
-                    os << s << ", ";
-                }
-                if (e.extraBind.isValid()) {
-                    os << e.extraBind;
-                }
+            if (e.isSplit) {
                 os << "..";
                 for (const auto& s : e.trailing) {
                     os << ", " << s;
                 }
-                os << " ]";
-                break;
             }
-            case HIRPatternData::TAG_Or: {
-                auto& e = x.data.as_Or();
-                os << "(";
-                for (size_t i = 0; i < e.size(); i++) {
-                    if (i != 0) {
-                        os << "|";
-                    }
-                    os << e[i];
-                }
-                os << ")";
-                break;
-            }
+            os << ")";
+            break;
         }
-        return os;
+        case HIRPatternData::TAG_PathNamed: {
+            auto& e = x.data.as_PathNamed();
+            os << e.path;
+            os << "{ ";
+            for (const auto& ns : e.subPatterns) {
+                os << ns.first << ": " << ns.second << ", ";
+            }
+            os << "}";
+            break;
+        }
+        case HIRPatternData::TAG_Value: {
+            auto& e = x.data.as_Value();
+            os << e.val;
+            break;
+        }
+        case HIRPatternData::TAG_Range: {
+            auto& e = x.data.as_Range();
+            if (e.start) {
+                os << *e.start;
+            }
+            os << " .." << (e.isInclusive ? "=" : "") << " ";
+            if (e.end) {
+                os << *e.end;
+            }
+            break;
+        }
+        case HIRPatternData::TAG_Slice: {
+            auto& e = x.data.as_Slice();
+            os << "[";
+            for (const auto& s : e.subPatterns) {
+                os << s << ", ";
+            }
+            os << "]";
+            break;
+        }
+        case HIRPatternData::TAG_SplitSlice: {
+            auto& e = x.data.as_SplitSlice();
+            os << "[ ";
+            for (const auto& s : e.leading) {
+                os << s << ", ";
+            }
+            if (e.extraBind.isValid()) {
+                os << e.extraBind;
+            }
+            os << "..";
+            for (const auto& s : e.trailing) {
+                os << ", " << s;
+            }
+            os << " ]";
+            break;
+        }
+        case HIRPatternData::TAG_Or: {
+            auto& e = x.data.as_Or();
+            os << "(";
+            for (size_t i = 0; i < e.size(); i++) {
+                if (i != 0) {
+                    os << "|";
+                }
+                os << e[i];
+            }
+            os << ")";
+            break;
+        }
+    }
+    return os;
 }
 
 namespace {
@@ -228,12 +228,19 @@ namespace {
             }
             case HIRPatternData::TAG_Tuple: {
                 auto& e = pattern.data.as_Tuple();
-                for (const auto& subpattern : e.subPatterns) { visitPatternDeclarationSlots(subpattern, slots); }
+                for (const auto& subpattern : e.subPatterns) {
+                    visitPatternDeclarationSlots(subpattern, slots);
+                }
                 break;
             }
             case HIRPatternData::TAG_SplitTuple: {
                 auto& e = pattern.data.as_SplitTuple();
-                for (const auto& subpattern : e.leading) visitPatternDeclarationSlots(subpattern, slots); for (const auto& subpattern : e.trailing) visitPatternDeclarationSlots(subpattern, slots);
+                for (const auto& subpattern : e.leading) {
+                    visitPatternDeclarationSlots(subpattern, slots);
+                }
+                for (const auto& subpattern : e.trailing) {
+                    visitPatternDeclarationSlots(subpattern, slots);
+                }
                 break;
             }
             case HIRPatternData::TAG_PathValue: {
@@ -241,12 +248,19 @@ namespace {
             }
             case HIRPatternData::TAG_PathTuple: {
                 auto& e = pattern.data.as_PathTuple();
-                for (const auto& subpattern : e.leading) visitPatternDeclarationSlots(subpattern, slots); for (const auto& subpattern : e.trailing) visitPatternDeclarationSlots(subpattern, slots);
+                for (const auto& subpattern : e.leading) {
+                    visitPatternDeclarationSlots(subpattern, slots);
+                }
+                for (const auto& subpattern : e.trailing) {
+                    visitPatternDeclarationSlots(subpattern, slots);
+                }
                 break;
             }
             case HIRPatternData::TAG_PathNamed: {
                 auto& e = pattern.data.as_PathNamed();
-                for (const auto& field : e.subPatterns) { visitPatternDeclarationSlots(field.second, slots); }
+                for (const auto& field : e.subPatterns) {
+                    visitPatternDeclarationSlots(field.second, slots);
+                }
                 break;
             }
             case HIRPatternData::TAG_Value: {
@@ -257,17 +271,28 @@ namespace {
             }
             case HIRPatternData::TAG_Slice: {
                 auto& e = pattern.data.as_Slice();
-                for (const auto& subpattern : e.subPatterns) { visitPatternDeclarationSlots(subpattern, slots); }
+                for (const auto& subpattern : e.subPatterns) {
+                    visitPatternDeclarationSlots(subpattern, slots);
+                }
                 break;
             }
             case HIRPatternData::TAG_SplitSlice: {
                 auto& e = pattern.data.as_SplitSlice();
-                for (const auto& subpattern : e.leading) { visitPatternDeclarationSlots(subpattern, slots); } if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); } for (const auto& subpattern : e.trailing) { visitPatternDeclarationSlots(subpattern, slots); }
+                for (const auto& subpattern : e.leading) {
+                    visitPatternDeclarationSlots(subpattern, slots);
+                }
+                if (e.extraBind.isValid()) {
+                    slots.push_back(e.extraBind.slot);
+                }
+                for (const auto& subpattern : e.trailing) {
+                    visitPatternDeclarationSlots(subpattern, slots);
+                }
                 break;
             }
             case HIRPatternData::TAG_Or: {
                 auto& e = pattern.data.as_Or();
-                assert(!e.empty()); visitPatternDeclarationSlots(e.front(), slots);
+                assert(!e.empty());
+                visitPatternDeclarationSlots(e.front(), slots);
                 break;
             }
         }
@@ -297,12 +322,19 @@ namespace {
                 }
                 case HIRPatternData::TAG_Tuple: {
                     auto& e = current.data.as_Tuple();
-                    for (const auto& subpattern : e.subPatterns) { visitImmediate(subpattern); }
+                    for (const auto& subpattern : e.subPatterns) {
+                        visitImmediate(subpattern);
+                    }
                     break;
                 }
                 case HIRPatternData::TAG_SplitTuple: {
                     auto& e = current.data.as_SplitTuple();
-                    for (const auto& subpattern : e.leading) visitImmediate(subpattern); for (const auto& subpattern : e.trailing) visitImmediate(subpattern);
+                    for (const auto& subpattern : e.leading) {
+                        visitImmediate(subpattern);
+                    }
+                    for (const auto& subpattern : e.trailing) {
+                        visitImmediate(subpattern);
+                    }
                     break;
                 }
                 case HIRPatternData::TAG_PathValue: {
@@ -310,12 +342,19 @@ namespace {
                 }
                 case HIRPatternData::TAG_PathTuple: {
                     auto& e = current.data.as_PathTuple();
-                    for (const auto& subpattern : e.leading) visitImmediate(subpattern); for (const auto& subpattern : e.trailing) visitImmediate(subpattern);
+                    for (const auto& subpattern : e.leading) {
+                        visitImmediate(subpattern);
+                    }
+                    for (const auto& subpattern : e.trailing) {
+                        visitImmediate(subpattern);
+                    }
                     break;
                 }
                 case HIRPatternData::TAG_PathNamed: {
                     auto& e = current.data.as_PathNamed();
-                    for (const auto& field : e.subPatterns) { visitImmediate(field.second); }
+                    for (const auto& field : e.subPatterns) {
+                        visitImmediate(field.second);
+                    }
                     break;
                 }
                 case HIRPatternData::TAG_Value: {
@@ -326,12 +365,22 @@ namespace {
                 }
                 case HIRPatternData::TAG_Slice: {
                     auto& e = current.data.as_Slice();
-                    for (const auto& subpattern : e.subPatterns) { visitImmediate(subpattern); }
+                    for (const auto& subpattern : e.subPatterns) {
+                        visitImmediate(subpattern);
+                    }
                     break;
                 }
                 case HIRPatternData::TAG_SplitSlice: {
                     auto& e = current.data.as_SplitSlice();
-                    for (const auto& subpattern : e.leading) { visitImmediate(subpattern); } if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); } for (auto it = e.trailing.rbegin(); it != e.trailing.rend(); ++it) { visitImmediate(*it); }
+                    for (const auto& subpattern : e.leading) {
+                        visitImmediate(subpattern);
+                    }
+                    if (e.extraBind.isValid()) {
+                        slots.push_back(e.extraBind.slot);
+                    }
+                    for (auto it = e.trailing.rbegin(); it != e.trailing.rend(); ++it) {
+                        visitImmediate(*it);
+                    }
                     break;
                 }
                 case HIRPatternData::TAG_Or: {
@@ -341,8 +390,6 @@ namespace {
                 }
             }
 
-            // HIR stores `outer @ inner @ pattern` bindings outermost first,
-            // while rustc establishes the inner binding first.
             for (auto it = current.bindings.rbegin(); it != current.bindings.rend(); ++it) {
                 slots.push_back(it->slot);
             }
@@ -422,65 +469,65 @@ namespace {
 
 namespace {
     HIRPattern::Data clonePatternData(const HIRPattern::Data& data) {
-    switch (data.tag()) {
-        case HIRPatternData::TAG_Any: {
-            return HIRPattern::Data::make_Any({});
+        switch (data.tag()) {
+            case HIRPatternData::TAG_Any: {
+                return HIRPattern::Data::make_Any({});
+            }
+            case HIRPatternData::TAG_Box: {
+                auto& e = data.as_Box();
+                return HIRPattern::Data::make_Box({box$(e.sub->clone())});
+            }
+            case HIRPatternData::TAG_Deref: {
+                auto& e = data.as_Deref();
+                return HIRPattern::Data::make_Deref({e.kind, e.targetType, box$(e.sub->clone())});
+            }
+            case HIRPatternData::TAG_Ref: {
+                auto& e = data.as_Ref();
+                return HIRPattern::Data::make_Ref({e.type, e.isSkipped, box$(e.sub->clone())});
+            }
+            case HIRPatternData::TAG_Tuple: {
+                auto& e = data.as_Tuple();
+                return HIRPattern::Data::make_Tuple({clonePatVec(e.subPatterns)});
+            }
+            case HIRPatternData::TAG_SplitTuple: {
+                auto& e = data.as_SplitTuple();
+                return HIRPattern::Data::make_SplitTuple({clonePatVec(e.leading), clonePatVec(e.trailing), e.totalSize});
+            }
+            case HIRPatternData::TAG_PathValue: {
+                auto& e = data.as_PathValue();
+                return HIRPattern::Data::make_PathValue({e.path.clone(), e.binding.clone()});
+            }
+            case HIRPatternData::TAG_PathTuple: {
+                auto& e = data.as_PathTuple();
+                return HIRPattern::Data::make_PathTuple({e.path.clone(), e.binding.clone(), clonePatVec(e.leading), e.isSplit, clonePatVec(e.trailing), e.totalSize});
+            }
+            case HIRPatternData::TAG_PathNamed: {
+                auto& e = data.as_PathNamed();
+                return HIRPattern::Data::make_PathNamed({e.path.clone(), e.binding.clone(), clonePatFields(e.subPatterns), e.isExhaustive});
+            }
+            case HIRPatternData::TAG_Value: {
+                auto& e = data.as_Value();
+                return HIRPattern::Data::make_Value({clonePatval(e.val)});
+            }
+            case HIRPatternData::TAG_Range: {
+                auto& e = data.as_Range();
+                return HIRPattern::Data::make_Range({box$(clonePatval(*e.start)), box$(clonePatval(*e.end)), e.isInclusive});
+            }
+            case HIRPatternData::TAG_Slice: {
+                auto& e = data.as_Slice();
+                return HIRPattern::Data::make_Slice({clonePatVec(e.subPatterns)});
+            }
+            case HIRPatternData::TAG_SplitSlice: {
+                auto& e = data.as_SplitSlice();
+                return HIRPattern::Data::make_SplitSlice({clonePatVec(e.leading), e.extraBind, clonePatVec(e.trailing)});
+            }
+            case HIRPatternData::TAG_Or: {
+                auto& e = data.as_Or();
+                return clonePatVec(e);
+            }
         }
-        case HIRPatternData::TAG_Box: {
-            auto& e = data.as_Box();
-            return HIRPattern::Data::make_Box({box$(e.sub->clone())});
-        }
-        case HIRPatternData::TAG_Deref: {
-            auto& e = data.as_Deref();
-            return HIRPattern::Data::make_Deref({e.kind, e.targetType, box$(e.sub->clone())});
-        }
-        case HIRPatternData::TAG_Ref: {
-            auto& e = data.as_Ref();
-            return HIRPattern::Data::make_Ref({e.type, e.isSkipped, box$(e.sub->clone())});
-        }
-        case HIRPatternData::TAG_Tuple: {
-            auto& e = data.as_Tuple();
-            return HIRPattern::Data::make_Tuple({clonePatVec(e.subPatterns)});
-        }
-        case HIRPatternData::TAG_SplitTuple: {
-            auto& e = data.as_SplitTuple();
-            return HIRPattern::Data::make_SplitTuple({clonePatVec(e.leading), clonePatVec(e.trailing), e.totalSize});
-        }
-        case HIRPatternData::TAG_PathValue: {
-            auto& e = data.as_PathValue();
-            return HIRPattern::Data::make_PathValue({e.path.clone(), e.binding.clone()});
-        }
-        case HIRPatternData::TAG_PathTuple: {
-            auto& e = data.as_PathTuple();
-            return HIRPattern::Data::make_PathTuple({e.path.clone(), e.binding.clone(), clonePatVec(e.leading), e.isSplit, clonePatVec(e.trailing), e.totalSize});
-        }
-        case HIRPatternData::TAG_PathNamed: {
-            auto& e = data.as_PathNamed();
-            return HIRPattern::Data::make_PathNamed({e.path.clone(), e.binding.clone(), clonePatFields(e.subPatterns), e.isExhaustive});
-        }
-        case HIRPatternData::TAG_Value: {
-            auto& e = data.as_Value();
-            return HIRPattern::Data::make_Value({clonePatval(e.val)});
-        }
-        case HIRPatternData::TAG_Range: {
-            auto& e = data.as_Range();
-            return HIRPattern::Data::make_Range({box$(clonePatval(*e.start)), box$(clonePatval(*e.end)), e.isInclusive});
-        }
-        case HIRPatternData::TAG_Slice: {
-            auto& e = data.as_Slice();
-            return HIRPattern::Data::make_Slice({clonePatVec(e.subPatterns)});
-        }
-        case HIRPatternData::TAG_SplitSlice: {
-            auto& e = data.as_SplitSlice();
-            return HIRPattern::Data::make_SplitSlice({clonePatVec(e.leading), e.extraBind, clonePatVec(e.trailing)});
-        }
-        case HIRPatternData::TAG_Or: {
-            auto& e = data.as_Or();
-            return clonePatVec(e);
-        }
-    }
 
-    UNREACHABLE();
+        UNREACHABLE();
     }
 }
 

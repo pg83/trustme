@@ -10,7 +10,6 @@
 #include <string>
 #include <iostream>
 
-/// Representation of a syntatic token in a TOML file
 struct TomlToken {
     enum class Type {
         Eof,
@@ -109,10 +108,8 @@ TomlKeyValue TomlFile::getNextValue() {
             t = lexer_.getToken();
         }
 
-        // Expect '[', a string, or an identifier
         switch (t.type) {
             case TomlToken::Type::Eof:
-                // Empty return indicates the end of the list
                 return TomlKeyValue{};
             case TomlToken::Type::SquareOpen: {
                 currentBlock.clear();
@@ -149,16 +146,13 @@ TomlKeyValue TomlFile::getNextValue() {
                 if (t.type != TomlToken::Type::Newline) {
                     throw ::std::runtime_error(FMT(lexer_ << ": Unexpected token after block block - " << t));
                 }
-                // Recurse!
                 return getNextValue();
             }
             default:
                 break;
         }
     } else {
-        // Expect a string or an identifier
         if (t.type == TomlToken::Type::Eof) {
-            // EOF isn't allowed here
             throw ::std::runtime_error(FMT(lexer_ << ": Unexpected EOF in composite"));
         }
     }
@@ -183,19 +177,15 @@ TomlKeyValue TomlFile::getNextValue() {
         t = lexer_.getToken();
     }
 
-    // Note: Should be impossible, as it's the break condition above
     assert(t.type == TomlToken::Type::Assign);
     t = lexer_.getToken();
 
-    // --- Value ---
     TomlKeyValue rv;
     switch (t.type) {
-        // String: Return the string value
         case TomlToken::Type::String:
             rv.path = this->getPath(std::move(keyName));
             rv.value = TomlValue{t.data};
             break;
-        // Array: Parse the entire list and return as Type::List
         case TomlToken::Type::SquareOpen: {
             rv.path = this->getPath(std::move(keyName));
             rv.value.type = TomlValue::Type::List;
@@ -222,11 +212,6 @@ TomlKeyValue TomlFile::getNextValue() {
                             throw ::std::runtime_error(FMT(lexer_ << ": Unexpected identifier in array value position - " << t));
                         }
                         break;
-                    // Nested array or inline table. This parser's value model is flat
-                    // (strings / scalars), so these are consumed (balanced) and
-                    // discarded rather than aborting the whole file. A warning is
-                    // emitted after the loop so a dropped value is noticed if it ever
-                    // turns out to matter.
                     case TomlToken::Type::SquareOpen:
                     case TomlToken::Type::BraceOpen:
                         skippedNested = true;
@@ -261,7 +246,6 @@ TomlKeyValue TomlFile::getNextValue() {
         }
         case TomlToken::Type::BraceOpen:
             currentComposite.push_back(std::move(keyName));
-            // Recurse to restart parse
             return getNextValue();
         case TomlToken::Type::Integer:
             rv.path = this->getPath(std::move(keyName));
@@ -301,9 +285,6 @@ TomlKeyValue TomlFile::getNextValue() {
 }
 
 void TomlFile::skipCompositeValue() {
-    // The opening `[` or `{` has already been consumed by the caller. Read
-    // tokens (including any nested groups) until the matching close balances
-    // the count back to zero. Contents are discarded.
     unsigned depth = 1;
     while (depth > 0) {
         auto t = lexer_.getToken();
@@ -387,8 +368,6 @@ namespace {
             case 'f':
                 str += '\f';
                 break;
-            // `\uXXXX` / `\UXXXXXXXX`: consume the hex digits. The compiler never
-            // needs the exact codepoint of a string value, so store a placeholder.
             case 'u':
                 for (int i = 0; i < 4; i++) {
                     (void)is.get();
@@ -401,8 +380,6 @@ namespace {
                 }
                 str += '?';
                 break;
-            // Line-ending backslash in a multi-line basic string: trim the newline
-            // and all following whitespace up to the next non-whitespace char.
             case '\n':
             case '\r':
             case ' ':
@@ -462,22 +439,18 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                 }
             }
             return TomlToken{Type::Newline};
-        // Literal string: No escaping
         case '\'':
             c = is.get();
             if (c == '\'') {
                 c = is.get();
-                // Empty literal string
                 if (c != '\'') {
                     str = "";
                 } else {
-                    // If the first character is a newline, strip it
                     c = is.get();
                     if (c == '\n') {
                         line++;
                         c = is.get();
                     }
-                    // Multi-line literal string
                     for (;;) {
                         if (c == '\'') {
                             c = is.get();
@@ -504,7 +477,6 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                     if (c == EOF) {
                         throw ::std::runtime_error("Unexpected EOF in single-quoted string");
                     }
-                    // Technically not allowed
                     if (c == '\n') {
                         line++;
                     }
@@ -513,7 +485,6 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                 }
             }
             return TomlToken{Type::String, str};
-        // Basic string: has escape sequences
         case '"':
             c = is.get();
             if (c == '"') {
@@ -522,13 +493,11 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                     is.putback(c);
                     return TomlToken{Type::String, ""};
                 } else {
-                    // Strip newline if it's the first character
                     c = is.get();
                     if (c == '\n') {
                         line++;
                         c = is.get();
                     }
-                    // Keep reading until """
                     for (;;) {
                         if (c == '"') {
                             c = is.get();
@@ -565,7 +534,6 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                         c = is.get();
                         continue;
                     }
-                    // Technically not allowed
                     if (c == '\n') {
                         line++;
                     }
@@ -576,7 +544,6 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
             return TomlToken{Type::String, str};
         default:
             if (isalnum(c) || c == '_' || c == '-') {
-                // Identifier
                 while (isalnum(c) || c == '-' || c == '_') {
                     str += (char)c;
                     c = is.get();
@@ -627,7 +594,6 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                             val += c - '0';
                         }
                     } else {
-                        // Literal `0` is handled below
                     }
                 } else {
                     for (; i < str.size(); i++) {

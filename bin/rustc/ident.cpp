@@ -1,8 +1,10 @@
 #include "ident.h"
-#include <iostream>
+
 #include "common.h" // vector print
 
 #include <std/mem/obj_pool.h>
+
+#include <iostream>
 
 using namespace stl;
 
@@ -21,14 +23,10 @@ bool Ident::Hygiene::isVisible(const Hygiene& srcH) const {
         return false;
     }
     for (size_t i = 0; i < selfSize; i++) {
-        if (inner->contexts[i] != srcH.inner->contexts[i]
-                || inner->macroDefinitions[i] != srcH.inner->macroDefinitions[i]) {
+        if (inner->contexts[i] != srcH.inner->contexts[i] || inner->macroDefinitions[i] != srcH.inner->macroDefinitions[i]) {
             return false;
         }
     }
-    // Ordinary lexical scopes extend visibility. A macro invocation is a
-    // semi-opaque rib: it must be removed at its definition boundary before
-    // bindings outside that definition become visible.
     for (size_t i = selfSize; i < srcSize; i++) {
         if (srcH.inner->macroDefinitions[i] != 0) {
             return false;
@@ -196,18 +194,25 @@ Ordering Ident::Hygiene::ord(const Hygiene& x) const {
     ORD(a.macroDefinitions, b.macroDefinitions); /*ORD(*m_inner->search_module, *x->search_module);*/
     return OrdEqual;
 }
+
 Ident::Ident(const char* name)
     : hygiene()
-    , name(name) {
+    , name(name)
+{
 }
+
 Ident::Ident(RcString name)
     : hygiene()
-    , name(::std::move(name)) {
+    , name(::std::move(name))
+{
 }
+
 Ident::Ident(Hygiene hygiene, RcString name)
     : hygiene(::std::move(hygiene))
-    , name(::std::move(name)) {
+    , name(::std::move(name))
+{
 }
+
 bool Ident::operator<(const Ident& x) const {
     if (this->name != x.name) {
         return this->name < x.name;

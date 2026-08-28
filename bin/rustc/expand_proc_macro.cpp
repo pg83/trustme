@@ -58,25 +58,12 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     auto pmCrateName = RcString::newInterned("proc_macro");
     wb.settings->implicitCrates.insert(std::make_pair(pmCrateName, const_cast<ASTCrate&>(crate).loadExternCrate(*wb.settings, Span(), pmCrateName)));
 
-    // Create the following module:
-    // ```
-    // mod `proc_macro#` {
-    //   extern crate proc_macro;
-    //   }
-    //   static TESTS: [proc_macro::MacroDesc; _] = [
-    //     proc_macro::MacroDesc { name: "deriving_Foo", handler: ::path::to::foo }
-    //     ];
-    // }
-    // ```
-
-    // ---- main function ----
     auto mainFn = ASTFunction{Span(), mkType(*crate.pool, ASTTypeTags::Unit(), Span()), {}};
     {
         auto callNode = NEWNODE(CallPath, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("main")}), ::makeVec1(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(NamedValue, ASTPath("", {ASTPathNode("proc_macro#"), ASTPathNode("MACROS")})))));
         mainFn.setCode(mv$(callNode));
     }
 
-    // ---- test list ----
     ::std::vector<ASTExprNodeP> testNodes;
 
     for (const auto& desc : crate.procMacros) {
@@ -89,9 +76,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
                 break;
         }
         ASTExprNodeStructLiteral::tValues descVals;
-        // `name: "foo",`
         descVals.push_back({{}, "name", NEWNODE(String, desc.name.c_str())});
-        // `handler`: ::foo
         descVals.push_back({{}, "handler", NEWNODE(CallPath, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroType"), ASTPathNode(typeName)}), ::makeVec1(NEWNODE(NamedValue, ASTPath(desc.path))))});
 
         testNodes.push_back(NEWNODE(StructLiteral, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")}), nullptr, mv$(descVals)));
@@ -101,7 +86,6 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     size_t testCount = testsArray->values.size();
     auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), ::std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
 
-    // ---- module ----
     auto newmod = ASTModule{ASTAbsolutePath("", {"proc_macro#"})};
     // - TODO: These need to be loaded too.
     //  > They don't actually need to exist here, just be loaded (and use absolute paths)
@@ -151,14 +135,11 @@ struct ProcMacroInv: public TokenStream {
     ::std::ofstream dumpFileOut;
     ::std::ofstream dumpFileRes;
 
-    /// Spans that have had an index assigned
     ::std::unordered_map<const SpanInner*, size_t> knownSpans;
-    /// Span indexes that have been sent
     ::std::unordered_set<size_t> sentSpans;
     size_t nextSpanIndex = 2;
 
     struct Handles {
-        //~Handles();
         Handles();
 
         Handles(Handles&&);
@@ -168,7 +149,6 @@ struct ProcMacroInv: public TokenStream {
         pid_t childPid = 0; // Questionably needed
         int childStdin = -1;
         int childStdout = -1;
-        // NOTE: stderr stays as our stderr
     } handles;
 
     bool eofHit = false;
@@ -235,7 +215,6 @@ struct ProcMacroInv: public TokenStream {
 };
 
 ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath) {
-    // 1. Locate macro in HIR list
     const auto& crateName = macPath.front();
     ASSERT_BUG(sp, crate.externCrates.count(crateName), "Crate not loaded for macro: [" << macPath << "]");
     const auto& extCrate = crate.externCrates.at(crateName);
@@ -262,17 +241,13 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCr
         ERROR(sp, E0000, "Unable to find referenced proc macro " << macPath);
     }
 
-    // 2. Get executable and macro name
     const auto* procMacroExeName = extCrate.procMacroFilename != "" ? extCrate.procMacroFilename.c_str() : extCrate.filename.c_str();
 
-    // 3. Create ProcMacroInv
     auto rv = ProcMacroInv(wb.id, sp, extCrate.hir->edition, procMacroExeName, *pmp);
     rv.parseState().crate = &crate;
     rv.parseState().wb = &wb;
 
     return rv;
-
-    // NOTE: 1.39 failure_derive (2015) emits `::failure::foo` but `libcargo` doesn't have `failure` in root (it's a 2018 crate)
 }
 
 namespace {
@@ -282,8 +257,6 @@ namespace {
         const Settings& settings;
         ProcMacroInv& pmi;
         bool emitAllAttrs;
-        // Derive inputs must not include `#[derive(...)]` attributes themselves (rustc
-        // strips them before invoking a derive macro).
         bool skipDeriveAttrs = false;
 
         ProcMacroVisitor(const WireBoard& wb, const Span& sp, const Settings& settings, ProcMacroInv& pmi);
@@ -346,7 +319,6 @@ namespace {
 
         void visitImplHdr(const ASTImplDef& impl);
 
-        /// Send a trait definition to the proc macro.
         void visitTrait(const RcString& name, const ASTVisibility& vis, const ASTTrait& trait);
 
         void visitImpl(const ASTImpl& impl);
@@ -357,7 +329,6 @@ namespace {
 
 template <typename F>
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree* attrInput, F cb) {
-    // 1. Create ProcMacroInv instance
     auto pmi = ProcMacroInvokeInt(sp, wb, crate, macPath);
     if (!pmi.checkGood()) {
         return ::std::unique_ptr<TokenStream>();
@@ -365,26 +336,21 @@ template <typename F>
     if (attrInput) {
         // TODO: Assert that this is a `#[proc_macro_attribute]` macro
         if (attrInput->size() != 0) {
-            // If the input is non-empty, then it must be a parenthesised token tree
             ASSERT_BUG(sp, attrInput->size() >= 2, "");
             ASSERT_BUG(sp, (*attrInput)[0].tok() == TOK_PAREN_OPEN || (*attrInput)[0].tok() == TOK_SQUARE_OPEN, "");
             ProcMacroVisitor v(wb, sp, *wb.settings, pmi);
-            // - Strip the parens when sending
             for (size_t i = 1; i < attrInput->size() - 1; i++) {
                 v.visitTokentree((*attrInput)[i]);
             }
         }
         pmi.sendDone();
     }
-    // 2. Feed item as a token stream.
     ProcMacroVisitor v(wb, sp, *wb.settings, pmi);
     cb(v);
     pmi.sendDone();
-    // 3. Return boxed invocation instance
     return box$(pmi);
 }
 
-// --- Derive inputs
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTStruct& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         v.skipDeriveAttrs = true;
@@ -409,7 +375,6 @@ template <typename F>
     });
 }
 
-// --- attribute
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const RcString& itemName, const ASTItem& i) {
     return ProcMacroInvoke(sp, wb, crate, macPath, &tt, [&](ProcMacroVisitor& v) {
         v.emitAllAttrs = true;
@@ -418,7 +383,6 @@ template <typename F>
     });
 }
 
-// -- function-like input
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt) {
     return ProcMacroInvoke(sp, wb, crate, macPath, nullptr, [&](ProcMacroVisitor& v) {
         v.visitTokentree(tt);
@@ -460,18 +424,15 @@ ProcMacroInv::ProcMacroInv(u32& id, const Span& sp, ASTEdition edition, const ch
     posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[1]);
 
     char* argv[3] = {const_cast<char*>(executable), const_cast<char*>(procMacroDesc.name.c_str()), nullptr};
-    //char*   envp[] = { nullptr };
     int rv = posix_spawn(&this->handles.childPid, executable, &file_actions, nullptr, argv, environ);
     if (rv != 0) {
         BUG(sp, "Error in posix_spawn - " << rv << " - can't start `" << executable << "`");
     }
 
     posix_spawn_file_actions_destroy(&file_actions);
-    // Close the ends we don't care about.
     close(stdinPipes[0]);
     close(stdoutPipes[1]);
 
-    // Invocation span is #1 (#0 is always empty/undefined)
     this->sendSpanDef(1, sp);
 }
 
@@ -1053,7 +1014,6 @@ ProcMacroVisitor::ProcMacroVisitor(const WireBoard& wb, const Span& sp, const Se
     , sp(sp)
     , settings(settings)
     , pmi(pmi)
-    //,emit_all_attrs(false)
     , emitAllAttrs(true)
 {
 }
@@ -1097,7 +1057,6 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
         case TOK_INTERPOLATED_ITEM:
         case TOK_INTERPOLATED_VIS:
             TODO(sp, "TOK_INTERPOLATED_...");
-        // Value tokens
         case TOK_IDENT:
             pmi.sendIdent(tok.ident().name.c_str());
             break; // TODO: Raw idents
@@ -1136,7 +1095,6 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             pmi.sendRword("_");
             break;
 
-        // Symbols
         case TOK_PAREN_OPEN:
             pmi.sendSymbol("(");
             break;
@@ -1305,7 +1263,6 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             pmi.sendSymbol("`");
             break;
 
-        // Reserved Words
         case TOK_RWORD_PUB:
             pmi.sendRword("pub");
             break;
@@ -1445,7 +1402,6 @@ auto ProcMacroVisitor::visitToken(const ::Token& tok) -> void {
             pmi.sendRword("macro");
             break;
 
-        // 2018
         case TOK_RWORD_ASYNC:
             pmi.sendRword("async");
             break;
@@ -1568,7 +1524,6 @@ auto ProcMacroVisitor::visitLifetime(const ASTLifetimeRef& x) -> void {
     } else if (x.binding() == ASTLifetimeRef::BINDING_INFER) {
         pmi.sendLifetime("_");
     } else if (x.binding() == ASTLifetimeRef::BINDING_UNSPECIFIED) {
-        // Nothing
     } else {
         pmi.sendLifetime(x.name().name.c_str());
     }
@@ -1941,7 +1896,6 @@ auto ProcMacroVisitor::visitParams(const ASTGenericParams& params) -> void {
             }
             switch (param.tag()) {
                 case GenericParam::TAG_None: {
-                    // Uh... oops?
                     BUG(sp, "Enountered GenericParam::None");
                     break;
                 }
@@ -2393,9 +2347,7 @@ auto ProcMacroVisitor::visitFunction(const RcString& name, const ASTVisibility& 
     pmi.sendSymbol(")");
     pmi.sendSymbol("->");
     this->visitType(fcn.rettype());
-    //}
     this->visitBounds(fcn.params());
-    // A trait method declaration has no body - send `;` rather than dereferencing an absent node.
     if (fcn.code().isValid()) {
         this->visitNodes(fcn.code());
     } else {
@@ -2474,7 +2426,6 @@ auto ProcMacroVisitor::visitTrait(const RcString& name, const ASTVisibility& vis
     pmi.sendIdent(name.c_str());
     this->visitParams(trait.params());
 
-    // Supertraits and trait-level lifetime bounds: `trait Foo: Bar + 'a`
     bool first = true;
     for (const auto& st : trait.supertraits()) {
         pmi.sendSymbol(first ? ":" : "+");
@@ -2491,7 +2442,6 @@ auto ProcMacroVisitor::visitTrait(const RcString& name, const ASTVisibility& vis
     this->visitBounds(trait.params());
 
     pmi.sendSymbol("{");
-    // Trait items inherit the trait's visibility; trustme records them as `pub`, which the plugin's parser rejects. Send them unqualified.
     const auto itemVis = ASTVisibility::makeBarePrivate();
     for (const auto& i : trait.items()) {
         this->visitAttrs(i.attrs);

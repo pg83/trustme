@@ -1,10 +1,12 @@
-#include <std/sys/types.h>
 #include "memory_dump.h"
-#include <iostream>
+
+#include <std/sys/types.h>
+
+#include <vector>
+#include <cassert>
 #include <cstdint>
 #include <cstring>
-#include <cassert>
-#include <vector>
+#include <iostream>
 
 #if defined(__linux__)
     #include <zlib.h>
@@ -16,12 +18,8 @@ void memoryDump(unsigned& sequence, const char* phase) {
         char filename[256];
         sprintf(filename, "trustme-%i-%s.dmp", idx, phase);
 #if defined(__linux__) && defined(__x86_64__)
-        // On linux, dump out a custom format that covers the entire address space
-        // Could save as an ELF core dump, but lazy
-        // For the format, see down near `struct DumpFileHdr`
     #define DEBUG_MEM_DUMP 1
 
-        // 1. Enumerate all memory ranges
         struct RangeEnt {
             u64 vStart = 0;
             u64 vEnd = 0;
@@ -37,23 +35,18 @@ void memoryDump(unsigned& sequence, const char* phase) {
         size_t chunkSize = 1 << 20;
         ::std::vector<RangeEnt> rangeEnts;
         size_t chunkCount = 0;
-        // - Open `/proc/self/maps`, parse `<start>-<end> <flags> <ofs> <maj>:<minor> <inode> <file_name>`
         {
             u64 lastVaddr = 0;
             FILE* fp = ::std::fopen("/proc/self/maps", "r");
             while (!feof(fp)) {
                 RangeEnt e;
                 if (fscanf(fp, "%lx-%lx %4s %lx %d:%d %d", &e.vStart, &e.vEnd, e.flagsStr, &e.fileOfs, &e.devMaj, &e.devMin, &e.inode) != 7) {
-                    // Uh-oh
                 }
-                //::std::cout << "e.inode=" << e.inode << "\n";
                 for (;;) {
                     int ch = getc(fp);
-                    //::std::cout << " " << ch;
                     if (ch < 0 || ch == '\n') {
                         break;
                     }
-                    // Skip leading spaces
                     if (ch == ' ' && e.name.empty()) {
                         continue;
                     }
@@ -64,26 +57,21 @@ void memoryDump(unsigned& sequence, const char* phase) {
                     continue;
                 }
 
-                // Chunk count
                 if (e.flagsStr[0] != 'r') {
                     continue;
                 }
 
                 if (lastVaddr / chunkSize != e.vStart / chunkSize) {
-                    //::std::cout << "e.name =" << e.name << "\n";
                     if (lastVaddr % chunkSize != 0) {
                         chunkCount += 1;
                     }
-                    // Otherwise, the chunk would have already been flushed
                 }
                 e.firstChunk = chunkCount;
                 if (e.vStart / chunkSize == (e.vEnd - 1) / chunkSize) {
-                    // No chunk used
                     if (e.vEnd % chunkSize == 0) {
                         chunkCount += 1;
                     }
                 } else {
-                    // uses at least one chunk
                     auto headSize = (chunkSize - e.vStart % chunkSize) % chunkSize;
                     if (headSize > 0) {
                         chunkCount += 1;
@@ -91,25 +79,16 @@ void memoryDump(unsigned& sequence, const char* phase) {
                     chunkCount += (e.vEnd - (e.vStart + headSize)) / chunkSize;
                 }
                 lastVaddr = e.vEnd;
-                // Add entry
                 rangeEnts.push_back(std::move(e));
             }
-            // Account for last chunk's count
             if (lastVaddr % chunkSize != 0) {
                 chunkCount += 1;
             }
             fclose(fp);
         }
 
-        // FORMAT:
-        // - A fixed header
-        // - Memory map information (see `DumpRangeHdr`)
-        // - zlib-compressed memory contents, chunked by `chunk_size` and omitting completely empty regions
-        //   - Each chunk starts with the virtual address (64-bits)
-        // - Finally, register dump (PC, then x86 dwarf ordering)
         FILE* outFp = fopen(filename, "wb");
 
-        // - Header
         struct DumpFileHdr {
             char magic[12];
             u32 nRanges;
@@ -123,7 +102,6 @@ void memoryDump(unsigned& sequence, const char* phase) {
         fileHdr.chunkSize = chunkSize;
         fwrite(&fileHdr, sizeof(fileHdr), 1, outFp);
 
-        // - Write out the parsed maps
         struct DumpRangeHdr {
             u64 vStart;
             u64 size;
@@ -146,7 +124,6 @@ void memoryDump(unsigned& sequence, const char* phase) {
             fwrite(&hdr, sizeof(hdr), 1, outFp);
             fwrite(r.name.c_str(), 1, r.name.size(), outFp);
         }
-        // - Write out the content of the maps
         ::std::vector<unsigned char> zlibBuffer(16 * 1024);
         ::std::vector<u8> buf(chunkSize);
         size_t chunkCountFlushed = 0;
@@ -172,17 +149,13 @@ void memoryDump(unsigned& sequence, const char* phase) {
             zstream.avail_in = buf.size();
             zstream.next_in = reinterpret_cast<unsigned char*>(buf.data());
 
-            // While there's data to compress
             while (zstream.avail_in > 0) {
                 assert(zstream.avail_out != 0);
 
-                // Compress the data
                 int ret = deflate(&zstream, Z_NO_FLUSH);
                 if (ret == Z_STREAM_ERROR)
                     throw ::std::runtime_error("zlib deflate stream error");
 
-                // If the entire input wasn't consumed, then it was likely due to a lack of output space
-                // - Flush the output buffer to the file
                 if (zstream.avail_out < zlibBuffer.size()) {
                     size_t bytes = zlibBuffer.size() - zstream.avail_out;
                     fwrite(zlibBuffer.data(), bytes, 1, outFp);
@@ -192,7 +165,6 @@ void memoryDump(unsigned& sequence, const char* phase) {
                 }
             }
 
-            // Complete the compression
             do {
                 ret = deflate(&zstream, Z_FINISH);
                 if (ret == Z_STREAM_ERROR) {
@@ -208,14 +180,12 @@ void memoryDump(unsigned& sequence, const char* phase) {
                 }
             } while (ret == Z_OK);
             deflateEnd(&zstream);
-            // Zero the buffer, just to make compression better on partial blocks
             memset(buf.data(), 0, buf.size());
         };
         u64 lastVaddr = 0;
         for (const auto& r : rangeEnts) {
             if (r.flagsStr[0] == 'r') {
                 if (lastVaddr / chunkSize != r.vStart / chunkSize) {
-                    // Flush chunk, if the last end was not aligned
                     if (lastVaddr % chunkSize != 0) {
                         flushChunk(lastVaddr / chunkSize * chunkSize);
                     }
@@ -225,18 +195,14 @@ void memoryDump(unsigned& sequence, const char* phase) {
                 ::std::cout << chunkCountFlushed << "/" << chunkCount << ": " << std::hex << r.vStart << " -- " << r.vEnd << "(" << (r.vEnd - r.vStart) << ")" << std::dec << " " << r.flagsStr << " : " << r.name << "\n";
     #endif
                 if (r.vStart / chunkSize == (r.vEnd - 1) / chunkSize) {
-                    // Small
                     memcpy(buf.data() + r.vStart % chunkSize, (const void*)r.vStart, r.vEnd - r.vStart);
-                    // Flush if this has just finished a chunk
                     if (r.vEnd % chunkSize == 0) {
                         flushChunk(r.vStart / chunkSize * chunkSize);
                     }
                 } else {
-                    // Leading partial
                     const auto headSize = chunkSize - r.vStart % chunkSize;
                     memcpy(buf.data() + r.vStart % chunkSize, (const void*)r.vStart, headSize);
                     flushChunk(r.vStart / chunkSize * chunkSize);
-                    // Fill whole chunks
                     const auto tailSize = r.vEnd % chunkSize;
                     const auto tailPos = r.vEnd - tailSize;
                     u64 va = r.vStart + headSize;
@@ -245,9 +211,7 @@ void memoryDump(unsigned& sequence, const char* phase) {
                         flushChunk(va / chunkSize * chunkSize);
                         va += chunkSize;
                     }
-                    // Fill tail chunk (no flush)
                     memcpy(buf.data(), (const void*)tailPos, tailSize);
-                    // - No flush, next push will do that
                 }
                 lastVaddr = r.vEnd;
             }
@@ -259,14 +223,11 @@ void memoryDump(unsigned& sequence, const char* phase) {
             assert(false);
         }
 
-        // - Save/dump register state
-        // > PC, and then all 16 amd64 GPRs
         struct RegState {
             u64 pc;
             u64 gprs[16];
         } regs;
 
-        // Dwarf ordering: ADCB,SI,DI,BP,SP,r8-15
         asm volatile("\
             mov %%rax, 0x08(%0);\
             mov %%rdx, 0x10(%0);\

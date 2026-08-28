@@ -154,7 +154,6 @@ void RustPrinter::handleModule(const ASTModule& mod) {
             continue;
         }
         const auto& iData = i.data.as_Use();
-        //}
         if (iData.entries.empty()) {
             continue;
         }
@@ -330,7 +329,6 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         for (const auto& it : i.items()) {
             switch ((*it.data).tag()) {
                 case ASTItem::TAG_None: {
-                    // Ignore, it's been deleted by #[cfg]
                     break;
                 }
                 case ASTItem::TAG_MacroInv: {
@@ -502,7 +500,6 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                 break;
         }
         os << pb.name << "/*" << pb.slot << "*/";
-        // If binding is irrefutable, and would be binding against a wildcard, just emit the name
         if (!isRefutable && p.bindings().size() == 1 && p.data().is_Any()) {
             return;
         }
@@ -552,7 +549,6 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                 } else {
                     os << "& ";
                 }
-                // Just in case the inner binds as mut
                 os << "(";
                 printPattern(*v.sub, isRefutable);
                 os << ")";
@@ -1375,7 +1371,6 @@ auto RustPrinter::visit(ASTExprNodeMatch& n) -> void {
             visitIfletConditions(arm.guard);
         }
         os << " => ";
-        // Increase indent, but don't print. Causes nested blocks to be indented above the match
         incIndent();
         ASTNodeVisitor::visit(arm.code);
         decIndent();

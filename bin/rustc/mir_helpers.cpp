@@ -29,7 +29,6 @@ void MIRTypeResolve::printMsgCb(const char* tag, SpanMessageCallback& cb) const 
     cb.write(os);
     os << ::std::endl;
     abort();
-    //throw CheckFailure {};
 }
 
 unsigned int MIRTypeResolve::getCurStmtOfs() const {
@@ -110,7 +109,6 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
             switch ((*ty).tag()) {
                 default:
                     MIR_BUG(*this, "Field access on unexpected type - " << ty);
-                    // Array and Slice use LValue::Field when the index is constant and known-good
                     break;
                 case HIRTypeData::TAG_Array: {
                     auto& te = (*ty).as_Array();
@@ -550,9 +548,6 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::typeNameForSimplePath(const HIRSi
     } else {
         const auto& crateName = path.crateName();
         if (crateName != "") {
-            // An executable's crate name is the placeholder `bin#`, and the
-            // others carry a version tag (`core-0_0_0`) that the name of the
-            // type does not.
             if (crateName == crate.crateName && crate.crateNameDisplay != "") {
                 rv += crate.crateNameDisplay.c_str();
             } else {
@@ -573,8 +568,6 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::typeNameForSimplePath(const HIRSi
         auto text = FMT(components[i]);
         if (text.compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0) {
             auto owner = text.substr(strlen(CLOSURE_PATH_PREFIX));
-            // `npos` compares greater than any index, so the digits check
-            // also covers a name with no `_` in it at all.
             const auto index = owner.rfind('_');
             if (index < owner.size() && owner.find_first_not_of("0123456789", index + 1) >= owner.size()) {
                 owner = owner.substr(0, index);
@@ -597,8 +590,6 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::typeNameForPathArgs(const HIRPath
     for (const auto& t : params.types) {
         add(intrinsicTypeNameImpl(t, genericPlaceholders));
     }
-    // Const generic arguments are part of the name too: `S<3>`. An
-    // evaluated one prints as its encoded bytes otherwise.
     for (const auto& v : params.values) {
         if (genericPlaceholders && v.is_Generic()) {
             add("_");
@@ -674,7 +665,6 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTy
         return prefix + intrinsicTypeNameImpl(te->inner, genericPlaceholders);
     }
     if (const auto* te = ty->opt_Function()) {
-        // rustc leaves the default ABI and an empty return type unwritten.
         auto rv = FMT((te->isUnsafe ? "unsafe " : ""));
         if (te->abi != "" && te->abi != "Rust") {
             rv += FMT("extern \"" << te->abi << "\" ");
@@ -694,10 +684,6 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTy
         return rv;
     }
     if (const auto* te = ty->opt_NamedFunction()) {
-        // A function item's name is the path that names the function, not the
-        // signature the type formatter shows. The constructor of a tuple struct
-        // or of an enum variant is a function item whose path is the type's,
-        // and rustc keeps the two apart by naming the constructor.
         const char* suffix = te->def.is_Function() ? "" : "::{{constructor}}";
         return typeNameForItemPath(te->path, genericPlaceholders) + suffix;
     }
@@ -709,7 +695,6 @@ MIRTypeResolve::TypeNameString MIRTypeResolve::intrinsicTypeNameImpl(const HIRTy
         ::std::vector<::std::string> bounds;
         if (te->trait.path.path.crateName() != "" || !te->trait.path.path.components().empty()) {
             auto principal = typeNameForSimplePath(te->trait.path.path);
-            // The callable traits keep their parenthesised sugar.
             const auto& comps = te->trait.path.path.components();
             const auto& last = comps.empty() ? RcString() : comps.back();
             const auto& params = te->trait.path.params;
@@ -816,12 +801,8 @@ void visitTerminatorTarget(const MIRTerminator& term, MIRTargetVisitor& cb) {
     visitTerminatorTargetMut(const_cast<MIRTerminator&>(term), adapter);
 }
 
-// --------------------------------------------------------------------
-// MIR_Helper_GetLifetimes
-// --------------------------------------------------------------------
 namespace {
     struct ValueLifetime {
-        /// Bitmap of locations where the variable is valid
         ::std::vector<bool> stmtBitmap;
 
         ValueLifetime(size_t stmtCount);
@@ -859,7 +840,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 
     ::std::vector<ValueLifetime> slotLifetimes(fcn.locals.size(), ValueLifetime(statementCount));
 
-    // - Enumerate all read positions for each slot
     std::vector<std::vector<bool>> slotReadBitmaps(fcn.locals.size());
     {
         for (auto& b : slotReadBitmaps) {
@@ -889,10 +869,8 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         }
     }
 
-    // Enumerate direct assignments of variables (linear iteration of BB list)
     for (size_t bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
         auto assignedLvalue = [&](size_t bbIdx, size_t stmtIdx, const MIRLValue& lv) {
-            // NOTE: Fills the first statement after running, just to ensure that any assigned value has _a_ lifetime
             if (lv.is_Local()) {
                 auto de = lv.root.as_Local();
                 if (!mask || mask->at(de)) {
@@ -907,7 +885,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
             state.setCurStmt(bbIdx, stmtIdx);
             const auto& stmt = bb.statements[stmtIdx];
             if (const auto* se = stmt.opt_Assign()) {
-                // For assigned variables, determine how long that value will live
                 assignedLvalue(bbIdx, stmtIdx + 1, se->dst);
             } else if (const auto* se = stmt.opt_Asm()) {
                 for (const auto& e : se->outputs) {
@@ -917,14 +894,12 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         }
         state.setCurStmtTerm(bbIdx);
 
-        // Only Call can assign a value
         if (bb.terminator.is_Call()) {
             auto& te = bb.terminator.as_Call();
             assignedLvalue(te.retBlock, 0, te.retVal);
         }
     }
 
-    // Dump out variable lifetimes.
     if (dumpDebug) {
         for (size_t i = 0; i < slotLifetimes.size(); i++) {
             slotLifetimes[i].dumpDebug("_", i, blockOffsets);
@@ -950,11 +925,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
     const ::std::vector<bool>& useBitmap,
     ValueLifetime& vl
 ) {
-    // Walk the BB tree until:
-    // - Loopback
-    // - Assignment
-    // - Drop
-
     struct State {
         const ::std::vector<size_t>& blockOffsets;
         ValueLifetime& outVl;
@@ -996,7 +966,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             return rv;
         }
 
-        // Returns true if the variable has been borrowed
         bool isBorrowed() const {
             return this->isBorrowed_;
         }
@@ -1036,15 +1005,12 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             assert(!isBorrowed_);
             assert(bbHistory.size() > 0);
             if (bbHistory.size() == 1) {
-                // only one block
                 outVl.fill(blockOffsets, bbHistory[0], lastReadOfs, stmtIdx);
             } else {
-                // First block.
                 auto initBbIdx = bbHistory[0];
                 auto limit0 = blockOffsets[initBbIdx + 1] - blockOffsets[initBbIdx] - 1;
                 outVl.fill(blockOffsets, initBbIdx, lastReadOfs, limit0);
 
-                // Middle blocks
                 for (size_t i = 1; i < bbHistory.size() - 1; i++) {
                     size_t bbIdx = bbHistory[i];
                     assert(bbIdx + 1 < blockOffsets.size());
@@ -1052,7 +1018,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     outVl.fill(blockOffsets, bbIdx, 0, limit);
                 }
 
-                // Last block
                 auto bbIdx = bbHistory.back();
                 outVl.fill(blockOffsets, bbIdx, 0, stmtIdx);
             }
@@ -1122,7 +1087,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                             wasUpdated = true;
                             break;
                         case MIRValUsage::Write:
-                            // Don't care
                             break;
                     }
                 }
@@ -1140,14 +1104,12 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 mirRes.setCurStmt(bbIdx, stmtIdx);
                 visitedStatements[blockOffsets.at(bbIdx) + stmtIdx] = true;
 
-                // Visit and see if the value is read (setting the read flag or end depending on if the value is Copy)
                 wasUpdated = false;
                 visitMirLvalues(stmt, visitCb);
                 if (wasUpdated || wasMoved) {
                 }
 
                 if (wasMoved) {
-                    // Moved: Update read position and apply
                     state.markRead(stmtIdx);
                     state.finalise(stmtIdx);
                     return;
@@ -1157,7 +1119,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     case MIRStatement::TAG_Assign: {
                         auto& se = stmt.as_Assign();
                         if (se.dst == lv) {
-                            // Value assigned, just apply
                             state.finalise(stmtIdx);
                             return;
                         }
@@ -1167,7 +1128,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                         auto& se = stmt.as_Asm();
                         for (const auto& e : se.outputs) {
                             if (e.second == lv) {
-                                // Assigned, just apply
                                 state.finalise(stmtIdx);
                                 return;
                             }
@@ -1188,7 +1148,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                                     auto& v = p.as_Reg();
                                     if (v.output) {
                                         if (*v.output == lv) {
-                                            // Assigned, just apply
                                             state.finalise(stmtIdx);
                                             return;
                                         }
@@ -1203,19 +1162,15 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                         break;
                     }
                     case MIRStatement::TAG_SetDropFlag: {
-                        // Ignore
                         break;
                     }
                     case MIRStatement::TAG_SaveDropFlag: {
-                        // Ignore
                         break;
                     }
                     case MIRStatement::TAG_LoadDropFlag: {
-                        // Ignore
                         break;
                     }
                     case MIRStatement::TAG_ScopeEnd: {
-                        // Ignore
                         break;
                     }
                 }
@@ -1227,13 +1182,11 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             visitMirLvalues(bb.terminator, visitCb);
 
             if (wasMoved) {
-                // Moved: Update read position and apply
                 state.markRead(stmtIdx);
                 state.finalise(stmtIdx);
                 return;
             }
 
-            // Terminator
             switch (bb.terminator.tag()) {
                 case MIRTerminator::TAG_Incomplete: {
                     // TODO: Isn't this a bug?
@@ -1302,7 +1255,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 case MIRTerminator::TAG_Call: {
                     auto& te = bb.terminator.as_Call();
                     if (te.retVal == lv) {
-                        // Value assigned, just apply
                         state.finalise(stmtIdx);
                         return;
                     }
@@ -1353,7 +1305,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
     // TODO: Have a bitmap of visited statements. If a visted statement is hit, stop the current state
     // - Use the same rules as loopback.
 
-    // Fill the first statement, to ensure that there is at least one bit set.
     runner.runBlock(bbIdx, stmtIdx, State(blockOffsets, vl, bbIdx, stmtIdx));
 
     while (!runner.statesToDo.empty()) {
@@ -1373,13 +1324,11 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 state.finalise(0);
                 continue;
             } else {
-                // Put this state elsewhere and check if the variable is known valid at that point.
                 postCheckList.push_back(::std::make_pair(bbIdx, mv$(state)));
                 continue;
             }
         }
 
-        // Special case for when doing multiple runs on the same output
         if (vl.stmtBitmap.at(blockOffsets.at(bbIdx) + 0)) {
             state.markRead(0);
             state.finalise(0);
@@ -1389,13 +1338,11 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         runner.runBlock(bbIdx, 0, mv$(state));
     }
 
-    // Iterate while there are items in the post_check list
     while (!postCheckList.empty()) {
         bool change = false;
         for (auto it = postCheckList.begin(); it != postCheckList.end();) {
             auto bbIdx = it->first;
             auto& state = it->second;
-            // If the target of this loopback is valid, then the entire route to the loopback must have been valid
             if (vl.stmtBitmap.at(blockOffsets.at(bbIdx) + 0)) {
                 change = true;
                 state.markRead(0);
@@ -1406,7 +1353,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 ++it;
             }
         }
-        // Keep going while changes happen
         if (!change) {
             break;
         }
@@ -1416,26 +1362,12 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
 #else
 
 MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction& fcn, bool dumpDebug) {
-    // New algorithm notes:
-    // ---
-    // The lifetime of a value starts when it is written, and ends the last time it is read
-    // - When a variable is read, end any existing lifetime and start a new one.
-    // - When the value is read, update the end of its lifetime.
-    // ---
-    // A lifetime is a range in the call graph (with a start and end, including list of blocks)
-    // - Representation: Bitmap with a bit per statement.
-    // - Record the current block path in general state, along with known active lifetimes
-
     // TODO: If a value is borrowed, assume it lives forevermore
     // - Ideally there would be borrow tracking to determine its actual required lifetime.
     // - NOTE: This doesn't impact the borrows themselves, just the borrowee
 
     // TODO: Add a statement type StorageDead (or similar?) that indicates the point where a values scope ends
 
-    // Scan through all possible paths in the graph (with loopback detection using a memory of the path)
-    // - If a loop is detected, determine if there were changes to the lifetime set during that pass
-    //  > Changes are noticed by recording in the state structure when it triggers a change in the lifetime
-    //    map.
     struct Position {
         size_t pathIndex = 0; // index into the block path.
         unsigned int stmtIdx = 0;
@@ -1466,7 +1398,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         ::std::vector<unsigned int> blockChangeIdx;
         unsigned int curChangeIdx = 0;
 
-        // if read, update. If set, save and update
         ::std::vector<ProtoLifetime> tmpEnds;
         ::std::vector<ProtoLifetime> varEnds;
 
@@ -1626,7 +1557,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                     break;
                 }
 
-                // If the current index is the terminator (one after the size)
                 if (j == bb.statements.size()) {
                     j = 0;
                     i++;
@@ -1635,7 +1565,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                 }
             }
 
-            // - If the above set a new bit, increment `val_state.cur_change_idx`
             if (didSet) {
                 valState.curChangeIdx += 1;
             }
@@ -1645,7 +1574,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         };
 
         auto applyState = [&](State& state) {
-            // Apply all changes in this state, just in case there was new information
             for (unsigned i = 0; i < fcn.temporaries.size(); i++) {
                 addLifetimeS(state, MIRLValue::make_Temporary({i}), state.tmpEnds[i].start, state.tmpEnds[i].end);
             }
@@ -1656,9 +1584,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         auto addToVisit = [&](unsigned int newBbIdx, State newState) {
             auto& bbMemoryEnt = blockSeenLifetimes[newBbIdx];
             if (!bbMemoryEnt.hasState()) {
-                // No recorded state, needs to be visited
             } else if (bbMemoryEnt.tryMerge(newState)) {
-                // This state has new information, needs to be visited
             } else {
                 // Skip
                 // TODO: Acquire from the target block the actual end of any active lifetimes, then apply them.
@@ -1678,15 +1604,12 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                         newState.varEnds[i].end = curPos;
                     }
                 }
-                // - Apply whatever state was still active
                 applyState(newState);
                 return;
             }
             todoQueue.push_back(::std::make_pair(newBbIdx, mv$(newState)));
         };
 
-        // Compare this state to a composite list of lifetimes seen in this block
-        // - Just compares the end of each proto lifetime
         {
             auto& bbMemoryEnt = blockSeenLifetimes[bbIdx];
             bool hadState = bbMemoryEnt.hasState();
@@ -1699,7 +1622,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
             }
         }
 
-        // Check if this state has visited this block before, and if anything changed since last time
         {
             auto it = ::std::find(valState.blockPath.rbegin(), valState.blockPath.rend(), bbIdx);
             if (it != valState.blockPath.rend()) {
@@ -1727,7 +1649,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
             } else {
                 return;
             }
-            // Update the last read location
             slot->end = curPos;
         };
         auto lvalueSet = [&](const MIRLValue& lv) {
@@ -1739,7 +1660,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
             } else {
                 return;
             }
-            // End whatever value was originally there, and insert this new one
             slot->end = curPos;
             addLifetime(lv, slot->start, slot->end);
             slot->start = curPos;
@@ -1769,7 +1689,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
             return false;
         };
 
-        // Run statements
         for (const auto& stmt : fcn.blocks[bbIdx].statements) {
             auto stmtIdx = &stmt - &fcn.blocks[bbIdx].statements.front();
             curPos.stmtIdx = stmtIdx;
@@ -1794,12 +1713,10 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         switch (fcn.blocks[bbIdx].terminator.tag()) {
             case MIRTerminator::TAG_Incomplete: {
                 auto& e = fcn.blocks[bbIdx].terminator.as_Incomplete();
-                // Should be impossible here.
                 break;
             }
             case MIRTerminator::TAG_Return: {
                 auto& e = fcn.blocks[bbIdx].terminator.as_Return();
-                // End all active lifetimes at their previous location.
                 applyState(valState);
                 break;
             }
@@ -1827,7 +1744,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                 auto& e = fcn.blocks[bbIdx].terminator.as_If();
                 visitMirLvalue(e.cond, ValUsage::Read, visitLvalCb);
 
-                // Push blocks
                 addToVisit(e.bb0, valState.clone());
                 addToVisit(e.bb1, mv$(valState));
                 break;
@@ -1867,7 +1783,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                     }
                 }
 
-                // Push blocks (with return valid only in one)
                 if (e.unwind.is_Cleanup()) {
                     auto& target = e.unwind.as_Cleanup();
                     addToVisit(target, valState.clone());
@@ -1881,7 +1796,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         }
     }
 
-    // Dump out variable lifetimes.
     if (dumpDebug) {
         for (unsigned int i = 0; i < temporaryLifetimes.size(); i++) {
             temporaryLifetimes[i].dumpDebug("tmp", i, blockOffsets);
@@ -1891,7 +1805,6 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         }
     }
 
-    // Move lifetime bitmaps into the variable for the below code
     MIRValueLifetimes rv;
     rv.blockOffsets = mv$(blockOffsets);
     rv.temporaries.reserve(temporaryLifetimes.size());
@@ -1956,7 +1869,6 @@ MIRValueLifetime::MIRValueLifetime(::std::vector<bool> stmts)
 {
 }
 
-// true if this value is used at any point
 bool MIRValueLifetime::isUsed() const {
     for (auto v : statements) {
         if (v) {

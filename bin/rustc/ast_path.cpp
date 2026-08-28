@@ -10,7 +10,6 @@
 
 #define PRETTY_PATH_PRINT 1
 
-// --- AST::PathBinding
 ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingType& x) {
     switch (x.tag()) {
         case ASTPathBindingType::TAG_Unbound: {
@@ -313,7 +312,6 @@ void ASTPathParamEnt::fmt(::std::ostream& os) const {
     }
 }
 
-// --- AST::PathNode
 ASTPathNode::ASTPathNode(RcString name, ASTPathParams args)
     : ident_(mv$(name))
     , params_(mv$(args))
@@ -354,7 +352,6 @@ void ASTPathNode::printPretty(::std::ostream& os, bool isTypeContext) const {
     return os;
 }
 
-/// Return an iterator to the named item
 template <typename T>
 typename ::std::vector<ASTNamed<T>>::const_iterator findNamed(const ::std::vector<ASTNamed<T>>& vec, const ::std::string& name) {
     return ::std::find_if(vec.begin(), vec.end(), [&name](const ASTNamed<T>& x) {
@@ -362,7 +359,6 @@ typename ::std::vector<ASTNamed<T>>::const_iterator findNamed(const ::std::vecto
     });
 }
 
-// --- AST::Path
 ASTPath::~ASTPath() {
 }
 
@@ -410,7 +406,11 @@ ASTPath::ASTPath(const ASTPath& x)
         }
         case Class::TAG_UFCS: {
             auto& ent = x.cls.as_UFCS();
-            if (ent.trait) cls = Class::make_UFCS({ent.type->clone(), ::std::unique_ptr<ASTPath>(new ASTPath(*ent.trait)), ent.nodes}); else cls = Class::make_UFCS({ent.type->clone(), nullptr, ent.nodes});
+            if (ent.trait) {
+                cls = Class::make_UFCS({ent.type->clone(), ::std::unique_ptr<ASTPath>(new ASTPath(*ent.trait)), ent.nodes});
+            } else {
+                cls = Class::make_UFCS({ent.type->clone(), nullptr, ent.nodes});
+            }
             break;
         }
     }
@@ -448,7 +448,6 @@ ASTPath& ASTPath::operator+=(const ASTPath& other) {
     for (auto& node : other.nodes()) {
         append(node);
     }
-    // If the path is modified, clear the binding
     bindings = Bindings();
     return *this;
 }
@@ -488,13 +487,25 @@ Ordering ASTPath::ord(const ASTPath& x) const {
         case ASTPath::Class::TAG_Absolute: {
             auto& ent = cls.as_Absolute();
             auto& xEnt = x.cls.as_Absolute();
-            rv = ::ord(ent.crate, xEnt.crate); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, xEnt.nodes);
+            rv = ::ord(ent.crate, xEnt.crate);
+            if (rv != OrdEqual) {
+                return rv;
+            }
+            return ::ord(ent.nodes, xEnt.nodes);
             break;
         }
         case ASTPath::Class::TAG_UFCS: {
             auto& ent = cls.as_UFCS();
             auto& xEnt = x.cls.as_UFCS();
-            rv = ent.type->ord(*xEnt.type); if (rv != OrdEqual) return rv; rv = ent.trait->ord(*xEnt.trait); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, xEnt.nodes);
+            rv = ent.type->ord(*xEnt.type);
+            if (rv != OrdEqual) {
+                return rv;
+            }
+            rv = ent.trait->ord(*xEnt.trait);
+            if (rv != OrdEqual) {
+                return rv;
+            }
+            return ::ord(ent.nodes, xEnt.nodes);
             break;
         }
     }
@@ -506,12 +517,10 @@ void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) 
     switch (cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
             os << "/*inv*/";
-            // NOTE: Don't print the binding for invalid paths
             return;
         }
         case ASTPathClass::TAG_Local: {
             auto& ent = cls.as_Local();
-            // Only print comment if there's no binding
             if (bindings.value.is_Unbound() && bindings.type.is_Unbound()) {
                 if (isDebug) {
                     os << "/*var*/";
@@ -589,7 +598,7 @@ void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) 
             break;
         }
     }
-    if( isDebug ) {
+    if (isDebug) {
         os << "/*";
         bool printed = false;
         if (!bindings.value.is_Unbound()) {
@@ -635,7 +644,6 @@ ASTAbsolutePath::ASTAbsolutePath(RcString crate, ::std::vector<RcString> nodes)
 }
 
 ASTAbsolutePath ASTAbsolutePath::operator+(RcString n) const {
-    // Maybe being overly efficient here, but meh.
     ASTAbsolutePath rv;
     rv.crate = this->crate;
     rv.nodes.reserve(this->nodes.size() + 1);
@@ -654,7 +662,6 @@ bool ASTAbsolutePath::operator==(const ASTAbsolutePath& x) const {
     return true;
 }
 
-// Returns true if this path is a prefix of the other path (or equal)
 bool ASTAbsolutePath::isParentOf(const ASTAbsolutePath& other) const {
     if (this->crate != other.crate) {
         return false;
@@ -692,13 +699,11 @@ ASTPath::ASTPath(Class c)
 {
 }
 
-// INVALID
 ASTPath::ASTPath()
     : cls()
 {
 }
 
-// ABSOLUTE
 ASTPath::ASTPath(RcString crate, ::std::vector<ASTPathNode> nodes)
     : cls(Class::make_Absolute({mv$(crate), mv$(nodes)}))
 {
@@ -758,25 +763,26 @@ ASTPath& ASTPath::operator+=(ASTPathNode pn) {
 }
 
 const RcString& ASTPath::asTrivial() const {
-switch (cls.tag()) {
-default:
-    break;
-    case ASTPathClass::TAG_Local: {
-        auto& e = cls.as_Local();
-        return e.name;
+    switch (cls.tag()) {
+        default:
+            break;
+        case ASTPathClass::TAG_Local: {
+            auto& e = cls.as_Local();
+            return e.name;
+        }
+        case ASTPathClass::TAG_Relative: {
+            auto& e = cls.as_Relative();
+            return e.nodes[0].name();
+        }
     }
-    case ASTPathClass::TAG_Relative: {
-        auto& e = cls.as_Relative();
-        return e.nodes[0].name();
-    }
-}
-throw std::runtime_error("as_trivial on non-trivial path");
+    throw std::runtime_error("as_trivial on non-trivial path");
 }
 
 size_t ASTPath::size() const {
     switch (cls.tag()) {
         case Class::TAG_Invalid: {
-            assert(!cls.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");
+            assert(!cls.is_Invalid());
+            throw ::std::runtime_error("Path::nodes() on Invalid");
             break;
         }
         case Class::TAG_Local: {
@@ -809,11 +815,13 @@ size_t ASTPath::size() const {
 ::std::vector<ASTPathNode>& ASTPath::nodes() {
     switch (cls.tag()) {
         case Class::TAG_Invalid: {
-            assert(!cls.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");
+            assert(!cls.is_Invalid());
+            throw ::std::runtime_error("Path::nodes() on Invalid");
             break;
         }
         case Class::TAG_Local: {
-            assert(!cls.is_Local()); throw ::std::runtime_error("Path::nodes() on Local");
+            assert(!cls.is_Local());
+            throw ::std::runtime_error("Path::nodes() on Local");
             break;
         }
         case Class::TAG_Relative: {

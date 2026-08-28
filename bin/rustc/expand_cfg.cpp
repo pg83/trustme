@@ -26,9 +26,6 @@ using namespace stl;
 
 namespace {}
 
-// The cfg!() evaluation state: --cfg values/flags, value callbacks and the
-// --check-cfg expectations with their lint settings. Opaque outside this
-// file; Settings holds a pointer.
 struct CfgState {
     ObjPool* pool;
     ::std::multimap<::std::string, ::std::string> values;
@@ -83,7 +80,6 @@ void CfgDump(const Settings& settings, ::std::ostream& os) {
     for (const auto& f : cfg.flags) {
         os << ">" << f << std::endl;
     }
-    // NOTE: `g_cfg_value_fcns` is only used for feature flags, which the cargo driver doesn't need
 }
 
 void CfgSetFlag(Settings& settings, ::std::string name) {
@@ -163,7 +159,6 @@ namespace {
                     GET_CHECK_TOK(tok, lex, TOK_STRING);
                     val = tok.str();
                 }
-                // Equality
                 auto its = cfg.values.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
                     if (it->second == val) {
@@ -197,7 +192,6 @@ namespace {
                     return rv;
                 } else if (name == "not") {
                     bool rv = checkCfgInner(cfg, lex);
-                    // Allow a trailing comma
                     lex.getTokenIf(TOK_COMMA);
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return !rv;
@@ -213,10 +207,6 @@ namespace {
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return rv;
                 } else if (name == "target") {
-                    // `target(os = "linux", arch = "x86_64")` is the compact
-                    // spelling of `all(target_os = "linux", target_arch =
-                    // "x86_64")`.  Keep evaluation in the ordinary cfg path
-                    // so check-cfg sees the canonical target_* names too.
                     bool rv = true;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
                         const auto field = lex.getTokenCheck(TOK_IDENT).ident().name;
@@ -229,11 +219,7 @@ namespace {
                     }
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return rv;
-                }
-                // `version("1.49.0")` holds when the compiler is at least that
-                // version. `RUSTC_OVERRIDE_VERSION_STRING` replaces the version
-                // it compares against, which is how upstream tests pin it.
-                else if (name == "version") {
+                } else if (name == "version") {
                     auto wanted = lex.getTokenCheck(TOK_STRING).str();
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
@@ -263,7 +249,6 @@ namespace {
                     auto want = H::parse(wanted);
                     return have >= want;
                 } else {
-                    // oops
                     ERROR(lex.pointSpan(), E0000, "Unknown cfg() function - " << name);
                 }
 
@@ -273,7 +258,6 @@ namespace {
                 for (auto it = its.first; it != its.second; ++it) {
                     return true;
                 }
-                // Flag
                 auto it = cfg.flags.find(name.c_str());
                 return (it != cfg.flags.end());
         }
@@ -550,7 +534,6 @@ auto CCfgHandler::stage() const -> AttrStage {
 }
 
 auto CCfgHandler::handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const -> void {
-    // Ignore, as #[cfg] on a crate is handled in expand/mod.cpp
     if (!checkCfg(*wb.settings, sp, mi)) {
         // Remove all items (can't remove the module)
         crate.rootModule_.items.clear();

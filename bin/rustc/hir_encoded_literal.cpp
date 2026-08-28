@@ -16,26 +16,25 @@ Ordering Reloc::ord(const Reloc& x) const {
         return ::ord(bytes, x.bytes);
     }
 }
+
 Ordering EncodedLiteral::ord(const EncodedLiteral& x) const {
     ORD(bytes, x.bytes);
     ORD(relocations, x.relocations);
     return OrdEqual;
 }
-//size_t  m_reloc_ofs;
-//size_t  m_reloc_size;
 
 EncodedLiteralSlice::EncodedLiteralSlice(const EncodedLiteral& base)
     : base(base)
     , ofs(0)
     , size(base.bytes.size())
-//, m_reloc_ofs(0)
-//, m_reloc_size(base.relocations.size())
 {
 }
+
 EncodedLiteralSlice EncodedLiteralSlice::slice(size_t ofs) const {
     assert(ofs <= size);
     return slice(ofs, size - ofs);
 }
+
 EncodedLiteralSlice EncodedLiteralSlice::slice(size_t ofs, size_t len) const {
     assert(ofs <= size);
     assert(len <= size);
@@ -58,6 +57,7 @@ EncodedLiteralSlice EncodedLiteralSlice::slice(size_t ofs, size_t len) const {
     }
     return os;
 }
+
 ::std::ostream& operator<<(std::ostream& os, const EncodedLiteral& x) {
     for (size_t i = 0; i < x.bytes.size(); i++) {
         const char* HEX = "0123456789ABCDEF";

@@ -8,14 +8,12 @@
 FsPath::FsPath(const char* s)
     : str_(s)
 {
-    // 1. Normalise path separators to the system specified separator
     for (size_t i = 0; i < str_.size(); i++) {
         if (str_[i] == '/' || str_[i] == '\\') {
             str_[i] = SEP;
         }
     }
 
-    // 2. Remove any trailing separators
     if (!str_.empty()) {
         while (!str_.empty() && str_.back() == SEP) {
             str_.pop_back();
@@ -60,11 +58,8 @@ FsPath FsPath::normalise() const {
 
     for (auto comp : *this) {
         if (comp == ".") {
-            // Ignore.
         } else if (comp == "..") {
-            // If the path is empty, OR the last element is a "..", push the element
             if (rv.str_.empty() || (rv.str_.size() == 3 && rv.str_[0] == '.' && rv.str_[1] == '.' && rv.str_[2] == SEP) || (rv.str_.size() > 4 && *(rv.str_.end() - 4) == SEP && *(rv.str_.end() - 3) == '.' && *(rv.str_.end() - 2) == '.' && *(rv.str_.end() - 1) == SEP)) {
-                // Push
                 rv.str_ += comp;
                 rv.str_ += SEP;
             } else {
@@ -73,7 +68,6 @@ FsPath FsPath::normalise() const {
                 if (pos == ::std::string::npos) {
                     rv.str_.resize(0);
                 } else if (pos == 0) {
-                    // Keep.
                 } else {
                     rv.str_.resize(pos + 1);
                 }
@@ -145,14 +139,12 @@ FsPath FsPath::operator/(const FsPath& p) const {
     return rv;
 }
 
-/// Append a relative path
 FsPath FsPath::operator/(const char* o) const {
     auto rv = *this;
     rv /= o;
     return rv;
 }
 
-/// Add an arbitary string to the  component
 FsPath FsPath::operator+(const char* o) const {
     if (!this->isValid()) {
         throw ::std::runtime_error("Appending a string to an invalid path");

@@ -65,7 +65,6 @@ namespace {
             return ::std::move(fldLvalue);
         } else {
             const auto& langClone = state.resolve.hirCrate().getLangItemPath(sp, "clone");
-            // Allocate to locals (one for the `&T`, the other for the cloned `T`)
             auto borrowLv = MIRLValue::newLocal(mirFcn.locals.size());
             mirFcn.locals.push_back(state.crate.types.borrow(HIRBorrowType::Shared, subty));
             auto resLv = MIRLValue::newLocal(mirFcn.locals.size());
@@ -73,7 +72,6 @@ namespace {
             const auto dropFlag = static_cast<unsigned>(mirFcn.dropFlags.size());
             mirFcn.dropFlags.push_back(false);
 
-            // Call `<T as Clone>::clone`, passing a borrow of the field
             auto& bb = cloneOpenBlock(mirFcn);
             bb.statements.push_back(MIRStatement::make_Assign({borrowLv.clone(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, mv$(fldLvalue)})}));
             HIRPathParams pp;
@@ -86,7 +84,6 @@ namespace {
             mirFcn.blocks.push_back(MIRBasicBlock());
             mirFcn.blocks.back().statements.push_back(MIRStatement::make_SetDropFlag({dropFlag, true, ~0u}));
 
-            // Save the output of the `clone` call
             return ::std::move(resLv);
         }
     }
@@ -126,7 +123,6 @@ namespace {
 void TransAutoImplClone(State& state, HIRTypeRef ty) {
     Span sp;
 
-    // Create MIR
     MIRFunction mirFcn;
     if (state.resolve.typeIsCopy(sp, ty)) {
         MIRBasicBlock bb;
@@ -152,7 +148,6 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
                         auto fldLvalue = MIRLValue::newField(MIRLValue::newDeref(MIRLValue::newArgument(0)), static_cast<unsigned>(values.size()));
                         values.push_back(cloneField(state, sp, mirFcn, cleanup, tyM, mv$(fldLvalue)));
                     }
-                    // Construct the result value
                     auto& bb = cloneOpenBlock(mirFcn);
                     bb.statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), MIRRValue::make_Struct({gp.clone(), mv$(values)})}));
                     bb.terminator = MIRTerminator::make_Return({});
@@ -172,7 +167,6 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
                     auto fldLvalue = MIRLValue::newField(MIRLValue::newDeref(MIRLValue::newArgument(0)), static_cast<unsigned>(values.size()));
                     values.push_back(cloneField(state, sp, mirFcn, cleanup, te.inner, mv$(fldLvalue)));
                 }
-                // Construct the result
                 auto& bb = cloneOpenBlock(mirFcn);
                 bb.statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), MIRRValue::make_Array({mv$(values)})}));
                 bb.terminator = MIRTerminator::make_Return({});
@@ -186,13 +180,11 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
                 CloneCleanupState cleanup;
                 ::std::vector<MIRParam> values;
                 values.reserve(te.size());
-                // For each field of the tuple, create a clone (either using Copy if posible, or calling Clone::clone)
                 for (const auto& subty : te) {
                     auto fldLvalue = MIRLValue::newField(MIRLValue::newDeref(MIRLValue::newArgument(0)), static_cast<unsigned>(values.size()));
                     values.push_back(cloneField(state, sp, mirFcn, cleanup, subty, mv$(fldLvalue)));
                 }
 
-                // Construct the result tuple
                 auto& bb = cloneOpenBlock(mirFcn);
                 bb.statements.push_back(MIRStatement::make_Assign({MIRLValue::newReturn(), MIRRValue::make_Tuple({mv$(values)})}));
                 bb.terminator = MIRTerminator::make_Return({});
@@ -202,7 +194,6 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
         }
     }
 
-    // Function
     HIRFunction fcn{
         HIRFunction::Receiver::BorrowShared,
         HIRGenericParams{},
@@ -212,7 +203,6 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
     };
     fcn.code.mir = generatedBody(mv$(mirFcn));
 
-    // Impl
     HIRTraitImpl impl;
     impl.type = ty;
     impl.methods.insert(::std::make_pair(RcString("clone"), HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fcn)}));
@@ -266,7 +256,6 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
         impl.methods.insert(::std::make_pair(RcString("clone_from"), HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fromFcn)}));
     }
 
-    // Add impl to the crate
     auto& list = state.crate.traitImpls[state.langClone].getListForTypeMut(impl.type);
     list.push_back(box$(impl));
     state.crate.allTraitImpls[state.langClone].getListForTypeMut(list.back()->type).push_back(list.back().get());
@@ -364,7 +353,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
     State state{wb, crate, transList};
 
     {
-        // Generate for all
         for (const auto& ty : transList.autoCloneImpls) {
             state.doneList.insert(ty);
             TransAutoImplClone(state, ty);
@@ -392,8 +380,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 auto p = HIRPath(ty, HIRGenericPath(state.langClone), method);
                 auto* e = transList.addFunction(crate.types, p.clone());
                 if (!e) {
-                    // The list already holds it under its symbol, put there
-                    // with a body; there is nothing to fill in.
                     return;
                 }
                 auto m = impl.methods.find(method);
@@ -420,8 +406,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             bb.terminator = MIRTerminator::make_Return({});
             mirFcn.blocks.push_back(::std::move(bb));
 
-            // Function
-            // `fn addr(self) -> usize;`
             HIRFunction fcn{
                 HIRFunction::Receiver::Value,
                 HIRGenericParams{},
@@ -431,17 +415,13 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             };
             fcn.code.mir = generatedBody(mv$(mirFcn));
 
-            // Impl
             HIRTraitImpl impl;
             impl.type = ty;
             impl.methods.insert(::std::make_pair(RcString::newInterned("addr"), HIRTraitImpl::ImplEnt<HIRFunction>{false, ::std::move(fcn)}));
 
-            // Add impl to the crate
             auto& list = state.crate.traitImpls[langFnPtr].getListForTypeMut(impl.type);
             list.push_back(box$(impl));
             state.crate.allTraitImpls[langFnPtr].getListForTypeMut(list.back()->type).push_back(list.back().get());
-
-            // - Add this function to the TransList
 
             {
                 auto p = HIRPath(ty, HIRGenericPath(langFnPtr), "addr");
@@ -455,7 +435,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
         transList.autoFnptrImpls.clear();
     }
 
-    // Trait object methods
     {
         transList.autoFunctions.reserve(transList.autoFunctions.size() + transList.traitObjectMethods.size());
         for (const auto& path : transList.traitObjectMethods) {
@@ -468,7 +447,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             const auto& trait = crate.getTraitByPath(sp, traitPath.path);
             const auto& fcnDef = trait.values.at(name).as_Function();
 
-            // Get the vtable index for this function
             unsigned vtableIdx = tyDyn.trait.traitPtr->getVtableValueIndex(traitPath, name);
             ASSERT_BUG(sp, vtableIdx > 0, "Calling method '" << name << "' from " << traitPath << " through " << pe.type << " which isn't in the vtable");
 
@@ -491,9 +469,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
             MIRLValue lvSelf = MIRLValue::newArgument(0);
             MIRLValue lvPtr;
-            // ---
-            // bb0:
-            //   _1 = DstPtr a1
             switch (fcnDef.receiver) {
                 case HIRFunction::Receiver::Value: {
                     // By-value trait object dispatch
@@ -536,26 +511,19 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     TODO(sp, "Handle different receiver types: <dyn " << traitPath << ">::" << name << " - self: " << newFcn.args.front().second);
             }
 
-            //   _2 = DstMeta a1
             auto lvVtable = builder.addLocal(crate.types.borrow(HIRBorrowType::Shared, tyDyn.trait.traitPtr->getVtableType(sp, crate, tyDyn)));
             builder.pushStmtAssign(lvVtable.clone(), MIRRValue::make_DstMeta({mv$(lvSelf)}));
-            //   rv = _2*.{idx}(a2, ...) goto bb2 else bb3
             std::vector<MIRParam> callArgs;
             callArgs.push_back(mv$(lvPtr));
             for (size_t i = 1; i < fcnDef.args.size(); i++) {
                 callArgs.push_back(MIRLValue::newArgument(i));
             }
             builder.terminateCall(MIRLValue::newReturn(), MIRLValue::newField(MIRLValue::newDeref(mv$(lvVtable)), vtableIdx), mv$(callArgs), 1, 2, fcnDef.markings.trackCaller);
-            // bb1:
-            //   RETURN
             builder.ensureOpen();
             builder.terminateBlock(MIRTerminator::make_Return({}));
-            // bb2:
-            //   UNWIND
             builder.ensureOpen();
             builder.mir.blocks.back().isCleanup = true;
             builder.terminateBlock(MIRTerminator::make_UnwindResume({}));
-            // ---
 
             transList.autoFunctions.push_back(box$(newFcn));
             auto* e = transList.addFunction(crate.types, path.clone());
@@ -568,7 +536,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
         transList.traitObjectMethods.clear();
     }
 
-    // Create VTable instances
     {
         transList.autoStatics.reserve(transList.vtables.size());
         for (const auto& ent : transList.vtables) {
@@ -628,10 +595,8 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                             argParams.push_back(MIRLValue::newField(MIRLValue::newArgument(1), i));
                         }
                         builder.terminateCall(MIRLValue::newReturn(), te->path.clone(), mv$(argParams), 1, 2);
-                        // BB1: Return
                         builder.ensureOpen();
                         builder.terminateBlock(MIRTerminator::make_Return({}));
-                        // BB1: Diverge
                         builder.ensureOpen();
                         builder.mir.blocks.back().isCleanup = true;
                         builder.terminateBlock(MIRTerminator::make_UnwindResume({}));
@@ -670,10 +635,8 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                             argParams.push_back(MIRLValue::newField(MIRLValue::newArgument(1), i));
                         }
                         builder.terminateCall(MIRLValue::newReturn(), !isByValue ? MIRLValue::newDeref(MIRLValue::newArgument(0)) : MIRLValue::newArgument(0), mv$(argParams), 1, 2);
-                        // BB1: Return
                         builder.ensureOpen();
                         builder.terminateBlock(MIRTerminator::make_Return({}));
-                        // BB1: Diverge
                         builder.ensureOpen();
                         builder.mir.blocks.back().isCleanup = true;
                         builder.terminateBlock(MIRTerminator::make_UnwindResume({}));
@@ -698,7 +661,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             tupleTys.push_back(crate.types.primitive(HIRCoreType::Usize)); // fn
             auto vtableTy = crate.types.tuple(std::move(tupleTys));
 
-            // Look up the size of the VTable, so we can allocate the right buffer size
             const auto* repr = TargetGetTypeRepr(sp, state.resolve, vtableTy);
             assert(repr);
 
@@ -716,13 +678,10 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 ofs += ptrBytes;
                 assert(ofs <= vtableData.bytes.size());
             };
-            // Drop glue
             transList.dropGlue.insert(type);
             pushPtr(HIRPath(type, "#drop_glue"));
-            // Size & align
             {
                 size_t size, align;
-                // NOTE: Uses the Size+Align version because that doesn't panic on unsized
                 ASSERT_BUG(sp, TargetGetSizeAndAlignOf(sp, state.resolve, type, size, align), "Unexpected generic? " << type);
                 vtableData.writeUint(ofs, ptrBytes, size);
                 ofs += ptrBytes;
@@ -732,7 +691,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             assert(ofs == vtableData.bytes.size());
             vtableStatic.valueGenerated = true;
 
-            // Add to list
             transList.autoStatics.push_back(box$(vtableStatic));
             auto* e = transList.addStatic(crate.types, ent.first.clone());
             if (e) {
@@ -750,7 +708,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             }
             // TODO: What's the use of `ent.second` here? (it's a `Trans_Params`)
 
-            // Get the vtable type
             const auto& trait = crate.getTraitByPath(sp, traitPath.path);
             const auto& vtableSp = trait.vtablePath;
             ASSERT_BUG(sp, vtableSp != HIRSimplePath(), "Trait " << traitPath.path << " doesn't have a vtable");
@@ -763,14 +720,11 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             const auto& vtableRef = crate.getStructByPath(sp, vtableSp);
             auto vtableTy = crate.types.path(HIRGenericPath(mv$(vtableSp), mv$(vtableParams)), &vtableRef);
 
-            // Ensure that the type is defined/populated
             transList.addType(vtableTy, false);
 
-            // Look up the size of the VTable, so we can allocate the right buffer size
             const auto* repr = TargetGetTypeRepr(sp, state.resolve, vtableTy);
             assert(repr);
 
-            // Create vtable contents
             auto monomorphCbTrait = MonomorphStatePtr(crate.types, type, &traitPath.params, nullptr);
 
             HIRLinkage linkage;
@@ -787,13 +741,10 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 ofs += ptrBytes;
                 assert(ofs <= vtableData.bytes.size());
             };
-            // Drop glue
             transList.dropGlue.insert(type);
             pushPtr(HIRPath(type, "#drop_glue"));
-            // Size & align
             {
                 size_t size, align;
-                // NOTE: Uses the Size+Align version because that doesn't panic on unsized
                 ASSERT_BUG(sp, TargetGetSizeAndAlignOf(sp, state.resolve, type, size, align), "Unexpected generic? " << type);
                 vtableData.writeUint(ofs, ptrBytes, size);
                 ofs += ptrBytes;
@@ -801,13 +752,8 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 ofs += ptrBytes;
             }
 
-            // Methods
-            // - The `m_value_indexes` list isn't sorted (well, it's sorted differently) so we need an `O(n^2)` search
-
             for (unsigned int i = 0; i < trait.valueIndexes.size(); i++) {
-                // Find the corresponding vtable entry
                 for (const auto& m : trait.valueIndexes) {
-                    // NOTE: The "3" is the number of non-method vtable entries
                     if (m.second.first != 3 + i) {
                         continue;
                     }
@@ -820,7 +766,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     const auto& srcTrait = state.resolve.hirCrate().getTraitByPath(sp, m.second.second.path);
                     const auto& item = srcTrait.values.at(m.first);
                     bool preserveTrackCaller = false;
-                    // If the entry is a by-value function, then emit a reference to a shim
                     if (item.is_Function()) {
                         const auto& tplFcn = item.as_Function();
                         preserveTrackCaller = tplFcn.markings.trackCaller;
@@ -829,7 +774,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                             itemPath.data.as_UfcsKnown().item = RcString::newInterned(FMT(m.first << "#ptr"));
                             auto* e = transList.addFunction(crate.types, itemPath.clone());
                             if (e) {
-                                // Create the shim (forward to the true call, dereferencing the first argument)
                                 HIRFunction newFcn;
                                 newFcn.markings.trackCaller = preserveTrackCaller;
                                 newFcn.returnType = srcTraitMs.monomorphType(sp, tplFcn.returnType);
@@ -848,24 +792,17 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 });
                                 MIRTypeResolve localMirRes{sp, state.resolve, pathCallback, newFcn.returnType, newFcn.args, *newFcn.code.mir};
                                 Builder builder(state, *newFcn.code.mir);
-                                // bb0:
-                                //   rv = CALL ...
                                 ::std::vector<MIRParam> callArgs;
                                 callArgs.push_back(MIRLValue::newDeref(MIRLValue::newArgument(0)));
                                 for (size_t i = 1; i < tplFcn.args.size(); i++) {
                                     callArgs.push_back(MIRLValue::newArgument(i));
                                 }
                                 builder.terminateCall(MIRLValue::newReturn(), mv$(callPath), std::move(callArgs), 1, 2, preserveTrackCaller);
-                                // bb1:
-                                //   RETURN
                                 builder.ensureOpen();
                                 builder.terminateBlock(MIRTerminator::make_Return({}));
-                                // bb2:
-                                //   UNWIND
                                 builder.ensureOpen();
                                 builder.mir.blocks.back().isCleanup = true;
                                 builder.terminateBlock(MIRTerminator::make_UnwindResume({}));
-                                // ---
 
                                 transList.autoFunctions.push_back(box$(newFcn));
                                 e->ptr = transList.autoFunctions.back().get();
@@ -876,7 +813,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     pushPtr(mv$(itemPath), preserveTrackCaller);
                 }
             }
-            // Parent trait vtables
             for (size_t i = 0; i < trait.allParentTraits.size(); i++) {
                 const auto& pt = trait.allParentTraits[i];
                 const auto& fld = repr->fields.at(trait.vtableParentTraitsStart + i);
@@ -891,7 +827,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             assert(ofs == vtableData.bytes.size());
             vtableStatic.valueGenerated = true;
 
-            // Add to list
             transList.autoStatics.push_back(box$(vtableStatic));
             auto* e = transList.addStatic(crate.types, ent.first.clone());
             if (e) {
@@ -903,7 +838,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
         transList.vtables.clear();
     }
 
-    // Create drop glue implementations
     {
         for (const auto& ty : transList.types) {
             Span sp;
@@ -941,7 +875,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             auto ownedBoxPointeeDrop = static_cast<MIRBasicBlockId>(~0u);
             auto ownedBoxDropCall = static_cast<MIRBasicBlockId>(~0u);
             if (const auto* ity = state.resolve.isTypeOwnedBox(ty)) {
-                // Call inner destructors
                 auto innerVal = derefBox(MIRLValue::newDeref(builder.self.clone()));
                 HIRTypeRef tmp;
                 ASSERT_BUG(sp, localMirRes.getLvalueType(tmp, innerVal) == ity, "Hard-coded box pointer path didn't result in the inner type");
@@ -972,35 +905,27 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         break;
                     }
                     case HIRTypeData::TAG_Diverge: {
-                        // Exists for reasons...
                         builder.terminateBlock(MIRTerminator::make_Unreachable({}));
                         break;
                     }
                     case HIRTypeData::TAG_Primitive: {
-                        // Nothing to do
                         break;
                     }
                     case HIRTypeData::TAG_Pattern: {
-                        // Pattern types are restricted scalars and have no
-                        // independent drop glue beyond their base type.
                         break;
                     }
                     case HIRTypeData::TAG_NamedFunction: {
-                        // Nothing to do
                         break;
                     }
                     case HIRTypeData::TAG_Function: {
-                        // Nothing to do
                         break;
                     }
                     case HIRTypeData::TAG_Pointer: {
-                        // Nothing to do
                         break;
                     }
                     case HIRTypeData::TAG_Borrow: {
                         auto& te = (*ty).as_Borrow();
                         if (te.type == HIRBorrowType::Owned) {
-                            // `drop a0**`
                             builder.pushStmtDrop(MIRLValue::newDeref(MIRLValue::newDeref(builder.self.clone())));
                         }
                         break;
@@ -1024,10 +949,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         auto size = te.size.as_Known();
                         auto self = MIRLValue::newDeref(builder.self.clone());
                         if (size > 0 && state.resolve.typeNeedsDropGlue(sp, te.inner)) {
-                            // The C++ backend expands structural array drops
-                            // itself, including the unwind cleanup of the tail.
-                            // Keeping a second hand-built MIR loop here would
-                            // duplicate that logic and lose the tail on panic.
                             builder.pushStmtDrop(mv$(self));
                         }
                         break;
@@ -1043,7 +964,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 UNREACHABLE();
                             }
                             case HIRTypePathBinding::TAG_ExternType: {
-                                // Why is this trying to be dropped?
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Struct: {
@@ -1059,9 +979,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 
                                 if (ty->is_Path() && (ty->as_Path().isGenerator() || ty->as_Path().isFuture())) {
                                     ASSERT_BUG(sp, hasDrop, "");
-                                    // Coroutines use a custom Drop impl that handles dropping values
                                 } else {
-                                    // NOTE: Lazy option of monomorphising and handling the two classes
                                     const auto* repr = TargetGetTypeRepr(sp, state.resolve, ty);
                                     ASSERT_BUG(sp, repr, "No repr for struct " << ty);
 
@@ -1084,7 +1002,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                     builder.pushCallDrop(ty);
                                     hasDrop = true;
                                 }
-                                // Union requires no internal drop glue
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Enum: {
@@ -1126,10 +1043,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                         builder.mir.blocks[switchBlock].terminator.as_Switch().targets = mv$(targets);
 
                                         if (customDropCall != ~0u) {
-                                            // If the user's Drop implementation
-                                            // panics, select the active variant
-                                            // again and destroy its payload on a
-                                            // cleanup edge.
                                             const auto cleanupSwitch = static_cast<MIRBasicBlockId>(builder.mir.blocks.size());
                                             MIRBasicBlock switchCleanupBlock;
                                             switchCleanupBlock.isCleanup = true;
@@ -1196,10 +1109,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             if (ownedBoxPointeeDrop != ~0u) {
                 ASSERT_BUG(sp, ownedBoxDropCall != ~0u, "Owned Box did not have a Drop implementation: " << ty);
 
-                // The pointee is destroyed before Box::drop deallocates its
-                // storage.  If the pointee panics, run Box::drop and the
-                // remaining fields on the cleanup path before resuming the
-                // original exception.
                 if (builder.mir.blocks.back().terminator.is_Incomplete()) {
                     builder.terminateBlock(MIRTerminator::make_Return({}));
                 }
@@ -1280,14 +1189,12 @@ namespace {
         TransList rv;
         const TransList* origList;
 
-        // Queue of items to enumerate
         ::std::deque<TransListFunction*> fcnQueue;
         ::std::vector<TransListFunction*> fcnsToTypeVisit;
 
         ::std::set<std::string> emittedFunctions;
         ::std::set<HIRPath> activePaths;
 
-        // Map of locally-defined exported `link_name` functions
         ::std::unordered_map<std::string, std::pair<HIRSimplePath, const HIRFunction*>> linkFunctions;
 
         EnumState(const WireBoard& wb);
@@ -1429,7 +1336,6 @@ MIREnumCachePtr::~MIREnumCachePtr() {
     this->p = nullptr;
 }
 
-/// Enumerate trans items starting from `::main` (binary crate)
 TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate) {
     Span sp;
 
@@ -1438,15 +1344,12 @@ TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate) {
     if (!crate.noMain) {
         auto cStartPath = crate.getLangItemPathOpt("trustme-start");
         if (cStartPath == HIRSimplePath()) {
-            // user entrypoint
             auto mainPath = crate.getLangItemPath(Span(), "trustme-main");
             const auto& mainFcn = crate.getFunctionByPath(sp, mainPath);
 
             state.rv.roots.push_back(mainPath);
             state.enumFcn(mainPath, mainFcn, TransParams(crate.types));
 
-            // "start" language item
-            // - Takes main, and argc/argv as arguments
             const auto& startPath = crate.getLangItemPathOpt("start");
             if (startPath != HIRSimplePath()) {
                 const auto& fcn = crate.getFunctionByPath(sp, startPath);
@@ -1457,8 +1360,6 @@ TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate) {
                 state.rv.roots.push_back(p.clone());
                 state.enumFcn(std::move(p), fcn, mv$(langStartPp));
             } else if (!crate.isNoCore) {
-                // Preserve the usual diagnostic for crates that rely on the
-                // standard entrypoint protocol.
                 crate.getLangItemPath(sp, "start");
             }
         } else {
@@ -1494,18 +1395,11 @@ namespace {
                     auto v = state.resolve.getValue(sp, *path, unusedMs, true);
                     bool deferBoundPath = hasConditionalBounds && v.is_NotYetKnown();
                     if (hasConditionalBounds && !deferBoundPath && v.is_Function() && path->data.is_UfcsKnown() && !path->data.as_UfcsKnown().type->is_TraitObject()) {
-                        // Signature-only lookup can return the trait method even
-                        // when no concrete impl is available.  Resolve just
-                        // these UFCS paths fully before treating them as roots.
                         MonomorphState implMs(state.crate.types);
                         deferBoundPath = state.resolve.getValue(sp, *path, implMs, false).is_NotYetKnown();
                     }
                     if (v.is_StructConstructor() || v.is_EnumConstructor()) {
                     } else if (deferBoundPath) {
-                        // A path can be concrete while its availability still
-                        // depends on this generic function's bounds.  It must
-                        // be resolved when the saved MIR is instantiated, not
-                        // emitted as an unconditional item of this crate.
                     } else {
                         auto p = ms.monomorphPath(sp, *path);
                         state.rv.roots.push_back(p.clone());
@@ -1573,15 +1467,9 @@ namespace {
             case HIRValueItem::TAG_Static: {
                 const auto& e = *vi.as_Static();
                 if (e.linkage.name != "" || e.linkage.section != "") {
-                    // If a link name is set, force emit
                     isVisible = true;
                 }
                 if (e.isPromoted && !e.params.isGeneric()) {
-                    // Storage this compiler made for a promoted borrow is
-                    // named after the crate that made it. A generic body
-                    // another crate monomorphises reads it by that name, so
-                    // this crate defines it whether or not anything here
-                    // does.
                     isVisible = true;
                 }
                 if (isVisible && !e.params.isGeneric()) {
@@ -1608,17 +1496,14 @@ namespace {
                     switch (e.markings.inlineType) {
                         case HIRFunction::Markings::Inline::Always:
                         case HIRFunction::Markings::Inline::Normal:
-                            // Don't emit, it's going to be emitted by callers
                             isInline = true;
                             break;
                         case HIRFunction::Markings::Inline::Auto:
                         case HIRFunction::Markings::Inline::Never:
-                            // Should still be emitted, as it won't be emitted downstream
                             break;
                     }
                 }
                 if (e.linkage.name != "" || e.linkage.section != "") {
-                    // If a link name is set, force emit
                     isVisible = true;
                 }
 
@@ -1633,8 +1518,6 @@ namespace {
                         state.rv.roots.push_back(getPath.get());
                     }
                 }
-                // Enumerate concrete items used
-                // - These are functions that have to be emitted, even if they're not public themselves
                 if (e.saveCode) {
                     TransEnumerateGenericFunctionItems(state, sp, e, MonomorphStatePtr(state.crate.types), !e.params.bounds.empty());
                 }
@@ -1706,10 +1589,6 @@ namespace {
         MonomorphStatePtr ms(state.crate.types);
         ms.ppImpl = &paramsImpl;
         if (!impl.params.isGeneric()) {
-            // Erased lifetimes and concrete `where` clauses leave an impl with
-            // no translation parameters, but do not make the impl
-            // unconditionally available.  Ask the normal trait resolver to
-            // prove this exact impl before eagerly emitting its public items.
             bool implAvailable = true;
             if (!impl.params.bounds.empty()) {
                 implAvailable = resolve.findImpl(sp, traitPath, impl.traitArgs, implTy, [&](const ImplRef& implRef, SolverCertainty certainty) {
@@ -1730,20 +1609,15 @@ namespace {
             // - Lazy (wrong) version would be to not emit if the type is private - but private types can be leaked
             //   - Could flag leaked private types in a previous pass?
 
-            // Emit each method/static (in the trait itself)
             const auto& trait = resolve.hirCrate().getTraitByPath(sp, traitPath);
             for (const auto& vi : trait.values) {
-                // Constant, no codegen
                 if (vi.second.is_Constant())
                     ;
-                // Generic method, no codegen
                 else if (vi.second.is_Function() && vi.second.as_Function().params.isGeneric())
                     ;
-                // VTable, magic
                 else if (vi.first == "vtable#")
                     ;
                 else {
-                    // Check bounds before queueing for codegen
                     HIRPathParams pp;
                     if (vi.second.is_Function()) {
                         const auto& fcn = vi.second.as_Function();
@@ -1795,14 +1669,12 @@ namespace {
     }
 }
 
-/// Enumerate trans items for all public non-generic items (library crate)
 TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
     Span sp;
     EnumState state{wb};
 
     TransEnumeratePublicMod(state, crate.rootModule, HIRSimplePath(crate.crateName, {}), true);
 
-    // Impl blocks
     StaticTraitResolve resolve{wb, OpaqueReveal::All};
     for (auto& implGroup : crate.traitImpls) {
         const auto& traitPath = implGroup.first;
@@ -1859,7 +1731,6 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
                     auto ppMethod = HIRPathParams();
                     for (const auto& r : e.second.data.valueRes.relocations) {
                         if (r.p) {
-                            // Still need to monomorph, as lifetimes aren't counted in `is_generic`
                             state.rv.roots.push_back(MonomorphStatePtr(state.crate.types, nullptr, &implParams, &ppMethod).monomorphPath(Span(), *r.p));
                         }
                     }
@@ -1880,7 +1751,6 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
         H1::enumerateTypeImpl(state, *impl);
     }
 
-    // Ensure that the panic handler is emitted
     {
         auto it = crate.langItems.find("trustme-panic_implementation");
         if (it != crate.langItems.end()) {
@@ -1895,7 +1765,6 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
 
     auto rv = TransEnumerateCommonPost(state);
 
-    // Strip out any functions/types/statics that are still generic?
     for (auto it = rv.functions.begin(); it != rv.functions.end();) {
         if (monomorphisePathNeeded(it->first)) {
             rv.functions.erase(it++);
@@ -1948,8 +1817,6 @@ namespace {
 }
 
 void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList& list) {
-    // Clear the function enum cache and re-generate
-    // - This is called after optimisation, so the cache may point to functions that have been optimised out
     for (const auto& fcnE : list.functions) {
         auto& function = *fcnE.second->ptr;
         if (function.code.mir) {
@@ -1965,7 +1832,6 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
         }
     }
 
-    // Completely re-run enumeration, but this time include the TransList so MIR recursion uses the optimised versions
     EnumState state{wb};
     state.origList = &list;
     for (const auto& p : list.roots) {
@@ -1981,17 +1847,11 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
                 }
             }
         } else {
-            // Statics don't have lifetime params
         }
         TransEnumerateFillFromPathMono(state, std::move(path));
     }
     auto newList = TransEnumerateCommonPost(state);
 
-    // Region-bearing drop variants are retained below when their value type or
-    // an explicit MIR drop is reachable. Their optimised bodies can name
-    // region-bearing value paths which the canonical ABI variant does not, so
-    // enumerate those bodies too. A borrowed ABI type alone needs only a C
-    // forward declaration and must not retain a body which accesses its fields.
     Vector<const TransListFunction*> enumeratedImplicitDrops;
     for (;;) {
         Vector<const TransListFunction*> generatedFunctions;
@@ -2020,8 +1880,6 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
         TransEnumerateGeneratedMIR(wb, newList, generatedFunctions);
     }
 
-    // Add stub entries to `new_list` for vtables and destructors, items that would be created by stages after enumerate
-    // - VTables
     for (const auto* type : newList.dropGlue) {
         newList.functions.insert(std::make_pair(HIRPath(type, "#drop_glue"), nullptr));
     }
@@ -2036,7 +1894,6 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
         newList.statics.insert(std::make_pair(vtp.first.clone(), nullptr));
 
         if (traitPath.path == HIRSimplePath()) {
-            // Non-data traits
             continue;
         }
 
@@ -2044,9 +1901,7 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
 
         auto monomorphCbTrait = MonomorphStatePtr(state.crate.types, type, &traitPath.params, nullptr);
         for (unsigned int i = 0; i < trait.valueIndexes.size(); i++) {
-            // Find the corresponding vtable entry
             for (const auto& m : trait.valueIndexes) {
-                // NOTE: The "3" is the number of non-method vtable entries
                 if (m.second.first != 3 + i) {
                     continue;
                 }
@@ -2057,7 +1912,6 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
 
                 newList.functions.insert(std::make_pair(std::move(itemPath), nullptr));
 
-                // If the entry is a by-value function, then emit a reference to a shim
                 const auto& srcTrait = state.resolve.hirCrate().getTraitByPath(sp, m.second.second.path);
                 const auto& item = srcTrait.values.at(m.first);
                 if (item.is_Function() && item.as_Function().receiver == HIRFunction::Receiver::Value) {
@@ -2069,10 +1923,8 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
             }
         }
     }
-    // - Drop Glue
     for (const auto& ty : newList.types) {
         Span sp;
-        // Ignore shallow types
         if (ty.second) {
             continue;
         }
@@ -2104,7 +1956,6 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
         newList.functions.insert(std::make_pair(fnPath.clone(), nullptr));
     }
     for (const auto& ty : newList.autoFnptrImpls) {
-        // - <fn(...) as FnPtr>::addr
         HIRPath fnPath(ty, crate.getLangItemPath(Span(), "fn_ptr_trait"), "addr");
         newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
     }
@@ -2124,17 +1975,12 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
     for (const auto& ty : newList.types) {
         ASSERT_BUG(Span(), list.addType(ty.first, ty.second), "Duplicate type in cleaned translation list: " << ty.first);
     }
-    // Constructors are re-derived along with the types, so a constructor that
-    // optimisation made unreachable must go too: its wrapper would name a type
-    // this list no longer carries.
     list.constructors = mv$(newList.constructors);
     removeMissing(wb, list.functions, newList.functions);
     removeMissing(wb, list.statics, newList.statics);
 }
 
-/// Common post-processing
 void TransEnumerateCommonPostRun(EnumState& state) {
-    // Run the enumerate queue (keeps the recursion depth down)
     while (!state.fcnQueue.empty()) {
         auto& fcnOut = *state.fcnQueue.front();
         state.fcnQueue.pop_front();
@@ -2322,16 +2168,10 @@ namespace {
     }; // struct TypeVisitor
 } // namespace <empty>
 
-// Enumerate types required for the enumerated items
 void TransEnumerateTypes(EnumState& state) {
     Span sp;
     TypeVisitor tv{state.resolve.board(), state.rv, state.origList};
 
-    // Taking `<dyn Trait>::method` as a function item creates a dispatch
-    // wrapper without creating any concrete vtable instance.  The wrapper
-    // dereferences the vtable, so visit its complete type and all field
-    // dependencies explicitly.  This runs in both initial enumeration and
-    // cleanup's re-derivation of the reachable list.
     for (const auto& path : state.rv.traitObjectMethods) {
         const auto& pe = path.data.as_UfcsKnown();
         const auto& tyDyn = pe.type->as_TraitObject();
@@ -2342,7 +2182,6 @@ void TransEnumerateTypes(EnumState& state) {
     size_t constructorsVisited = 0;
     bool constructorsAdded;
     do {
-        // Visit all functions that haven't been type-visited yet
         for (unsigned int i = 0; i < state.fcnsToTypeVisit.size(); i++) {
             auto* p = state.fcnsToTypeVisit[i];
             assert(p->path);
@@ -2363,7 +2202,6 @@ void TransEnumerateTypes(EnumState& state) {
 
             tv.visitType(pp.monomorph(tv.resolve, stat.type));
         }
-        // - Constants need visiting, as they will be expanded
         for (const auto& ent : state.rv.constants) {
             assert(ent.second->ptr);
             const auto& stat = *ent.second->ptr;
@@ -2388,9 +2226,7 @@ void TransEnumerateTypes(EnumState& state) {
 
             const auto& vtableTySpath = trait.vtablePath;
             const auto& vtableRef = state.crate.getStructByPath(sp, vtableTySpath);
-            // Copy the param set from the trait in the trait object
             HIRPathParams vtableParams = gpath.params.clone();
-            // - Include associated types on bound
             for (const auto& tyIdx : trait.typeIndexes) {
                 auto idx = tyIdx.second;
                 if (vtableParams.types.size() <= idx) {
@@ -2446,7 +2282,6 @@ void TransEnumerateTypes(EnumState& state) {
         constructorsAdded = false;
         for (unsigned int i = typesCount; i < state.rv.types.size(); i++) {
             const auto& ent = state.rv.types[i];
-            // Shallow? Skip.
             if (ent.second) {
                 continue;
             }
@@ -2458,26 +2293,20 @@ void TransEnumerateTypes(EnumState& state) {
                 const HIRTraitMarkings* markingsPtr = te.binding.getTraitMarkings();
                 ASSERT_BUG(sp, markingsPtr, "Path binding not set correctly - " << ty);
 
-                // If the type has a drop impl, and it's either defined in this crate or has params (and thus was monomorphised)
                 if (markingsPtr->hasDropImpl && (gp.path.crateName() == state.crate.crateName || gp.params.hasParams())) {
-                    // Add the Drop impl to the codegen list
                     TransEnumerateFillFromPathMono(state, HIRPath(ty, state.crate.getLangItemPath(sp, "drop"), "drop", HIRPathParams()));
                     constructorsAdded = true;
                 }
             }
 
             if (const auto* ity = tv.resolve.isTypeOwnedBox(ty)) {
-                // NOTE: Save the params before visiting, as the ASTType* might move as types are added, but the inner data won't move
                 const auto& p = ty->as_Path().path.data.as_Generic().params;
                 tv.visitType(ity);
             }
         }
         typesCount = state.rv.types.size();
 
-        // Run queue
         TransEnumerateCommonPostRun(state);
-        // The queue can name further constructors, whose types are then still
-        // unvisited.
         if (state.rv.constructors.size() != constructorsVisited) {
             constructorsAdded = true;
         }
@@ -2505,10 +2334,6 @@ namespace {
                 const HIRTypeData* type = defs->values[i].type;
                 HIRTypeRef tmp;
                 if (monomorphiseTypeNeeded(type)) {
-                    // A const parameter's type may name the parameters before it
-                    // (`const M: [T; N]`), and those are concrete by now. The
-                    // list fills both slots because a definition indexes its own
-                    // parameters as `I:n` or as `M:n` depending on the item.
                     MonomorphStatePtr ms(crate.types, nullptr, &params, &params);
                     type = tmp = ms.monomorphType(sp, type);
                     ASSERT_BUG(sp, !monomorphiseTypeNeeded(type), "Generic const parameter type " << type << " in " << defs->fmtArgs());
@@ -2528,9 +2353,6 @@ namespace {
             }
             case HIRPathData::TAG_UfcsKnown: {
                 auto& pe = path.data.as_UfcsKnown();
-                // An empty trait path is the marker-only vtable sentinel. It
-                // has no trait parameters to evaluate; the vtable enumerator
-                // handles this representation directly.
                 if (pe.trait.path != HIRSimplePath()) {
                     const auto& trait = crate.getTraitByPath(sp, pe.trait.path);
                     evaluateTranslationParams(sp, wb, crate, &trait.params, pe.trait.params);
@@ -2638,8 +2460,6 @@ namespace {
                 TODO(sp, path << " was " << ent.tagStr());
             case TypeckValuePtr::TAG_NotYetKnown: {
                 const auto* pe = &path.data.as_UfcsKnown();
-                // Options:
-                // - VTable
                 if (pe->item == "vtable#") {
                     return EntPtr::make_AutoGenerate({});
                 }
@@ -2735,11 +2555,6 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
         }
     }
 
-    // A trait method whose Self is the corresponding trait object is always
-    // dispatched through that object's vtable.  This also applies when the
-    // method is used as a function item: resolving the path to a default trait
-    // body here would turn `Trait::method` into a static call once Self is
-    // inferred as `dyn Trait`.
     if (const auto* pe = pathMono.data.opt_UfcsKnown()) {
         if (const auto* tyDyn = pe->type->opt_TraitObject()) {
             if (pe->item != "vtable#" && tyDyn->trait.traitPtr->getVtableValueIndex(pe->trait, pe->item) > 0) {
@@ -2749,8 +2564,6 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
         }
     }
 
-    // Get the item type
-    // - Valid types are Function and Static
     auto itemRef = getEntFullpath(sp, state.resolve.board(), state.crate, pathMono, subPp);
     evaluateTranslationImplAndTraitParams(sp, state.resolve.board(), state.crate, pathMono, subPp);
     if (pathAlreadyEnumerated(state, pathMono)) {
@@ -2779,43 +2592,23 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 // Leave generation of struct/enum constructors to codgen
                 // TODO: Add to a list of required constructors
                 state.rv.constructors.insert(mv$(pathMono.data.as_Generic()));
-            }
-            // - <T>::#type_id
-            else if (pathMono.data.is_UfcsInherent() && pathMono.data.as_UfcsInherent().item == "#type_id") {
+            } else if (pathMono.data.is_UfcsInherent() && pathMono.data.as_UfcsInherent().item == "#type_id") {
                 state.rv.typeids.insert(pathMono.data.as_UfcsInherent().type);
-            }
-            // - <T as U>::#vtable
-            else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().item == "vtable#") {
+            } else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().item == "vtable#") {
                 if (state.rv.addVtable(pathMono.clone(), TransParams(state.crate.types))) {
-                    // Fill from the vtable
                     TransEnumerateFillFromVTable(state, mv$(pathMono), subPp);
                 }
-            }
-            // - <(Trait) as Trait>::method
-            else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().type->is_TraitObject()) {
+            } else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().type->is_TraitObject()) {
                 state.rv.traitObjectMethods.insert(mv$(pathMono));
-            }
-            // - <fn(...) as Fn*>::call*
-            else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().type->is_Function() && (pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn") || pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn_mut") || pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn_once"))) {
-                // Must have been a dynamic dispatch request, just leave as-is
-                // - However, ensure that all arguments are visited?
-                //    state.rv.vi
-            }
-            // - <fn{...} as Fn*>::call*
-            else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().type->is_NamedFunction() && (pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn") || pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn_mut") || pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn_once"))) {
-                // Calling a non-dynamic function, need to visit that function
+            } else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().type->is_Function() && (pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn") || pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn_mut") || pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn_once"))) {
+            } else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().type->is_NamedFunction() && (pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn") || pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn_mut") || pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn_once"))) {
                 TransEnumerateFillFromPath(state, pathMono.data.as_UfcsKnown().type->as_NamedFunction().path, subPp);
-            }
-            // - <fn(...) as FnPtr>::addr
-            else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().type->is_Function() && pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn_ptr_trait")) {
+            } else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().type->is_Function() && pathMono.data.as_UfcsKnown().trait.path == state.crate.getLangItemPathOpt("fn_ptr_trait")) {
                 state.rv.autoFnptrImpls.insert(pathMono.data.as_UfcsKnown().type);
-            }
-            // <* as Clone>::clone
-            else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().trait == state.crate.getLangItemPathOpt("clone")) {
+            } else if (pathMono.data.is_UfcsKnown() && pathMono.data.as_UfcsKnown().trait == state.crate.getLangItemPathOpt("clone")) {
                 const auto& pe = pathMono.data.as_UfcsKnown();
                 ASSERT_BUG(sp, pe.item == "clone" || pe.item == "clone_from", "Unexpected Clone method called, " << pathMono);
                 const auto& innerTy = pe.type;
-                // If this is !Copy, then we need to ensure that the inner type's clone impls are also available
                 ::StaticTraitResolve resolve{state.resolve.board(), OpaqueReveal::All};
                 if (!resolve.typeIsCopy(sp, innerTy)) {
                     auto enumImpl = [&](const HIRTypeData* ity) {
@@ -2859,7 +2652,6 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             if (pathAlreadyEnumerated(state, pathMono)) {
                 return;
             }
-            // Add this path (monomorphised) to the queue
             state.enumFcn(mv$(pathMono), *e, mv$(subPp));
             break;
         }
@@ -2926,7 +2718,6 @@ void TransEnumerateFillFromMIRConstant(MIREnumCache& state, const MIRConstant& c
         case MIRConstant::TAG_StaticString: {
             break;
         }
-        // String
         case MIRConstant::TAG_Encoded: {
             auto& ce = c.as_Encoded();
             for (const auto& reloc : ce.value.relocations) {
@@ -2938,7 +2729,6 @@ void TransEnumerateFillFromMIRConstant(MIREnumCache& state, const MIRConstant& c
         }
         case MIRConstant::TAG_Const: {
             auto& ce = c.as_Const();
-            // - Check if this constant has a value of Defer
             state.insertPath(*ce.p);
             break;
         }
@@ -3199,12 +2989,8 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
                     case MIRCallTarget::TAG_Intrinsic: {
                         auto& e2 = e.fcn.as_Intrinsic();
                         if (e2.name == "type_id") {
-                            // Add <T>::#type_id to the enumerate list
                             state.insertTypeid(e2.params.types.at(0));
                         } else if (e2.name == "drop_in_place") {
-                            // C lowering turns this intrinsic into static
-                            // #drop_glue calls, so expose those dependencies
-                            // to translation enumeration before codegen.
                             state.insertDestructorType(e2.params.types.at(0));
                         }
                         break;
@@ -3293,7 +3079,6 @@ void TransEnumerateFillFromVTable(EnumState& state, HIRPath vtablePath, const Tr
             auto ptMono = MonomorphStatePtr(state.crate.types, type, &traitPath.params, nullptr).monomorphGenericpath(sp, ptPath.path);
             auto ptVtablePath = HIRPath(type, mv$(ptMono), vtablePath.data.as_UfcsKnown().item);
             state.rv.addVtable(mv$(ptVtablePath), TransParams(state.crate.types));
-            // No need to recurse.
         }
     }
 }
@@ -3309,9 +3094,7 @@ void TransEnumerateFillFromLiteral(EnumState& state, const EncodedLiteral& lit, 
 
 void TransEnumerateFillFromFunction(EnumState& state, const HIRPath& p, const HIRFunction& function, const TransParams& pp) {
     if (!function.code.mir) {
-        // External.
         if (function.linkage.name != "") {
-            // Search for a function with the same linkage name anywhere in the loaded crates
             auto it = state.linkFunctions.find(function.linkage.name);
             if (it != state.linkFunctions.end()) {
                 state.enumFcn(HIRPath(it->second.first), *it->second.second, TransParams(state.crate.types, pp.sp));
@@ -3426,10 +3209,6 @@ auto Builder::pushDropSequence(::std::vector<MIRLValue> values, MIRBasicBlockId 
         return;
     }
 
-    // Lay the cleanup suffixes out before the normal chain.  A panic
-    // from field N starts at field N+1; a panic from the user's Drop
-    // implementation starts at field zero.  Cleanup drops terminate
-    // on a second panic.
     ensureOpen();
     const auto entry = static_cast<MIRBasicBlockId>(mir.blocks.size() - 1);
     terminateBlock(MIRTerminator::make_Goto(~0u));
@@ -3495,7 +3274,6 @@ auto Builder::terminateCall(MIRLValue rv, MIRCallTarget tgt, std::vector<MIRPara
 }
 
 auto Builder::pushCallDrop(const HIRTypeData* ty) -> MIRBasicBlockId {
-    // Get a `&mut *self`
     auto borrowLv = this->addLocal(state.crate.types.borrow(HIRBorrowType::Unique, ty));
     this->pushStmtAssign(borrowLv.clone(), MIRRValue::make_Borrow({HIRBorrowType::Unique, false, MIRLValue::newDeref(this->self.clone())}));
 
@@ -3757,10 +3535,6 @@ auto TypeVisitor::visitEnum(const HIRTypeData* selfType, const HIRGenericPath& p
 
 auto TypeVisitor::visitType(const HIRTypeData* ty, Mode mode) -> void {
     Span sp;
-    // Trans is reveal-all: a projection over someone's
-    // return-position opaque (a struct field instantiated with a
-    // fn-def parameter) may only normalise once the opaque is
-    // revealed (mir/validate/needs-reveal-all).
     if (visitTyWith(ty, [](const HIRTypeData* inner) {
         return inner->is_ErasedType();
     })) {
@@ -3769,7 +3543,6 @@ auto TypeVisitor::visitType(const HIRTypeData* ty, Mode mode) -> void {
         resolve.expandAssociatedTypes(sp, revealed);
         ty = revealed;
     }
-    // If the type has already been visited, AND either this is a shallow visit, or the previous wasn't
     if (out.hasType(ty, mode == Mode::Shallow)) {
         return;
     }
@@ -3878,7 +3651,6 @@ auto TypeVisitor::visitType(const HIRTypeData* ty, Mode mode) -> void {
                         break;
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
-                        // No innards to visit
                         break;
                     }
                     case HIRTypePathBinding::TAG_Struct: {
@@ -3893,7 +3665,6 @@ auto TypeVisitor::visitType(const HIRTypeData* ty, Mode mode) -> void {
                     }
                     case HIRTypePathBinding::TAG_Enum: {
                         auto& tpb = te.binding.as_Enum();
-                        // NOTE: Force repr generation before recursing into enums (allows layout optimisation to be calculated)
                         TargetGetTypeRepr(sp, resolve, ty);
                         visitEnum(ty, te.path.data.as_Generic(), *tpb);
                         break;
@@ -3905,15 +3676,12 @@ auto TypeVisitor::visitType(const HIRTypeData* ty, Mode mode) -> void {
                 auto& te = (*ty).as_TraitObject();
                 Span sp;
 
-                // If the data trait is empty, then no vtable to visit
                 if (!te.trait.path.path.components().empty()) {
-                    // Ensure that the data trait's vtable is present
                     const auto& trait = *te.trait.traitPtr;
                     auto vtableTy = trait.getVtableType(sp, crate, te);
 
                     visitType(vtableTy);
                 } else {
-                    // Wait, what vtable should be used then?
                 }
                 break;
             }
@@ -3982,9 +3750,7 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
     bool hasErased = visitTyWith(fcn.returnType, [&](const auto& x) {
         return x->is_ErasedType();
     });
-    // Handle erased types in the return type.
     if (hasErased || monomorphiseTypeNeeded(fcn.returnType)) {
-        // If there's an erased type, make a copy with the erased type expanded
         HIRTypeRef retTy;
         if (hasErased) {
             retTy = cloneTyWith(crate.types, sp, fcn.returnType, [&](const auto& x, auto& out) {
@@ -4012,7 +3778,6 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
     if (fcn.code.mir) {
         mirP = &*fcn.code.mir;
     }
-    // If the previous list is populated, then this should be in it.
     if (prevList) {
         const auto* transFcn = prevList->findFunction(path);
         ASSERT_BUG(sp, transFcn, "Unable to find " << path << " in first-pass enumerate result");
@@ -4027,7 +3792,6 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
             tv.visitType(monomorph(ty));
         }
 
-        // Find all LValue::Deref instances and get the result type
         MIRTypeResolve::argsT emptyArgs;
         HIRTypeRef emptyTy;
         auto pathCallback = makeCallable<MIRPathCb>([](auto&) {});
@@ -4061,7 +3825,6 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                     };
                     const HIRTypeData* ty = nullptr;
                     ;
-                    // Recurse, if Deref get the type and add it to the visitor
                     switch (lv.root.tag()) {
                         case MIRLValue::Storage::TAG_Return: {
                             MIR_TODO(localMirRes, "Get return type for MIR type enumeration");
@@ -4118,14 +3881,6 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                 }
 
                 bool visitConst(const MIRConstant& c) override {
-                    // A byte string can introduce a type that appears
-                    // in neither a local nor the callee signature.  A
-                    // byte string passed through C varargs is emitted
-                    // as a pointer to its inferred `[u8; N]` type, so
-                    // make that type reachable before codegen asks
-                    // emitCtype for it.  Other constant kinds can name
-                    // generic parameters that are not available in
-                    // this signature-only traversal.
                     if (c.is_Bytes()) {
                         HIRTypeRef tmp;
                         auto ty = localMirRes.getConstType(c);
@@ -4135,7 +3890,6 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                 }
 
                 void visitPath(const HIRPath& /*p*/) override {
-                    // Paths don't need visiting?
                 }
 
                 void visitType(const HIRTypeData* ty) override {
@@ -4157,9 +3911,7 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                     const auto& p = localMirRes.resolve.hirCrate().getLangItemPath(sp, "panic_location");
                     const auto& s = localMirRes.resolve.hirCrate().getStructByPath(sp, p);
                     tv.visitType(tv.crate.types.path(HIRPath(p), &s));
-                }
-                // In 1.74+ the `offset` intrinsic takes a pointer as its generic
-                else if (e2.name == "offset") {
+                } else if (e2.name == "offset") {
                     HIRTypeRef tmp;
                     const auto& ty = pp.maybeMonomorph(tv.resolve, tmp, e2.params.types.at(0));
                     tv.visitType(ty->as_Pointer().inner);
@@ -4171,7 +3923,6 @@ void __attribute__((noinline)) TypeVisitor::visitFunction(const HIRPath& path, c
                     HIRTypeRef tmp;
                     const auto& ty = pp.maybeMonomorph(tv.resolve, tmp, p.data.as_UfcsKnown().type);
                     if (ty->is_TraitObject()) {
-                        // Must have the vtable for the trait object available!
                         tv.visitType(ty);
                     }
                 }

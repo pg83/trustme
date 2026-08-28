@@ -137,8 +137,6 @@
         }
         case ASTPatternData::TAG_Value: {
             auto& ent = pat.data_.as_Value();
-            // A range may have no start (`..=10`), and `..` is the rest pattern,
-            // which has neither.
             if (!ent.start.is_Invalid()) {
                 os << ent.start;
             }
@@ -247,8 +245,8 @@ bool PatternContainsNever(const ASTPattern& pat) {
     };
 
     switch (pat.data().tag()) {
-default:
-        return false;
+        default:
+            return false;
         case ASTPatternData::TAG_Never: {
             return true;
         }
@@ -543,10 +541,13 @@ ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, TuplePat pat)
     , data_(Data::make_StructTuple({::std::move(path), ::std::move(pat)}))
 {
 }
+
 namespace {
     Ordering ordPatternValue(const ASTPattern::Value& a, const ASTPattern::Value& b) {
         auto rv = ::ord(static_cast<unsigned>(a.tag()), static_cast<unsigned>(b.tag()));
-        if (rv != OrdEqual) return rv;
+        if (rv != OrdEqual) {
+            return rv;
+        }
         switch (a.tag()) {
             case ASTPattern::Value::TAG_Invalid: {
                 return OrdEqual;
@@ -554,13 +555,25 @@ namespace {
             case ASTPattern::Value::TAG_Integer: {
                 auto& ae = a.as_Integer();
                 auto& be = b.as_Integer();
-                rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type)); if (rv != OrdEqual) return rv; return ::ord(ae.value, be.value);
+                rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type));
+                if (rv != OrdEqual) {
+                    return rv;
+                }
+                return ::ord(ae.value, be.value);
                 break;
             }
             case ASTPattern::Value::TAG_Float: {
                 auto& ae = a.as_Float();
                 auto& be = b.as_Float();
-                rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type)); if (rv != OrdEqual) return rv; rv = ::ord(ae.value.bitsHi(), be.value.bitsHi()); if (rv != OrdEqual) return rv; return ::ord(ae.value.bitsLo(), be.value.bitsLo());
+                rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type));
+                if (rv != OrdEqual) {
+                    return rv;
+                }
+                rv = ::ord(ae.value.bitsHi(), be.value.bitsHi());
+                if (rv != OrdEqual) {
+                    return rv;
+                }
+                return ::ord(ae.value.bitsLo(), be.value.bitsLo());
                 break;
             }
             case ASTPattern::Value::TAG_String: {
@@ -585,24 +598,44 @@ namespace {
 
 Ordering ord(const ASTPattern& a, const ASTPattern& b) {
     auto rv = ::ord(static_cast<unsigned>(a.data().tag()), static_cast<unsigned>(b.data().tag()));
-    if (rv != OrdEqual) return rv;
+    if (rv != OrdEqual) {
+        return rv;
+    }
     switch (a.data().tag()) {
         case ASTPattern::Data::TAG_Value: {
             auto& ae = a.data().as_Value();
             auto& be = b.data().as_Value();
-            rv = ordPatternValue(ae.start, be.start); if (rv != OrdEqual) return rv; return ordPatternValue(ae.end, be.end);
+            rv = ordPatternValue(ae.start, be.start);
+            if (rv != OrdEqual) {
+                return rv;
+            }
+            return ordPatternValue(ae.end, be.end);
             break;
         }
         case ASTPattern::Data::TAG_ValueLeftInc: {
             auto& ae = a.data().as_ValueLeftInc();
             auto& be = b.data().as_ValueLeftInc();
-            rv = ordPatternValue(ae.start, be.start); if (rv != OrdEqual) return rv; return ordPatternValue(ae.end, be.end);
+            rv = ordPatternValue(ae.start, be.start);
+            if (rv != OrdEqual) {
+                return rv;
+            }
+            return ordPatternValue(ae.end, be.end);
             break;
         }
         case ASTPattern::Data::TAG_Or: {
             auto& ae = a.data().as_Or();
             auto& be = b.data().as_Or();
-            rv = ::ord(ae.size(), be.size()); if (rv != OrdEqual) return rv; for (size_t i = 0; i < ae.size(); i++) { rv = ::ord(ae[i], be[i]); if (rv != OrdEqual) return rv; } return OrdEqual;
+            rv = ::ord(ae.size(), be.size());
+            if (rv != OrdEqual) {
+                return rv;
+            }
+            for (size_t i = 0; i < ae.size(); i++) {
+                rv = ::ord(ae[i], be[i]);
+                if (rv != OrdEqual) {
+                    return rv;
+                }
+            }
+            return OrdEqual;
             break;
         }
         case ASTPattern::Data::TAG_MaybeBind: {
@@ -635,7 +668,11 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
         case ASTPattern::Data::TAG_Ref: {
             auto& ae = a.data().as_Ref();
             auto& be = b.data().as_Ref();
-            rv = ::ord(ae.mut, be.mut); if (rv != OrdEqual) return rv; return ::ord(*ae.sub, *be.sub);
+            rv = ::ord(ae.mut, be.mut);
+            if (rv != OrdEqual) {
+                return rv;
+            }
+            return ::ord(*ae.sub, *be.sub);
             break;
         }
         case ASTPattern::Data::TAG_Tuple: {

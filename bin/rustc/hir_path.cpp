@@ -128,20 +128,11 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
     return os;
 }
 
-// The simple-path interner. A process-wide table (like the RcString intern
-// table: path constructors have no access to the wiring board) maps the
-// first Zobrist hash to entries; a lookup compares the second hash only,
-// never the component content — the combined 128 bits make a false match
-// impossible in practice.
 namespace {
-    // Component keys must be content-based, not allocation-order-based;
-    // the string interner's stored xxh128 half is exactly that, for free.
     u64 contentHash(const RcString& s) {
         return s.contentHash();
     }
 
-    // The two Zobrist keys of a component at a position. Position goes
-    // through the mixer (a plain XOR fold would make the hash symmetric).
     const u64 POS_STEP = 0x9E3779B97F4A7C15;
 
     u64 key1(u64 ch, size_t i) {
@@ -152,9 +143,6 @@ namespace {
         return splitMix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
     }
 
-    // A stored path: the shared data plus the link of the per-hash1 chain.
-    // IntHasher is splitMix64 (a bijection), so a chain only ever holds
-    // entries with the same hash1; they are told apart by hash2 alone.
     struct PathNode: public HIRSimplePathData {
         PathNode* next;
 
@@ -183,7 +171,6 @@ namespace {
         return nullptr;
     }
 
-    // Entries live as long as the interner pool, so member references stay valid.
     const HIRSimplePathData* addPath(u64 h1, u64 h2, ThinVector<RcString> members) {
         auto& in = interner();
         auto* head = in.table.find(h1);
@@ -459,7 +446,6 @@ bool HIRTraitPath::equalsIgnoringRegions(const HIRTraitPath& x) const {
 }
 
 Ordering HIRTraitPath::ord(const HIRTraitPath& x) const {
-    // NOTE: An empty set is treated as the same as none
     ORD(path, x.path);
     ORD(traitBounds, x.traitBounds);
     ORD(typeBounds, x.typeBounds);
@@ -586,9 +572,6 @@ HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathPar
                 return HIRCompare::Fuzzy;
             }
 
-            // An unevaluated value that is a plain integer literal can still be compared
-            // exactly; treating it as fuzzy made impl selection on const generics pick the
-            // first candidate (harfrust's `SelectAtomic<8/16/32>`).
             struct H2 {
                 static bool getLiteral(const HIRConstGeneric& v, U128& out) {
                     if (const auto* ev = v.opt_Evaluated()) {
@@ -621,7 +604,6 @@ HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathPar
                 if (litT != litX) {
                     return HIRCompare::Unequal;
                 }
-                // Equal literals: continue (leaves `rv` as-is)
             } else if (valT != valX) {
                 if (valT.is_Unevaluated() || valX.is_Unevaluated()) {
                     return HIRCompare::Fuzzy;
@@ -838,7 +820,6 @@ HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<RcString> components)
 }
 
 HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<const RcString> components) {
-    // NOTE: Ensure that it's impossible for the crate name to be empty with only one value in `members`, simplifies comparison logic
     if (crate.c_str()[0] == '\0' && components.empty()) {
         p = nullptr;
         return;
@@ -941,7 +922,6 @@ HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y) {
     } else if (y == HIRCompare::Fuzzy) {
         x = HIRCompare::Fuzzy;
     } else {
-        // keep as-is
     }
     return x;
 }

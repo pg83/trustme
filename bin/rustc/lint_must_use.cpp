@@ -22,7 +22,6 @@ namespace {
         return node;
     }
 
-    /// `#[must_use]` on the type of the discarded value.
     bool typeIsMustUse(const HIRTypeData* ty) {
         if (const auto* pe = ty->opt_Path()) {
             switch (pe->binding.tag()) {
@@ -45,7 +44,6 @@ namespace {
         return false;
     }
 
-    /// `#[must_use]` on a trait named by `impl Trait` or `dyn Trait`.
     bool traitIsMustUse(const HIRCrate& crate, const HIRTypeData* ty) {
         auto check = [&](const HIRSimplePath& path) {
             return crate.getTraitByPath(Span(), path).mustUse;
@@ -89,8 +87,6 @@ namespace {
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
 
-        /// A lint attribute on the function overrides the containing module's
-        /// level for its body.
         void visitFunction(HIRItemPath p, HIRFunction& item) override;
 
         void visitExpr(HIRExprPtr& exp) override;
@@ -103,8 +99,6 @@ CfgLintLevel LintUnusedMustUseLevel(const Settings& settings) {
 
 void LintUnusedMustUse(const WireBoard& wb, HIRCrate& crate) {
     const auto level = LintUnusedMustUseLevel(*wb.settings);
-    // A function may still raise the level for its own body, so the walk runs
-    // even when the crate allows the lint.
     MustUseOuterVisitor visitor(wb, level);
     visitor.visitCrate(crate);
 }

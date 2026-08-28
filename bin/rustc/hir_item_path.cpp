@@ -66,7 +66,6 @@ HIRPath HIRItemPath::getFullPath() const {
     assert(parent);
     assert(name);
 
-    // If the parent has a name, or the parent is the crate root.
     if (parent->name || !parent->ty) {
         return getSimplePath();
     } else if (parent->trait) {

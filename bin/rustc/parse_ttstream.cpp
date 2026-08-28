@@ -17,7 +17,6 @@ TTStream::~TTStream() {
 
 Token TTStream::realGetToken() {
     while (stack.size() > 0) {
-        // If current index is above TT size, go up
         unsigned int& idx = stack.back().first;
         assert(stack.back().second);
         const TokenTree& tree = *stack.back().second;
@@ -58,7 +57,6 @@ ASTEdition TTStream::realGetEdition() const {
 }
 
 Ident::Hygiene TTStream::realGetHygiene() const {
-    // Empty.
     if (!hygienePtr) {
         return Ident::Hygiene();
     }
@@ -79,7 +77,6 @@ TTStreamO::~TTStreamO() {
 
 Token TTStreamO::realGetToken() {
     while (stack.size() > 0) {
-        // If current index is above TT size, go up
         unsigned int& idx = stack.back().first;
         TokenTree& tree = (stack.back().second ? *stack.back().second : inputTt);
 
@@ -118,7 +115,6 @@ Position TTStreamO::getPosition() const {
 }
 
 Ident::Hygiene TTStreamO::realGetHygiene() const {
-    // Empty.
     if (!hygienePtr) {
         return Ident::Hygiene();
     }

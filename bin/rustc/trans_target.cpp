@@ -51,7 +51,6 @@ namespace {
             "x86",
             32,
             false,
-            // i586+ baseline: 8/16/32-bit atomics via LOCK prefix, 64-bit via cmpxchg8b
             {/*atomic(u8)=*/true, /*u16=*/true, /*u32=*/true, /*u64=*/true, /*ptr=*/true},
             TargetArch::Alignments(2, 4, /*u64*/ 4, /*u128*/ 4, 4, 4, /*ptr*/ 4) // u128 has the same alignment as u64, which is u32's alignment. And f64 is 4 byte aligned
         };
@@ -84,14 +83,7 @@ namespace {
     }
 
     TargetArch archPowerpc() {
-        return {
-            "powerpc",
-            32,
-            true,
-            // 8-byte atomics are lock-based via libatomic here, but still available: cfg'ing out AtomicU64 breaks libstd.
-            {/*atomic(u8)=*/true, true, true, true, true},
-            TargetArch::Alignments(2, 4, 8, 8, 4, 8, 4)
-        };
+        return {"powerpc", 32, true, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 8, 4, 8, 4)};
     }
 
     TargetArch archRiscv64() {
@@ -122,7 +114,6 @@ namespace {
 
         TomlFile tomlFile(filename);
         for (auto keyVal : tomlFile) {
-            // Assertion: The way toml works, there has to be at least two entries in every path.
             assert(keyVal.path.size() > 1);
 
             auto checkPathLength = [&](const TomlKeyValue& kv, unsigned len) {
@@ -174,12 +165,10 @@ namespace {
                         } else if (keyVal.value.asString() == archRiscv64().name) {
                             rv.arch = archRiscv64();
                         } else {
-                            // Error.
                             ::std::cerr << "ERROR: Unknown architecture name '" << keyVal.value.asString() << "' in " << filename << ::std::endl;
                             exit(1);
                         }
                     } else {
-                        // Warning
                         ::std::cerr << "Warning: Unknown configuration item " << keyVal.path[0] << "." << keyVal.path[1] << " in " << filename << ::std::endl;
                     }
                 } else if (keyVal.path[0] == "backend") {
@@ -217,9 +206,7 @@ namespace {
                         } else {
                             ::std::cerr << "WARNING: Unknown field backend.c." << keyVal.path[2] << " in " << filename << ::std::endl;
                         }
-                    }
-                    // Does MMIR need configuration?
-                    else {
+                    } else {
                         ::std::cerr << "WARNING: Unknown configuration item backend." << keyVal.path[1] << " in " << filename << ::std::endl;
                     }
                 } else if (keyVal.path[0] == "arch") {
@@ -306,9 +293,7 @@ namespace {
         of << "[target]\n"
            << "family = \"" << spec.family << "\"\n"
            << "os-name = \"" << spec.osName << "\"\n"
-           << "env-name = \"" << spec.envName
-           << "\"\n"
-           //<< "arch = \"" << spec.m_arch.m_name << "\"\n"
+           << "env-name = \"" << spec.envName << "\"\n"
            << "\n"
            << "[backend.c]\n"
            << "variant = \"gnu\"\n"
@@ -350,7 +335,6 @@ namespace {
     }
 
     TargetSpec initFromSpecName(const ::std::string& targetName) {
-// Options for all the fully-GNU environments
 #define BACKEND_C_OPTS_GNU {"-ffunction-sections", "-pthread"}, {"-Wl,--start-group"}, {"-Wl,--end-group", "-Wl,--gc-sections", "-l", "atomic"}
         // If there's a '/' in the filename, open it as a path, otherwise assume it's a triple.
         if (targetName.find('/') != ::std::string::npos) {
@@ -397,25 +381,15 @@ namespace {
             return TargetSpec{"unix", "openbsd", "gnu", {false, "aarch64-unknown-openbsd", BACKEND_C_OPTS_GNU}, archArm64()};
         } else if (targetName == "x86_64-unknown-dragonfly") {
             return TargetSpec{"unix", "dragonfly", "gnu", {false, "x86_64-unknown-dragonfly", BACKEND_C_OPTS_GNU}, archX86_64()};
-        }
-        // `*-apple-darwin` has an empty target_env (as in rustc); "gnu" selects glibc-only code on a platform with no glibc.
-        else if (targetName == "i686-apple-darwin") {
-            // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
-            // The first 32bit Intel Mac was Core Solo aka yonah. It allows to use `-march=yonah` like Rust.
+        } else if (targetName == "i686-apple-darwin") {
             return TargetSpec{"unix", "macos", "", {false, "x86_64-apple-darwin", {"-march=yonah"}, {}}, archX86_64()};
         } else if (targetName == "x86_64-apple-darwin") {
-            // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
-            // The first 64bit Intel Mac was Core Duo. It allows to use `-march=core2` like Rust.
             return TargetSpec{"unix", "macos", "", {false, "x86_64-apple-darwin", {"-march=core2"}, {}}, archX86_64()};
         } else if (targetName == "aarch64-apple-darwin") {
-            // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
             return TargetSpec{"unix", "macos", "", {false, "aarch64-apple-darwin", {}, {}}, archArm64()};
         } else if (targetName == "powerpc-apple-darwin") {
-            // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
-            // NOTE: 32-bit PowerPC needs libatomic for the 8-byte atomics (see archPowerpc())
             return TargetSpec{"unix", "macos", "", {true, "powerpc-apple-darwin", {}, {}, {"-l", "atomic"}}, archPowerpc()};
         } else if (targetName == "powerpc64-apple-darwin") {
-            // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
             return TargetSpec{"unix", "macos", "", {false, "powerpc64-apple-darwin", {}, {}}, archPowerpc64()};
         } else if (targetName == "arm-unknown-haiku") {
             return TargetSpec{"unix", "haiku", "gnu", {true, "arm-unknown-haiku", {}, {}}, archArm32()};
@@ -489,10 +463,6 @@ void TargetSetCfg(WireBoard& wb, const ::std::string& targetName) {
     CfgSetValue(settings, "target_endian", tgt.arch.bigEndian ? "big" : "little");
     CfgSetValue(settings, "target_arch", tgt.arch.name);
     CfgSetValue(settings, "target_abi", "llvm"); // This is a lie, but hopefully works?
-    // target_has_atomic_equal_alignment="N" means align_of::<AtomicN>() == align_of::<N>().
-    // Since libcore declares AtomicN with repr(align(sizeof(N))), only set it when the
-    // primitive's natural alignment already matches its size (e.g. u64 on x86 has align 4,
-    // so target_has_atomic_equal_alignment="64" must be unset there even with cmpxchg8b).
     if (tgt.arch.atomics.u8) {
         CfgSetValue(settings, "target_has_atomic", "8");
         CfgSetValue(settings, "target_has_atomic_load_store", "8");
@@ -531,7 +501,6 @@ void TargetSetCfg(WireBoard& wb, const ::std::string& targetName) {
         CfgSetValue(settings, "target_has_atomic", "cas");
     }
     CfgSetValueCb(settings, "target_feature", [](const ::std::string& s) {
-        //if(g_target.m_arch.m_name == "x86_64" && s == "sse2") return true;    // 1.39 ppv-lite86 requires sse2 (x86_64 always has it)
         return false;
     });
 }
@@ -569,9 +538,6 @@ namespace {
             }
         } visitor(resolve.hirCrate().types);
 
-        // The expression visitor predates const traversal. This pass is read-only;
-        // it only uses the mutable interface to enumerate the closure's patterns
-        // and variable nodes before the normal capture-annotation phase.
         const_cast<HIRExprNodeClosure&>(closure).visit(visitor);
         ::std::sort(visitor.definitions.begin(), visitor.definitions.end());
         visitor.definitions.erase(::std::unique(visitor.definitions.begin(), visitor.definitions.end()), visitor.definitions.end());
@@ -584,9 +550,6 @@ namespace {
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign) {
     switch ((*ty).tag()) {
         case HIRTypeData::TAG_Infer: {
-            // Layout queries are also used while relating unevaluated generic
-            // constants.  An inference variable has no layout yet; report the
-            // query as deferred, just like a generic or unresolved opaque type.
             return false;
         }
         case HIRTypeData::TAG_Diverge: {
@@ -676,7 +639,6 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             return true;
         }
         case HIRTypeData::TAG_Generic: {
-            // Unknown - return false
             return false;
         }
         case HIRTypeData::TAG_TraitObject: {
@@ -694,10 +656,6 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 return false;
             }
             if (outSize == SIZE_MAX) {
-                // An inconsistent but accepted parameter environment can make
-                // an otherwise-unsized element usable here (e.g. `str: Copy`
-                // under `trivial_bounds`).  MIR construction must preserve the
-                // symbolic layout just as it does for a generic element.
                 return false;
             }
             if (!te.size.is_Known()) {
@@ -732,7 +690,6 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         case HIRTypeData::TAG_Borrow: {
             auto& te = (*ty).as_Borrow();
-            // - Alignment is machine native
             outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             // - Size depends on Sized-nes of the parameter
             // TODO: Handle different types of Unsized (ones with different pointer sizes)
@@ -752,9 +709,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         case HIRTypeData::TAG_Pointer: {
             auto& te = (*ty).as_Pointer();
-            // - Alignment is machine native
             outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
-            // - Size depends on Sized-nes of the parameter
             switch (resolve.metadataType(sp, te.inner)) {
                 case MetadataType::Unknown:
                     return false;
@@ -770,13 +725,11 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             return true;
         }
         case HIRTypeData::TAG_NamedFunction: {
-            // Zero size
             outSize = 0;
             outAlign = 1;
             return true;
         }
         case HIRTypeData::TAG_Function: {
-            // Pointer size
             outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             return true;
@@ -824,7 +777,6 @@ namespace {
         size_t size;
         size_t align;
         HIRTypeRef ty;
-        /// `align` came from an explicit `repr(align(N))` somewhere inside `ty`.
         bool userAlign = false;
     };
 
@@ -1172,10 +1124,6 @@ namespace {
             return ::std::min<size_t>(e.align, maxAlignment);
         }
 
-        // Match rustc's default layout grouping: an aggregate whose size has a
-        // stronger power-of-two factor than its ABI alignment is grouped with
-        // fields of that effective alignment. For example, [u8; 4] belongs to
-        // the align-4 group, while [u8; 6] belongs to align-2.
         const size_t sizeAsAlign = ::std::max(e.size, e.align);
         return sizeAsAlign & (~sizeAsAlign + 1);
     }
@@ -1184,9 +1132,6 @@ namespace {
         return a.align != b.align ? a.align < b.align : a.size < b.size;
     }
 
-    /// Generate a struct representation using the provided entries
-    ///
-    /// - Handles (optional) sorting and packing
     ::std::unique_ptr<TypeRepr> makeTypeReprStructInner(const Span& sp, const HIRTypeData* ty, ::std::vector<Ent>& ents, StructSorting sorting, unsigned forcedAlignment, unsigned maxAlignment) {
         if (ents.size() > 0) {
             auto sortFields = [&](auto first, auto last) {
@@ -1221,10 +1166,6 @@ namespace {
         for (auto& e : ents) {
             auto align = e.align;
 
-            // PowerPC 32-bit ABI
-            // First element uses natural alignment, subsequent elements with natural alignment
-            // >= 4 and up to 8 use embedding = 4. Skip ZST.
-            // The cap is on natural alignment only: an explicitly aligned member keeps it, as in gcc.
             if (TargetCapsMemberAlignment()) {
                 if (e.size > 0) {
                     if (!isFirstField && !e.userAlign && align >= 4 && align <= 8) {
@@ -1237,7 +1178,6 @@ namespace {
                 rv.userAlign = true;
             }
 
-            // Increase offset to fit alignment
             align = maxAlignment > 0 ? std::min<size_t>(align, maxAlignment) : align;
             if (align > 0) {
                 while (curOfs % align != 0) {
@@ -1246,7 +1186,6 @@ namespace {
             }
             maxAlign = ::std::max(maxAlign, align);
 
-            // Forced padding is indicated by setting the field index to -1
             if (e.field != ~0u) {
                 ASSERT_BUG(sp, e.field < fields.size(), "Field index out of range");
                 ASSERT_BUG(sp, fields[e.field].ty == HIRTypeRef(), "Dupliate field index");
@@ -1254,7 +1193,6 @@ namespace {
                 fields[e.field].ty = e.ty;
             }
             if (e.size == SIZE_MAX) {
-                // Ensure that this is the last item
                 ASSERT_BUG(sp, &e == &ents.back(), "Unsized item isn't the last item in " << ty);
                 curOfs = SIZE_MAX;
             } else {
@@ -1263,12 +1201,9 @@ namespace {
         }
         if (forcedAlignment > 0) {
             maxAlign = std::max(maxAlign, static_cast<size_t>(forcedAlignment));
-            // `repr(align(N))` - this is the root of a user-alignment chain.
             rv.userAlign = true;
         }
-        // If not packing (and the size isn't infinite/unsized) then round the size up to the alignment
         if (curOfs != SIZE_MAX) {
-            // Size must be a multiple of alignment
             while (curOfs % maxAlign != 0) {
                 curOfs++;
             }
@@ -1276,7 +1211,6 @@ namespace {
         for (const auto& f : fields) {
             ASSERT_BUG(sp, f.ty != HIRTypeRef(), "Uninitialised field found - " << (&f - &fields[0]));
         }
-        // Aligment is 1 for packed structs, and `max_align` otherwise
         rv.align = maxAlign;
         rv.size = curOfs;
         rv.fields = ::std::move(fields);
@@ -1303,7 +1237,6 @@ namespace {
             switch (str.repr) {
                 case HIRStruct::Repr::C:
                 case HIRStruct::Repr::Simd:
-                    // No sorting, no packing
                     sorting = StructSorting::None;
                     break;
                 case HIRStruct::Repr::Transparent:
@@ -1328,9 +1261,6 @@ namespace {
                 idx++;
                 ents.push_back(mv$(ent));
             }
-            // A tuple's last element may be unsized, and the layout has to
-            // leave it there: what a pointer to the tuple carries is the
-            // metadata of that element.
             sorting = (!ents.empty() && ents.back().size == SIZE_MAX) ? StructSorting::AllButFinal : StructSorting::All;
         } else {
             BUG(sp, "Unexpected type in creating type repr - " << ty);
@@ -1509,11 +1439,6 @@ namespace {
                 break;
             case HIRTypeData::TAG_Path: {
                 auto& te = (*ty).as_Path();
-                // rustc deliberately hides every validity niche inside a
-                // coroutine from an enclosing enum.  The saved state and
-                // locals change across suspension points, so treating an
-                // invalid value in the current layout as a stable niche can
-                // make `Option<coroutine>` overwrite a live coroutine state.
                 if (te.isGenerator() || te.isFuture()) {
                     return false;
                 }
@@ -1526,8 +1451,6 @@ namespace {
                     if (str->structMarkings.isNoNiche) {
                         return false;
                     }
-                    // Preserve the full invalid range for the general niche
-                    // layout instead of collapsing it to the zero value.
                     if (str->structMarkings.boundedMax && (r->fields.size() != 1 || !boundedMaxIsFullRange(r->fields[0].ty, str->structMarkings.boundedMaxValue))) {
                         return false;
                     }
@@ -1537,13 +1460,10 @@ namespace {
                             return true;
                         }
                     }
-                    // 1.39 marks these with #[rustc_nonnull_optimization_guaranteed] instead
                     if (str->structMarkings.isNonzero) {
                         outPath.subFields.push_back(0);
                         outPath.size = r->size;
                         if ((r->fields[0].ty->is_Pointer() || r->fields[0].ty->is_Borrow()) && outPath.size > TargetGetPointerBits() / 8) {
-                            // A wide pointer's validity niche is only its data
-                            // address; metadata occupies the following word.
                             outPath.size = TargetGetPointerBits() / 8;
                         }
                         return true;
@@ -1621,15 +1541,6 @@ namespace {
         return ofs;
     }
 
-    /// <summary>
-    /// Locate a suitable niche location in the given path (an enum that has space in its tag)
-    /// </summary>
-    /// <param name="sp"></param>
-    /// <param name="resolve"></param>
-    /// <param name="ty"></param>
-    /// <param name="out_path">Path to the variant field</param>
-    /// <param name="requiredCount">Number of discriminants that must fit in the niche</param>
-    /// <param name="nicheStart">First scalar value reserved for the outer enum</param>
     bool getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t minOffset, size_t maxOffset, size_t requiredCount, TypeRepr::FieldPath& outPath, size_t& nicheStart) {
         switch (ty->tag()) {
             break;
@@ -1663,8 +1574,6 @@ namespace {
             } break;
             case HIRTypeData::TAG_Path: {
                 auto& te = (*ty).as_Path();
-                // Coroutines do not expose the niches of their captures or
-                // internal state to an outer enum (see getNonzeroPath too).
                 if (te.isGenerator() || te.isFuture()) {
                     return false;
                 }
@@ -1683,8 +1592,6 @@ namespace {
                         assert(r->fields[0].offset == 0);
                         auto size = getSizeOrZero(sp, resolve, r->fields[0].ty);
                         if ((r->fields[0].ty->is_Pointer() || r->fields[0].ty->is_Borrow()) && size > TargetGetPointerBits() / 8) {
-                            // A wide pointer's null niche is in the data word,
-                            // not in the data+metadata pair as a whole.
                             size = TargetGetPointerBits() / 8;
                         }
                         if (size <= maxOffset) {
@@ -1731,7 +1638,6 @@ namespace {
 
                     switch (r->variants.tag()) {
                         case TypeReprVariantMode::TAG_None: {
-                            // If there is no discriminator, recurse into the only field
                             if (r->fields.empty()) {
                                 return false;
                             } else {
@@ -1746,13 +1652,6 @@ namespace {
                         case TypeReprVariantMode::TAG_Linear: {
                             auto& ve = r->variants.as_Linear();
                             if (ve.usesNiche()) {
-                                // The inner enum made its niche values valid,
-                                // but the scalar carrying the tag can still
-                                // have another invalid range.  Search the
-                                // populated variant again while reserving the
-                                // values consumed by this enum.  For example,
-                                // Option<Scalar<1..=100>> consumes zero and
-                                // Option<Option<Scalar<1..=100>>> uses 101.
                                 const auto& field = r->fields.at(ve.field.index);
                                 const size_t fieldSize = getSizeOrZero(sp, resolve, field.ty);
                                 if (field.offset < maxOffset && field.offset + fieldSize > minOffset) {
@@ -1775,8 +1674,6 @@ namespace {
                                                 const size_t afterStart = occupiedEnd == SIZE_MAX ? SIZE_MAX : ::std::max(candidateStart, occupiedEnd + 1);
                                                 const size_t afterCount = occupiedEnd == SIZE_MAX || candidateEnd < afterStart ? 0 : candidateEnd - afterStart + 1;
                                                 if (requiredCount <= beforeCount) {
-                                                    // The requested values fit before the
-                                                    // range used by the inner enum.
                                                 } else if (requiredCount <= afterCount) {
                                                     candidateStart = afterStart;
                                                 } else {
@@ -1792,7 +1689,6 @@ namespace {
                                 }
                                 return false;
                             }
-                            // Check that the offset of this tag field is >= min_offset
                             auto ofs = getOffset(sp, resolve, r, ve.field);
                             if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t)) {
                                 const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
@@ -1859,7 +1755,6 @@ namespace {
                 auto& te = (*ty).as_Primitive();
                 switch (te) {
                     case HIRCoreType::Char:
-                        // Only valid if the min offset is zero
                         if (minOffset == 0 && maxOffset >= 4 && requiredCount <= UINT32_MAX - 0x10FFFF) {
                             outPath.size = 4;
                             nicheStart = 0x10FFFF + 1;
@@ -1949,8 +1844,6 @@ namespace {
             break;
             case HIREnumClass::TAG_Data: {
                 auto& e = enm.data.as_Data();
-                // repr(C) enums - they have different rules
-                // - A data enum with `repr(C)` puts the tag before the data
                 if (enm.isCRepr) {
                     size_t maxSize = 0;
                     size_t maxAlign = 0;
@@ -1990,7 +1883,6 @@ namespace {
                     }
                     rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
                 } else if (enm.tagRepr == HIREnum::Repr::Auto && e.size() <= 1) {
-                    // If there are not multiple variants, then only include the one body
                     if (e.size() == 1) {
                         auto t = monomorph(e[0].type);
                         const auto* innerRepr = TargetGetTypeRepr(sp, resolve, t);
@@ -2004,16 +1896,13 @@ namespace {
                         rv.size = 0;
                         rv.align = 0;
                     }
-                    // Just leave it as None
                 } else {
-                    // repr(Rust) - allows interesting optimisations
                     struct Variant {
                         HIRTypeRef type;
                         ::std::vector<Ent> ents;
                         unsigned forcedAlignment;
                     };
 
-                    /// Is there an explicitly specified discriminant value provided?
                     bool hasExplcitValue = false;
                     std::vector<Variant> variants;
                     variants.reserve(e.size());
@@ -2035,9 +1924,7 @@ namespace {
 
                     if (enm.tagRepr == HIREnum::Repr::Auto) {
                         ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
-                        // Non-zero optimisation
                         if (rv.variants.is_None() && variants.size() == 2) {
-                            // If only one variant has a size of 0, then look for a nonzero in the variant list
                             size_t sizes[2] = {0, 0};
                             for (size_t i = 0; i < 2; i++) {
                                 for (const auto& ent : variants[i].ents) {
@@ -2046,9 +1933,7 @@ namespace {
                             }
                             auto minSize = ::std::min(sizes[0], sizes[1]);
                             auto maxSize = ::std::max(sizes[0], sizes[1]);
-                            // If one is zero and one is non-zero
                             if (minSize == 0 && maxSize > 0) {
-                                // Check for a non-zero path in any of those
                                 unsigned nzVar = (sizes[0] == 0 ? 1 : 0);
                                 for (size_t i = 0; i < variants[nzVar].ents.size(); i++) {
                                     TypeRepr::FieldPath nzPath;
@@ -2075,14 +1960,10 @@ namespace {
                             // - Calling `Target_GetTypeRepr` generates the variant early - too lazy to reimplement logic
                         } // non-zero
 
-                        // Niche optimisation
-                        // - Find an inner enum or char, and use high values for the variant
                         if (rv.variants.is_None()) {
                             bool nicheBeforeData = false;
                             size_t nicheOffset = 0;
                             size_t nonNicheOffset = 0;
-                            // Find the largest variant
-                            // - Also get the next-largest size to use as the minimum tag offset
                             unsigned nMatch = 0;
                             size_t biggestVar = variants.size();
                             size_t maxVarSize = 0;
@@ -2093,19 +1974,14 @@ namespace {
                                 reprs.push_back(makeTypeReprStructInner(sp, e[i].type, variants[i].ents, StructSorting::All, variants[i].forcedAlignment, 0));
                                 maxAlign = std::max(maxAlign, reprs.back()->align);
                                 size_t varSize = reprs.back()->size;
-                                // If larger than current max, update current max and reset
                                 if (varSize > maxVarSize) {
                                     minOffset = maxVarSize; // Downgrade the previous to min_offset
                                     maxVarSize = varSize;
                                     biggestVar = i;
                                     nMatch = 1;
-                                }
-                                // If equal to current max, increment count
-                                else if (varSize == maxVarSize) {
+                                } else if (varSize == maxVarSize) {
                                     nMatch += 1;
-                                }
-                                // Otherwise (smaller) update the min offset
-                                else {
+                                } else {
                                     minOffset = std::max(minOffset, varSize);
                                 }
                             }
@@ -2117,8 +1993,6 @@ namespace {
                                 for (size_t i = 0; i < reprs[biggestVar]->fields.size(); i++) {
                                     const auto& fld = reprs[biggestVar]->fields[i];
 
-                                    // 1. Look for a tag at the end
-                                    // - Prefer the end-of-struct version, as it avoids adding fields to the other variants
                                     TypeRepr::FieldPath nzPath;
                                     size_t nicheStart = 0;
                                     if (getVariantNichePath(sp, resolve, fld.ty, (minOffset > fld.offset ? minOffset - fld.offset : 0), maxVarSize - fld.offset, requiredNicheCount, nzPath, nicheStart)) {
@@ -2136,9 +2010,6 @@ namespace {
                                         break;
                                     }
 
-                                    // Note: rustc doesn't do this.
-                                    // 2. Look for a possible tag at the start?
-                                    // - Prepending the tag might change the next-largest variant too much?
                                     if (fld.offset == 0) {
                                         TypeRepr::FieldPath nzPath;
                                         size_t nicheStart = 0;
@@ -2195,35 +2066,26 @@ namespace {
                                     default:
                                         BUG(sp, "Unknown niche size: " << nichePath);
                                 }
-                                // Generate raw struct reprs for all variants
-                                // - Add `non_niche_offset` to all variants
                                 assert(reprs.size() == variants.size());
-                                // Size/alignment of the union of the *final* variant layouts, which is what codegen emits.
                                 size_t finalSize = 0;
                                 size_t finalAlign = 1;
                                 for (size_t i = 0; i < reprs.size(); i++) {
                                     if (e[i].type != resolve.hirCrate().types.unit()) {
-                                        // If the tag is leading, then add to all other variants and update reprs
                                         if (i == biggestVar) {
                                         } else if (nicheBeforeData) {
-                                            // Add padding (if needed)
                                             if (nicheOffset > 0) {
                                                 variants[i].ents.insert(variants[i].ents.begin(), Ent());
                                                 variants[i].ents[0].align = 1;
                                                 variants[i].ents[0].size = nicheOffset;
                                                 variants[i].ents[0].field = ~0u;
-                                                // Leave no type
                                                 TODO(sp, "Handle adding padding");
                                             }
-                                            // Add the tag
                                             variants[i].ents.insert(variants[i].ents.begin(), Ent());
                                             variants[i].ents[0].align = nichePath.size;
                                             variants[i].ents[0].size = nichePath.size;
                                             variants[i].ents[0].field = variants[i].ents.size() - 1;
                                             variants[i].ents[0].ty = nicheTy;
-                                            // Create the new repr
                                             reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forcedAlignment, 0);
-                                            // Make sure that the newly calculated repr doesn't change the size/alignment
                                             assert(reprs[i]->size <= maxSize);
                                             assert(reprs[i]->align <= maxAlign);
                                         } else {
@@ -2232,7 +2094,6 @@ namespace {
                                             for (const auto& f : reprs[i]->fields) {
                                                 maxOfs = std::max(maxOfs, f.offset + getSizeOrZero(sp, resolve, f.ty));
                                             }
-                                            // - Increase alignment to the niche size
                                             if (maxOfs % nichePath.size != 0) {
                                                 maxOfs += nichePath.size - (maxOfs % nichePath.size);
                                             }
@@ -2251,9 +2112,7 @@ namespace {
                                             variants[i].ents.back().size = nichePath.size;
                                             variants[i].ents.back().field = tagFldIdx;
                                             variants[i].ents.back().ty = nicheTy;
-                                            // Create the new repr
                                             reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forcedAlignment, 0);
-                                            // Make sure that the newly calculated repr doesn't change the size/alignment
                                             assert(reprs[i]->size <= maxSize);
                                             assert(reprs[i]->align <= maxAlign);
                                         }
@@ -2261,8 +2120,6 @@ namespace {
                                         finalAlign = std::max(finalAlign, reprs[i]->align);
                                         setTypeRepr(resolve, sp, variants[i].type, std::move(reprs[i]));
                                     } else {
-                                        // Note: unit type (any empty type) doesn't need the tag added
-                                        // NOTE: Unit type should already have a repr, but make sure
                                         if (const auto* r = TargetGetTypeRepr(sp, resolve, variants[i].type)) {
                                             finalSize = std::max(finalSize, r->size);
                                             finalAlign = std::max(finalAlign, r->align);
@@ -2274,7 +2131,6 @@ namespace {
                                 rv.size = maxSize;
                                 rv.align = maxAlign;
 
-                                // Under a capping ABI take size/align from the final variant layouts - `max_align` predates the tag field, so it over-states them
                                 if (TargetCapsMemberAlignment() && finalSize > 0) {
                                     size_t sz = finalSize;
                                     while (sz % finalAlign != 0) {
@@ -2286,7 +2142,6 @@ namespace {
                                     }
                                 }
 
-                                // Ensure that the tag offset is still valid
                                 auto tagOffset = getOffset(sp, resolve, &rv, nichePath);
                                 if (nonNicheOffset != 0) {
                                     ASSERT_BUG(sp, tagOffset < nonNicheOffset, "Niche offset invalid: " << tagOffset << " >= " << nonNicheOffset);
@@ -2297,23 +2152,13 @@ namespace {
                         } // Niche optimisation
                     } // All optimisations
 
-                    // rustc-compatible enum repr
-                    // ```
-                    // union {
-                    //   struct {
-                    //      TagType tag;
-                    //      ...data
-                    // }
-                    // ```
                     if (rv.variants.is_None()) {
                         HIRTypeRef tagTy;
-                        // If the tag size is specified, then force that
                         if (enm.tagRepr != HIREnum::Repr::Auto) {
                             tagTy = resolve.hirCrate().types.primitive(enm.getReprType(enm.tagRepr));
                         } else {
                             ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
                             if (e.size() <= 1) {
-                                // Unreachable
                                 BUG(sp, "Reached auto tag type logic with zero/one-sized enum");
                             } else if (e.size() <= 255) {
                                 tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U8);
@@ -2330,9 +2175,6 @@ namespace {
                         TargetGetSizeAndAlignOf(sp, resolve, tagTy, tagSize, tagAlign);
                         size_t maxSize = tagSize;
                         size_t maxAlign = tagAlign;
-                        // Sort all varaint fields (fully)
-                        // Add the tag to the start of all variants
-                        // Generate a struct repr (with sorting off)
                         for (size_t varI = 0; varI < variants.size(); varI++) {
                             auto& ents = variants[varI].ents;
                             auto& varTy = variants[varI].type;
@@ -2340,26 +2182,22 @@ namespace {
                                 if (enm.tagRepr == HIREnum::Repr::Auto) {
                                     ::std::sort(ents.begin(), ents.end(), sortfnEnumVariantFields);
                                 }
-                                // - Add tag
                                 ents.insert(ents.begin(), Ent());
                                 ents[0].align = tagAlign;
                                 ents[0].size = tagSize;
                                 ents[0].field = ents.size() - 1;
                                 ents[0].ty = tagTy;
 
-                                // - Create repr and assign
                                 auto repr = makeTypeReprStructInner(sp, varTy, ents, StructSorting::None, variants[varI].forcedAlignment, 0);
                                 maxSize = std::max(maxSize, repr->size);
                                 maxAlign = std::max(maxAlign, repr->align);
                                 setTypeRepr(resolve, sp, varTy, std::move(repr));
                             }
 
-                            // - Push the field
                             rv.fields.push_back(TypeRepr::Field{0, mv$(varTy)});
                         }
                         rv.fields.push_back(TypeRepr::Field{0, mv$(tagTy)});
 
-                        // Size must be a multiple of alignment
                         rv.size = maxSize;
                         while (rv.size % maxAlign != 0) {
                             rv.size++;
@@ -2386,14 +2224,8 @@ namespace {
                 switch (enm.tagRepr) {
                     case HIREnum::Repr::Auto:
                         if (enm.isCRepr) {
-                            // No auto-sizing, just i32?
                             rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(HIRCoreType::U32)});
                         } else if (e.variants.size() == 1) {
-                            // One variant is not a choice, so nothing has to
-                            // be stored to tell which it is: `enum E { V }`
-                            // is zero-sized, and its discriminant is a
-                            // constant the tag-less paths below read off the
-                            // enum itself.
                         } else if (!e.variants.empty()) {
                             i64 minValue = INT64_MAX;
                             i64 maxValue = INT64_MIN;
@@ -2445,9 +2277,6 @@ namespace {
             } break;
         }
 
-        // `#[repr(align(N))]` raises the alignment of the enum itself, and the
-        // size rounds up to match. A data enum gets this through its variant
-        // structs, but a value enum has only the tag.
         if (enm.forcedAlignment > 0 && enm.data.is_Value()) {
             rv.align = std::max(rv.align, static_cast<size_t>(enm.forcedAlignment));
             while (rv.size % rv.align != 0) {
@@ -2494,13 +2323,11 @@ namespace {
         };
 
         TypeRepr rv;
-        // codegen_c pins union alignment with an explicit `__attribute__((aligned))`, which gcc counts as user-alignment - so a union, and anything containing it, is exempt from the cap.
         rv.userAlign = true;
         for (const auto& var : unn.variants) {
             rv.fields.push_back({0, monomorph(var.ty)});
             size_t size, align;
             if (!TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, size, align)) {
-                // Generic? - Not good.
                 return nullptr;
             }
             if (size == SIZE_MAX) {
@@ -2508,20 +2335,16 @@ namespace {
             }
             rv.size = ::std::max(rv.size, size);
             rv.align = ::std::max(rv.align, align);
-            // A union inherits user-alignment from any member, as in gcc.
             if (TargetTypeHasUserAlignment(sp, resolve, rv.fields.back().ty)) {
                 rv.userAlign = true;
             }
         }
-        // `#[repr(packed(N))]` caps it below its widest member's.
         if (unn.maxFieldAlignment > 0) {
             rv.align = ::std::min(rv.align, static_cast<size_t>(unn.maxFieldAlignment));
         }
-        // `#[repr(align(N))]` raises the union past its widest member.
         if (unn.forcedAlignment > 0) {
             rv.align = ::std::max(rv.align, static_cast<size_t>(unn.forcedAlignment));
         }
-        // Round the size to be a multiple of align
         if (rv.size % rv.align != 0) {
             rv.size += rv.align - rv.size % rv.align;
         }
@@ -2597,7 +2420,6 @@ bool TargetCapsMemberAlignment() {
 }
 
 bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
-    // Arrays and slices inherit it from the element type, as in gcc's `layout_type`
     if (const auto* te = ty->opt_Array()) {
         return TargetTypeHasUserAlignment(sp, resolve, te->inner);
     }
@@ -2607,7 +2429,6 @@ bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolv
     if (const auto* te = ty->opt_Pattern()) {
         return TargetTypeHasUserAlignment(sp, resolve, te->inner);
     }
-    // Aggregates cache it on their repr; everything else is naturally aligned by definition
     if (ty->is_Tuple() || (ty->is_Path() && (ty->as_Path().binding.is_Struct() || ty->as_Path().binding.is_Union() || ty->as_Path().binding.is_Enum()))) {
         const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
         return repr && repr->userAlign;
@@ -2622,9 +2443,6 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
         return exact->second;
     }
 
-    // Trans is reveal-all: a projection through a fn-def's return-position
-    // opaque (e.g. a struct field of `<fn{bar} as Func>::Ret`) only becomes
-    // a layout-able type once the opaque is revealed.
     if (visitTyWith(ty, [](const HIRTypeData* inner) {
         return inner->is_ErasedType();
     })) {
@@ -3311,8 +3129,6 @@ auto TransmuteLayoutBuilder::build(const HIRTypeData* ty) -> Built {
         }
         if (path->binding.is_Struct()) {
             const auto& str = *path->binding.as_Struct();
-            // rustc 1.90's transmutability layout does not yet model
-            // scalar valid ranges (including the NonZero wrappers).
             if (str.structMarkings.isNonzero || str.structMarkings.boundedMax) {
                 supported = false;
                 return {nfa.uninhabited(), repr->size};

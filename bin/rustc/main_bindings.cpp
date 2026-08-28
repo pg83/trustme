@@ -48,35 +48,19 @@ void ExpandTestHarness(ASTCrate& crate) {
     ASSERT_BUG(Span(), crate.extCratenameTest != "", "Crate `test` not loaded");
     ASSERT_BUG(Span(), crate.extCratenameStd != "", "Crate `std` not loaded");
     auto cTest = crate.extCratenameTest;
-    // Create the following module:
-    // ```
-    // mod `#test` {
-    //   extern crate std;
-    //   extern crate test;
-    //   }
-    //   static TESTS: [test::TestDescAndFn; _] = [
-    //     test::TestDescAndFn { desc: test::TestDesc { name: "foo", ignore: false, should_panic: test::ShouldPanic::No }, testfn: ::path::to::foo },
-    //     ];
-    // }
-    // ```
 
-    // ---- main function ----
     auto mainFn = ASTFunction{Span(), mkType(*crate.pool, ASTTypeTags::Unit(), Span()), {}};
     {
         auto callNode = NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("test_main_static")}), ::makeVec1(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(NamedValue, ASTPath("", {ASTPathNode("test#"), ASTPathNode("TESTS")})))));
         mainFn.setCode(mv$(callNode));
     }
 
-    // ---- test list ----
     ::std::vector<ASTExprNodeP> testNodes;
 
     for (const auto& test : crate.tests) {
         ASTExprNodeStructLiteral::tValues descVals;
-        // `name: "foo",`
         descVals.push_back({{}, "name", NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("StaticTestName")}), ::makeVec1(NEWNODE(String, test.name)))});
-        // `ignore: false,`
         descVals.push_back({{}, "ignore", NEWNODE(Bool, test.ignore)});
-        // `should_panic: ShouldPanic::No,`
         {
             ASTExprNodeP shouldPanicVal;
             switch (test.panicType) {
@@ -114,15 +98,12 @@ void ExpandTestHarness(ASTCrate& crate) {
 
         auto testFcnNode = NEWNODE(NamedValue, ASTPath(test.path));
         {
-            // Convert `fn()` into `fn()->Result<(),String>`
-            // Use `|| ::test::assert_test_result( fcn() )`
             testFcnNode = NEWNODE(Closure, {}, mkType(*crate.pool, Span()), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, ASTPath(test.path), {}))), false, false, false);
         }
         auto testTypeVarName = test.isBenchmark ? "StaticBenchFn" : "StaticTestFn";
         descandfnVals.push_back({{}, RcString::newInterned("testfn"), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode(testTypeVarName)}), ::makeVec1(std::move(testFcnNode)))});
 
         testNodes.push_back(NEWNODE(StructLiteral, ASTPath(cTest, {ASTPathNode("TestDescAndFn")}), nullptr, mv$(descandfnVals)));
-        // NOTE: 1.39+ needs &TestDescAndFn here
         {
             testNodes.back() = NEWNODE(UniOp, ASTExprNodeUniOp::REF, mv$(testNodes.back()));
         }
@@ -131,13 +112,11 @@ void ExpandTestHarness(ASTCrate& crate) {
 
     size_t testCount = testsArray->values.size();
     auto listItemTy = mkType(*crate.pool, Span(), ASTPath(cTest, {ASTPathNode("TestDescAndFn")}));
-    // NOTE: 1.39+ needs &TestDescAndFn here
     {
         listItemTy = mkType(*crate.pool, ASTTypeTags::Reference(), Span(), ASTLifetimeRef::newStatic(), false, mv$(listItemTy));
     }
     auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mv$(listItemTy), ::std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
 
-    // ---- module ----
     auto newmod = ASTModule{ASTAbsolutePath("", {"test#"})};
     auto visPrivate = ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, newmod.path());
     // - TODO: These need to be loaded too.
@@ -173,15 +152,12 @@ struct ProgramParams {
         STAGE_ALL,
     } lastStage = STAGE_ALL;
 
-    /// `--emit=metadata`: analyse the crate, but do not codegen or link it.
     bool emitMetadataOnly = false;
 
     ::std::string infile;
     ::std::string outfile;
     ::std::string outputDir = "";
     ::std::string target = DEFAULT_TARGET_NAME;
-    // Metadata inspection used by graph builders. No source compilation is
-    // performed when this is populated.
     RcString crateNameQuery;
 
     ::std::string emitDepfile;
@@ -194,25 +170,18 @@ struct ProgramParams {
     OptimizationLevel optLevel = OptimizationLevel::None;
     bool debugAssertions = false;
     bool debugAssertionsExplicit = false;
-    // `-Zub-checks`: whether the library's UB checks are compiled in. Follows
-    // debug assertions unless it is given.
     bool ubChecks = false;
     bool ubChecksExplicit = false;
     Settings::FmtDebug fmtDebug = Settings::FmtDebug::Full;
     bool overflowChecks = false;
     bool overflowChecksExplicit = false;
-    // rustc defaults MIR optimisation to 1 at -O0 and to 2 otherwise.
-    // Keep the explicit bit separate so `-Zmir-opt-level=0` is distinguishable
-    // from the implicit default.
     unsigned mirOptLevel = 0;
     bool mirOptLevelExplicit = false;
     DebugInfoLevel debugInfo = DebugInfoLevel::None;
 
     bool testHarness = false;
 
-    // NOTE: If populated, nothing happens except for loading the target
     ::std::string targetSaveback;
-    // NOTE: if true, no parse/compilation performed (target is loaded though)
     bool printCfgs = false;
 
     ::std::vector<::std::string> crateSearchDirs;
@@ -222,7 +191,6 @@ struct ProgramParams {
     ::std::set<::std::string> features;
 
     struct {
-        /// Debugger aid: pause just after startup so a debugger can attach.
         bool pause = false;
 
         bool dumpAst = false;
@@ -256,10 +224,7 @@ struct ProgramParams {
     void showHelp() const;
 };
 
-/// main!
 namespace {
-    /// The crate name rustc derives from the input file when none is given: the
-    /// stem, with `-` written as `_`.
     ::std::string CrateNameFromFile(const ::std::string& infile) {
         auto s = infile.find_last_of('/');
         s = (s == ::std::string::npos ? 0 : s + 1);
@@ -283,8 +248,6 @@ namespace {
 
 static int compile(int argc, char* argv[]) {
 #if TRUSTME_SANITIZER_BUILD
-    // Keep teardown out of production, but make sanitizer builds destroy every
-    // pooled object so ASan/LSan can distinguish real leaks from arena lifetime.
     auto poolOwner = ObjPool::fromMemory();
     auto* pool = poolOwner.mutPtr();
 #else
@@ -313,7 +276,6 @@ static int compile(int argc, char* argv[]) {
 
     wb.inherentMethods = HIRInherentCache::create(*pool);
 
-    // Set up cfg values
     {
         CfgSetValue(*wb.settings, "rust_compiler", "trustme");
         CfgSetValue(*wb.settings, "panic", params.codegen.panicType);
@@ -358,12 +320,7 @@ static int compile(int argc, char* argv[]) {
 
     ExpandInit(*wb.expandRegistry);
 
-    // The AST gets its own pool so parse/expand-lifetime data can be dropped
-    // wholesale right after HIR lowering (the one place a pool dies early).
 #if TRUSTME_SANITIZER_BUILD
-    // Error-path tests can leave before AST Drop. Keep an owner in sanitizer
-    // builds so those paths are leak-checkable; successful production builds
-    // still release this pool at the early drop point below.
     auto astPoolOwner = ObjPool::fromMemory();
     auto* astPool = astPoolOwner.mutPtr();
 #else
@@ -372,7 +329,6 @@ static int compile(int argc, char* argv[]) {
     wb.astPool = astPool;
 
     {
-        // Parse the crate into AST
         ASTCrate* cratePtr = [&]() {
             return ParseCrate(wb, wb.astPool, params.infile, params.edition);
         }();
@@ -386,7 +342,6 @@ static int compile(int argc, char* argv[]) {
         }
         memoryDump(memoryDumpSequence, "Parsed");
 
-        // Load external crates.
         {
             for (const auto& ld : params.crateSearchDirs) {
                 wb.settings->crateLoadDirs.push_back(ld);
@@ -398,7 +353,6 @@ static int compile(int argc, char* argv[]) {
             }
         }
         {
-            // Extract the crate type and name from the crate attributes
             auto crateType = params.crateType;
             if (crateType == ASTCrate::Type::Unknown) {
                 crateType = crate.crateType;
@@ -417,7 +371,6 @@ static int compile(int argc, char* argv[]) {
             crate.crateType = ASTCrate::Type::Unknown;
         }
 
-        // Iterate all items in the AST, applying syntax extensions
         {
             Expand(wb, crate);
 
@@ -425,12 +378,9 @@ static int compile(int argc, char* argv[]) {
                 ExpandTestHarness(crate);
             }
         }
-        // Once `cfg` has removed what it removes, the lint attributes that are
-        // left have to agree with each other.
         {
             LintCheckForbid(wb, crate);
         }
-        // Extract the crate type and name from the crate attributes
         auto crateType = params.crateType;
         if (crateType == ASTCrate::Type::Unknown) {
             crateType = crate.crateType;
@@ -485,7 +435,6 @@ static int compile(int argc, char* argv[]) {
         }
         memoryDump(memoryDumpSequence, "Expanded");
 
-        // Allocator and panic strategies
         {
             if (crate.crateType == ASTCrate::Type::Executable || params.testHarness || crate.crateType == ASTCrate::Type::ProcMacro) {
                 bool allocatorCrateLoaded = false;
@@ -513,7 +462,6 @@ static int compile(int argc, char* argv[]) {
                         panicRuntimeNeeded = true;
                     }
                 }
-                // The default (system) allocator is provided by liballoc.
                 allocatorCrateLoaded = true;
                 if (!allocatorCrateLoaded) {
                     crate.loadExternCrate(*wb.settings, Span(), "alloc_system");
@@ -524,15 +472,12 @@ static int compile(int argc, char* argv[]) {
                     crate.loadExternCrate(*wb.settings, Span(), panicCrate.c_str());
                 }
 
-                // - `trustme-main` lang item default
                 if (!crate.noMain) {
                     crate.langItems.insert(::std::make_pair(::std::string("trustme-main"), ASTAbsolutePath("", {"main"})));
                 }
             }
         }
-        /// Emit the dependency files
         if (params.emitDepfile != "") {
-            // - Iterate all loaded files for modules
             struct PathEnumerator {
                 ::std::vector<::std::string> out;
 
@@ -562,16 +507,11 @@ static int compile(int argc, char* argv[]) {
             of << ::std::endl;
 
             of << params.outfile << ":";
-            // - Iterate all loaded crates files
             for (const auto& ec : crate.externCrates) {
                 of << " " << ec.second.filename;
             }
-            // - Iterate all extra files (include! and friends)
         }
 
-        // Resolve names to be absolute names (include references to the relevant struct/global/function)
-        // - This does name checking on types and free functions.
-        // - Resolves all identifiers/paths to references
         {
             ResolveUse(wb, crate); // - Absolutise and resolve use statements
         }
@@ -593,10 +533,6 @@ static int compile(int argc, char* argv[]) {
             return 0;
         }
 
-        // --------------------------------------
-        // HIR Section
-        // --------------------------------------
-        // Construct the HIR beside the AST in the compilation object pool.
         HIRCrate* hirCrate = [&]() {
             return LowerHIRFromAST(wb, pool, crate);
         }();
@@ -604,7 +540,6 @@ static int compile(int argc, char* argv[]) {
         wb.langItems = LangItems::create(*pool, *hirCrate);
         memoryDump(memoryDumpSequence, "HIR Gen");
 
-        // The AST is dead from here on: drop it physically.
         {
             wb.astCrate = nullptr;
             wb.astPool = nullptr;
@@ -622,26 +557,18 @@ static int compile(int argc, char* argv[]) {
         }
         memoryDump(memoryDumpSequence, "HIR");
 
-        // Replace type aliases (`type`) into the actual type
-        // - Does simple replacements
-        // - Done before bind so type alises can be used in patterns?
         {
             ConvertHIRExpandAliases(wb, *hirCrate);
         }
         {
             ConvertHIRValidateReceivers(wb, *hirCrate);
         }
-        // Set up bindings and other useful information.
         {
             ConvertHIRBind(wb, *hirCrate);
         }
-        // A method call resolved in an outer scope still has to find an
-        // inherent method, so the index of them comes first.
         {
             ConvertHIRIndexInherentMethods(wb, *hirCrate);
         }
-        // Determine what trait to use for <T>::Foo in outer scope
-        // - Also inserts defaults in trait impls
         {
             ConvertHIRResolveUFCSOuter(wb, *hirCrate);
         }
@@ -650,14 +577,12 @@ static int compile(int argc, char* argv[]) {
         {
             ConvertHIRExpandAliasesSelf(*hirCrate);
         }
-        // Enumerate marker impls on types and other useful metadata
         {
             ConvertHIRMarkings(wb, *hirCrate);
         }
         {
             ConvertHIRResolveUFCSSortImpls(wb, *hirCrate);
         }
-        // Determine what trait to use for <T>::Foo (and does some associated type expansion)
         {
             ConvertHIRResolveUFCS(wb, *hirCrate);
         }
@@ -678,39 +603,28 @@ static int compile(int argc, char* argv[]) {
             ConvertHIRConstantEvaluate(wb, *hirCrate);
         }
         if (params.debug.dumpHir) {
-            // DUMP after initial consteval
             {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hirCrate);
             }
         }
 
-        // === Type checking ===
-        // - This can recurse and call the MIR lower to evaluate constants
-
-        // Check outer items first (types of constants/functions/statics/impls/...)
-        // - Doesn't do any expressions except those in types
         {
             TypecheckModuleLevel(wb, *hirCrate);
         }
-        // Check the rest of the expressions (including function bodies)
         {
             TypecheckExpressions(wb, *hirCrate);
         }
-        // Lints that need resolved types, but must see the code as written.
         {
             LintUnusedMustUse(wb, *hirCrate);
             LintUnsafeCode(wb, *hirCrate);
         }
-        // === HIR Expansion ===
-        // Annotate how each node's result is used
         {
             HIRExpandAnnotateUsage(wb, *hirCrate);
         }
         {
             HIRExpandStaticBorrowConstantsMark(wb, *hirCrate);
         }
-        // - Now that all types are known, closures can be desugared
         {
             HIRExpandClosures(wb, *hirCrate);
         }
@@ -724,7 +638,6 @@ static int compile(int argc, char* argv[]) {
         {
             HIRExpandVTables(wb, *hirCrate);
         }
-        // - And calls can be turned into UFCS
         {
             HIRExpandUfcsEverything(wb, *hirCrate);
         }
@@ -735,7 +648,6 @@ static int compile(int argc, char* argv[]) {
             HIRExpandErasedType(wb, *hirCrate);
         }
         if (params.debug.dumpHir) {
-            // DUMP after typecheck (before validation)
             {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
                 HIRDump(os, *hirCrate);
@@ -746,12 +658,10 @@ static int compile(int argc, char* argv[]) {
         }
         memoryDump(memoryDumpSequence, "Typecheck");
 
-        // Lower expressions into MIR
         {
             HIRGenerateMIR(wb, *hirCrate);
         }
         if (params.debug.dumpMir) {
-            // DUMP after generation
             {
                 ::std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
                 MIRDump(os, *hirCrate);
@@ -759,19 +669,13 @@ static int compile(int argc, char* argv[]) {
         }
         memoryDump(memoryDumpSequence, "MIR Gen");
 
-        // LowerMIR validates every function before returning. The next validation is
-        // performed after MIR_Cleanup has actually changed the crate.
-
-        // - Expand constants in HIR and virtualise calls
         {
             MIRCleanupCrate(wb, *hirCrate);
         }
-        // Optimise the MIR
         {
             MIROptimiseCrate(wb, *hirCrate, mirOptLevel, enableMirInlining);
         }
         if (params.debug.dumpMir) {
-            // DUMP: After optimisation
             {
                 ::std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
                 MIRDump(os, *hirCrate);
@@ -800,9 +704,6 @@ static int compile(int argc, char* argv[]) {
         }
         transOpt.debugInfo = params.debugInfo;
 
-        // Cargo owns C++ compilation and linking. Give it this crate's native
-        // link contribution as data instead of hiding it in an emitted shell
-        // command.
         if (params.codegen.emitLinkManifest != "") {
             ::std::ofstream manifest(params.codegen.emitLinkManifest.c_str());
             ASSERT_BUG(Span(), manifest.is_open(), "Failed to open link manifest `" << params.codegen.emitLinkManifest << "`");
@@ -832,15 +733,12 @@ static int compile(int argc, char* argv[]) {
             ASSERT_BUG(Span(), !manifest.bad(), "Failed to write link manifest `" << params.codegen.emitLinkManifest << "`");
         }
 
-        // Generate code for non-generic public items (if requested)
         if (params.testHarness) {
-            // If the test harness is enabled, override crate type to "Executable"
             crateType = ASTCrate::Type::Executable;
         }
 
         // TODO: For 1.29 executables/dylibs, add oom/panic shims
         if (crateType == ASTCrate::Type::ProcMacro) {
-            // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `trustme-main`)
             {
                 HIRCrate crateForSer(pool, *wb.types);
                 crateForSer.crateName = hirCrate->crateName;
@@ -855,13 +753,10 @@ static int compile(int argc, char* argv[]) {
             }
         }
 
-        // `--emit=metadata` stops here: the crate has been analysed, and what
-        // is left only builds it.
         if (params.emitMetadataOnly) {
             if (crateType == ASTCrate::Type::RustLib) {
                 HIRSerialise(params.outfile, *hirCrate);
             } else {
-                // Non-library metadata-only invocations have no loadable rlib.
                 {
                     ::std::ofstream marker(params.outfile);
                 }
@@ -869,7 +764,6 @@ static int compile(int argc, char* argv[]) {
             return 0;
         }
 
-        // Enumerate items to be passed to codegen
         TransList items = [&]() {
             switch (crateType) {
                 case ASTCrate::Type::Unknown:
@@ -886,20 +780,16 @@ static int compile(int argc, char* argv[]) {
             }
             throw ::std::runtime_error("Invalid crate_type value");
         }();
-        // - Generate automatic impls (mainly Clone for 1.29)
         {
             // TODO: Drop glue generation?
             TransAutoImpls(wb, *hirCrate, items);
         }
-        // - Generate monomorphised versions of all functions
         {
             TransMonomorphiseList(wb, *hirCrate, items, mirOptLevel);
         }
-        // - Do post-monomorph inlining
         {
             MIROptimiseCrateInlining(wb, *hirCrate, items, false, mirOptLevel, enableMirInlining);
         }
-        // - Expand constants in HIR (using ones that were monomorphised above)
         {
             MIRCleanupCrate(wb, *hirCrate);
         }
@@ -908,14 +798,12 @@ static int compile(int argc, char* argv[]) {
         std::string hirFile;
         switch (crateType) {
             case ASTCrate::Type::RustLib:
-                // Save a loadable HIR dump
                 hirFile = params.outfile;
                 {
                     HIRSerialise(hirFile, *hirCrate);
                 }
                 break;
             case ASTCrate::Type::RustDylib:
-                // Save a loadable HIR dump
                 hirFile = params.outfile + ".rlib";
                 {
                     HIRSerialise(hirFile, *hirCrate);
@@ -925,33 +813,23 @@ static int compile(int argc, char* argv[]) {
                 break;
         }
 
-        // - Do post-monomorph inlining
         {
             MIROptimiseCrateInlining(wb, *hirCrate, items, true, mirOptLevel, enableMirInlining);
         }
-        // - Clean up ununused functions
         {
             TransEnumerateCleanup(wb, *hirCrate, items);
         }
         switch (crateType) {
             case ASTCrate::Type::Unknown:
                 UNREACHABLE();
-            case ASTCrate::Type::RustLib:
-                // Generate a linkable .o
-                {
-                    TransCodegen(wb, params.outfile, CodegenOutput::StaticLibrary, transOpt, hirCrate, std::move(items), hirFile);
-                }
-                break;
+            case ASTCrate::Type::RustLib: {
+                TransCodegen(wb, params.outfile, CodegenOutput::StaticLibrary, transOpt, hirCrate, std::move(items), hirFile);
+            } break;
             case ASTCrate::Type::RustDylib:
-            case ASTCrate::Type::CDylib:
-                // Generate a shared library
-                {
-                    TransCodegen(wb, params.outfile, CodegenOutput::DynamicLibrary, transOpt, hirCrate, std::move(items), hirFile);
-                }
-                break;
+            case ASTCrate::Type::CDylib: {
+                TransCodegen(wb, params.outfile, CodegenOutput::DynamicLibrary, transOpt, hirCrate, std::move(items), hirFile);
+            } break;
             case ASTCrate::Type::ProcMacro: {
-                // Needs: An executable (the actual macro handler), metadata (for `extern crate foo;`)
-                // - Metadata was done before enumerate
                 {
                     TransCodegen(wb, params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), hirFile);
                 }
@@ -978,9 +856,6 @@ namespace {
         try {
             args.result = compile(args.argc, args.argv);
         } catch (const ::std::exception& e) {
-            // The one place a real runtime error (I/O, corrupt metadata, bad
-            // TOML, bad CLI) is allowed to land; everything else aborts at
-            // its site.
             ::std::cerr << "error: " << e.what() << ::std::endl;
             ::exit(1);
         }
@@ -1007,8 +882,6 @@ int main(int argc, char* argv[]) {
     CompileArgs args{argc, argv, 1};
     pthread_t thread;
     if (pthread_attr_init(&attr) != 0 || pthread_attr_setstacksize(&attr, stackSize) != 0 || pthread_create(&thread, &attr, compileOnThread, &args) != 0) {
-        // No thread to be had: the work still has to happen, just with whatever
-        // stack this one has.
         return compile(argc, argv);
     }
     pthread_join(thread, nullptr);
@@ -1082,7 +955,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
         }
     }
 
-    // Parse the rustc-compatible command-line subset supported by this driver.
     for (int i = 1; i < argc; i++) {
         const char* arg = argv[i];
 
@@ -1165,8 +1037,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             exit(1);
                         }
                     };
-                    //        ::std::cerr << "Flag -C " << optname << " doesn't take an argument" << ::std::endl;
-                    //    }
 
                     if (optname == "emit-cpp-only") {
                         this->codegen.emitCppOnly = true;
@@ -1384,7 +1254,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         noOptval();
                         this->debug.dumpMir = true;
                     } else if (optname == "parse-crate-root-only") {
-                        // rustc's spelling of "stop once the crate root parses".
                         noOptval();
                         this->lastStage = STAGE_PARSE;
                     } else if (optname == "stop-after") {
@@ -1408,11 +1277,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     } else if (optname == "pause-after-start") {
                         this->debug.pause = true;
                     } else if (optname == "unpretty") {
-                        // A pretty-printer selects how far the compiler runs
-                        // before printing.  `normal` prints the parsed source
-                        // and `expanded`/`ast-tree` the expanded crate, so
-                        // neither reaches name resolution -- code that only
-                        // makes sense before it is still a valid input.
                         getOptval();
                         auto form = optval.substr(0, optval.find(','));
                         if (form == "normal" || form == "identified") {
@@ -1420,20 +1284,13 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         } else if (form == "expanded" || form == "ast-tree") {
                             this->lastStage = STAGE_EXPAND;
                         } else if ((form == "hir" || form == "hir-tree") && optval.find("typed") == ::std::string::npos) {
-                            // The HIR is printed once names are resolved; only
-                            // the `typed` variant needs the types as well.
                             this->lastStage = STAGE_HIR;
                         } else {
-                            // `hir`, `thir` and `mir` forms need the passes
-                            // that build them, so they run the whole compiler.
                         }
                     } else if (optname == "print-cfgs") {
                         noOptval();
                         this->printCfgs = true;
                     } else if (optname == "check-cfg-all-expected") {
-                        // This only controls how many expected cfg values rustc
-                        // prints in diagnostics.  trustme emits a compact
-                        // diagnostic and has no corresponding display limit.
                         noOptval();
                     } else {
                         // Unstable rustc switches are routinely attached to
@@ -1446,13 +1303,11 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     continue;
 
                 default:
-                    // Fall through to the for loop below
                     break;
             }
 
             for (; *arg; arg++) {
                 switch (*arg) {
-                    // "-o <file>" : Set output file
                     case 'o':
                         if (i == argc - 1) {
                             ::std::cerr << "Option -" << *arg << " requires an argument" << ::std::endl;
@@ -1494,15 +1349,9 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 if (this->outputDir != "" && this->outputDir.back() != '/') {
                     this->outputDir += '/';
                 }
-            }
-            // --crate-name-of <metadata> >> Print the exact name stored in a
-            // metadata artifact. Cargo uses this when importing a prebuilt
-            // sysroot whose filenames need not contain the crate tag.
-            else if (const char* metadata = checkWithArg("crate-name-of")) {
+            } else if (const char* metadata = checkWithArg("crate-name-of")) {
                 this->crateNameQuery = metadata;
-            }
-            // --crate <unique-name>=<metadata-path> >> Make one exact crate artifact available.
-            else if (strcmp(arg, "--crate") == 0) {
+            } else if (strcmp(arg, "--crate") == 0) {
                 if (i == argc - 1) {
                     ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
                     exit(1);
@@ -1515,9 +1364,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 }
                 auto name = RcString::newInterned(desc, pos - desc);
                 settings.crateOverride(name).metadataPath = pos + 1;
-            }
-            // --crate-object <unique-name>=<object-path> >> Exact link object for standalone linking.
-            else if (strcmp(arg, "--crate-object") == 0) {
+            } else if (strcmp(arg, "--crate-object") == 0) {
                 if (i == argc - 1) {
                     ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
                     exit(1);
@@ -1530,9 +1377,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 }
                 auto name = RcString::newInterned(desc, pos - desc);
                 settings.crateOverride(name).objectPath = pos + 1;
-            }
-            // --proc-macro <unique-name>=<executable-path> >> Exact host executable for a proc macro crate.
-            else if (strcmp(arg, "--proc-macro") == 0) {
+            } else if (strcmp(arg, "--proc-macro") == 0) {
                 if (i == argc - 1) {
                     ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
                     exit(1);
@@ -1545,11 +1390,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 }
                 auto name = RcString::newInterned(desc, pos - desc);
                 settings.crateOverride(name).procMacroPath = pos + 1;
-            }
-            // --crate-alias <source-name>=<unique-name> >> Resolve a source
-            // name through the availability table without eagerly importing
-            // it into the extern prelude.
-            else if (strcmp(arg, "--crate-alias") == 0) {
+            } else if (strcmp(arg, "--crate-alias") == 0) {
                 if (i == argc - 1) {
                     ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
                     exit(1);
@@ -1576,17 +1417,11 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 auto& spec = settings.crateOverride(name);
                 spec.isExtern = true;
                 spec.target = pos ? RcString::newInterned(pos + 1) : RcString{};
-            }
-            // --crate-tag <name>  >> Specify a version/identifier suffix for the crate
-            else if (const auto* nameStr = checkWithArg("crate-tag")) {
+            } else if (const auto* nameStr = checkWithArg("crate-tag")) {
                 this->crateNameSuffix = nameStr;
-            }
-            // --crate-name <name>  >> Specify the crate name (overrides `#![crate_name="<name>"]`)
-            else if (const auto* nameStr = checkWithArg("crate-name")) {
+            } else if (const auto* nameStr = checkWithArg("crate-name")) {
                 this->crateName = nameStr;
-            }
-            // `--crate-type <name>`    - Specify the crate type (overrides `#![crate_type="<name>"]`)
-            else if (const char* typeStr = checkWithArg("crate-type")) {
+            } else if (const char* typeStr = checkWithArg("crate-type")) {
                 if (strcmp(typeStr, "lib") == 0 || strcmp(typeStr, "rlib") == 0) {
                     this->crateType = ASTCrate::Type::RustLib;
                 } else if (strcmp(typeStr, "dylib") == 0) {
@@ -1601,10 +1436,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     ::std::cerr << "Unknown value for --crate-type: " << typeStr << ::std::endl;
                     exit(1);
                 }
-            }
-            // `--cfg <flag>` / `--cfg=<flag>`
-            // `--cfg <var>=<value>` / `--cfg=<var>=<value>`
-            else if (const char* cfgSpec = checkWithArg("cfg")) {
+            } else if (const char* cfgSpec = checkWithArg("cfg")) {
                 ::std::string name;
                 ::std::string value;
                 bool has_value = false;
@@ -1657,17 +1489,12 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 }
                 CfgSetLintCap(settings, level);
             } else if (const char* emit = checkWithArg("emit")) {
-                // `--emit=metadata` asks for the crate to be analysed but not
-                // built: nothing is codegenned and nothing is linked, so a
-                // crate that only declares an external symbol is still valid.
                 if (::std::strcmp(emit, "metadata") == 0) {
                     this->emitMetadataOnly = true;
                 } else {
                     ::std::cerr << "Ignoring `--emit " << emit << "` for compatability with rustc" << std::endl;
                 }
-            }
-            // `--target <triple>`  - Override the default compiler target
-            else if (const char* targetName = checkWithArg("target")) {
+            } else if (const char* targetName = checkWithArg("target")) {
                 this->target = targetName;
             } else if (strcmp(arg, "--dump-target-spec") == 0) {
                 if (i == argc - 1) {
@@ -1712,7 +1539,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             }
 
             if (s == "") {
-                // Ignore
             } else if (s == "ast") {
                 this->debug.dumpAst = true;
             } else if (s == "hir") {
@@ -1721,7 +1547,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 this->debug.dumpMir = true;
             } else {
                 ::std::cerr << "Unknown option in $TRUSTME_DUMP '" << s << "'" << ::std::endl;
-                // - No terminate, just warn
             }
         }
     }

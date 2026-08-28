@@ -70,34 +70,18 @@ struct Mangler {
 
     Mangler(ManglingContext& context, LifetimeIdentityMode lifetimeIdentityMode = LifetimeIdentityMode::Erased);
 
-    /// Formats an integer in a decodable format (lower case until the final digit)
-    // Used to encode values that might be have trailing digits
     void fmtBase26Int(unsigned val);
 
-    // Reference-counted item names
-    // - These can be repeated quite often, so support back-references
-    //   > Back-references are emitted as "`_` <base26>"
-    // - Otherwise, emitted as a raw string (see below)
     void fmtName(const RcString& s);
 
-    // Item names:
-    // - These can have a single '#' in them (either leading or in the middle)
-    // - '-' (crate names)
-    // Encoding is either:
-    // - "<len:int> <raw_data>" (fully valid identifier)
-    // - "<ofs:base26> <len:int> <raw_data1> <raw_data2>" (`#` or `-` present)
-    // - "<len:base26> `_` <raw_data2>" (`#` or `-` at the start)
     void fmtName(const char* const s);
 
-    // SimplePath : <ncomp> 'c' [<RcString> ...]
     void fmtSimplePath(const HIRSimplePath& sp);
 
-    // PathParams : <ntys> 'g' [<ASTType*> ...]
     void fmtPathParams(const HIRPathParams& pp);
 
     void fmtConstGeneric(const HIRConstGeneric& value);
 
-    // GenericPath : <SimplePath> <PathParams>
     void fmtGenericPath(const HIRGenericPath& gp);
 
     void fmtPath(const HIRPath& p);
@@ -241,7 +225,6 @@ Mangler::Mangler(ManglingContext& context, LifetimeIdentityMode lifetimeIdentity
 }
 
 auto Mangler::fmtBase26Int(unsigned val) -> void {
-    // Lower-case:
     while (val >= 26) {
         os << char('a' + (val % 26));
         val /= 26;
@@ -251,12 +234,10 @@ auto Mangler::fmtBase26Int(unsigned val) -> void {
 }
 
 auto Mangler::fmtName(const RcString& s) -> void {
-    // Support back-references to names (if shorter than the literal name)
     const auto* windowBegin = names.begin() + nameWindowStart;
     auto it = std::find(windowBegin, names.end(), s);
     if (it != names.end()) {
         auto idx = it - windowBegin;
-        // Only emit this way if shorter than the formatted name would be.
         auto len = 1 + static_cast<unsigned>(std::ceil(std::log10(idx + 1) / std::log10(26)));
         if (len < s.size()) {
             os << "_";
@@ -297,7 +278,6 @@ auto Mangler::fmtName(const char* const s) -> void {
 
     size_t size = strlen(name);
     const char* hashPos = nullptr;
-    // Search the string for a '#' or '-' character (only one allowed)
     for (const auto* p = name; *p; p++) {
         if (isalnum(static_cast<unsigned char>(*p))) {
         } else if (*p == '_') {
@@ -310,23 +290,17 @@ auto Mangler::fmtName(const char* const s) -> void {
         }
     }
 
-    // If there's a hash, then encode such that it's removed
     if (hashPos != nullptr) {
         auto preHashLen = static_cast<int>(hashPos - name);
-        // If the hash is at the start, and is followed by either a digit (expected) or an underscore (unlikely) - then encode with a leading underscore
         if (hashPos == name && (isdigit(static_cast<unsigned char>(hashPos[1])) || hashPos[1] == '_')) {
-            // <len:base26> '_' <body2>
-            // An encoding that allows this pattern
             fmtBase26Int(size - 1);
             ASSERT_BUG(Span(), hashPos[1] != '_', "Leading underscore not valid in '" << name << "'");
             os << '_';
             os << hashPos + 1;
         } else {
-            // <pos:base26> <len:int> <body1> <body2>
             fmtBase26Int(preHashLen);
             bool needsLeadingEscape = (isdigit(static_cast<unsigned char>(name[0])) || name[0] == '_');
             os << size - 1 + (needsLeadingEscape ? 1 : 0);
-            // If the string starts with a digit or underscrore, then escape it with another underscore.
             if (needsLeadingEscape) {
                 os << '_';
             }
@@ -359,7 +333,6 @@ auto Mangler::fmtSimplePath(const HIRSimplePath& sp) -> void {
 }
 
 auto Mangler::fmtPathParams(const HIRPathParams& pp) -> void {
-    // Type Parameter count
     os << pp.types.size();
     if (pp.values.size() > 0) {
         os << "v";
@@ -409,11 +382,6 @@ auto Mangler::fmtGenericPath(const HIRGenericPath& gp) -> void {
 }
 
 auto Mangler::fmtPath(const HIRPath& p) -> void {
-    // Path type
-    // - Generic: starts with `G`
-    // - Inherent: Starts with `I`
-    // - Trait: Starts with `Q` (qualified)
-    // - bare type: Starts with `T` (see Trans_MangleType)
     switch (p.data.tag()) {
         case HIRPathData::TAG_Generic: {
             auto& e = p.data.as_Generic();
@@ -479,7 +447,6 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
         }
         case HIRTypeData::TAG_TraitObject: {
             auto& e = (*ty).as_TraitObject();
-            // - TraitObject: 'D' <data:GenericPath> <naty> [<ASTType*> ...] <nmarker> [markers: <GenericPath> ...]
             os << "D";
             this->fmtGenericPath(e.trait.path);
             os << e.trait.typeBounds.size();
@@ -499,14 +466,12 @@ auto Mangler::fmtType(const HIRTypeData* ty) -> void {
         }
         case HIRTypeData::TAG_NamedFunction: {
             auto& e = (*ty).as_NamedFunction();
-            // - Named function: 'f' <path>
             os << "f";
             this->fmtPath(e.path);
             break;
         }
         case HIRTypeData::TAG_Function: {
             auto& e = (*ty).as_Function();
-            // - Function: 'F' <abi:RcString> <nargs> [args: <ASTType*> ...] <ret:ASTType*>
             os << "F";
             os << (e.isUnsafe ? "u" : ""); // Optional allowed, next is a number
             os << (e.trackCaller ? "c" : "");

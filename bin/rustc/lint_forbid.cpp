@@ -1,10 +1,10 @@
 #include "lint_forbid.h"
 
+#include "span.h"
 #include "ast_ast.h"
 #include "ast_crate.h"
-#include "parse_ttstream.h"
-#include "span.h"
 #include "wire_board.h"
+#include "parse_ttstream.h"
 
 #include <set>
 
@@ -49,8 +49,6 @@ namespace {
         }
     }
 
-    /// Read one item's lint attributes: what it forbids, and what it tries to
-    /// set to a level below forbid.
     template <typename F>
     void readLintAttrs(const ASTAttributeList& attrs, ::std::set<RcString>& forbidden, const F& lowered) {
         for (const auto& a : attrs.items) {
@@ -71,7 +69,6 @@ namespace {
 
     void checkNamedItem(ASTNamed<ASTItem>& item, const ::std::set<RcString>& outerForbidden) {
         auto forbidden = outerForbidden;
-        // What this item forbids applies to what is nested in it.
         readLintAttrs(item.attrs, forbidden, [&](const Span& sp, const RcString& lint) {
             if (outerForbidden.count(lint)) {
                 ERROR(sp, E0000, "lint `" << lint << "` is forbidden by an enclosing item and cannot be lowered here");
@@ -88,7 +85,6 @@ namespace {
                 checkNamedItem(*item, forbidden);
             }
         }
-        // An item written inside a function body lives in an anonymous module.
         for (auto& anon : mod.anonMods()) {
             if (anon) {
                 checkModule(*anon, forbidden);

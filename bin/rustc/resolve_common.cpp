@@ -48,9 +48,6 @@ namespace {
 
         ResolveState(const Span& span, const Settings& settings, const ASTCrate& crate);
 
-        /// <summary>
-        /// Obtain a reference to the specified module
-        /// </summary>
         ResolveModuleRef getModule(const ASTPath& basePath, const ASTPath& path, bool ignoreLast, ASTAbsolutePath* outPath, bool ignoreHygiene = false);
 
         ResolveModuleRef getModuleForMacro(const ASTPath& basePath, const ASTPath& path, ASTAbsolutePath* outPath);
@@ -63,11 +60,8 @@ namespace {
 
         static bool matchingNamespace(const ASTItem& i, ResolveNamespace ns);
 
-        ResolveItemRef findItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr)
-            //ResolveModuleRef get_source_module_for_name(const AST::Module& mod, const RcString& name, ResolveNamespace ns, ::AST::AbsolutePath* out_path=nullptr)
-            ;
+        ResolveItemRef findItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr);
 
-        /// Locate the named item in HIR (resolving `Import` references too)
         ResolveItemRef findItemHir(const HIRModule& mod, const RcString& itemName, ResolveNamespace ns, ASTAbsolutePath* outPath = nullptr, const HIRSimplePath* visPathP = nullptr);
     };
 }
@@ -117,7 +111,6 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
             return std::move(rv.as_Macro());
         }
         case ResolveModuleRef::TAG_ImplicitPrelude: {
-            // This isn't a macro, so return `None`
             return ResolveItemRefMacro::make_None({});
         }
         case ResolveModuleRef::TAG_None: {
@@ -128,8 +121,6 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
     return ResolveItemRefMacro::make_None({});
 }
 
-/// Returns the source module for the specified name
-// NOTE: Name resolution
 ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, const ASTPath& path, ResolveNamespace ns, ASTAbsolutePath* outPath) {
     ResolveState rs(sp, settings, crate);
 
@@ -150,8 +141,6 @@ ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& s
             break;
         }
         case ResolveModuleRef::TAG_Hir: {
-            // If `get_module` provided a HIR module, then this is right?
-            // - What if it's an alias? (not critical)
             return mod;
         }
         case ResolveModuleRef::TAG_ImplicitPrelude: {
@@ -176,17 +165,14 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
     const auto& baseNodes = basePath.nodes();
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
-            // Should never happen
             BUG(sp, "Invalid path class encountered");
             break;
         }
         case ASTPathClass::TAG_Local: {
-            // Wait, how is this already known?
             BUG(sp, "Local path class in use statement");
             break;
         }
         case ASTPathClass::TAG_UFCS: {
-            // Wait, how is this already known?
             BUG(sp, "UFCS path class in use statement");
             break;
         }
@@ -235,13 +221,10 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                 return ResolveModuleRef(&currentMod);
             }
             const auto& name = e.nodes.front().name();
-            // Look up in stack of anon modules
             size_t i = 0;
             do {
-                // Get a reference to the module, given the current path
                 const auto& startMod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
 
-                // Find the top of the path in that namespace
                 auto realMod = as_Namespace(this->findItem(startMod, name, ResolveNamespace::Namespace, outPath));
                 switch (realMod.tag()) {
                     case ResolveItemRefType::TAG_Ast: {
@@ -249,7 +232,6 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                         // TODO: What about an enum?
                         switch ((*iData).tag()) {
                             default: {
-                                // Ignore, keep going
                             } break;
                             case ASTItem::TAG_Crate: {
                                 auto& c = (*iData).as_Crate();
@@ -287,20 +269,14 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                             return ResolveModuleRef();
                         }
                         if (iEntPtr->is_Trait()) {
-                            // A trait is not a module, but an associated item
-                            // of one can be imported; the caller looks the
-                            // name up in the trait itself.
                             return ResolveModuleRef();
                         }
 
-                        //}
                         ASSERT_BUG(sp, iEntPtr->is_Module(), "Expected Module, got " << iEntPtr->tagStr() << " for " << name << " in [" << baseNodes << "]");
                         return getModuleHir(iEntPtr->as_Module(), path, 1, ignoreLast, outPath);
-                        //}
                         break;
                     }
                     case ResolveItemRefType::TAG_None: {
-                        // Not found in this module, keep searching
                         break;
                     }
                 }
@@ -308,12 +284,10 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                 i += 1;
             } while (i < baseNodes.size() && baseNodes[baseNodes.size() - i].name().c_str()[0] == '#');
 
-            // If not found, look for an implicit crate allowed in this edition.
             if (crate.edition >= ASTEdition::Rust2018 || name == "core" || name == "std") {
                 auto ecIt = settings.implicitCrates.find(name);
                 if (ecIt != settings.implicitCrates.end()) {
                     if (ecIt->second == "") {
-                        // This crate!
                         return getModuleAst(crate.rootModule_, path, 1, ignoreLast, outPath);
                     } else {
                         ASSERT_BUG(sp, crate.externCrates.count(ecIt->second), "Crate \"" << ecIt->second << "\" not loaded (for \"" << ecIt->first << "\")");
@@ -328,7 +302,6 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
             return ResolveModuleRef();
         }
         case ASTPathClass::TAG_Self: {
-            // Look up within the non-anon module
             size_t i = 0;
             while (i < baseNodes.size() && baseNodes[baseNodes.size() - i - 1].name().c_str()[0] == '#') {
                 i += 1;
@@ -337,7 +310,6 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
             return getModuleAst(startMod, path, 0, ignoreLast, outPath);
         }
         case ASTPathClass::TAG_Super: {
-            // Pop current non-anon module, then look up in anon modules
             size_t i = 0;
             while (i < baseNodes.size() && baseNodes[baseNodes.size() - i - 1].name().c_str()[0] == '#') {
                 i += 1;
@@ -351,9 +323,7 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
             auto& e = path.cls.as_Absolute();
             if (e.crate == "" || e.crate == crate.crateNameReal) {
                 return getModuleAst(crate.rootModule_, path, 0, ignoreLast, outPath);
-            }
-            // 2018 `::cratename::` paths
-            else if (e.crate.c_str()[0] == '=') {
+            } else if (e.crate.c_str()[0] == '=') {
                 const char* n = e.crate.c_str() + 1;
                 if (n == crate.crateNameSet) {
                     return getModuleAst(crate.rootModule_, path, 0, ignoreLast, outPath);
@@ -374,7 +344,6 @@ auto ResolveState::getModule(const ASTPath& basePath, const ASTPath& path, bool 
                 }
                 return getModuleHir(ecIt2->second.hir->rootModule, path, 0, ignoreLast, outPath);
             } else {
-                // HIR lookup (different)
                 auto ecIt = crate.externCrates.find(e.crate);
                 if (ecIt == crate.externCrates.end()) {
                     return ResolveModuleRef();
@@ -396,9 +365,6 @@ auto ResolveState::getModuleForMacro(const ASTPath& basePath, const ASTPath& pat
         return mod;
     }
 
-    // Qualified macro paths have used the extern prelude since their
-    // introduction, including in the 2015 edition. Other path kinds
-    // retain the edition-dependent lookup performed by getModule.
     const auto& crateAlias = path.nodes().front().name();
     auto implicitIt = settings.implicitCrates.find(crateAlias);
     if (implicitIt == settings.implicitCrates.end()) {
@@ -486,7 +452,6 @@ auto ResolveState::getModuleHir(const HIRModule& startMod, const ASTPath& path, 
     ASSERT_BUG(Span(), path.nodes().size() >= (ignoreLast ? 1 : 0), "" << path);
     for (size_t i = startOffset; i < path.nodes().size() - (ignoreLast ? 1 : 0); i++) {
         const auto& name = path.nodes()[i].name();
-        // Find the module for this node
         auto it = mod->modItems.find(name);
         if (it == mod->modItems.end() || !it->second->publicity.isGlobal()) {
             return ResolveModuleRef();
@@ -582,15 +547,11 @@ auto ResolveState::matchingNamespace(const ASTItem& i, ResolveNamespace ns) -> b
     UNREACHABLE();
 }
 
-auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath)
-    //ResolveModuleRef get_source_module_for_name(const AST::Module& mod, const RcString& name, ResolveNamespace ns, ::AST::AbsolutePath* out_path=nullptr)
-    -> ResolveItemRef {
+auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveNamespace ns, ASTAbsolutePath* outPath) -> ResolveItemRef {
     if (mod.indexPopulated) {
         TODO(sp, "Look up in index");
     }
 
-    // Prevent infinite recursion
-    // - Includes the target name to only catch on nested lookups of the same name
     auto guardEnt = ::std::make_pair(&mod, name);
     bool visitUse = true;
     if (std::count(antirecurseStack.begin(), antirecurseStack.end(), guardEnt) > 0) {
@@ -613,7 +574,6 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
         }
         for (const auto& mac : reverse(mod.macroImports)) {
             if (mac.ref.is_None()) {
-                // Skip
                 continue;
             }
             if (mac.name == name) {
@@ -644,9 +604,6 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
     }
 
     for (const auto& i : mod.items) {
-        // Note: Cache the result of `cfg()` resolution, as it doesn't change
-        // - Do the caching here (on the item level) instead of in `cfg.cpp` as that avoids needing to check
-        //   the attribute list multiple times.
         switch (i->cachedCfg) {
             case ASTCachedCfg::Unknown:
                 i->cachedCfg = checkCfgAttrs(settings, i->attrs) ? ASTCachedCfg::Yes : ASTCachedCfg::No;
@@ -734,7 +691,6 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                     switch (tgtMod.tag()) {
                         case ResolveModuleRef::TAG_Ast: {
                             auto& modPtr = tgtMod.as_Ast();
-                            // NOTE: Recursion
                             auto rv = this->findItem(*modPtr, itemName, ns, outPath);
                             if (!rv.is_None()) {
                                 return rv;
@@ -743,8 +699,6 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                         }
                         case ResolveModuleRef::TAG_Hir: {
                             auto& modPtr = tgtMod.as_Hir();
-                            // If `get_module` provided a HIR module, then this is right?
-                            // - What if it's an alias? (not critical)
                             auto rv = this->findItemHir(*modPtr, itemName, ns, outPath);
                             if (!rv.is_None()) {
                                 return rv;
@@ -781,8 +735,6 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
             }
             for (const auto& e : useStmt->entries) {
                 if (e.name == "") {
-                    // - Outer recurse
-                    //  > Get the module for this path
                     auto srcMod = this->getModule(mod.path(), e.path, /*ignore_last=*/false, outPath);
                     switch (srcMod.tag()) {
                         case ResolveModuleRef::TAG_None: {
@@ -799,7 +751,6 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                             if (!rv.is_None()) {
                                 return rv;
                             }
-                            // Fall through, keep searching
                             break;
                         }
                         case ResolveModuleRef::TAG_Hir: {
@@ -808,7 +759,6 @@ auto ResolveState::findItem(const ASTModule& mod, const RcString& name, ResolveN
                             if (!rv.is_None()) {
                                 return rv;
                             }
-                            // Not found, fall through
                             break;
                         }
                     }
@@ -849,7 +799,6 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
         }
     };
 
-    // Note, `out_path` should be populated to this module's path
     switch (ns) {
         case ResolveNamespace::Namespace: {
             auto it = mod.modItems.find(itemName);
@@ -933,7 +882,6 @@ auto ResolveState::findItemHir(const HIRModule& mod, const RcString& itemName, R
                             }
                             return v;
                         }
-                        // Fall throught to fail
                     }
                 } else {
                     mi = &it->second->ent;

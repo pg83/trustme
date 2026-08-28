@@ -50,7 +50,6 @@ namespace {
 
         void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override;
 
-        // - Type Items
         void visitTrait(HIRItemPath p, HIRTrait& item) override;
 
         void visitFunction(HIRItemPath p, HIRFunction& item) override;

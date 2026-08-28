@@ -1232,10 +1232,7 @@ NV(ASTExprNodeTuple, {
         visit(val);
     }
 })
-NV(ASTExprNodeNamedValue,
-   {
-       // LEAF
-   })
+NV(ASTExprNodeNamedValue, {})
 
 NV(ASTExprNodeField, { visit(node.obj); })
 NV(ASTExprNodeIndex, {
@@ -1268,7 +1265,6 @@ ASTExprNodeBlock::ASTExprNodeBlock(::std::vector<Line> nodes)
 {
 }
 
-/// Shortcut for a block that returns a contained node
 ASTExprNodeBlock::ASTExprNodeBlock(ASTExprNodeP value)
     : ASTExprNodeBlock()
 {

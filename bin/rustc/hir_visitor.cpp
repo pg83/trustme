@@ -94,7 +94,6 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
         auto& item = named.second->ent;
         switch (item.tag()) {
             case HIRValueItem::TAG_Import: {
-                // SimplePath - no visitor
                 break;
             }
             case HIRValueItem::TAG_Constant: {
@@ -108,7 +107,6 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
                 break;
             }
             case HIRValueItem::TAG_StructConstant: {
-                // Just a path
                 break;
             }
             case HIRValueItem::TAG_Function: {
@@ -117,7 +115,6 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
                 break;
             }
             case HIRValueItem::TAG_StructConstructor: {
-                // Just a path
                 break;
             }
         }
@@ -183,7 +180,6 @@ void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& im
         resolve_->setImplGenericsRaw(MetadataType::Unknown, impl.params);
     }
     this->visitParams(impl.params);
-    // Visit trait arguments through GenericPath so path-context checks and rewrites are shared.
     {
         HIRGenericPath gp{traitPath, mv$(impl.traitArgs)};
         this->visitGenericPath(gp, PathContext::TRAIT);
@@ -271,20 +267,19 @@ void HIRVisitor::visitTrait(HIRItemPath p, HIRTrait& item) {
     for (auto& i : item.values) {
         auto itemPath = HIRItemPath(traitIp, i.first.c_str());
         switch (i.second.tag()) {
-            //(None, ),
             case HIRTraitValueItem::TAG_Constant: {
                 auto& e = i.second.as_Constant();
-                 this->visitConstant(itemPath, e);
+                this->visitConstant(itemPath, e);
                 break;
             }
             case HIRTraitValueItem::TAG_Static: {
                 auto& e = i.second.as_Static();
-                 this->visitStatic(itemPath, e);
+                this->visitStatic(itemPath, e);
                 break;
             }
             case HIRTraitValueItem::TAG_Function: {
                 auto& e = i.second.as_Function();
-                 this->visitFunction(itemPath, e);
+                this->visitFunction(itemPath, e);
                 break;
             }
         }
@@ -321,7 +316,7 @@ void HIRVisitor::visitStruct(HIRItemPath p, HIRStruct& item) {
             break;
         }
     }
-    if( resolve_ ) {
+    if (resolve_) {
         resolve_->clearImplGenerics();
     }
 }
@@ -348,7 +343,7 @@ void HIRVisitor::visitEnum(HIRItemPath p, HIREnum& item) {
             break;
         }
     }
-    if( resolve_ ) {
+    if (resolve_) {
         resolve_->clearImplGenerics();
     }
 }
@@ -458,7 +453,9 @@ void HIRVisitor::visitPattern(HIRPattern& pat) {
         }
         case HIRPatternData::TAG_Deref: {
             auto& e = pat.data.as_Deref();
-            if (e.targetType) updateType(e.targetType);
+            if (e.targetType) {
+                updateType(e.targetType);
+            }
             this->visitPattern(*e.sub);
             break;
         }
@@ -573,10 +570,6 @@ void HIRVisitor::visitPatternVal(HIRPattern::Value& val) {
 }
 
 namespace {
-    // Plumbing for the interned-type walk: rebuild-on-child-change over the
-    // value structures embedded in type data. `out` is filled only when a
-    // contained type changed; the change signal is always the pointer that
-    // visitType returned.
     bool walkTypesInConstgeneric(HIRVisitor& v, const HIRConstGeneric& c, HIRConstGeneric& out);
     bool walkTypesInPathParams(HIRVisitor& v, const HIRPathParams& p, HIRPathParams& out);
     bool walkTypesInGenericPath(HIRVisitor& v, const HIRGenericPath& p, HIRGenericPath& out);
@@ -629,14 +622,12 @@ namespace {
         HIRPathParams nitem;
         bool cimpl = walkTypesInPathParams(v, u.paramsImpl, nimpl);
         bool citem = walkTypesInPathParams(v, u.paramsItem, nitem);
-        // The expression is shared between clones; its contents were visited
-        // in place by the old clone-based walk too.
         v.visitExpr(*u.expr);
         if (nself == u.selfType && !cimpl && !citem) {
             return false;
         }
         // escape: the Unevaluated payload is an owning unique_ptr in today's representation
-    out = HIRConstGeneric(::std::make_unique<HIRConstGenericUnevaluated>(u.clone()));
+        out = HIRConstGeneric(::std::make_unique<HIRConstGenericUnevaluated>(u.clone()));
         auto& ou = *out.as_Unevaluated();
         ou.selfType = nself;
         if (cimpl) {
@@ -1214,7 +1205,6 @@ void HIRVisitor::visitGenericPath(HIRGenericPath& p, HIRVisitor::PathContext /*p
 }
 
 void HIRVisitor::visitExpr(HIRExprPtr& exp) {
-    // Do nothing, leave expression stuff for user
     for (auto& t : exp.erasedTypes) {
         updateType(t);
     }

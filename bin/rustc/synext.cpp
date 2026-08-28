@@ -75,7 +75,6 @@ namespace {
         auto e = mv$(*it);
         mod.macros().erase(it);
 
-        // Leave an alias here, so existing references are valid.
         mod.macroImports.push_back(ASTModule::MacroImport{false, name, ASTAbsolutePath("", {name}), &*e.data});
 
         if (localInnerMacros) {
@@ -210,7 +209,6 @@ auto CMacroUseHandler::handle(const Span& sp, const ASTAttribute& mi, const Wire
     };
 
     if (i.is_None()) {
-        // Just ignore
     } else if (const auto* ecItem = i.opt_Crate()) {
         const auto& ec = crate.externCrates.at(ecItem->name);
 
@@ -310,9 +308,7 @@ auto CMacroExportHandler::handle(const Span& sp, const ASTAttribute& mi, const W
     const bool localInnerMacros = macroExportUsesLocalInnerMacros(mi);
 
     if (i.is_None()) {
-    }
-    // If on a `use` it's for a #[rustc_builtin_macro]
-    else if (const auto* u = i.opt_Use()) {
+    } else if (const auto* u = i.opt_Use()) {
         if (u->entries.size() == 1 && u->entries.back().path.isAbsolute() && u->entries.back().path.cls.as_Absolute().crate == CRATE_BUILTINS && u->entries.back().path.cls.as_Absolute().nodes.size() == 1)
             ;
         else {

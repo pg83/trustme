@@ -376,7 +376,6 @@ enum eTokenType Token::typefromstr(const ::std::string& s) {
     return TOK_NULL;
 }
 
-/// The text of a string literal, viewed as the bytes it holds.
 static StringView literalBytes(const ::std::string& s) {
     return StringView(reinterpret_cast<const u8*>(s.data()), s.size());
 }
@@ -386,14 +385,10 @@ struct EscapedString {
 
     EscapedString(StringView s);
 
-    /// How many bytes the UTF-8 sequence starting at `i` runs for, or zero
-    /// when the bytes there are not one.
     static size_t utf8Run(StringView s, size_t i);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const EscapedString& x) {
         for (size_t i = 0; i < x.s.length(); i++) {
-            // A byte, not a char: `char` is signed here, and a high byte read
-            // through it would print as its sign-extended self.
             const u8 b = x.s[i];
             switch (b) {
                 case '"':
@@ -419,12 +414,9 @@ struct EscapedString {
                 continue;
             }
             if (b < 0x80) {
-                // A control character is written by its value.
                 os << "\\u{" << ::std::hex << static_cast<unsigned int>(b) << ::std::dec << "}";
                 continue;
             }
-            // Text passes through as itself; a byte that starts no sequence is
-            // written as the byte it is.
             if (const auto run = utf8Run(x.s, i)) {
                 os.write(reinterpret_cast<const char*>(x.s.data() + i), run);
                 i += run - 1;
@@ -436,8 +428,6 @@ struct EscapedString {
     }
 };
 
-/// A byte string holds bytes, not text: rustc writes every byte that is not
-/// printable ASCII as a hex escape, since `\u{..}` has no meaning there.
 struct EscapedByteString {
     StringView s;
 
@@ -493,8 +483,6 @@ void printEscapedLiteral(::std::ostream& os, eTokenType type, const u8* value, s
 }
 
 namespace {
-    /// The fewest hashes that let a raw literal hold `text`: one more than the
-    /// longest run of `#` that follows a quote in it, and none without a quote.
     static size_t rawStringHashes(StringView text) {
         size_t needed = 0;
         for (size_t i = 0; i < text.length(); i++) {
@@ -512,8 +500,6 @@ namespace {
         return needed;
     }
 
-    /// Append `tt` to `out` as source, spacing the tokens the way whoever wrote
-    /// them had to.  `prev` carries the token before the tree.
     static void appendTokenTreeSource(StringBuilder& out, const TokenTree& tt, eTokenType& prev) {
         if (tt.isToken()) {
             if (!out.empty() && tokensNeedSpace(prev, tt.tok().type())) {
@@ -528,7 +514,6 @@ namespace {
         }
     }
 
-    /// An attribute's meta item as source: `doc = "..."`, `cfg(unix)`, `C`.
     static void attributeToSource(StringBuilder& out, const ASTAttribute& attr) {
         auto name = FMT(attr.name());
         out.append(name.data(), name.size());
@@ -538,7 +523,6 @@ namespace {
 }
 
 bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
-    // These bind to what is on their left: `x,` `x;` `x.y` `f()` `a[0]`.
     switch (cur) {
         case TOK_COMMA:
         case TOK_SEMICOLON:
@@ -551,7 +535,6 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         default:
             break;
     }
-    // And these to what is on their right: `.y` `#[a]` `$x` `(a` `[a`.
     switch (prev) {
         case TOK_DOT:
         case TOK_HASH:
@@ -563,14 +546,12 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         default:
             break;
     }
-    // A macro call keeps its name, its `!` and its delimiter together.
     if (cur == TOK_EXCLAM && (prev == TOK_IDENT || Token::typeIsRword(prev))) {
         return false;
     }
     if (prev == TOK_EXCLAM && (cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN || cur == TOK_BRACE_OPEN)) {
         return false;
     }
-    // As does a call or an index.
     if ((cur == TOK_PAREN_OPEN || cur == TOK_SQUARE_OPEN) && (prev == TOK_IDENT || prev == TOK_PAREN_CLOSE || prev == TOK_SQUARE_CLOSE)) {
         return false;
     }
@@ -621,7 +602,6 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
             ss << *reinterpret_cast<const ASTVisibility*>(data_.as_Fragment());
             return ss.str();
         }
-        // Value tokens
         case TOK_IDENT:
             return data_.as_Ident().isRaw ? "r#" + ::std::string(data_.as_Ident().name.c_str()) : ::std::string(data_.as_Ident().name.c_str());
         case TOK_LIFETIME:
@@ -657,8 +637,6 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
                 return FMT(formatFloatValueForToken(data_.as_Float().floatval) << coretypeName(data_.as_Float().datatype));
             }
         case TOK_STRING: {
-            // A doc comment is a `#[doc = ...]` whose string rustc writes as a
-            // raw literal, with just enough hashes to close it unambiguously.
             const auto& text = data_.as_String();
             if (!isDocComment_) {
                 return FMT("\"" << EscapedString(literalBytes(text)) << "\"");
@@ -684,7 +662,6 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
             return "#";
         case TOK_UNDERSCORE:
             return "_";
-        // Symbols
         case TOK_PAREN_OPEN:
             return "(";
         case TOK_PAREN_CLOSE:
@@ -800,7 +777,6 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         case TOK_BACKTICK:
             return "`";
 
-        // Reserved Words
         case TOK_RWORD_PUB:
             return "pub";
         case TOK_RWORD_PRIV:
@@ -903,7 +879,6 @@ bool tokensNeedSpace(eTokenType prev, eTokenType cur) {
         case TOK_RWORD_MACRO:
             return "macro";
 
-        // 2018
         case TOK_RWORD_ASYNC:
             return "async";
         case TOK_RWORD_AWAIT:
@@ -1006,8 +981,6 @@ Position::Position(RcString filename, unsigned int line, unsigned int ofs)
     , ofs(ofs)
 {
 }
-
-// Only for strings, for formatting
 
 Token::Token(enum eTokenType t, Data d, Position p)
     : type_(t)

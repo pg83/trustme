@@ -33,7 +33,6 @@ STD_TEST_SUITE(TaggedUnionValue) {
         SampleValue v = SampleValue::make_Point({.x = 3});
         STD_INSIST(v.is_Point());
         STD_INSIST(v.as_Point().x == 3);
-        // The .tu spec gives y a default initializer.
         STD_INSIST(v.as_Point().y == 7);
     }
 
@@ -52,7 +51,6 @@ STD_TEST_SUITE(TaggedUnionValue) {
         STD_INSIST(*v.as_Owner() == 5);
         int taken = *v.unwrap_Owner();
         STD_INSIST(taken == 5);
-        // unwrap moves the payload's contents out; the variant stays active.
         STD_INSIST(v.is_Owner());
         STD_INSIST(v.as_Owner() == nullptr);
     }
@@ -92,10 +90,6 @@ STD_TEST_SUITE(TaggedUnionValue) {
     }
 
     STD_TEST(movedFromHuskIsNotDestructed) {
-        // Historical TAGGED_UNION semantics, preserved deliberately: moving
-        // marks the source dead without destructing the moved-from husk.
-        // Resources travel to the destination, so nothing leaks, but the
-        // husk's destructor never runs and the instance count shows it.
         STD_INSIST(SampleCounted::liveCount == 0);
         {
             SampleValue v = SampleValue::make_Counted(SampleCounted(4));
@@ -128,8 +122,6 @@ STD_TEST_SUITE(TaggedUnionIncomplete) {
         SampleTree a;
         SampleTree b;
         STD_INSIST(a.is_Nil() && b.is_Nil());
-        // Empty variants are never allocated, but their accessor reference is
-        // backed by the containing value instead of process-global storage.
         STD_INSIST(&a.as_Nil() != &b.as_Nil());
         STD_INSIST(a.opt_Nil() == &a.as_Nil());
     }
@@ -162,8 +154,6 @@ STD_TEST_SUITE(TaggedUnionIncomplete) {
         SampleTree t = SampleTree::make_Node(std::move(n));
         const SampleTreeNode* payload = &t.as_Node();
         SampleTree u = std::move(t);
-        // The payload does not move in memory: addresses taken before the
-        // move stay valid, unlike the in-place storage.
         STD_INSIST(&u.as_Node() == payload);
         STD_INSIST(t.isDead());
         SampleTree w;
@@ -203,7 +193,6 @@ STD_TEST_SUITE(TaggedUnionIncomplete) {
             STD_INSIST(SampleCounted::liveCount == 1);
             STD_INSIST(t.as_Mark().value == 3);
             SampleTree u = std::move(t);
-            // Pointer-steal move: no new payload instance, no husk.
             STD_INSIST(SampleCounted::liveCount == 1);
             STD_INSIST(u.as_Mark().value == 3);
         }

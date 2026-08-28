@@ -1,7 +1,7 @@
 #include "parse_tokenstream.h"
 
 #include "common.h"
-#include "ast_crate.h" // Edition lookup
+#include "ast_crate.h"  // Edition lookup
 #include "wire_board.h" // typePool() reads the pool off the board
 #include "parse_parseerror.h"
 
@@ -162,7 +162,6 @@ ASTModule& ParseState::getCurrentMod() {
     return *this->module;
 }
 
-/// <summary>Consumes a token if it is of the specified type</summary>
 bool TokenStream::getTokenIf(eTokenType exp) { // I'd like std::optional, but not available
     if (lookahead(0) == exp) {
         getToken();
@@ -172,7 +171,6 @@ bool TokenStream::getTokenIf(eTokenType exp) { // I'd like std::optional, but no
     }
 }
 
-/// <summary>Consumes a token if it is of the specified type</summary>
 bool TokenStream::getTokenIf(eTokenType exp, Token& dst) { // I'd like std::optional, but not available
     if (lookahead(0) == exp) {
         dst = getToken();

@@ -62,8 +62,6 @@ namespace {
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
 
-        /// A lint attribute on the function sets the level for its declaration
-        /// and its body.
         void visitFunction(HIRItemPath p, HIRFunction& item) override;
 
         void visitExpr(HIRExprPtr& exp) override;

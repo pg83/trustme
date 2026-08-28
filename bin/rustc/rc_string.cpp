@@ -12,11 +12,6 @@
 
 using namespace stl;
 
-// The string interner. Every constructed string lives here forever:
-// zero-terminated bytes in the interner's ObjPool, one InternedString
-// entry per unique content, and an open-addressing slot table keyed by
-// the first xxh128 half with the second half as the whole equality check
-// (a full 128-bit collision is the accepted, negligible failure mode).
 namespace {
     struct InternedString {
         const char* begin;
@@ -91,7 +86,6 @@ Ordering RcString::ord(const char* s, size_t len) const {
             return ::ord(cmp, 0);
         }
     }
-    // Since the prefix is equal, then sort `this` before `s` if it's shorter
     return ::ord(this->size(), len);
 }
 

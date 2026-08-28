@@ -3,8 +3,6 @@
 using namespace stl;
 
 namespace {
-    /// The largest value an unsigned `repr` can hold, or nothing when the tag
-    /// is signed or not a fixed-width integer.
     ::std::optional<U128> enumTagUnsignedMax(HIRCoreType ty) {
         switch (ty) {
             case HIRCoreType::U8:
@@ -95,11 +93,6 @@ namespace {
 
     bool constGenericIsConcrete(const HIRConstGeneric& value);
 
-    // A constant declared under trait-bound where-clauses (its own or the
-    // enclosing impl's) may name projections those bounds justify; resolving
-    // them needs the bounds' environment, which pre-evaluation phases do not
-    // model.  Such constants stay symbolic until monomorphisation asks with
-    // concrete substitutions -- the replacement for the old Defer unwind.
     bool constItemMustStaySymbolic(const HIRGenericParams* implParams, const HIRGenericParams& itemParams) {
         auto hasTraitBounds = [](const HIRGenericParams* params) {
             if (!params) {
@@ -181,9 +174,6 @@ namespace {
         return false;
     }
 
-    /// One syntactic scan filling HIRExprState::Captures: the generic slots
-    /// the expression names. Cost model matches rustc's TypeFlags: computed
-    /// once per expression (per stage), read as bits afterwards.
     struct ExprCaptureScan final: HIRExprVisitorDef {
         HIRExprState::Captures out;
 
@@ -214,9 +204,6 @@ namespace {
         return state.captures;
     }
 
-    /// Whether every generic slot the expression names is concrete in its
-    /// captured environment: the rustc `const_eval_resolve` precondition,
-    /// decided without running the interpreter. Reads the cached captures.
     bool unevaluatedUsedSlotsAreConcrete(HIRTypeInterner& types, const HIRConstGenericUnevaluated& ue) {
         if (!ue.expr || !*ue.expr || !(*ue.expr).state) {
             return false;
@@ -254,10 +241,6 @@ namespace {
         HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override;
     };
 
-    /// Typecheck a symbolic const's body and build its MIR without
-    /// interpreting it: bodies are checked unconditionally (rustc checks
-    /// anon-const bodies like any body); only the value waits for a
-    /// concrete environment.
     void translateConstExprBody(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRTypeData* type, const HIRConstGenericUnevaluated& value) {
         ASSERT_BUG(sp, type, "translateConstExprBody without an expected type");
         const auto& expr = *value.expr;
@@ -300,7 +283,6 @@ namespace {
 // Definitions generated from hir_conv_ent_ptr.tu.
 #include "hir_conv_ent_ptr_tu.h"
     enum class EntNS {
-        //Type,
         Value
     };
 }
@@ -329,12 +311,10 @@ struct MIREvalPtr {
     const T& operator*() const;
 };
 
-/// "Statically allocated" constant data
 struct MIREvalConstantPtr final: public MIREvalPtr<MIREvalConstant> {
     static MIREvalConstantPtr allocate(ObjPool* pool, const void* data, size_t len);
 };
 
-/// Mutable allocation
 struct MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
     static MIREvalAllocationPtr allocate(ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty);
     static MIREvalAllocationPtr allocateScratch(ObjPool* pool, size_t size);
@@ -342,12 +322,10 @@ struct MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
     static MIREvalAllocationPtr allocateRo(ObjPool* pool, const void* data, size_t len);
 };
 
-/// Reference to a `static`
 struct MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
     static MIREvalStaticRefPtr allocate(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending = false);
 };
 
-/// Common interface for data storage
 struct IValue {
     virtual void fmtIdent(std::ostream& os) const = 0;
     virtual void fmt(::std::ostream& os, size_t ofs, size_t len) const = 0;
@@ -367,7 +345,6 @@ struct IValue {
     virtual void setReloc(size_t ofs, MIREvalRelocPtr ptr) = 0;
 };
 
-/// Pointer wrapping a reference-counted allocation
 struct MIREvalRelocPtr {
     uintptr_t ptr;
 
@@ -419,7 +396,6 @@ struct MIREvalRelocPtr {
     void set(uintptr_t ptr, Tag tag);
 };
 
-/// Helper: Print a 2-digit hex value (without updating the stream state)
 void putbHex(std::ostream& os, u8 v) {
     char tmp[3];
     tmp[0] = "0123456789ABCDEF"[v >> 4];
@@ -428,7 +404,6 @@ void putbHex(std::ostream& os, u8 v) {
     os << tmp;
 }
 
-/// Constant data
 struct MIREvalConstant final: public IValue {
     friend struct Embed<MIREvalConstant>;
     friend struct MIREvalConstantPtr;
@@ -531,8 +506,6 @@ struct MIREvalStaticRef final: public IValue {
     HIRPath path_;
     const EncodedLiteral* encoded;
     size_t length;
-    // The referenced static is being evaluated right now: its address is
-    // usable, reading its bytes is a value cycle.
     bool valuePending;
 
     MIREvalStaticRef(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending);
@@ -562,9 +535,7 @@ struct MIREvalStaticRef final: public IValue {
     const HIRPath& path() const;
 };
 
-/// Reference to a value
 namespace {
-    /// A float cast to an integer saturates in Rust, and NaN becomes zero.
     U128 floatToUintSaturating(double v, unsigned bits) {
         const U128 maxValue = bits >= 128 ? U128::max() : (U128(1) << bits) - U128(1);
         if (!(v > 0.0)) {
@@ -592,7 +563,6 @@ namespace {
         const unsigned magnitudeBits = bits - 1;
         const U128 maxMagnitude = (U128(1) << magnitudeBits) - U128(1);
         if (v < 0.0) {
-            // The negative side reaches one further than the positive one.
             const U128 magnitude = floatToUintSaturating(-v, 128);
             const U128 limit = maxMagnitude + U128(1);
             return S128(0) - S128(magnitude >= limit ? limit : magnitude);
@@ -680,14 +650,12 @@ std::ostream& operator<<(std::ostream& os, const MIREvalAllocationPtr& ap) {
     return os;
 }
 
-// ---
 MIREvalConstantPtr MIREvalConstantPtr::allocate(ObjPool* pool, const void* data, size_t len) {
     MIREvalConstantPtr rv;
     rv.ptr = pool->make<MIREvalConstant>(data, len);
     return rv;
 }
 
-// ---
 MIREvalAllocationPtr MIREvalAllocationPtr::allocate(ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty) {
     size_t len;
     if (!TargetGetSizeOf(Span(), resolve, ty, len)) {
@@ -725,14 +693,12 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocateRo(ObjPool* pool, const void*
     return rv;
 }
 
-// ---
 MIREvalStaticRefPtr MIREvalStaticRefPtr::allocate(ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len, bool valuePending) {
     MIREvalStaticRefPtr rv;
     rv.ptr = pool->make<MIREvalStaticRef>(pool, std::move(p), lit, len, valuePending);
     return rv;
 }
 
-// --- RelocPtr ---
 IValue* MIREvalRelocPtr::asValuePtr() const {
     assert(ptr);
     switch (ptr & 3) {
@@ -752,7 +718,6 @@ IValue* MIREvalRelocPtr::asValuePtr() const {
 }
 
 namespace {
-    /// Get the offset for a given field path
     size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr* r, const TypeRepr::FieldPath& outPath) {
         assert(outPath.index < r->fields.size());
         size_t ofs = r->fields[outPath.index].offset;
@@ -798,8 +763,6 @@ namespace {
                 return EntPtr();
             }
             case TypeckValuePtr::TAG_NotYetKnown: {
-                // With the goal solver as the default, resolution for a
-                // concrete path must answer definitively.
                 BUG(sp, "getValue could not commit to an impl for " << path);
             }
             case TypeckValuePtr::TAG_Constant: {
@@ -893,12 +856,10 @@ struct MIREvalCallStackEntry {
     const SourceLocation callerLocation;
     const bool tracksCaller;
 
-    // MIR Resolve Helper
     const StaticTraitResolve& rootResolve;
     StaticTraitResolve resolve;
     MIREvalPathCallback pathCallback;
     MIRTypeResolve state;
-    // Monomorphiser from the function
     MonomorphState ms;
 
     MIREvalAllocationPtr retval;
@@ -909,29 +870,10 @@ struct MIREvalCallStackEntry {
     ::std::vector<MIREvalAllocationPtr> locals;
     ::std::vector<bool> dropFlags;
 
-    // ---
     MIREvalCallStackEntry(const MIREvalCallStackEntry&) = delete;
     MIREvalCallStackEntry(MIREvalCallStackEntry&&) = delete;
 
-    MIREvalCallStackEntry(
-        ObjPool* valuePool,
-        unsigned frameIndex,
-        const Span& rootSpan,
-        const StaticTraitResolve& resolve,
-        const MIREvalPathCallback& printPath,
-        // Pre-monomorphised function signature (as this may be a `static`)
-        HIRTypeRef expTy,
-        std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs,
-        // Function/Body code
-        const MIRFunction& fcn,
-        // Monomorphisation rules
-        MonomorphState ms,
-        ::std::vector<MIREvalAllocationPtr> args,
-        const HIRGenericParams* itemParamsDef,
-        const HIRGenericParams* implParamsDef,
-        SourceLocation callerLocation,
-        bool tracksCaller
-    );
+    MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameIndex, const Span& rootSpan, const StaticTraitResolve& resolve, const MIREvalPathCallback& printPath, HIRTypeRef expTy, std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs, const MIRFunction& fcn, MonomorphState ms, ::std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller);
 
     HIRTypeRef monomorphExpand(const HIRTypeData* ty) const;
 
@@ -955,14 +897,12 @@ struct MIREvalCallStackEntry {
 
     void writeConst(MIREvalValueRef dst, const MIRConstant& c);
 
-    /// Write a borrow of the given lvalue
     void writeBorrow(MIREvalValueRef dst, HIRBorrowType bt, const MIRLValue& lv);
 
     void writeParam(MIREvalValueRef dst, const MIRParam& p);
 
     const EncodedLiteral& getConst(const HIRConstGeneric& v, EncodedLiteral& tmp) const;
 
-    /// Read a floating point value from a MIR::Param
     FloatValue readParamFloat(unsigned bits, const MIRParam& p) const;
 
     U128 readParamFloatBits(unsigned bits, const MIRParam& p) const;
@@ -1008,10 +948,6 @@ namespace {
             return left.first == right.first ? 1 : 0;
         }
 
-        // rustc deliberately reports two provenance-bearing pointers as
-        // unknown, even when the interpreter can see the same allocation and
-        // offset.  This intrinsic must not make CTFE pointer identity stronger
-        // than upstream's public contract.
         if (left.second && right.second) {
             return 2;
         }
@@ -1022,8 +958,6 @@ namespace {
             return 2;
         }
 
-        // A pointer within (or one byte past) a live allocation is definitely
-        // non-null.  Wrapping pointers outside that range remain unknown.
         const u64 offset = relocated.first - EncodedLiteral::PTR_BASE;
         return offset <= relocated.second.asValue().size() ? 0 : 2;
     }
@@ -1036,21 +970,11 @@ namespace {
         return std::make_pair(src.slice(repr->fields[0].offset, s), src.slice(repr->fields[1].offset, 1));
     }
 
-    bool doArithChecked(
-        MIREvalCallStackEntry& localState,
-        const HIRTypeData* ty,
-        MIREvalValueRef& dst,
-        const MIRParam& valL,
-        MIRBinOp op,
-        const MIRParam& valR,
-        // Should the output be saturated
-        bool saturate = false
-    ) {
+    bool doArithChecked(MIREvalCallStackEntry& localState, const HIRTypeData* ty, MIREvalValueRef& dst, const MIRParam& valL, MIRBinOp op, const MIRParam& valR, bool saturate = false) {
         auto ti = TypeInfo::forType(ty);
         const auto& state = localState.state;
         bool didOverflow = false;
 
-        // NOTE: Shifts can use any integer as the RHS, so give them special handling
         if (op == MIRBinOp::BIT_SHL || op == MIRBinOp::BIT_SHR) {
             HIRTypeRef tmpR;
             const auto& tyR = localState.state.getParamType(tmpR, valR);
@@ -1211,7 +1135,6 @@ namespace {
                         break;
                     }
                     case MIRBinOp::DIV:
-                        // Early-prevent division by zero
                         if (r == 0) {
                             dst.writeUint(state, ti.bits, U128(0));
                             return true;
@@ -1219,7 +1142,6 @@ namespace {
                         dst.writeUint(state, ti.bits, ti.mask(l / r));
                         break;
                     case MIRBinOp::MOD:
-                        // Early-prevent division by zero
                         if (r == 0) {
                             dst.writeUint(state, ti.bits, U128(0));
                             return true;
@@ -1537,8 +1459,6 @@ static void writeCtfeEnumVariant(const StaticTraitResolve& resolve, MIREvalCallS
         }
         case TypeReprVariantMode::TAG_NonZero: {
             auto& variant = enmRepr->variants.as_NonZero();
-            // No tag to write for the populated variant. The empty variant is
-            // represented by zeroing the niche field.
             if (index == variant.zeroVariant) {
                 auto offset = getOffset(state.sp, resolve, enmRepr, variant.field);
                 const auto savedOffset = offset;
@@ -1582,11 +1502,9 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
 
     switch (stmt.tag()) {
         case MIRStatement::TAG_Assign: {
-            // Fall through
             break;
         }
         case MIRStatement::TAG_ScopeEnd: {
-            // Just ignore, it's a hint
             return;
         }
         case MIRStatement::TAG_SetDropFlag: {
@@ -1647,7 +1565,6 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
 
             switch ((*castType).tag()) {
                 default:
-                    // NOTE: Can be an unsizing!
                     MIR_TODO(state, "RValue::Cast to " << castType << " from " << srcTy << ", val = " << inval);
                     break;
                 case HIRTypeData::TAG_Primitive: {
@@ -1655,7 +1572,6 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                     auto ti = TypeInfo::forPrimitive(te);
                     auto srcTi = TypeInfo::forType(srcTy);
                     switch (ti.ty) {
-                        // Integers mask down
                         case TypeInfo::Signed:
                         case TypeInfo::Unsigned:
                             switch (srcTi.ty) {
@@ -1668,9 +1584,6 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                                     dst.writeUint(state, ti.bits, inval.readUint(state, srcTi.bits));
                                     break;
                                 case TypeInfo::Float: {
-                                    // A 128-bit destination needs both halves,
-                                    // and does not fit the 64-bit writer. The
-                                    // cast saturates, and NaN becomes zero.
                                     const double f = static_cast<double>(inval.readFloat(state, srcTi.bits));
                                     if (ti.ty == TypeInfo::Signed) {
                                         dst.writeSint(state, ti.bits, floatToSintSaturating(f, ti.bits));
@@ -1688,9 +1601,6 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                                         BUG(state.sp, "Layout not computable during const evaluation - " << "repr of " << srcTy);
                                     }
                                     if (repr->variants.is_None()) {
-                                        // One variant, so nothing is stored
-                                        // to say which: the discriminant is
-                                        // a constant on the enum.
                                         MIR_ASSERT(state, enm.numVariants() == 1, "Enum with no tag and " << enm.numVariants() << " variants - " << srcTy);
                                         dst.writeUint(state, ti.bits, U128(enm.getDiscriminant(0)));
                                         break;
@@ -1711,7 +1621,6 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                             break;
                         case TypeInfo::Float:
                             switch (srcTi.ty) {
-                                // NOTE: Subtle rounding differences between f32 and f64
                                 case TypeInfo::Signed: {
                                     auto v = inval.readSint(state, srcTi.bits);
                                     dst.writeFloat(state, ti.bits, ti.bits == 32 ? v.toFloat() : v.toDouble());
@@ -1739,9 +1648,6 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                     if (const auto* e = srcTy->opt_NamedFunction()) {
                         dst.writePtr(state, EncodedLiteral::PTR_BASE, localState.getStaticrefMono(e->path));
                     } else if (TypeInfo::forType(srcTy).ty == TypeInfo::Signed && TypeInfo::forType(srcTy).bits < dst.getLen() * 8) {
-                        // A signed integer sign-extends on its way to a pointer,
-                        // as it would on its way to a wider integer. Copying the
-                        // bytes would leave the high half zero.
                         auto srcTi = TypeInfo::forType(srcTy);
                         dst.writeUint(state, dst.getLen() * 8, inval.readSint(state, srcTi.bits).getInner());
                     } else {
@@ -1814,9 +1720,6 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                         case MIRUniOp::INV:
                             MIR_BUG(state, "Invalid invert of Float");
                         case MIRUniOp::NEG: {
-                            // IEEE negation toggles only the sign bit. Doing
-                            // this through a host float would canonicalise NaN
-                            // payloads and can discard the newly-set sign.
                             auto bits = localState.getLval(e.val).readUint(state, ti.bits);
                             bits = bits ^ (U128(1) << (ti.bits - 1));
                             dst.writeUint(state, ti.bits, bits);
@@ -1854,13 +1757,11 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
 
                 switch ((*dstTy).tag()) {
                     default:
-                        // NOTE: Can be an unsizing!
                         MIR_TODO(state, "RValue::MakeDst Coerce to " << dstTy);
                         break;
                     case HIRTypeData::TAG_Path: {
                         auto& te = (*dstTy).as_Path();
                         bool done = false;
-                        // CoerceUnsized cast
                         if (te.binding.is_Struct()) {
                             const HIRStruct& str = *te.binding.as_Struct();
                             if (srcTy->is_Path() && srcTy->as_Path().binding.is_Struct() && srcTy->as_Path().binding.as_Struct() == &str) {
@@ -1868,9 +1769,6 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                                 if (markings.coerceUnsized != HIRStructMarkings::Coerce::None) {
                                     done = true;
                                 }
-                                // The coerced pointer starts the value, so its
-                                // metadata follows it, and the parameter the
-                                // coercion runs through names the pointee.
                                 if (markings.coerceUnsized == HIRStructMarkings::Coerce::Pointer && markings.coerceParam != ~0u) {
                                     const auto& paramsD = te.path.data.as_Generic().params;
                                     const auto& paramsS = srcTy->as_Path().path.data.as_Generic().params;
@@ -2110,10 +2008,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 if (localState.valueNeedsNonConstDrop(ty, value)) {
                     ERROR(this->rootSpan, E0000, "destructor of `" << ty << "` cannot be evaluated at compile-time");
                 }
-                // A `impl const Drop` destructor is observable -- `RefCell`'s
-                // borrow guards are the reason `borrow` works in a `const` block
-                // -- so it has to actually run. A shallow drop only frees a box,
-                // which constant evaluation does not model.
                 if (e.kind == MIRDropKind::DEEP) {
                     this->runConstDrop(localState, ty, e.slot);
                 }
@@ -2253,18 +2147,14 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     rv.slice(repr->fields[0].offset + pb, pb).writeUint(state, TargetGetPointerBits(), filenameLen);                                                                   // file.len
                     rv.slice(repr->fields[1].offset, 4).writeUint(state, 32, caller.line);                                                                                             // line: u32
                     rv.slice(repr->fields[2].offset, 4).writeUint(state, 32, caller.column);                                                                                           // col: u32
-                }
-                // ---
-                else if (te->name == "ctpop") {
+                } else if (te->name == "ctpop") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), "ctpop with non-primitive " << ty);
                     auto ti = TypeInfo::forType(ty);
                     auto val = ti.mask(localState.readParamUint(ti.bits, e.args.at(0)));
                     unsigned rv = __builtin_popcountll(val.getLo()) + __builtin_popcountll(val.getHi());
                     dst.writeUint(state, 32, U128(rv));
-                }
-                // - CounT Trailing Zeros
-                else if (te->name == "cttz" || te->name == "cttz_nonzero") {
+                } else if (te->name == "cttz" || te->name == "cttz_nonzero") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), "`cttz` with non-primitive " << ty);
                     auto ti = TypeInfo::forType(ty);
@@ -2279,20 +2169,16 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         }
                     }
                     dst.writeUint(state, 32, U128(rv));
-                }
-                // - CounT Lrailing Zeros
-                else if (te->name == "ctlz" || te->name == "ctlz_nonzero") {
+                } else if (te->name == "ctlz" || te->name == "ctlz_nonzero") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), "`ctlz` with non-primitive " << ty);
                     auto ti = TypeInfo::forType(ty);
                     auto val = ti.mask(localState.readParamUint(ti.bits, e.args.at(0)));
                     unsigned rv = 0;
-                    // Count how many shifts needed to remove the MSB
                     while (val != U128(0)) {
                         val >>= 1;
                         rv += 1;
                     }
-                    // Then subtract from the total bit count (no shift needed = max bits)
                     dst.writeUint(state, 32, U128(ti.bits - rv));
                 } else if (te->name == "bswap") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -2352,9 +2238,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto val = localState.readParamUint(ti.bits, e.args.at(0));
                     U128 rv;
                     for (size_t i = 0; i < ti.bits; i++) {
-                        // Shift before inserting - shifting after leaks the first bit out of
-                        // the top and drops the last one (broke miniz_oxide's reversed-bits
-                        // lookup table).
                         rv <<= 1;
                         if ((val & 1) != 0) {
                             rv |= 1;
@@ -2375,7 +2258,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     if (countI == 0) {
                         rv = val;
                     } else if (te->name == "rotate_left") {
-                        // NOTE: `read_param_uint` has zeroes in the high bits, so anything above `ti.bits` should be zero
                         auto a = val << countI;
                         auto b = val >> (ti.bits - countI);
                         rv = a | b;
@@ -2384,11 +2266,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         auto b = val << (ti.bits - countI);
                         rv = a | b;
                     }
-                    // Writing back will truncate away the higher bits
                     dst.writeUint(state, ti.bits, rv);
-                }
-                // ---
-                else if (te->name == "add_with_overflow") {
+                } else if (te->name == "add_with_overflow") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                     auto dstTup = getTupleTBool(localState, dst, ty);
@@ -2406,9 +2285,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto dstTup = getTupleTBool(localState, dst, ty);
                     bool overflowed = doArithChecked(localState, ty, dstTup.first, e.args.at(0), MIRBinOp::MUL, e.args.at(1));
                     dstTup.second.writeUint(state, 8, U128(overflowed ? 1 : 0));
-                }
-                // Unchecked and wrapping are the same
-                else if (te->name == "wrapping_add" || te->name == "unchecked_add") {
+                } else if (te->name == "wrapping_add" || te->name == "unchecked_add") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::ADD, e.args.at(1));
@@ -2428,9 +2305,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::BIT_SHR, e.args.at(1));
-                }
-                // - Except for div/rem, which add checking just in case
-                else if (te->name == "unchecked_rem") {
+                } else if (te->name == "unchecked_rem") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                     bool wasOverflow = doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::MOD, e.args.at(1));
@@ -2440,16 +2315,12 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                     bool wasOverflow = doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::DIV, e.args.at(1));
                     MIR_ASSERT(state, !wasOverflow, "`" << te->name << "` overflowed");
-                }
-                // `exact_div` is UB if the division results in a non-zero remainder (or if the division overflows)
-                else if (te->name == "exact_div") {
+                } else if (te->name == "exact_div") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                     bool wasOverflow = doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::DIV, e.args.at(1));
                     MIR_ASSERT(state, !wasOverflow, "`" << te->name << "` overflowed");
-                }
-                // Saturating operations
-                else if (te->name == "saturating_add") {
+                } else if (te->name == "saturating_add") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::ADD, e.args.at(1), true);
@@ -2457,14 +2328,10 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, ty->is_Primitive(), "`" << te->name << "` with non-primitive " << ty);
                     doArithChecked(localState, ty, dst, e.args.at(0), MIRBinOp::SUB, e.args.at(1), true);
-                }
-                // ---
-                else if (te->name == "transmute" || te->name == "transmute_unchecked") {
+                } else if (te->name == "transmute" || te->name == "transmute_unchecked") {
                     localState.writeParam(dst, e.args.at(0));
                 } else if (te->name == "init") {
                     MIR_ASSERT(state, e.args.empty(), "`init` takes no arguments");
-                    // This is trustme's internal zero-initialisation
-                    // intrinsic, also emitted for a coroutine's state slot.
                     memset(dst.extWriteBytes(state, dst.getLen()), 0, dst.getLen());
                 } else if (te->name == "unlikely") {
                     localState.writeParam(dst, e.args.at(0));
@@ -2541,11 +2408,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     // TODO: Determine if the type is inhabited (i.e. isn't diverge)
                     bool isUninhabited = resolve.typeIsImpossible(state.sp, ty);
                     MIR_ASSERT(state, !isUninhabited, "assert_inhabited " << ty << " failed");
-                }
-                // ---
-                else if (te->name == "const_eval_select") {
-                    // "Selects which function to call depending on the context."
-                    // `fn const_eval_select<ARG, F, G, RET>(arg: ARG, called_in_const: F, called_at_rt: G ) -> RET`
+                } else if (te->name == "const_eval_select") {
                     auto argTy = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, argTy->is_Tuple(), "`" << te->name << "` requires a tuple for ARG, got " << argTy);
                     auto* repr = TargetGetTypeRepr(state.sp, resolve, argTy);
@@ -2585,7 +2448,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         }
                     }
 
-                    // Argument values
                     ::std::vector<MIREvalAllocationPtr> callArgs;
                     callArgs.reserve(repr->fields.size());
                     for (const auto& f : repr->fields) {
@@ -2598,9 +2460,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     if (this->callFunction(localState, e.retVal, fcnPath, std::move(callArgs), e.source, true)) {
                         return TERM_RET_PUSHED;
                     }
-                }
-                // ---
-                else if (te->name == "copy_nonoverlapping" || te->name == "copy") {
+                } else if (te->name == "copy_nonoverlapping" || te->name == "copy") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t elementSize;
                     if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
@@ -2662,8 +2522,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 } else if (te->name == "black_box") {
                     localState.writeParam(dst, e.args.at(0));
                 } else if (te->name == "forget") {
-                    // `forget` consumes its argument and returns unit.  The MIR
-                    // call itself therefore has no value or memory effect.
                 } else if (te->name == "simd_extract" || te->name == "simd_extract_dyn") {
                     auto vectorTy = localState.monomorphExpand(te->params.types.at(0));
                     auto elementTy = localState.monomorphExpand(te->params.types.at(1));
@@ -2701,9 +2559,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ptrPair = localState.readParamPtr(e.args.at(0));
                     auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
                     dst.writePtr(state, ptrPair.first + ofs.truncateU64() * elementSize, ptrPair.second);
-                }
-                // `arith_offset` is the wrapping form of `offset`; identical arithmetic here, and the type parameter is the *pointee*.
-                else if (te->name == "arith_offset") {
+                } else if (te->name == "arith_offset") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t elementSize;
                     if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
@@ -2751,9 +2607,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     } else {
                         dst.writeSint(state, TargetGetPointerBits(), S128(elementDistance));
                     }
-                }
-                // Returns 1/0/2 (equal / not equal / unknown).
-                else if (te->name == "ptr_guaranteed_cmp") {
+                } else if (te->name == "ptr_guaranteed_cmp") {
                     auto a = localState.readParamPtr(e.args.at(0));
                     auto b = localState.readParamPtr(e.args.at(1));
                     dst.writeUint(state, 8, pointerGuaranteedCmp(a, b));
@@ -2772,9 +2626,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     MIR_ASSERT(state, ptrDst.first >= EncodedLiteral::PTR_BASE, "");
                     MIREvalValueRef vrDst = MIREvalValueRef(ptrDst.second, ptrDst.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
                     memset(vrDst.extWriteBytes(state, nbytes), val.truncateU64(), nbytes);
-                }
-                // Innards of `core::ptr::read` (on 1.90+)
-                else if (te->name == "read_via_copy") {
+                } else if (te->name == "read_via_copy") {
                     auto ptrSrc = localState.readParamPtr(e.args.at(0));
                     auto vrSrc = MIREvalValueRef(ptrSrc.second, ptrSrc.first - EncodedLiteral::PTR_BASE);
                     dst.copyFrom(state, vrSrc);
@@ -2799,9 +2651,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
 
                         switch (repr->variants.tag()) {
                             case TypeReprVariantMode::TAG_None: {
-                                // An enum with one variant stores nothing to
-                                // say which it is, but still has that
-                                // variant's discriminant.
                                 U128 only(0);
                                 if (ty->is_Path()) {
                                     if (const auto* enmpp = ty->as_Path().binding.opt_Enum()) {
@@ -2850,9 +2699,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     }
                 } else if (te->name == "variant_count") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    // Asking for a type that is not an enum is a lint
-                    // (`enum_intrinsics_non_enums`), not an error: a struct or a
-                    // union is one variant, anything else is none.
                     size_t count = 0;
                     if (ty->is_Path()) {
                         const auto& binding = ty->as_Path().binding;
@@ -2901,8 +2747,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     };
                     auto readAlignment = [&](size_t argument) {
                         u64 alignment = readUsize(argument);
-                        // rustc_abi::Align treats zero as one and inherits
-                        // LLVM's maximum supported alignment of 2^29.
                         if (alignment == 0) {
                             alignment = 1;
                         }
@@ -3004,12 +2848,6 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
     throw std::runtime_error("Unreachable?");
 }
 
-/// @brief Call a function (handling `Fn*` traits, and struct/enum constructors)
-/// @param local_state
-/// @param rv_slot
-/// @param fcn_path
-/// @param call_args
-/// @return `true` is a new stack frame was pushed
 bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, HIRPath* fcnPath, ::std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect) {
     const auto& state = localState.state;
     resolve.revealOpaqueTypesPath(state.sp, *fcnPath);
@@ -3039,16 +2877,11 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
                     vr.copyFrom(state, argTuple.slice(fld.offset, size));
                 }
             } else {
-                // Ignore: Not a fn trait
             }
         }
     }
     const auto& path = *pathP;
 
-    // A const call with unresolved type or const arguments is not evaluatable
-    // until monomorphisation.  Resolving the item is still possible, but
-    // executing its MIR here would incorrectly validate (or reject) just one
-    // generic definition rather than each concrete instance.
     if (monomorphisePathNeeded(path)) {
         BUG(state.sp, "Const call to generic " << path << " during concrete evaluation");
     }
@@ -3085,7 +2918,6 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         if (ep && ep.state->stage < HIRExprState::Stage::ConstEval) {
             auto prev = ep.state->stage;
             ep.state->stage = HIRExprState::Stage::ConstEvalRequest;
-            // Run consteval on the arguments and return type
             ConvertHIRConstantEvaluateFcnSig(resolve.board(), resolve.hirCrate(), implParamsDef, path, const_cast<HIRFunction&>(fcn));
             ep.state->stage = prev;
         }
@@ -3100,11 +2932,9 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
             }
         }
 
-        // Call by invoking evaluate_constant on the function
         const auto* mir = this->resolve.hirCrate().getOrGenMir(this->resolve.board(), HIRItemPath(*fcnPath), fcn);
         MIR_ASSERT(state, mir, "No MIR for function " << *fcnPath);
 
-        // Monomorphised argument types
         HIRFunction::argsT argDefs;
         for (const auto& a : fcn.args) {
             auto argTy = this->resolve.monomorphExpand(this->rootSpan, a.second, fcnMs);
@@ -3131,7 +2961,6 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
     } else if (rv.is_NotFound() && monomorphisePathNeeded(path)) {
         BUG(state.sp, "Unresolved generic path " << path << " during concrete evaluation");
     } else if (rv.is_Struct()) {
-        // Set destination, same way as `RValue::Struct` does
         auto dst = localState.getLval(rvSlot);
 
         HIRTypeRef tmp;
@@ -3170,8 +2999,6 @@ void HIREvaluator::callConstDestructor(MIREvalCallStackEntry& localState, HIRTyp
     localState.writeParam(MIREvalValueRef(callArgs.back()), MIRParam::make_Borrow({HIRBorrowType::Unique, slot.clone()}));
     auto* path = localState.valuePool->make<HIRPath>(ty, HIRGenericPath(resolve.langDrop()), RcString::newInterned("drop"), HIRPathParams{});
 
-    // The destructor runs to completion on a stack of its own: a `Drop`
-    // terminator has no return slot for the evaluator to resume into.
     auto saved = ::std::move(this->callStack);
     this->callStack.clear();
     STD_DEFER {
@@ -3182,9 +3009,6 @@ void HIREvaluator::callConstDestructor(MIREvalCallStackEntry& localState, HIRTyp
     }
 }
 
-/// Run the destructors of a value going out of scope during constant
-/// evaluation. Only `impl const Drop` ones exist here: any other destructor was
-/// rejected by `valueNeedsNonConstDrop` before this point.
 void HIREvaluator::runConstDrop(MIREvalCallStackEntry& localState, HIRTypeRef ty, const MIRLValue& slot) {
     const auto& state = localState.state;
     if (!localState.rootResolve.typeNeedsDropGlue(state.sp, ty)) {
@@ -3193,7 +3017,6 @@ void HIREvaluator::runConstDrop(MIREvalCallStackEntry& localState, HIRTypeRef ty
 
     switch ((*ty).tag()) {
         default:
-            // Nothing else can carry a destructor.
             return;
         case HIRTypeData::TAG_Path: {
             auto& te = (*ty).as_Path();
@@ -3260,7 +3083,6 @@ EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MI
     rv.bytes.insert(rv.bytes.begin(), aBytes, aBytes + a.size());
     for (const auto& r : a.getRelocations()) {
         if (const auto* innerAlloc = r.ptr.asAllocation()) {
-            // Create a new static
             if (innerAlloc->isConstHeapAllocation() || innerAlloc->isWritable()) {
                 ASSERT_BUG(this->rootSpan, innerAlloc->isAlive(), "constant contains a pointer to a deallocated allocation");
                 auto innerVal = allocationToEncoded(innerAlloc->getType(), *innerAlloc);
@@ -3281,16 +3103,13 @@ EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MI
 
                 rv.relocations.push_back(Reloc::newNamed(r.offset, TargetGetPointerBits() / 8, mv$(itemPath)));
             } else {
-                // string
                 auto size = innerAlloc->size();
                 auto ptr = innerAlloc->getBytes(0, size, true);
                 rv.relocations.push_back(Reloc::newBytes(r.offset, TargetGetPointerBits() / 8, ::std::string(ptr, ptr + size)));
             }
         } else if (const auto* sr = r.ptr.asStaticref()) {
-            // Just emit a path
             rv.relocations.push_back(Reloc::newNamed(r.offset, TargetGetPointerBits() / 8, sr->path().clone()));
         } else if (const auto* c = r.ptr.asConstant()) {
-            // string
             auto size = c->size();
             auto ptr = c->getBytes(0, size, true);
             rv.relocations.push_back(Reloc::newBytes(r.offset, TargetGetPointerBits() / 8, ::std::string(ptr, ptr + size)));
@@ -3308,8 +3127,6 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
 EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, HIRTypeRef exp, MonomorphState ms) {
     const auto* mir = this->resolve.hirCrate().getOrGenMir(this->resolve.board(), ip, expr, exp);
 
-    // rustc evaluates constants in reveal-all mode: all opaque types have
-    // their hidden representation before CTFE asks for layout or dispatch.
     resolve.revealOpaqueTypes(expr.span(), exp);
 
     if (mir) {
@@ -3343,7 +3160,6 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
 
         assert(this->callStack.empty());
         this->numFrames = 0;
-        // Note: Since this is the entrypoint, `this->resolve` has the correct GenericParams
         this->pushStackEntry(ip, *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenericsPtr(), resolve.implGenericsPtr(), SourceLocation(this->rootSpan), false);
         auto rvRaw = this->runUntilStackEmpty();
 
@@ -3441,9 +3257,6 @@ namespace {
 
         static bool enumTagIsSigned(HIRCoreType ty);
 
-        /// Compute one variant's discriminant, following its dependencies:
-        /// the previous variant for an auto value, any variant its expression
-        /// casts through the constant fold.
         static void visitEnumVariant(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& p, const HIRModule& mod, const HIRItemPath& modPath, const char* name, HIREnum& item, size_t idx);
 
         static void visitEnumInner(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& p, const HIRModule& mod, const HIRItemPath& modPath, const char* name, HIREnum& item);
@@ -3471,8 +3284,6 @@ namespace {
 } // namespace
 
 namespace {
-    // Discriminant values must be known before anything else is evaluated: an array size in
-    // an early module can cast a variant of an enum that the main pass visits later.
     struct EnumValueExpander: public HIRVisitor {
         const WireBoard& wb;
         const HIRCrate& crate;
@@ -3510,7 +3321,6 @@ void ConvertHIRConstantEvaluate(const WireBoard& wb, HIRCrate& crate) {
 }
 
 void ConvertHIRConstantEvaluateExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exprPtr) {
-    // Check innards but NOT the value
     Expander exp{wb};
     exp.visitExpr(exprPtr);
 }
@@ -3615,8 +3425,6 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
         if (v.is_Unevaluated()) {
             const auto& ue = *v.as_Unevaluated();
 
-            // Need to look up the required type - to do that requires knowing the item it's for
-            // - Which, might not be known at this point - might be a UfcsInherent
             {
                 ASSERT_BUG(sp, paramsDef, "Missing generic parameter definitions for " << params);
                 auto idx = static_cast<size_t>(&v - &params.values.front());
@@ -3624,10 +3432,6 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
                 const HIRTypeData* ty = paramsDef->values[idx].type;
                 HIRTypeRef tmp;
                 if (monomorphiseTypeNeeded(ty)) {
-                    // A const parameter's type may name the parameters before it
-                    // (`const M: [u8; N]`), and those are already known here. The
-                    // list fills both slots because a definition indexes its own
-                    // parameters as `I:n` or as `M:n` depending on the item.
                     MonomorphStatePtr ms(crate.types, nullptr, &params, &params);
                     ty = tmp = ms.monomorphType(sp, ty);
                     ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
@@ -3744,7 +3548,6 @@ auto MonomorphAvailability::paramsFor(const HIRGenericRef& generic) const -> con
         case HIRTypeData::TAG_Array:
         case HIRTypeData::TAG_Pattern:
         case HIRTypeData::TAG_NamedFunction: {
-            // Values inside these must still reach visitConstgeneric.
             auto data = type->cloneData();
             visitTypeDataChildren(data);
             return typeInterner().intern(mv$(data));
@@ -3771,8 +3574,6 @@ auto MonomorphAvailability::visitConstgeneric(HIRConstGeneric& value) -> void {
         return;
     }
     if (auto* unevaluated = value.opt_Unevaluated()) {
-        // The expression refers through these captured parameter lists.
-        // Its own HIR bindings are not parameters of the current state.
         if ((*unevaluated)->selfType) {
             (*unevaluated)->selfType = visitType((*unevaluated)->selfType);
         }
@@ -4003,7 +3804,6 @@ auto MIREvalConstant::readMask(u8* dst, size_t dstOfs, size_t /*ofs*/, size_t le
     dst += dstOfs / 8;
     dstOfs %= 8;
     if (dstOfs != 0) {
-        // Do a single-bit fill
         while (len--) {
             dst[dstOfs / 8] |= 1 << (dstOfs % 8);
         }
@@ -4113,7 +3913,6 @@ auto MIREvalAllocation::readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len)
     dstOfs %= 8;
     ofs %= 8;
     if (dstOfs != 0 || ofs != 0) {
-        // If the entries are unaligned, then use a bit-by-bit copy
         for (size_t i = 0; i < len; i++) {
             size_t s = ofs + i;
             size_t d = dstOfs + i;
@@ -4127,7 +3926,6 @@ auto MIREvalAllocation::readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len)
         for (; len >= 8; len -= 8) {
             *dst++ = *src++;
         }
-        // Tail entires (partial byte)
         if (len > 0) {
             u8 mask = (0xFF >> (8 - len));
             *dst = (*dst & ~mask) | (*src & mask);
@@ -4141,7 +3939,6 @@ auto MIREvalAllocation::isWritable() const -> bool {
 
 auto MIREvalAllocation::extWriteBytes(size_t ofs, size_t len) -> u8* {
     ASSERT_BUG(Span(), ofs <= length && len <= length && ofs + len <= length, "OOB write: " << ofs << "+" << len << " out of " << length);
-    // Set the mask
     {
         auto* m = this->getMask();
         size_t mo = ofs, ml = len;
@@ -4155,7 +3952,6 @@ auto MIREvalAllocation::extWriteBytes(size_t ofs, size_t len) -> u8* {
             m[mo / 8] |= (1 << (mo % 8));
         }
     }
-    // Clear impacted relocations
     auto it = std::remove_if(this->relocations.begin(), this->relocations.end(), [&](const Reloc& r) {
         return (ofs <= r.offset && r.offset < ofs + len);
     });
@@ -4180,9 +3976,6 @@ auto MIREvalAllocation::getReloc(size_t ofs) const -> MIREvalRelocPtr {
 }
 
 auto MIREvalAllocation::setReloc(size_t ofs, MIREvalRelocPtr ptr) -> void {
-    // Not necessarily pointer-aligned: a packed struct puts a reference
-    // wherever its fields fall, and constant evaluation copies those bytes
-    // around as bytes.
     auto it = std::lower_bound(this->relocations.begin(), this->relocations.end(), ofs, [](const Reloc& r, size_t ofs) {
         return r.offset < ofs;
     });
@@ -4280,7 +4073,6 @@ auto MIREvalStaticRef::getBytes(size_t ofs, size_t len, bool checkMask) const ->
         assert(len <= encoded->bytes.size());
         assert(ofs + len <= encoded->bytes.size());
         if (encoded->bytes.size() == 0) {
-            // Empty vectors can have a null data pointer
             return reinterpret_cast<const u8*>("");
         }
         return encoded->bytes.data() + ofs;
@@ -4299,7 +4091,6 @@ auto MIREvalStaticRef::readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) 
     dst += dstOfs / 8;
     dstOfs %= 8;
     if (dstOfs != 0) {
-        // Do a single-bit fill
         while (len--) {
             dst[dstOfs / 8] |= 1 << (dstOfs % 8);
         }
@@ -4399,7 +4190,6 @@ auto MIREvalValueRef::copyFrom(const MIRTypeResolve& state, const MIREvalValueRe
     ensureLive(state);
     other.ensureLive(state);
     size_t len = std::min(this->len, other.len);
-    // Check that there's no overlap
     if (this->storage == other.storage) {
         if (this->ofs < other.ofs) {
             MIR_ASSERT(state, this->ofs + len <= other.ofs, "Overlapping copy_from: " << other.ofs << "+" << len << " and " << this->ofs << "+" << len);
@@ -4407,13 +4197,10 @@ auto MIREvalValueRef::copyFrom(const MIRTypeResolve& state, const MIREvalValueRe
             MIR_ASSERT(state, other.ofs + len <= this->ofs, "Overlapping copy_from: " << other.ofs << "+" << len << " and " << this->ofs << "+" << len);
         }
     }
-    // Copy the data (don't check the source mask when getting the source pointer)
     const auto* src = other.storage.asValue().getBytes(other.ofs, len, /*check_mask*/ false);
     MIR_ASSERT(state, src, "Invalid read " << other.storage << " - " << other.ofs << "+" << len);
     storage.asValue().writeBytes(this->ofs, src, len);
-    // Copy the mask data
     storage.asValue().writeMaskFrom(this->ofs, other.storage.asValue(), other.ofs, len);
-    // Copy relocations
     for (size_t i = 0; i < len; i++) {
         if (auto r = other.storage.asValue().getReloc(other.ofs + i)) {
             storage.asValue().setReloc(this->ofs + i, std::move(r));
@@ -4433,9 +4220,6 @@ auto MIREvalValueRef::copyFromOverlapping(const MIRTypeResolve& state, const MIR
         return;
     }
 
-    // `copy` has memmove semantics.  A scratch allocation is needed instead
-    // of a byte buffer because CTFE values also carry initialisation bits and
-    // pointer relocations, all of which are part of the copied representation.
     auto scratch = MIREvalAllocationPtr::allocateScratch(pool, copyLen);
     MIREvalValueRef temporary(scratch);
     temporary.copyFrom(state, other.slice(0, copyLen));
@@ -4657,7 +4441,6 @@ auto TypeInfo::mask(U128 v) const -> U128 {
 
 auto TypeInfo::mask(S128 v) const -> U128 {
     if (v < 0) {
-        // Negate, mask, and re-negate
         return (-S128(mask((-v).getInner()))).getInner();
     } else {
         return mask((v).getInner());
@@ -4677,25 +4460,7 @@ auto MIREvalPathCallback::write(::std::ostream& os) const -> void {
     os << path;
 }
 
-MIREvalCallStackEntry::MIREvalCallStackEntry(
-    ObjPool* valuePool,
-    unsigned frameIndex,
-    const Span& rootSpan,
-    const StaticTraitResolve& resolve,
-    const MIREvalPathCallback& printPath,
-    // Pre-monomorphised function signature (as this may be a `static`)
-    HIRTypeRef expTy,
-    std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs,
-    // Function/Body code
-    const MIRFunction& fcn,
-    // Monomorphisation rules
-    MonomorphState ms,
-    ::std::vector<MIREvalAllocationPtr> args,
-    const HIRGenericParams* itemParamsDef,
-    const HIRGenericParams* implParamsDef,
-    SourceLocation callerLocation,
-    bool tracksCaller
-)
+MIREvalCallStackEntry::MIREvalCallStackEntry(ObjPool* valuePool, unsigned frameIndex, const Span& rootSpan, const StaticTraitResolve& resolve, const MIREvalPathCallback& printPath, HIRTypeRef expTy, std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs, const MIRFunction& fcn, MonomorphState ms, ::std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller)
     : valuePool(valuePool)
     , frameIndex(frameIndex)
     , argDefs(std::move(argDefs))
@@ -4859,8 +4624,6 @@ auto MIREvalCallStackEntry::valueNeedsNonConstDrop(const HIRTypeData* ty, MIREva
             if (!markings) {
                 return true;
             }
-            // A `impl const Drop` destructor may run at compile time; the
-            // fields still have to be droppable there too.
             if (markings->hasDropImpl && !markings->hasConstDropImpl) {
                 return true;
             }
@@ -4950,7 +4713,6 @@ auto MIREvalCallStackEntry::getStaticrefMono(const HIRPath& p, HIRTypeRef* outTy
 
 auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> MIREvalStaticRefPtr {
     rootResolve.revealOpaqueTypesPath(state.sp, p);
-    // If there's any mention of generics in this path, then return Literal::Defer
     if (visitPathTysWith(p, [&](const auto& ty) -> bool {
         return ty->is_Generic();
     })) {
@@ -4985,7 +4747,6 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
         }
 
         if (!s.valueGenerated) {
-            // If there's no MIR and no HIR then this is an external static (which can only be borrowed)
             if (!s.value && !s.value.mir) {
                 return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, staticSize);
             }
@@ -5004,10 +4765,6 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
         if (!s.valueGenerated) {
             auto& item = const_cast<HIRStatic&>(s);
 
-            // A static that names itself (through a promoted, say) only
-            // needs its address here, which is a relocation -- asking for
-            // its bytes while they are being worked out would never finish.
-            // Reading the bytes of such a reference is a value cycle.
             if (item.valueEvaluating) {
                 return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, staticSize, /*valuePending=*/true);
             }
@@ -5024,7 +4781,6 @@ auto MIREvalCallStackEntry::getStaticref(HIRPath p, HIRTypeRef* outTy) const -> 
                 }
             }
 
-            // Challenge: Adding items to the module might invalidate an iterator.
             HIRItemPath modIp{item.value.state->modPath};
             auto nvs = NewvalState(item.value.state->module, modIp, FMT("static" << &item << "#"));
             auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
@@ -5083,14 +4839,12 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
             case MIRLValue::Wrapper::TAG_Field: {
                 decltype(w.as_Field()) e = w.as_Field();
                 if (typ->is_Slice() || typ->is_Array()) {
-                    // Check the inner type
                     size_t size;
                     if (const auto* te = typ->opt_Array()) {
                         typ = te->inner;
                         size = te->size.as_Known();
                     } else if (const auto* te = typ->opt_Slice()) {
                         typ = te->inner;
-                        // Get metadata
                         size = metadata.readUsize(state);
                     } else {
                         UNREACHABLE();
@@ -5139,13 +4893,11 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
                 } else {
                     MIR_BUG(state, "Deref of unsupported type - " << typ);
                 }
-                // If the inner type is unsized
                 size_t sz, al;
                 if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
                     BUG(state.sp, "Layout not computable during const evaluation - " << "size/align of " << typ);
                 }
                 if (sz == SIZE_MAX) {
-                    // Read metadata
                     metadata = val.slice(TargetGetPointerBits() / 8);
                 }
                 auto p = val.readPtr(state);
@@ -5182,14 +4934,12 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
             }
             case MIRLValue::Wrapper::TAG_Index: {
                 decltype(w.as_Index()) e = w.as_Index();
-                // Check the inner type
                 size_t size;
                 if (const auto* te = typ->opt_Array()) {
                     typ = te->inner;
                     size = te->size.as_Known();
                 } else if (const auto* te = typ->opt_Slice()) {
                     typ = te->inner;
-                    // Get metadata
                     size = metadata.readUsize(state);
                 } else {
                     MIR_BUG(state, "Index of unsupported type - " << typ);
@@ -5229,7 +4979,6 @@ auto MIREvalCallStackEntry::getLval(const MIRLValue& lv, MIREvalValueRef* meta, 
 auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) const -> const EncodedLiteral& {
     auto p = ms.monomorphPath(state.sp, inP);
     rootResolve.revealOpaqueTypesPath(state.sp, p);
-    // If there's any mention of generics in this path, then return Literal::Defer
     if (visitPathTysWith(p, [&](const auto& ty) -> bool {
         return ty->is_Generic();
     })) {
@@ -5245,11 +4994,6 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) cons
     }
     if (c.valueState == HIRConstant::ValueState::Unknown) {
         auto& item = const_cast<HIRConstant&>(c);
-        // This evaluates the *definition* under an identity substitution:
-        // a body that names its generic environment (impl params, Self)
-        // is per-instantiation and goes through the monomorph cache
-        // below instead of being attempted here. The body is translated
-        // first so the captures are post-typecheck and precise.
         {
             HIRTypeRef bodyTy = item.type;
             rootResolve.hirCrate().getOrGenMir(rootResolve.board(), HIRItemPath(p), item.value, bodyTy);
@@ -5259,7 +5003,6 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) cons
         if (bodyNamesEnv) {
             item.valueState = HIRConstant::ValueState::Generic;
         } else {
-            // Challenge: Adding items to the module might invalidate an iterator.
             HIRItemPath modIp{item.value.state->modPath};
             auto nvs = NewvalState(item.value.state->module, modIp, FMT("const" << &c << "#"));
             auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
@@ -5288,7 +5031,6 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) cons
         auto it = c.monomorphCache.find(p);
         if (it == c.monomorphCache.end()) {
             auto& item = const_cast<HIRConstant&>(c);
-            // Challenge: Adding items to the module might invalidate an iterator.
             HIRItemPath modIp{item.value.state->modPath};
             auto nvs = NewvalState(item.value.state->module, modIp, FMT("const" << &c << "#"));
             auto eval = HIREvaluator(item.value.span(), rootResolve.wb, nvs);
@@ -5308,7 +5050,6 @@ auto MIREvalCallStackEntry::getConst(const HIRPath& inP, HIRTypeRef* outTy) cons
 }
 
 auto MIREvalCallStackEntry::writeEncoded(MIREvalValueRef dst, const EncodedLiteral& encoded) -> void {
-    // Write the encoded value into the destination
     dst.writeBytes(state, encoded.bytes.data(), encoded.bytes.size());
     for (const auto& r : encoded.relocations) {
         MIREvalRelocPtr reloc;
@@ -5812,10 +5553,6 @@ auto Expander::visitPathParams(HIRPathParams& p) -> void {
 
 auto Expander::visitConstgeneric(HIRConstGeneric& value) -> void {
     if (auto* unevaluated = value.opt_Unevaluated()) {
-        // `selfType` is the captured evaluation environment, not a
-        // child of the expression.  In an impl header it contains a
-        // pre-binding snapshot of this same const argument; walking
-        // that snapshot would evaluate it without its impl params.
         visitPathParams((*unevaluated)->paramsImpl);
         visitPathParams((*unevaluated)->paramsItem);
         visitExpr(*(*unevaluated)->expr);
@@ -6029,8 +5766,6 @@ auto Expander::visitArraysize(HIRArraySize& as) -> void {
         }
         const bool predicted = unevaluatedUsedSlotsAreConcrete(crate.types, unevaluated);
         if (!predicted && !wb.ctfe->capsOracle()) {
-            // A bare const parameter gets its symbolic form; anything
-            // else stays Unevaluated for monomorphisation-time demand.
             if (tn) {
                 as = HIRConstGeneric(HIRGenericRef(tn->name, tn->binding));
             }
@@ -6045,8 +5780,6 @@ auto Expander::visitArraysize(HIRArraySize& as) -> void {
 }
 
 [[nodiscard]] auto Expander::visitType(HIRTypeRef ty) -> HIRTypeRef {
-    // Params and consts embedded in these types carry values this pass
-    // evaluates; route them through the owned-structure hooks.
     ty = visitTypeDefaultViaHooks(ty);
 
     if (ty->is_Array()) {
@@ -6094,7 +5827,6 @@ auto Expander::visitArraysize(HIRArraySize& as) -> void {
                 }
                 case HIRTypePathBinding::TAG_Struct: {
                     auto& pbe = te->binding.as_Struct();
-                    // If this struct hasn't been visited already, visit it
                     auto savedIp = implParams;
                     implParams = nullptr;
                     this->visitStruct(te->path.data.as_Generic().path, const_cast<HIRStruct&>(*pbe));
@@ -6124,13 +5856,8 @@ auto Expander::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
     HIRVisitor::visitConstant(p, item);
     recurseTypes = false;
 
-    // NOTE: Consteval needed here for MIR match generation to work
     if (pass != Pass::Values) {
     } else if (item.valueState == HIRConstant::ValueState::Generic || item.params.isGeneric() || monomorphisePathNeeded(p.getFullPath())) {
-        // Generic constants are evaluated for each concrete path.  A
-        // body that happens not to read its parameters must not run
-        // while visiting the definition: the instantiation may be
-        // unused or occur only in a dead branch.
         item.valueState = HIRConstant::ValueState::Generic;
     } else if (item.valueState == HIRConstant::ValueState::InProgress) {
         ERROR(item.value.span(), E0000, "cycle detected when evaluating constant `" << p << "`");
@@ -6145,7 +5872,6 @@ auto Expander::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
             item.valueState = HIRConstant::ValueState::Known;
         }
     } else {
-        // " << *item.m_value);
     }
 
     itemParams = nullptr;
@@ -6200,10 +5926,6 @@ auto Expander::visitStruct(HIRItemPath p, HIRStruct& item) -> void {
 
 auto Expander::visitExpr(HIRExprPtr& expr) -> void {
     struct Visitor: public HIRExprVisitorDef {
-        /// A value is out of the tree while a borrow of it is being
-        /// lifted into a static: making that static evaluates it, and
-        /// a static that names itself walks back through here before
-        /// the hole has been filled.
         void visitNodePtr(HIRExprNodeP& nodePtr) override {
             if (!nodePtr) {
                 return;
@@ -6220,12 +5942,10 @@ auto Expander::visitExpr(HIRExprPtr& expr) -> void {
         }
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override {
-            // Need to evaluate array sizes
             return exp.visitType(ty);
         }
 
         void visitPathParams(HIRPathParams& pp) override {
-            // Explicit call to handle const params (eventually)
             exp.visitPathParams(pp);
         }
 
@@ -6234,7 +5954,6 @@ auto Expander::visitExpr(HIRExprPtr& expr) -> void {
         }
 
         void visitGenericPath(HIRVisitor::PathContext pc, HIRGenericPath& p) override {
-            // `visit_path_params` relies on `m_get_params` being set by the enclosing path visitor; without this override a generic path in an expression reaches it empty.
             exp.visitGenericPath(p, pc);
         }
 
@@ -6389,7 +6108,6 @@ ExpanderApply::ExpanderApply(ObjPool& pool, HIRTypeInterner& types)
 auto ExpanderApply::visitModule(HIRItemPath p, HIRModule& mod) -> void {
     if (!mod.inlineStatics.empty()) {
         for (auto& v : mod.inlineStatics) {
-            // ::std::unique_ptr<VisEnt<ValueItem>>
             auto* iv = pool_.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), HIRValueItem::make_Static(pool_.make<HIRStatic>(mv$(*v.second)))});
             mod.valueItems.insert(::std::make_pair(v.first, iv));
         }
@@ -6422,10 +6140,6 @@ auto EnumValueExpander::visitModule(HIRItemPath p, HIRModule& mod) -> void {
 }
 
 auto EnumValueExpander::visitEnum(HIRItemPath p, HIREnum& item) -> void {
-    // Enum discriminants are evaluated before the regular expression
-    // typecheck pass. Give their literals and primitive operators the
-    // enum repr type now, so CTFE/MIR never sees a defaulted i32 where
-    // it was asked to produce (for example) a u64.
     auto _ = typeck.setImplGenerics(item.params);
     if (auto* e = item.data.opt_Value()) {
         auto enumType = crate.types.primitive(HIREnum::getReprType(item.tagRepr));

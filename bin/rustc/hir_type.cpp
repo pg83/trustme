@@ -30,8 +30,6 @@ Ordering ord(const HIRTypeData* l, const HIRTypeData* r) {
     if (l == r) {
         return OrdEqual;
     }
-    // Distinct interned nodes always have distinct uids; two zeros mean an
-    // un-interned working copy leaked into an ordered container.
     assert(l->uid != r->uid);
     return l->uid < r->uid ? OrdLess : OrdGreater;
 }
@@ -1010,8 +1008,6 @@ namespace {
     }
 
     void addTypeFlags(u32& flags, HIRTypeRef type) {
-        // A path argument can still be empty here: an RPIT that a `where Self:
-        // Sized` keeps out of the vtable is never filled in.
         if (type) {
             flags |= type->flags;
         }
@@ -1260,9 +1256,6 @@ namespace {
                 break;
             }
             case HIRConstGeneric::TAG_Evaluated: {
-                // The evaluated value does not expose a cheap scalar hash for
-                // every representation.  Its tag still separates it from the
-                // overwhelmingly more common generic and inferred constants.
                 break;
             }
             case HIRConstGeneric::TAG_Unevaluated: {
@@ -1743,7 +1736,6 @@ bool HIRTypeData::equalsIgnoringRegions(HIRTypeRef x) const {
             if (te.type != xe.type) {
                 return false;
             }
-            //if( te.lifetime != xe.lifetime )
             return te.inner->equalsIgnoringRegions(xe.inner);
         }
         case HIRTypeData::TAG_Pointer: {
@@ -1935,12 +1927,10 @@ namespace {
     }
 
     HIRCompare matchValues(const Span& sp, const HIRConstGeneric& t, const HIRConstGeneric& x, HIRMatchGenerics& callback) {
-        // LHS generic: call callback
         if (const auto* e = t.opt_Generic()) {
             return callback.matchVal(*e, x);
         }
 
-        // Either are infer, check for exact match or return fuzzy
         if (const auto* xep = x.opt_Infer()) {
             const auto& xe = *xep;
 
@@ -2052,19 +2042,12 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
     }
     const auto& v = (tyL->is_Infer() ? resolvePlaceholder.getType(sp, tyL) : tyL);
     const auto& x = (tyR->is_Infer() || tyR->is_Generic() ? resolvePlaceholder.getType(sp, tyR) : tyR);
-    // Resolving an inference variable can expose the generic that the caller
-    // must match.  Treat it exactly like a generic supplied directly as the
-    // left operand instead of falling through to the unreachable structural
-    // Generic/Generic case below.
     if (const auto* e = v->opt_Generic()) {
         return this->matchTy(*e, x, resolvePlaceholder);
     }
-    // If `x` is an ivar - This can be a fuzzy match.
     if (const auto* xep = x->opt_Infer()) {
         const auto& xe = *xep;
-        // - If type inferrence is active (i.e. this ivar has an index), AND both `v` and `x` refer to the same ivar slot
         if (xe.index != ~0u && v->is_Infer() && v->as_Infer().index == xe.index) {
-            // - They're equal (no fuzzyness about it)
             return HIRCompare::Equal;
         }
         switch (xe.tyClass) {
@@ -2172,9 +2155,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         return HIRCompare::Fuzzy;
     }
 
-    // MatchGenerics is a relation, not plain type equality.  Its callbacks can
-    // bind lifetimes and generic parameters while walking two identical
-    // interned types, so pointer identity must not bypass the structural walk.
     if (v->tag() != x->tag()) {
         // HACK: If the path is Opaque, return a fuzzy match.
         // - This works around an impl selection bug.
@@ -2198,7 +2178,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         case HIRTypeData::TAG_Infer: {
             auto& te = (*v).as_Infer();
             auto& xe = (*x).as_Infer();
-            // Both sides are infer
             switch (te.tyClass) {
                 case HIRInferClass::None:
                     return HIRCompare::Fuzzy;
@@ -2477,8 +2456,6 @@ bool HIRTypePathBinding::operator==(const HIRTypePathBinding& x) const {
 }
 
 const HIRTraitMarkings* HIRTypePathBinding::getTraitMarkings() const {
-    // A binding that names an item can still be waiting for it: until then
-    // there are no markings to read, the same as for one that names none.
     const HIRTraitMarkings* markingsPtr = nullptr;
     switch ((*this).tag()) {
         case HIRTypePathBinding::TAG_Unbound: {
@@ -2689,12 +2666,10 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
     const auto& left = resolvePlaceholder.getType(sp, self);
     const auto& right = resolvePlaceholder.getType(sp, x);
 
-    // If the two types are the same ivar, return equal
     if (left->is_Infer() && left == right) {
         return HIRCompare::Equal;
     }
 
-    // Unbound paths and placeholder generics
     if (left->tag() != right->tag()) {
         if (left->is_Path() && left->as_Path().binding.is_Unbound()) {
             return HIRCompare::Fuzzy;
@@ -2710,7 +2685,6 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
         }
     }
 
-    // If left is infer
     if (const auto* e = left->opt_Infer()) {
         switch (e->tyClass) {
             case HIRInferClass::None:
@@ -2793,7 +2767,6 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
         UNREACHABLE();
     }
 
-    // If righthand side is infer, it's a fuzzy match (or not a match)
     if (const auto* re = right->opt_Infer()) {
         switch (re->tyClass) {
             case HIRInferClass::None:
@@ -2853,9 +2826,6 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
         }
         UNREACHABLE();
     }
-
-    // If righthand is a type parameter, it can only match another type parameter
-    // - See `(Generic,` below
 
     if (left->tag() != right->tag()) {
         return HIRCompare::Unequal;
@@ -2961,7 +2931,6 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
             } else if (le.size != re.size) {
                 return HIRCompare::Unequal;
             } else {
-                // Sizes equal
             }
             rv &= le.inner->compareWithPlaceholders(sp, re.inner, resolvePlaceholder);
             return rv;
@@ -3121,6 +3090,5 @@ TypeFmtStream::TypeFmtStream(::std::ostream& output)
 }
 
 auto TypeFmtStream::from(::std::ostream& output) -> TypeFmtStream* {
-    // This stream is private to HIR formatting, so slot zero is ours.
     return output.pword(0) == &output ? static_cast<TypeFmtStream*>(&output) : nullptr;
 }

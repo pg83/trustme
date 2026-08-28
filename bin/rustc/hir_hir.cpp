@@ -299,13 +299,9 @@ Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) co
         const auto* tn = cast<const HIRExprNodeConstParam>(&**this->expr);
         const auto* xn = cast<const HIRExprNodeConstParam>(&**x.expr);
         if (tn && xn) {
-            // Is this valid? What if they're from different scopes?
             return ::ord(tn->binding, xn->binding);
         }
 
-        // EVIL OPTION: Just compare the string representations
-        // - The fmt() routine prints MIR blocks (when populated) or the source expression
-        //   (when not) in a deterministic, pointer-free form, so this gives a stable order.
         auto vT = FMT(*this);
         auto vX = FMT(x);
         return ::ord(vT, vX);
@@ -637,7 +633,6 @@ const HIRModule& HIRCrate::getModByPath(const Span& sp, const HIRSimplePath& pat
     if (ignoreLastNode) {
         ASSERT_BUG(sp, path.components().size() > 0, "get_mod_by_path received invalid path with ignore_last_node=true - " << path);
     }
-    // Special handling for empty paths with `ignore_last_node`
     if (path.components().size() == (ignoreLastNode ? 1 : 0)) {
         if (!ignoreCrateName && path.crateName() != crateName) {
             ASSERT_BUG(sp, extCrates.count(path.crateName()) > 0, "Crate '" << path.crateName() << "' not loaded");
@@ -762,10 +757,6 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
         BUG(sp, "Could not find value name " << path);
     }
 
-    // A `use` in the value namespace names the item it imports: `use m::f as
-    // main;` makes the crate's `main` that import, and every consumer of a
-    // value path wants what stands behind it. An enum variant is not one --
-    // its import carries the variant index and is read as the import it is.
     if (const auto* imp = it->second->ent.opt_Import(); imp && !imp->isVariant && imp->path != path) {
         return this->getValitemByPath(sp, imp->path, ignoreCrateName);
     }
@@ -836,7 +827,6 @@ namespace {
     }
 
     struct ImplMatcher: public HIRMatchGenerics {
-        // Borrowed reused scratch (see matchesTypeRoot); nullptr = unbound.
         Vector<HIRTypeRef>& implTypes;
 
         ImplMatcher(Vector<HIRTypeRef>& buf, const HIRGenericParams& implGenerics);
@@ -849,17 +839,10 @@ namespace {
     };
 
     bool matchesTypeRoot(const HIRGenericParams& params, const HIRTypeData* implTy, const HIRTypeData* matchType, tCbResolveType tyRes, HIRImplMatcherScratch& scratch) {
-        // A nominal path deserialises without its pointer-valued binding
-        // metadata. Its SimplePath is nevertheless complete and is exactly
-        // what the impl index and matcher use. Only an unresolved UFCS path is
-        // still too early to select an inherent impl.
         const auto* matchPath = matchType->opt_Path();
         if (isUnboundedInfer(matchType) || (matchPath && matchPath->binding.is_Unbound() && !matchPath->path.data.is_Generic())) {
             return false;
         }
-        // Depth-indexed pool of reused binding buffers: ~1.7M allocations on
-        // libcore came from a fresh vector per match. The depth index keeps a
-        // re-entrant match (via the resolve callback) off the same buffer.
         ASSERT_BUG(Span(), scratch.depth < 8, "impl matcher nested too deep");
         STD_DEFER {
             scratch.depth--;
@@ -924,9 +907,6 @@ namespace {
             return leftOpen ? ::OrdLess : ::OrdGreater;
         }
         if (leftOpen) {
-            // Two independently named const parameters are equally general.
-            // Relations between them are accounted for by the surrounding
-            // impl matcher; neither is more specific on syntax alone.
             return ::OrdEqual;
         }
         BUG(sp, "Mismatched const values - " << left << " and " << right);
@@ -951,7 +931,6 @@ namespace {
         if (left->is_Generic()) {
             return right->is_Generic() ? ::OrdEqual : ::OrdLess;
         }
-        // - A generic is always less specific than anything but itself (handled above)
         if (right->is_Generic()) {
             return ::OrdGreater;
         }
@@ -1160,9 +1139,7 @@ namespace {
         auto monomorphCb = MonomorphStatePtr(types, type, &curTrait.path.params, nullptr);
 
         for (const auto& traitPathRaw : tr.allParentTraits) {
-            // 1. Monomorph
             auto traitPathMono = monomorphCb.monomorphTraitpath(sp, traitPathRaw, false);
-            // 2. Add
             rv.push_back(HIRGenericBound::make_TraitBound({type, mv$(traitPathMono), HIRBoundConstness::Never, isTrivial}));
         }
 
@@ -1254,13 +1231,7 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     const Span& sp = _sp;
     TypeOrdContext ordContext;
 
-    // >> https://github.com/rust-lang/rfcs/blob/master/text/1210-impl-specialization.md#defining-the-precedence-rules
-    // 1. If this->m_type is less specific than other.m_type: return false
     {
-        // If any in te.impl->m_params is less specific than oe.impl->m_params: return false
-        // Mixed ordering (more specific in one position, less in another)
-        // means the impls are incomparable: neither is a specialisation of
-        // the other, so this one is not "more specific".
         auto ord = typelistOrdSpecific(ordContext, sp, this->traitArgs.types, other.traitArgs.types);
         if (ordContext.mixed) {
             return false;
@@ -1296,11 +1267,6 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
         return parentMatchesChild && mappedBoundsImplied(sp, types, *this, other, parentMatcher) && mappedImplicitSizedImplied(*this, other, parentMatcher);
     }
 
-    // `T` carries an implicit `Sized` predicate while `T: ?Sized` does not.
-    // It is part of the specialization domain even though it is stored on the
-    // parameter declaration rather than in `params.bounds`.  Compare it after
-    // applying the same head mapping as explicit predicates, so permuted
-    // generic parameter lists retain the right relation.
     if (!mappedImplicitSizedImplied(*this, other, parentMatcher)) {
         return false;
     }
@@ -1322,18 +1288,15 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
     bool isEqual = true;
     while (itT != boundsT.end() && itO != boundsO.end()) {
         auto cmp = ::ord(*itT, *itO);
-        // Equal bounds? advance both
         if (cmp == OrdEqual) {
             ++itT;
             ++itO;
             continue;
         }
 
-        // If the two bounds are similar
         if (itT->tag() == itO->tag() && itT->is_TraitBound()) {
             const auto& bT = itT->as_TraitBound();
             const auto& bO = itO->as_TraitBound();
-            // Check if the type is equal
             if (bT.type == bO.type && bT.trait.path.path == bO.trait.path.path) {
                 const auto& paramsT = bT.trait.path.params;
                 const auto& paramsO = bO.trait.path.params;
@@ -1359,7 +1322,6 @@ bool HIRTraitImpl::moreSpecificThan(HIRTypeInterner& types, const HIRTraitImpl& 
             isEqual = false;
             ++itT;
         } else {
-            //++ it_o;
             return false;
         }
     }
@@ -1394,7 +1356,6 @@ namespace {
     };
 }
 
-// Returns `true` if the two impls overlap in the types they will accept
 bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other) const {
     // TODO: Pre-calculate impl trees (with pointers to parent impls)
     struct H {
@@ -1484,7 +1445,6 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                     if (!H::typesOverlap(ae.trait.path.params, be.trait.path.params)) {
                         return false;
                     }
-                    // Marker traits only overlap if the lists are the same (with overlap)
                     if (ae.markers.size() != be.markers.size()) {
                         return false;
                     }
@@ -1586,7 +1546,6 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
         return true;
     }
 
-    // 1. Are the impl types of the same form (or is one generic)
     if (!H::typesOverlap(this->type, other.type)) {
         return false;
     }
@@ -1596,8 +1555,6 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
 
     Span sp;
 
-    // Mixed ordering between the heads means neither is a specialisation
-    // of the other.
     TypeOrdContext ordContext;
     typeOrdSpecific(ordContext, sp, this->type, other.type);
     typelistOrdSpecific(ordContext, sp, this->traitArgs.types, other.traitArgs.types);
@@ -1637,13 +1594,11 @@ namespace {
     bool findTraitImplsInt(const HIRCrate& crate, const HIRSimplePath& trait, const HIRTypeData* type, tCbResolveType tyRes, HIRTraitImplCallback& callback) {
         auto it = crate.traitImpls.find(trait);
         if (it != crate.traitImpls.end()) {
-            // 1. Find named impls (associated with named types)
             if (const auto* implList = it->second.getListForType(type)) {
                 if (findImplsList(*implList, type, tyRes, crate.implMatcherScratch, callback)) {
                     return true;
                 }
             }
-            // - If the type is an ivar, search all types
             if (type->is_Infer() && !type->as_Infer().isLit()) {
                 for (const auto& list : it->second.named) {
                     if (findImplsList(list.second, type, tyRes, crate.implMatcherScratch, callback)) {
@@ -1652,7 +1607,6 @@ namespace {
                 }
             }
 
-            // 2. Search fully generic list.
             if (findImplsList(it->second.generic, type, tyRes, crate.implMatcherScratch, callback)) {
                 return true;
             }
@@ -1667,13 +1621,11 @@ bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRTypeData* t
     if (this->allTraitImpls.size() > 0) {
         auto it = this->allTraitImpls.find(trait);
         if (it != this->allTraitImpls.end()) {
-            // 1. Find named impls (associated with named types)
             if (const auto* implList = it->second.getListForType(type)) {
                 if (findImplsList(*implList, type, tyRes, implMatcherScratch, callback)) {
                     return true;
                 }
             }
-            // - If the type is an ivar, search all types
             if (type->is_Infer() && !type->as_Infer().isLit()) {
                 for (const auto& list : it->second.named) {
                     if (findImplsList(list.second, type, tyRes, implMatcherScratch, callback)) {
@@ -1682,7 +1634,6 @@ bool HIRCrate::findTraitImplsCb(const HIRSimplePath& trait, const HIRTypeData* t
                 }
             }
 
-            // 2. Search fully generic list.
             if (findImplsList(it->second.generic, type, tyRes, implMatcherScratch, callback)) {
                 return true;
             }
@@ -1707,14 +1658,12 @@ namespace {
     bool findAutoTraitImplsInt(const HIRCrate& crate, const HIRSimplePath& trait, const HIRTypeData* type, tCbResolveType tyRes, HIRMarkerImplCallback& callback) {
         auto it = crate.markerImpls.find(trait);
         if (it != crate.markerImpls.end()) {
-            // 1. Find named impls (associated with named types)
             if (const auto* implList = it->second.getListForType(type)) {
                 if (findImplsList(*implList, type, tyRes, crate.implMatcherScratch, callback)) {
                     return true;
                 }
             }
 
-            // 2. Search fully generic list.
             if (findImplsList(it->second.generic, type, tyRes, crate.implMatcherScratch, callback)) {
                 return true;
             }
@@ -1728,14 +1677,12 @@ bool HIRCrate::findAutoTraitImplsCb(const HIRSimplePath& trait, const HIRTypeDat
     if (this->allMarkerImpls.size() > 0) {
         auto it = this->allMarkerImpls.find(trait);
         if (it != this->allMarkerImpls.end()) {
-            // 1. Find named impls (associated with named types)
             if (const auto* implList = it->second.getListForType(type)) {
                 if (findImplsList(*implList, type, tyRes, implMatcherScratch, callback)) {
                     return true;
                 }
             }
 
-            // 2. Search fully generic list.
             if (findImplsList(it->second.generic, type, tyRes, implMatcherScratch, callback)) {
                 return true;
             }
@@ -1757,14 +1704,12 @@ bool HIRCrate::findAutoTraitImplsCb(const HIRSimplePath& trait, const HIRTypeDat
 
 namespace {
     bool findTypeImplsInt(const HIRCrate& crate, const HIRTypeData* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) {
-        // 1. Find named impls (associated with named types)
         if (const auto* implList = crate.typeImpls.getListForType(type)) {
             if (findImplsList(*implList, type, tyRes, crate.implMatcherScratch, callback)) {
                 return true;
             }
         }
 
-        // 2. Search fully generic list?
         if (findImplsList(crate.typeImpls.generic, type, tyRes, crate.implMatcherScratch, callback)) {
             return true;
         }
@@ -1775,14 +1720,12 @@ namespace {
 
 bool HIRCrate::findTypeImplsCb(const HIRTypeData* type, tCbResolveType tyRes, HIRTypeImplCallback& callback) const {
     if (allTraitImpls.size() > 0) {
-        // 1. Find named impls (associated with named types)
         if (const auto* implList = this->allTypeImpls.getListForType(type)) {
             if (findImplsList(*implList, type, tyRes, implMatcherScratch, callback)) {
                 return true;
             }
         }
 
-        // 2. Search fully generic list?
         if (findImplsList(this->allTypeImpls.generic, type, tyRes, implMatcherScratch, callback)) {
             return true;
         }
@@ -1791,7 +1734,6 @@ bool HIRCrate::findTypeImplsCb(const HIRTypeData* type, tCbResolveType tyRes, HI
     }
     // TODO: Determine the source crate for this type (coherence) and only search that
 
-    // > Current crate
     if (findTypeImplsInt(*this, type, tyRes, callback)) {
         return true;
     }
@@ -1805,7 +1747,6 @@ bool HIRCrate::findTypeImplsCb(const HIRTypeData* type, tCbResolveType tyRes, HI
 
 const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath& ip, const HIRExprPtr& ep, const HIRFunction::argsT& args, HIRTypeRef& retTy) const {
     if (!ep) {
-        // No HIR, so has to just have MIR - from a extern crate most likely
         ASSERT_BUG(Span(), ep.mir, "No HIR (!ep) and no MIR (!ep.m_mir) for " << ip);
         return &*ep.mir;
     } else {
@@ -1819,9 +1760,6 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
                 currentTrait.path = ep.state->currentTraitPath;
                 currentTrait.params = ep.state->currentTraitImpl->traitArgs.clone();
             }
-            // Lazy processing can be requested from Resolve UFCS Outer,
-            // before the whole-crate Self-expansion pass has run.  Give
-            // this body and its signature the same owner substitution.
             if (ep.state->currentSelfType) {
                 ConvertHIRExpandAliasesSelfExpr(*this, ep.state->currentSelfType, const_cast<HIRFunction::argsT&>(args), retTy, epMut);
             }
@@ -1837,7 +1775,6 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
                 ep.state->stage = HIRExprState::Stage::ConstEval;
             }
 
-            // Ensure typechecked
             if (ep.state->stage < HIRExprState::Stage::Typecheck) {
                 if (ep.state->stage == HIRExprState::Stage::TypecheckRequest) {
                     ERROR(Span(), E0000, "Loop in constant evaluation");
@@ -1853,7 +1790,6 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
                 ms.traits = ep.state->traits;
                 ms.modPaths.push_back(ep.state->modPath);
                 TypecheckCode(ms, const_cast<HIRFunction::argsT&>(args), retTy, epMut);
-                // NOTE: This is already set by the above function
                 ASSERT_BUG(Span(), ep.state->stage == HIRExprState::Stage::Typecheck, "Typecheck_Code didn't set stage");
             }
             if (ep.state->stage < HIRExprState::Stage::PostTypecheck) {
@@ -1875,11 +1811,9 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
                 ep.state->stage = HIRExprState::Stage::ExpandRequest;
                 HIRExpandUfcsEverythingExpr(wb, *this, epMut, ep.state->currentTraitImpl);
                 HIRExpandReborrowsExpr(wb, *this, epMut);
-                //HIR_Expand_ErasedType(*this, ep_mut);    // - Maybe?
 
                 ep.state->stage = HIRExprState::Stage::Expand;
             }
-            // Generate MIR
             if (ep.state->stage < HIRExprState::Stage::Mir) {
                 if (ep.state->stage == HIRExprState::Stage::MirRequest) {
                     ERROR(Span(), E0000, "Loop in constant evaluation");
@@ -1899,10 +1833,8 @@ HIRTypeRef HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, const 
 
     const auto& vtableTySpath = this->vtablePath;
     const auto& vtableRef = crate.getStructByPath(sp, vtableTySpath);
-    // Copy the param set from the trait in the trait object
     HIRPathParams vtableParams = te.trait.path.params.clone();
     vtableParams.types.resize(te.trait.path.params.types.size() + this->typeIndexes.size());
-    // - Include associated types on bound
     for (const auto& tyB : te.trait.typeBounds) {
         if (this->typeIndexes.count(tyB.first) == 0) {
             WARNING(sp, W0000, "Trait object path " << te.trait << " references a type with no vtable type index");
@@ -1952,7 +1884,6 @@ unsigned HIRTrait::getVtableParentIndex(HIRTypeInterner& types, const Span& sp, 
     return std::make_pair(nullptr, nullptr);
 }
 
-/// Helper for getting the struct associated with a pattern path
 const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIRPattern::PathBinding& binding, bool isTuple) {
     const HIRStruct* strP = nullptr;
     switch (binding.tag()) {
@@ -2009,7 +1940,6 @@ const tStructFields& patternGetNamed(const Span& sp, const HIRPath& path, const 
     return patternGetStruct(sp, path, binding, false).data.as_Named();
 }
 
-// ---
 EncodedLiteral EncodedLiteral::makeUsize(u64 v) {
     EncodedLiteral rv;
     rv.bytes.resize(8); // 64-bit pointers only (32-bit targets are unsupported)
@@ -2071,7 +2001,6 @@ S128 EncodedLiteralSlice::readSint(size_t size /*=0*/) const {
     }
     auto v = readUint(size);
     if (size < 128 / 8 && ((v >> (8 * size - 1)) != 0)) {
-        // Sign extend
         v |= U128(UINT64_MAX, UINT64_MAX) << (8 * size);
     }
     return S128(v);
@@ -2156,7 +2085,6 @@ bool EncodedLiteralSlice::operator==(const EncodedLiteralSlice& x) const {
 }
 
 Ordering EncodedLiteralSlice::ord(const EncodedLiteralSlice& x) const {
-    // NOTE: Check the data first (to maintain some level of lexical ordering)
     auto minSize = std::min(size, x.size);
     for (size_t i = 0; i < minSize; i++) {
         if (auto cmp = ::ord(base.bytes[ofs + i], x.base.bytes[x.ofs + i])) {
@@ -2331,7 +2259,6 @@ bool HIRCrate::isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias
         }
     }
 
-    // The attribute can name a plain alias of the opaque alias.
     for (size_t i = 0; i < nameCount; i++) {
         const auto& named = names[i];
         const HIRSimplePath* path = &named;
@@ -2356,7 +2283,6 @@ bool HIRCrate::isOpaqueAliasNamedBy(const HIRTypeDataErasedTypeAliasInner& alias
         }
     }
 
-    // It can also name a type that contains the opaque alias.
     for (size_t i = 0; i < nameCount; i++) {
         const auto& named = names[i];
         const auto* item = getTypeitemByPathOpt(named);

@@ -9,8 +9,6 @@
 using namespace stl;
 
 namespace {
-    // Instance-counting element: lets tests assert that every constructed value
-    // is destroyed exactly once (no leaks, no double-frees).
     struct Counted {
         static int liveCount;
         int value;
@@ -46,9 +44,6 @@ STD_TEST_SUITE(ThinVectorBasics) {
     }
 
     STD_TEST(sizedConstructorDefaultInits) {
-        // The sized constructor default-constructs each element (`new (p) T;`),
-        // so trivial types are left indeterminate — use a type with a defined
-        // default to observe that every slot was constructed exactly once.
         STD_INSIST(Counted::liveCount == 0);
         {
             ThinVector<Counted> v(4);
@@ -104,7 +99,6 @@ STD_TEST_SUITE(ThinVectorBasics) {
         v.reserve(16);
         STD_INSIST(v.capacity() >= 16);
         STD_INSIST(v.size() == 0);
-        // Reserving smaller must not shrink.
         v.reserve(4);
         STD_INSIST(v.capacity() >= 16);
 
@@ -184,8 +178,6 @@ STD_TEST_SUITE(ThinVectorSemantics) {
 
 STD_TEST_SUITE(ThinVectorAccessAndOrder) {
     STD_TEST(atInBounds) {
-        // Out-of-range access aborts (logic error), so only the valid
-        // paths are exercised here.
         ThinVector<int> v;
         v.push_back(5);
         v.push_back(7);
@@ -219,7 +211,6 @@ STD_TEST_SUITE(ThinVectorAccessAndOrder) {
         STD_INSIST(a.ord(b) == OrdEqual);
         STD_INSIST(a.ord(c) == OrdLess);
         STD_INSIST(c.ord(a) == OrdGreater);
-        // Shorter prefix sorts before the longer list.
         STD_INSIST(shorter.ord(a) == OrdLess);
         STD_INSIST(a.ord(shorter) == OrdGreater);
     }

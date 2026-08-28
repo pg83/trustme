@@ -17,10 +17,8 @@
 
 using namespace stl;
 
-// Map of: LoopIndex=>(Path=>Count)
 typedef std::map<unsigned, std::map<std::vector<unsigned>, unsigned>> loopCountsT;
 
-/// A particular captured fragment
 struct CapturedVal {
     unsigned int numUses; // Number of times this var will be used
     unsigned int numUsed; // Number of times it has been used
@@ -52,7 +50,6 @@ inline ::std::ostream& operator<<(::std::ostream& os, const CaptureLayer& x) {
 }
 
 struct ParameterMappings {
-    /// Represents the fragments captured for a name
     struct CapturedVar {
         CaptureLayer topLayer;
 
@@ -79,24 +76,13 @@ struct ParameterMappings {
 
     void insert(unsigned int nameIndex, const ::std::vector<unsigned int>& iterations, InterpolatedFragment data);
 
-    /// <summary>
-    /// Get the replacement fragment for a given loop iteration (or `nullptr`) if out of bounds
-    /// </summary>
     InterpolatedFragment* get(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
 
-    /// <summary>
-    /// Given a current iteration and a loop index, return how many times this loop will run
-    /// </summary>
     unsigned int getLoopRepeats(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int loopIdx) const;
 
-    /// <summary>
-    /// Return the number of times this level of a given name/variable will loop
-    /// </summary>
     unsigned int getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth = 0) const;
 
-    /// Increment the number of times a particular fragment will be used
     void incCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
-    /// Decrement the number of times a particular fragment is used (returns true if there are still usages remaining)
     bool decCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
 
     CapturedVal& getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
@@ -114,9 +100,7 @@ struct MacroPatternStream {
     const ::std::vector<bool>* conditionReplay;
     size_t conditionReplayPos;
 
-    // Currently processed loop indexes
     ::std::vector<unsigned int> currentLoops;
-    // Iteration index of each active loop level
     ::std::vector<unsigned int> loopIterations;
 
     loopCountsT loopCounts;
@@ -128,15 +112,12 @@ struct MacroPatternStream {
 
     size_t curPos() const;
 
-    /// Get the next pattern entry
     const SimplePatEnt& next();
 
     const SimplePatEnt& peek();
 
-    /// Inform the stream that the `if` rule that was just returned succeeded
     void ifSucceeded();
 
-    /// Get the current loop iteration count
     const ::std::vector<unsigned int>& getLoopIters() const;
 
     ::std::vector<bool> takeHistory();
@@ -144,13 +125,8 @@ struct MacroPatternStream {
     loopCountsT takeLoopCounts();
 };
 
-// === Prototypes ===
 unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts);
 void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::vector<MacroExpansionEnt>& contents);
-
-// ------------------------------------
-// ParameterMappings
-// ------------------------------------
 
 void ParameterMappings::insert(unsigned int nameIndex, const ::std::vector<unsigned int>& iterations, InterpolatedFragment data) {
     if (nameIndex >= mappings_.size()) {
@@ -186,7 +162,6 @@ CapturedVal& ParameterMappings::getCap(const Span& sp, const ::std::vector<unsig
     auto& e = mappings_.at(nameIdx);
     auto* layer = &e.topLayer;
 
-    // - If the top layer is a 1-sized set of values, unconditionally return it
     if (auto* e = layer->opt_Vals()) {
         if (e->size() == 1) {
             return (*e)[0];
@@ -221,8 +196,6 @@ InterpolatedFragment* ParameterMappings::get(const Span& sp, const ::std::vector
 
 unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int loopIdx) const {
     const auto& list = loopCounts.at(loopIdx);
-    // Iterate the list, find the first prefix match of `iterations`
-    // - `iterations` should always be longer or equal in length to every entry in `list`
     for (const auto& e : list) {
         ASSERT_BUG(Span(), e.first.size() <= iterations.size(), "Loop " << loopIdx << " iteration path [" << e.first << "] larger than query path [" << iterations << "]");
         if (std::equal(e.first.begin(), e.first.end(), iterations.begin())) {
@@ -233,8 +206,6 @@ unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const ::std::vect
 }
 
 namespace {
-    /// The number of levels between a layer and the values under it, counting
-    /// the layer of values itself as one.
     template <typename Layer>
     unsigned int captureLayerDepth(const Layer& layer) {
         unsigned int rv = 1;
@@ -248,8 +219,6 @@ namespace {
         return rv;
     }
 
-    /// The number of nodes `level` levels below a layer, where the layer's own
-    /// entries are level one.
     template <typename Layer>
     unsigned int captureLayerNodesAt(const Layer& layer, unsigned int level) {
         if (const auto* vals = layer.opt_Vals()) {
@@ -271,7 +240,6 @@ unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::ve
     auto& e = mappings_.at(nameIdx);
     auto* layer = &e.topLayer;
 
-    // - If the top layer is a 1-sized set of values, unconditionally return it
     if (auto* e = layer->opt_Vals()) {
         if (e->size() == 1) {
             return 1;
@@ -296,9 +264,6 @@ unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::ve
             }
         }
     }
-    // `${count($x, depth)}` counts the repetitions `depth` levels above the
-    // values: at depth zero every value, and at the deepest level the entries
-    // of this layer.
     const unsigned int levels = captureLayerDepth(*layer);
     if (depth >= levels) {
         depth = levels - 1;
@@ -319,10 +284,6 @@ bool ParameterMappings::decCount(const Span& sp, const ::std::vector<unsigned in
     return (cap.numUsed < cap.numUses);
 }
 
-// ------------------------------------
-// MacroPatternStream
-// ------------------------------------
-
 const SimplePatEnt& MacroPatternStream::next() {
     if (peekCacheValid) {
         peekCacheValid = false;
@@ -330,19 +291,15 @@ const SimplePatEnt& MacroPatternStream::next() {
     }
 
     for (;;) {
-        // If not replaying, and the previous entry was a conditional, record the result of that conditional
         if (!conditionReplay && lastWasCond) {
             conditionHistory.push_back(conditionMet);
         }
         lastWasCond = false;
-        // End of list? return End entry
         if (curPos_ == simpleEnts.size()) {
             return endEnt;
         }
         const auto& curEnt = simpleEnts[curPos_];
-        // If replaying, and this is a conditional
         if (conditionReplay && curEnt.is_If()) {
-            // Skip the conditional (following its target or just skipping over)
             if ((*conditionReplay)[conditionReplayPos++]) {
                 curPos_ = curEnt.as_If().jumpTarget;
             } else {
@@ -385,7 +342,6 @@ const SimplePatEnt& MacroPatternStream::next() {
                 loopIterations.pop_back();
                 currentLoops.pop_back();
 
-                // Save this iteration count if replaying
                 if (conditionReplay) {
                     loopCounts[loopIndex].insert(std::make_pair(loopIterations, numIter));
                 }
@@ -407,8 +363,6 @@ void MacroPatternStream::ifSucceeded() {
     conditionMet = true;
 }
 
-// ----------------------------------------------------------------
-/// State for MacroExpander and Macro_InvokeRules_CountSubstUses
 struct MacroExpandState {
     const ::std::vector<MacroExpansionEnt>& rootContents;
     const ParameterMappings& mappings_;
@@ -419,26 +373,19 @@ struct MacroExpandState {
         unsigned maxIndex;
     };
 
-    /// Layer states : Index and Iteration
     ::std::vector<tOffset> offsets;
     ::std::vector<unsigned int> iterations_;
 
-    /// Cached pointer to the current layer
     const ::std::vector<MacroExpansionEnt>* curEnts; // For faster lookup.
 
     MacroExpandState(const ::std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings);
 
-    // Returns a pointer to the next entry to expand, or nullptr if the end is reached
-    // - NOTE: When a Loop entry is returned, the separator token should be emitted
     const MacroExpansionEnt* nextEnt();
 
     const ::std::vector<unsigned int> iterations() const;
 
-    /// The iteration index of the loop `depth` levels out from the innermost
-    /// one, or `~0u` if there is no such loop.
     unsigned int loopIndexAt(unsigned int depth) const;
 
-    /// How many times that loop runs.
     unsigned int loopLengthAt(unsigned int depth) const;
 
     unsigned int topPos() const;
@@ -447,7 +394,6 @@ struct MacroExpandState {
     const ::std::vector<MacroExpansionEnt>* getCurLayer() const;
 };
 
-// ----------------------------------------------------------------
 struct MacroExpander: public TokenStream {
     Span thisSpan;
     const RcString crateName;
@@ -461,11 +407,6 @@ struct MacroExpander: public TokenStream {
     ::std::unique_ptr<TTStreamO> ttstream;
     ASTEdition sourceEdition;
     bool isMacroItem;
-    /// `#[rustc_macro_transparency = "transparent"]`: the expansion's own names
-    /// stay in the caller's scope rather than the macro's, which is what lets
-    /// `mir!` declare `RET` for the caller's tokens to assign to. The reverse
-    /// direction -- the macro body naming one of the caller's locals -- would
-    /// need the invocation's own scope here, and nothing asks for it yet.
     bool transparent;
     Ident::Hygiene hygiene_;
     Ident::Hygiene lastHygiene;
@@ -548,7 +489,6 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
             return InterpolatedFragment(ParseModItemS(lex, curMod.fileInfo, curMod.path(), ASTAttributeList{}));
         } break;
         case MacroPatEnt::PAT_IDENT:
-            // NOTE: Any reserved word is also valid as an ident
             GET_TOK(tok, lex);
             if (Token::typeIsRword(tok.type())) {
                 return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
@@ -595,14 +535,12 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
     UNREACHABLE();
 }
 
-/// Parse the input TokenTree according to the `macro_rules!` patterns and return a token stream of the replacement
 ::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, const WireBoard& wb, TokenTree input, const ASTCrate& crate, ASTModule& mod) {
     ParameterMappings boundTts;
     unsigned int ruleIndex = MacroInvokeRulesMatchPattern(sp, wb, rules, mv$(input), crate, mod, boundTts);
 
     const auto& rule = rules.rules.at(ruleIndex);
 
-    // Run through the expansion counting the number of times each fragment is used
     MacroInvokeRulesCountSubstUses(boundTts, rule.contents);
 
     TokenStream* retPtr = new MacroExpander(wb.id, *crate.hirPool, name, sp, crate.edition, rules.isMacroItem, rules.transparent, rules.definitionId, rules.hygiene, rule.contents, mv$(boundTts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
@@ -610,10 +548,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
     return ::std::unique_ptr<TokenStream>(retPtr);
 }
 
-// Collection of functions that consume a specific fragment type from a token stream
-// - Does very loose consuming
 namespace {
-    // Class that provides read-only iteration over a TokenTree
     struct TokenStreamRO {
         const TokenTree& tt;
         ::std::vector<size_t> offsets;
@@ -635,10 +570,8 @@ namespace {
 
         void consumeAndPush(eTokenType ty);
 
-        // Consumes if the current token is `ty`, otherwise doesn't and returns false
         bool consumeIf(eTokenType ty);
 
-        /// Returns the position in the stream (number of tokens that have been consumed)
         size_t position() const;
     };
 
@@ -649,7 +582,6 @@ namespace {
     };
     bool consumeItem(TokenStreamRO& lex, ItemConsumeMode mode = ItemConsumeMode::ItemFragment);
 
-    // Consume an entire TT
     bool consumeTt(TokenStreamRO& lex) {
         switch (lex.next()) {
             case TOK_EOF:
@@ -732,12 +664,10 @@ namespace {
                 lex.consume();
             }
         }
-        // Consume closing token
         lex.consume();
         return true;
     }
 
-    // Consume a path
     bool consumePath(TokenStreamRO& lex, bool typeMode = false) {
         switch (lex.next()) {
             case TOK_INTERPOLATED_PATH:
@@ -746,14 +676,12 @@ namespace {
                 return true;
             case TOK_RWORD_SELF:
                 lex.consume();
-                // Allow a lone `self` (it's referring to the current object)
                 if (lex.next() != TOK_DOUBLE_COLON) {
                     return true;
                 }
                 break;
             case TOK_RWORD_CRATE:
                 lex.consume();
-                // Require `::` after `crate`
                 break;
             case TOK_RWORD_SUPER:
                 lex.consume();
@@ -767,7 +695,6 @@ namespace {
                 lex.consume();
                 if (typeMode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT || lex.next() == TOK_PAREN_OPEN))
                     ;
-                // Allow a lone ident
                 else if (lex.next() != TOK_DOUBLE_COLON) {
                     return true;
                 } else
@@ -811,7 +738,6 @@ namespace {
                 return false;
             }
         }
-        // Handles `Fn()`
         if (typeMode && lex.next() == TOK_PAREN_OPEN) {
             if (!consumeTt(lex)) {
                 return false;
@@ -830,9 +756,6 @@ namespace {
             if (lex.consumeIf(TOK_LIFETIME)) {
                 continue;
             }
-            // A path fragment stands for a trait here, but a type fragment does
-            // not: `impl $ty` is not a type, so an arm asking for one does not
-            // match and the next arm gets its turn.
             if (lex.next() == TOK_INTERPOLATED_TYPE) {
                 return false;
             }
@@ -859,8 +782,6 @@ namespace {
                 lex.consume();
                 return consumeTypeTraitList(lex);
             case TOK_QMARK:
-                // Relaxed bounds are part of the type grammar even when a
-                // later semantic check rejects the resulting trait object.
                 lex.consume();
                 return consumeTypeTraitList(lex);
             case TOK_RWORD_FOR:
@@ -884,7 +805,6 @@ namespace {
                 if (!consumePath(lex, true)) {
                     return false;
                 }
-                // Macro invocation?
                 if (lex.consumeIf(TOK_EXCLAM)) {
                     if (lex.next() != TOK_PAREN_OPEN && lex.next() != TOK_SQUARE_OPEN && lex.next() != TOK_BRACE_OPEN) {
                         return false;
@@ -991,7 +911,6 @@ namespace {
                             return false;
                         }
                     } else {
-                        // Fall through to the range handling
                         break;
                     }
                     if (allowOr && lex.consumeIf(TOK_PIPE)) {
@@ -1040,7 +959,6 @@ namespace {
                     }
                     lex.consume();
                     break;
-                // The rest pattern `..`, and a range with no start (`..=10`).
                 case TOK_DOUBLE_DOT:
                 case TOK_DOUBLE_DOT_EQUAL:
                     lex.consume();
@@ -1065,7 +983,6 @@ namespace {
                             lex.consume();
                             break;
                         default:
-                            // A bare `..`
                             break;
                     }
                     if (allowOr && lex.consumeIf(TOK_PIPE)) {
@@ -1078,7 +995,6 @@ namespace {
             if (lex.consumeIf(TOK_AT)) {
                 continue;
             }
-            // ... or ..=
             if (lex.consumeIf(TOK_TRIPLE_DOT) || lex.consumeIf(TOK_DOUBLE_DOT_EQUAL)) {
                 switch (lex.next()) {
                     case TOK_IDENT:
@@ -1111,7 +1027,6 @@ namespace {
         }
     }
 
-    // Consume an expression
     bool consumeExpr(TokenStreamRO& lex, bool noStructLit = false, bool statementExpr = false) {
         bool cont;
 
@@ -1121,7 +1036,6 @@ namespace {
             consumeTt(lex);
         }
 
-        // Closures
         if (lex.next() == TOK_RWORD_MOVE || lex.next() == TOK_PIPE || lex.next() == TOK_DOUBLE_PIPE) {
             lex.consumeIf(TOK_RWORD_MOVE);
             if (lex.consumeIf(TOK_PIPE)) {
@@ -1181,11 +1095,6 @@ namespace {
                 }
             } while (innerCont);
 
-            // :: -> path
-            // ident -> path
-            // '<' -> path
-            // '(' -> tt
-            // '[' -> tt
             switch (lex.next()) {
                 case TOK_RWORD_CONTINUE:
                 case TOK_RWORD_BREAK:
@@ -1225,7 +1134,6 @@ namespace {
                         consumeTt(lex);
                     } else if (lex.consumeIf(TOK_EXCLAM)) {
                         if (lex.consumeIf(TOK_IDENT)) {
-                            // yay?
                         }
                         exprIsComplete = !hasPrefix && lex.next() == TOK_BRACE_OPEN;
                         consumeTt(lex);
@@ -1249,7 +1157,6 @@ namespace {
                     lex.consume();
                     break;
 
-                // Possibly a left-open (or full-open) range literal
                 case TOK_DOUBLE_DOT:
                 case TOK_DOUBLE_DOT_EQUAL:
                 case TOK_TRIPLE_DOT:
@@ -1278,7 +1185,6 @@ namespace {
                     consumeTt(lex);
                     exprIsComplete = !hasPrefix;
                     break;
-                // A label heads a loop or a block, and nothing else.
                 case TOK_LIFETIME:
                     lex.consume();
                     if (!lex.consumeIf(TOK_COLON)) {
@@ -1400,7 +1306,6 @@ namespace {
 
             do {
                 innerCont = true;
-                // '.' ident/int
                 switch (lex.next()) {
                     case TOK_QMARK:
                         lex.consume();
@@ -1425,9 +1330,7 @@ namespace {
                             return false;
                         }
                         break;
-                    // '[' -> tt
                     case TOK_SQUARE_OPEN:
-                    // '(' -> tt
                     case TOK_PAREN_OPEN:
                         if (statementExpr && exprIsComplete) {
                             innerCont = false;
@@ -1526,10 +1429,6 @@ namespace {
             return true;
         }
 
-        // A statement fragment includes item declarations.  Try the item
-        // grammar on a checkpoint first; only advance the real stream when
-        // the complete item matched, so expression statements retain their
-        // normal interpretation.
         auto itemLex = lex.clone();
         if (consumeItem(itemLex, ItemConsumeMode::StatementFragment)) {
             while (lex.position() < itemLex.position()) {
@@ -1541,9 +1440,6 @@ namespace {
             return true;
         }
 
-        // Outer attributes are part of a statement fragment.  Item matching
-        // above consumes its own attributes; skip them here before deciding
-        // between a let statement and an expression statement.
         while (lex.next() == TOK_HASH) {
             lex.consume();
             if (lex.consumeIf(TOK_EXCLAM) || !consumeTt(lex)) {
@@ -1588,7 +1484,6 @@ namespace {
             if (lex.next() == TOK_EOF || lex.next() == TOK_PAREN_CLOSE || lex.next() == TOK_BRACE_CLOSE || lex.next() == TOK_SQUARE_CLOSE) {
                 return false;
             }
-            // NOTE: This is kinda true?
             return true;
         }
     }
@@ -1646,7 +1541,6 @@ namespace {
             lex.consumeIf(TOK_EXCLAM);
             consumeTt(lex);
         }
-        // Interpolated items
         if (lex.next() == TOK_INTERPOLATED_ITEM) {
             if (mode != ItemConsumeMode::ItemFragment) {
                 return false;
@@ -1673,7 +1567,6 @@ namespace {
             }
             return true;
         }
-        // Normal items
         if (!consumeVis(lex)) {
             return false;
         }
@@ -1682,7 +1575,6 @@ namespace {
         }
         switch (lex.next()) {
             case TOK_RWORD_USE:
-                // Lazy mode
                 while (lex.next() != TOK_SEMICOLON) {
                     lex.consume();
                 }
@@ -1703,7 +1595,6 @@ namespace {
                     return false;
                 }
                 break;
-            // impl [Foo for] Bar { ... }
             case TOK_RWORD_IMPL:
                 lex.consume();
                 if (!H::maybeGenerics(lex)) {
@@ -1724,7 +1615,6 @@ namespace {
                     return false;
                 }
                 return consumeTt(lex);
-            // type Foo
             case TOK_RWORD_TYPE:
                 lex.consume();
                 if (!lex.consumeIf(TOK_IDENT)) {
@@ -1745,7 +1635,6 @@ namespace {
                 }
 
                 break;
-            // static FOO
             case TOK_RWORD_STATIC:
                 lex.consume();
                 if (!lex.consumeIf(TOK_IDENT)) {
@@ -2091,7 +1980,6 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, c
         for (;;) {
             const auto pos = armStream.curPos();
             const auto& pat = armStream.next();
-            // NOTE: The positions seen by this aren't fully sequential, as `next` steps over jumps/loop control ops
             if (pat.is_End()) {
                 if (lex.next() != TOK_EOF) {
                     fail = true;
@@ -2140,7 +2028,6 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, c
                     stmtIsItemHistory.push_back(stmtIsItem);
                 }
             } else {
-                // Unreachable.
             }
         }
 
@@ -2156,9 +2043,6 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, c
         // TODO: Keep track of where each arm failed.
         TODO(sp, "No arm matched - " << failPos);
     } else {
-        // yay!
-
-        // NOTE: There can be multiple arms active, take the first.
         auto i = matches[0].armIndex;
         const auto& history = matches[0].conditionHistory;
         const auto& stmtIsItemHistory = matches[0].stmtIsItemHistory;
@@ -2203,7 +2087,6 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, c
                 captures.push_back(mv$(cap));
                 captureInfo.push_back(Capture{e->idx, armStream.getLoopIters(), capIdx});
             } else {
-                // Unreachable.
             }
         }
         ASSERT_BUG(sp, stmtCaptureIndex == stmtIsItemHistory.size(), "Unused statement fragment classification");
@@ -2231,11 +2114,8 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::ve
                 auto& e = (*entPtr).as_NamedValue();
                 switch (e & ~NAMEDVALUE_VALMASK) {
                     case 0:
-                        // Increment a counter in `bound_tts`
                         boundTts.incCount(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
                         break;
-                    // `${ignore($x)}` expands to nothing and takes no fragment
-                    // with it, so it uses none.
                     case NAMEDVALUE_TY_IGNORE:
                     case NAMEDVALUE_TY_MAGIC:
                     default:
@@ -2255,7 +2135,6 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::ve
                             switch (e & ~NAMEDVALUE_VALMASK) {
                                 case 0:
                                 case NAMEDVALUE_TY_IGNORE:
-                                    // Increment a counter in `bound_tts`
                                     boundTts.incCount(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
                                     break;
                                 case NAMEDVALUE_TY_MAGIC:
@@ -2295,11 +2174,9 @@ Ident::Hygiene MacroExpander::realGetHygiene() const {
 
 Token MacroExpander::realGetToken() {
     lastHygiene = hygiene_;
-    // Use m_next_token first
     if (nextToken.type() != TOK_NULL) {
         return mv$(nextToken);
     }
-    // Then try m_ttstream
     if (ttstream.get()) {
         Token rv = ttstream->getToken();
         if (rv.type() != TOK_EOF) {
@@ -2308,7 +2185,6 @@ Token MacroExpander::realGetToken() {
         ttstream.reset();
     }
 
-    // Loop to handle case where $crate expands to nothing
     while (const auto* nextEntPtr = state.nextEnt()) {
         const auto& ent = *nextEntPtr;
         switch (ent.tag()) {
@@ -2351,9 +2227,6 @@ Token MacroExpander::realGetToken() {
                         break;
                     }
                     case NAMEDVALUE_TY_IGNORE: { // `${ignore(VarName)}`
-                        // Expands to nothing: it only says which variable
-                        // drives the repetition it is in, and a variable that
-                        // repeats deeper than here still names one.
                         break;
                     }
                     case NAMEDVALUE_TY_MAGIC: // NAMEDVALUE_TY_MAGIC
@@ -2402,7 +2275,6 @@ Token MacroExpander::realGetToken() {
                             if (canSteal) {
                                 return Token(Token::TagTakeIP(), mv$(*frag));
                             } else {
-                                // Clones
                                 return Token(*frag);
                             }
                         }
@@ -2429,8 +2301,6 @@ Token MacroExpander::realGetToken() {
                             } else {
                                 tok = canSteal ? Token(Token::TagTakeIP(), mv$(*frag)) : Token(*frag);
                             }
-                            // A string literal contributes its contents, the
-                            // same as a literal spelled in the `concat`.
                             if (tok == TOK_STRING) {
                                 newIdent += tok.str();
                             } else if (tok == TOK_IDENT) {
@@ -2460,17 +2330,13 @@ Token MacroExpander::realGetToken() {
 }
 
 const MacroExpansionEnt* MacroExpandState::nextEnt() {
-    // Check offset of lowest layer
     while (offsets.size() > 0) {
         unsigned int layer = offsets.size() - 1;
         const auto& ents = *curEnts;
 
-        // Obtain current read position in layer, and increment
         size_t idx = offsets.back().readPos++;
 
-        // Check if limit has been reached
         if (idx < ents.size()) {
-            // - If not, just handle the next entry
             const auto& ent = ents[idx];
             switch (ent.tag()) {
                 case MacroExpansionEnt::TAG_Token: {
@@ -2497,7 +2363,6 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
                             ERROR(Span(), E0000, "Mismatch in loop iterations: " << thisRepeats << " != " << numRepeats);
                         }
                     }
-                    // 2. If it's going to repeat, start the loop
                     if (numRepeats > 0) {
                         offsets.push_back({0, 0, numRepeats});
                         iterations_.push_back(0);
@@ -2506,9 +2371,7 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
                     break;
                 }
             }
-            // Fall through for loop
         } else if (layer > 0) {
-            // - Otherwise, restart/end loop and fall through
             auto& curOfs = offsets.back();
             if (curOfs.loopIndex + 1 < curOfs.maxIndex) {
                 iterations_.back()++;
@@ -2520,12 +2383,9 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
                 if (loopLayer.as_Loop().joiner.type() != TOK_NULL) {
                     return &loopLayer;
                 }
-                // Fall through and restart layer
             } else {
-                // Terminate loop, fall through to lower layers
                 offsets.pop_back();
                 iterations_.pop_back();
-                // - Special case: End of macro, avoid issues
                 if (offsets.size() == 0) {
                     break;
                 }
@@ -2625,22 +2485,18 @@ bool isTokenExpr(eTokenType tt) {
         return true;
     }
     switch (tt) {
-        // Leading unary operators
-        case TOK_AMP:       // Borrow
-        case TOK_STAR:      // Deref
-        case TOK_DASH:      // Negate
-        case TOK_EXCLAM:    // Invert
-        case TOK_RWORD_BOX: // Box
-        // Composite values
+        case TOK_AMP:         // Borrow
+        case TOK_STAR:        // Deref
+        case TOK_DASH:        // Negate
+        case TOK_EXCLAM:      // Invert
+        case TOK_RWORD_BOX:   // Box
         case TOK_PAREN_OPEN:  // Parenthesised
         case TOK_SQUARE_OPEN: // Array
 
-        // Flow
         case TOK_RWORD_RETURN:
         case TOK_RWORD_BREAK:
         case TOK_RWORD_CONTINUE:
 
-        // Blocks
         case TOK_BRACE_OPEN:
         case TOK_RWORD_MATCH:
         case TOK_RWORD_IF:
@@ -2649,15 +2505,12 @@ bool isTokenExpr(eTokenType tt) {
         case TOK_RWORD_LOOP:
         case TOK_RWORD_UNSAFE:
         case TOK_RWORD_TRY:
-        // A label, which heads a loop or a block
         case TOK_LIFETIME:
 
-        // Closures
         case TOK_RWORD_MOVE:
         case TOK_PIPE:
         case TOK_DOUBLE_PIPE:
 
-        // Literal tokens
         case TOK_INTEGER:
         case TOK_FLOAT:
         case TOK_STRING:
@@ -2726,12 +2579,10 @@ bool isTokenVis(eTokenType tt) {
 MacroRulesPtr::MacroRulesPtr(MacroRules* p)
     : ptr(p)
 {
-    //::std::cout << "MRP new " << m_ptr << ::std::endl;
 }
 
 MacroRulesPtr::~MacroRulesPtr() {
     if (ptr) {
-        //::std::cout << "MRP delete " << m_ptr << ::std::endl;
         delete ptr;
         ptr = nullptr;
     }
@@ -2952,7 +2803,6 @@ namespace {
     ::std::vector<SimplePatEnt> macroPatternToSimple(const Span& sp, const ::std::vector<MacroPatEnt>& pattern);
 }
 
-/// A partially-parsed rule within a macro_rules! blcok
 struct MacroRule {
     ::std::vector<MacroPatEnt> pattern;
     Span patSpan;
@@ -2964,24 +2814,17 @@ struct MacroRule {
     MacroRule(const MacroRule&) = delete;
 };
 
-/// <summary>
-/// State used when parsing a rule pattern (passed to contents/expansion)
-/// </summary>
 struct RuleParseState {
     struct NameState {
         unsigned idx;
         std::vector<unsigned> loops;
-        /// Where the name was written. Two metavariables of the same name are
-        /// only distinct if they came from different expansions.
         Ident::Hygiene hygiene;
     };
 
     std::map<RcString, std::vector<NameState>> names;
     unsigned nextNameIndex;
 
-    /// Next loop identifier
     unsigned nextLoopIndex;
-    // Stack of current loops (indexes)
     std::vector<unsigned> loopStack;
 
     RuleParseState();
@@ -2995,7 +2838,6 @@ struct RuleParseState {
     void closeLoop();
 };
 
-/// Parse the pattern of a macro_rules! arm
 ::std::vector<MacroPatEnt> ParseMacroRulesPat(TokenStream& lex, enum eTokenType open, enum eTokenType close, RuleParseState& state) {
     Token tok;
 
@@ -3033,7 +2875,6 @@ struct RuleParseState {
                     case TOK_RWORD_CRATE: // Not valid, as `$crate` already has meaning
                         parseErrorUnexpected(lex, tok);
                     default:
-                        // NOTE: Allow any reserved word
                         if (!Token::typeIsRword(tok.type())) {
                             parseErrorUnexpected(lex, tok);
                         }
@@ -3064,8 +2905,6 @@ struct RuleParseState {
                         } else if (type == "expr") {
                             ty = MacroPatEnt::PAT_EXPR;
                         } else if (type == "expr_2021") {
-                            // The 2021 meaning of `expr`, spelled out for when a
-                            // later edition widens what `expr` matches.
                             ty = MacroPatEnt::PAT_EXPR;
                         } else if (type == "stmt") {
                             ty = MacroPatEnt::PAT_STMT;
@@ -3099,9 +2938,7 @@ struct RuleParseState {
                         GET_TOK(tok, lex); // Joiner or loop type
                         // If the token is a loop type, then it can't be a joiner
                         if (/*lex.edition_after(AST::Edition::Rust2018) &&*/ tok.type() == TOK_QMARK) {
-                            // 2018 added `?` repetition operator
                         } else if (tok.type() == TOK_PLUS || tok.type() == TOK_STAR) {
-                            // `+` and `*` were present at 1.0 (2015)
                         } else {
                             if (tok.hasData()) {
                                 ERROR(lex.pointSpan(), E0000, "Invalid macro joiner " << tok << ", must be punctuation");
@@ -3152,7 +2989,6 @@ struct ContentLoopVariableUse {
     std::vector<unsigned> loopStack;
     bool isOptional;
 
-    // Constructor for when added as part of a variable
     ContentLoopVariableUse(std::vector<unsigned> loopStack);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ContentLoopVariableUse& x) {
@@ -3323,7 +3159,6 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
     }
 }
 
-/// Parse the contents (replacement) of a macro_rules! arm
 ::std::vector<MacroExpansionEnt> ParseMacroRulesCont(TokenStream& lex, enum eTokenType open, enum eTokenType close, const RuleParseState& state, unsigned loopDepth = 0, ::std::map<unsigned int, ContentLoopVariableUse>* varUsagePtr = nullptr) {
     Token tok;
     ::std::vector<MacroExpansionEnt> ret;
@@ -3345,35 +3180,24 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
             }
             depth--;
         } else {
-            // Not a change to the depth
-            // NOTE: Not chained, still want to push open/close tokens to the output
         }
 
-        // `$` - Macro metavars
         if (tok.type() == TOK_DOLLAR) {
             GET_TOK(tok, lex);
 
-            // `$$` - an escaped dollar, which the expansion emits literally so
-            // that a macro can define a macro.
             if (tok.type() == TOK_DOLLAR) {
                 ret.push_back(MacroExpansionEnt(Token(TOK_DOLLAR)));
                 continue;
             }
 
-            // `$(`
             if (tok.type() == TOK_PAREN_OPEN) {
                 ::std::map<unsigned int, ContentLoopVariableUse> varUsage;
                 auto content = ParseMacroRulesCont(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state, loopDepth + 1, &varUsage);
-                // ^^ The above will eat the PAREN_CLOSE
 
                 GET_TOK(tok, lex);
                 enum eTokenType joiner = TOK_NULL;
-                // `?` right after `$(..)` is the repetition operator in every
-                // edition, as it is on the pattern side. What 2018 changed is
-                // that `?` may no longer be a separator.
                 if (tok.type() == TOK_QMARK) {
                 } else if (tok.type() == TOK_PLUS || tok.type() == TOK_STAR) {
-                    // `+` and `*` were present at 1.0 (2015)
                 } else {
                     joiner = tok.type();
                     GET_TOK(tok, lex);
@@ -3399,18 +3223,13 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                 }
                 bool isOptional = (loopType != '+'); // Only '+' has to be entered
 
-                // Look up the variables used in `var_set` and determine the controlling loop(s) for this loop
-                // - Pull based on current depth
                 std::set<unsigned> controllingLoops;
                 for (const auto& v : varUsage) {
                     if (v.second.loopStack.size() != 0 && loopDepth < v.second.loopStack.size()) {
-                        // Take the current point in the stack
                         controllingLoops.insert(v.second.loopStack[loopDepth]);
                     }
                 }
                 if (controllingLoops.empty()) {
-                    // quick_error 1.2.2 has a potential typo in the arm marked with "Flush buffer on meta after ident"
-                    // - This is the same as the the comment in `$foo` handling below
                     WARNING(lex.pointSpan(), W0000, "Macro loop doesn't contain any variables at this depth, omitting as it'll not run");
                     continue;
                 }
@@ -3422,7 +3241,6 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                 if (varUsagePtr) {
                     for (const auto& v : varUsage) {
                         auto it = varUsagePtr->insert(v).first;
-                        // If `is_optional`: Loop might not be expanded, so propagate the non-optionality of the variable
                         if (isOptional) {
                             it->second.isOptional = true;
                         }
@@ -3430,9 +3248,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                 }
 
                 ret.push_back(MacroExpansionEnt::make_Loop({mv$(content), joiner, mv$(controllingLoops)}));
-            }
-            // - `${operator(args}` - Extensions
-            else if (tok.type() == TOK_BRACE_OPEN) {
+            } else if (tok.type() == TOK_BRACE_OPEN) {
                 auto ident = lex.getTokenCheck(TOK_IDENT).ident().name;
                 if (ident == "ignore") {
                     lex.getTokenCheck(TOK_PAREN_OPEN);
@@ -3449,10 +3265,6 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                         TODO(lex.pointSpan(), "Handle ${ignore(" << name << ")} - Missing");
                     }
 
-                    // `${ignore($x)}` expands to nothing: it only says which
-                    // variable drives the repetition it is in, so a variable
-                    // that repeats deeper than here is still a valid answer.
-
                     if (varUsagePtr) {
                         varUsagePtr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
                     }
@@ -3466,8 +3278,6 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                     }
                     auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
                     const auto& name = nameIdent.name;
-                    // `${count($x, depth)}` counts the repetitions `depth`
-                    // levels above the values rather than the values.
                     unsigned int countDepth = 0;
                     if (lex.getTokenIf(TOK_COMMA)) {
                         countDepth = static_cast<unsigned int>(lex.getTokenCheck(TOK_INTEGER).intval().truncateU64());
@@ -3478,17 +3288,11 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                         TODO(lex.pointSpan(), "Handle ${count(" << name << ")} - Missing");
                     }
 
-                    // Can still be repeating
-                    //// If the current loop depth is smaller than the stack for this variable, then error
-                    //}
-
                     if (varUsagePtr) {
                         varUsagePtr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
                     }
                     ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_COUNT | (countDepth << NAMEDVALUE_COUNT_DEPTHSHIFT) | ns->idx));
                 } else if (ident == "index" || ident == "len") {
-                    // Both name a loop: `${index()}` and `${len()}` the
-                    // innermost one, and an argument counts levels out from it.
                     lex.getTokenCheck(TOK_PAREN_OPEN);
                     unsigned int loopDepthArg = 0;
                     if (!lex.getTokenIf(TOK_PAREN_CLOSE)) {
@@ -3499,7 +3303,6 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                 } else if (ident == "concat") {
                     ::std::vector<MacroExpansionConcatEnt> ents;
                     lex.getTokenCheck(TOK_PAREN_OPEN);
-                    // A list of identifiers (which could be expansion entries)
                     while (true) {
                         if (lex.getTokenIf(TOK_DOLLAR)) {
                             if (lex.getTokenIf(TOK_RWORD_CRATE)) {
@@ -3512,7 +3315,6 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                                 if (!ns) {
                                     TODO(lex.pointSpan(), "concat - unmapped name");
                                 } else {
-                                    // If the current loop depth is smaller than the stack for this variable, then error
                                     if (loopDepth < ns->loops.size()) {
                                         ERROR(lex.pointSpan(), E0000, "Variable $" << name << " is still repeating at this depth (" << loopDepth << " < " << ns->loops.size() << ")");
                                     }
@@ -3524,8 +3326,6 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                                 }
                             }
                         } else if (lex.lookahead(0) == TOK_STRING) {
-                            // `${concat(a, "b")}` — a string literal names its
-                            // own contents.
                             GET_CHECK_TOK(tok, lex, TOK_STRING);
                             ents.push_back(MacroExpansionConcatEnt(Ident(RcString::newInterned(tok.str()))));
                         } else {
@@ -3548,19 +3348,13 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
             } else if (tok.type() == TOK_RWORD_CRATE) {
                 ret.push_back(MacroExpansionEnt(NAMEDVALUE_MAGIC_CRATE));
             } else if (tok.type() == TOK_IDENT || Token::typeIsRword(tok.type())) {
-                // Look up the named parameter in the list of param names for this arm
                 auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
                 const auto& name = nameIdent.name;
                 const auto* ns = state.findName(nameIdent);
                 if (!ns) {
-                    // NOTE: `error-chain`'s quick_error macro has an arm which refers to an undefined metavar.
-                    // - Would emit a warning and use a marker index, but that's FAR too noisy
-
-                    // Emit the literal $ <name>
                     ret.push_back(MacroExpansionEnt(Token(TOK_DOLLAR)));
                     ret.push_back(MacroExpansionEnt(mv$(tok)));
                 } else {
-                    // If the current loop depth is smaller than the stack for this variable, then error
                     if (loopDepth < ns->loops.size()) {
                         ERROR(lex.pointSpan(), E0000, "Variable $" << name << " is still repeating at this depth (" << loopDepth << " < " << ns->loops.size() << ")");
                     }
@@ -3574,7 +3368,6 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                 PUTBACK(tok, lex);
                 ret.push_back(MacroExpansionEnt(Token(TOK_DOLLAR)));
             } else {
-                // Expected reserved word, ident, or `(`
                 parseErrorUnexpected(lex, tok);
             }
         } else {
@@ -3585,13 +3378,11 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
     return ret;
 }
 
-/// Parse a single arm of a macro_rules! block - `(foo) => (bar)`
 MacroRule ParseMacroRulesVar(TokenStream& lex) {
     Token tok;
 
     MacroRule rule;
 
-    // Pattern
     enum eTokenType close;
     switch (GET_TOK(tok, lex)) {
         case TOK_BRACE_OPEN:
@@ -3606,7 +3397,6 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
         default:
             parseErrorUnexpected(lex, tok);
     }
-    // - Pattern entries
     RuleParseState state;
     {
         auto ps = lex.startSpan();
@@ -3616,7 +3406,6 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
 
     GET_CHECK_TOK(tok, lex, TOK_FATARROW);
 
-    // Replacement
     switch (GET_TOK(tok, lex)) {
         case TOK_BRACE_OPEN:
             close = TOK_BRACE_CLOSE;
@@ -3624,7 +3413,6 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
         case TOK_PAREN_OPEN:
             close = TOK_PAREN_CLOSE;
             break;
-        // The transcriber takes any of the three delimiters, as the matcher does.
         case TOK_SQUARE_OPEN:
             close = TOK_SQUARE_CLOSE;
             break;
@@ -3655,7 +3443,6 @@ void enumerateNames(const ::std::vector<MacroPatEnt>& pats, ::std::vector<RcStri
 
 MacroRulesArm ParseMacroRulesMakeArm(Span patSp, ::std::vector<MacroPatEnt> pattern, ::std::vector<MacroExpansionEnt> contents) {
     MacroRulesCheckFollowSets(pattern.data(), pattern.size());
-    // - Convert the rule into an instruction stream
     auto ruleSequence = macroPatternToSimple(patSp, pattern);
     auto arm = MacroRulesArm(mv$(ruleSequence), mv$(contents));
     enumerateNames(pattern, arm.paramNames);
@@ -3671,16 +3458,13 @@ namespace {
     }
 }
 
-/// Parse an entire macro_rules! block into a format that exec.cpp can use
 MacroRulesPtr ParseMacroRules(TokenStream& lex) {
     Token tok;
 
-    // Parse the patterns and replacements
     ::std::vector<MacroRule> rules;
     while (lex.lookahead(0) != TOK_EOF && lex.lookahead(0) != TOK_BRACE_CLOSE) {
         rules.push_back(ParseMacroRulesVar(lex));
         GET_TOK(tok, lex);
-        // LAZY: `macro` allows comma (not `macro_rules!`) but this is strictly more permissive than rustc
         if (tok.type() != TOK_SEMICOLON && tok.type() != TOK_COMMA) {
             PUTBACK(tok, lex);
             break;
@@ -3692,7 +3476,6 @@ MacroRulesPtr ParseMacroRules(TokenStream& lex) {
     }
 
     auto rv = makeMrPtr(lex);
-    // Re-parse the patterns into a unified form
     for (auto& rule : rules) {
         rv->rules.push_back(ParseMacroRulesMakeArm(rule.patSpan, mv$(rule.pattern), mv$(rule.contents)));
     }
@@ -3741,21 +3524,11 @@ namespace {
     }
 
     enum class PatternHeadRv {
-        /// An item has been added to the output
         Closed,
-        /// Nothing was found (i.e. ran out of data)
         NotFound,
-        /// The path didn't match
         InvalidPath,
     };
 
-    // Yields all possible ExpectTok/ExpectPat entries from a pattern position
-    // Returns `true` if there's no fall-through
-    /// rv: Output vector for tokens
-    /// pattern: Input pattern (match arm or body of a repeat)
-    /// direct_pos: Position in `pattern` at which to start the search
-    /// indirect_path: Token/check path to follow before returning an item
-    /// indirect_ofs: Current offset into `indirect_path`
     PatternHeadRv macroPatternGetHeadSetInner(::std::vector<ExpTok>& rv, const ::std::vector<MacroPatEnt>& pattern, size_t directPos, const std::vector<ExpTok>& indirectPath, size_t indirectOfs) {
         for (size_t idx = directPos; idx < pattern.size(); idx++) {
             const auto& ent = pattern[idx];
@@ -3766,44 +3539,34 @@ namespace {
                             if (ent.name == "+") {
                                 return PatternHeadRv::InvalidPath;
                             } else {
-                                // The path didn't match going into the loop, so consider the next token.
                             }
                             break;
                         case PatternHeadRv::Closed:
-                            // + loops have to iterate at least once, so if the set is closed by the sub-patterns, close us too
                             if (ent.name == "+") {
                                 return PatternHeadRv::Closed;
                             } else if (ent.name == "*" || ent.name == "?") {
-                                // for * and ? loops, they can be skipped entirely.
-                                // - Don't add the separator, this arm is to capture the case where the arm isn't taken.
                             } else {
                                 BUG(Span(), "Unknown loop type " << ent.name);
                             }
                             break;
                         case PatternHeadRv::NotFound:
-                            // Reached the end of the loop without finding a token
                             indirectOfs += ent.subpats.size();
 
-                            // If the inner pattern didn't close the option set, then the next token can be the separator
                             if (ent.tok != TOK_NULL) {
-                                // If indirect is non-zero, decrement without doing anything
                                 if (indirectOfs < indirectPath.size()) {
                                     if (indirectPath[indirectOfs] != ExpTok(MacroPatEnt::PAT_TOKEN, ent.tok)) {
                                         return PatternHeadRv::InvalidPath;
                                     }
                                     indirectOfs++;
 
-                                    // If this is a loop (and not just an optional), attempt to repeat it
                                     if (ent.name != "?") {
                                         assert(ent.subpats.size() > 0);
                                         macroPatternGetHeadSetInner(rv, ent.subpats, 0, indirectPath, indirectOfs + ent.subpats.size());
                                     }
                                 } else {
                                     rv.push_back(ExpTok(MacroPatEnt::PAT_TOKEN, ent.tok));
-                                    // Don't close the set yet, could be skipped
                                 }
                             } else {
-                                // If this is a loop (and not just an optional), attempt to repeat it
                                 if (ent.name != "?") {
                                     assert(ent.subpats.size() > 0);
                                     macroPatternGetHeadSetInner(rv, ent.subpats, 0, indirectPath, indirectOfs + ent.subpats.size());
@@ -3830,9 +3593,7 @@ namespace {
 
     ::std::vector<ExpTok> macroPatternGetHeadSet(const ::std::vector<MacroPatEnt>& pattern, size_t directPos, const std::vector<ExpTok>& indirectPath) {
         ::std::vector<ExpTok> rv;
-        // If the pattern set isn't closed (hit something unconditional), then add `EOF` to it
         if (macroPatternGetHeadSetInner(rv, pattern, directPos, indirectPath, 0) != PatternHeadRv::Closed) {
-            //if(rv.empty())
             if (!::std::any_of(rv.begin(), rv.end(), [](const ExpTok& e) {
                 return e.ty == MacroPatEnt::PAT_TOKEN && e.tok == TOK_EOF;
             })) {
@@ -3878,7 +3639,6 @@ namespace {
                         skipConds.push_back(::makeVec1<SimplePatIfCheck>({ee.ty, ee.tok}));
                     }
 
-                    // - Duplicates need special handling (build up a subseqent set)
                     const size_t MAX_CONDITION_ADD = 2;
                     for (size_t iterations = 0; iterations < MAX_CONDITION_ADD; iterations++) {
                         bool didExtend = false;
@@ -3887,10 +3647,6 @@ namespace {
                             if (sIt != skipConds.end()) {
                                 didExtend = true;
 
-                                // Lowering extends the condition to construct a
-                                // deterministic stream. Rust still reports an
-                                // ambiguity at the current fragment instead of
-                                // using that extra lookahead to choose a capture.
                                 if (eIt->front().ty != MacroPatEnt::PAT_TOKEN && !eIt->front().isLocalAmbiguity()) {
                                     eIt->front().markLocalAmbiguity();
                                     sIt->front().markLocalAmbiguity();
@@ -3902,14 +3658,12 @@ namespace {
                                 }
                                 auto entryPats2 = macroPatternGetHeadSet(ent.subpats, 0, path);
                                 assert(entryPats2.size() > 0);
-                                // Replace `TOK_EOF` in entry patterns with the first skip pattern
                                 if (::std::find(entryPats2.begin(), entryPats2.end(), TOK_EOF) != entryPats2.end()) {
                                     entryPats2.erase(::std::find(entryPats2.begin(), entryPats2.end(), TOK_EOF));
                                     entryPats2.insert(entryPats2.end(), skipPats1.begin(), skipPats1.end());
                                 }
                                 auto skipPats2 = macroPatternGetHeadSet(pattern, idx + 1, path);
                                 assert(skipPats2.size() > 0);
-                                // Update the current element for both of them, and add new elements to the end of each list
                                 {
                                     auto e2It = entryPats2.begin();
                                     eIt->push_back({e2It->ty, e2It->tok});
@@ -3934,14 +3688,12 @@ namespace {
                             break;
                         }
                     }
-                    // - If there's three-level needed, error?
                     for (auto eIt = entryConds.begin(); eIt != entryConds.end(); ++eIt) {
                         auto sIt = ::std::find(skipConds.begin(), skipConds.end(), *eIt);
                         if (sIt != skipConds.end()) {
                             TODO(ent.sp, "Entry and skip patterns share an entry (max extend " << MAX_CONDITION_ADD << "), ambigious - " << *eIt);
                         }
                     }
-                    // - Generate the repeat condition set
                     if (ent.tok != TOK_NULL) {
                         // NOTE: If the separator is also allowed after the list, then this can't just check for the separator
                         for (const auto& p : entryConds) {
@@ -3960,7 +3712,6 @@ namespace {
                     }
                     // TODO: Combine the two cases below into one?
 
-                    // If the loop is a $()+ loop, then just recurse into it
                     if (ent.name == "+") {
                         push(SimplePatEnt::make_LoopStart({ent.nameIndex}));
                         size_t start = rv.size();
@@ -3973,7 +3724,6 @@ namespace {
                                 for (const auto& ee : repeatConds) {
                                     pushIfv(true, ee, expectAndJumpPos);
                                 }
-                                // If any of the above succeeded, they'll jump past this jump to the ExpectTok
                                 push(SimplePatEnt::make_Jump({~0u}));
                             } else {
                                 pushIfv(false, repeatConds.front(), ~0u);
@@ -4004,16 +3754,11 @@ namespace {
                     } else if (ent.name == "*" || ent.name == "?") {
                         push(SimplePatEnt::make_LoopStart({ent.nameIndex}));
 
-                        // Options:
-                        // - Enter the loop (if the next token is one of the head set of the loop)
-                        // - Skip the loop (the next token is the head set of the subsequent entries)
                         size_t rewriteStart = rv.size();
                         if (entryConds.size() == 1 && entryConds[0].back().tok != TOK_EOF) // HACK: if the entry ends with `EOF` then it won't be correct
                         {
-                            // If not the entry pattern, skip.
                             pushIfv(false, entryConds.front(), ~0u);
                         } else if (skipConds.empty()) {
-                            // No skip patterns, try all entry patterns
                             size_t start = rv.size() + entryConds.size() + 1;
                             for (const auto& p : entryConds) {
                                 pushIfv(true, p, start);
@@ -4031,25 +3776,20 @@ namespace {
                         if (ent.name == "*") {
                             if (ent.tok != TOK_NULL) {
                                 if (repeatConds.size() == 1) {
-                                    // If not a repeat, jump out
                                     for (const auto& ee : repeatConds) {
                                         pushIfv(/*is_equal*/ false, ee, ~0u);
                                     }
                                     push(SimplePatEnt::make_ExpectTok(ent.tok));
                                 } else {
-                                    // Multiple repeat conditions
-                                    // - If any repeat condition matches, then jump to a consume
                                     auto checkPos = rv.size() + repeatConds.size() + 1;
                                     for (const auto& ee : repeatConds) {
                                         pushIfv(/*is_equal*/ true, ee, checkPos);
                                     }
-                                    // - If none of the above matched, then jump out of the loop
                                     push(SimplePatEnt::make_Jump({~0u}));
                                     assert(rv.size() == checkPos);
                                     push(SimplePatEnt::make_ExpectTok(ent.tok));
                                 }
                             }
-                            // Jump back to the entry check.
                             push(SimplePatEnt::make_Jump({rewriteStart}));
                         } else if (ent.name == "?") {
                             ASSERT_BUG(sp, ent.tok == TOK_NULL, "$()? with a separator isn't valid");
@@ -4088,7 +3828,6 @@ namespace {
                 auto& tuMatch = rv[i];
                 switch (tuMatch.tag()) {
                     default:
-                        // Ignore
                         break;
                     case SimplePatEnt::TAG_If: {
                         auto& e = tuMatch.as_If();
@@ -4118,7 +3857,6 @@ MacroPatEnt::MacroPatEnt()
 {
 }
 
-// Literal token
 MacroPatEnt::MacroPatEnt(Span sp, Token tok)
     : sp(mv$(sp))
     , tok(mv$(tok))
@@ -4126,7 +3864,6 @@ MacroPatEnt::MacroPatEnt(Span sp, Token tok)
 {
 }
 
-// Variable reference
 MacroPatEnt::MacroPatEnt(Span sp, RcString name, unsigned int nameIndex, Type type)
     : sp(mv$(sp))
     , name(mv$(name))
@@ -4136,7 +3873,6 @@ MacroPatEnt::MacroPatEnt(Span sp, RcString name, unsigned int nameIndex, Type ty
 {
 }
 
-// Loop/optional
 MacroPatEnt::MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, ::std::vector<MacroPatEnt> ents)
     : sp(mv$(sp))
     , name(op)
@@ -4342,17 +4078,13 @@ auto TokenStreamRO::consume() -> void {
         }
 
         activeOffset++;
-        // If reached the end of a tree...
         if (activeOffset == curTree->size()) {
-            // If the end of the root is reached, return (leaving the state indicating EOS)
             if (offsets.empty()) {
                 return;
             }
-            // Pop and continue
             activeOffset = offsets.back();
             offsets.pop_back();
         } else {
-            // Dig into nested trees
             while (!(*curTree)[activeOffset].isToken()) {
                 curTree = &(*curTree)[activeOffset];
                 offsets.push_back(activeOffset);
@@ -4396,7 +4128,6 @@ auto RuleParseState::addName(const Ident& ident) -> unsigned {
     unsigned idx = this->nextNameIndex++;
     auto& list = this->names[ident.name];
     for (const auto& e : list) {
-        // The same name from the same place twice really is a duplicate.
         assert(e.hygiene != ident.hygiene);
     }
     list.push_back(NameState{idx, this->loopStack, ident.hygiene});
@@ -4408,9 +4139,6 @@ auto RuleParseState::findName(const Ident& ident) const -> const NameState* {
     if (it == this->names.end() || it->second.empty()) {
         return nullptr;
     }
-    // Prefer the one written in the same place; a single candidate answers
-    // whatever context asks, which is what a name that never came through
-    // another macro needs.
     for (const auto& e : it->second) {
         if (e.hygiene == ident.hygiene) {
             return &e;

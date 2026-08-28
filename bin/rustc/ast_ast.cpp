@@ -144,7 +144,6 @@ void ASTAttribute::parseParenIdentListCb(ASTAttributeIdentCallback& itemCb) cons
     lex.getTokenCheck(TOK_PAREN_CLOSE);
 }
 
-// ---
 ASTVisibility ASTVisibility::makeGlobal() {
     return ASTVisibility();
 }
@@ -235,8 +234,6 @@ void ASTVisibility::inplaceUnion(const ASTVisibility& x) {
         TODO(Span(), "Union with incompatible visbility");
     }
 }
-
-// ---
 
 ASTStructItem ASTStructItem::clone() const {
     return ASTStructItem(attrs.clone(), vis, name, type->clone(), defaultValue.clone());
@@ -338,12 +335,20 @@ ASTEnum ASTEnum::clone() const {
             }
             case ASTEnumVariantData::TAG_Tuple: {
                 auto& e = var.data.as_Tuple();
-                decltype(e.items) newSt; for (const auto& f : e.items) newSt.push_back(f.clone()); newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name, mv$(newSt)));
+                decltype(e.items) newSt;
+                for (const auto& f : e.items) {
+                    newSt.push_back(f.clone());
+                }
+                newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name, mv$(newSt)));
                 break;
             }
             case ASTEnumVariantData::TAG_Struct: {
                 auto& e = var.data.as_Struct();
-                decltype(e.fields) newFields; for (const auto& f : e.fields) newFields.push_back(f.clone()); newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name, mv$(newFields)));
+                decltype(e.fields) newFields;
+                for (const auto& f : e.fields) {
+                    newFields.push_back(f.clone());
+                }
+                newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name, mv$(newFields)));
                 break;
             }
         }
@@ -361,12 +366,20 @@ ASTStruct ASTStruct::clone() const {
         }
         case ASTStructData::TAG_Tuple: {
             auto& e = data.as_Tuple();
-            decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return ASTStruct(params_.clone(), mv$(newFields));
+            decltype(e.ents) newFields;
+            for (const auto& f : e.ents) {
+                newFields.push_back(f.clone());
+            }
+            return ASTStruct(params_.clone(), mv$(newFields));
             break;
         }
         case ASTStructData::TAG_Struct: {
             auto& e = data.as_Struct();
-            decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return ASTStruct(params_.clone(), mv$(newFields));
+            decltype(e.ents) newFields;
+            for (const auto& f : e.ents) {
+                newFields.push_back(f.clone());
+            }
+            return ASTStruct(params_.clone(), mv$(newFields));
             break;
         }
     }
@@ -707,14 +720,6 @@ std::ostream& operator<<(std::ostream& os, const GenericParam& x) {
     return os;
 }
 
-//int GenericParams::find_name(const char* name) const
-//{
-//    for( unsigned int i = 0; i < m_type_params.size(); i ++ )
-//    {
-//        if( m_type_params[i].name() == name )
-//    }
-//}
-
 ::std::ostream& operator<<(::std::ostream& os, const ASTGenericParams& tps) {
     return os << "<" << tps.params << "> where {" << tps.bounds << "}";
 }
@@ -731,8 +736,6 @@ ASTAttributeList::ASTAttributeList(ASTAttributeList&&) = default;
 ASTAttributeList& ASTAttributeList::operator=(ASTAttributeList&&) = default;
 ASTAttributeList::ASTAttributeList(const ASTAttributeList&) = default;
 
-//StructItem() {}
-
 ASTStructItem::ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExpr defaultValue)
     : attrs(mv$(attrs))
     , vis(mv$(vis))
@@ -742,8 +745,6 @@ ASTStructItem::ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString
 {
 }
 
-//TupleItem() {}
-
 ASTTupleItem::ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, ASTType* ty)
     : attrs(mv$(attrs))
     , vis(mv$(vis))
@@ -751,7 +752,6 @@ ASTTupleItem::ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, ASTType* t
 {
 }
 
-//TypeAlias() {}
 ASTTypeAlias::ASTTypeAlias(ASTGenericParams params, ASTType* type)
     : params_(std::move(params))
     , type_(std::move(type))
@@ -821,7 +821,6 @@ ASTFunction::Flags ASTFunction::Flags::setGen() const {
     return rv;
 }
 
-// Helper for derive, defines an ABI_RUST function with no generics
 ASTFunction::ASTFunction(Span sp, ASTType* retType, Arglist args)
     : ASTFunction(sp, ABI_RUST, Flags(), ASTGenericParams(), std::move(retType), std::move(args), false)
 {

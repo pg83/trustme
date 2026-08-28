@@ -1,9 +1,10 @@
-#include <std/sys/types.h>
 #include "unicode_nfc.h"
 
-#include <algorithm>
-#include <cstdint>
+#include <std/sys/types.h>
+
 #include <vector>
+#include <cstdint>
+#include <algorithm>
 
 namespace {
     struct UnicodeCombining {
@@ -14,7 +15,6 @@ namespace {
     struct UnicodeDecomposition {
         u32 codepoint;
         u32 first;
-        /// Zero for a singleton decomposition.
         u32 second;
     };
 
@@ -26,8 +26,6 @@ namespace {
 
 #include "unicode_nfc_tables.inc"
 
-    // Hangul syllables are decomposed and composed arithmetically, not from a
-    // table.
     constexpr u32 HANGUL_S_BASE = 0xAC00;
     constexpr u32 HANGUL_L_BASE = 0x1100;
     constexpr u32 HANGUL_V_BASE = 0x1161;
@@ -39,34 +37,29 @@ namespace {
     constexpr u32 HANGUL_S_COUNT = HANGUL_L_COUNT * HANGUL_N_COUNT;
 
     u8 combiningClass(u32 codepoint) {
-        const auto* found = ::std::lower_bound(::std::begin(COMBINING), ::std::end(COMBINING), codepoint,
-            [](const UnicodeCombining& entry, u32 value) {
-                return entry.codepoint < value;
-            });
+        const auto* found = ::std::lower_bound(::std::begin(COMBINING), ::std::end(COMBINING), codepoint, [](const UnicodeCombining& entry, u32 value) {
+            return entry.codepoint < value;
+        });
         return found != ::std::end(COMBINING) && found->codepoint == codepoint ? found->cls : 0;
     }
 
     const UnicodeDecomposition* decompositionOf(u32 codepoint) {
-        const auto* found = ::std::lower_bound(::std::begin(DECOMPOSITIONS), ::std::end(DECOMPOSITIONS), codepoint,
-            [](const UnicodeDecomposition& entry, u32 value) {
-                return entry.codepoint < value;
-            });
+        const auto* found = ::std::lower_bound(::std::begin(DECOMPOSITIONS), ::std::end(DECOMPOSITIONS), codepoint, [](const UnicodeDecomposition& entry, u32 value) {
+            return entry.codepoint < value;
+        });
         return found != ::std::end(DECOMPOSITIONS) && found->codepoint == codepoint ? found : nullptr;
     }
 
     u32 composedPair(u32 first, u32 second) {
-        if (HANGUL_L_BASE <= first && first < HANGUL_L_BASE + HANGUL_L_COUNT && HANGUL_V_BASE <= second
-            && second < HANGUL_V_BASE + HANGUL_V_COUNT) {
+        if (HANGUL_L_BASE <= first && first < HANGUL_L_BASE + HANGUL_L_COUNT && HANGUL_V_BASE <= second && second < HANGUL_V_BASE + HANGUL_V_COUNT) {
             return HANGUL_S_BASE + ((first - HANGUL_L_BASE) * HANGUL_V_COUNT + (second - HANGUL_V_BASE)) * HANGUL_T_COUNT;
         }
-        if (HANGUL_S_BASE <= first && first < HANGUL_S_BASE + HANGUL_S_COUNT && (first - HANGUL_S_BASE) % HANGUL_T_COUNT == 0
-            && HANGUL_T_BASE < second && second < HANGUL_T_BASE + HANGUL_T_COUNT) {
+        if (HANGUL_S_BASE <= first && first < HANGUL_S_BASE + HANGUL_S_COUNT && (first - HANGUL_S_BASE) % HANGUL_T_COUNT == 0 && HANGUL_T_BASE < second && second < HANGUL_T_BASE + HANGUL_T_COUNT) {
             return first + (second - HANGUL_T_BASE);
         }
-        const auto* found = ::std::lower_bound(::std::begin(COMPOSITIONS), ::std::end(COMPOSITIONS), first,
-            [](const UnicodeComposition& entry, u32 value) {
-                return entry.first < value;
-            });
+        const auto* found = ::std::lower_bound(::std::begin(COMPOSITIONS), ::std::end(COMPOSITIONS), first, [](const UnicodeComposition& entry, u32 value) {
+            return entry.first < value;
+        });
         for (; found != ::std::end(COMPOSITIONS) && found->first == first; ++found) {
             if (found->second == second) {
                 return found->composed;
@@ -95,7 +88,6 @@ namespace {
         out.push_back(codepoint);
     }
 
-    /// Sort each run of combining marks by class, keeping equal classes in order.
     void orderCanonically(::std::vector<u32>& text) {
         for (size_t i = 1; i < text.size(); i++) {
             const auto cls = combiningClass(text[i]);
@@ -123,8 +115,6 @@ namespace {
         size_t out = 1;
         for (size_t i = 1; i < text.size(); i++) {
             const auto cls = combiningClass(text[i]);
-            // A mark may only compose with the starter when nothing between them
-            // blocks it: no earlier mark of the same or a higher class.
             if (lastClass < cls || (lastClass == 0 && cls == 0)) {
                 if (const auto composed = composedPair(text[starter], text[i])) {
                     text[starter] = composed;
@@ -158,8 +148,6 @@ namespace {
         }
     }
 
-    /// Decode UTF-8. Malformed input is not this file's business to diagnose: a
-    /// bad byte becomes its own codepoint so the text survives unchanged.
     ::std::vector<u32> decodeUtf8(const ::std::string& text) {
         ::std::vector<u32> out;
         out.reserve(text.size());

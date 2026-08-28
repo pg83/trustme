@@ -34,7 +34,6 @@ TokenTree TokenTree::clone() const {
         return os << tt.tok_.toStr();
     } else {
         os << "/*" << tt.edition << " " << tt.hygiene_ << " TT*/";
-        // NOTE: All TTs (except the outer tt on a macro invocation) include the grouping
         bool first = true;
         for (const auto& i : tt.subtrees) {
             if (!first) {

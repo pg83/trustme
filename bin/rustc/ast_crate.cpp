@@ -4,9 +4,9 @@
 #include "hir_hir.h" // HIR::Crate
 #include "settings.h"
 #include "expand_cfg.h"
+#include "wire_board.h"
 #include "parse_parseerror.h"
 #include "hir_main_bindings.h" // HIR_Deserialise
-#include "wire_board.h"
 
 #include <fstream>
 #include <dirent.h>
@@ -77,16 +77,10 @@ void ASTCrate::loadExterns(Settings& settings) {
             }
         }
     };
-    // Crate-level cfg is applied during expansion, but explicit extern crates
-    // are loaded before expansion. Do not require externs from a crate whose
-    // entire contents will be removed.
     if (checkItemCfg(settings, attrs)) {
         iterateModule(settings, rootModule_, cb);
     }
 
-    // Check for no_std or no_core, and load libstd/libcore
-    // - Duplicates some of the logic in "Expand", but also helps keep crate loading separate to most of expand
-    // NOTE: Not all crates are loaded here, any crates loaded by macro invocations will be done during expand.
     bool noStd = false;
     bool noCore = false;
 
@@ -110,29 +104,19 @@ void ASTCrate::loadExterns(Settings& settings) {
     }
 
     if (noCore) {
-        // Don't load anything
     } else if (noStd) {
         auto n = this->loadExternCrate(settings, Span(), "core");
-        //}
     } else {
         auto n = this->loadExternCrate(settings, Span(), "std");
-        //}
     }
 
-    // `--crate` populates the availability table but does not put a name in
-    // the source extern prelude.  Only `--extern` aliases are loaded here.
     settings.crateOverrides.visit([&](const CrateOverride& entry) {
         if (!entry.isExtern) {
             return;
         }
-        // A path that names no file is only an error if the crate is used:
-        // `--extern Name=/nowhere` on a crate that never mentions `Name` is
-        // accepted, and a mention of it fails to find the crate as usual.
         if (entry.target != "") {
             const auto* target = settings.findCrateOverride(entry.target);
-            const auto path = target && target->metadataPath != ""
-                ? target->metadataPath
-                : entry.target;
+            const auto path = target && target->metadataPath != "" ? target->metadataPath : entry.target;
             if (!::std::ifstream(path.c_str()).good()) {
                 return;
             }
@@ -148,14 +132,11 @@ void ASTCrate::loadExterns(Settings& settings) {
 // TODO: Handle disambiguating crates with the same name (e.g. libc in std and crates.io libc)
 // - Crates recorded in rlibs should specify a hash/tag that's passed in to this function.
 RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& name, const ::std::string& basename /*=""*/) {
-
     ::std::string path;
     auto* entry = settings.findCrateOverride(name);
     const CrateOverride* artifacts = nullptr;
     RcString expectedName;
 
-    // An exact `--crate unique=path` always wins, including for a recursive
-    // dependency whose old metadata still carries a basename.
     if (entry && entry->metadataPath != "") {
         path = entry->metadataPath.c_str();
         artifacts = entry;
@@ -163,10 +144,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         if (!::std::ifstream(path).good()) {
             ERROR(sp, E0000, "Unable to open crate '" << name << "' at path " << path);
         }
-    }
-    // Resolve a source alias through the exact table.  If there is no such
-    // exact entry, the RHS is a legacy `--extern alias=path`.
-    else if (entry && entry->target != "") {
+    } else if (entry && entry->target != "") {
         auto* target = settings.findCrateOverride(entry->target);
         if (target && target->metadataPath != "") {
             path = target->metadataPath.c_str();
@@ -178,10 +156,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         if (!::std::ifstream(path).good()) {
             ERROR(sp, E0000, "Unable to open crate '" << name << "' at path " << path);
         }
-    }
-    // If the filename is known, then search for that in the search directories
-    // - Checks the crate name of each to ensure a match
-    else if (basename != "") {
+    } else if (basename != "") {
         bool hasExactCrates = false;
         settings.crateOverrides.visit([&](const CrateOverride& entry) {
             hasExactCrates |= entry.metadataPath != "";
@@ -189,12 +164,10 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         if (hasExactCrates) {
             ERROR(sp, E0000, "Crate '" << name << "' is missing from the explicit --crate table");
         }
-        // Search a list of load paths for the crate
         for (const auto& p : settings.crateLoadDirs) {
             path = p + "/" + basename;
 
             if (::std::ifstream(path).good()) {
-                // Ensure that if this is loaded, it yields the right name (otherwise skip)
                 auto n = HIRDeserialiseJustName(path);
                 if (n == name) {
                     break;
@@ -212,7 +185,6 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         auto directFilename = FMT("lib" << name << RLIB_SUFFIX);
         auto directFilenameSo = FMT("lib" << name << RDYLIB_SUFFIX);
         auto namePrefix = FMT("lib" << name << "-");
-        // Search a list of load paths for the crate
         for (const auto& p : settings.crateLoadDirs) {
             path = p + "/" + directFilename;
             if (::std::ifstream(path).good()) {
@@ -226,7 +198,6 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
             }
             path = "";
 
-            // Search for `p+"/lib"+name+"-*.rlib" (which would match e.g. libnum-0.11.rlib)
             auto dp = opendir(p.c_str());
             if (!dp) {
                 continue;
@@ -235,22 +206,16 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
             while ((ent = readdir(dp)) != nullptr && path == "") {
                 const auto* fname = ent->d_name;
 
-                // AND the start is "lib"+name
                 size_t len = strlen(fname);
                 if (len > (sizeof(RLIB_SUFFIX) - 1) && strcmp(fname + len - (sizeof(RLIB_SUFFIX) - 1), RLIB_SUFFIX) == 0) {
-                    // A new proc-macro executable has a `.rlib` metadata
-                    // companion. The executable is the legacy -L artifact;
-                    // metadataFilename() will find its companion when loading.
-                    if (len > strlen(PLUGIN_SUFFIX RLIB_SUFFIX)
-                        && strcmp(fname + len - strlen(PLUGIN_SUFFIX RLIB_SUFFIX), PLUGIN_SUFFIX RLIB_SUFFIX) == 0) {
+                    if (len > strlen(PLUGIN_SUFFIX RLIB_SUFFIX) && strcmp(fname + len - strlen(PLUGIN_SUFFIX RLIB_SUFFIX), PLUGIN_SUFFIX RLIB_SUFFIX) == 0) {
                         auto pluginPath = p + "/" + fname;
                         pluginPath.resize(pluginPath.size() - strlen(RLIB_SUFFIX));
                         if (::std::ifstream(pluginPath).good()) {
                             continue;
                         }
                     }
-                    if (len > strlen(RDYLIB_SUFFIX RLIB_SUFFIX)
-                        && strcmp(fname + len - strlen(RDYLIB_SUFFIX RLIB_SUFFIX), RDYLIB_SUFFIX RLIB_SUFFIX) == 0) {
+                    if (len > strlen(RDYLIB_SUFFIX RLIB_SUFFIX) && strcmp(fname + len - strlen(RDYLIB_SUFFIX RLIB_SUFFIX), RDYLIB_SUFFIX RLIB_SUFFIX) == 0) {
                         auto dylibPath = p + "/" + fname;
                         dylibPath.resize(dylibPath.size() - strlen(RLIB_SUFFIX));
                         if (::std::ifstream(dylibPath).good()) {
@@ -263,7 +228,6 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
                     continue;
                 }
 
-                // Check if the entry ends with .rlib
                 if (strncmp(namePrefix.c_str(), fname, namePrefix.size()) != 0) {
                     continue;
                 }
@@ -284,7 +248,6 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
         path = paths.front();
     }
 
-    // NOTE: Creating `ExternCrate` loads the crate from the specified path
     auto ec = ASTExternCrate{wb.id, hirPool, types, name, path};
     auto realName = ec.hir->crateName;
     assert(realName != "");
@@ -303,23 +266,19 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
     }
     auto res = externCrates.insert(::std::make_pair(realName, mv$(ec)));
     if (!res.second) {
-        // Crate already loaded?
         return realName;
     }
     auto& extCrate = res.first->second;
     const auto& crateExtList = extCrate.hir->extCrates;
 
-    // Load referenced crates
     for (const auto& ext : crateExtList) {
         if (externCrates.count(ext.first) == 0) {
             const auto loadName = this->loadExternCrate(settings, sp, ext.first, ext.second.basename);
             if (loadName != ext.first) {
-                // ERROR - The crate loaded wasn't the one that was used when compiling this crate.
                 ERROR(sp, E0000, "The crate file `" << ext.second.basename << "` didn't load the expected crate - have " << loadName << " != exp " << ext.first);
             }
         }
     }
-    // NOTE: Add the crate to the ordered list AFTER its dependencies
     externCratesOrd.push_back(realName);
 
     if (extCrate.shortName == "core") {
@@ -346,9 +305,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
     return realName;
 }
 
-ASTExternCrate::ASTExternCrate(u32& id,
-    ObjPool* pool, HIRTypeInterner& types, const RcString& name,
-    const ::std::string& path)
+ASTExternCrate::ASTExternCrate(u32& id, ObjPool* pool, HIRTypeInterner& types, const RcString& name, const ::std::string& path)
     : name(name)
     , shortName(name)
     , filename(path)

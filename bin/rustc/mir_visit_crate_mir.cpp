@@ -3,7 +3,6 @@
 #include "hir_expr.h"
 #include "wire_board.h"
 
-// NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
 void MIROuterVisitor::visitExpr(HIRExprPtr& exp) {
     BUG(Span(), "visit_expr hit in OuterVisitor");
 }
@@ -20,8 +19,6 @@ HIRTypeRef MIROuterVisitor::visitType(HIRTypeRef ty) {
         }
         return resolve_.hirCrate().types.intern(mv$(data));
     }
-    // Const-generic expressions inside types still need MIR generation via
-    // the visitConstgeneric hook.
     return visitTypeDefaultViaHooks(ty);
 }
 
@@ -35,7 +32,6 @@ void MIROuterVisitor::visitConstgeneric(HIRConstGeneric& value) {
 void MIROuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
     auto _ = this->resolve_.setItemGenerics(item.params);
     if (item.code || item.code.mir) {
-
         HIRTypeRef tmp;
         const auto& sp = item.code ? item.code->span() : Span();
         const auto& retTy = resolve_.fixTraitDefaultReturn(sp, p, item.returnType, tmp);

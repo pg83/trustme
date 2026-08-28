@@ -356,14 +356,11 @@ HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySiz
         } else if (se->is_Unevaluated()) {
             sz = HIRConstGeneric(std::make_unique<HIRConstGenericUnevaluated>(se->as_Unevaluated()->monomorph(sp, *this, true)));
         } else {
-            // Routes const inference variables through the virtual hook so a
-            // canonicalising monomorphiser sees array sizes too.
             sz = this->monomorphConstgeneric(sp, *se, true);
         }
         se = sz.opt_Unevaluated();
         assert(se);
 
-        // Evaluate, if possible
         if (se->is_Unevaluated()) {
             if (this->constevalWb) {
                 ConvertHIRConstantEvaluateConstGeneric(sp, *this->constevalWb, *this->constevalWb->crate, types.primitive(HIRCoreType::Usize), sz.as_Unevaluated());
@@ -477,9 +474,6 @@ HIRConstGeneric MonomorphiserPP::getValue(const Span& sp, const HIRGenericRef& v
     }
 }
 
-//t_cb_generic MonomorphState::get_cb(const Span& sp) const
-//{
-//}
 ::std::ostream& operator<<(::std::ostream& os, const MonomorphState& ms) {
     os << "MonomorphState {";
     if (ms.selfTy != HIRTypeRef()) {
@@ -600,10 +594,6 @@ bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRTypeData* 
     UNREACHABLE();
 }
 
-// For these binary language operations, once the left-hand type is known
-// it also fixes an otherwise untyped right-hand operand. Shifts are
-// deliberately excluded: their right-hand side need only be an integer
-// and may have a different type.
 bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const HIRTypeData* left) {
     const auto* primitive = left->opt_Primitive();
     const auto numeric = primitive && (isInteger(*primitive) || isFloat(*primitive));
@@ -648,9 +638,6 @@ bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const HIRType
     UNREACHABLE();
 }
 
-// A binary language candidate is available either when both operands are
-// already known to be valid primitive inputs, or when the known lhs
-// determines the still-inferred rhs.
 bool primitiveOperatorHasLanguageCandidate(TypeckPrimitiveOperator op, const HIRTypeData* left, const HIRTypeData* right) {
     return primitiveOperatorHasBuiltin(op, left, right) || (right->is_Infer() && primitiveOperatorLhsDeterminesRhs(op, left));
 }
@@ -891,7 +878,6 @@ auto TyVisitor<W>::visitType(const HIRTypeData* ty) -> bool {
                 return visitType(e.rettype);
             }
             case HIRTypeData::TAG_NodeType: {
-                // These just have a node pointer, no visiting
                 break;
             }
         }

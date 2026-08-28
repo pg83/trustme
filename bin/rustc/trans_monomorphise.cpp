@@ -125,7 +125,6 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
 
     MIRFunction output;
 
-    // 1. Monomorphise locals and temporaries
     output.locals.reserve(tpl->locals.size());
     for (const auto& var : tpl->locals) {
         output.locals.push_back(params.monomorph(resolve, var));
@@ -133,7 +132,6 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
     output.dropFlags = tpl->dropFlags;
 
     Cloner c{sp, resolve, params};
-    // 2. Monomorphise all paths
     output.blocks.reserve(tpl->blocks.size());
     for (const auto& block : tpl->blocks) {
         ::std::vector<MIRStatement> statements;
@@ -141,7 +139,6 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
         statements.reserve(block.statements.size());
         for (const auto& stmt : block.statements) {
             switch (stmt.tag()) {
-                // LAZY: These _should_ be in `clone_stmt`, but they're not needed in optimising and MIR cloning
                 break;
                 case MIRStatement::TAG_SaveDropFlag: {
                     auto& e = stmt.as_SaveDropFlag();
@@ -167,7 +164,6 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
     return MIRFunctionPointer(box$(output).release());
 }
 
-/// Monomorphise all values and functions in a TransList.
 void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list, unsigned mirOptLevel) {
     ::StaticTraitResolve resolve{wb, OpaqueReveal::All};
 
@@ -185,7 +181,6 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         }
 
         HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override {
-            // Ensure that the type is in enumeration (it should have been, but maybe not?)
             out.addType(type, false);
             auto name = RcString::newInterned(FMT("ConstEvalMonomorph#" << count));
             count++;
@@ -209,11 +204,6 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
     ::std::set<const TransListStatic*> evaluatedStatics;
     size_t insertedStatics = 0;
 
-    // CTFE can materialise a global allocation containing relocations to
-    // translation items that were absent from the initial graph.  Enumerating
-    // those items can in turn expose more monomorphised constants, so drive
-    // value evaluation and late enumeration to a fixpoint before touching
-    // function MIR.
     bool changed;
     do {
         changed = false;
@@ -222,8 +212,6 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         // yet. Defer relocation enumeration until those statics are present.
         Vector<const EncodedLiteral*> generatedLiterals;
 
-        // Reverse order is intentional: const-eval commonly needs constants
-        // referenced by a later entry to have been evaluated first.
         for (auto& ent : reverse(list.constants)) {
             if (!evaluatedConstants.insert(ent.second.get()).second) {
                 continue;
@@ -294,10 +282,6 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         }
     } while (changed);
 
-    // MIR cleanup can make a previously generic coercion concrete and insert
-    // translation paths such as `<T as Trait>::vtable#`.  Those paths do not
-    // exist in the pre-monomorphisation MIR, so collect and prepare them until
-    // the translation graph reaches a fixed point.
     ::std::set<const TransListFunction*> processedFunctions;
     while (processedFunctions.size() < list.functions.size()) {
         Vector<const TransListFunction*> generatedFunctions;
@@ -308,7 +292,6 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             }
 
             const auto& fcn = *transFcn->ptr;
-            // Trait methods (which are the only case where `Self` can exist in the argument list at this stage) always need to be monomorphised.
             bool isMethod = (fcn.args.size() > 0 && visitTyWith(fcn.args[0].second, [&](const auto& x) {
                 return x == crate.types.self();
             }));

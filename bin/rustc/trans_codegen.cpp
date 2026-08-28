@@ -88,8 +88,6 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
         BUG(sp, "Unknown codegen mode '" << opt.mode << "'");
     }
 
-    // 1. Emit structure/type definitions.
-    // - Emit in the order they're needed.
     for (const auto& ty : list.types) {
         if (ty.second) {
             codegen->emitTypeProto(ty.first);
@@ -130,12 +128,7 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
         codegen->emitTypeId(ty);
     }
     list.typeids.clear();
-    // Emit required constructor methods (and other wrappers)
     for (const auto& path : list.constructors) {
-        // Get the item type
-        // - Function (must be an intrinsic)
-        // - Struct (must be a tuple struct)
-        // - Enum variant (must be a tuple variant)
         const HIRModule* modPtr = nullptr;
         if (path.path.components().size() > 1) {
             const auto& nse = cratePtr->getTypeitemByPath(sp, path.path, false, true);
@@ -149,7 +142,6 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
             modPtr = &cratePtr->getModByPath(sp, path.path, true);
         }
 
-        // Not an enum, currently must be a struct
         const auto& te = modPtr->modItems.at(path.path.components().back())->ent;
         codegen->emitConstructorStruct(sp, path, te.as_Struct());
     }
@@ -158,7 +150,6 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
     FunctionOrder functionOrder(wb, list, sp);
     const bool orderedFunctions = opt.mode == "c";
 
-    // 2. Emit function prototypes
     if (orderedFunctions) {
         for (const auto* node : functionOrder.ordered) {
             if (!node->needsPrototype) {
@@ -173,14 +164,12 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
         for (const auto& ent : list.functions) {
             assert(ent.second->ptr);
             const auto& fcn = *ent.second->ptr;
-            // Extern if there isn't any HIR
             bool isExtern = !static_cast<bool>(fcn.code);
             if (fcn.code.mir && !ent.second->forcePrototype) {
                 codegen->emitFunctionProto(ent.first, fcn, ent.second->pp, isExtern);
             }
         }
     }
-    // - External functions
     for (const auto& ent : list.functions) {
         assert(ent.second->ptr);
         const auto& fcn = *ent.second->ptr;
@@ -194,9 +183,7 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
             }
         }
     }
-    // VTables (may be needed by statics)
     assert(list.vtables.empty());
-    // 3. Emit statics
     for (const auto& ent : list.statics) {
         assert(ent.second->ptr);
         const auto& stat = *ent.second->ptr;
@@ -223,14 +210,11 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
         emitStaticDefinitions();
     }
 
-    // 4. Emit function code
     auto emitFunctionDefinition = [&](const TransListFunction& function, bool hasPrototype) {
         const auto& path = *function.path;
         const auto& fcn = *function.ptr;
         const auto& pp = function.pp;
-        // `is_extern` is set if there's no HIR (i.e. this function is from an external crate)
         bool isExtern = !static_cast<bool>(fcn.code);
-        // If this is a provided trait method, it needs to be monomorphised too.
         bool isMethod = (fcn.args.size() > 0 && visitTyWith(fcn.args[0].second, [&](const auto& x) {
             return x == cratePtr->types.self();
         }));
@@ -274,10 +258,7 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
     };
     emitGlobalAsm(emitGlobalAsm, cratePtr->rootModule);
 
-    // NOTE: Completely reinitialise the `TransList` to free all monomorphised memory before calling the backend compilation tool
-    // - This can save several GB of working set
     list = TransList();
-    // Would drop the entire crate, but finalise tends to need it
     codegen->finalise(opt, outTy, hirFile);
 }
 
@@ -287,8 +268,6 @@ CodeGenerator::~CodeGenerator() {
 void CodeGenerator::finalise(const TransOptions& opt, CodegenOutput outTy, const ::std::string& hirFile) {
 }
 
-// Called on all types directly mentioned (e.g. variables, arguments, and fields)
-// - Inner-most types are visited first.
 void CodeGenerator::emitTypeProto(const HIRTypeData*) {
 }
 

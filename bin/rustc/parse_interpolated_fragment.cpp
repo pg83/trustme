@@ -152,8 +152,6 @@ InterpolatedFragment::InterpolatedFragment(ASTVisibility v)
     return os;
 }
 
-// :vis
-
 TokenTree& InterpolatedFragment::asTt() {
     assert(type == TT);
     return *reinterpret_cast<TokenTree*>(ptr);

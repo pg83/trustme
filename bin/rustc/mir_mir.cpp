@@ -10,17 +10,21 @@
     switch (v.tag()) {
         case MIRConstant::TAG_Int: {
             auto& e = v.as_Int();
-            os << (e.v < 0 ? "-" : "+"); os << (e.v < 0 ? -e.v : e.v); os << " " << e.t;
+            os << (e.v < 0 ? "-" : "+");
+            os << (e.v < 0 ? -e.v : e.v);
+            os << " " << e.t;
             break;
         }
         case MIRConstant::TAG_Uint: {
             auto& e = v.as_Uint();
-            os << std::hex << "0x" << e.v << std::dec; os << " " << e.t;
+            os << std::hex << "0x" << e.v << std::dec;
+            os << " " << e.t;
             break;
         }
         case MIRConstant::TAG_Float: {
             auto& e = v.as_Float();
-            os << std::hexfloat << e.v << std::defaultfloat; os << " " << e.t;
+            os << std::hexfloat << e.v << std::defaultfloat;
+            os << " " << e.t;
             break;
         }
         case MIRConstant::TAG_Bool: {
@@ -30,7 +34,9 @@
         }
         case MIRConstant::TAG_Bytes: {
             auto& e = v.as_Bytes();
-            os << "b\""; os << ::std::hex; for (auto v : e) {
+            os << "b\"";
+            os << ::std::hex;
+            for (auto v : e) {
                 if (v == '\\' || v == '"') {
                     os << "\\" << v;
                 } else if (' ' <= v && v < 0x7F) {
@@ -40,7 +46,8 @@
                 } else {
                     os << "\\x" << ((unsigned int)v & 0xFF);
                 }
-            } os << "\"";
+            }
+            os << "\"";
             os << ::std::dec;
             break;
         }
@@ -56,7 +63,8 @@
         }
         case MIRConstant::TAG_Const: {
             auto& e = v.as_Const();
-            assert(e.p); os << *e.p;
+            assert(e.p);
+            os << *e.p;
             break;
         }
         case MIRConstant::TAG_Generic: {
@@ -66,7 +74,8 @@
         }
         case MIRConstant::TAG_Function: {
             auto& e = v.as_Function();
-            assert(e.p); os << "fn " << *e.p;
+            assert(e.p);
+            os << "fn " << *e.p;
             break;
         }
         case MIRConstant::TAG_ItemAddr: {
@@ -93,19 +102,28 @@
         case MIRConstant::TAG_Int: {
             auto& ae = (*this).as_Int();
             auto& be = b.as_Int();
-            if (ae.v != be.v) return ::ord(ae.v, be.v); return ::ord((unsigned)ae.t, (unsigned)be.t);
+            if (ae.v != be.v) {
+                return ::ord(ae.v, be.v);
+            }
+            return ::ord((unsigned)ae.t, (unsigned)be.t);
             break;
         }
         case MIRConstant::TAG_Uint: {
             auto& ae = (*this).as_Uint();
             auto& be = b.as_Uint();
-            if (ae.v != be.v) return ::ord(ae.v, be.v); return ::ord((unsigned)ae.t, (unsigned)be.t);
+            if (ae.v != be.v) {
+                return ::ord(ae.v, be.v);
+            }
+            return ::ord((unsigned)ae.t, (unsigned)be.t);
             break;
         }
         case MIRConstant::TAG_Float: {
             auto& ae = (*this).as_Float();
             auto& be = b.as_Float();
-            if (ae.v != be.v) return ae.v > be.v ? OrdGreater : OrdLess; return ::ord((unsigned)ae.t, (unsigned)be.t);
+            if (ae.v != be.v) {
+                return ae.v > be.v ? OrdGreater : OrdLess;
+            }
+            return ::ord((unsigned)ae.t, (unsigned)be.t);
             break;
         }
         case MIRConstant::TAG_Bool: {
@@ -126,7 +144,8 @@
         case MIRConstant::TAG_Encoded: {
             auto& ae = (*this).as_Encoded();
             auto& be = b.as_Encoded();
-            ORD(ae.type, be.type); return ae.value.ord(be.value);
+            ORD(ae.type, be.type);
+            return ae.value.ord(be.value);
             break;
         }
         case MIRConstant::TAG_Const: {
@@ -147,7 +166,12 @@
         case MIRConstant::TAG_ItemAddr: {
             auto& ae = (*this).as_ItemAddr();
             auto& be = b.as_ItemAddr();
-            ORD(static_cast<bool>(ae), static_cast<bool>(be)); if (ae) ORD(*ae, *be); ORD(ae.offset, be.offset); return OrdEqual;
+            ORD(static_cast<bool>(ae), static_cast<bool>(be));
+            if (ae) {
+                ORD(*ae, *be);
+            }
+            ORD(ae.offset, be.offset);
+            return OrdEqual;
             break;
         }
     }
@@ -329,7 +353,8 @@ bool MIRParam::operator==(const MIRParam& x) const {
         }
         case MIRRValue::TAG_BinOp: {
             auto& e = x.as_BinOp();
-            os << "BinOp(" << e.valL << " "; switch (e.op) {
+            os << "BinOp(" << e.valL << " ";
+            switch (e.op) {
                 case MIRBinOp::ADD:
                     os << "ADD";
                     break;
@@ -392,20 +417,22 @@ bool MIRParam::operator==(const MIRParam& x) const {
                 case MIRBinOp::LE:
                     os << "LE";
                     break;
-            } os << " "
-                 << e.valR << ")";
+            }
+            os << " " << e.valR << ")";
             break;
         }
         case MIRRValue::TAG_UniOp: {
             auto& e = x.as_UniOp();
-            os << "UniOp(" << e.val << " "; switch (e.op) {
+            os << "UniOp(" << e.val << " ";
+            switch (e.op) {
                 case MIRUniOp::INV:
                     os << "INV";
                     break;
                 case MIRUniOp::NEG:
                     os << "NEG";
                     break;
-            } os << ")";
+            }
+            os << ")";
             break;
         }
         case MIRRValue::TAG_DstMeta: {
@@ -470,31 +497,64 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
         case MIRRValue::TAG_SizedArray: {
             auto& are = a.as_SizedArray();
             auto& bre = b.as_SizedArray();
-            if (are.val != bre.val) return false; if (are.count != bre.count) return false; return true;
+            if (are.val != bre.val) {
+                return false;
+            }
+            if (are.count != bre.count) {
+                return false;
+            }
+            return true;
             break;
         }
         case MIRRValue::TAG_Borrow: {
             auto& are = a.as_Borrow();
             auto& bre = b.as_Borrow();
-            if (are.type != bre.type) return false; if (are.val != bre.val) return false; return true;
+            if (are.type != bre.type) {
+                return false;
+            }
+            if (are.val != bre.val) {
+                return false;
+            }
+            return true;
             break;
         }
         case MIRRValue::TAG_Cast: {
             auto& are = a.as_Cast();
             auto& bre = b.as_Cast();
-            if (are.type != bre.type) return false; if (are.val != bre.val) return false; return true;
+            if (are.type != bre.type) {
+                return false;
+            }
+            if (are.val != bre.val) {
+                return false;
+            }
+            return true;
             break;
         }
         case MIRRValue::TAG_BinOp: {
             auto& are = a.as_BinOp();
             auto& bre = b.as_BinOp();
-            if (are.valL != bre.valL) return false; if (are.op != bre.op) return false; if (are.valR != bre.valR) return false; return true;
+            if (are.valL != bre.valL) {
+                return false;
+            }
+            if (are.op != bre.op) {
+                return false;
+            }
+            if (are.valR != bre.valR) {
+                return false;
+            }
+            return true;
             break;
         }
         case MIRRValue::TAG_UniOp: {
             auto& are = a.as_UniOp();
             auto& bre = b.as_UniOp();
-            if (are.op != bre.op) return false; if (are.val != bre.val) return false; return true;
+            if (are.op != bre.op) {
+                return false;
+            }
+            if (are.val != bre.val) {
+                return false;
+            }
+            return true;
             break;
         }
         case MIRRValue::TAG_DstPtr: {
@@ -510,7 +570,13 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
         case MIRRValue::TAG_MakeDst: {
             auto& are = a.as_MakeDst();
             auto& bre = b.as_MakeDst();
-            if (are.metaVal != bre.metaVal) return false; if (are.ptrVal != bre.ptrVal) return false; return true;
+            if (are.metaVal != bre.metaVal) {
+                return false;
+            }
+            if (are.ptrVal != bre.ptrVal) {
+                return false;
+            }
+            return true;
             break;
         }
         case MIRRValue::TAG_Tuple: {
@@ -526,19 +592,34 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
         case MIRRValue::TAG_UnionVariant: {
             auto& are = a.as_UnionVariant();
             auto& bre = b.as_UnionVariant();
-            if (are.path != bre.path) return false; if (are.index != bre.index) return false; return are.val == bre.val;
+            if (are.path != bre.path) {
+                return false;
+            }
+            if (are.index != bre.index) {
+                return false;
+            }
+            return are.val == bre.val;
             break;
         }
         case MIRRValue::TAG_EnumVariant: {
             auto& are = a.as_EnumVariant();
             auto& bre = b.as_EnumVariant();
-            if (are.path != bre.path) return false; if (are.index != bre.index) return false; return are.vals == bre.vals;
+            if (are.path != bre.path) {
+                return false;
+            }
+            if (are.index != bre.index) {
+                return false;
+            }
+            return are.vals == bre.vals;
             break;
         }
         case MIRRValue::TAG_Struct: {
             auto& are = a.as_Struct();
             auto& bre = b.as_Struct();
-            if (are.path != bre.path) return false; return are.vals == bre.vals;
+            if (are.path != bre.path) {
+                return false;
+            }
+            return are.vals == bre.vals;
             break;
         }
     }
@@ -600,43 +681,70 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
         }
         case MIRTerminator::TAG_Switch: {
             auto& e = x.as_Switch();
-            os << "Switch( "; if (e.validFlag != ~0u) os << "IF df$" << e.validFlag << " ELSE bb" << e.invalidTarget << ", "; os << e.val << " : "; for (unsigned int j = 0; j < e.targets.size(); j++) os << j << " => bb" << e.targets[j] << ", "; os << ")";
+            os << "Switch( ";
+            if (e.validFlag != ~0u) {
+                os << "IF df$" << e.validFlag << " ELSE bb" << e.invalidTarget << ", ";
+            }
+            os << e.val << " : ";
+            for (unsigned int j = 0; j < e.targets.size(); j++) {
+                os << j << " => bb" << e.targets[j] << ", ";
+            }
+            os << ")";
             break;
         }
         case MIRTerminator::TAG_SwitchValue: {
             auto& e = x.as_SwitchValue();
-            os << "SwitchValue( " << e.val << " : "; switch (e.values.tag()) {
+            os << "SwitchValue( " << e.val << " : ";
+            switch (e.values.tag()) {
                 case MIRSwitchValues::TAG_Unsigned: {
                     auto& ve = e.values.as_Unsigned();
-                    for (unsigned int j = 0; j < e.targets.size(); j++) os << ve[j] << " => bb" << e.targets[j] << ", ";
+                    for (unsigned int j = 0; j < e.targets.size(); j++) {
+                        os << ve[j] << " => bb" << e.targets[j] << ", ";
+                    }
                     break;
                 }
                 case MIRSwitchValues::TAG_Signed: {
                     auto& ve = e.values.as_Signed();
-                    for (unsigned int j = 0; j < e.targets.size(); j++) os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";
+                    for (unsigned int j = 0; j < e.targets.size(); j++) {
+                        os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";
+                    }
                     break;
                 }
                 case MIRSwitchValues::TAG_String: {
                     auto& ve = e.values.as_String();
-                    for (unsigned int j = 0; j < e.targets.size(); j++) os << "\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";
+                    for (unsigned int j = 0; j < e.targets.size(); j++) {
+                        os << "\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";
+                    }
                     break;
                 }
                 case MIRSwitchValues::TAG_ByteString: {
                     auto& ve = e.values.as_ByteString();
-                    for (unsigned int j = 0; j < e.targets.size(); j++) os << "b\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";
+                    for (unsigned int j = 0; j < e.targets.size(); j++) {
+                        os << "b\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";
+                    }
                     break;
                 }
-            } os << "else bb" << e.defTarget << ")";
+            }
+            os << "else bb" << e.defTarget << ")";
             break;
         }
         case MIRTerminator::TAG_Drop: {
             auto& e = x.as_Drop();
-            os << "Drop(" << e.slot; if (e.kind == MIRDropKind::SHALLOW) os << " SHALLOW"; if (e.flagIdx != ~0u) os << " IF df$" << e.flagIdx; os << ") -> bb" << e.target << " unwind "; fmtUnwind(e.unwind);
+            os << "Drop(" << e.slot;
+            if (e.kind == MIRDropKind::SHALLOW) {
+                os << " SHALLOW";
+            }
+            if (e.flagIdx != ~0u) {
+                os << " IF df$" << e.flagIdx;
+            }
+            os << ") -> bb" << e.target << " unwind ";
+            fmtUnwind(e.unwind);
             break;
         }
         case MIRTerminator::TAG_Call: {
             auto& e = x.as_Call();
-            os << "Call( " << e.retVal << " = "; switch (e.fcn.tag()) {
+            os << "Call( " << e.retVal << " = ";
+            switch (e.fcn.tag()) {
                 case MIRCallTarget::TAG_Value: {
                     auto& e2 = e.fcn.as_Value();
                     os << "(" << e2 << ")";
@@ -652,12 +760,20 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
                     os << "\"" << e2.name << "\"::" << e2.params;
                     break;
                 }
-            } os << "( "; for (const auto& arg : e.args) os << arg << ", "; os << "), bb" << e.retBlock << ", "; fmtUnwind(e.unwind); os << ")";
+            }
+            os << "( ";
+            for (const auto& arg : e.args) {
+                os << arg << ", ";
+            }
+            os << "), bb" << e.retBlock << ", ";
+            fmtUnwind(e.unwind);
+            os << ")";
             break;
         }
         case MIRTerminator::TAG_TailCall: {
             auto& e = x.as_TailCall();
-            os << "TailCall( "; switch (e.fcn.tag()) {
+            os << "TailCall( ";
+            switch (e.fcn.tag()) {
                 case MIRCallTarget::TAG_Value: {
                     auto& e2 = e.fcn.as_Value();
                     os << "(" << e2 << ")";
@@ -673,12 +789,25 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
                     os << "\"" << e2.name << "\"::" << e2.params;
                     break;
                 }
-            } os << "( "; for (const auto& arg : e.args) os << arg << ", "; os << ") )";
+            }
+            os << "( ";
+            for (const auto& arg : e.args) {
+                os << arg << ", ";
+            }
+            os << ") )";
             break;
         }
         case MIRTerminator::TAG_Asm2: {
             auto& e = x.as_Asm2();
-            os << "asm!(...) -> "; if (e.retBlock != ~0u) os << "bb" << e.retBlock << ", "; for (const auto& p : e.params) if (const auto* bb = p.opt_Label()) os << "label bb" << *bb << ", ";
+            os << "asm!(...) -> ";
+            if (e.retBlock != ~0u) {
+                os << "bb" << e.retBlock << ", ";
+            }
+            for (const auto& p : e.params) {
+                if (const auto* bb = p.opt_Label()) {
+                    os << "label bb" << *bb << ", ";
+                }
+            }
             break;
         }
     }
@@ -731,87 +860,174 @@ bool operator==(const MIRTerminator& a, const MIRTerminator& b) {
         case MIRTerminator::TAG_Goto: {
             auto& ae = a.as_Goto();
             auto& be = b.as_Goto();
-            if (ae != be) return false;
+            if (ae != be) {
+                return false;
+            }
             break;
         }
         case MIRTerminator::TAG_If: {
             auto& ae = a.as_If();
             auto& be = b.as_If();
-            if (ae.cond != be.cond) return false; if (ae.bbTrue != be.bbTrue) return false; if (ae.bbFalse != be.bbFalse) return false;
+            if (ae.cond != be.cond) {
+                return false;
+            }
+            if (ae.bbTrue != be.bbTrue) {
+                return false;
+            }
+            if (ae.bbFalse != be.bbFalse) {
+                return false;
+            }
             break;
         }
         case MIRTerminator::TAG_Switch: {
             auto& ae = a.as_Switch();
             auto& be = b.as_Switch();
-            if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.validFlag != be.validFlag) return false; if (ae.invalidTarget != be.invalidTarget) return false;
+            if (ae.val != be.val) {
+                return false;
+            }
+            if (ae.targets != be.targets) {
+                return false;
+            }
+            if (ae.validFlag != be.validFlag) {
+                return false;
+            }
+            if (ae.invalidTarget != be.invalidTarget) {
+                return false;
+            }
             break;
         }
         case MIRTerminator::TAG_SwitchValue: {
             auto& ae = a.as_SwitchValue();
             auto& be = b.as_SwitchValue();
-            if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.defTarget != be.defTarget) return false; if (ae.values != be.values) return false;
+            if (ae.val != be.val) {
+                return false;
+            }
+            if (ae.targets != be.targets) {
+                return false;
+            }
+            if (ae.defTarget != be.defTarget) {
+                return false;
+            }
+            if (ae.values != be.values) {
+                return false;
+            }
             break;
         }
         case MIRTerminator::TAG_Drop: {
             auto& ae = a.as_Drop();
             auto& be = b.as_Drop();
-            if (ae.kind != be.kind || ae.slot != be.slot || ae.flagIdx != be.flagIdx || ae.target != be.target || !unwindEqual(ae.unwind, be.unwind)) return false;
+            if (ae.kind != be.kind || ae.slot != be.slot || ae.flagIdx != be.flagIdx || ae.target != be.target || !unwindEqual(ae.unwind, be.unwind)) {
+                return false;
+            }
             break;
         }
         case MIRTerminator::TAG_Call: {
             auto& ae = a.as_Call();
             auto& be = b.as_Call();
-            if (ae.retVal != be.retVal) return false; if (ae.fcn.tag() != be.fcn.tag()) return false; switch (ae.fcn.tag()) {
+            if (ae.retVal != be.retVal) {
+                return false;
+            }
+            if (ae.fcn.tag() != be.fcn.tag()) {
+                return false;
+            }
+            switch (ae.fcn.tag()) {
                 case MIRCallTarget::TAG_Value: {
                     auto& afe = ae.fcn.as_Value();
                     auto& bfe = be.fcn.as_Value();
-                    if (afe != bfe) return false;
+                    if (afe != bfe) {
+                        return false;
+                    }
                     break;
                 }
                 case MIRCallTarget::TAG_Path: {
                     auto& afe = ae.fcn.as_Path();
                     auto& bfe = be.fcn.as_Path();
-                    if (afe != bfe) return false;
+                    if (afe != bfe) {
+                        return false;
+                    }
                     break;
                 }
                 case MIRCallTarget::TAG_Intrinsic: {
                     auto& afe = ae.fcn.as_Intrinsic();
                     auto& bfe = be.fcn.as_Intrinsic();
-                    if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;
+                    if (afe.name != bfe.name) {
+                        return false;
+                    }
+                    if (afe.params != bfe.params) {
+                        return false;
+                    }
                     break;
                 }
-            } if (ae.args != be.args) return false; if (ae.retBlock != be.retBlock) return false; if (!unwindEqual(ae.unwind, be.unwind)) return false; if (ae.source != be.source) return false; if (ae.tracksCaller != be.tracksCaller) return false;
+            }
+            if (ae.args != be.args) {
+                return false;
+            }
+            if (ae.retBlock != be.retBlock) {
+                return false;
+            }
+            if (!unwindEqual(ae.unwind, be.unwind)) {
+                return false;
+            }
+            if (ae.source != be.source) {
+                return false;
+            }
+            if (ae.tracksCaller != be.tracksCaller) {
+                return false;
+            }
             break;
         }
         case MIRTerminator::TAG_TailCall: {
             auto& ae = a.as_TailCall();
             auto& be = b.as_TailCall();
-            if (ae.fcn.tag() != be.fcn.tag()) return false; switch (ae.fcn.tag()) {
+            if (ae.fcn.tag() != be.fcn.tag()) {
+                return false;
+            }
+            switch (ae.fcn.tag()) {
                 case MIRCallTarget::TAG_Value: {
                     auto& afe = ae.fcn.as_Value();
                     auto& bfe = be.fcn.as_Value();
-                    if (afe != bfe) return false;
+                    if (afe != bfe) {
+                        return false;
+                    }
                     break;
                 }
                 case MIRCallTarget::TAG_Path: {
                     auto& afe = ae.fcn.as_Path();
                     auto& bfe = be.fcn.as_Path();
-                    if (afe != bfe) return false;
+                    if (afe != bfe) {
+                        return false;
+                    }
                     break;
                 }
                 case MIRCallTarget::TAG_Intrinsic: {
                     auto& afe = ae.fcn.as_Intrinsic();
                     auto& bfe = be.fcn.as_Intrinsic();
-                    if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;
+                    if (afe.name != bfe.name) {
+                        return false;
+                    }
+                    if (afe.params != bfe.params) {
+                        return false;
+                    }
                     break;
                 }
-            } if (ae.args != be.args) return false; if (ae.source != be.source) return false; if (ae.tracksCaller != be.tracksCaller) return false;
+            }
+            if (ae.args != be.args) {
+                return false;
+            }
+            if (ae.source != be.source) {
+                return false;
+            }
+            if (ae.tracksCaller != be.tracksCaller) {
+                return false;
+            }
             break;
         }
         case MIRTerminator::TAG_Asm2: {
             auto& ae = a.as_Asm2();
             auto& be = b.as_Asm2();
-            if (ae.options != be.options || ae.lines != be.lines || ae.params != be.params || ae.retBlock != be.retBlock) return false;
+            if (ae.options != be.options || ae.lines != be.lines || ae.params != be.params || ae.retBlock != be.retBlock) {
+                return false;
+            }
             break;
         }
     }
@@ -822,150 +1038,150 @@ bool operator==(const MIRAsmParam& a, const MIRAsmParam& b) {
     if (a.tag() != b.tag()) {
         return false;
     }
-        switch (a.tag()) {
-            case MIRAsmParam::TAG_Const: {
-                auto& ae = a.as_Const();
-                auto& be = b.as_Const();
-                return ae == be;
-            }
-            case MIRAsmParam::TAG_Sym: {
-                auto& ae = a.as_Sym();
-                auto& be = b.as_Sym();
-                return ae == be;
-            }
-            case MIRAsmParam::TAG_Reg: {
-                auto& ae = a.as_Reg();
-                auto& be = b.as_Reg();
-                if (ae.dir != be.dir) {
-                    return false;
-                }
-                if (ae.spec != be.spec) {
-                    return false;
-                }
-                if (!!ae.input != !!be.input) {
-                    return false;
-                }
-                if (ae.input && *ae.input != *be.input) {
-                    return false;
-                }
-                if (!!ae.output != !!be.output) {
-                    return false;
-                }
-                if (ae.output && *ae.output != *be.output) {
-                    return false;
-                }
-                break;
-            }
-            case MIRAsmParam::TAG_Label: {
-                auto& ae = a.as_Label();
-                auto& be = b.as_Label();
-                return ae == be;
-            }
+    switch (a.tag()) {
+        case MIRAsmParam::TAG_Const: {
+            auto& ae = a.as_Const();
+            auto& be = b.as_Const();
+            return ae == be;
         }
-        return true;
+        case MIRAsmParam::TAG_Sym: {
+            auto& ae = a.as_Sym();
+            auto& be = b.as_Sym();
+            return ae == be;
+        }
+        case MIRAsmParam::TAG_Reg: {
+            auto& ae = a.as_Reg();
+            auto& be = b.as_Reg();
+            if (ae.dir != be.dir) {
+                return false;
+            }
+            if (ae.spec != be.spec) {
+                return false;
+            }
+            if (!!ae.input != !!be.input) {
+                return false;
+            }
+            if (ae.input && *ae.input != *be.input) {
+                return false;
+            }
+            if (!!ae.output != !!be.output) {
+                return false;
+            }
+            if (ae.output && *ae.output != *be.output) {
+                return false;
+            }
+            break;
+        }
+        case MIRAsmParam::TAG_Label: {
+            auto& ae = a.as_Label();
+            auto& be = b.as_Label();
+            return ae == be;
+        }
+    }
+    return true;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const MIRStatement& x) {
-        switch (x.tag()) {
-            case MIRStatement::TAG_Assign: {
-                auto& e = x.as_Assign();
-                os << e.dst << " = " << e.src;
-                break;
-            }
-            case MIRStatement::TAG_Asm: {
-                auto& e = x.as_Asm();
-                os << "(";
-                for (const auto& spec : e.outputs) {
-                    os << "\"" << spec.first << "\" : " << spec.second << ", ";
-                }
-                os << ") = llvm_asm!(\"" << FmtEscaped(e.tpl) << "\", input=( ";
-                for (const auto& spec : e.inputs) {
-                    os << "\"" << spec.first << "\" : " << spec.second << ", ";
-                }
-                os << "), clobbers=[" << e.clobbers << "], flags=[" << e.flags << "])";
-                break;
-            }
-            case MIRStatement::TAG_Asm2: {
-                auto& e = x.as_Asm2();
-                os << "asm!(";
-                for (const auto& l : e.lines) {
-                    if (&l != &e.lines.front()) {
-                        os << " ";
-                    }
-                    l.fmt(os);
-                }
-                for (const auto& p : e.params) {
-                    os << ", ";
-                    switch (p.tag()) {
-                        case MIRAsmParam::TAG_Const: {
-                            auto& v = p.as_Const();
-                            os << "const " << v;
-                            break;
-                        }
-                        case MIRAsmParam::TAG_Sym: {
-                            auto& v = p.as_Sym();
-                            os << "sym " << v;
-                            break;
-                        }
-                        case MIRAsmParam::TAG_Reg: {
-                            auto& v = p.as_Reg();
-                            os << "reg " << v.dir << " " << v.spec << " ";
-                            if (v.input) {
-                                os << *v.input;
-                            } else {
-                                os << "_";
-                            }
-                            os << " => ";
-                            if (v.output) {
-                                os << *v.output;
-                            } else {
-                                os << "_";
-                            }
-                            break;
-                        }
-                        case MIRAsmParam::TAG_Label: {
-                            auto& v = p.as_Label();
-                            os << "label bb" << v;
-                            break;
-                        }
-                    }
-                }
-                if (e.options.any()) {
-                    os << ", ";
-                    e.options.fmt(os);
-                }
-                os << ")";
-                break;
-            }
-            case MIRStatement::TAG_SetDropFlag: {
-                auto& e = x.as_SetDropFlag();
-                os << "df$" << e.idx << " = ";
-                if (e.other == ~0u) {
-                    os << e.newVal;
-                } else {
-                    os << (e.newVal ? "!" : "") << "df$" << e.other;
-                }
-                break;
-            }
-            case MIRStatement::TAG_SaveDropFlag: {
-                os << "SaveDropFlag()";
-                break;
-            }
-            case MIRStatement::TAG_LoadDropFlag: {
-                os << "LoadDropFlag()";
-                break;
-            }
-            case MIRStatement::TAG_ScopeEnd: {
-                auto& e = x.as_ScopeEnd();
-                os << "ScopeEnd(";
-                for (auto idx : e.slots) {
-                    os << "_$" << idx << ",";
-                }
-                os << ")";
-                break;
-            }
+    switch (x.tag()) {
+        case MIRStatement::TAG_Assign: {
+            auto& e = x.as_Assign();
+            os << e.dst << " = " << e.src;
+            break;
         }
-        return os;
+        case MIRStatement::TAG_Asm: {
+            auto& e = x.as_Asm();
+            os << "(";
+            for (const auto& spec : e.outputs) {
+                os << "\"" << spec.first << "\" : " << spec.second << ", ";
+            }
+            os << ") = llvm_asm!(\"" << FmtEscaped(e.tpl) << "\", input=( ";
+            for (const auto& spec : e.inputs) {
+                os << "\"" << spec.first << "\" : " << spec.second << ", ";
+            }
+            os << "), clobbers=[" << e.clobbers << "], flags=[" << e.flags << "])";
+            break;
+        }
+        case MIRStatement::TAG_Asm2: {
+            auto& e = x.as_Asm2();
+            os << "asm!(";
+            for (const auto& l : e.lines) {
+                if (&l != &e.lines.front()) {
+                    os << " ";
+                }
+                l.fmt(os);
+            }
+            for (const auto& p : e.params) {
+                os << ", ";
+                switch (p.tag()) {
+                    case MIRAsmParam::TAG_Const: {
+                        auto& v = p.as_Const();
+                        os << "const " << v;
+                        break;
+                    }
+                    case MIRAsmParam::TAG_Sym: {
+                        auto& v = p.as_Sym();
+                        os << "sym " << v;
+                        break;
+                    }
+                    case MIRAsmParam::TAG_Reg: {
+                        auto& v = p.as_Reg();
+                        os << "reg " << v.dir << " " << v.spec << " ";
+                        if (v.input) {
+                            os << *v.input;
+                        } else {
+                            os << "_";
+                        }
+                        os << " => ";
+                        if (v.output) {
+                            os << *v.output;
+                        } else {
+                            os << "_";
+                        }
+                        break;
+                    }
+                    case MIRAsmParam::TAG_Label: {
+                        auto& v = p.as_Label();
+                        os << "label bb" << v;
+                        break;
+                    }
+                }
+            }
+            if (e.options.any()) {
+                os << ", ";
+                e.options.fmt(os);
+            }
+            os << ")";
+            break;
+        }
+        case MIRStatement::TAG_SetDropFlag: {
+            auto& e = x.as_SetDropFlag();
+            os << "df$" << e.idx << " = ";
+            if (e.other == ~0u) {
+                os << e.newVal;
+            } else {
+                os << (e.newVal ? "!" : "") << "df$" << e.other;
+            }
+            break;
+        }
+        case MIRStatement::TAG_SaveDropFlag: {
+            os << "SaveDropFlag()";
+            break;
+        }
+        case MIRStatement::TAG_LoadDropFlag: {
+            os << "LoadDropFlag()";
+            break;
+        }
+        case MIRStatement::TAG_ScopeEnd: {
+            auto& e = x.as_ScopeEnd();
+            os << "ScopeEnd(";
+            for (auto idx : e.slots) {
+                os << "_$" << idx << ",";
+            }
+            os << ")";
+            break;
+        }
+    }
+    return os;
 }
 
 bool operator==(const MIRStatement& a, const MIRStatement& b) {
@@ -973,44 +1189,44 @@ bool operator==(const MIRStatement& a, const MIRStatement& b) {
         return false;
     }
 
-        switch (a.tag()) {
-            case MIRStatement::TAG_Assign: {
-                auto& ae = a.as_Assign();
-                auto& be = b.as_Assign();
-                return ae.dst == be.dst && ae.src == be.src;
-            }
-            case MIRStatement::TAG_Asm: {
-                auto& ae = a.as_Asm();
-                auto& be = b.as_Asm();
-                return ae.outputs == be.outputs && ae.inputs == be.inputs && ae.clobbers == be.clobbers && ae.flags == be.flags;
-            }
-            case MIRStatement::TAG_Asm2: {
-                auto& ae = a.as_Asm2();
-                auto& be = b.as_Asm2();
-                return ae.lines == be.lines && ae.options == be.options && ae.params == be.params;
-            }
-            case MIRStatement::TAG_SetDropFlag: {
-                auto& ae = a.as_SetDropFlag();
-                auto& be = b.as_SetDropFlag();
-                return ae.idx == be.idx && ae.other == be.other && ae.newVal == be.newVal;
-            }
-            case MIRStatement::TAG_SaveDropFlag: {
-                auto& ae = a.as_SaveDropFlag();
-                auto& be = b.as_SaveDropFlag();
-                return ae.idx == be.idx && ae.slot == be.slot && ae.bitIndex == be.bitIndex;
-            }
-            case MIRStatement::TAG_LoadDropFlag: {
-                auto& ae = a.as_LoadDropFlag();
-                auto& be = b.as_LoadDropFlag();
-                return ae.idx == be.idx && ae.slot == be.slot && ae.bitIndex == be.bitIndex;
-            }
-            case MIRStatement::TAG_ScopeEnd: {
-                auto& ae = a.as_ScopeEnd();
-                auto& be = b.as_ScopeEnd();
-                return ae.slots == be.slots;
-            }
+    switch (a.tag()) {
+        case MIRStatement::TAG_Assign: {
+            auto& ae = a.as_Assign();
+            auto& be = b.as_Assign();
+            return ae.dst == be.dst && ae.src == be.src;
         }
-        UNREACHABLE();
+        case MIRStatement::TAG_Asm: {
+            auto& ae = a.as_Asm();
+            auto& be = b.as_Asm();
+            return ae.outputs == be.outputs && ae.inputs == be.inputs && ae.clobbers == be.clobbers && ae.flags == be.flags;
+        }
+        case MIRStatement::TAG_Asm2: {
+            auto& ae = a.as_Asm2();
+            auto& be = b.as_Asm2();
+            return ae.lines == be.lines && ae.options == be.options && ae.params == be.params;
+        }
+        case MIRStatement::TAG_SetDropFlag: {
+            auto& ae = a.as_SetDropFlag();
+            auto& be = b.as_SetDropFlag();
+            return ae.idx == be.idx && ae.other == be.other && ae.newVal == be.newVal;
+        }
+        case MIRStatement::TAG_SaveDropFlag: {
+            auto& ae = a.as_SaveDropFlag();
+            auto& be = b.as_SaveDropFlag();
+            return ae.idx == be.idx && ae.slot == be.slot && ae.bitIndex == be.bitIndex;
+        }
+        case MIRStatement::TAG_LoadDropFlag: {
+            auto& ae = a.as_LoadDropFlag();
+            auto& be = b.as_LoadDropFlag();
+            return ae.idx == be.idx && ae.slot == be.slot && ae.bitIndex == be.bitIndex;
+        }
+        case MIRStatement::TAG_ScopeEnd: {
+            auto& ae = a.as_ScopeEnd();
+            auto& be = b.as_ScopeEnd();
+            return ae.slots == be.slots;
+        }
+    }
+    UNREACHABLE();
 }
 
 MIRLValue::Storage MIRLValue::Storage::clone() const {
@@ -1127,37 +1343,52 @@ MIRRValue MIRRValue::clone() const {
             auto& e = (*this).as_DstPtr();
             return MIRRValue::make_DstPtr({e.val.clone()});
         }
-        // Construct a DST pointer from a thin pointer and metadata
         case MIRRValue::TAG_MakeDst: {
             auto& e = (*this).as_MakeDst();
             return MIRRValue::make_MakeDst({e.ptrVal.clone(), e.metaVal.clone()});
         }
         case MIRRValue::TAG_Tuple: {
             auto& e = (*this).as_Tuple();
-            decltype(e.vals) ret; ret.reserve(e.vals.size()); for (const auto& v : e.vals) ret.push_back(v.clone()); return MIRRValue::make_Tuple({mv$(ret)});
+            decltype(e.vals) ret;
+            ret.reserve(e.vals.size());
+            for (const auto& v : e.vals) {
+                ret.push_back(v.clone());
+            }
+            return MIRRValue::make_Tuple({mv$(ret)});
             break;
         }
-        // Array literal
         case MIRRValue::TAG_Array: {
             auto& e = (*this).as_Array();
-            decltype(e.vals) ret; ret.reserve(e.vals.size()); for (const auto& v : e.vals) ret.push_back(v.clone()); return MIRRValue::make_Array({mv$(ret)});
+            decltype(e.vals) ret;
+            ret.reserve(e.vals.size());
+            for (const auto& v : e.vals) {
+                ret.push_back(v.clone());
+            }
+            return MIRRValue::make_Array({mv$(ret)});
             break;
         }
-        // Create a new instance of a union
         case MIRRValue::TAG_UnionVariant: {
             auto& e = (*this).as_UnionVariant();
             return MIRRValue::make_UnionVariant({e.path.clone(), e.index, e.val.clone()});
         }
-        // Create a new instance of an enum
         case MIRRValue::TAG_EnumVariant: {
             auto& e = (*this).as_EnumVariant();
-            decltype(e.vals) ret; ret.reserve(e.vals.size()); for (const auto& v : e.vals) ret.push_back(v.clone()); return MIRRValue::make_EnumVariant({e.path.clone(), e.index, mv$(ret)});
+            decltype(e.vals) ret;
+            ret.reserve(e.vals.size());
+            for (const auto& v : e.vals) {
+                ret.push_back(v.clone());
+            }
+            return MIRRValue::make_EnumVariant({e.path.clone(), e.index, mv$(ret)});
             break;
         }
-        // Create a new instance of a struct
         case MIRRValue::TAG_Struct: {
             auto& e = (*this).as_Struct();
-            decltype(e.vals) ret; ret.reserve(e.vals.size()); for (const auto& v : e.vals) ret.push_back(v.clone()); return MIRRValue::make_Struct({e.path.clone(), mv$(ret)});
+            decltype(e.vals) ret;
+            ret.reserve(e.vals.size());
+            for (const auto& v : e.vals) {
+                ret.push_back(v.clone());
+            }
+            return MIRRValue::make_Struct({e.path.clone(), mv$(ret)});
             break;
         }
     }
@@ -1194,25 +1425,33 @@ bool MIRSwitchValues::operator==(const MIRSwitchValues& x) const {
         case MIRSwitchValues::TAG_Unsigned: {
             auto& ave = (*this).as_Unsigned();
             auto& bve = x.as_Unsigned();
-            if (ave != bve) return false;
+            if (ave != bve) {
+                return false;
+            }
             break;
         }
         case MIRSwitchValues::TAG_Signed: {
             auto& ave = (*this).as_Signed();
             auto& bve = x.as_Signed();
-            if (ave != bve) return false;
+            if (ave != bve) {
+                return false;
+            }
             break;
         }
         case MIRSwitchValues::TAG_String: {
             auto& ave = (*this).as_String();
             auto& bve = x.as_String();
-            if (ave != bve) return false;
+            if (ave != bve) {
+                return false;
+            }
             break;
         }
         case MIRSwitchValues::TAG_ByteString: {
             auto& ave = (*this).as_ByteString();
             auto& bve = x.as_ByteString();
-            if (ave != bve) return false;
+            if (ave != bve) {
+                return false;
+            }
             break;
         }
     }
@@ -1260,19 +1499,37 @@ HIRPath MIRCloner::monomorph(const HIRPath& ty) const {
         switch (rv.data.tag()) {
             case HIRPath::Data::TAG_Generic: {
                 auto& e2 = rv.data.as_Generic();
-                r->evaluatePathParams(sp, e2.params); for (auto& arg : e2.params.types) r->expandAssociatedTypes(sp, arg);
+                r->evaluatePathParams(sp, e2.params);
+                for (auto& arg : e2.params.types) {
+                    r->expandAssociatedTypes(sp, arg);
+                }
                 break;
             }
             case HIRPath::Data::TAG_UfcsInherent: {
                 auto& e2 = rv.data.as_UfcsInherent();
-                r->expandAssociatedTypes(sp, e2.type); r->evaluatePathParams(sp, e2.params); r->evaluatePathParams(sp, e2.implParams); for (auto& arg : e2.params.types) r->expandAssociatedTypes(sp, arg);
+                r->expandAssociatedTypes(sp, e2.type);
+                r->evaluatePathParams(sp, e2.params);
+                r->evaluatePathParams(sp, e2.implParams);
+                for (auto& arg : e2.params.types) {
+                    r->expandAssociatedTypes(sp, arg);
+                }
                 // TODO: impl params too?
-                for (auto& arg : e2.implParams.types) r->expandAssociatedTypes(sp, arg);
+                for (auto& arg : e2.implParams.types) {
+                    r->expandAssociatedTypes(sp, arg);
+                }
                 break;
             }
             case HIRPath::Data::TAG_UfcsKnown: {
                 auto& e2 = rv.data.as_UfcsKnown();
-                r->expandAssociatedTypes(sp, e2.type); r->evaluatePathParams(sp, e2.trait.params); r->evaluatePathParams(sp, e2.params); for (auto& arg : e2.trait.params.types) r->expandAssociatedTypes(sp, arg); for (auto& arg : e2.params.types) r->expandAssociatedTypes(sp, arg);
+                r->expandAssociatedTypes(sp, e2.type);
+                r->evaluatePathParams(sp, e2.trait.params);
+                r->evaluatePathParams(sp, e2.params);
+                for (auto& arg : e2.trait.params.types) {
+                    r->expandAssociatedTypes(sp, arg);
+                }
+                for (auto& arg : e2.params.types) {
+                    r->expandAssociatedTypes(sp, arg);
+                }
                 break;
             }
             case HIRPath::Data::TAG_UfcsUnknown: {
@@ -1301,7 +1558,7 @@ HIRPathParams MIRCloner::monomorph(const HIRPathParams& ty) const {
         switch (p.tag()) {
             case MIRAsmParam::TAG_Const: {
                 auto& v = p.as_Const();
-                rv.push_back( this->cloneConstant(v) );
+                rv.push_back(this->cloneConstant(v));
                 break;
             }
             case MIRAsmParam::TAG_Sym: {
@@ -1593,58 +1850,56 @@ MIRConstant MIRCloner::cloneConstant(const MIRConstant& src) const {
         case MIRConstant::TAG_Generic: {
             auto& ce = src.as_Generic();
             auto val = monomorphiser().getValue(sp, ce);
-                        if (const auto* r = resolve()) {
-                            r->evaluateConstGeneric(sp, val);
-                        }
-                    switch (val.tag()) {
-            default:
-                        TODO(sp, "Monomorphise MIR generic constant " << ce << " = " << val);
-                        case HIRConstGeneric::TAG_Generic: {
-                            auto& ve = val.as_Generic();
-                            return ve;
-                        }
-                        case HIRConstGeneric::TAG_Evaluated: {
-                            auto& ve = val.as_Evaluated();
-                            // The parameter's declared type can name other generics
-                            // (`const M: [T; N]`), so it needs monomorphising too.
-                            const auto ty = this->monomorph(this->valueGenericType(ce));
-                            auto v = EncodedLiteralSlice(*ve);
-                            if (!ty->is_Primitive()) {
-                                return MIRConstant::make_Encoded({ty, ve->clone()});
-                            }
-                            // TODO: This is duplicated in `mir/from_hir_match.cpp` - De-duplicate?
-                            switch (ty->as_Primitive()) {
-                                case HIRCoreType::Bool:
-                                    return MIRConstant::make_Bool({v.readUint(1) != 0});
-                                case HIRCoreType::U8:
-                                case HIRCoreType::U16:
-                                case HIRCoreType::U32:
-                                case HIRCoreType::U64:
-                                case HIRCoreType::U128:
-                                    return MIRConstant::make_Uint({v.readUint(ve->bytes.size()), ty->as_Primitive()});
-                                case HIRCoreType::Usize:
-                                    return MIRConstant::make_Uint({v.readUint(TargetGetPointerBits() / 8), ty->as_Primitive()});
-                                case HIRCoreType::I8:
-                                case HIRCoreType::I16:
-                                case HIRCoreType::I32:
-                                case HIRCoreType::I64:
-                                case HIRCoreType::I128:
-                                    return MIRConstant::make_Int({v.readSint(ve->bytes.size()), ty->as_Primitive()});
-                                case HIRCoreType::Isize:
-                                    return MIRConstant::make_Int({v.readSint(TargetGetPointerBits() / 8), ty->as_Primitive()});
-                                case HIRCoreType::F16:
-                                case HIRCoreType::F32:
-                                case HIRCoreType::F64:
-                                case HIRCoreType::F128:
-                                    return MIRConstant::make_Float({v.readFloat(ve->bytes.size()), ty->as_Primitive()});
-                                case HIRCoreType::Char:
-                                    return MIRConstant::make_Uint({v.readUint(4), ty->as_Primitive()});
-                                case HIRCoreType::Str:
-                                    BUG(sp, "`str` const generic");
-                            }
-                            break;
-                        }
+            if (const auto* r = resolve()) {
+                r->evaluateConstGeneric(sp, val);
+            }
+            switch (val.tag()) {
+                default:
+                    TODO(sp, "Monomorphise MIR generic constant " << ce << " = " << val);
+                case HIRConstGeneric::TAG_Generic: {
+                    auto& ve = val.as_Generic();
+                    return ve;
+                }
+                case HIRConstGeneric::TAG_Evaluated: {
+                    auto& ve = val.as_Evaluated();
+                    const auto ty = this->monomorph(this->valueGenericType(ce));
+                    auto v = EncodedLiteralSlice(*ve);
+                    if (!ty->is_Primitive()) {
+                        return MIRConstant::make_Encoded({ty, ve->clone()});
                     }
+                    // TODO: This is duplicated in `mir/from_hir_match.cpp` - De-duplicate?
+                    switch (ty->as_Primitive()) {
+                        case HIRCoreType::Bool:
+                            return MIRConstant::make_Bool({v.readUint(1) != 0});
+                        case HIRCoreType::U8:
+                        case HIRCoreType::U16:
+                        case HIRCoreType::U32:
+                        case HIRCoreType::U64:
+                        case HIRCoreType::U128:
+                            return MIRConstant::make_Uint({v.readUint(ve->bytes.size()), ty->as_Primitive()});
+                        case HIRCoreType::Usize:
+                            return MIRConstant::make_Uint({v.readUint(TargetGetPointerBits() / 8), ty->as_Primitive()});
+                        case HIRCoreType::I8:
+                        case HIRCoreType::I16:
+                        case HIRCoreType::I32:
+                        case HIRCoreType::I64:
+                        case HIRCoreType::I128:
+                            return MIRConstant::make_Int({v.readSint(ve->bytes.size()), ty->as_Primitive()});
+                        case HIRCoreType::Isize:
+                            return MIRConstant::make_Int({v.readSint(TargetGetPointerBits() / 8), ty->as_Primitive()});
+                        case HIRCoreType::F16:
+                        case HIRCoreType::F32:
+                        case HIRCoreType::F64:
+                        case HIRCoreType::F128:
+                            return MIRConstant::make_Float({v.readFloat(ve->bytes.size()), ty->as_Primitive()});
+                        case HIRCoreType::Char:
+                            return MIRConstant::make_Uint({v.readUint(4), ty->as_Primitive()});
+                        case HIRCoreType::Str:
+                            BUG(sp, "`str` const generic");
+                    }
+                    break;
+                }
+            }
             break;
         }
         case MIRConstant::TAG_Function: {
@@ -1684,8 +1939,6 @@ MIRRValue MIRCloner::cloneRval(const MIRRValue& src) const {
     switch (src.tag()) {
         case MIRRValue::TAG_Use: {
             auto& se = src.as_Use();
-            //if( const auto* ae = se.opt_Argument() )
-            //    if( const auto* e = this->te.args.at(ae->idx).opt_Constant() )
             return MIRRValue(this->cloneLval(se));
         }
         case MIRRValue::TAG_Constant: {
@@ -1943,8 +2196,6 @@ MIRLValue MIRLValue::cloneUnwrapped(unsigned count) const {
     return MIRLValue(root.clone(), ::std::vector<Wrapper>(wrappers.begin(), wrappers.end() - count));
 }
 
-// Returns true if one lvalue is a subset of the other
-// - Equivalent to `a.is_subset_of(b) || b.is_subset_of(a)` (but more efficient)
 bool MIRLValue::isEitherSubset(const MIRLValue& other) const {
     if (!(root == other.root)) {
         return false;
@@ -1963,7 +2214,6 @@ MIRLValue::RefCommon::RefCommon(const MIRLValue& lv, size_t wrapperCount)
     assert(wrapperCount <= lv.wrappers.size());
 }
 
-/// Unwrap one level, returning false if already at the root
 bool MIRLValue::RefCommon::tryUnwrap() {
     if (wrapperCount_ == 0) {
         return false;
@@ -2050,7 +2300,6 @@ MIRLValue::CRef::CRef(const MIRLValue& lv, size_t wc)
 {
 }
 
-/// Unwrap one level
 const MIRLValue::CRef MIRLValue::CRef::innerRef() const {
     assert(wrapperCount_ > 0);
     auto rv = *this;
@@ -2072,17 +2321,13 @@ MIRLValue::MRef MIRLValue::MRef::innerRef() {
 
 void MIRLValue::MRef::replace(MIRLValue x) {
     auto& mutLv = const_cast<MIRLValue&>(*lv_);
-    // Shortcut: No wrappers on source/destination (just assign the slot/root)
     if (wrapperCount_ == 0 && x.wrappers.empty()) {
         mutLv.root = ::std::move(x.root);
         return;
     }
-    // If there's wrappers on this value (assigning over inner portion)
     if (wrapperCount_ < lv_->wrappers.size()) {
-        // Add those wrappers to the end of the new value
         x.wrappers.insert(x.wrappers.end(), lv_->wrappers.begin() + wrapperCount_, lv_->wrappers.end());
     }
-    // Overwrite
     mutLv = ::std::move(x);
 }
 

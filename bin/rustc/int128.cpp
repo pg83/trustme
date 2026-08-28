@@ -2,14 +2,17 @@
 
 U128::U128()
     : lo(0)
-    , hi(0) {
+    , hi(0)
+{
 }
+
 U128::U128(u64 lo, u64 hi)
     : lo(lo)
-    , hi(hi) {
+    , hi(hi)
+{
 }
+
 u64 U128::encodeFloat(int bits, int zeroExp) const {
-    // Adapted from https://blog.m-ou.se/floats/
     int n;
     {
         int nset = 0;
@@ -28,24 +31,28 @@ u64 U128::encodeFloat(int bits, int zeroExp) const {
     u64 e = (*this == U128(0)) ? 0 : (127 - n) + zeroExp - 1;
     return (e << bits) + m;
 }
+
 double U128::toDouble() const {
     u64 vi = encodeFloat(52, 1023);
     double rv;
     memcpy(&rv, &vi, sizeof(rv));
     return rv;
 }
+
 float U128::toFloat() const {
     u32 vi = static_cast<u32>(encodeFloat(23, 127));
     float rv;
     memcpy(&rv, &vi, sizeof(rv));
     return rv;
 }
+
 void U128::toBeBytes(u8* dst, size_t maxLen) {
     maxLen = maxLen > 16 ? 16 : maxLen;
     for (size_t i = 0; i < maxLen; i++) {
         dst[maxLen - 1 - i] = static_cast<u8>((*this >> static_cast<unsigned>(i * 8)).truncateU64());
     }
 }
+
 void U128::fromBeBytes(const u8* src, size_t maxLen) {
     maxLen = maxLen > 16 ? 16 : maxLen;
     *this = U128();
@@ -53,83 +60,101 @@ void U128::fromBeBytes(const u8* src, size_t maxLen) {
         *this |= U128(src[maxLen - 1 - i]) << static_cast<unsigned>(i * 8);
     }
 }
+
 U128 U128::operator+(U128 x) const {
     U128 rv(0);
     add128O(*this, x, &rv);
     return rv;
 }
+
 U128 U128::operator-(U128 x) const {
     U128 rv(0);
     sub128O(*this, x, &rv);
     return rv;
 }
+
 U128 U128::operator*(U128 x) const {
     U128 rv(0);
     mul128O(*this, x, &rv);
     return rv;
 }
+
 U128 U128::operator/(U128 x) const {
     U128 rv(0);
     div128O(*this, x, &rv, nullptr);
     return rv;
 }
+
 U128 U128::operator%(U128 x) const {
     U128 rv(0);
     div128O(*this, x, nullptr, &rv);
     return rv;
 }
+
 U128& U128::operator+=(unsigned x) {
     *this = *this + x;
     return *this;
 }
+
 U128& U128::operator+=(U128 x) {
     *this = *this + x;
     return *this;
 }
+
 U128& U128::operator*=(unsigned x) {
     *this = *this * x;
     return *this;
 }
+
 U128& U128::operator*=(U128 x) {
     *this = *this * x;
     return *this;
 }
+
 U128& U128::operator|=(unsigned x) {
     *this = *this | x;
     return *this;
 }
+
 U128& U128::operator|=(U128 x) {
     *this = *this | x;
     return *this;
 }
+
 U128& U128::operator&=(unsigned x) {
     *this = *this & x;
     return *this;
 }
+
 U128& U128::operator&=(U128 x) {
     *this = *this & x;
     return *this;
 }
+
 U128& U128::operator<<=(unsigned bits) {
     *this = *this << bits;
     return *this;
 }
+
 U128& U128::operator>>=(unsigned bits) {
     *this = *this >> bits;
     return *this;
 }
+
 U128 U128::operator<<(U128 bits) const {
     if (bits >= 128) {
         return U128(0);
     }
     return *this << static_cast<unsigned>(bits.truncateU64());
 }
+
 U128 U128::operator>>(U128 bits) const {
     if (bits >= 128) {
         return U128(0);
     }
     return *this >> static_cast<unsigned>(bits.truncateU64());
 }
+
 U128 U128::operator<<(unsigned bits) const {
     if (bits == 0) {
         return *this;
@@ -143,6 +168,7 @@ U128 U128::operator<<(unsigned bits) const {
         return U128(lo << bits, (hi << bits) | (lo >> (64 - bits)));
     }
 }
+
 U128 U128::operator>>(unsigned bits) const {
     if (bits == 0) {
         return *this;
@@ -156,6 +182,7 @@ U128 U128::operator>>(unsigned bits) const {
         return U128(lo >> bits | (hi << (64 - bits)), hi >> bits);
     }
 }
+
 Ordering U128::ord(const U128& x) const {
     int c = cmp128(*this, x);
     if (c == 0) {
@@ -163,6 +190,7 @@ Ordering U128::ord(const U128& x) const {
     }
     return c < 0 ? OrdLess : OrdGreater;
 }
+
 bool U128::bit(unsigned idx) const {
     if (idx < 64) {
         return ((lo >> idx) & 1) != 0;
@@ -172,6 +200,7 @@ bool U128::bit(unsigned idx) const {
     }
     return false;
 }
+
 // TODO: All of these are functionally identical to code in `codegen_c.cpp` - could it be shared?
 int U128::cmp128(U128 a, U128 b) {
     if (a.hi != b.hi) {
@@ -182,16 +211,19 @@ int U128::cmp128(U128 a, U128 b) {
     }
     return 0;
 }
+
 bool U128::add128O(U128 a, U128 b, U128* o) {
     o->lo = a.lo + b.lo;
     o->hi = a.hi + b.hi + (o->lo < a.lo ? 1 : 0);
     return (o->hi < a.hi);
 }
+
 bool U128::sub128O(U128 a, U128 b, U128* o) {
     o->lo = a.lo - b.lo;
     o->hi = a.hi - b.hi - (o->lo > a.lo ? 1 : 0);
     return (o->hi > a.hi);
 }
+
 bool U128::mul128O(U128 a, U128 b, U128* o) {
     bool of = false;
     o->hi = 0;
@@ -212,7 +244,7 @@ bool U128::mul128O(U128 a, U128 b, U128* o) {
     }
     return of;
 }
-// Long division
+
 bool U128::div128O(U128 a, U128 b, U128* q, U128* r) {
     if (a.hi == 0 && b.hi == 0) {
         if (q) {
@@ -268,47 +300,58 @@ bool U128::div128O(U128 a, U128 b, U128* q, U128* r) {
     }
     return false;
 }
+
 S128::S128() {
 }
+
 S128::S128(i64 v)
-    : inner(v, v < 0 ? UINT64_MAX : 0) {
+    : inner(v, v < 0 ? UINT64_MAX : 0)
+{
 }
+
 S128::S128(U128 v)
-    : inner(v) {
+    : inner(v)
+{
 }
+
 i64 S128::truncateI64() const { /*assert(inner.hi == 0 || inner.hi == UINT64_MAX);*/
     return inner.lo;
 }
+
 void S128::signExtend(size_t nBytes) {
     if (nBytes < 16 && inner.bit(static_cast<unsigned>(nBytes * 8 - 1))) {
-        // Apply sign extension mask - shift in nbits from an all-ones value
         inner |= U128::max() << static_cast<unsigned>(nBytes * 8);
     }
 }
+
 void S128::fromLeBytes(const u8* src, size_t maxLen) {
     inner.fromLeBytes(src, maxLen);
     signExtend(maxLen);
 }
+
 void S128::fromBeBytes(const u8* src, size_t maxLen) {
     inner.fromBeBytes(src, maxLen);
     signExtend(maxLen);
 }
+
 S128 S128::operator*(S128 x) const {
     auto retNeg = isNeg() != x.isNeg();
     auto rvU = uAbs() * x.uAbs();
     return retNeg ? -S128(rvU) : S128(rvU);
 }
+
 S128 S128::operator/(S128 x) const {
     auto retNeg = isNeg() != x.isNeg();
     auto rvU = uAbs() / x.uAbs();
     return retNeg ? -S128(rvU) : S128(rvU);
 }
+
 S128 S128::operator%(S128 x) const {
     auto retNeg = isNeg();
     auto rvU = uAbs() % x.uAbs();
     return retNeg ? -S128(rvU) : S128(rvU);
 }
-/// Unsigned absolute value (handles MIN correctly)
+
 U128 S128::uAbs() const {
     if (inner.hi == UINT64_MAX && inner.lo == 0) {
         return inner;
@@ -319,6 +362,7 @@ U128 S128::uAbs() const {
         return (*this).inner;
     }
 }
+
 Ordering S128::ord(const S128& x) const {
     int c = cmp128s(this->inner, x.inner);
     if (c == 0) {
@@ -326,14 +370,17 @@ Ordering S128::ord(const S128& x) const {
     }
     return c < 0 ? OrdLess : OrdGreater;
 }
+
 S128& S128::operator<<=(unsigned bits) {
     *this = *this << bits;
     return *this;
 }
+
 S128& S128::operator>>=(unsigned bits) {
     *this = *this >> bits;
     return *this;
 }
+
 S128 S128::operator>>(unsigned bits) const {
     if (bits == 0) {
         return *this;
@@ -347,6 +394,7 @@ S128 S128::operator>>(unsigned bits) const {
     }
     return S128(U128(inner.lo >> bits | (inner.hi << (64 - bits)), static_cast<u64>(static_cast<i64>(inner.hi) >> bits)));
 }
+
 void S128::fmt(::std::ostream& os) const {
     if (isI64()) {
         os << static_cast<i64>(inner.lo);
@@ -359,6 +407,7 @@ void S128::fmt(::std::ostream& os) const {
         }
     }
 }
+
 int S128::cmp128s(U128 a, U128 b) {
     if (a.hi != b.hi) {
         return (i64)a.hi < (i64)b.hi ? -1 : 1;
@@ -372,9 +421,7 @@ int S128::cmp128s(U128 a, U128 b) {
 std::ostream& operator<<(::std::ostream& os, const U128& x) {
     if (x.hi == 0) {
         os << x.lo;
-    }
-    //}
-    else {
+    } else {
         char output[40 + 1];
         auto v = x;
         unsigned i = 0;
@@ -411,6 +458,7 @@ std::ostream& operator<<(::std::ostream& os, const U128& x) {
     }
     return os;
 }
+
 std::ostream& operator<<(::std::ostream& os, const S128& x) {
     x.fmt(os);
     return os;

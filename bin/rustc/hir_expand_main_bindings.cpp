@@ -39,7 +39,6 @@ namespace {
         ClosureScope(HIRExprNodeClosure& node);
     };
 
-    /// Scope state for generators
     struct CoroutineScope {
         enum : unsigned {
             STACK_MARKER_LOOP = ~0u,
@@ -47,16 +46,9 @@ namespace {
 
         CRNode node;
 
-        // Note: Counts the total number of `yield`s encountered
-        // - Loops are pre-counted to either be `-2` (no inner yields) or `-1` (has an inner yield)
         std::vector<unsigned> yieldStack;
 
         struct Var {
-            // If
-            // > `defined_stack` is empty
-            // > OR `defined_stack` isn't a prefix of `last_used_stack`
-            // > OR `last_used_stack`'s tail contains a yielding loop
-            // - Then the variable needs to be saved
             std::vector<unsigned> definedStack;
             std::vector<unsigned> lastUsedStack;
             HIRValueUsage usage;
@@ -80,10 +72,7 @@ namespace {
 
         ::std::vector<HIRValueUsage> usage;
         ::std::vector<Scope> closureStack;
-        /// Calls of a closure that had not been classified yet when the call was
-        /// seen -- the closure is written later in the same expression.
         Vector<HIRExprNodeCallValue*> pendingCalls;
-        /// Disable the capture logic in `ExprNode_Variable` (as the variable was captured using a field access)
         bool ignoreVariableCapture;
 
         struct UsageGuard {
@@ -199,8 +188,6 @@ namespace {
 
         HIRValueUsage getUsageForPattern(const Span& sp, const HIRPattern& pat, const HIRTypeData* outerTy) const;
 
-        // --- Closure/generator usage tracking ---
-        /// Update usage depending on the type
         HIRValueUsage getRealUsage(const Span& sp, unsigned slot, const std::vector<RcString>& fields, HIRValueUsage usage);
 
         void markUsedVariableClosure(const Span& sp, ClosureScope& closureRec, unsigned slot, std::vector<RcString> fields, HIRValueUsage usage);
@@ -219,9 +206,6 @@ namespace {
 
         void visitExpr(HIRExprPtr& exp) override;
 
-        // ------
-        // Code-containing items
-        // ------
         void visitFunction(HIRItemPath p, HIRFunction& item) override;
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override;
@@ -277,7 +261,6 @@ namespace {
     };
 
     typedef ::std::vector<::std::pair<HIRExprNodeClosure::Class, HIRTraitImpl>> outImplsClosureT;
-    /// <Trait LangItem> and <TraitImpl>
     typedef ::std::vector<::std::pair<const char*, HIRTraitImpl>> outTraitImplsT;
 
     struct OutState {
@@ -340,7 +323,6 @@ namespace {
             }
         }
         for (auto& ptr : this->implsType) {
-            // NOTE: This should always have a name
             const auto& path = ptr->type->as_Path().path.data.as_Generic().path;
             crate.allTypeImpls.named[path].push_back(ptr.get());
             crate.typeImpls.named[path].push_back(mv$(ptr));
@@ -353,7 +335,6 @@ namespace {
         this->traitImpls.resize(0);
     }
 
-    /// Mutate the contents of a closure to update captures, variables, and types
     struct ClosureExprVisitorMutate: public HIRExprVisitorDef {
         const HIRTypeData* closureType;
         const ::std::vector<unsigned int>& localVars;
@@ -400,7 +381,6 @@ namespace {
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer) const override;
     };
 
-    /// Visitor to replace closure types with actual type
     struct ClosureExprVisitorFixup: public HIRExprVisitorDef {
         const HIRCrate& crate;
         StaticTraitResolve resolve_;
@@ -450,7 +430,6 @@ namespace {
         static HIRTraitImpl makeFn(HIRTypeInterner& types, HIRGenericParams params, HIRPathParams traitParams, HIRTypeRef closureType, ::std::pair<HIRPattern, HIRTypeRef> argsArgent, HIRTypeRef retTy, HIRExprPtr code);
     };
 
-    /// Extract closures from the main tree
     struct ClosureExprVisitorExtract: public HIRExprVisitorDef {
         const StaticTraitResolve& resolve_;
         ObjPool* pool;
@@ -458,7 +437,6 @@ namespace {
         const ::std::vector<HIRTypeRef>& variableTypes;
         const HIRExprPtr& exprPtr;
 
-        // Outputs
         OutState& out;
         const char* newTypeSuffix;
         bool isAsyncDropIntrinsic;
@@ -543,7 +521,6 @@ namespace {
             HIRGenericParams& params;
             HIRPathParams& constructorPathParams;
             bool frozen = false;
-            // A set of bounds that have already been added to `params` - used to allow looping
             std::set<const HIRGenericBound*> addedBounds;
 
             Monomorph(const StaticTraitResolve& resolve, HIRGenericParams& params, HIRPathParams& constructorPathParams);
@@ -566,11 +543,8 @@ namespace {
             template <typename T, typename U>
             static bool contains(const ThinVector<T>& l, const U& v);
             enum class TypeNeed {
-                // No generics used
                 NoGenerics,
-                // A non-referenced type is used - exclude
                 UsesOthers,
-                // A referenced type is used - must be included
                 Required,
             };
 
@@ -589,12 +563,8 @@ namespace {
 
         Monomorph createParams(const Span& sp, const StaticTraitResolve& resolve, HIRGenericParams& params, HIRPathParams& constructorPathParams) const;
 
-        /// <summary>
-        /// Main extraction closure visitor
-        /// </summary>
         void visit(HIRExprNodeClosure& node) override;
 
-        // So, re-write all variable references into either a capture or a local.
         struct ExprVisitorGeneratorRewrite: public HIRExprVisitorDef {
             const Monomorph& monomorph;
             const std::map<unsigned, unsigned>& variableRewrites;
@@ -607,25 +577,20 @@ namespace {
 
             void visitPathParams(HIRPathParams& pp) override;
 
-            /// Support replacing nodes
             void visitNodePtr(HIRExprNodeP& nodePtr) override;
 
-            /// Rewrite variable references into either a different slot or a field access
             void visit(HIRExprNodeVariable& node) override;
 
             void visit(HIRExprNodeConstParam& node) override;
 
             void visit(HIRExprNodeArraySized& node) override;
 
-            // Custom visitor that only updates the captures and path
-            // - Don't want to visit the patterns within
             void visit(HIRExprNodeClosure& node) override;
 
             void visit(HIRExprNodeGenerator& node) override;
 
             void visit(HIRExprNodeAsyncBlock& node) override;
 
-            /// Update variable definitions
             void visitPattern(const Span& sp, HIRPattern& pat) override;
 
             void visitPatternBinding(const Span& sp, HIRPatternBinding& binding);
@@ -652,25 +617,17 @@ namespace {
 
         static HIREnum makeCoroutineStateEnum(unsigned suspensionCount);
 
-        /// <summary>
-        /// Main extraction generator visitor
-        /// </summary>
         void visit(HIRExprNodeGenerator& node) override;
 
         void visit(HIRExprNodeAsyncBlock& node) override;
 
-        /// Newly defined variables
         void visitPattern(const Span& sp, HIRPattern& pat) override;
 
-        // Loops that contain yeild points require all referenced variables to be saved
         void visit(HIRExprNodeLoop& node) override;
 
         void visit(HIRExprNodeYield& node) override;
     };
 
-    /// <summary>
-    /// Top-level visitor
-    /// </summary>
     struct ClosureOuterVisitor: public HIRVisitor {
         StaticTraitResolve resolve_;
         OutState out;
@@ -684,16 +641,12 @@ namespace {
 
         void visitModule(HIRItemPath p, HIRModule& mod) override;
 
-        // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
         void visitExpr(HIRExprPtr& exp) override;
 
         [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
 
         void visitConstgeneric(HIRConstGeneric&) override;
 
-        // ------
-        // Code-containing items
-        // ------
         void visitFunction(HIRItemPath p, HIRFunction& item) override;
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override;
@@ -925,9 +878,6 @@ namespace {
 
         void visitExpr(HIRExprPtr& exp) override;
 
-        // ------
-        // Code-containing items
-        // ------
         void visitFunction(HIRItemPath p, HIRFunction& item) override;
     };
 } // namespace
@@ -972,9 +922,6 @@ static void checkConstFinalBorrow(const StaticTraitResolve& resolve, HIRExprNode
     if (!borrow) {
         return;
     }
-    // Coercing `&mut x` to `&T` reads as a shared borrow of a dereference of
-    // the mutable one, and the place that names is still one the program could
-    // have written through.
     bool isMutable = borrow->type != HIRBorrowType::Shared;
     HIRExprNode* held = &*borrow->value;
     while (auto* deref = cast<HIRExprNodeDeref>(held)) {
@@ -985,8 +932,6 @@ static void checkConstFinalBorrow(const StaticTraitResolve& resolve, HIRExprNode
         isMutable |= inner->type != HIRBorrowType::Shared;
         held = &*inner->value;
     }
-    // A borrow of something the program named keeps that thing's own rules;
-    // only a value this expression makes is kept by the constant.
     if (cast<HIRExprNodePathValue>(held)) {
         return;
     }
@@ -998,9 +943,6 @@ static void checkConstFinalBorrow(const StaticTraitResolve& resolve, HIRExprNode
     }
 }
 
-// Indexing stays in the caller when a borrow is promoted. Only the value being
-// indexed is moved into static storage, so a runtime index must not disqualify
-// an otherwise constant storage value.
 static HIRExprNodeP* staticBorrowPromotionRoot(HIRExprNodeP& value) {
     auto* root = &value;
     for (;;) {
@@ -1023,9 +965,7 @@ struct StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
 
     HIRSimplePath langRangeFull_;
 
-    // Output from a node visit
     bool isConstant;
-    // Running state: Cleared if `m_is_constant` is false after a node visit
     bool allConstant_;
     bool promoteAllConstFnCalls;
 
@@ -1039,7 +979,6 @@ struct StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
 
     void visit(HIRExprNodeBorrow& node) override;
 
-    // - Composites (set local constant if all inner are constant)
     void visit(HIRExprNodeArraySized& node) override;
 
     void visit(HIRExprNodeArrayList& node) override;
@@ -1050,22 +989,18 @@ struct StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
 
     void visit(HIRExprNodeTuple& node) override;
 
-    // - `let` is valid if the value is constant
     void visit(HIRExprNodeLet& node) override;
 
-    // Function calls
     void visit(HIRExprNodeCallMethod& node) override;
 
     void visit(HIRExprNodeCallPath& node) override;
 
-    // - Accessors (constant if the inner is constant)
     void visit(HIRExprNodeDeref& node) override;
 
     void visit(HIRExprNodeField& node) override;
 
     void visit(HIRExprNodeIndex& node) override;
 
-    // - Operations (only cast currently)
     void visit(HIRExprNodeCast& node) override;
 
     void visit(HIRExprNodeUnsize& node) override;
@@ -1074,12 +1009,10 @@ struct StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
 
     void visit(HIRExprNodeUniOp& node) override;
 
-    // - Block (only if everything? What about just has a value?)
     void visit(HIRExprNodeBlock& node) override;
 
     void visit(HIRExprNodeConstBlock& node) override;
 
-    // - Root values
     void visit(HIRExprNodeLiteral& node) override;
 
     void visit(HIRExprNodeConstParam& node) override;
@@ -1088,7 +1021,6 @@ struct StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
 
     void visit(HIRExprNodePathValue& node) override;
 
-    // - Closures: Only constant if they don't capture anything
     void visit(HIRExprNodeClosure& node) override;
 
     bool nodeIsConstant(HIRExprNodeP& node);
@@ -1098,9 +1030,6 @@ struct StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
     bool isMaybeInteriorMut(const HIRExprNode& node) const;
 };
 
-/// <summary>
-/// Visit all expressions and just mark borrows that are of promotable statics (don't promote just yet)
-/// </summary>
 struct StaticBorrowOuterVisitorMark: public HIRVisitor {
     const HIRCrate& crate;
     StaticTraitResolve resolve_;
@@ -1119,16 +1048,12 @@ struct StaticBorrowOuterVisitorMark: public HIRVisitor {
 
     void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
 
-    // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
     void visitExpr(HIRExprPtr& exp) override;
 
     void visitConstgeneric(HIRConstGeneric& c) override;
 
     [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
 
-    // ------
-    // Code-containing items
-    // ------
     void visitFunction(HIRItemPath p, HIRFunction& item) override;
 
     void visitStatic(HIRItemPath p, HIRStatic& item) override;
@@ -1203,7 +1128,6 @@ struct StaticBorrowOuterVisitor: public HIRVisitor, public NewStaticCallback {
     const HIRTypeData* selfType = nullptr;
     const HIRItemPath* currentModulePath;
     const HIRModule* currentModule;
-    // Is the current context constant (a `const fn` or `const` item)
     bool isConst;
 
     struct NewStatic {
@@ -1228,16 +1152,12 @@ struct StaticBorrowOuterVisitor: public HIRVisitor, public NewStaticCallback {
 
     void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
 
-    // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
     void visitExpr(HIRExprPtr& exp) override;
 
     void visitConstgeneric(HIRConstGeneric& c) override;
 
     [[nodiscard]] HIRTypeRef visitType(HIRTypeRef ty) override;
 
-    // ------
-    // Code-containing items
-    // ------
     void visitFunction(HIRItemPath p, HIRFunction& item) override;
 
     void visitStatic(HIRItemPath p, HIRStatic& item) override;
@@ -1285,7 +1205,6 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
         );
         newStatic.params = mv$(generics);
         newStatic.isPromoted = true;
-        // - Since this was neeed in consteval, it's going to need to be saved?
         newStatic.saveLiteral = true;
 
         struct Nvs: HIREvaluator::Newval {
@@ -1364,7 +1283,6 @@ void HIRExpandStaticBorrowConstants(const WireBoard& wb, HIRCrate& crate) {
     StaticBorrowOuterVisitor ov(wb);
     ov.visitCrate(crate);
 
-    // Consteval can run again, creating new items
     for (auto& newTyPair : crate.newTypes) {
         crate.rootModule.modItems.insert(mv$(newTyPair));
     }
@@ -1403,26 +1321,14 @@ namespace {
 
         void visit(HIRExprNodeUse& node) override;
 
-        // ----------
-        // _CallValue
-        // ----------
-        // Replace with a UFCS call using the now-known type
         void visit(HIRExprNodeCallValue& node) override;
 
-        // ----------
-        // _CallMethod
-        // ----------
-        // Simple replacement
         void visit(HIRExprNodeCallMethod& node) override;
 
         bool isBuiltinOperator(const Span& sp, TypeckPrimitiveOperator op, const char* langitem, const HIRTypeData* tyL, const HIRTypeData* tyR) const;
 
         bool isBuiltinOperator(const Span& sp, TypeckPrimitiveOperator op, const char* langitem, const HIRTypeData* ty) const;
 
-        // -------
-        // _Assign
-        // -------
-        // Replace with overload call if not a builtin supported operation
         void visit(HIRExprNodeAssign& node) override;
 
         void visit(HIRExprNodeBinOp& node) override;
@@ -1441,7 +1347,6 @@ namespace {
 
         UfcsOuterVisitor(const WireBoard& wb);
 
-        // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
         void visitExpr(HIRExprPtr& exp) override;
 
         void visitConstgeneric(HIRConstGeneric& c) override;
@@ -1450,9 +1355,6 @@ namespace {
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override;
 
-        // ------
-        // Code-containing items
-        // ------
         void visitFunction(HIRItemPath p, HIRFunction& item) override;
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override;
@@ -1554,14 +1456,12 @@ ClosureScope::ClosureScope(HIRExprNodeClosure& node)
 CoroutineScope::CoroutineScope(HIRExprNodeGenerator& node)
     : node(&node)
 {
-    // This should always be non-empty
     yieldStack.push_back(0);
 }
 
 CoroutineScope::CoroutineScope(HIRExprNodeAsyncBlock& node)
     : node(&node)
 {
-    // This should always be non-empty
     yieldStack.push_back(0);
 }
 
@@ -1610,8 +1510,6 @@ auto AnnotateExprVisitorMark::visitRoot(HIRExprPtr& rootPtr) -> void {
     rootPtr->visit(*this);
     assert(usage.size() == expectedSize);
 
-    // Now that every closure has been classified, the calls that could
-    // not be settled earlier can be.
     for (auto* call : pendingCalls) {
         const auto* nodePp = (*call->value->resType).is_NodeType() ? ((*call->value->resType).as_NodeType().opt_Closure()) : nullptr;
         if (!nodePp || !*nodePp) {
@@ -1668,7 +1566,6 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeBlock& node) -> void {
     }
 
     if (scope) {
-        // NOTE: Have to get the pointer again (it might have changed due to inner push/pop)
         scope = &closureStack.back().as_Coroutine();
         scope->yieldStack.pop_back();
     }
@@ -1734,12 +1631,10 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeYield& node) -> void {
     auto _ = this->pushUsage(HIRValueUsage::Move);
     this->visitNodePtr(node.value);
 
-    // `yield`: Increase all stack entries that don't correspond to a loop
     CoroutineScope* scope = closureStack.size() > 0 ? closureStack.back().opt_Coroutine() : nullptr;
     if (scope && scope->node.is_Generator()) {
         for (size_t i = 0; i < scope->yieldStack.size(); i++) {
             if (scope->yieldStack[i] != CoroutineScope::STACK_MARKER_LOOP) {
-                // Assert that adding 1 won't overflow (... that'd be >65k yield statements)
                 assert(scope->yieldStack[i] < CoroutineScope::STACK_MARKER_LOOP - 1);
                 scope->yieldStack[i] += 1;
             }
@@ -1751,12 +1646,10 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeAWait& node) -> void {
     auto _ = this->pushUsage(HIRValueUsage::Move);
     this->visitNodePtr(node.value);
 
-    // `yield`: Increase all stack entries that don't correspond to a loop
     CoroutineScope* scope = closureStack.size() > 0 ? closureStack.back().opt_Coroutine() : nullptr;
     if (scope && scope->node.is_Async()) {
         for (size_t i = 0; i < scope->yieldStack.size(); i++) {
             if (scope->yieldStack[i] != CoroutineScope::STACK_MARKER_LOOP) {
-                // Assert that adding 1 won't overflow (... that'd be >65k yield statements)
                 assert(scope->yieldStack[i] < CoroutineScope::STACK_MARKER_LOOP - 1);
                 scope->yieldStack[i] += 1;
             }
@@ -1782,7 +1675,6 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeLet& node) -> void {
 auto AnnotateExprVisitorMark::visit(HIRExprNodeLoop& node) -> void {
     CoroutineScope* scope = closureStack.size() > 0 ? closureStack.back().opt_Coroutine() : nullptr;
     if (scope) {
-        // 1. Determine if there's a yield within this
         struct InnerVisitor: public HIRExprVisitorDef {
             bool hasYield = false;
 
@@ -1805,17 +1697,14 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeLoop& node) -> void {
 
             void visit(HIRExprNodeYield& node) override {
                 hasYield = true;
-                // Don't bother recursing, we've found a yield
             }
         } v(resolve_.hirCrate().types);
 
         v.visitNodePtr(node.code);
 
-        // 2. If so, push `STACK_MARKER_LOOP`
         if (v.hasYield) {
             scope->yieldStack.push_back(CoroutineScope::STACK_MARKER_LOOP);
         } else {
-            // Clear `scope` to prevent the pop
             scope = nullptr;
         }
     }
@@ -1824,14 +1713,12 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeLoop& node) -> void {
     this->visitNodePtr(node.code);
 
     if (scope) {
-        // NOTE: Have to get the pointer again (it might have changed due to inner push/pop)
         scope = &closureStack.back().as_Coroutine();
         scope->yieldStack.pop_back();
     }
 }
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeLoopControl& node) -> void {
-    // NOTE: Leaf
     if (node.value) {
         this->visitNodePtr(node.value);
     }
@@ -1970,9 +1857,7 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeDeref& node) -> void {
     if (this->getUsage() == HIRValueUsage::Move && resolve_.typeIsCopy(node.span(), node.resType)) {
         auto _ = pushUsage(HIRValueUsage::Borrow);
         this->visitNodePtr(node.value);
-    }
-    // Pointers only need a borrow to be derefernced.
-    else if (node.value->resType->is_Pointer()) {
+    } else if (node.value->resType->is_Pointer()) {
         auto _ = pushUsage(HIRValueUsage::Borrow);
         this->visitNodePtr(node.value);
     } else {
@@ -2001,12 +1886,10 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeField& node) -> void {
     bool savedIgnoreVariableCapure = ignoreVariableCapture;
     // Rust 2021 - Closures (and I assume generators) capture fields separately
     if (resolve_.hirCrate().edition >= ASTEdition::Rust2021) {
-        // Is there an active closure (or generator) AND this node isn't in a chain that has already been considered.
         if (!closureStack.empty() && !ignoreVariableCapture) {
             ::std::vector<RcString> fields;
             fields.push_back(node.field);
 
-            // Extract a chain of field names
             auto* inner = node.value.get();
             while (auto* innerField = cast<HIRExprNodeField>(inner)) {
                 fields.push_back(innerField->field);
@@ -2018,7 +1901,6 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeField& node) -> void {
                     inner = innerDeref->value.get();
                 }
             }
-            // and if the final value is a variable, then insert into the captures
             if (auto* innerVar = cast<HIRExprNodeVariable>(inner)) {
                 std::reverse(fields.begin(), fields.end());
 
@@ -2029,7 +1911,6 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeField& node) -> void {
         }
     }
 
-    // If taking this field by value, but the type is Copy - pretend it's a borrow.
     if (this->getUsage() == HIRValueUsage::Move && isCopy) {
         auto _ = pushUsage(HIRValueUsage::Borrow);
         this->visitNodePtr(node.value);
@@ -2143,8 +2024,6 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeCallMethod& node) -> void {
             case HIRFunction::Receiver::BorrowShared:
                 vu = HIRValueUsage::Borrow;
                 break;
-                //case ::HIR::Function::Receiver::PointerMut:
-                //case ::HIR::Function::Receiver::PointerConst:
         }
         auto _ = pushUsage(vu);
         this->visitNodePtr(node.value);
@@ -2180,9 +2059,6 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeStructLiteral& node) -> void {
         bool isMoved = false;
         const auto& tpb = node.baseValue->resType->as_Path().binding;
         const tStructFields* fieldsPtr;
-        // `S { 0: a, ..base }` names the tuple fields by index, so give
-        // them those names and the shared code below reads which of them
-        // the base still has to provide.
         tStructFields tupleFields;
         if (tpb.is_Enum()) {
             const auto& enm = *tpb.as_Enum();
@@ -2230,7 +2106,6 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeStructLiteral& node) -> void {
             }
         }
 
-        // If only Copy fields will be used, set usage to Borrow
         auto _ = pushUsage(isMoved ? HIRValueUsage::Move : HIRValueUsage::Borrow);
         this->visitNodePtr(node.baseValue);
     }
@@ -2309,7 +2184,6 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeClosure& node) -> void {
         }
     }
 
-    // Determine if the closure is `Copy`
     {
         node.isCopy = true;
         for (auto& cap : scope.capturedVars) {
@@ -2369,13 +2243,9 @@ auto AnnotateExprVisitorMark::visit(HIRExprNodeGenerator& node) -> void {
 }
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeGeneratorWrapper&) -> void {
-    // Lazy CTFE can extract a coroutine before the whole-crate pass.
-    // Its body was annotated before it was moved into this wrapper.
 }
 
 auto AnnotateExprVisitorMark::visit(HIRExprNodeAsyncBlock& node) -> void {
-    // NOTE: This is a near-clone of `ExprNodeGenerator` (they're very similar, and at one point
-    // futures/async were directly implemented as syntax sugar around generators)
     if (!node.code) {
         return;
     }
@@ -2426,12 +2296,10 @@ auto AnnotateExprVisitorMark::addVarDef(const Span& sp, unsigned int slot) -> vo
 }
 
 auto AnnotateExprVisitorMark::addClosureDefFromPattern(const Span& sp, const HIRPattern& pat) -> void {
-    // Add binding indexes to m_closure_defs
     for (const auto& pb : pat.bindings) {
         addVarDef(sp, pb.slot);
     }
 
-    // Recurse
     switch (pat.data.tag()) {
         case HIRPatternData::TAG_Any: {
             break;
@@ -2558,7 +2426,6 @@ auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPatter
         return vu;
     }
 
-    // Implicit derefs
     const HIRTypeData* typ = outerTy;
     for (size_t i = 0; i < pat.implicitDerefCount; i++) {
         typ = typ->as_Borrow().inner;
@@ -2577,7 +2444,6 @@ auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPatter
         }
         case HIRPatternData::TAG_Box: {
             auto& pe = pat.data.as_Box();
-            // NOTE: Specific to `owned_box`
             const auto& sty = ty->as_Path().path.data.as_Generic().params.types.at(0);
             return getUsageForPattern(sp, *pe.sub, sty);
         }
@@ -2717,7 +2583,6 @@ auto AnnotateExprVisitorMark::getUsageForPattern(const Span& sp, const HIRPatter
 }
 
 auto AnnotateExprVisitorMark::getRealUsage(const Span& sp, unsigned slot, const std::vector<RcString>& fields, HIRValueUsage usage) -> HIRValueUsage {
-    // If the usage is move, update it depending on the type
     if (usage == HIRValueUsage::Move) {
         const auto* ty = &variableTypes.at(slot);
         HIRTypeRef tmpTy;
@@ -2726,13 +2591,9 @@ auto AnnotateExprVisitorMark::getRealUsage(const Span& sp, unsigned slot, const 
             ty = &tmpTy;
         }
 
-        // Copy types just need a borrow
         if (resolve_.typeIsCopy(sp, *ty)) {
             usage = HIRValueUsage::Borrow;
-        }
-        // `&mut` types get re-borrowed
-        // - The reborrow pass is AFTER this pass
-        else if ((*ty)->is_Borrow() && (*ty)->as_Borrow().type == HIRBorrowType::Unique) {
+        } else if ((*ty)->is_Borrow() && (*ty)->as_Borrow().type == HIRBorrowType::Unique) {
             usage = HIRValueUsage::Mutate;
         } else {
         }
@@ -2745,7 +2606,6 @@ auto AnnotateExprVisitorMark::markUsedVariableClosure(const Span& sp, ClosureSco
     auto& closure = closureRec.node;
 
     if (::std::binary_search(closureDefs.begin(), closureDefs.end(), slot)) {
-        // Ignore, this is local to the current closure
         return;
     }
     usage = getRealUsage(sp, slot, fields, usage);
@@ -2755,7 +2615,6 @@ auto AnnotateExprVisitorMark::markUsedVariableClosure(const Span& sp, ClosureSco
     newEnt.fields = std::move(fields);
     newEnt.usage = usage;
 
-    // `equal_range` considering one being a prefix of the other as equal
     auto its = ::std::equal_range(closureRec.capturedVars.begin(), closureRec.capturedVars.end(), newEnt, [](const HIRExprNodeClosure::AvuCache::Capture& a, const HIRExprNodeClosure::AvuCache::Capture& b) -> bool {
         if (a.rootSlot < b.rootSlot) {
             return true;
@@ -2772,12 +2631,10 @@ auto AnnotateExprVisitorMark::markUsedVariableClosure(const Span& sp, ClosureSco
                     return b.fields[i] < a.fields[i];
                 }
             }
-            // Equal up to the prefix.
             return false;
         }
     });
     if (its.first == its.second) {
-        // Doesn't exist yet
         closureRec.capturedVars.insert(its.first, newEnt);
     } else if (its.first->fields.size() <= newEnt.fields.size()) {
         assert(its.first->rootSlot == newEnt.rootSlot);
@@ -2794,9 +2651,7 @@ auto AnnotateExprVisitorMark::markUsedVariableClosure(const Span& sp, ClosureSco
         }
 
         if (its.first + 1 == its.second) {
-            // Single pre-existing entry
         } else {
-            // Multiple pre-existing entries
             assert(its.first->fields.size() > newEnt.fields.size());
             for (auto it = its.first + 1; it != its.second; ++it) {
                 its.first->usage = std::max(its.first->usage, it->usage);
@@ -2861,8 +2716,6 @@ auto AnnotateExprVisitorMark::markUsedVariable(const Span& sp, unsigned int slot
 }
 
 auto AnnotateExprVisitorMark::applyCoroutine(const Span& sp, bool isMove, bool isCoroutineClosureBody, HIRExprNodeGenerator::AvuCache& avuCache, std::map<unsigned, CoroutineScope::Var>& usedVariables) -> void {
-    // A move coroutine normally owns all captures. A coroutine-closure instead owns
-    // its arguments while a by-reference call captures through the parent closure.
     if (isMove) {
         auto* parentClosure = !closureStack.empty() ? closureStack.back().opt_Closure() : nullptr;
         for (auto& cap : usedVariables) {
@@ -2875,7 +2728,6 @@ auto AnnotateExprVisitorMark::applyCoroutine(const Span& sp, bool isMove, bool i
             if (cap.second.usage == HIRValueUsage::Borrow) {
                 HIRTypeRef tmpTy;
                 const auto* capTyP = &variableTypes.at(cap.first);
-                //}
                 if ((*capTyP)->is_Borrow() && (*capTyP)->as_Borrow().type == HIRBorrowType::Shared) {
                     cap.second.usage = HIRValueUsage::Move;
                 }
@@ -2883,17 +2735,14 @@ auto AnnotateExprVisitorMark::applyCoroutine(const Span& sp, bool isMove, bool i
         }
     }
 
-    // - Apply into the parent stack
     if (closureStack.size() > 0) {
         for (const auto& cap : usedVariables) {
-            // Only apply already-defined variables (ones without a set `defined_stack`)
             if (cap.second.definedStack.empty()) {
                 markUsedVariable(sp, cap.first, {}, cap.second.usage);
             }
         }
     }
 
-    // Optimisation: Pre-reserve the space required
     {
         size_t nCaps = 0;
         size_t nLocals = 0;
@@ -2947,12 +2796,10 @@ auto AnnotateOuterVisitor::visitFunction(HIRItemPath p, HIRFunction& item) -> vo
 }
 
 auto AnnotateOuterVisitor::visitStatic(HIRItemPath p, HIRStatic& item) -> void {
-    // NOTE: No generics
     HIRVisitor::visitStatic(p, item);
 }
 
 auto AnnotateOuterVisitor::visitConstant(HIRItemPath p, HIRConstant& item) -> void {
-    // NOTE: No generics
     HIRVisitor::visitConstant(p, item);
 }
 
@@ -3025,7 +2872,6 @@ auto ClosureExprVisitorMutate::visitPattern(const Span& sp, HIRPattern& pat) -> 
     for (auto& pb : pat.bindings) {
         auto bindingIt = ::std::find(localVars.begin(), localVars.end(), pb.slot);
         if (bindingIt != localVars.end()) {
-            // NOTE: Offset of 1 is for `self` (`args` is destructured)
             pb.slot = 1 + (bindingIt - localVars.begin());
         } else {
             BUG(sp, "Pattern binds to non-local - " << pb);
@@ -3036,7 +2882,6 @@ auto ClosureExprVisitorMutate::visitPattern(const Span& sp, HIRPattern& pat) -> 
         if (e->extraBind.isValid()) {
             auto bindingIt = ::std::find(localVars.begin(), localVars.end(), e->extraBind.slot);
             if (bindingIt != localVars.end()) {
-                // NOTE: Offset of 1 is for `self` (`args` is destructured)
                 e->extraBind.slot = 1 + (bindingIt - localVars.begin());
             } else {
                 BUG(sp, "Pattern (split slice extra) binds to non-local - " << e->extraBind);
@@ -3056,8 +2901,6 @@ auto ClosureExprVisitorMutate::visitPathParams(HIRPathParams& pp) -> void {
 }
 
 auto ClosureExprVisitorMutate::visit(HIRExprNodeArraySized& node) -> void {
-    // The default visitor doesn't enter array sizes, so the repeat count's const
-    // generic has to be remapped to the closure's parameter list here.
     HIRExprVisitorDef::visit(node);
     node.size = monomorphiser.monomorphArraysize(node.span(), node.size);
 }
@@ -3080,7 +2923,6 @@ auto ClosureExprVisitorMutate::visit(HIRExprNodeClosure& node) -> void {
 
     // Fix params in path
     visitGenericPath(HIRVisitor::PathContext::VALUE, node.objPath);
-    // Visit captures
     for (auto& subnode : node.captures) {
         visitNodePtr(subnode);
     }
@@ -3112,18 +2954,15 @@ auto ClosureExprVisitorMutate::visit(HIRExprNodeAsyncBlock& node) -> void {
 #define NEWNODE(TY, CLASS, ...) closureMkExprnodep(pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
 
 auto ClosureExprVisitorMutate::visit(HIRExprNodeVariable& node) -> void {
-    // 1. Is it a closure-local?
     {
         auto bindingIt = ::std::find(localVars.begin(), localVars.end(), node.slot);
         if (bindingIt != localVars.end()) {
-            // NOTE: Offset of 1 is for `self` (`args` is destructured)
             auto newSlot = 1 + bindingIt - localVars.begin();
             node.slot = newSlot;
             return;
         }
     }
 
-    // 2. Is it a capture?
     {
         auto bindingIt = ::std::find_if(captures.begin(), captures.end(), [&](const HIRExprNodeClosure::AvuCache::Capture& x) {
             return x.rootSlot == node.slot;
@@ -3154,11 +2993,9 @@ auto ClosureExprVisitorMutate::visit(HIRExprNodeVariable& node) -> void {
 #define NEWNODE(TY, CLASS, ...) closureMkExprnodep(pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
 
 auto ClosureExprVisitorMutate::visit(HIRExprNodeField& node) -> void {
-    // NOTE: The logic here matches the logic in `annotate_value_usage.cpp`
     ::std::vector<RcString> fields;
     fields.push_back(node.field);
 
-    // Extract a chain of field names
     auto* inner = node.value.get();
     while (auto* innerField = cast<HIRExprNodeField>(inner)) {
         fields.push_back(innerField->field);
@@ -3168,7 +3005,6 @@ auto ClosureExprVisitorMutate::visit(HIRExprNodeField& node) -> void {
         fields.push_back(RcString());
         inner = innerDeref->value.get();
     }
-    // and if the final value is a variable, then insert into the captures
     if (auto* innerVar = cast<HIRExprNodeVariable>(inner)) {
         std::reverse(fields.begin(), fields.end());
 
@@ -3319,7 +3155,6 @@ auto ClosureExprVisitorFixup::visitNodePtr(HIRExprNodeP& node) -> void {
 
 auto ClosureExprVisitorFixup::visit(HIRExprNodeCast& node) -> void {
     const Span& sp = node.span();
-    // Handle casts from closures to function pointers
     if (((*node.value->resType).is_NodeType() && ((*node.value->resType).as_NodeType().is_Closure()))) {
         const auto* srcNodep = node.value->resType->as_NodeType().as_Closure();
         ASSERT_BUG(sp, srcNodep, "");
@@ -3334,7 +3169,6 @@ auto ClosureExprVisitorFixup::visit(HIRExprNodeCast& node) -> void {
 
         // - Get the result type (can't use `get_value` as that won't find the still-to-be stored impls)
 
-        // - Get the new PathValue
         const auto& str = *srcNode.objPtr;
         auto closureType = crate.types.path(srcNode.objPath.clone(), &str);
         auto fnPath = HIRPath(mv$(closureType), RcString("call_free"));
@@ -3397,12 +3231,9 @@ auto ClosureExprVisitorFixup::visit(HIRExprNodeCallValue& node) -> void {
 auto H::fixFnParams(HIRExprPtr& code, const HIRTypeData* selfTy, const HIRTypeData* argsTy) -> void {
     // TODO: The self_ty here is wrong, the borrow needs to be included.
     if (code.bindings.size() == 0) {
-        // No bindings - Wrapper function
-        // Insert 0 = Self, 1 = Args
         code.bindings.push_back(selfTy);
         code.bindings.push_back(argsTy);
     } else {
-        // Bindings present - Actual code (which destructures `args`)
         assert(code.bindings.size() >= 1);
         assert(code.bindings[0]->is_Infer() && code.bindings[0]->as_Infer().index == ~0u);
         code.bindings[0] = selfTy;
@@ -3410,7 +3241,6 @@ auto H::fixFnParams(HIRExprPtr& code, const HIRTypeData* selfTy, const HIRTypeDa
 }
 
 auto H::makeFnfree(HIRTypeInterner& types, HIRGenericParams params, HIRTypeRef closureType, ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> args, HIRTypeRef retTy, HIRExprPtr code) -> HIRTypeImpl {
-    // NOTE: Fixup isn't needed, there's no self
     assert(code.bindings.size() > 0);
     code.bindings[0] = types.unit();
     return HIRTypeImpl{std::move(params), std::move(closureType), makeMap1(RcString("call_free"), HIRTypeImpl::VisImplEnt<HIRFunction>{HIRPublicity::newGlobal(), false, HIRFunction(HIRFunction::Receiver::Free, HIRGenericParams{}, mv$(args), retTy, mv$(code))}), {}, {}, HIRSimplePath()};
@@ -3557,29 +3387,22 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
     }
     const auto implCounts = out.saveCounts();
 
-    // A closure can only expose call traits that exist in a no_core
-    // crate. Preserve the strongest available receiver class and
-    // fall back towards FnOnce when Fn or FnMut is absent.
     if (node.cls == HIRExprNodeClosure::Class::Shared && resolve_.hirCrate().getLangItemPathOpt("fn").components().empty()) {
         node.cls = resolve_.hirCrate().getLangItemPathOpt("fn_mut").components().empty() ? HIRExprNodeClosure::Class::Once : HIRExprNodeClosure::Class::Mut;
     } else if (node.cls == HIRExprNodeClosure::Class::Mut && resolve_.hirCrate().getLangItemPathOpt("fn_mut").components().empty()) {
         node.cls = HIRExprNodeClosure::Class::Once;
     }
 
-    // --- Extract and mutate code into a trait impl on the closure type ---
-
     // TODO: Fix up lifetimes somehow
     //  - Convert any referenced lifetimes in arguments/return into impl params
     //  - Interior lifetimes need to be renumbered
     // - Need to have done lifetime inferrence (allocating locals to all) beforehand.
 
-    // 1. Prepare type params for rewriting the expression tree
     HIRGenericParams params;
     HIRPathParams constructorPathParams;
     // TODO: Don't create using all inputs, instead only use the parameters required by the body
     auto monomorphCb = createParams(sp, resolve_, params, constructorPathParams);
 
-    // Argument and return types
     ::std::vector<HIRTypeRef> argsTyInner;
     for (const auto& arg : node.args) {
         argsTyInner.push_back(monomorphCb.monomorphType(sp, arg.second));
@@ -3587,21 +3410,15 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
     HIRTypeRef argsTy = resolve_.hirCrate().types.tuple(mv$(argsTyInner));
     HIRTypeRef retType = monomorphCb.monomorphType(sp, node.returnType);
 
-    // 2. Iterate over the nodes and rewrite variable accesses to either renumbered locals, or field accesses
     ClosureExprVisitorMutate ev{pool, node.resType, node.avuCache.localVars, node.avuCache.capturedVars, monomorphCb};
     ev.visitNodePtr(node.code);
-    // NOTE: `ev` is used down in `Args` to convert the argument destructuring pattern
 
-    // - Types of local variables
     ::std::vector<HIRTypeRef> localTypes;
     localTypes.push_back(resolve_.hirCrate().types.infer()); // self - filled by make_fn*
     for (const auto bindingIdx : node.avuCache.localVars) {
         localTypes.push_back(monomorphCb.monomorphType(sp, variableTypes.at(bindingIdx)));
     }
-    // - Generate types of captures, and construct the actual capture values
-    //  > Capture types (with borrows and using closure's type params)
     ::std::vector<HIRVisEnt<HIRTypeRef>> captureTypes;
-    //  > Capture value nodes
     ::std::vector<HIRExprNodeP> captureNodes;
     captureTypes.reserve(node.avuCache.capturedVars.size());
     captureNodes.reserve(node.avuCache.capturedVars.size());
@@ -3688,7 +3505,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
     ::std::tie(closureStructPath, closureStructPtr) = out.newType->create(CLOSURE_PATH_PREFIX, newTypeSuffix, mv$(str));
     auto& closureStructRef = closureStructPtr->as_Struct();
 
-    // Mark the object pathname in the closure.
     node.objPtr = &closureStructRef;
     node.objPath = HIRGenericPath(closureStructPath, monomorphCb.freeze());
     node.objPathBase = node.objPath.clone();
@@ -3731,9 +3547,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
         const_cast<HIRCrate&>(resolve_.hirCrate()).allTraitImpls[langCopy].getListForTypeMut(closureType).push_back(v.back().get());
     }
 
-    // ---
-    // 3. Create trait impls
-    // ---
     HIRPathParams traitParams;
     traitParams.types.push_back(argsTy);
     switch (node.cls) {
@@ -3743,7 +3556,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
             struct H2 {
                 static ::std::pair<HIRExprNodeClosure::Class, HIRTraitImpl> makeDispatch(HIRTypeInterner& types, ObjPool* pool, const Span& sp, HIRExprNodeClosure::Class c, HIRGenericParams params, HIRPathParams traitParams, const HIRTypeData* closureType, const HIRTypeData* argsTy, const HIRTypeData* retType) {
                     const auto& argsTupInner = argsTy->as_Tuple();
-                    // 1. Create a list of `arg.0, arg.1, arg.2, ...` for the dispatch methods
                     ::std::vector<HIRExprNodeP> dispatchArgs;
                     ::std::vector<HIRTypeRef> dispatchNodeArgsCache;
                     dispatchArgs.reserve(argsTupInner.size());
@@ -3789,13 +3601,11 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
                 out.implsClosure.push_back(H2::makeDispatch(resolve_.hirCrate().types, pool, sp, HIRExprNodeClosure::Class::Shared, params.clone(), traitParams.clone(), closureType, argsTy, retType));
             }
 
-            // 2. Split args_pat/args_ty into separate arguments
             ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> argsSplit;
             argsSplit.reserve(node.args.size());
             for (size_t i = 0; i < node.args.size(); i++) {
                 argsSplit.push_back(::std::make_pair(mv$(argsPat.data.as_Tuple().subPatterns[i]), mv$(argsTy->as_Tuple()[i])));
             }
-            // - Create fn_free free method
             out.implsType.push_back(box$(H::makeFnfree(resolve_.hirCrate().types, mv$(params), mv$(closureType), mv$(argsSplit), mv$(retType), std::move(bodyCode))));
 
         } break;
@@ -3803,7 +3613,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
             const auto& langFn = resolve_.hirCrate().getLangItemPath(node.span(), "fn");
             const auto methodSelfTy = resolve_.hirCrate().types.borrow(HIRBorrowType::Shared, closureType);
 
-            // - FnOnce
             {
                 auto* dispatchCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(closureType, HIRGenericPath(langFn, traitParams.clone()), RcString("call"), HIRPathParams()), makeVec2(NEWNODE(methodSelfTy, Borrow, sp, HIRBorrowType::Shared, NEWNODE(closureType, Variable, sp, RcString("self"), 0)), NEWNODE(argsTy, Variable, sp, RcString("arg"), 1)));
                 auto dispatchNode = closureMkExprnodep(dispatchCall, retType);
@@ -3811,7 +3620,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
                 auto argsArg = ::std::make_pair(HIRPattern{{false, HIRPatternBinding::Type::Move, RcString("args"), 1}, {}}, argsTy);
                 out.implsClosure.push_back(::std::make_pair(HIRExprNodeClosure::Class::Once, H::makeFnonce(params.clone(), traitParams.clone(), closureType, mv$(argsArg), retType, mv$(dispatchNode))));
             }
-            // - FnMut
             {
                 auto selfTy = resolve_.hirCrate().types.borrow(HIRBorrowType::Unique, closureType);
                 auto* dispatchCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(closureType, HIRGenericPath(langFn, traitParams.clone()), RcString("call"), HIRPathParams()), makeVec2(NEWNODE(methodSelfTy, Borrow, sp, HIRBorrowType::Shared, NEWNODE(closureType, Deref, sp, NEWNODE(mv$(selfTy), Variable, sp, RcString("self"), 0))), NEWNODE(argsTy, Variable, sp, RcString("arg"), 1)));
@@ -3821,14 +3629,12 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
                 out.implsClosure.push_back(::std::make_pair(HIRExprNodeClosure::Class::Mut, H::makeFnmut(resolve_.hirCrate().types, params.clone(), traitParams.clone(), closureType, mv$(argsArg), retType, mv$(dispatchNode))));
             }
 
-            // - Fn
             out.implsClosure.push_back(::std::make_pair(HIRExprNodeClosure::Class::Shared, H::makeFn(resolve_.hirCrate().types, mv$(params), mv$(traitParams), mv$(closureType), ::std::make_pair(mv$(argsPat), mv$(argsTy)), mv$(retType), mv$(bodyCode))));
         } break;
         case HIRExprNodeClosure::Class::Mut: {
             const auto& langFnMut = resolve_.hirCrate().getLangItemPath(node.span(), "fn_mut");
             const auto methodSelfTy = resolve_.hirCrate().types.borrow(HIRBorrowType::Unique, closureType);
 
-            // - FnOnce
             {
                 auto* dispatchCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(closureType, HIRGenericPath(langFnMut, traitParams.clone()), RcString("call_mut"), HIRPathParams()), makeVec2(NEWNODE(methodSelfTy, Borrow, sp, HIRBorrowType::Unique, NEWNODE(closureType, Variable, sp, RcString("self"), 0)), NEWNODE(argsTy, Variable, sp, RcString("arg"), 1)));
                 auto dispatchNode = closureMkExprnodep(dispatchCall, retType);
@@ -3837,11 +3643,9 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
                 out.implsClosure.push_back(::std::make_pair(HIRExprNodeClosure::Class::Once, H::makeFnonce(params.clone(), traitParams.clone(), closureType, mv$(argsArg), retType, mv$(dispatchNode))));
             }
 
-            // - FnMut (code)
             out.implsClosure.push_back(::std::make_pair(HIRExprNodeClosure::Class::Mut, H::makeFnmut(resolve_.hirCrate().types, mv$(params), mv$(traitParams), mv$(closureType), ::std::make_pair(mv$(argsPat), mv$(argsTy)), mv$(retType), mv$(bodyCode))));
         } break;
         case HIRExprNodeClosure::Class::Once:
-            // - FnOnce (code)
             out.implsClosure.push_back(::std::make_pair(HIRExprNodeClosure::Class::Once, H::makeFnonce(mv$(params), mv$(traitParams), mv$(closureType), ::std::make_pair(mv$(argsPat), mv$(argsTy)), mv$(retType), mv$(bodyCode))));
             break;
     }
@@ -3883,10 +3687,6 @@ auto ClosureExprVisitorExtract::setStateType(const Span& sp, CrVars& vars, HIRTy
 
 auto ClosureExprVisitorExtract::coroutineVars(const Span& sp, const HIRExprNodeGenerator::AvuCache& avuCache, unsigned nArgs, const Monomorph& monomorphCb, bool useClone) const -> CrVars {
     CrVars rv;
-    // 3. Classify varibles
-    // - Captures: defined outside and need to be captured using closure capture rules (`defined_stack.empty()`)
-    // - Saved: defined inside but used across a yield boundary (see GeneratorState)
-    // - Local: defined and used between two yields
     size_t nCaps = avuCache.capturedVars.size();
     size_t nLocals = avuCache.localVars.size();
     rv.nArgs = nArgs;
@@ -3895,7 +3695,6 @@ auto ClosureExprVisitorExtract::coroutineVars(const Span& sp, const HIRExprNodeG
     rv.structEnts.reserve(1 + nCaps);
     rv.captureNodes.reserve(nCaps);
 
-    // Add captures to the locals list first
     for (const auto& cap : avuCache.capturedVars) {
         unsigned index = nArgs + rv.newLocals.size();
         rv.variableRewrites.insert(std::make_pair(cap.first, index));
@@ -4020,15 +3819,9 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
 
     const auto& sp = node.span();
 
-    // NOTE: Most of generator's lowering is done in MIR lowering
-    // - This is because it needs to rewrite the flow quite severely.
-    // > HOWEVER: The code is extracted here and passed over to the new impl
-    // Update the type params in the state type path, now that everything has been visited (and thus all parameters are known)
-
     ASSERT_BUG(sp, !isActive(&node), "Cyclic generator type dependency");
     ActiveNodeGuard activeGuard{activeNode, &node};
 
-    // 1. Recurse to obtain useful metadata
     HIRExprVisitorDef::visit(node);
     extractReferencedNodeTypes(sp, node.resumeTy);
     extractReferencedNodeTypes(sp, node.yieldTy);
@@ -4041,7 +3834,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
     }
     const auto implCounts = out.saveCounts();
 
-    // -- Prepare type params for rewriting the expression tree
     HIRGenericParams params;
     HIRPathParams constructorPathParams;
     auto monomorphCb = createParams(sp, resolve_, params, constructorPathParams);
@@ -4054,7 +3846,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
     auto yieldTy = monomorphCb.monomorphType(sp, node.yieldTy);
     auto returnTy = monomorphCb.monomorphType(sp, node.returnType);
 
-    // Generate the structure,
     auto crVars = coroutineVars(node.span(), node.avuCache, 2, monomorphCb);
     fixCoroutineVarTypes(sp, params, monomorphCb, crVars);
 
@@ -4068,16 +3859,10 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
 
     monomorphCb.addBounds(sp, resolve_);
 
-    // Rust reserves the unresumed, returned, and poisoned states before
-    // assigning one discriminant to each suspension point.  Populate
-    // the enum now so layout queries performed before MIR lowering see
-    // the final tag width.
     auto suspensionCount = countCoroutineSuspensions(node.code, true, false);
     auto stateIdxType = out.newType->create("gen_state_idx#", newTypeSuffix, makeCoroutineStateEnum(suspensionCount));
     auto stateIdxTy = resolve_.hirCrate().types.path(stateIdxType.first, &stateIdxType.second->as_Enum());
 
-    // Create the captures structure here, and update it afterwards with the state
-    // - The final entry in captures is the state, and is pre-filled with zeroes by the creator's MIR lower
     auto stateStr = HIRStruct{
         params.clone(),
         HIRStruct::Repr::Rust,
@@ -4097,7 +3882,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
     ::std::tie(genStructPath, genStructPtr) = out.newType->create(GENERATOR_PATH_PREFIX, newTypeSuffix, mv$(genStr));
     auto& genStructRef = genStructPtr->as_Struct();
 
-    // Mark the object pathname in the closure.
     node.objPtr = &genStructRef;
     node.objPath = HIRGenericPath(genStructPath, monomorphCb.freeze());
     node.objPathBase = node.objPath.clone();
@@ -4107,14 +3891,11 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
     auto langPin = resolve_.hirCrate().getLangItemPath(sp, "pin");
     auto langGeneratorState = resolve_.hirCrate().getLangItemPath(sp, "coroutine_state");
 
-    // `::path::to::struct`
     auto selfArgTy = resolve_.hirCrate().types.path(HIRGenericPath(genStructPath, params.makeNopParams(resolve_.hirCrate().types, 0)), &genStructRef);
-    // `&mut Self`
     selfArgTy = resolve_.hirCrate().types.borrow(HIRBorrowType::Unique, selfArgTy);
     ::std::vector<HIRTypeRef> resumeArgs;
     resumeArgs.push_back(selfArgTy);
     resumeArgs.push_back(resumeTy);
-    // `Pin<&mut Self>`
     selfArgTy = resolve_.hirCrate().types.path(HIRGenericPath(langPin, HIRPathParams(selfArgTy)), &resolve_.hirCrate().getStructByPath(sp, langPin));
     resumeArgs[0] = selfArgTy;
     crVars.setArguments(sp, std::move(resumeArgs));
@@ -4141,7 +3922,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
         }
     }
 
-    // -- Prepare drop impl for later filling
     HIRFunction* fcnDropPtr;
     {
         HIRFunction fcnDrop;
@@ -4161,23 +3941,17 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
         out.traitImpls.push_back(std::make_pair("drop", std::move(dropImpl)));
     }
 
-    // -- Create function
     HIRFunction fcnResume;
     fcnResume.markings.trackCaller = node.trackCaller;
     fcnResume.receiver = HIRFunction::Receiver::Custom;
     fcnResume.receiverType = selfArgTy;
-    // - `self: Pin<&mut {Self}>`
     fcnResume.args.push_back(std::make_pair(HIRPattern(), selfArgTy));
     fcnResume.args.push_back(std::make_pair(node.hasResumePattern ? HIRPattern{HIRPatternBinding{false, HIRPatternBinding::Type::Move, RcString::newInterned("resume"), 1}, HIRPattern::Data::make_Any({})} : HIRPattern(), resumeTy));
     node.hasResumePattern = false;
-    // - `-> GeneratorState<{Yield},{Return}>`
     HIRPathParams retParams;
     retParams.types.push_back(yieldTy);
     retParams.types.push_back(returnTy);
     fcnResume.returnType = resolve_.hirCrate().types.path(HIRGenericPath(langGeneratorState, std::move(retParams)), &resolve_.hirCrate().getEnumByPath(sp, langGeneratorState));
-    // - ` { ... }`
-    // Emit as a top-level generator
-    // - It has a populated body, non-zero `m_obj_ptr`, and unset `m_obj_path`
     auto* v = pool->make<HIRExprNodeGeneratorWrapper>(sp, returnTy, yieldTy, mv$(bodyNode), false);
     v->captureUsages = std::move(crVars.captureUsages);
     v->resType = fcnResume.returnType;
@@ -4190,7 +3964,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeGenerator& node) -> void {
     fcnResume.code.state = exprPtr.state.clone(pool);
     fcnResume.code.bindings = std::move(crVars.newLocals);
 
-    // -- Create impl
     HIRTraitImpl impl;
     impl.traitArgs.types.push_back(resumeTy);
     impl.type = resolve_.hirCrate().types.path(HIRGenericPath(genStructPath, params.makeNopParams(resolve_.hirCrate().types, 0)), &genStructRef);
@@ -4214,7 +3987,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     ASSERT_BUG(sp, !isActive(&node), "Cyclic async block type dependency");
     ActiveNodeGuard activeGuard{activeNode, &node};
 
-    // 1. Recurse to obtain useful metadata
     HIRExprVisitorDef::visit(node);
     extractReferencedNodeTypes(sp, node.returnType);
     if (node.isAsyncGen) {
@@ -4228,7 +4000,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     }
     const auto implCounts = out.saveCounts();
 
-    // -- Prepare type params for rewriting the expression tree
     HIRGenericParams params;
     HIRPathParams constructorPathParams;
     auto monomorphCb = createParams(sp, resolve_, params, constructorPathParams);
@@ -4236,7 +4007,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     // The root result type belongs to the surrounding item.  Map it
     // once, before the generated future's impl parameters are frozen.
     auto returnTy = monomorphCb.monomorphType(sp, node.returnType);
-    // `async gen` hands out items instead of one value.
     auto itemTy = node.isAsyncGen ? monomorphCb.monomorphType(sp, node.yieldTy) : HIRTypeRef();
 
     auto crVars = coroutineVars(node.span(), node.avuCache, 2, monomorphCb, node.isUse);
@@ -4249,14 +4019,10 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
 
     monomorphCb.addBounds(sp, resolve_);
 
-    // Async blocks use the same three reserved states.  `async gen`
-    // adds a suspension for each yield as well as each await.
     auto suspensionCount = countCoroutineSuspensions(node.code, node.isAsyncGen, true);
     auto stateIdxType = out.newType->create("async_state_idx#", newTypeSuffix, makeCoroutineStateEnum(suspensionCount));
     auto stateIdxTy = resolve_.hirCrate().types.path(stateIdxType.first, &stateIdxType.second->as_Enum());
 
-    // Create the captures structure here, and update it afterwards with the state
-    // - The final entry in captures is the state, and is pre-filled with zeroes by the creator's MIR lower
     auto stateStr = HIRStruct{
         params.clone(),
         HIRStruct::Repr::Rust,
@@ -4268,12 +4034,7 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     ::std::tie(stateStructPath, stateStructPtr) = out.newType->create("async_state#", newTypeSuffix, std::move(stateStr));
     auto stateType = resolve_.hirCrate().types.path(HIRGenericPath(stateStructPath, params.makeNopParams(resolve_.hirCrate().types, 0)), &stateStructPtr->as_Struct());
 
-    // Update the state type entry, now that it's known
     setStateType(sp, crVars, stateType);
-
-    // NOTE: Most of async lowering is done in MIR lowering
-    // - This is because it needs to rewrite the flow quite severely.
-    // > HOWEVER: The code is extracted here and passed over to the new impl
 
     auto genStr = HIRStruct{params.clone(), HIRStruct::Repr::Rust, HIRStruct::Data::make_Tuple(std::move(crVars.structEnts))};
     genStr.markings.hasDropImpl = true;
@@ -4283,22 +4044,17 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     ::std::tie(genStructPath, genStructPtr) = out.newType->create(PATH_PREFIX_FUTURE, newTypeSuffix, mv$(genStr));
     auto& genStructRef = genStructPtr->as_Struct();
 
-    // Mark the object pathname
     node.objPtr = &genStructRef;
     node.objPath = HIRGenericPath(genStructPath, monomorphCb.freeze());
     node.objPathBase = node.objPath.clone();
     node.captures = std::move(crVars.captureNodes);
     node.stateDataType = resolve_.hirCrate().types.path(HIRGenericPath(stateStructPath, node.objPath.params.clone()), &stateStructPtr->as_Struct());
 
-    // `::path::to::struct`
     auto selfArgTy = resolve_.hirCrate().types.path(HIRGenericPath(genStructPath, params.makeNopParams(resolve_.hirCrate().types, 0)), &genStructRef);
-    // `&mut Self`
     selfArgTy = resolve_.hirCrate().types.borrow(HIRBorrowType::Unique, selfArgTy);
     auto langPin = resolve_.hirCrate().getLangItemPath(sp, "pin");
-    // `Pin<&mut Self>`
     selfArgTy = resolve_.hirCrate().types.path(HIRGenericPath(langPin, HIRPathParams(selfArgTy)), &resolve_.hirCrate().getStructByPath(sp, langPin));
 
-    // `context: &mut Context`
     auto langContext = resolve_.hirCrate().getLangItemPath(sp, "Context");
     auto contextArgTy = resolve_.hirCrate().types.borrow(HIRBorrowType::Unique, resolve_.hirCrate().types.path(HIRGenericPath(langContext, HIRPathParams()), &resolve_.hirCrate().getStructByPath(sp, langContext)));
     crVars.setArguments(sp, {selfArgTy, contextArgTy});
@@ -4309,7 +4065,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
         fixup.visitNodePtr(bodyNode);
     }
 
-    // -- Prepare drop impl for later filling
     HIRFunction* fcnDropPtr;
     {
         HIRFunction fcnDrop;
@@ -4329,15 +4084,11 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
         out.traitImpls.push_back(std::make_pair("drop", std::move(dropImpl)));
     }
 
-    // -- Create function
     HIRFunction fcnResume;
     fcnResume.receiver = HIRFunction::Receiver::Custom;
     fcnResume.receiverType = selfArgTy;
-    // - `self: Pin<&mut {Self}>`
     fcnResume.args.push_back(std::make_pair(HIRPattern(), selfArgTy));
-    // - `context: &mut Context<'_>`
     fcnResume.args.push_back(std::make_pair(HIRPattern(), contextArgTy));
-    // - `-> Poll<{Return}>`, or `-> Poll<Option<{Item}>>` for `async gen`
     HIRPathParams retParams;
     auto langPoll = resolve_.hirCrate().getLangItemPath(sp, "Poll");
     if (node.isAsyncGen) {
@@ -4347,9 +4098,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
         retParams.types.push_back(returnTy);
     }
     fcnResume.returnType = resolve_.hirCrate().types.path(HIRGenericPath(langPoll, std::move(retParams)), &resolve_.hirCrate().getEnumByPath(sp, langPoll));
-    // - ` { ... }`
-    // Emit as a top-level generator
-    // - It has a populated body, non-zero `m_obj_ptr`, and unset `m_obj_path`
     auto* v = pool->make<HIRExprNodeGeneratorWrapper>(sp, returnTy, node.isAsyncGen ? itemTy : resolve_.hirCrate().types.unit(), std::move(bodyNode), true);
     v->isAsyncGen = node.isAsyncGen;
     v->captureUsages = std::move(crVars.captureUsages);
@@ -4362,7 +4110,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeAsyncBlock& node) -> void {
     fcnResume.code.state = exprPtr.state.clone(pool);
     fcnResume.code.bindings = std::move(crVars.newLocals);
 
-    // -- Create impl
     HIRTraitImpl impl;
     impl.type = resolve_.hirCrate().types.path(HIRGenericPath(genStructPath, params.makeNopParams(resolve_.hirCrate().types, 0)), &genStructRef);
     if (node.isAsyncGen) {
@@ -4556,13 +4303,10 @@ auto ClosureExprVisitorExtract::Monomorph::getValue(const Span& sp, const HIRGen
 }
 
 auto ClosureExprVisitorExtract::Monomorph::monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer) const -> HIRTypeRef {
-    //}
     return Monomorphiser::monomorphType(sp, tpl, allowInfer);
 }
 
 auto ClosureExprVisitorExtract::Monomorph::maybeMonomorphBound(const Span& sp, const HIRGenericBound& bound) -> void {
-    // Determine if the bound relates to any of the types in the list.
-    // - This helps reduce the number of generics captured (which is needed for lifetimes)
     if (boundNeeded(sp, bound)) {
         if (addedBounds.insert(&bound).second) {
             auto newB = monomorphBound(sp, bound);
@@ -4573,8 +4317,6 @@ auto ClosureExprVisitorExtract::Monomorph::maybeMonomorphBound(const Span& sp, c
 
 auto ClosureExprVisitorExtract::Monomorph::addBounds(const Span& sp, const StaticTraitResolve& resolve) -> void {
     assert(&resolve == &this->resolve);
-    // Loop until no new bounds are added
-    // This handles the case where a bound adds a new generic, which then needs previously-visited bounds
     size_t l = SIZE_MAX;
     while (l != params.bounds.size()) {
         l = params.bounds.size();
@@ -4605,15 +4347,12 @@ auto ClosureExprVisitorExtract::Monomorph::contains(const ThinVector<T>& l, cons
 }
 
 auto ClosureExprVisitorExtract::Monomorph::updateTypeNeed(TypeNeed& rv, const HIRTypeData* t) const -> bool {
-    // Only include if a used generic is present AND there are no unused generics
-    // - Visit the type, if there's a generic then determine if the
     if (t->is_Generic()) {
         if (contains(constructorPathParams.types, t)) {
             if (rv == TypeNeed::NoGenerics) {
                 rv = TypeNeed::Required;
             }
         } else {
-            // Trigger an early-return
             rv = TypeNeed::UsesOthers;
             return true;
         }
@@ -4622,8 +4361,6 @@ auto ClosureExprVisitorExtract::Monomorph::updateTypeNeed(TypeNeed& rv, const HI
 }
 
 auto ClosureExprVisitorExtract::Monomorph::typeBoundNeeded(const Span& sp, const HIRTypeData* ty) const -> TypeNeed {
-    // Only include if a used generic is present AND there are no unused generics
-    // - Visit the type, if there's a generic then determine if the
     auto rv = TypeNeed::NoGenerics;
     visitTyWith(ty, [this, &rv](const HIRTypeData* type) {
         return updateTypeNeed(rv, type);
@@ -4653,13 +4390,9 @@ auto ClosureExprVisitorExtract::Monomorph::boundNeeded(const Span& sp, const HIR
     switch (b.tag()) {
         case HIRGenericBound::TAG_TraitBound: {
             auto& e = b.as_TraitBound();
-            //if( type_bound_needed(sp, e.type) != TypeNeed::Required )
-            // Allows more complex type bounds
-            // e.g. `ty::Predicate<'tcx>: LowerInto<'tcx, std::option::Option<T>>,` (from 1.54 compiler/rustc_traits/src/chalk/db.rs:54)
             if (typeBoundNeeded(sp, e.type) != TypeNeed::Required && typeBoundNeeded(sp, e.trait) != TypeNeed::Required) {
                 return false;
             }
-            // Check for an unused type omitted: `V: FromIterator<A>` `I: IntoIterator<Item=A>` - `A` is only used in the bounds.
             return true;
         }
         case HIRGenericBound::TAG_TypeEquality: {
@@ -4715,7 +4448,6 @@ auto ClosureExprVisitorExtract::ExprVisitorGeneratorRewrite::visit(HIRExprNodeCo
 }
 
 auto ClosureExprVisitorExtract::ExprVisitorGeneratorRewrite::visit(HIRExprNodeArraySized& node) -> void {
-    // The default visitor doesn't enter array sizes; remap the repeat count too.
     HIRExprVisitorDef::visit(node);
     node.size = monomorph.monomorphArraysize(node.span(), node.size);
 }
@@ -4784,7 +4516,6 @@ auto ClosureOuterVisitor::visitCrate(HIRCrate& crate) -> void {
     unsigned int closureCount = 0;
     HIRSimplePath rootModPath(crate.crateName, {});
     curModPath = &rootModPath;
-    // Type construction helper used for impl blocks
     auto newType = makeCallable<ClosureTypeCb>([&](const char* prefix, const char* suffix, auto s) -> auto {
         auto name = RcString::newInterned(FMT(prefix << "I_" << suffix << (suffix[0] ? "_" : "") << closureCount));
         closureCount += 1;
@@ -4799,7 +4530,6 @@ auto ClosureOuterVisitor::visitCrate(HIRCrate& crate) -> void {
 
     HIRVisitor::visitCrate(crate);
 
-    // Defensive measure
     out.updateSourceModule(emptyCounts, rootModPath);
 
     out.pushNewImpls(sp, crate);
@@ -4851,13 +4581,9 @@ auto ClosureOuterVisitor::visitExpr(HIRExprPtr& exp) -> void {
         auto& e = data.as_Array();
         e.inner = this->visitType(e.inner);
         if (e.size.is_Unevaluated()) {
-            //::std::vector< ::HIR::ASTType*>  tmp;
         }
         return resolve_.hirCrate().types.intern(std::move(data));
     }
-    // Values embedded in types must reach the (suppressing)
-    // visitConstgeneric hook below rather than the base walk, which
-    // would descend into their expressions.
     return visitTypeDefaultViaHooks(ty);
 }
 
@@ -5003,10 +4729,6 @@ ErasedOuterVisitorFixup::ErasedOuterVisitorFixup(const WireBoard& wb)
 }
 
 auto ErasedOuterVisitorFixup::visitParams(HIRGenericParams& params) -> void {
-    // A type parameter default is instantiated in the caller's
-    // param-env. Resolving its projections against the declaration's
-    // own bounds can turn a default that names an earlier parameter
-    // into a reference to a later, still-omitted parameter.
     for (auto& value : params.values) {
         updateType(value.type);
         visitConstgeneric(value.defaultValue);
@@ -5045,11 +4767,8 @@ auto ReborrowExprVisitorMutate::visitNodePtr(HIRExprPtr& root) -> void {
 
     root->visit(*this);
 
-    // 1. Convert into an ExprNodeP
     auto np = root.takeNode();
-    // 2. Pass to do_reborrow
     np = doReborrow(mv$(np));
-    // 3. Convert back
     root.reset(np.release());
 }
 
@@ -5075,9 +4794,7 @@ auto ReborrowExprVisitorMutate::doReborrow(HIRExprNodeP nodePtr) -> HIRExprNodeP
                 auto tyMut = nodePtr->resType;
                 auto ty = e->inner;
                 nodePtr = NEWNODE(mv$(tyMut), Borrow, sp, HIRBorrowType::Unique, NEWNODE(mv$(ty), Deref, sp, mv$(nodePtr)));
-            }
-            // Recurse into blocks - Neater this way
-            else if (auto p = cast<HIRExprNodeBlock>(nodePtr.get())) {
+            } else if (auto p = cast<HIRExprNodeBlock>(nodePtr.get())) {
                 if (p->valueNode) {
                     p->valueNode = doReborrow(mv$(p->valueNode));
                 } else {
@@ -5241,7 +4958,6 @@ auto StaticBorrowExprVisitorMark::visitNodePtr(HIRExprNodeP& node) -> void {
     assert(node);
     isConstant = false;
     {
-        // If the inner didn't set `is_constant`, clear `all_constant`
         node->visit(*this);
         if (!isConstant) {
             allConstant_ = false;
@@ -5256,10 +4972,7 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeBorrow& node) -> void {
     HIRExprVisitorDef::visit(node);
     const bool wholeValueIsConstant = allConstant_;
 
-    if (
-        const auto* inode = cast<HIRExprNodePathValue>(node.value.get())
-        //&& node.m_value->m_usage == HIR::ValueUsage::Borrow
-    ) {
+    if (const auto* inode = cast<HIRExprNodePathValue>(node.value.get())) {
         MonomorphState ms(resolve_.hirCrate().types);
         auto v = resolve_.getValue(node.span(), inode->path, ms, /*signature_only*/ true);
         if (v.is_Static()) {
@@ -5275,8 +4988,6 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeBorrow& node) -> void {
         promotionRootIsConstant = nodeIsConstant(*valuePtrPtr);
     }
 
-    // A static already supplies permanent storage. In particular, don't
-    // copy it merely because its index is dynamic.
     if (const auto* path = cast<HIRExprNodePathValue>(valuePtrPtr->get())) {
         MonomorphState ms(resolve_.hirCrate().types);
         if (resolve_.getValue(node.span(), path->path, ms, /*signature_only*/ true).is_Static()) {
@@ -5286,12 +4997,7 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeBorrow& node) -> void {
         }
     }
 
-    // If the inner, or just the storage value below an index, is constant
-    // (Array, Struct, Literal, const), it can have static storage. Runtime
-    // projections remain around the replacement path in the caller.
     if (promotionRootIsConstant) {
-        // If the inner value is already a static or it's a constant, then treat as a valid static
-        // - Seek through field accesses
         {
             auto vpp = valuePtrPtr;
             while (auto* innerNode = cast<HIRExprNodeField>(vpp->get())) {
@@ -5319,16 +5025,9 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeBorrow& node) -> void {
             return v == 0;
         })();
 
-        // Promoted values are never destroyed. Match rustc's `NeedsDrop`
-        // qualification and reject mutable borrows of non-ZST values.
-        // Interior mutability is handled at the lower levels.
         if (!isUnsized && !candidateNeedsDrop(valuePtr) && (isZst || node.type == HIRBorrowType::Shared)) {
             node.isValidStaticBorrowConstant = true;
 
-            // A runtime index still makes the resulting pointer a runtime
-            // value. The marker is enough for the mutation pass; claiming
-            // the complete borrow is constant could promote an outer
-            // expression that captures the index local.
             isConstant = wholeValueIsConstant;
         }
     } else {
@@ -5434,7 +5133,6 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeIndex& node) -> void {
     auto savedAllConstant = allConstant_;
     allConstant_ = true;
     HIRExprVisitorDef::visit(node);
-    // Ensure that it's only a ".."
     if (allConstant_) {
         const auto& ty = node.index->resType;
         if (node.value->resType->is_Array() && node.value->resType->as_Array().size == 0) {
@@ -5443,8 +5141,6 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeIndex& node) -> void {
             if (ty->is_Path() && ty->as_Path().path.data.is_Generic() && ty->as_Path().path.data.as_Generic().path == langRangeFull_) {
                 isConstant = !isMaybeInteriorMut(node);
             } else {
-                // ... or just allow it - consteval can handle indexing out of bounds, right?
-                // ref: 1.39 librustc_data_structures/indexed_vec.rs L141 `const fn from_u32_const` uses it as a compile-time assert
                 isConstant = !isMaybeInteriorMut(node);
             }
         }
@@ -5458,8 +5154,6 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeCast& node) -> void {
     HIRExprVisitorDef::visit(node);
     const auto* dstPrimitive = node.resType->opt_Primitive();
     const bool exposesAddress = dstPrimitive && isInteger(*dstPrimitive) && (node.value->resType->is_NamedFunction() || node.value->resType->is_Function() || node.value->resType->is_Pointer());
-    // A function or data address only becomes an integer at runtime.
-    // Promoting this cast would force CTFE to invent that address.
     isConstant = allConstant_ && !exposesAddress;
     allConstant_ = savedAllConstant;
 }
@@ -5477,8 +5171,6 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeBinOp& node) -> void {
     allConstant_ = true;
     HIRExprVisitorDef::visit(node);
     if (allConstant_) {
-        // Only allow operations between matching primitives
-        // - Which can only be integer/float ops
         if (node.left->resType == node.right->resType) {
             if (node.left->resType->is_Primitive()) {
                 isConstant = true;
@@ -5493,8 +5185,6 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeUniOp& node) -> void {
     allConstant_ = true;
     HIRExprVisitorDef::visit(node);
     if (allConstant_) {
-        // Only allow operations on primitives
-        // - Which can only be integer/float ops
         if (node.value->resType->is_Primitive()) {
             isConstant = true;
         }
@@ -5511,8 +5201,6 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeConstBlock& node) -> void {
     HIRExprVisitorDef::visit(node);
     // TODO: Separate the const-valid and const-promotable flags
 
-    // NOTE: The second pass will lift this into a `const`, which will then be evaluated
-    // - Evaluation will fail if it's not constant
     checkConstFinalBorrow(resolve_, *node.inner);
 
     isConstant = allConstant_;
@@ -5525,9 +5213,6 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeLiteral& node) -> void {
 
 auto StaticBorrowExprVisitorMark::visit(HIRExprNodeConstParam& node) -> void {
     HIRExprVisitorDef::visit(node);
-    // A const parameter is constant for each monomorphisation.  Keep it in
-    // a promotion candidate; the lifted generic static is evaluated into
-    // its per-path monomorphCache before codegen.
     isConstant = true;
 }
 
@@ -5539,7 +5224,6 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeUnitVariant& node) -> void {
 auto StaticBorrowExprVisitorMark::visit(HIRExprNodePathValue& node) -> void {
     HIRExprVisitorDef::visit(node);
     MonomorphState ms(resolve_.hirCrate().types);
-    // If the target is a constant, set `m_is_constant`
     auto v = resolve_.getValue(node.span(), node.path, ms, /*signature_only*/ true);
     switch (v.tag()) {
         case StaticTraitResolve::ValuePtr::TAG_Constant:
@@ -5565,12 +5249,10 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeClosure& node) -> void {
     HIRExprVisitorDef::visit(node);
     allConstant_ = savedAllConstant;
 
-    // If this is a non-capcuring closure
     if (node.avuCache.capturedVars.empty()) {
         isConstant = true;
 
         if (node.code) {
-            // Don't allow if any local is generic.
             for (auto idx : node.avuCache.localVars) {
                 ASSERT_BUG(node.span(), idx < exprPtr.bindings.size(), "Local variable #" << idx << " out of range: " << exprPtr.bindings.size());
                 if (monomorphiseTypeNeeded(exprPtr.bindings.at(idx))) {
@@ -5579,9 +5261,6 @@ auto StaticBorrowExprVisitorMark::visit(HIRExprNodeClosure& node) -> void {
                 }
             }
         } else {
-            // Allowed? It's already been converted.
-            // - Should this check the path for generics?
-            //node.m_obj_path;
         }
     }
 }
@@ -5620,9 +5299,6 @@ auto StaticBorrowExprVisitorMark::candidateNeedsDrop(HIRExprNodeP& root) const -
             HIRExprVisitorDef::visitNodePtr(node);
         }
 
-        // Closure and coroutine bodies are not evaluated when their
-        // value is constructed, so their internal temporaries are not
-        // part of the promotion candidate.
         void visit(HIRExprNodeClosure&) override {
         }
 
@@ -5713,7 +5389,6 @@ auto StaticBorrowOuterVisitorMark::visitConstgeneric(HIRConstGeneric& c) -> void
 }
 
 [[nodiscard]] auto StaticBorrowOuterVisitorMark::visitType(HIRTypeRef ty) -> HIRTypeRef {
-    // Values embedded in types must reach the visitConstgeneric hook.
     return visitTypeDefaultViaHooks(ty);
 }
 
@@ -5782,16 +5457,12 @@ auto StaticBorrowExprVisitorMutate::visitNodePtr(HIRExprNodeP& root) -> void {
 }
 
 auto StaticBorrowExprVisitorMutate::createParams(const Span& sp, HIRGenericParams& params, HIRPathParams& constructorPathParams) const -> Monomorph {
-    // - 0xFFFF "Self" -> 0 "Super" (if present)
-    // NOTE: Check `has_self` (which just checskf or impl params) and `m_self_type` (the actual self type)
-    // - Needed for some constant evalulated values
     if (resolve_.hasSelf() && selfType) {
         ASSERT_BUG(sp, selfType, "Missing self type (disagreement between m_resolve and StaticBorrowExprVisitorMutate)");
         constructorPathParams.types.push_back(selfType);
         params.types.push_back(HIRTypeParamDef{RcString::newInterned("Super"), resolve_.hirCrate().types.infer(), false}); // TODO: Determine if parent Self is Sized
         params.paramKinds.pushBack(HIRGenericParamKind::Type);
     }
-    // - Top-level params come first
     unsigned ofsImplT = params.types.size();
     for (const auto& tyDef : resolve_.implGenerics().types) {
         unsigned i = &tyDef - &resolve_.implGenerics().types.front();
@@ -5804,7 +5475,6 @@ auto StaticBorrowExprVisitorMutate::createParams(const Span& sp, HIRGenericParam
         constructorPathParams.values.push_back(HIRGenericRef(vDef.name, 0 * 256 + i));
         params.values.push_back(HIRValueParamDef{vDef.name, vDef.type});
     }
-    // - Item-level params come second
     unsigned ofsItemT = params.types.size();
     for (const auto& tyDef : resolve_.itemGenerics().types) {
         unsigned i = &tyDef - &resolve_.itemGenerics().types.front();
@@ -5824,11 +5494,8 @@ auto StaticBorrowExprVisitorMutate::createParams(const Span& sp, HIRGenericParam
         params.paramKinds.pushBack(resolve_.itemGenerics().paramKindAt(i));
     }
 
-    // Create the params used for the type on the impl block
-
     Monomorph monomorphCb(resolve_.hirCrate().types, params, ofsImplT, ofsItemT, ofsImplV, ofsItemV);
 
-    // - Clone the bounds (from both levels)
     auto monomorphBound = [&](const HIRGenericBound& b) -> HIRGenericBound {
         switch (b.tag()) {
             case HIRGenericBound::TAG_TraitBound: {
@@ -5915,7 +5582,6 @@ auto StaticBorrowExprVisitorMutate::extractNode(HIRExprNodeP& node, StaticTraitR
 
         void visit(HIRExprNodeClosure& node) override {
             HIRExprVisitorDef::visit(node);
-            // Update bindings here too
             if (node.code) {
                 for (auto& l : node.avuCache.localVars) {
                     ASSERT_BUG(node.span(), bindingMapping.count(l) != 0, "");
@@ -5968,11 +5634,9 @@ auto StaticBorrowExprVisitorMutate::visit(HIRExprNodeBorrow& node) -> void {
     HIRExprVisitorDef::visit(node);
 
     if (node.isValidStaticBorrowConstant) {
-        // Clear the flag, so subsequent visits don't repeat
         node.isValidStaticBorrowConstant = false;
 
         auto* valuePtrPtr = staticBorrowPromotionRoot(node.value);
-        // If the inner value is already a static or it's a constant, then treat as a valid static
         auto& valuePtr = *valuePtrPtr;
         if (auto* innerNode = cast<HIRExprNodeDeref>(valuePtrPtr->get())) {
             BUG(node.span(), "Unexpected inner being deref?");
@@ -5981,14 +5645,11 @@ auto StaticBorrowExprVisitorMutate::visit(HIRExprNodeBorrow& node) -> void {
         auto usage = valuePtr->usage;
 
         auto newResTy = valuePtr->resType;
-        // Clone the in-scope generics (same as done in closure generation)
-        // - Would be picky, but hard to get the bounds right.
         StaticTraitResolve resolve{resolve_.board()};
         HIRGenericParams paramsDef;
         HIRPathParams constrParams;
         auto valExpr = extractNode(valuePtr, resolve, paramsDef, constrParams);
 
-        // Create new static
         auto sp = valExpr->span();
 
         // Replace all unknown lifetimes with `'static`
@@ -5997,7 +5658,6 @@ auto StaticBorrowExprVisitorMutate::visit(HIRExprNodeBorrow& node) -> void {
         resolve.expandAssociatedTypes(sp, staticTy);
 
         auto path = newStaticCb.create(sp, mv$(staticTy), mv$(valExpr), mv$(paramsDef), false);
-        // Update the `m_value` to point to a new node
         auto newNode = NEWNODE(std::move(newResTy), PathValue, sp, HIRGenericPath(mv$(path), mv$(constrParams)), HIRExprNodePathValue::STATIC);
         newNode->usage = usage;
         valuePtr = mv$(newNode);
@@ -6033,7 +5693,6 @@ auto StaticBorrowExprVisitorMutate::visit(HIRExprNodeConstBlock& node) -> void {
         auto newResTy = m2.monomorphType(sp, staticTy, false);
 
         auto path = newStaticCb.create(sp, mv$(staticTy), mv$(valExpr), mv$(paramsDef), true);
-        // Update the `m_value` to point to a new node
         auto newNode = NEWNODE(std::move(newResTy), PathValue, sp, HIRGenericPath(std::move(path), mv$(constrParams)), HIRExprNodePathValue::CONSTANT);
         newNode->usage = usage;
         node.inner = mv$(newNode);
@@ -6105,7 +5764,6 @@ StaticBorrowOuterVisitor::StaticBorrowOuterVisitor(const WireBoard& wb)
 
 auto StaticBorrowOuterVisitor::create(Span sp, HIRTypeRef ty, HIRExprPtr valExpr, HIRGenericParams generics, bool isConst) -> HIRSimplePath {
     ASSERT_BUG(sp, currentModule, "");
-    // Assign a path (based on the current list)
     auto& list = newStatics[currentModule];
     auto idx = list.size();
     auto name = RcString::newInterned(FMT((isConst ? "lifted#" : "const#") << idx));
@@ -6118,9 +5776,6 @@ auto StaticBorrowOuterVisitor::create(Span sp, HIRTypeRef ty, HIRExprPtr valExpr
     );
     newStatic.params = mv$(generics);
     newStatic.isPromoted = true;
-    // Downstream const evaluation can execute saved `const fn` MIR that
-    // refers to this promoted static. Non-generic statics have no HIR
-    // body in an rlib, so their evaluated bytes must travel with it.
     newStatic.saveLiteral = !newStatic.params.isGeneric();
     list.push_back(NewStatic{path, std::move(newStatic), isConst});
     return path;
@@ -6129,7 +5784,6 @@ auto StaticBorrowOuterVisitor::create(Span sp, HIRTypeRef ty, HIRExprPtr valExpr
 auto StaticBorrowOuterVisitor::visitCrate(HIRCrate& crate) -> void {
     HIRVisitor::visitCrate(crate);
 
-    // Once the crate is complete, add the newly created statics to the module tree
     for (auto& modList : newStatics) {
         auto& mod = *const_cast<HIRModule*>(modList.first);
         currentModule = &mod;
@@ -6189,9 +5843,6 @@ auto StaticBorrowOuterVisitor::visitCrate(HIRCrate& crate) -> void {
             }
         };
 
-        // Publish the complete set first. Evaluating one promotion can
-        // compile a const fn which refers to another promotion from this
-        // same pass, and path lookup must already be able to find it.
         for (auto& newStaticPair : modList.second) {
             auto& newStatic = newStaticPair.data;
             auto newEnt = newStaticPair.isConst ? HIRValueItem(crate.pool->make<HIRConstant>(H::toConst(newStatic))) : HIRValueItem(crate.pool->make<HIRStatic>(std::move(newStaticPair.data)));
@@ -6289,7 +5940,6 @@ auto StaticBorrowOuterVisitor::visitConstgeneric(HIRConstGeneric& c) -> void {
 }
 
 [[nodiscard]] auto StaticBorrowOuterVisitor::visitType(HIRTypeRef ty) -> HIRTypeRef {
-    // Values embedded in types must reach the visitConstgeneric hook.
     return visitTypeDefaultViaHooks(ty);
 }
 
@@ -6406,12 +6056,10 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
     HIRExprVisitorDef::visit(node);
     const auto& tyVal = node.value->resType;
 
-    // Calling a `fn` type should be kept as a _CallValue
     if (tyVal->is_Function()) {
         return;
     }
 
-    // 1. Construct tuple type containing argument types for `Args`
     HIRTypeRef argTupType;
     {
         ::std::vector<HIRTypeRef> argTypes;
@@ -6420,7 +6068,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
         }
         argTupType = crate.types.tuple(mv$(argTypes));
     }
-    // - Make the trait arguments.
     HIRPathParams traitArgs;
     traitArgs.types.push_back(argTupType);
 
@@ -6428,7 +6075,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
     // TODO: You can call via &-ptrs, but that currently isn't handled in typeck
     if (const auto* nodePp = ((*node.value->resType).is_NodeType() ? ((*node.value->resType).as_NodeType().opt_Closure()) : nullptr)) {
         if (node.traitUsed == HIRExprNodeCallValue::TraitUsed::Unknown) {
-            // NOTE: Closure node still exists, and will do until MIR construction deletes the HIR
             switch ((*nodePp)->cls) {
                 case HIRExprNodeClosure::Class::Unknown:
                     BUG(sp, "References an ::Unknown closure");
@@ -6452,12 +6098,10 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
         }
     }
 
-    // Use marking in node to determine trait to use
     HIRTypeRef selfArgType;
     HIRPath methodPath(HIRSimplePath{});
     switch (node.traitUsed) {
         case HIRExprNodeCallValue::TraitUsed::Fn:
-            // Insert a borrow op.
             selfArgType = crate.types.borrow(HIRBorrowType::Shared, tyVal);
             node.value = NEWNODE(selfArgType, Borrow, sp, HIRBorrowType::Shared, mv$(node.value));
             methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "fn"), mv$(traitArgs)), RcString::newInterned("call"), HIRPathParams());
@@ -6471,10 +6115,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
             selfArgType = tyVal;
             methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "fn_once"), mv$(traitArgs)), RcString::newInterned("call_once"));
             break;
-        // An async callable is a callable that returns a future, and
-        // that is exactly what a closure with an async body is here. The
-        // call goes through the matching `Fn*` trait, whose impl the
-        // closure has; `async_call*` has no body to call.
         case HIRExprNodeCallValue::TraitUsed::AsyncFn:
             selfArgType = crate.types.borrow(HIRBorrowType::Shared, tyVal);
             node.value = NEWNODE(selfArgType, Borrow, sp, HIRBorrowType::Shared, mv$(node.value));
@@ -6490,13 +6130,11 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
             methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "fn_once"), mv$(traitArgs)), RcString::newInterned("call_once"));
             break;
 
-        //case ::HIR::ExprNodeCallValue::TraitUsed::Unknown:
         default:
             BUG(node.span(), "Encountered CallValue with TraitUsed::Unknown, ty=" << node.value->resType);
     }
     assert(selfArgType != HIRTypeRef());
 
-    // Construct argument list for the output
     ::std::vector<HIRExprNodeP> args;
     args.reserve(2);
     args.push_back(mv$(node.value));
@@ -6505,7 +6143,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallValue& node) -> void {
     auto* replacement = crate.pool->make<HIRExprNodeCallPath>(sp, mv$(methodPath), mv$(args));
     replacement_ = ufcsMkExprnodep(replacement, mv$(node.resType));
 
-    // Populate the cache for later passes
     auto& argTypes = replacement->cache.argTypes;
     argTypes.push_back(mv$(selfArgType));
     argTypes.push_back(mv$(argTupType));
@@ -6526,10 +6163,8 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeCallMethod& node) -> void {
         args.push_back(mv$(arg));
     }
 
-    // Replace using known function path
     auto* replacement = crate.pool->make<HIRExprNodeCallPath>(sp, mv$(node.methodPath), mv$(args));
     replacement_ = ufcsMkExprnodep(replacement, mv$(node.resType));
-    // Populate the cache for later passes
     replacement->cache = mv$(node.cache);
 }
 
@@ -6538,13 +6173,6 @@ auto UfcsExprVisitorMutate::isBuiltinOperator(const Span& sp, TypeckPrimitiveOpe
         return false;
     }
 
-    // In an ordinary crate primitive operators are compiler operations.
-    // The matching impls exported by core describe their trait surface;
-    // lowering through those impls would bake core's compilation mode
-    // (notably its overflow-check setting) into every downstream use.
-    // A no_core crate is different: it can supply its own operator lang
-    // items and observable primitive impls, so those still need normal
-    // impl selection below.
     if (!crate.isNoCore) {
         return true;
     }
@@ -6687,14 +6315,12 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeAssign& node) -> void {
         if (isBuiltinOperator(sp, operatorKind, langitem, tySlot, tyVal)) {
             return;
         }
-        // - Fall down to overload replacement
         break;
     }
 #undef _
     assert(langitem);
     assert(opname);
 
-    // Needs replacement, continue
     HIRGenericPath trait{crate.getLangItemPath(node.span(), langitem), HIRPathParams(tyVal)};
 
     auto slotTypeRefmut = crate.types.borrow(HIRBorrowType::Unique, tySlot);
@@ -6704,7 +6330,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeAssign& node) -> void {
     auto* replacement = crate.pool->make<HIRExprNodeCallPath>(sp, HIRPath(tySlot, mv$(trait), RcString::newInterned(opname), HIRPathParams()), mv$(args));
     replacement_ = ufcsMkExprnodep(replacement, mv$(node.resType));
 
-    // Populate the cache for later passes
     auto& argTypes = replacement->cache.argTypes;
     argTypes.push_back(mv$(slotTypeRefmut));
     argTypes.push_back(tyVal);
@@ -6829,8 +6454,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeBinOp& node) -> void {
     }
 
     if (isComparison) {
-        // The primitive candidate did not win, so emit a call with
-        // borrowed operands to the selected trait implementation.
         HIRPathParams traitParams;
         traitParams.types.push_back(tyR);
         HIRGenericPath trait{crate.getLangItemPath(node.span(), langitem), mv$(traitParams)};
@@ -6848,7 +6471,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeBinOp& node) -> void {
         auto* replacement = crate.pool->make<HIRExprNodeCallPath>(sp, HIRPath(tyL, mv$(trait), RcString::newInterned(method), mv$(fcnParams)), mv$(args));
         replacement_ = ufcsMkExprnodep(replacement, mv$(node.resType));
 
-        // Populate the cache for later passes
         auto& argTypes = replacement->cache.argTypes;
         argTypes.push_back(mv$(tyLRef));
         argTypes.push_back(mv$(tyRRef));
@@ -6859,7 +6481,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeBinOp& node) -> void {
     assert(langitem);
     assert(method);
 
-    // Needs replacement, continue
     HIRPathParams traitParams;
     traitParams.types.push_back(tyR);
     HIRGenericPath trait{crate.getLangItemPath(node.span(), langitem), mv$(traitParams)};
@@ -6871,7 +6492,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeBinOp& node) -> void {
     auto* replacement = crate.pool->make<HIRExprNodeCallPath>(sp, HIRPath(tyL, mv$(trait), RcString::newInterned(method)), mv$(args));
     replacement_ = ufcsMkExprnodep(replacement, mv$(node.resType));
 
-    // Populate the cache for later passes
     auto& argTypes = replacement->cache.argTypes;
     argTypes.push_back(tyL);
     argTypes.push_back(tyR);
@@ -6909,7 +6529,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeUniOp& node) -> void {
         return;
     }
 
-    // Needs replacement, continue
     HIRGenericPath trait{crate.getLangItemPath(node.span(), langitem), {}};
 
     ::std::vector<HIRExprNodeP> args;
@@ -6918,7 +6537,6 @@ auto UfcsExprVisitorMutate::visit(HIRExprNodeUniOp& node) -> void {
     auto* replacement = crate.pool->make<HIRExprNodeCallPath>(sp, HIRPath(tyVal, mv$(trait), RcString::newInterned(method)), mv$(args));
     replacement_ = ufcsMkExprnodep(replacement, mv$(node.resType));
 
-    // Populate the cache for later passes
     auto& argTypes = replacement->cache.argTypes;
     argTypes.push_back(tyVal);
     argTypes.push_back(replacement_->resType);
@@ -6978,7 +6596,6 @@ auto UfcsOuterVisitor::visitConstgeneric(HIRConstGeneric& c) -> void {
 }
 
 [[nodiscard]] auto UfcsOuterVisitor::visitType(HIRTypeRef ty) -> HIRTypeRef {
-    // Values embedded in types must reach the visitConstgeneric hook.
     return visitTypeDefaultViaHooks(ty);
 }
 
@@ -7193,8 +6810,6 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
                     auto i = paramsDef.types.size();
                     auto rv = traitPtr->typeIndexes.insert(::std::make_pair(ty.first, static_cast<unsigned>(i)));
                     if (rv.second == false) {
-                        // NOTE: Some traits have multiple parents with the same ATY name
-                        // E.g. `::"rustc_data_structures-0_0_0"::graph::ControlFlowGraph`
                         rv.first->second = UINT_MAX;
                         this->hasConflict = true;
                     } else {
@@ -7264,7 +6879,6 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
                         bool hasItem = (it != traitPtr->typeIndexes.end());
                         // TODO: Check the trait against m_type_indexes
                         if (isSelf /*&& pe.trait == trait_path*/ && hasItem) {
-                            // Replace with a new type param, need to know the index of it
                             return types.generic(RcString::newInterned(FMT("a#" << pe.item)), it->second);
                         }
                     }
@@ -7286,7 +6900,6 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
                     case HIRTraitValueItem::TAG_Function: {
                         auto& ve = vi.second.as_Function();
                         if (ve.receiver == HIRFunction::Receiver::Free) {
-                            // ?
                             break;
                         }
                         if (::std::any_of(ve.params.bounds.begin(), ve.params.bounds.end(), [&](const auto& b) {
@@ -7313,11 +6926,8 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
                         for (unsigned int i = 1; i < ve.args.size(); i++) {
                             ft.argTypes.push_back(resolvePtr->monomorphExpand(sp, ve.args[i].second, m));
                         }
-                        // Clear the first argument (the receiver)
                         HIRTypeRef fcnType = types.function(mv$(ft));
 
-                        // Detect use of `Self` and don't create the vtable if there is.
-                        // NOTE: Associated types where replaced by clone_ty_with
                         if (visitTyWith(fcnType, [&](const auto& t) {
                             return (t == types.self());
                         })) {
@@ -7345,7 +6955,6 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
                 for (const auto& st : tr.allParentTraits) {
                     auto self = types.self();
                     auto stMono = MonomorphStatePtr(types, self, &traitPath.params, nullptr).monomorphTraitpath(sp, st, false);
-                    // NOTE: Doesn't trigger non-object-safe
                     supertraitFlags->push_back(addEntsFromTrait(*st.traitPtr, stMono.path, nullptr));
                 }
             }
@@ -7354,7 +6963,6 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
     };
 
     VtableConstruct vtc{crate.types, sp, this, &resolve, &tr, {}};
-    // - Drop glue pointer
     HIRTypeDataFunctionPointer ft;
     ft.isUnsafe = false;
     ft.isVariadic = false;
@@ -7362,11 +6970,8 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
     ft.rettype = crate.types.unit();
     ft.argTypes.push_back(crate.types.pointer(HIRBorrowType::Owned, crate.types.unit()));
     vtc.fields.push_back({RcString::newInterned("#drop_glue"), HIRPublicity::newNone(), crate.types.function(mv$(ft)), {}});
-    // - Size of data
     vtc.fields.push_back({RcString::newInterned("#size"), HIRPublicity::newNone(), crate.types.primitive(HIRCoreType::Usize), {}});
-    // - Alignment of data
     vtc.fields.push_back({RcString::newInterned("#align"), HIRPublicity::newNone(), crate.types.primitive(HIRCoreType::Usize), {}});
-    // - Add methods
     ::std::vector<bool> supertraitFlags;
     if (!vtc.addEntsFromTrait(tr, traitPath, &supertraitFlags) || hasConflictingAtyName) {
         tr.valueIndexes.clear();
@@ -7374,7 +6979,6 @@ auto VtableOuterVisitor::visitTrait(HIRItemPath p, HIRTrait& tr) -> void {
         return;
     }
     tr.vtableParentTraitsStart = vtc.fields.size();
-    // Add parent vtables too.
     for (size_t i = 0; i < tr.allParentTraits.size(); i++) {
         const auto& pt = tr.allParentTraits[i];
         auto parentVtableSpath = pt.path.path;
@@ -7443,7 +7047,6 @@ auto FixupVisitor::visitStruct(HIRItemPath ip, HIRStruct& str) -> void {
             auto& fldTy = fields[trait.vtableParentTraitsStart + i].ty;
 
             if (parentTrait.vtablePath == HIRSimplePath()) {
-                // Not object safe, so clear this entry
                 fldTy = crate.types.unit();
             } else {
                 auto borrowData = fldTy->cloneData();
@@ -7458,28 +7061,21 @@ auto FixupVisitor::visitStruct(HIRItemPath ip, HIRStruct& str) -> void {
                         vtableGpath.params.types.resize(atyIdx.second + 1);
                     }
                     auto& slot = vtableGpath.params.types[atyIdx.second];
-                    // If this associated type is in the trait path `pt`
                     auto it = pt.typeBounds.find(atyIdx.first);
                     if (it != pt.typeBounds.end()) {
                         slot = it->second.type;
-                    }
-                    // If this type is not in the trait path, then check if it has a defined generic
-                    else if (trait.typeIndexes.count(atyIdx.first) != 0) {
+                    } else if (trait.typeIndexes.count(atyIdx.first) != 0) {
                         slot = crate.types.generic(RcString(), trait.typeIndexes.at(atyIdx.first));
                     } else {
-                        // Otherwise, it has to have been defined in another parent trait
                         const HIRGenericPath* gp = nullptr;
                         for (const auto& pptraitPath : parentTrait.allParentTraits) {
                             if (pptraitPath.traitPtr->types.count(atyIdx.first) != 0) {
-                                // Found the trait that defined this ATY
                                 gp = &pptraitPath.path;
                             }
                         }
                         ASSERT_BUG(sp, gp, "Failed to a find trait that defined " << atyIdx.first << " in " << pt.path.path);
 
-                        // Monomorph into the top trait
                         auto gpMono = MonomorphStatePtr(crate.types, nullptr, &pt.path.params, nullptr).monomorphGenericpath(sp, *gp);
-                        // Search the parent list
                         const HIRTraitPath* p = nullptr;
                         for (const auto& pt : trait.allParentTraits) {
                             if (pt.path == gpMono) {

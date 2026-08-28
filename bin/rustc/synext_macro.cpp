@@ -121,8 +121,6 @@ namespace {
         ERROR(sp, E0000, "Unknown architecture for asm!");
     }
 
-    /// Registers the target reserves: naming one as an operand is an error,
-    /// not a clobber.
     const char* x86ReservedRegister(const std::string& name) {
         static const std::pair<const char*, const char*> reserved[] = {
             {"bp", "the frame pointer"},
@@ -382,7 +380,6 @@ struct CConcatIdentsExpander: public ExpandProcMacro {
 };
 
 namespace {
-    // Read a string out of the input stream
     ::std::string getString(const Span& sp, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const TokenTree& tt) {
         auto lex = TTStream(sp, ParseState(), tt);
         lex.parseState().wb = &wb;
@@ -435,7 +432,6 @@ struct CExpanderModulePath: public ExpandProcMacro {
 
 namespace {
 
-    /// Options for a formatting fragment
     struct FmtArgs {
         enum class Align {
             Unspec,
@@ -466,7 +462,6 @@ namespace {
         bool widthIsArg = false;
         unsigned int width = 0;
 
-        /// `{:.0}` is a precision of zero, not an omitted precision.
         bool precSet = false;
         bool precIsArg = false;
         unsigned int prec = 0;
@@ -518,15 +513,11 @@ namespace {
         }
     };
 
-    /// A single formatting fragment
     struct FmtFrag {
-        /// Literal text preceding the fragment
         ::std::string leadingText;
 
-        /// Argument index used
         unsigned int argIndex;
 
-        /// Trait to use for formatting
         const char* traitName;
 
         // TODO: Support case where this hasn't been edited (telling the formatter that it has nothing to apply)
@@ -540,11 +531,9 @@ namespace {
             outLen = 1;
             return v1;
         } else if ((v1 & 0xC0) == 0x80) {
-            // Invalid (continuation)
             outLen = 1;
             return 0xFFFE;
         } else if ((v1 & 0xE0) == 0xC0) {
-            // Two bytes
             outLen = 2;
 
             u8 e1 = s[1];
@@ -555,7 +544,6 @@ namespace {
             u32 outval = ((v1 & 0x1F) << 6) | ((e1 & 0x3F) << 0);
             return outval;
         } else if ((v1 & 0xF0) == 0xE0) {
-            // Three bytes
             outLen = 3;
             u8 e1 = s[1];
             if ((e1 & 0xC0) != 0x80) {
@@ -569,7 +557,6 @@ namespace {
             u32 outval = ((v1 & 0x0F) << 12) | ((e1 & 0x3F) << 6) | ((e2 & 0x3F) << 0);
             return outval;
         } else if ((v1 & 0xF8) == 0xF0) {
-            // Four bytes
             outLen = 4;
             u8 e1 = s[1];
             if ((e1 & 0xC0) != 0x80) {
@@ -591,15 +578,8 @@ namespace {
         }
     }
 
-    /// Parse a format string into a sequence of fragments.
-    ///
-    /// Returns a list of fragments, and the remaining free text after the last format sequence
     ::std::tuple<::std::vector<FmtFrag>, ::std::string> parseFormatString(const Span& sp, const ::std::string& formatString, ::std::map<RcString, unsigned int>& named, unsigned int nFree, std::vector<TokenTree>& namedArgs, const Ident::Hygiene& hygiene) {
         unsigned int nextFree = 0;
-        // A named argument can also be reached by position: `{}` counts through the
-        // arguments in source order, and named ones come last. Only the arguments
-        // actually written at the call site count -- the implicit captures that
-        // `getNamed` appends below are not addressable that way.
         const unsigned int nPositional = nFree + static_cast<unsigned>(namedArgs.size());
 
         ::std::vector<FmtFrag> frags;
@@ -608,11 +588,9 @@ namespace {
         auto getNamed = [&](RcString ident) -> unsigned {
             auto it = named.find(ident);
             if (it == named.end()) {
-                // Add an implicit named argument
                 it = named.insert(std::make_pair(ident, static_cast<unsigned>(namedArgs.size()))).first;
                 // TODO: Create a token with span information pointing to this location in the string.
                 if (ident == "self") {
-                    // Technically, `self` needs hygiene, but trustme doesn't do that
                     namedArgs.push_back(Token(TOK_RWORD_SELF));
                 } else {
                     namedArgs.push_back(Token(TOK_IDENT, Ident(hygiene, ident)));
@@ -636,23 +614,18 @@ namespace {
                         // TODO: Error? Warning?
                         s--; // Step backwards, just in case
                     }
-                    // Doesn't need escaping
                     curLiteral += '}';
                 } else {
                     curLiteral += *s;
                 }
             } else {
                 s++;
-                // Escaped '{' as "{{"
                 if (*s == '{') {
                     curLiteral += '{';
                     continue;
                 }
-                // `{ }` names the next argument just like `{}` does: the space is
-                // padding in the format string, not part of the argument name.
                 skipWhitespace();
 
-                // Debugging: A view of the formatting fragment
                 const char* s2 = s;
                 while (s2 < sEnd && *s2 != '}') {
                     s2++;
@@ -663,9 +636,7 @@ namespace {
                 const char* traitName;
                 FmtArgs args;
 
-                // Formatting parameter
                 if (*s != ':' && *s != '}') {
-                    // Parse either an integer or an identifer
                     if (isdigit(*s)) {
                         unsigned int argIdx = 0;
                         do {
@@ -692,12 +663,9 @@ namespace {
 
                 skipWhitespace();
 
-                // If next character is ':', parse extra information
                 if (*s == ':') {
                     s++; // eat ':'
 
-                    // Alignment
-                    // - Padding character, a single unicode codepoint followed by '<'/'^'/'>'
                     {
                         int nextCI;
                         u32 ch = parseUtf8(s, nextCI);
@@ -719,7 +687,6 @@ namespace {
                     } else {
                     }
 
-                    // Sign
                     if (*s == '+') {
                         args.sign = FmtArgs::Sign::Plus;
                         s++;
@@ -742,7 +709,6 @@ namespace {
                     } else {
                     }
 
-                    // Padded width
                     if (::std::isdigit(*s) /*|| *s == '*'*/) {
                         unsigned int val = 0;
                         while (::std::isdigit(*s)) {
@@ -758,9 +724,6 @@ namespace {
                         } else {
                         }
                     } else if (::std::isalpha(*s) || *s == '_') {
-                        // Parse an ident and if the next character is $, convert to named
-                        // - Otherwise keep the ident around for the formatter
-
                         const char* start = s;
                         while (isalnum(*s) || *s == '_' || (*s < 0 || *s > 127)) {
                             s++;
@@ -775,11 +738,9 @@ namespace {
                         }
                     } else {
                     }
-                    // Precision
                     if (*s == '.') {
                         s++;
                         args.precSet = true;
-                        // '*' - Use next argument
                         if (*s == '*') {
                             args.precIsArg = true;
                             if (nextFree == nPositional) {
@@ -803,9 +764,6 @@ namespace {
                             } else {
                             }
                         } else if (::std::isalpha(*s) || *s == '_') {
-                            // Parse an ident and if the next character is $, convert to named
-                            // - Otherwise keep the ident around for the formatter
-
                             const char* start = s;
                             while (s != sEnd && (isalnum(*s) || *s == '_' || (*s < 0 || *s > 127))) {
                                 s++;
@@ -819,7 +777,6 @@ namespace {
                                 s = start;
                             }
                         } else {
-                            // Wut?
                             ERROR(sp, E0000, "Unexpected character in precision");
                         }
                     }
@@ -830,8 +787,6 @@ namespace {
                         ERROR(sp, E0000, "Unexpected end of formatting string");
                     }
 
-                    // Parse ident?
-                    // - Lazy way is to just handle a single char and ensure that it is just a single char
                     if (s[0] == '}') {
                         traitName = "Display";
                     } else if (s[1] == '}') {
@@ -873,9 +828,6 @@ namespace {
                         }
                         assert(*s == '}');
                     } else {
-                        // The single-character forms above leave `s` on the
-                        // closing brace; these two must do the same, or the rest
-                        // of the specifier is copied into the output as text.
                         if (strncmp(s, "x?}", 3) == 0) {
                             args.debugTy = FmtArgs::Debug::LowerHex;
                             traitName = "Debug";
@@ -892,11 +844,9 @@ namespace {
                     if (*s != '}') {
                         ERROR(sp, E0000, "Malformed formatting fragment, unexpected " << *s);
                     }
-                    // Otherwise, it's just a trivial Display call
                     traitName = "Display";
                 }
 
-                // Set index if unspecified
                 if (index == ~0u) {
                     if (nextFree == nPositional) {
                         ERROR(sp, E0000, "Not enough arguments passed, expected at least " << nPositional + 1);
@@ -949,7 +899,6 @@ namespace {
         toks.push_back(mv$(t2));
     }
 
-    //}
     void pushToks(::std::vector<TokenTree>& toks, Token t1, Token t2, Token t3, Token t4) {
         toks.push_back(mv$(t1));
         toks.push_back(mv$(t2));
@@ -976,14 +925,12 @@ namespace {
         ::std::vector<TokenTree> namedArgs;
         ::std::vector<TokenTree> freeArgs;
 
-        // - Parse the arguments
         while (GET_TOK(tok, lex) == TOK_COMMA) {
             if (lex.lookahead(0) == TOK_EOF) {
                 GET_TOK(tok, lex);
                 break;
             }
 
-            // - Named parameters
             if ((lex.lookahead(0) == TOK_IDENT || Token::typeIsRword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
                 GET_TOK(tok, lex);
                 auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
@@ -997,24 +944,19 @@ namespace {
                     ERROR(sp, E0000, "Duplicate definition of named argument `" << insRv.first->first << "`");
                 }
                 namedArgs.push_back(mv$(exprTt));
-            }
-            // - Free parameters
-            else {
+            } else {
                 auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
                 freeArgs.push_back(mv$(exprTt));
             }
         }
         CHECK_TOK(tok, TOK_EOF);
 
-        // - Parse the format string
         ::std::vector<FmtFrag> fragments;
         ::std::string tail;
         ::std::tie(fragments, tail) = parseFormatString(formatStringSp, formatString, namedArgsIndex, freeArgs.size(), namedArgs, h);
         if (addNewline) {
             tail += "\n";
         }
-        // `-Zfmt-debug=none` prints nothing for a `Debug` placeholder, so the
-        // fragment goes and the literal text before it joins the next one.
         if (lex.parseState().wb->settings->fmtDebug == Settings::FmtDebug::None) {
             ::std::vector<FmtFrag> kept;
             ::std::string pending;
@@ -1042,8 +984,6 @@ namespace {
         }
 
         ::std::vector<TokenTree> toks;
-        // This should expand to a `match (a, b, c) { (ref _0, ref _1, ref _2) => ... }` to ensure that the values live long enough?
-        // - Also avoids name collisions
         toks.push_back(TokenTree(TOK_RWORD_MATCH));
         toks.push_back(TokenTree(TOK_PAREN_OPEN));
         for (auto& arg : freeArgs) {
@@ -1067,9 +1007,6 @@ namespace {
         toks.push_back(TokenTree(TOK_FATARROW));
         toks.push_back(TokenTree(TOK_BRACE_OPEN));
 
-        // Save fragments into a static
-        // `static FRAGMENTS: [&'static str; N] = [...];`
-        // - Contains N+1 entries, where N is the number of fragments
         {
             toks.push_back(TokenTree(TOK_RWORD_STATIC));
             toks.push_back(ident("FRAGMENTS"));
@@ -1101,8 +1038,6 @@ namespace {
                 toks.push_back(TokenTree(TOK_AMP));
                 toks.push_back(TokenTree(TOK_SQUARE_OPEN));
                 for (const auto& frag : fragments) {
-                    // In 1.90.0, there's a collection of functions like `new_display`, one for each trait
-                    // Hacky option: Convert `LowerHex` into `_lower_hex`
                     ::std::stringstream newFnSs;
                     newFnSs << "new";
                     for (const char* s = frag.traitName; *s; s++) {
@@ -1123,9 +1058,7 @@ namespace {
         };
 
         if (isSimple) {
-            // ::fmt::Arguments::new_v1
             pushPath(toks, crate, {"fmt", "Arguments", "new_v1"});
-            // (
             toks.push_back(TokenTree(TOK_PAREN_OPEN));
             {
                 toks.push_back(TokenTree(TOK_AMP));
@@ -1134,17 +1067,10 @@ namespace {
 
                 H::argumentList(toks, fragments, crate);
             }
-            // )
             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
         } else // if(is_simple)
         {
-            // 1. Generate a set of arguments+formatters
-            // > Each combination of argument index and fragment type needs a unique entry in the `args` array
-
-            // Use new_v1_formatted
-            // - requires creating more entries in the `args` list to cover multiple formatters for one value
             pushPath(toks, crate, {"fmt", "Arguments", "new_v1_formatted"});
-            // (
             toks.push_back(TokenTree(TOK_PAREN_OPEN));
             {
                 toks.push_back(TokenTree(TOK_AMP));
@@ -1166,7 +1092,6 @@ namespace {
                     pushToks(toks, Token(U128(&frag - fragments.data()), CORETYPE_UINT));
                     pushToks(toks, TOK_COMMA);
 
-                    // Flags
                     {
                         pushToks(toks, ident("flags"), TOK_COLON);
 
@@ -1182,7 +1107,6 @@ namespace {
                         };
 
                         u64 flags = 0;
-                        // ::core::fmt::FlagV1 (private)
                         switch (frag.args.sign) {
                             case FmtArgs::Sign::Unspec:
                                 break;
@@ -1209,13 +1133,9 @@ namespace {
                                 flags |= 1 << Flag::DebugUpperHex;
                                 break;
                         }
-                        // Flags shifted, with 21 being SignPlus now
-                        // See `rustc-1.90.0-src/library/core/src/fmt/mod.rs` `mod flags`
                         flags <<= 21;
-                        // NOTE: The fill character is in the low 21 bits (max size of a codepoint)
                         flags |= frag.args.alignChar & 0x1FFFFF;
 
-                        // Width and precision flags
                         if (frag.args.widthIsArg || frag.args.width != 0) {
                             flags |= 1 << 27;
                         }
@@ -1223,7 +1143,6 @@ namespace {
                             flags |= 1 << 28;
                         }
 
-                        // Alignment is encoded as a flag.
                         switch (frag.args.align) {
                             case FmtArgs::Align::Unspec:
                                 flags |= 3 << 29;
@@ -1243,7 +1162,6 @@ namespace {
                         pushToks(toks, Token(U128(flags), CORETYPE_U32));
                         pushToks(toks, TOK_COMMA);
                     }
-                    // Counts (precision and width)
                     {
                         auto pushPathCount = [&](const char* variant) {
                             pushPath(toks, crate, {"fmt", "rt", "Count", variant});
@@ -1287,7 +1205,6 @@ namespace {
                 }
                 toks.push_back(TokenTree(TOK_SQUARE_CLOSE));
             }
-            // )
             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
         } // if(is_simple) else
 
@@ -1330,7 +1247,6 @@ namespace {
     }
 
     ::std::string getPathRelativeTo(const ::std::string& basePath, ::std::string path) {
-        // Absolute
         if (path[0] == '/') {
             return path;
         }
@@ -1495,7 +1411,6 @@ auto CLlvmAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrat
     ::std::vector<::std::string> clobbers;
     ::std::vector<::std::string> flags;
 
-    // Outputs
     if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
         GET_TOK(tok, lex);
         lex.putback(Token(TOK_COLON));
@@ -1521,7 +1436,6 @@ auto CLlvmAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrat
     } else {
     }
 
-    // Inputs
     if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
         GET_TOK(tok, lex);
         lex.putback(Token(TOK_COLON));
@@ -1546,7 +1460,6 @@ auto CLlvmAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrat
     } else {
     }
 
-    // Clobbers
     if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
         GET_TOK(tok, lex);
         lex.putback(Token(TOK_COLON));
@@ -1565,7 +1478,6 @@ auto CLlvmAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrat
     } else {
     }
 
-    // Flags
     if (lex.lookahead(0) == TOK_DOUBLE_COLON) {
         GET_TOK(tok, lex);
         lex.putback(Token(TOK_COLON));
@@ -1599,19 +1511,15 @@ auto CLlvmAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrat
     } else {
     }
 
-    // has to be the end
     if (lex.lookahead(0) != TOK_EOF) {
         ERROR(sp, E0000, "Unexpected token in asm! - " << lex.getToken());
     }
 
-    // Convert this into an AST node and insert as an intepolated expression
     ASTExprNodeP rv = ASTExprNodeP(new ASTExprNodeAsm{mv$(templateText), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags)});
     return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
 }
 
 auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> ::std::unique_ptr<TokenStream> {
-    // Stabilisation-path `asm!`
-
     Token tok;
     auto lex = TTStream(sp, ParseState(), tt);
     lex.parseState().wb = &wb;
@@ -1760,7 +1668,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             GET_TOK(tok, lex);
             AsmRegisterSpec regSpec;
             if (tok.type() == TOK_IDENT) {
-                //Target_GetCurSpec().m_arch
                 regSpec = AsmRegisterSpec::make_Class(getRegClass(wb, lex.pointSpan(), tok.ident().name));
             } else if (tok.type() == TOK_STRING) {
                 regSpec = AsmRegisterSpec::make_Explicit(tok.str());
@@ -1771,7 +1678,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
 
             if (lex.lookahead(0) == TOK_UNDERSCORE) {
                 GET_TOK(tok, lex);
-                // out or lateout only
                 switch (dir) {
                     case AsmDirection::LateOut:
                     case AsmDirection::Out:
@@ -1784,7 +1690,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                 auto e = ParseExpr0(lex);
 
                 if (lex.lookahead(0) == TOK_FATARROW) {
-                    // inout or inlateout only
                     switch (dir) {
                         case AsmDirection::InLateOut:
                         case AsmDirection::InOut:
@@ -1801,7 +1706,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
                         paramSpec = ASTExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), mv$(e), mv$(e2)});
                     }
                 } else {
-                    // Note: Different variant to handle `inout(reg) foo` without duplicating
                     paramSpec = ASTExprNodeAsm2::Param::make_RegSingle({dir, std::move(regSpec), mv$(e)});
                 }
             }
@@ -1814,8 +1718,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
     }
     CHECK_TOK(tok, TOK_EOF);
 
-    // - A positional operand may not follow one that has to be named to be
-    //   referenced.
     {
         bool seenNonPositional = false;
         for (size_t i = 0; i < params.size(); i++) {
@@ -1834,8 +1736,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         }
     }
 
-    // - Explicit registers must be distinct, and must not name a register
-    //   the target reserves.
     {
         const auto& arch = TargetGetCurSpec(wb).arch.name;
         const bool isX86 = arch == "x86" || arch == "x86_64";
@@ -1899,8 +1799,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
             if (spec && spec->is_Explicit()) {
                 explicitOutputs.insert(isX86 ? canonicalX86Register(spec->as_Explicit(), is64Bit) : spec->as_Explicit());
             } else if (spec) {
-                // A register-class output could land on a register the ABI
-                // clobbers, so the operand has to name its register.
                 ERROR(sp, E0000, "asm with `clobber_abi` must specify explicit registers for outputs");
             }
         }
@@ -1918,7 +1816,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         }
     }
 
-    // - Sanity-check options
     if (options.nomem && options.readonly) {
         ERROR(sp, E0000, "asm! options `nomem` and `readonly` are mutually exclusive");
     }
@@ -1928,8 +1825,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
     if (options.noreturn && hasOutputValue) {
         ERROR(sp, E0000, "asm outputs are not allowed with the `noreturn` option");
     }
-    //}
-    //}
 
     unsigned nextIndex = 0;
     std::vector<AsmLine> lines;
@@ -2020,8 +1915,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         lines.push_back(std::move(line));
     }
 
-    // - Every operand has to be referenced by the template, unless it names
-    //   an explicit register (which the assembly can use directly).
     {
         std::set<unsigned> referenced;
         for (const auto& line : lines) {
@@ -2055,7 +1948,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         }
     }
 
-    // - Sanity-check register modifiers
     for (const auto& line : lines) {
         for (const auto& frag : line.frags) {
             if (frag.index == UINT_MAX) {
@@ -2067,7 +1959,6 @@ auto CAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate& c
         }
     }
 
-    // Convert this into an AST node and insert as an intepolated expression
     ASTExprNodeP rv = ASTExprNodeP(new ASTExprNodeAsm2{mv$(options), mv$(lines), mv$(params)});
     return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
 }
@@ -2080,7 +1971,6 @@ auto CGlobalAsmExpander::expand(const Span& sp, const WireBoard& wb, const ASTCr
     ASSERT_BUG(sp, nodeAp, "");
     auto& nodeA = *nodeAp;
 
-    // `global_asm!` is not a call: only the syntax options apply to it.
     {
         const auto& o = nodeA.options;
         const char* bad = o.pure ? "pure" : o.nomem ? "nomem" : o.readonly ? "readonly" : o.preservesFlags ? "preserves_flags" : o.noreturn ? "noreturn" : o.nostack ? "nostack" : nullptr;
@@ -2306,7 +2196,6 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
     lex.parseState().wb = &wb;
     lex.parseState().module = &mod;
 
-    // assertion condition
     auto n = ParseExpr0(lex);
     ASSERT_BUG(sp, n, "No expression returned");
 
@@ -2324,13 +2213,11 @@ auto CExpanderAssert::expand(const Span& sp, const WireBoard& wb, const ASTCrate
         toks.push_back(Token(TOK_EXCLAM));
         toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())));
         toks.push_back(Token(TOK_BRACE_OPEN));
-        // User-provided message
         toks.push_back(Token(TOK_IDENT, RcString::newInterned("panic")));
         toks.push_back(Token(TOK_EXCLAM));
         toks.push_back(Token(TOK_PAREN_OPEN));
 
         auto fmt = ParseExpr0(lex);
-        // If there's a comma, it's a formatting sequence
         if (lex.getTokenIf(TOK_COMMA)) {
             toks.push_back(Token(InterpolatedFragment(InterpolatedFragment::EXPR, fmt.release())));
 
@@ -2489,14 +2376,10 @@ auto CConcatExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrate
                 rv += FMT(vp->value);
             }
         } else if (auto* vp = cast<ASTExprNodeFloat>(v.get())) {
-            // `concat!` uses the literal as written, which always has a
-            // decimal point.
             rv += formatFloatValueForToken(vp->value);
         } else if (auto* vp = cast<ASTExprNodeBool>(v.get())) {
             rv += (vp->value ? "true" : "false");
         } else if (auto* vp = cast<ASTExprNodeUniOp>(v.get())) {
-            // `concat!(-1.0)`: a negated literal is a unary operation, but
-            // it is still written as one literal.
             const auto* inner = vp->value.get();
             if (vp->type != ASTExprNodeUniOp::NEGATE) {
                 ERROR(sp, E0000, "Unexpected expression type in concat! argument");
@@ -2657,16 +2540,11 @@ auto CExpanderUnstableColumn::expand(const Span& sp, const WireBoard& wb, const 
 
 auto CExpanderModulePath::expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) -> ::std::unique_ptr<TokenStream> {
     ::std::string pathStr;
-    // A crate may be named after a reserved word, and the path names it the
-    // only way it could be written: `r#override`.
     if (LexFindReservedWord(crate.crateNameSet, crate.edition) != TOK_NULL) {
         pathStr += "r#";
     }
     pathStr += crate.crateNameSet;
     for (const auto& comp : mod.path().nodes) {
-        // Items declared in a block are kept in anonymous AST modules.
-        // Those are an implementation detail, not part of the lexical
-        // module path exposed by Rust.
         if (comp.c_str()[0] == '#') {
             continue;
         }
@@ -2689,8 +2567,6 @@ auto FmtArgs::operator!=(const FmtArgs& x) const -> bool {
     CMP(sign);
     CMP(alternate);
     CMP(zeroPad);
-    // `{:x?}` differs from `{:?}` only here, and the simple formatting
-    // path ignores everything this comparison does not name.
     CMP(debugTy);
     CMP(widthIsArg);
     CMP(width);
@@ -2738,7 +2614,6 @@ auto CIncludeExpander::expand(const Span& sp, const WireBoard& wb, const ASTCrat
     auto path = includeGetString(sp, lex, crate, mod);
     GET_CHECK_TOK(tok, lex, TOK_EOF);
 
-    //::std::string file_path = get_path_relative_to(mod.m_file_info.path, mv$(path));
     ::std::string filePath = getPathRelativeTo(sp.getTopFileSpan().filename.c_str(), mv$(path));
     crate.extraFiles.push_back(filePath);
 
@@ -2884,7 +2759,6 @@ auto CExpanderBuildDiagnosticArray::expand(const Span& sp, const WireBoard& wb, 
     toks.push_back(TOK_RWORD_PUB);
     toks.push_back(TOK_RWORD_STATIC);
     toks.push_back(Token(TOK_IDENT, itemName));
-    // : [(&'static str, &'static str); 0]
     toks.push_back(TOK_COLON);
     toks.push_back(TOK_SQUARE_OPEN);
     toks.push_back(TOK_PAREN_OPEN);
@@ -2899,7 +2773,6 @@ auto CExpanderBuildDiagnosticArray::expand(const Span& sp, const WireBoard& wb, 
     toks.push_back(TOK_SEMICOLON);
     toks.push_back(Token(U128(0), CORETYPE_UINT));
     toks.push_back(TOK_SQUARE_CLOSE);
-    // = [];
     toks.push_back(TOK_EQUAL);
     toks.push_back(TOK_SQUARE_OPEN);
     toks.push_back(TOK_SQUARE_CLOSE);

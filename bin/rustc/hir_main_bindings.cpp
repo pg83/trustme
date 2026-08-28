@@ -29,9 +29,6 @@ namespace {
     }
 
     auto metadataFilename(const auto& filename) {
-        // New rlibs are the compressed HIR stream itself. Dylibs and proc
-        // macros keep that stream in a `.rlib` companion. Old artifacts used
-        // a sibling `.hir`; recognise all three layouts during the transition.
         if (isMetadataFile(filename)) {
             return filename;
         }
@@ -42,8 +39,6 @@ namespace {
         return filename + ".hir";
     }
 }
-
-//namespace {
 
 template <typename T>
 struct D {};
@@ -82,9 +77,6 @@ struct HirDeserialiser {
     template <typename V>
     ::std::map<RcString, V> deserialiseIstrmap();
 
-    // Pool-allocated variant: module item tables are the single biggest heap
-    // consumer when loading extern crates, and they live for the whole
-    // compilation, so they belong in the arena rather than in unique_ptrs.
     template <typename T>
     ::std::unordered_map<RcString, T*> deserialiseIstrumapPooled();
 
@@ -212,7 +204,6 @@ struct HirDeserialiser {
 
     HIRLinkage deserialiseLinkage();
 
-    // - Value items
     HIRFunction deserialiseFunction();
 
     HIRFunction::Markings deserialiseFunctionMarkings();
@@ -223,7 +214,6 @@ struct HirDeserialiser {
 
     HIRStatic deserialiseStatic();
 
-    // - Type items
     HIRTypeAlias deserialiseTypealias();
 
     HIRTraitMarkings deserialiseMarkings();
@@ -302,7 +292,6 @@ template <>
 DEF_D(HIREnum::DataVariant, return d.deserialiseEnumdatavariant();)
 template <>
 DEF_D(HIRStructField, return d.deserialiseStructField();)
-//template<> DEF_D( ::HIR::Literal, return d.deserialise_literal(); )
 template <>
 DEF_D(HIRConstGeneric, return d.deserialiseConstgeneric();)
 
@@ -887,7 +876,6 @@ HIRModule HirDeserialiser::deserialiseModule() {
 
     HIRModule rv;
 
-    // m_traits doesn't need to be serialised
     rv.valueItems = deserialiseIstrumapPooled<HIRVisEnt<HIRValueItem>>();
     rv.modItems = deserialiseIstrumapPooled<HIRVisEnt<HIRTypeItem>>();
     rv.macroItems = deserialiseIstrumapPooled<HIRVisEnt<HIRMacroItem>>();
@@ -900,7 +888,6 @@ HIRExternLibrary HirDeserialiser::deserialiseExtlib() {
 }
 
 void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
-    // NOTE: This MUST be the first item
     this->crateName = in.readIstring();
     assert(this->crateName != "" && "Empty crate name loaded from metadata");
     privateVisibility = HIRPublicity::newPriv(HIRSimplePath(this->crateName));
@@ -938,8 +925,6 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     rv.linkPaths = deserialiseVec<::std::string>();
 }
 
-//}
-
 HIRCrate* HIRDeserialise(u32& id, ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename) {
     {
         HIRSerialiseReader in{metadataFilename(filename)};
@@ -955,7 +940,6 @@ RcString HIRDeserialiseJustName(const ::std::string& filename) {
     {
         HIRSerialiseReader in{metadataFilename(filename)};
 
-        // NOTE: This is the first item loaded by deserialise_crate
         auto crateName = in.readIstring();
         assert(crateName != "" && "Empty crate name loaded from metadata");
         return crateName;
@@ -982,7 +966,6 @@ namespace {
 
         void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override;
 
-        // - Type Items
         void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override;
 
         void visitInherentType(HIRItemPath p, HIRTypeAlias& item) override;
@@ -993,14 +976,11 @@ namespace {
 
         void visitEnum(HIRItemPath p, HIREnum& item) override;
 
-        // - Value Items
         void visitFunction(HIRItemPath p, HIRFunction& item) override;
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override;
 
         void visitConstant(HIRItemPath p, HIRConstant& item) override;
-
-        // - Misc
 
         bool nodeIsLeaf(const HIRExprNode& node);
 
@@ -1114,7 +1094,6 @@ void HIRDumpExpr(::std::ostream& sink, const HIRExprPtr& expr) {
 
 #undef NODE_IS
 
-//namespace {
 struct HirSerialiser {
     ::std::map<std::string, size_t> types;
     HIRSerialiseWriter& out;
@@ -1176,8 +1155,6 @@ struct HirSerialiser {
 
     template <typename T>
     void serialise(const ::std::pair<unsigned int, T>& e);
-
-    //}
 
     void serialise(bool v);
     ;
@@ -1327,7 +1304,6 @@ struct HirSerialiser {
 
     void serialise(const HIRLinkage& linkage);
 
-    // - Value items
     void serialise(const HIRFunction& fcn);
 
     void serialise(const HIRFunction::Markings& m);
@@ -1336,7 +1312,6 @@ struct HirSerialiser {
 
     void serialise(const HIRStatic& item);
 
-    // - Type items
     void serialise(const HIRTypeAlias& ta);
 
     void serialise(const HIRTraitAlias& ta);
@@ -1367,8 +1342,6 @@ struct HirSerialiser {
 
     void serialise(const HIRAssociatedType& at);
 };
-
-//}
 
 void HIRSerialise(const ::std::string& filename, const HIRCrate& crate) {
     HIRSerialiseWriter out;
@@ -1598,7 +1571,6 @@ auto HirDeserialiser::deserialiseTypeimpl() -> HIRTypeImpl {
         auto name = in.readIstring();
         rv.types.insert(::std::make_pair(mv$(name), HIRTypeImpl::VisImplEnt<HIRTypeAlias>{deserialisePub(), in.readBool(), deserialiseTypealias()}));
     }
-    // m_src_module doesn't matter after typeck
     return rv;
 }
 
@@ -1636,7 +1608,6 @@ auto HirDeserialiser::deserialiseTraitimpl() -> HIRTraitImpl {
         rv.types.insert(::std::make_pair(mv$(name), HIRTraitImpl::ImplEnt<HIRTypeRef>{isSpec, deserialiseType()}));
     }
 
-    // m_src_module doesn't matter after typeck
     return rv;
 }
 
@@ -1674,7 +1645,6 @@ auto HirDeserialiser::deserialiseMacrorules() -> ::MacroRules {
     auto crateName = in.readIstring();
     auto edition = static_cast<ASTEdition>(in.readTag());
     ::MacroRules rv(id, crateName, edition);
-    // NOTE: This is set after loading.
     rv.isMacroItem = in.readBool();
     rv.transparent = in.readBool();
     rv.rules = deserialiseVecC<::MacroRulesArm>([&]() {
@@ -3196,7 +3166,6 @@ auto HirSerialiser::serialiseArraysize(const HIRArraySize& as) -> void {
 }
 
 auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
-    // Use string comparison to ensure that lifetimes are checked
     auto tyStr = FMT(ty);
     if (tyStr[0] == '{') {
         auto p = tyStr.find('}');
@@ -3214,7 +3183,6 @@ auto HirSerialiser::serialiseType(const HIRTypeData* ty) -> void {
     out.writeTag(ty->tag());
     switch ((*ty).tag()) {
         case HIRTypeData::TAG_Infer: {
-            // BAAD
             break;
         }
         case HIRTypeData::TAG_Diverge: {
@@ -3513,8 +3481,6 @@ auto HirSerialiser::serialise(const HIRExternLibrary& lib) -> void {
 auto HirSerialiser::serialiseModule(const HIRModule& mod) -> void {
     auto _ = out.openObject("HIR::Module");
 
-    // m_traits doesn't need to be serialised
-
     serialiseStrmap(mod.valueItems);
     serialiseStrmap(mod.modItems);
     serialiseStrmap(mod.macroItems);
@@ -3545,7 +3511,6 @@ auto HirSerialiser::serialiseTypeimpl(const HIRTypeImpl& impl) -> void {
         out.writeBool(v.second.isSpecialisable);
         serialise(v.second.data);
     }
-    // m_src_module doesn't matter after typeck
 }
 
 auto HirSerialiser::serialise(const HIRTypeImpl& impl) -> void {
@@ -3583,7 +3548,6 @@ auto HirSerialiser::serialiseTraitimpl(const HIRTraitImpl& impl) -> void {
         out.writeBool(v.second.isSpecialisable);
         serialise(v.second.data);
     }
-    // m_src_module doesn't matter after typeck
 }
 
 auto HirSerialiser::serialise(const HIRTraitImpl& impl) -> void {
@@ -3635,7 +3599,6 @@ auto HirSerialiser::serialise(const ::MacroRulesPtr& mac) -> void {
 }
 
 auto HirSerialiser::serialise(const ::MacroRules& mac) -> void {
-    //m_exported: IGNORE, should be set
     out.writeString(mac.sourceCrate);
     out.writeTag(static_cast<unsigned int>(mac.edition));
     assert(mac.rules.size() > 0);
@@ -3869,7 +3832,6 @@ auto HirSerialiser::serialise(const HIRExprPtr& exp, bool saveMir) -> void {
 }
 
 auto HirSerialiser::serialise(const MIRFunction& mir) -> void {
-    // Write out MIR.
     serialiseVec(mir.locals);
     serialiseVec(mir.dropFlags);
     serialiseVec(mir.blocks);
@@ -4032,7 +3994,6 @@ auto HirSerialiser::serialise(const MIRTerminator& term) -> void {
     out.writeTag(static_cast<int>(term.tag()));
     switch (term.tag()) {
         case MIRTerminator::TAG_Incomplete: {
-            // NOTE: loops that diverge (don't break) leave a dangling bb
             break;
         }
         case MIRTerminator::TAG_Return: {
@@ -4532,8 +4493,6 @@ auto HirSerialiser::serialise(const HIRFunction::Markings& m) -> void {
     out.writeBool(m.trackCaller);
     out.writeBool(m.isRustcIntrinsic);
     out.writeBool(m.isRustcPromotable);
-    // `#[must_use]` is reported at the call site, which may be in another
-    // crate, so it has to travel with the function.
     out.writeBool(m.mustUse);
     out.writeCount(m.alignment);
     out.writeTag(static_cast<unsigned int>(m.inlineType));
@@ -4619,7 +4578,6 @@ auto HirSerialiser::serialise(const HIREnum::Class& v) -> void {
 
 auto HirSerialiser::serialise(const HIREnum::ValueVariant& v) -> void {
     out.writeString(v.name);
-    // NOTE: No expr, no longer needed
     out.writeU64(v.val.truncateU64());
 }
 

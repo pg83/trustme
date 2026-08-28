@@ -70,31 +70,12 @@ ImplRef SolverImpl::legacy() const {
 }
 
 namespace {
-    // Give every fresh placeholder in one active trait goal the same stable
-    // spelling.  This makes a recurrence through independently-instantiated
-    // blanket impls visible to the solver without changing the goal's actual
-    // type data or inference state.
     struct CanonicalizeTraitGoal final: public Monomorphiser {
         mutable ::std::vector<::std::pair<RcString, RcString>> placeholderNames_;
-        // Unresolved inference variables in the goal, canonicalised
-        // positionally so structurally identical goals share one cache key
-        // regardless of which caller variables they hold.  The canonical
-        // name is derived from the position, so only the node is stored.
         mutable Vector<const HIRTypeData*> ivarNodes_;
-        // Unresolved const inference variables, canonicalised positionally
-        // into the same reserved index range (value ivars live in their own
-        // index space).  Stores the original table index per slot.
         mutable Vector<unsigned> valueIvarIndexes_;
-        // Only mappings present when the goal is sealed belong to the input.
-        // Placeholders first seen while canonicalising a response are
-        // existential and must be freshly instantiated at every boundary.
         mutable size_t inputPlaceholderCount_ = 0;
-        // Present only for canonicalizers that fold unresolved inference
-        // variables into the reserved solver range; null keeps the legacy
-        // placeholder-only behaviour (ivars pass through untouched).
         const HMTypeInferrence* ivarTable_ = nullptr;
-        // Once frozen, unknown variables pass through raw instead of
-        // claiming new slots; sawForeignIvar_ records that it happened.
         mutable bool frozen_ = false;
         mutable bool sawForeignIvar_ = false;
 
@@ -102,13 +83,8 @@ namespace {
 
         explicit CanonicalizeTraitGoal(HIRTypeInterner& types, const HMTypeInferrence* ivarTable = nullptr);
 
-        // Canonical variables are interned Infer nodes in a reserved index
-        // range: they keep the literal class of the variable they stand for,
-        // so impl matching treats them exactly like the caller's variable.
         HIRTypeRef canonicalIvar(const HIRTypeData* infer) const;
 
-        /// Seal the slot set once the goal key is complete; only responses
-        /// are canonicalised afterwards.
         void freeze() const;
 
         bool sawForeignIvar() const;
@@ -167,11 +143,6 @@ namespace {
         return generic.isPlaceholder() && !generic.isSolverExistential() ? types.generic(instantiatePlaceholderName(generic.name), generic.binding) : types.generic(generic);
     }
 
-    // Canonical query variables created while evaluating a goal are
-    // existential.  They must be instantiated as fresh variables in the
-    // caller's inference table before a root response leaves the solver.
-    // Placeholders already present in the input goal are universal and stay
-    // unchanged.
     struct InstantiateTraitResponseForCaller final: public Monomorphiser {
         HMTypeInferrence& ivars;
         const ::std::vector<::std::pair<RcString, RcString>>& goalNames;
@@ -187,9 +158,6 @@ namespace {
 
         HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const override;
 
-        // Assembly runs in the canonical space, so a response names goal
-        // placeholders by their canonical spelling: translate those back to
-        // the caller's names before deciding what is existential.
         HIRGenericRef callerGeneric(const HIRGenericRef& generic) const;
 
         HIRTypeRef getType(const Span&, const HIRGenericRef& raw) const override;
@@ -197,10 +165,6 @@ namespace {
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& raw) const override;
     };
 
-    // Legacy/read-only consumers can observe an implementation head but have
-    // nowhere to apply the response's explicit slot assignments.  Present
-    // response existentials as the input variables they refine, preserving
-    // the correlation without mutating the inference table.
     struct CorrelateSolverResponseSlots final: public MonomorphiserNop {
         const SolverSlotValues& slots_;
         Vector<::std::pair<HIRTypeRef, HIRTypeRef>> structuralTypes_;
@@ -222,9 +186,6 @@ namespace {
         HIRConstGeneric monomorphConstgeneric(const Span& sp, const HIRConstGeneric& value, bool allowInfer) const override;
     };
 
-    // Maps one level's canonical solver variables and placeholder spellings
-    // back to what they stood for, so a response crossing a nested goal
-    // boundary never leaks that level's canonical names into the parent.
     struct DecanonicalizeSolverInfers final: public MonomorphiserNop {
         const CanonicalizeTraitGoal& canonicalizer_;
 
@@ -241,9 +202,6 @@ namespace {
 
 }
 
-// --------------------------------------------------------------------
-// HMTypeInferrence
-// --------------------------------------------------------------------
 void HMTypeInferrence::checkForLoops() {
     struct LoopChecker {
         Vector<unsigned int>& indexes;
@@ -281,8 +239,6 @@ void HMTypeInferrence::checkForLoops() {
 }
 
 void HMTypeInferrence::compactIvars() {
-    // Compaction rewrites stored types in place, which the journal does not
-    // model; it must never run while a probe could still roll back.
     ASSERT_BUG(Span(), snapshotDepth == 0, "ivar compaction during an active inference snapshot");
     this->checkForLoops();
 
@@ -647,7 +603,6 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
         }
         case HIRTypeData::TAG_Path: {
             auto& e = data.as_Path();
-            // Iterate all arguments
             H::expandIvarsPath(*this, e.path);
             break;
         }
@@ -825,7 +780,6 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
         }
         case HIRTypeData::TAG_Path: {
             auto& e = data.as_Path();
-            // Iterate all arguments
             switch (e.path.data.tag()) {
                 case HIRPath::Data::TAG_Generic: {
                     auto& e2 = e.path.data.as_Generic();
@@ -859,7 +813,6 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
         }
         case HIRTypeData::TAG_TraitObject: {
             auto& e = data.as_TraitObject();
-            // Iterate all paths
             this->addIvarsTraitPath(e.trait);
             for (auto& marker : e.markers) {
                 this->addIvarsParams(marker.params);
@@ -1038,8 +991,6 @@ void HMTypeInferrence::setIvarValTo(unsigned int slot, HIRConstGeneric val) {
         ASSERT_BUG(Span(), values[slot].val->as_Infer().index == slot, "slot " << slot << " - " << *values[slot].val);
         this->journalMutation(JournalEntry::Kind::ValSet, slot, nullptr);
         *values[slot].val = std::move(val);
-        // The warm goal cache keys on this generation; a const-value
-        // binding invalidates it just like a type binding does.
         this->markChange();
     }
 }
@@ -1058,7 +1009,6 @@ void HMTypeInferrence::ivarValUnify(unsigned int leftSlot, unsigned int rightSlo
     if (/*const auto* re =*/values[rightSlot].val->opt_Infer()) {
         values[rightSlot].alias = leftSlot;
         if (snapshotDepth != 0) {
-            // Keep the Infer value alive so rollback only clears the alias.
             this->journalMutation(JournalEntry::Kind::ValAlias, rightSlot, nullptr);
         } else {
             values[rightSlot].val.reset();
@@ -1069,12 +1019,6 @@ void HMTypeInferrence::ivarValUnify(unsigned int leftSlot, unsigned int rightSlo
         BUG(sp, "Unifiying over a set value");
     }
 }
-
-//::HIR::ASTType*& HMTypeInferrence::get_type(::HIR::ASTType*& type)
-//{
-//    }
-//    }
-//}
 
 const HIRTypeData* HMTypeInferrence::getType(const HIRTypeData* type) const {
     const auto* current = &type;
@@ -1136,7 +1080,6 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
     const auto rootIndex = this->rootIvarIndex(slot);
     auto& rootIvar = ivars.at(rootIndex);
 
-    // If the left type was '_', alias the right to it
     if (const auto* lE = type->opt_Infer(); lE && !isAliasInputInfer(lE->index)) {
         assert(lE->index != slot);
         if (lE->tyClass != HIRInferClass::None) {
@@ -1157,7 +1100,6 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
                 }
                 case HIRTypeData::TAG_Infer: {
                     auto& e = (*rootIvar.type).as_Infer();
-                    // Check for right having a ty_class
                     if (e.tyClass != HIRInferClass::None && e.tyClass != lE->tyClass) {
                         ERROR(sp, E0000, "Unifying types with mismatching literal classes - " << type << " := " << rootIvar.type);
                     }
@@ -1170,7 +1112,6 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
             }
         }
 
-        // Alias `l_e.index` to this slot
         const auto rightIndex = this->rootIvarIndex(lE->index);
         auto& rIvar = ivars.at(rightIndex);
         this->journalMutation(JournalEntry::Kind::TypeAlias, rightIndex, rIvar.type);
@@ -1198,7 +1139,6 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
 
         type = MonomorphAddLifetimes(types).monomorphType(sp, type, true);
 
-        // Otherwise, store left in right's slot
         if (const auto* e = rootIvar.type->opt_Infer()) {
             switch (e->tyClass) {
                 case HIRInferClass::None:
@@ -1215,7 +1155,6 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
                         }
                         checkTypeClassPrimitive(sp, type, e->tyClass, *primitive);
                     } else if (type->is_Diverge()) {
-                        // ... acceptable
                     } else {
                         BUG(sp, "Setting primitive to " << type);
                     }
@@ -1291,7 +1230,6 @@ const HIRConstGeneric& HMTypeInferrence::getValue(const HIRConstGeneric& val) co
 const HIRConstGeneric& HMTypeInferrence::getValue(unsigned slot) const {
     ASSERT_BUG(Span(), slot != ~0u, "HMTypeInferrence::get_value: Value generic ivar index not assigned");
     auto index = slot;
-    // Limit the iteration count to the number of ivars
     for (unsigned int count = 0; count < values.size(); count++) {
         ASSERT_BUG(Span(), index < values.size(), "");
         auto& ent = values[index];
@@ -1367,7 +1305,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
         }
         UNREACHABLE();
     };
-    //TU_MATCH(::HIR::TypeData, (this->get_type(ty).m_data), (e),
     switch ((*ty).tag()) {
         case HIRTypeData::TAG_Infer: {
             auto& e = (*ty).as_Infer();
@@ -1693,10 +1630,6 @@ bool HMTypeInferrence::typesEqual(const HIRTypeData* rl, const HIRTypeData* rr) 
     UNREACHABLE();
 }
 
-// --------------------------------------------------------------------
-// Unifier
-// --------------------------------------------------------------------
-
 bool HMTypeInferrence::containsLiveIvar(const HIRTypeData* type, unsigned int rootIndex) const {
     const auto* resolved = this->getType(type);
     return visitTyWith(resolved, [&](const HIRTypeData* inner) {
@@ -1718,10 +1651,6 @@ namespace {
         return infer && infer->index != ~0u && !isAliasInputInfer(infer->index);
     }
 
-    /// An unresolved projection may still normalise to anything: it
-    /// can neither prove nor refute an equality here.  Erased opaque
-    /// types are nominal and rigid outside their defining scope; the
-    /// defining-scope caller handles reveal before invoking Unifier.
     bool typeIsRigidUnknown(const HIRTypeData* type) {
         if (const auto* path = type->opt_Path()) {
             if (!path->path.data.is_Generic()) {
@@ -1820,9 +1749,6 @@ Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTyp
     if (left == right) {
         return Outcome::Proven;
     }
-    // Canonicalization can rebuild the same rigid projection with a
-    // different interned node. It is still an exact equality; only a
-    // genuinely different rigid alias must remain deferred.
     if (left->equalsIgnoringRegions(right)) {
         return Outcome::Proven;
     }
@@ -1847,9 +1773,6 @@ Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTyp
             }
         }
         if (infer->as_Infer().tyClass != HIRInferClass::None && typeIsRigidUnknown(other)) {
-            // A projection may normalise to a primitive in this
-            // literal class.  Defer the alias relation first; the
-            // normalised output is checked against the class later.
             return this->defer(left, right);
         }
         if (!literalClassAccepts(table_, infer->as_Infer().tyClass, other)) {
@@ -1912,7 +1835,6 @@ Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTyp
         case HIRTypeData::TAG_Primitive:
         case HIRTypeData::TAG_Diverge:
         case HIRTypeData::TAG_NodeType: {
-            // Interned: equality is pointer identity, checked above.
             return Outcome::Mismatch;
         }
         case HIRTypeData::TAG_Generic: {
@@ -1922,8 +1844,6 @@ Unifier::Outcome Unifier::unifyResolved(const HIRTypeData* leftRaw, const HIRTyp
             return Outcome::Mismatch;
         }
         case HIRTypeData::TAG_Path: {
-            // Rigid-unknown paths (any UFCS form, unbound or opaque
-            // bindings) were deferred above; both sides are nominal.
             const auto& le = left->as_Path().path.data.as_Generic();
             const auto& re = right->as_Path().path.data.as_Generic();
             if (le.path != re.path) {
@@ -2239,7 +2159,6 @@ Unifier::Outcome Unifier::unifyValuesResolved(const HIRConstGeneric& leftRaw, co
             table_.setIvarValTo(leftLive ? *leftLive : *rightLive, other.clone());
             return Outcome::Proven;
         }
-        // Placeholders, unevaluated expressions and rigid unknowns.
         return deferValue();
     }
     if (left.is_Infer() || right.is_Infer()) {
@@ -2257,19 +2176,11 @@ Unifier::Outcome Unifier::unifyValuesResolved(const HIRConstGeneric& leftRaw, co
     if ((left.is_Generic() && !left.as_Generic().isPlaceholder() && right.is_Evaluated()) || (right.is_Generic() && !right.as_Generic().isPlaceholder() && left.is_Evaluated())) {
         return Outcome::Mismatch;
     }
-    // Unevaluated expressions or placeholder/value mixtures.
     return deferValue();
 }
 
-// --------------------------------------------------------------------
-// TraitResolution
-// --------------------------------------------------------------------
-
 namespace {
     HIRCompare compareValue(const Span& sp, const HIRConstGeneric& leftRaw, const HIRConstGeneric& rightRaw, const HMTypeInferrence& infer) {
-        // The guarded overload keeps reserved-range indexes (alias
-        // inputs and solver-canonical value slots) rigid instead of
-        // asserting on the table bounds.
         const auto& left = infer.getValue(leftRaw);
         const auto& right = infer.getValue(rightRaw);
         if (left == right) {
@@ -2310,8 +2221,6 @@ HIRCompare TraitResolution::comparePp(const Span& sp, const HIRPathParams& left,
     return ord;
 }
 
-// -------------------------------------------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------------------------------------------
 bool TraitResolution::iterateBoundsTraitsCb(const Span& sp, const HIRTypeData* type, const HIRSimplePath& trait, TraitBoundCallback& cb) const {
     for (const auto& b : traitBounds) {
         if (b.first.second.path != trait) {
@@ -2386,7 +2295,6 @@ bool TraitResolution::iterateAtyBoundsCb(const Span& sp, const HIRPath::Data::Da
             return true;
         }
     }
-    // Search `<Self as Trait>::Name` bounds on the trait itself
     for (const auto& bound : traitRef.params.bounds) {
         if (!bound.is_TraitBound()) {
             continue;
@@ -2431,10 +2339,6 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
     const auto& type = this->ivars.getType(ty);
 
     if (trait == langSized()) {
-        // As with Copy below, candidate assembly must not solve the
-        // same goal recursively. Declared Sized bounds have already
-        // been assembled; this branch contributes only the builtin
-        // structural candidate.
         auto cmp = typeIsSizedBuiltin(sp, type);
         if (cmp != HIRCompare::Unequal) {
             return callback.visit(ImplRef(type, nullptr, nullptr), certaintyFromCompare(cmp));
@@ -2444,10 +2348,6 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
     }
 
     if (trait == langCopy()) {
-        // Candidate assembly is already the declared-impl search.
-        // Calling the public typeIsCopy here would solve the same
-        // Copy goal recursively and turn the active-cycle ambiguity
-        // into a spurious builtin candidate for nominal types.
         auto cmp = this->typeIsCopyBuiltin(sp, type);
         if (cmp != HIRCompare::Unequal) {
             return callback.visit(ImplRef(type, nullptr, nullptr), certaintyFromCompare(cmp));
@@ -2492,7 +2392,6 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         }
     }
 
-    // - `DiscriminantKind`
     if (!langDiscriminantKind().components().empty() && trait == langDiscriminantKind()) {
         const auto nameDiscriminant = RcString::newInterned("Discriminant");
         // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
@@ -2543,10 +2442,7 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         auto certainty = SolverCertainty::Proven;
         if (type->is_Infer() || (type->is_Path() && type->as_Path().binding.is_Unbound())) {
             return callback.visit(ImplRef(type, HIRPathParams(), HIRTraitPath::assocListT()), SolverCertainty::Ambiguous);
-        }
-        // Generics (or opaque ATYs)
-        else if (type->is_Generic() || (type->is_Path() && type->as_Path().binding.is_Opaque())) {
-            // If the type is `Sized` return `()` as the type
+        } else if (type->is_Generic() || (type->is_Path() && type->as_Path().binding.is_Opaque())) {
             const auto sized = typeIsSized(sp, type);
             if (sized != HIRCompare::Unequal) {
                 metaTy = crate.types.unit();
@@ -2555,22 +2451,14 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
                     certainty = SolverCertainty::Ambiguous;
                 }
             } else {
-                // Return unbounded
-                // - leave as `_`
             }
-        }
-        // Trait object: `Metadata=DynMetadata<T>`
-        else if (type->is_TraitObject()) {
+        } else if (type->is_TraitObject()) {
             metaTy = crate.types.path(HIRPath(HIRGenericPath(this->crate.getLangItemPath(sp, "dyn_metadata"), HIRPathParams(type))), HIRTypePathBinding::make_Struct(&crate.getStructByPath(sp, this->crate.getLangItemPath(sp, "dyn_metadata"))));
             hasMetaTy = true;
-        }
-        // Slice and str
-        else if (type->is_Slice() || ((*type).is_Primitive() && ((*type).as_Primitive() == HIRCoreType::Str))) {
+        } else if (type->is_Slice() || ((*type).is_Primitive() && ((*type).as_Primitive() == HIRCoreType::Str))) {
             metaTy = crate.types.primitive(HIRCoreType::Usize);
             hasMetaTy = true;
-        }
-        // Structs: Can delegate their metadata
-        else if (type->is_Path() && type->as_Path().binding.is_Struct()) {
+        } else if (type->is_Path() && type->as_Path().binding.is_Struct()) {
             const auto& str = *type->as_Path().binding.as_Struct();
             switch (str.structMarkings.dstType) {
                 case HIRStructMarkings::DstType::None:
@@ -2612,10 +2500,7 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
                     hasMetaTy = true;
                     break;
             }
-        }
-        // A tuple is unsized when its last element is, and it takes
-        // that element's metadata.
-        else if (type->is_Tuple() && !type->as_Tuple().empty()) {
+        } else if (type->is_Tuple() && !type->as_Tuple().empty()) {
             auto tailTy = this->expandAssociatedTypes(sp, HIRTypeRef(type->as_Tuple().back()));
             return delegateMetadata(tailTy);
         } else {
@@ -2629,21 +2514,16 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
 
         return callback.visit(ImplRef(type, {}, std::move(assocList)), certainty);
     }
-    // - `Tuple`
     if (!langTuple.components().empty() && trait == langTuple) {
-        // Fuzzy impl for `_` and unbound ATYs
         if (type->is_Infer() || (type->is_Path() && type->as_Path().binding.is_Unbound())) {
             return callback.visit(ImplRef(type, HIRPathParams(), HIRTraitPath::assocListT()), SolverCertainty::Ambiguous);
         }
-        // Impl for tuples
         if (type->is_Tuple()) {
             return callback.visit(ImplRef(type, {}, HIRTraitPath::assocListT()));
         }
-        // No impls for anything else
         return false;
     }
 
-    // Magic Unsize impls to trait objects
     if (trait == langUnsize()) {
         ASSERT_BUG(sp, params.types.size() == 1, "Unsize trait requires a single type param");
         const auto& dstTy = this->ivars.getType(params.types[0]);
@@ -2657,9 +2537,6 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
             HIRPathParams realParams{mv$(newDst)};
             rv = callback.visit(ImplRef(type, mv$(realParams), {}), SolverCertainty::Ambiguous);
         };
-        //if( dst_ty->is_Infer() || type->is_Infer() )
-        //{
-        //}
         auto cmp = this->canUnsize(sp, dstTy, type, cb);
         if (cmp == HIRCompare::Equal) {
             assert(!rv);
@@ -2668,14 +2545,12 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         return rv;
     }
 
-    // Magical CoerceUnsized impls for various types
     if (!langCoerceUnsized.components().empty() && trait == langCoerceUnsized) {
         if (assembleParamEnvCandidatesCb(sp, trait, params, type, callback)) {
             return true;
         }
 
         const auto& dstTy = params.types.at(0);
-        // - `*mut T => *const T`
         if (const auto* e = type->opt_Pointer()) {
             if (const auto* de = dstTy->opt_Pointer()) {
                 if (de->type < e->type) {
@@ -2694,7 +2569,6 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
         if (assembleParamEnvCandidatesCb(sp, trait, params, type, callback)) {
             return true;
         }
-        // Lowest level of sizedness: This _might_ be sized (i.e. it's not an extern type?)
         return callback.visit(ImplRef(type, {}, HIRTraitPath::assocListT()));
     } else if (trait == langMetaSized()) {
         TODO(sp, "MetaSized");
@@ -2711,12 +2585,9 @@ bool TraitResolution::assembleMagicCandidatesCb(const Span& sp, const HIRSimpleP
     }
 
     if (trait == langDestruct()) {
-        // Inidicates that something is droppable
-        // - Applies to everything?
         if (assembleParamEnvCandidatesCb(sp, trait, params, type, callback)) {
             return true;
         }
-        // Lowest level of sizedness: This _might_ be sized (i.e. it's not an extern type?)
         return callback.visit(ImplRef(type, {}, HIRTraitPath::assocListT()));
     }
 
@@ -2771,8 +2642,6 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
         HIRTraitPath::assocListT assoc;
         assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{oncePath.clone(), {}, outputType}));
         assoc.insert(::std::make_pair("CallOnceFuture", HIRTraitPath::AtyEqual{mv$(oncePath), {}, futureType}));
-        // A by-reference call hands back the same future; its lifetime parameter
-        // is not carried in HIR.
         assoc.insert(::std::make_pair("CallRefFuture", HIRTraitPath::AtyEqual{HIRGenericPath(langAsyncFnMut(), actualParams.clone()), {}, futureType}));
         return callback.visit(ImplRef(type, mv$(actualParams), mv$(assoc)), futureCertainty);
     };
@@ -2802,10 +2671,6 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                         return findAsyncCallable(inputs, nodeP->returnType, supportsShared, supportsMutable);
                     }
                     if (trait == langFn() || trait == langFnMut() || trait == langFnOnce()) {
-                        // `FnMut::call_mut(&mut f, ())` names the trait without
-                        // an argument tuple to compare against. What the closure
-                        // takes is the only thing that tuple could be, so it is
-                        // the answer, and the caller equates.
                         const HIRTypeData* wanted = params.types.size() == 1 && params.types[0]->is_Tuple() ? params.types[0] : nullptr;
 
                         auto cmp = wanted ? HIRCompare::Equal : HIRCompare::Fuzzy;
@@ -2822,10 +2687,6 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                             const auto& argsDes = wanted->as_Tuple();
                             auto argCmp = at->compareWithPlaceholders(sp, argsDes[i], this->ivars.callbackResolveInfer());
                             if (argCmp == HIRCompare::Unequal) {
-                                // The wanted argument may be an opaque type this
-                                // body gets to define, in which case the
-                                // closure's own argument is what it turns out to
-                                // be -- the caller equates the two.
                                 if (const auto* er = argsDes[i]->opt_ErasedType()) {
                                     if (const auto* alias = er->inner.opt_Alias(); alias && isOpaqueAliasDefiningScope(*alias->inner)) {
                                         argCmp = HIRCompare::Fuzzy;
@@ -2835,10 +2696,6 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                             cmp &= argCmp;
                         }
                         if (cmp != HIRCompare::Unequal) {
-                            // NOTE: This is a conditional "true", we know nothing about the move/mut-ness of this closure yet
-                            // - Could we?
-                            // - Not until after the first stage of typeck
-
                             HIRPathParams pp;
                             pp.types.push_back(crate.types.tuple(mv$(args)));
                             HIRTraitPath::assocListT types;
@@ -2867,7 +2724,6 @@ bool TraitResolution::assembleTypeCandidatesCb(const Span& sp, const HIRSimplePa
                 case HIRTypeDataNodeType::TAG_Async: {
                     auto& nodeP = e.as_Async();
                     if (nodeP->isAsyncGen) {
-                        // An `async gen` block is an AsyncIterator, not a Future.
                         if (trait == langAsyncIterator()) {
                             const RcString rcstringItem = RcString::newInterned("Item");
                             HIRTraitPath::assocListT assoc;
@@ -3011,7 +2867,6 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
         return true;
     }
 
-    // Trait impls from complex bounds
     switch ((*type).tag()) {
         default:
             break;
@@ -3025,7 +2880,6 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                     return callback.visit(ImplRef(type, &e.trait.path.params, &e.trait.typeBounds, e.trait.constness));
                 }
             }
-            // Markers too
             for (const auto& mt : e.markers) {
                 if (trait == mt.path) {
                     auto cmp = comparePp(sp, mt.params, params);
@@ -3041,10 +2895,8 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                 bool rv = false;
                 bool isSupertrait = false;
                 this->findNamedTraitInTrait(sp, trait, params, *e.trait.traitPtr, e.trait.path.path, e.trait.path.params, type, [&](const HIRTraitPath& iTp) {
-                    // The above is just the monomorphised params and associated set. Comparison is still needed.
                     auto cmp = this->comparePp(sp, iTp.path.params, params);
                     if (cmp != HIRCompare::Unequal) {
-                        // Invoke callback with a proper ImplRef
                         HIRTraitPath::assocListT assocClone;
                         for (const auto& e : iTp.typeBounds) {
                             assocClone.insert(::std::make_pair(e.first, e.second.clone()));
@@ -3083,19 +2935,12 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                 bool rv = false;
                 bool isSupertrait = false;
                 this->findNamedTraitInTrait(sp, trait, params, *traitPath.traitPtr, traitPath.path.path, traitPath.path.params, type, [&](const HIRTraitPath& iTp) {
-                    // The above is just the monomorphised params and associated set. Comparison is still needed.
                     auto cmp = this->comparePp(sp, iTp.path.params, params);
                     if (cmp != HIRCompare::Unequal) {
-                        // Invoke callback with a proper ImplRef
                         HIRTraitPath::assocListT assocClone;
                         for (const auto& e : iTp.typeBounds) {
                             assocClone.insert(::std::make_pair(e.first, e.second.clone()));
                         }
-                        // Existential equalities are stored on the principal
-                        // bound even when the associated item is declared by
-                        // a supertrait (e.g. `FnMut` carries `FnOnce::Output`).
-                        // Project those equalities together with the
-                        // supertrait candidate.
                         for (const auto& e : traitPath.typeBounds) {
                             if (e.second.sourceTrait.path == trait && comparePp(sp, e.second.sourceTrait.params, iTp.path.params) != HIRCompare::Unequal) {
                                 assocClone.erase(e.first);
@@ -3187,10 +3032,6 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                     bool ret = false;
                     this->findNamedTraitInTrait(sp, trait, params, *bound.traitPtr, bound.path.path, *bParamsMono, type, [&](const HIRTraitPath& iTp) {
                         auto cmp = this->comparePp(sp, iTp.path.params, params);
-                        // The supertrait's associated equalities travel with
-                        // the candidate (`Int: BitXor<Output = Self>` must
-                        // answer `Output`), exactly as the TraitObject and
-                        // ErasedType supertrait paths do.
                         HIRTraitPath::assocListT assocClone;
                         for (const auto& aty : iTp.typeBounds) {
                             assocClone.insert(::std::make_pair(aty.first, aty.second.clone()));
@@ -3201,7 +3042,6 @@ bool TraitResolution::assembleOtherCandidatesCb(const Span& sp, const HIRSimpleP
                         return false; // Continue
                     });
                     if (ret) {
-                        // NOTE: Callback called in closure's return statement
                         return rv;
                     }
                     return false;
@@ -3241,10 +3081,6 @@ struct NextTraitGoalEvaluator {
 
     struct Candidate {
         ImplRef impl;
-        // Exactness is only a ranking fact: an environment head that
-        // names the goal verbatim outranks one which constrains an
-        // input.  Whether the relation is actually proved is carried
-        // separately by headRelation and never inferred from this.
         bool headExact;
         Certainty headRelation;
         Certainty certainty;
@@ -3258,45 +3094,18 @@ struct NextTraitGoalEvaluator {
         // specialization fallback yet.
         bool headNormalizationAmbiguity;
         bool ambiguityBeyondHead = false;
-        // Ambiguity from the candidate's own predicates (nested
-        // bounds, implicit Sized, type equalities, the structural
-        // auto walk) -- NOT from comparing the requested associated
-        // output, which is an output rather than a filter.  Decides
-        // whether an exported possibility keeps its Equal head.
         bool nestedAmbiguity = false;
-        // Every call-site coercion relation over this head was
-        // proven.  A merely possible relation keeps the whole trait
-        // response ambiguous and must not publish candidate effects.
         bool coercionsProven = true;
-        // Relations deferred while matching the impl head are part of
-        // the candidate answer.  In particular, an unresolved
-        // projection is not a wildcard: selecting a concrete head
-        // requires that projection to equal the concrete type.
         ThinVector<SolverTypeEquality> headEqualities;
         ThinVector<SolverValueEquality> headValueEqualities;
-        // Equalities established by a selected call-site relation.
-        // They are answer effects just like impl-head equalities;
-        // keeping them on the candidate prevents an unselected
-        // coercion endpoint from constraining the caller.
         ThinVector<SolverTypeEquality> coercionEqualities;
-        // Declared alias bounds needed by a deferred head relation.
-        // Ambiguous ones are exported as ordinary solver obligations.
         ThinVector<SolverObligation> headObligations;
-        // Effects returned by nested relation goals while evaluating
-        // this candidate.  They are candidate-local: publishing them
-        // before selection would let an unselected projection guide
-        // caller inference.
         ThinVector<SolverTypeEquality> relationEqualities;
         ThinVector<SolverValueEquality> relationValueEqualities;
         ThinVector<SolverObligation> relationObligations;
         Vector<const HIRGenericBound*> normalizationNestedGoals;
         bool discarded = false;
-        // The certainty of the trait goal alone, before the root
-        // associated-item requirement could downgrade it.
         Certainty traitCertainty = Certainty::Ambiguous;
-        // The most specific impl this candidate shadowed during merge:
-        // a specialising impl that omits an associated item inherits
-        // the value from this chain (rustc's specialization graph).
         const Candidate* specializationItemSource = nullptr;
 
         Candidate(ImplRef impl, bool headExact, Certainty headRelation, const HIRMarkerImpl* markerImpl, HIRPathParams markerImplParams, bool autoBuiltin, CandidateSource source, bool headNormalizationAmbiguity = false, ThinVector<SolverTypeEquality> headEqualities = {}, ThinVector<SolverValueEquality> headValueEqualities = {});
@@ -3335,10 +3144,6 @@ struct NextTraitGoalEvaluator {
         Certainty certainty;
         const SolverResponse* response = nullptr;
         bool hasResponse = false;
-        // A fully rigid canonical goal (no inference variables in the
-        // key) evaluated without touching a goal cycle depends only on
-        // the resolver's ParamEnv: it stays valid for the resolver's
-        // whole lifetime, not just one outermost evaluation.
         bool persistent = false;
 
         CachedGoal(size_t hash, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, Certainty certainty);
@@ -3348,15 +3153,8 @@ struct NextTraitGoalEvaluator {
     const HIRCrate& crate;
     const Span* span_ = nullptr;
     bool coherenceMode = false;
-    // Counts cycle-head hits; a result computed while this moved is
-    // provisional and must not persist across evaluations.
     mutable u64 cycleHits_ = 0;
-    // Tracks the resolver's generic-context generation for the
-    // persistent slice of the goal cache.
     mutable u64 envGeneration_ = ~0ull;
-    // Inference-table + defining-opaque registration state the
-    // non-persistent cache slice was built against; the slice stays
-    // warm across evaluations until either changes.
     mutable u64 ivarGenerationSeen_ = ~0ull;
     mutable u64 solverEnvGenerationSeen_ = ~0ull;
 
@@ -3365,15 +3163,8 @@ struct NextTraitGoalEvaluator {
         HIRPathParams params;
     };
 
-    // The definition pointer is only an in-memory lookup key. The HIR
-    // representation contains an invocation-scoped numeric binder,
-    // never a formatted address. Reusing one set per immutable impl
-    // preserves recursive-goal identity for cycle detection.
     IntMap<ThinVector<ImplExistentials>> implExistentials_;
 
-    // Frames and candidates have stable pool-backed addresses.  Vectors
-    // are pointer indexes only, so recursive growth never moves an ImplRef
-    // or invalidates a parent candidate.
     ObjList<Candidate> candidateNodes;
     ::std::vector<CandidateFrame*> frames;
     size_t frameDepth = 0;
@@ -3396,21 +3187,12 @@ struct NextTraitGoalEvaluator {
 
     const HIRPathParams& implExistentials(const HIRGenericParams& definition);
 
-    // ---- Crate-lifetime concrete-goal cache ----
-    // Fully concrete canonical goals (no inference variables, no
-    // generics, no placeholders, no opaques, no unbound paths) have
-    // context-free answers whenever the resolver carries no bounds.
     bool goalIsConcrete(const HIRSimplePath& trait, const CanonicalGoal& canonical) const;
 
     bool crateCacheUsable() const;
 
     NextSolverCrateCache& crateCache() const;
 
-    // Unresolved inference variables canonicalise positionally into
-    // the reserved solver range (CanonicalizeTraitGoal::monomorphType):
-    // structurally identical goals share one cache key regardless of
-    // which caller variables they hold, and assembly/evaluation run in
-    // the same canonical space the key describes.
     CanonicalGoal canonicalizeGoal(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, CanonicalizeTraitGoal& canonicalizer) const;
 
     ::std::optional<size_t> availableDepthForNested();
@@ -3541,12 +3323,6 @@ struct NextTraitGoalEvaluator {
         Changed,
     };
 
-    // Relate a candidate pattern to one or more response values as a
-    // single inference-table transaction.  Stable candidate
-    // placeholders are first instantiated as fresh ivars.  A
-    // successful relation is materialised back into stable params
-    // before every probe slot is rolled back; a mismatch leaves the
-    // candidate byte-for-byte unchanged.
     template <typename Relate>
     CandidateBindingResult unifyCandidateParams(HIRPathParams& params, Relate relate);
 
@@ -3572,12 +3348,6 @@ struct NextTraitGoalEvaluator {
 
     Certainty solveGoal(const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated);
 
-    // A literal (integer/float class) inference variable can only
-    // become one of its class's primitives.  If no impl or bound
-    // head matches ANY of them, the goal can never be proven --
-    // rustc probes literal receivers per primitive type, which is
-    // what keeps `(&mut ?int).partial_cmp(..)` from selecting
-    // Iterator::partial_cmp through the &mut I blanket.
     bool literalClassCanMatch(const HIRSimplePath& trait, const HIRPathParams& params, HIRInferClass tyClass) const;
 
     bool containsDefiningOpaque(const HIRTypeData* ty) const;
@@ -3691,8 +3461,6 @@ bool TraitResolution::isOpaqueAliasDefiningScope(const HIRTypeDataErasedTypeAlia
 }
 
 HIRPathParams TraitResolution::makeFreshImplParams(const HIRGenericParams& params) const {
-    // `ivars` is a reference member: constness of the resolver does
-    // not propagate through it, so no cast is needed to mutate.
     HIRPathParams result;
     result.types.reserve(params.types.size());
     for (size_t i = 0; i < params.types.size(); i++) {
@@ -3718,23 +3486,10 @@ bool TraitResolution::implsOverlap(const Span& sp, const ImplRef& left, const Im
         return true;
     }
 
-    // Structural head unification with binding consistency is a
-    // necessary condition: `Extend<T>` and `Extend<&T>` for the same
-    // self can never overlap (`T = &T` is an infinite type).  The
-    // goal probe below over-approximates here because its one-way
-    // matcher drops goal-side inference constraints (no occurs
-    // check), which would let specialization discard a live impl.
-    // Heads only: the legacy bound walk recurses without a cycle
-    // guard on coinductive marker traits; bounds are the probe's job.
     if (!leftImpl->impl->overlapsWith(crate, *rightImpl->impl)) {
         return false;
     }
 
-    // The probe runs on the caller's own inference table under a
-    // snapshot: every binding and fresh variable it creates is rolled
-    // back, so nothing escapes into the type-checking context.  A
-    // dedicated evaluator keeps the probe's goal bookkeeping out of
-    // any evaluation session currently on the stack.
     if (!coherenceEvaluator) {
         ASSERT_BUG(sp, crate.pool, "next-solver coherence requires the crate object pool");
         coherenceEvaluator = crate.pool->make<NextTraitGoalEvaluator>(*this, crate);
@@ -3779,29 +3534,17 @@ bool TraitResolution::solveNormalizesToCb(const Span& sp, const NormalizesTo& go
     return nextSolver->evaluateNormalizesTo(sp, goal, callback, true);
 }
 
-// -------------------------------------------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------------------------------------------
-
 void TraitResolution::compactIvars(HMTypeInferrence& ivars, SolverResponseCallback* effects) {
     ASSERT_BUG(Span(), !ivars.probing(), "ivar compaction during an active inference snapshot");
     ivars.checkForLoops();
 
-    // Solver responses may append auxiliary output slots while a
-    // projection is normalised.  They did not exist at compaction
-    // entry and no pre-existing type can refer to them, so processing
-    // the growing tail would manufacture one new slot per visit and
-    // make this pass non-terminating.
     const auto initialIvarCount = ivars.ivars.size();
     for (unsigned int i = 0; i < initialIvarCount; i++) {
         if (!ivars.ivars[i].isAlias()) {
             auto type = ivars.ivars[i].type;
             ivars.expandIvars(type);
-            // Don't expand unless it is needed
             if (this->hasAssociatedType(type)) {
                 auto normalized = this->expandAssociatedTypes(Span(), type, effects);
-                // Applying a typed response can allocate inference
-                // variables and reallocate the table.  Never retain a
-                // reference into `ivars` across that callback.
                 if (!ivars.ivars[i].isAlias()) {
                     ivars.ivars[i].type = normalized;
                 }
@@ -3896,9 +3639,6 @@ bool TraitResolution::hasAssociatedType(const HIRTypeData* input) const {
         }
         case HIRTypeData::TAG_Path: {
             auto& e = (*input).as_Path();
-            // Both states still need projection normalisation. `Opaque` means
-            // that no rule was available at the previous attempt, not that
-            // the projection can never become known.
             if (e.path.data.is_UfcsKnown() && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
                 return true;
             }
@@ -3909,7 +3649,6 @@ bool TraitResolution::hasAssociatedType(const HIRTypeData* input) const {
         }
         case HIRTypeData::TAG_TraitObject: {
             auto& e = (*input).as_TraitObject();
-            // Recurse?
             if (H::checkPathparams(*this, e.trait.path.params)) {
                 return true;
             }
@@ -3981,11 +3720,9 @@ bool TraitResolution::hasAssociatedType(const HIRTypeData* input) const {
             return H::checkPath(*this, e.path);
         }
         case HIRTypeData::TAG_Function: {
-            // Recurse?
             return false;
         }
         case HIRTypeData::TAG_NodeType: {
-            // Recurse?
             return false;
         }
     }
@@ -4060,8 +3797,6 @@ void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& i
                     ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &traitDef.params, pe.trait.params);
                     H::expandAssociatedTypesParams(sp, *this, pe.trait.params, effects);
                     input = crate.types.intern(mv$(data));
-                    // Retry opaque projections too: equality bounds can be
-                    // learned after an earlier normalisation attempt.
                     const bool wasUnbound = input->as_Path().binding.is_Unbound();
                     const bool wasOpaque = input->as_Path().binding.is_Opaque();
                     if (wasUnbound || wasOpaque) {
@@ -4070,8 +3805,6 @@ void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& i
                             return;
                         }
 
-                        // Cache the result of this to avoid needing to do the full resolution too often.
-                        // - This avoids VERY slow typechecking in 1.90's librustc_target
                         const auto cacheKey = input->uid;
                         // A probe is rolled back as a unit, but normalization
                         // can manufacture an output containing one of its
@@ -4096,10 +3829,6 @@ void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& i
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
                     auto& pe = e.path.data.as_UfcsUnknown();
-                    // ResolveUFCS has not selected the declaring trait yet.
-                    // Its receiver and explicit item arguments are still
-                    // ordinary children of the type walker; the path itself
-                    // remains retryable until that later phase.
                     expandAssociatedTypesInplace(sp, pe.type, effects);
                     H::expandAssociatedTypesParams(sp, *this, pe.params, effects);
                     break;
@@ -4112,7 +3841,6 @@ void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& i
         }
         case HIRTypeData::TAG_TraitObject: {
             auto& e = data.as_TraitObject();
-            // Recurse?
             H::expandAssociatedTypesTp(sp, *this, e.trait, effects);
             for (auto& m : e.markers) {
                 H::expandAssociatedTypesParams(sp, *this, m.params, effects);
@@ -4120,7 +3848,6 @@ void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& i
             break;
         }
         case HIRTypeData::TAG_ErasedType: {
-            // Recurse?
             break;
         }
         case HIRTypeData::TAG_Array: {
@@ -4204,7 +3931,6 @@ void TraitResolution::expandAssociatedTypesInplace(const Span& sp, HIRTypeRef& i
             break;
         }
         case HIRTypeData::TAG_NodeType: {
-            // Recurse? Nah.
             break;
         }
     }
@@ -4283,9 +4009,6 @@ void TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span& sp, HIRT
         return;
     }
 
-    // A projection over caller inference remains retryable.  A rigid
-    // unresolved projection is an opaque alias which can participate
-    // in later bounds and method lookup.
     if (!this->ivars.typeContainsIvars(input, false)) {
         auto data = input->cloneData();
         data.as_Path().binding = HIRTypePathBinding::make_Opaque({});
@@ -4293,8 +4016,6 @@ void TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span& sp, HIRT
     }
 }
 
-// -------------------------------------------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------------------------------------------
 bool TraitResolution::findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& desParams, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* targetType, TraitPathCallback& callback) const {
     if (pp.types.size() != traitPtr.params.types.size()) {
         BUG(sp, "Incorrect number of parameters for trait " << traitPath);
@@ -4311,13 +4032,9 @@ bool TraitResolution::findNamedTraitInTraitCb(const Span& sp, const HIRSimplePat
         }
 
         if (pt.path.path == des) {
-            // NOTE: Doesn't quite work...
-            //if( cmp != ::HIR::Compare::Unequal )
-            //{
             if (callback.visit(ptMono)) {
                 return true;
             }
-            //}
         }
     }
 
@@ -4337,8 +4054,6 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
         return false;
     }
 
-    // NOTE: Even if the type is completely unknown (unbound UFCS), search the bound list.
-
     // TODO: A bound can imply something via its associated types. How deep can this go?
     // E.g. `T: IntoIterator<Item=&u8>` implies `<T as IntoIterator>::IntoIter : Iterator<Item=&u8>`
     // > Would maybe want a list of all explicit and implied bounds instead.
@@ -4355,12 +4070,6 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
                 boundParams = &normalisedParams;
             }
 
-            // Ordinary predicates still serve legacy method probing,
-            // which is migrated in the next SOLVER_EX stage. Preserve
-            // its existing prefilter until that consumer disappears.
-            // HRTB predicates bypass the old matcher entirely: the
-            // evaluator instantiates them with fresh variables and
-            // runs the common transactional relation.
             const bool hasHrtb = pathParamsContainGenericGroup(*boundParams, GENERICHrtb);
             if (!hasHrtb) {
                 auto relation = cmp;
@@ -4376,10 +4085,6 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
         }
     }
 
-    // Match nested declaration predicates on demand. Putting every
-    // declared predicate in the cached ParamEnv changes ordinary
-    // generic inference and specialization, while the declaration
-    // tree already gives each nested predicate its exact subject.
     auto visitDeclaredTrait = [&](auto&& visit, const HIRTypeData* subject, const HIRTraitPath& declaredTrait, bool matchCurrent) -> bool {
         if (matchCurrent && declaredTrait.path.path == trait) {
             auto ord = subject->compareWithPlaceholders(sp, type, this->ivars.callbackResolveInfer());
@@ -4481,7 +4186,6 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
 
     if (assocInfo) {
         bool rv = this->iterateBoundsTraits(sp, assocInfo->type, assocInfo->trait.path, [&](HIRCompare cmp, const HIRTypeData* boundTy, const HIRGenericPath& boundTrait, const CachedBound& boundInfo) -> bool {
-            // Check the trait params
             cmp &= this->comparePp(sp, boundTrait.params, assocInfo->trait.params);
             if (cmp == HIRCompare::Fuzzy) {
                 //TODO(sp, "Handle fuzzy matches searching for associated type bounds");
@@ -4512,7 +4216,6 @@ bool TraitResolution::assembleParamEnvCandidatesCb(const Span& sp, const HIRSimp
                     }
 
                     auto tpMono = monomorphCb.monomorphTraitpath(sp, bound, false);
-                    // - Expand associated types
                     this->expandAssociatedTypesParams(sp, tpMono.path.params);
                     for (auto& ty : tpMono.typeBounds) {
                         ty.second.type = this->expandAssociatedTypes(sp, mv$(ty.second.type));
@@ -4566,11 +4269,6 @@ HIRCompare TraitResolution::fticCheckParams(
                 // If the existing is an ivar, replace with this.
                 // - TODO: Store the least fuzzy option, or store all fuzzy options?
                 if (rv == HIRCompare::Fuzzy && outImplParams.types[g.binding]->is_Infer()) {
-                    // The same impl parameter can be learned through more than one
-                    // component of an impl header.  `Y = X` followed by `Y = &X`
-                    // is not a fuzzy refinement: it would require the infinite type
-                    // `X = &X`.  Treat that header as disjoint instead of replacing
-                    // the first constraint and letting specialization pick it.
                     const auto& existingResolved = resolveCb.getType(sp, outImplParams.types[g.binding]);
                     const auto* existingInfer = existingResolved->opt_Infer();
                     if (existingInfer && existingInfer->index != ~0u) {
@@ -4616,11 +4314,6 @@ HIRCompare TraitResolution::fticCheckParams(
                 if (sz.is_Infer()) {
                     return HIRCompare::Fuzzy;
                 }
-                // An unevaluated expression can still contain inference
-                // variables supplied by the caller.  A concrete occurrence
-                // of the same impl parameter is the stronger constraint;
-                // retain it while marking the candidate as fuzzy until the
-                // expression itself is normalized.
                 if (outImplParams.values[g.binding].is_Unevaluated()) {
                     if (sz.is_Evaluated()) {
                         outImplParams.values[g.binding] = sz.clone();
@@ -4675,9 +4368,6 @@ HIRCompare TraitResolution::fticCheckParams(
         }
     }
 
-    // Some impl blocks have type params used as part of type bounds.
-    // - A rough idea is to have monomorph return a third class of generic for params that are not yet bound.
-    //  - compare_with_placeholders gets called on both ivars and generics, so that can be used to replace it once known.
     HIRPathParams placeholders;
     RcString placeholderName;
     bool placeholdersNeeded = false;
@@ -4694,10 +4384,6 @@ HIRCompare TraitResolution::fticCheckParams(
         }
     }
     if (placeholdersNeeded) {
-        // Candidate substitutions for the same immutable impl header
-        // are alpha-equivalent.  A stable identity lets repeated
-        // constraint passes converge instead of manufacturing a new
-        // type and associated rule on every lookup.
         placeholderName = RcString::newInterned(FMT("impl_?_" << &implParamsDef));
         for (unsigned int i = 0; i < outImplParams.types.size(); i++) {
             if (outImplParams.types[i] == HIRTypeRef()) {
@@ -4772,11 +4458,9 @@ HIRCompare TraitResolution::fticCheckParams(
                 if (g.isPlaceholder()) {
                     return HIRCompare::Fuzzy;
                 }
-                // If the RHS is a non-literal ivar, return fuzzy
                 if (ty->is_Infer() && !ty->as_Infer().isLit()) {
                     return HIRCompare::Fuzzy;
                 }
-                // If the RHS is an unbound UfcsKnown, also fuzzy
                 if (ty->is_Path() && ty->as_Path().binding.is_Unbound()) {
                     return HIRCompare::Fuzzy;
                 }
@@ -4807,7 +4491,6 @@ HIRCompare TraitResolution::fticCheckParams(
                 if (g.isPlaceholder()) {
                     return HIRCompare::Fuzzy;
                 }
-                // If the RHS is a non-literal ivar, return fuzzy
                 if (v.is_Infer()) {
                     return HIRCompare::Fuzzy;
                 }
@@ -4840,9 +4523,6 @@ HIRCompare TraitResolution::fticCheckParams(
 
     Matcher matcher{crate.types, sp, outImplParams, placeholderName, placeholders};
 
-    //::std::vector<::HIR::ASTType*> saved_ph;
-
-    // Keep looping while placeholders are updated
     using DeferredTypeConstraint = ::std::pair<const HIRTypeData*, const HIRTypeData*>;
 
     int loops = 0;
@@ -4878,7 +4558,6 @@ HIRCompare TraitResolution::fticCheckParams(
                     if (((*realType).is_Infer() && ((*realType).as_Infer().isLit() == false))) {
                         foundFuzzyMatch = true;
                     }
-                    // NOTE: Save the placeholder state and restore if the result was Fuzzy
                     HIRPathParams savedPh = placeholders.clone();
                     HIRPathParams fuzzyPh;
                     ThinVector<DeferredTypeConstraint> fuzzyTypeConstraints;
@@ -4894,7 +4573,6 @@ HIRCompare TraitResolution::fticCheckParams(
                         // TODO: Save and restore placeholders if this isn't a full match
                         auto cmp = response.certainty == SolverCertainty::Proven ? HIRCompare::Equal : HIRCompare::Fuzzy;
                         if (cmp == HIRCompare::Fuzzy) {
-                            // If the match was fuzzy, try again filling in with `cb_match`
                             auto iTy = impl.getImplType(crate.types);
                             this->expandAssociatedTypesInplace(sp, iTy);
                             auto iTp = impl.getTraitParams(crate.types);
@@ -4910,16 +4588,12 @@ HIRCompare TraitResolution::fticCheckParams(
 
                             tmp = impl.getType(crate.types, assocBound.first.c_str(), assocBound.second.atyParams);
                             if (tmp == HIRTypeRef()) {
-                                // This bound isn't from this particular trait, go the slow way of using expand_associated_types
                                 tmp = this->expandAssociatedTypes(sp, crate.types.path(HIRPath(HIRPath::Data::Data_UfcsKnown{realType, realTraitPath.clone(), assocBound.first, {}}), {}));
                                 ty = tmp;
                             } else {
-                                // Expand after extraction, just to make sure.
                                 this->expandAssociatedTypesInplace(sp, tmp);
                                 ty = this->ivars.getType(tmp);
                             }
-                            // `ty` = Monomorphised actual type (< `be.type` as `be.trait` >::`assoc_bound.first`)
-                            // `assoc_bound.second` = Desired type (monomorphised too)
                             auto cmpI = assocBound.second.type->matchTestGenericsFuzz(sp, ty, cbInfer, matcher);
                             const auto containsOpaqueInScope = [&](const HIRTypeData* type, bool defining) {
                                 return visitTyWith(type, [&](const HIRTypeData* inner) {
@@ -4929,10 +4603,6 @@ HIRCompare TraitResolution::fticCheckParams(
                                 });
                             };
                             const bool containsDefiningOpaque = containsOpaqueInScope(ty, true) || containsOpaqueInScope(assocBound.second.type, true);
-                            // Generic matching keeps an unresolved opaque fuzzy so a
-                            // defining scope can select an impl that reveals its hidden
-                            // type. Outside that scope the opaque is rigid: a structural
-                            // mismatch is enough to discard this conditional impl.
                             if (cmpI == HIRCompare::Fuzzy && !containsDefiningOpaque && (containsOpaqueInScope(ty, false) || containsOpaqueInScope(assocBound.second.type, false)) && assocBound.second.type->compareWithPlaceholders(sp, ty, cbInfer) == HIRCompare::Unequal) {
                                 cmpI = HIRCompare::Unequal;
                             }
@@ -4958,7 +4628,6 @@ HIRCompare TraitResolution::fticCheckParams(
 
                         if (cmp == HIRCompare::Fuzzy) {
                             foundFuzzyMatch |= true;
-                            // `fuzzy_ph` is set (num_fuzzy > 0) then check if the PH set is equal, if not then flag not equal
                             if (numFuzzy > 0 && fuzzyPh != placeholders) {
                                 fuzzyCompatible = false;
                             }
@@ -4976,18 +4645,14 @@ HIRCompare TraitResolution::fticCheckParams(
                             placeholders.values.resize(fuzzyPh.values.size());
                         }
                         if (cmp != HIRCompare::Equal) {
-                            // Restore placeholders
-                            // - Maybe save the results for later?
                             placeholders = savedPh.clone();
                         }
-                        // If the match isn't a concrete equal, return false (to keep searching)
                         rv = cmp == HIRCompare::Equal;
                         return rv;
                     }, {.assocName = ""});
                     if (rv) {
                     } else if (foundFuzzyMatch) {
                         if (numFuzzy == 0) {
-                            // `real_type` was infer
                         } else if (numFuzzy == 1) {
                             placeholders = ::std::move(fuzzyPh);
                             for (const auto& constraint : fuzzyTypeConstraints) {
@@ -5006,7 +4671,6 @@ HIRCompare TraitResolution::fticCheckParams(
                         return HIRCompare::Unequal;
                     }
 
-                    //}
                     break;
                 }
                 case HIRGenericBound::TAG_TypeEquality: {
@@ -5125,7 +4789,6 @@ HIRCompare TraitResolution::typeIsSizedBuiltin(const Span& sp, const HIRTypeData
     const auto& type = this->ivars.getType(ty);
     switch ((*type).tag()) {
         default:
-            // Any unknown - it's sized
             break;
         case HIRTypeData::TAG_Infer: {
             auto& e = (*type).as_Infer();
@@ -5166,20 +4829,16 @@ HIRCompare TraitResolution::typeIsSizedBuiltin(const Span& sp, const HIRTypeData
                     break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    // Is it sized? No.
                     return HIRCompare::Unequal;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    // HAS to be Sized
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    // Pretty sure unions are Sized
                     break;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
                     auto& pb = e.binding.as_Struct();
-                    // Possibly not sized
                     switch (pb->structMarkings.dstType) {
                         case HIRStructMarkings::DstType::None:
                             break;
@@ -5237,9 +4896,6 @@ HIRCompare TraitResolution::typeIsSizedBuiltin(const Span& sp, const HIRTypeData
 
 HIRCompare TraitResolution::typeIsCopy(const Span& sp, const HIRTypeData* ty) const {
     const auto& type = this->ivars.getType(ty);
-    // `#![no_core]` crates need MIR's structural copy classification
-    // even when they do not define the Copy lang item.  There is no
-    // trait goal to solve in that language mode.
     if (langCopy().components().empty()) {
         return typeIsCopyBuiltin(sp, type);
     }
@@ -5320,7 +4976,6 @@ HIRCompare TraitResolution::typeIsCopyBuiltin(const Span& sp, const HIRTypeData*
             return HIRCompare::Equal;
         }
         case HIRTypeData::TAG_NodeType: {
-            // NOTE: This isn't strictly true, we're leaving the actual checking up to the validate pass
             return HIRCompare::Equal;
         }
         case HIRTypeData::TAG_Array: {
@@ -5418,16 +5073,7 @@ HIRCompare TraitResolution::typeIsClone(const Span& sp, const HIRTypeData* ty) c
     UNREACHABLE();
 }
 
-// Checks if a type can unsize to another
-// - Returns Compare::Equal if the unsize is possible and fully known
-// - Returns Compare::Fuzzy if the unsize is possible, but still unknown.
-// - Returns Compare::Unequal if the unsize is impossibe (for any reason)
-// Closure is called `get_new_type` is true, and the unsize is possible
-// usecases:
-// - Checking for an impl as part of impl selection (return True/False/Maybe with required match for Maybe)
-// - Checking for an impl as part of typeck (return True/False/Maybe with unsize possibility OR required equality)
 HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy, const HIRTypeData* srcTy, UnsizeTypeCallback* newTypeCallback, UnsizeInferCallback* inferCallback) const {
-    // 1. Test for type equality
     {
         auto cmp = dstTy->compareWithPlaceholders(sp, srcTy, ivars.callbackResolveInfer());
         if (cmp == HIRCompare::Equal) {
@@ -5435,10 +5081,7 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
         }
     }
 
-    // 2. If either side is an ivar, fuzzy.
     if (dstTy->is_Infer() || srcTy->is_Infer()) {
-        // Inform the caller that these two types could unsize to each other
-        // - This allows the coercions code to move the coercion rule up
         if (inferCallback) {
             inferCallback->visit(dstTy, srcTy);
         }
@@ -5464,7 +5107,6 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
         }
     }
 
-    // Associated types, check the bounds in the trait.
     if (srcTy->is_Path() && srcTy->as_Path().path.data.is_UfcsKnown()) {
         HIRCompare rv = HIRCompare::Equal;
         const auto& pe = srcTy->as_Path().path.data.as_UfcsKnown();
@@ -5492,7 +5134,6 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
         }
     }
 
-    // Struct<..., T, ...>: Unsize<Struct<..., U, ...>>
     if (dstTy->is_Path() && srcTy->is_Path()) {
         bool dstIsUnsizable = dstTy->as_Path().binding.is_Struct() && dstTy->as_Path().binding.as_Struct()->structMarkings.canUnsize;
         bool srcIsUnsizable = srcTy->as_Path().binding.is_Struct() && srcTy->as_Path().binding.as_Struct()->structMarkings.canUnsize;
@@ -5511,7 +5152,6 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                     auto cb = [&](auto d) {
                         assert(newTypeCallback);
 
-                        // Re-create structure with s/d
                         auto dstGpNew = dstGp.clone();
                         dstGpNew.params.types.at(str.structMarkings.unsizedParam) = mv$(d);
                         newTypeCallback->visit(crate.types.path(HIRPath(mv$(dstGpNew)), HIRTypePathBinding::make_Struct(&str)));
@@ -5574,19 +5214,13 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
         }
     }
 
-    // (Trait) <- Foo
     if (const auto* de = dstTy->opt_TraitObject()) {
         // TODO: Check if src_ty is !Sized
         // - Only allowed if the source is a trait object with the same data trait and lesser bounds
 
-        // (Trait) <- (Trait+Foo)
         if (const auto* se = srcTy->opt_TraitObject()) {
             auto rv = HIRCompare::Equal;
 
-            // Project the source principal to the requested
-            // supertrait.  A trait may contain the same supertrait
-            // with different substitutions, so compare the fully
-            // monomorphised parameters instead of only its path.
             const HIRTraitPath* projected = nullptr;
             HIRTraitPath projectedStorage;
             if (de->trait.path.path == se->trait.path.path) {
@@ -5608,9 +5242,6 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                 return HIRCompare::Unequal;
             }
 
-            // Every associated-type equality required by the
-            // destination object must also hold on the projected
-            // source supertrait.
             for (const auto& required : de->trait.typeBounds) {
                 const auto source = projected->typeBounds.find(required.first);
                 if (source == projected->typeBounds.end()) {
@@ -5622,7 +5253,6 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                 }
             }
 
-            // 2. Destination markers must be a strict subset
             for (const auto& mt : de->markers) {
                 // TODO: Fuzzy match
                 bool found = false;
@@ -5633,7 +5263,6 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                     }
                 }
                 if (!found) {
-                    // Return early.
                     return HIRCompare::Unequal;
                 }
             }
@@ -5650,7 +5279,6 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
         HIRTypeData::Data_TraitObject tmpE;
         tmpE.trait.path = de->trait.path.path;
 
-        // Check data trait first.
         if (de->trait.path.path == HIRSimplePath()) {
             ASSERT_BUG(sp, de->markers.size() > 0, "TraitObject with no traits - " << dstTy);
             good = true;
@@ -5666,10 +5294,6 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                 candidateE.trait.path = de->trait.path.path;
                 candidateE.trait.path.params = impl.getTraitParams(crate.types);
 
-                // Associated types declared by a supertrait carry the
-                // declaring trait path.  Rebuild that path with the
-                // selected principal-trait response instead of mixing
-                // response parameters with the original goal.
                 auto remapSourceTrait = [&](const HIRGenericPath& sourceTrait) {
                     if (sourceTrait.path == de->trait.path.path) {
                         return HIRGenericPath(sourceTrait.path, candidateE.trait.path.params.clone());
@@ -5701,8 +5325,6 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                             found = true;
                             foundEqual = parentCmp == HIRCompare::Equal;
                         } else if (result != responseParent) {
-                            // Multiple fuzzy supertrait projections
-                            // are a legitimate ambiguous response.
                             candidateCmp = HIRCompare::Fuzzy;
                         }
                     }
@@ -5717,10 +5339,7 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
                 for (const auto& aty : de->trait.typeBounds) {
                     auto atyv = impl.getType(crate.types, aty.first.c_str(), aty.second.atyParams);
                     if (atyv == HIRTypeRef()) {
-                        // Get the trait from which this associated type comes.
-                        // Insert a UfcsKnown path for that
                         auto p = HIRPath(srcTy, aty.second.sourceTrait.clone(), aty.first, aty.second.atyParams.clone());
-                        // Run EAT
                         atyv = this->expandAssociatedTypes(sp, crate.types.path(mv$(p), {}));
                     }
 
@@ -5739,7 +5358,6 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
             }, {.assocName = ""});
         }
 
-        // Then markers
         auto cb = [&](SolverResponse response) {
             if (!response.hasImpl || !response.impl) {
                 return false;
@@ -5764,7 +5382,6 @@ HIRCompare TraitResolution::canUnsizeCb(const Span& sp, const HIRTypeData* dstTy
         return totalCmp;
     }
 
-    // [T] <- [T; n]
     if (const auto* de = dstTy->opt_Slice()) {
         if (const auto* se = srcTy->opt_Array()) {
             auto cmp = de->inner->compareWithPlaceholders(sp, se->inner, ivars.callbackResolveInfer());
@@ -5808,11 +5425,6 @@ SolverCertainty TraitResolution::evaluateCoercionGoal(const Span& sp, const Solv
             return SolverCertainty::NoSolution;
         }
 
-        // A structural relation may solve caller inference, but an
-        // unresolved alias/opaque relation may not select an impl.
-        // The Unifier gives us leaf equalities, so only direct
-        // canonical input bindings are answer effects; every other
-        // deferred leaf remains genuine ambiguity.
         for (const auto& pending : unifier.pending()) {
             const auto* leftInfer = pending.left->opt_Infer();
             const auto* rightInfer = pending.right->opt_Infer();
@@ -5952,10 +5564,6 @@ SolverCertainty TraitResolution::evaluateCoercionGoal(const Span& sp, const Solv
                 return result;
             }
 
-            // A type parameter unused by fields is bivariant.  Relate
-            // the instantiated fields rather than the nominal path
-            // arguments so such a parameter does not reject a valid
-            // coercion endpoint.
             auto result = SolverCertainty::Proven;
             const auto relateField = [&](const HIRTypeData* field) {
                 auto sourceField = expandAssociatedTypes(sp, MonomorphStatePtr(crate.types, source, &sourceParams, nullptr).monomorphType(sp, field));
@@ -6055,8 +5663,6 @@ const HIRTypeData* TraitResolution::typeIsOwnedBox(const Span& sp, const HIRType
     return nullptr;
 }
 
-// -------------------------------------------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------------------------------------------
 TraitResolution::AutoderefResult TraitResolution::autoderefStep(const Span& sp, const HIRTypeData* tyIn, HIRTypeRef& target, ::std::optional<HIRTypeRef>* implType) const {
     if (implType) {
         implType->reset();
@@ -6080,15 +5686,10 @@ TraitResolution::AutoderefResult TraitResolution::autoderefStep(const Span& sp, 
     if (const auto* e = ty->opt_Borrow()) {
         target = this->ivars.getType(e->inner);
         return AutoderefResult::Match;
-    }
-    // Array-to-slice is the final unsize step in an autoderef search.
-    // create_autoderef materialises it as borrow -> pointer unsize -> deref.
-    else if (const auto* e = ty->opt_Array()) {
+    } else if (const auto* e = ty->opt_Array()) {
         target = crate.types.slice(e->inner);
         return AutoderefResult::Match;
-    }
-    // Shortcut, don't look up a Deref impl for primitives or slices
-    else if (ty->is_Slice() || ty->is_Primitive() || ty->is_Tuple() || ty->is_Array()) {
+    } else if (ty->is_Slice() || ty->is_Primitive() || ty->is_Tuple() || ty->is_Array()) {
         return AutoderefResult::NoMatch;
     } else {
         ::std::optional<HIRTypeRef> candidateTarget;
@@ -6159,12 +5760,6 @@ unsigned int TraitResolution::autoderefFindMethod(
         const auto& topTyR = this->ivars.getType(topTy);
         const auto* currentTy = topTyR;
 
-        // Correct algorithm:
-        // - Find any available method with a receiver type of `T`
-        // - If no, try &T
-        // - If no, try &mut T
-        // - If no, try &move T
-        // - If no, dereference T and try again
         auto curAccess = MethodAccess::Move; // Assume that the input value is movable
         auto collapseToMostSpecificSubtrait = [&]() {
             if (!crate.featureEnabled("supertrait_item_shadowing") || possibilities.size() < 2) {
@@ -6176,7 +5771,6 @@ unsigned int TraitResolution::autoderefFindMethod(
             for (const auto& possibility : possibilities) {
                 const auto* path = possibility.second.data.opt_UfcsKnown();
                 if (!path) {
-                    // RFC 3624 only collapses extension-trait picks.
                     return;
                 }
                 candidateTraits.push_back(path->trait.path);
@@ -6212,14 +5806,9 @@ unsigned int TraitResolution::autoderefFindMethod(
             // is not known yet cannot be picked: wait for the type.
             bool undecided = false;
 
-            // Non-referenced
             if (this->findMethod(sp, traits, ivars, typeIvarCount, ty, methodName, expectedResult, curAccess, AutoderefBorrow::None, possibilities, &undecided)) {
             }
 
-            // `*mut T` coerces to `*const T`, so a method written for
-            // the shared pointer applies to the mutable one. Only look
-            // when the mutable pointer has none of its own, so that a
-            // method on it still wins.
             if (possibilities.empty()) {
                 if (const auto* ptr = ty->opt_Pointer()) {
                     if (ptr->type != HIRBorrowType::Shared) {
@@ -6230,9 +5819,6 @@ unsigned int TraitResolution::autoderefFindMethod(
                 }
             }
 
-            // Pin ergonomics permits a method receiver written as
-            // `Pin<&T>` to reborrow a `Pin<&mut T>`. Probe that
-            // receiver before ordinary autoref candidates.
             if (possibilities.empty() && crate.featureEnabled("pin_ergonomics")) {
                 const auto* pathTy = ty->opt_Path();
                 const auto& langPin = crate.getLangItemPathOpt("pin");
@@ -6250,7 +5836,6 @@ unsigned int TraitResolution::autoderefFindMethod(
                 }
             }
 
-            // Auto-ref
             auto borrowTy = crate.types.borrow(HIRBorrowType::Shared, ty);
             if (this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, expectedResult, MethodAccess::Move, AutoderefBorrow::Shared, possibilities, &undecided)) {
             }
@@ -6274,10 +5859,8 @@ unsigned int TraitResolution::autoderefFindMethod(
                 return derefCount;
             }
 
-            // Auto-dereference
             derefCount += 1;
             if (const auto* typ = this->typeIsOwnedBox(sp, ty)) {
-                // `cur_access` can stay as-is (Box can be moved out of)
                 currentTy = typ;
             } else {
                 // TODO: Update `cur_access` based on the avaliable Deref impls
@@ -6298,7 +5881,6 @@ unsigned int TraitResolution::autoderefFindMethod(
             return ~0u;
         }
 
-        // No method found, return an empty list and return 0
         assert(possibilities.empty());
         return 0;
     }
@@ -6364,12 +5946,9 @@ unsigned int TraitResolution::autoderefFindMethod(
     return os;
 }
 
-// Checks that a given real receiver type matches a desired receiver type (with the correct access)
-// Returns the matched `Self` type, or nothing if there's a mismatch.
 ::std::optional<HIRTypeRef> TraitResolution::checkMethodReceiver(const Span& sp, const HIRFunction& fcn, const HIRTypeData* ty, TraitResolution::MethodAccess access) const {
     switch (fcn.receiver) {
         case HIRFunction::Receiver::Free:
-            // Free functions are never usable
             return ::std::nullopt;
         case HIRFunction::Receiver::Value:
             if (access >= TraitResolution::MethodAccess::Move) {
@@ -6501,17 +6080,11 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
         this->wb.inherentMethods->find(sp, methodName, ty, this->ivars.callbackResolveInfer(), [&](const HIRTypeData* selfTy, const HIRTypeImpl& impl) {
             const auto& method = impl.methods.at(methodName);
             if (!method.publicity.isVisible(this->visPath)) {
-                // Ignore method: Not visibile
                 return;
             }
             HIRPathParams implParams;
             auto cmp = fticCheckParams(sp, HIRSimplePath(), nullptr, selfTy, impl.params, {}, impl.type, implParams);
             if (cmp != HIRCompare::Unequal) {
-                // A wrapper receiver such as `Box<_>` can reach a
-                // concrete inherent-method bucket through its open
-                // inner type.  That bucket is only a possibility until
-                // inference identifies the inner type; selecting it now
-                // would leave an unresolvable `<_>::method` path.
                 if (outUndecided && typeIsUnboundedInfer(this->ivars.getType(selfTy))) {
                     *outUndecided = true;
                 }
@@ -6568,8 +6141,6 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
     // TODO: Handle custom recievers by finding the bottom of a deref chain (or take the top-level reciever as an argument here?)
 
-    // 3. Search generic bounds for a match
-    // - If there is a bound on the receiver, then that bound is usable no-matter what
     bool foundBound = false;
     bool foundNonGlobalBound = false;
     auto typeIsNonGlobalAfterNormalization = [&](const HIRTypeData* type) {
@@ -6596,17 +6167,13 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
         const auto& eTraitInfo = tb.second;
 
         assert(eTraitInfo.traitPtr);
-        // 1. Find the named method in the trait.
         HIRGenericPath finalTraitPath;
         const HIRFunction* fcnPtr;
         if (!(fcnPtr = this->traitContainsMethod(sp, eTraitGp, *eTraitInfo.traitPtr, eType, methodName, finalTraitPath))) {
             continue;
         }
 
-        // 2. Compare the receiver of the above to this type and the bound.
         if (auto selfTy = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
-            // HRLs - could be some in the path from `trait_contains_method`
-            // - Lazy option, just erase whatever we find
             struct MonomorphEraseHrls: public Monomorphiser {
                 using Monomorphiser::Monomorphiser;
 
@@ -6627,7 +6194,6 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
             finalTraitPath = MonomorphEraseHrls(crate.types).monomorphGenericpath(sp, finalTraitPath, true);
 
-            // If the type is an unbounded ivar, don't check.
             if (((**selfTy).is_Infer() && ((**selfTy).as_Infer().isLit() == false))) {
                 return false;
             }
@@ -6637,13 +6203,11 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 // TODO: Re-monomorphise final trait using `ty`?
                 // - Could collide with legitimate uses of `Self`
 
-                // Found the method, return the UFCS path for it
                 possibilities.push_back(::std::make_pair(borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
                 rv = true;
                 foundBound = true;
                 recordBoundGlobalness(eType, eTraitGp, eTraitInfo);
             } else if (cmp == HIRCompare::Fuzzy) {
-                // Found the method, return the UFCS path for it
                 possibilities.push_back(::std::make_pair(borrowType, HIRPath(HIRPath::Data::make_UfcsKnown({*selfTy, mv$(finalTraitPath), methodName, {}}))));
                 rv = true;
                 foundBound = true;
@@ -6653,37 +6217,23 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
         } else {
         }
     }
-    // The next solver only lets a non-global where-bound shadow crate
-    // impls. A global bound remains a method candidate, but probing must
-    // continue so the call signature can disambiguate it from an impl.
     if (foundBound && foundNonGlobalBound) {
         return rv;
     }
 
-    // 2. Search the current trait (if in an impl block)
     if (currentTraitPath_) {
         HIRGenericPath finalTraitPath;
         const HIRFunction* fcnPtr;
         if ((fcnPtr = this->traitContainsMethod(sp, *currentTraitPath_, *currentTraitPtr, ty, methodName, finalTraitPath))) {
             if (auto selfTy = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
-                // If the type is an unbounded ivar, don't check.
                 if (((**selfTy).is_Infer() && ((**selfTy).as_Infer().isLit() == false))) {
                     return false;
                 }
 
-                // Use the set of ivars we were given to populate the trait parameters
                 const auto& trait = crate.getTraitByPath(sp, finalTraitPath.path);
                 auto traitParams = getIvaredParams(trait.params);
 
                 {
-                    // The current trait wins only when it is known to
-                    // apply to this receiver.  An ambiguous candidate
-                    // must not shadow a declared associated-type bound
-                    // that is examined below (for example
-                    // `X::Sampler: UniformSampler` while implementing
-                    // another trait with a method of the same name).
-                    // Trait arguments remain inference variables shared
-                    // with the eventual call signature.
                     const bool crateImplFound = solveTraitGoal(sp, finalTraitPath.path, traitParams, *selfTy, [](SolverResponse response) {
                         return response.hasImpl && response.certainty == SolverCertainty::Proven;
                     }, {.assocName = ""});
@@ -6717,8 +6267,6 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
         }
     };
 
-    // 4. If the type is a trait object, search for methods on that trait object
-    // - NOTE: This isnt mutually exclusive with the below set (an inherent impl of `(Trait)` is valid)
     if (const auto* ityp = getInnerType(ty, [](const auto& t) {
         return t->is_TraitObject();
     })) {
@@ -6727,7 +6275,6 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
 
         bool foundTraitObject = false;
         auto addTraitObjectMethod = [&](const HIRFunction& fcn, HIRGenericPath finalTraitPath) {
-            // - If the receiver is valid, then it's correct (no need to check the type again)
             if (auto selfTyP = checkMethodReceiver(sp, fcn, ty, access)) {
                 possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
                 rv = true;
@@ -6753,14 +6300,11 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
             }
         }
 
-        // If the method was found on the trait object, prefer that over all others.
         if (foundTraitObject) {
             return rv;
         }
     }
 
-    // 5. Mutually exclusive searches
-    // - Erased type - `impl Trait`
     if (const auto* ityp = getInnerType(ty, [](const auto& t) {
         return t->is_ErasedType();
     })) {
@@ -6776,27 +6320,20 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 }
             }
         }
-    }
-    // Generics: Nothing except the bounds (Which have already been checked)
-    else if (getInnerType(ty, [](const auto& t) {
+    } else if (getInnerType(ty, [](const auto& t) {
         return t->is_Generic();
     })) {
-    }
-    // UfcsKnown paths: Can have trait bounds added by the definer
-    else if (const auto* ityp = getInnerType(ty, [](const auto& t) {
+    } else if (const auto* ityp = getInnerType(ty, [](const auto& t) {
         return t->is_Path() && t->as_Path().path.data.is_UfcsKnown();
     })) {
         const auto& e = ityp->as_Path().path.data.as_UfcsKnown();
 
         // UFCS known - Assuming that it's reached the maximum resolvable level (i.e. a type within is generic), search for trait bounds on the type
 
-        // `Self` = `*.type`
-        // `/*I:#*/` := `e.trait.m_params`
         auto monomorphCb = MonomorphStatePtr(crate.types, e.type, &e.trait.params, &e.params);
 
         const auto& trait = this->crate.getTraitByPath(sp, e.trait.path);
         const auto& assocTy = trait.types.at(e.item);
-        // NOTE: The bounds here have 'Self' = the type
         for (const auto& bound : assocTy.traitBounds) {
             ASSERT_BUG(sp, bound.traitPtr, "Pointer to trait " << bound.path << " not set in " << e.trait.path);
             HIRGenericPath finalTraitPath;
@@ -6809,7 +6346,6 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                         monomorphCb.ppHrb = &ppHrb;
                         finalTraitPath = monomorphCb.monomorphGenericpath(sp, finalTraitPath, false);
 
-                        // Found the method, return the UFCS path for it
                         possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
                         rv = true;
                     }
@@ -6817,7 +6353,6 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
             }
         }
 
-        // Search `<Self as Trait>::Name` bounds on the trait itself
         for (const auto& bound : trait.params.bounds) {
             if (!bound.is_TraitBound()) {
                 continue;
@@ -6842,8 +6377,6 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 continue;
             }
 
-            // Found such a bound, now to test if it is useful
-
             HIRGenericPath finalTraitPath;
             if (const auto* fcnPtr = this->traitContainsMethod(sp, be.trait.path, *be.trait.traitPtr, crate.types.self(), methodName, finalTraitPath)) {
                 if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
@@ -6852,7 +6385,6 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                             finalTraitPath.params = monomorphCb.monomorphPathParams(sp, finalTraitPath.params, false);
                         }
 
-                        // Found the method, return the UFCS path for it
                         possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
                         rv = true;
                     }
@@ -6862,7 +6394,6 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
     } else {
     }
 
-    // 6. Search for trait methods (using currently in-scope traits)
     for (const auto& traitRef : ::reverse(traits)) {
         if (traitRef.first == nullptr) {
             break;
@@ -6887,7 +6418,6 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
         if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
             const auto& selfTy = *selfTyP;
 
-            // Use the set of ivars we were given to populate the trait parameters
             HIRPathParams traitParams = getIvaredParams(traitRef.second->params);
 
             // TODO: Re-monomorphise the trait path!
@@ -6905,11 +6435,6 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 return e && e->tyClass == HIRInferClass::None;
             });
 
-            // Probe is existential over the trait arguments. An exact
-            // projected return can carry the surrounding expectation
-            // into selection; method-generic returns stay with the
-            // eventual call signature because its method arguments
-            // are not part of this probe.
             HIRTypeRef methodReturn;
             const HIRPath::Data::Data_UfcsKnown* returnProjection = nullptr;
             if (expectedResult && !fcnPtr->params.isGeneric()) {
@@ -6917,13 +6442,6 @@ bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const
                 const auto* returnPath = methodReturn->opt_Path();
                 returnProjection = returnPath ? returnPath->path.data.opt_UfcsKnown() : nullptr;
                 if (returnProjection) {
-                    // Only an associated output of this trait goal can
-                    // guide selection.  A method returning `Self` also
-                    // becomes a projection when the receiver itself is
-                    // one (for example `F::SignedInt::wrapping_neg`),
-                    // but asking the receiver's `Int` goal for
-                    // `SignedInt` invents the invalid projection
-                    // `<F as Int>::SignedInt`.
                     HIRGenericPath sourceTrait;
                     auto rootTrait = HIRGenericPath(*traitRef.first, traitParams.clone());
                     if (returnProjection->type != selfTy || !traitContainsType(sp, rootTrait, *traitRef.second, returnProjection->item.c_str(), sourceTrait) || sourceTrait.path != returnProjection->trait.path) {
@@ -6983,7 +6501,6 @@ unsigned int TraitResolution::autoderefFindField(const Span& sp, const HIRTypeDa
             return derefCount;
         }
 
-        // 3. Dereference and try again
         derefCount += 1;
         currentTy = this->autoderef(sp, ty, tmpType);
     } while (currentTy);
@@ -6996,7 +6513,6 @@ unsigned int TraitResolution::autoderefFindField(const Span& sp, const HIRTypeDa
         }
     }
 
-    // Dereference failed! This is a hard error (hitting _ is checked above and returns ~0)
     TODO(sp, "Error when no field could be found, but type is known - (: " << topTy << ")." << fieldName);
 }
 
@@ -7004,23 +6520,19 @@ bool TraitResolution::findField(const Span& sp, const HIRTypeData* ty, const RcS
     if (const auto* e = ty->opt_Path()) {
         switch (e->binding.tag()) {
             case HIRTypePathBinding::TAG_Unbound: {
-                // Wut?
                 TODO(sp, "Handle TypePathBinding::Unbound - " << ty);
                 break;
             }
             case HIRTypePathBinding::TAG_Opaque: {
-                // Ignore, no fields on an opaque
                 break;
             }
             case HIRTypePathBinding::TAG_Struct: {
                 auto& be = e->binding.as_Struct();
-                // Has fields!
                 const auto& str = *be;
                 const auto& params = e->path.data.as_Generic().params;
                 auto monomorph = MonomorphStatePtr(crate.types, ty, &params, nullptr);
                 switch (str.data.tag()) {
                     case HIRStructData::TAG_Unit: {
-                        // No fields on a unit struct
                         break;
                     }
                     case HIRStructData::TAG_Tuple: {
@@ -7047,11 +6559,9 @@ bool TraitResolution::findField(const Span& sp, const HIRTypeData* ty, const RcS
                 break;
             }
             case HIRTypePathBinding::TAG_Enum: {
-                // No fields on enums either
                 break;
             }
             case HIRTypePathBinding::TAG_ExternType: {
-                // No fields on extern types
                 break;
             }
             case HIRTypePathBinding::TAG_Union: {
@@ -7093,8 +6603,6 @@ HMTypeInferrence::FmtPP::FmtPP(const HMTypeInferrence& ctxt, const HIRPathParams
 {
 }
 
-// Null only when alias != ~0
-
 HMTypeInferrence::IVar::IVar(HIRTypeRef type)
     : alias(~0u)
     , type(type)
@@ -7123,9 +6631,6 @@ bool HMTypeInferrence::takeChanged() {
 }
 
 void HMTypeInferrence::markChange() {
-    // Generations are allocated by a counter that survives rollback:
-    // a generation observed inside a rolled-back probe never recurs,
-    // so nothing cached against it can be mistaken for a live state.
     mutationGeneration = ++generationCounter;
     if (!hasChanged) {
         hasChanged = true;
@@ -7148,9 +6653,6 @@ void HMTypeInferrence::commit(const Snapshot& snapshot) {
     ASSERT_BUG(Span(), journal.length() >= snapshot.journalLength, "inference snapshots committed out of order");
     snapshotDepth--;
     if (snapshotDepth == 0) {
-        // Value aliases keep their Infer payload alive for rollback;
-        // once nothing can roll back any more, release it as the
-        // non-probing path does.
         for (size_t i = 0; i < journal.length(); i++) {
             const auto& entry = journal[i];
             if (entry.kind == JournalEntry::Kind::ValAlias) {
@@ -7183,7 +6685,6 @@ void HMTypeInferrence::rollbackTo(const Snapshot& snapshot) {
                 break;
             }
             case JournalEntry::Kind::ValAlias: {
-                // The Infer payload was kept alive at mutation time.
                 values.at(entry.slot).alias = ~0u;
                 break;
             }
@@ -7211,7 +6712,6 @@ HMTypeInferrence::ResolvePlaceholders::ResolvePlaceholders(const HMTypeInferrenc
 {
 }
 
-/// Expand any located associated types in the input, operating in-place and returning the result
 HIRTypeRef TraitResolution::expandAssociatedTypes(const Span& sp, HIRTypeRef input, SolverResponseCallback* effects) const {
     expandAssociatedTypesInplace(sp, input, effects);
     return input;
@@ -7304,10 +6804,6 @@ auto CanonicalizeTraitGoal::canonicalIvar(const HIRTypeData* infer) const -> HIR
             const auto original = RcString::newInterned(FMT("#solver-unowned-type-" << infer->as_Infer().index));
             return types.generic(canonicalPlaceholderName(original), GENERICPlaceholder * 256);
         }
-        // The goal's slots are sealed: a variable beyond them (an
-        // environment bound pulled a live caller variable into the
-        // response) passes through raw and is reported, so the
-        // caller can restrict how the response is cached.
         sawForeignIvar_ = true;
         return infer;
     }
@@ -7363,25 +6859,11 @@ auto CanonicalizeTraitGoal::originalValueIvar(unsigned index) const -> const uns
 auto CanonicalizeTraitGoal::monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer) const -> HIRTypeRef {
     if (ivarTable_ && ty->is_Infer()) {
         const auto& infer = ty->as_Infer();
-        // Assembly already runs in this canonicalizer's space.  When
-        // the completed response is sealed and canonicalised for
-        // storage, its input slots must therefore pass through
-        // unchanged.  Treating one as an unowned response variable
-        // turns it into an existential placeholder and loses the
-        // identity of GAT/item parameters that do not occur in the
-        // impl head.
         if (frozen_ && isSolverCanonicalInfer(infer.index) && originalIvar(infer.index)) {
             return ty;
         }
         const auto* resolved = ivarTable_->getType(ty);
         if (const auto* infer = resolved->opt_Infer()) {
-            // Alias-input placeholders predate the inference table
-            // and stay rigid.  A parent level's canonical variable is
-            // renumbered into THIS level's slots (its node becomes the
-            // "original"): every level then owns all canonical indices
-            // in its goal, so boundary decanonicalisation is exact --
-            // levels sharing raw indices would otherwise alias each
-            // other's slots (all levels intern the same Infer nodes).
             if (isAliasInputInfer(infer->index) && !isSolverCanonicalInfer(infer->index)) {
                 return resolved;
             }
@@ -7390,11 +6872,6 @@ auto CanonicalizeTraitGoal::monomorphType(const Span& sp, const HIRTypeData* ty,
         return monomorphType(sp, resolved, allowInfer);
     }
     if (const auto* path = ty->opt_Path(); path && path->binding.is_Opaque()) {
-        // Canonicalisation only renames variables; the path still
-        // resolves to the same item, so the Opaque binding stays
-        // valid and must survive -- assembly recognises rigid
-        // projections (alias-bound self) by it, where the generic
-        // monomorphiser would have to drop it for re-resolution.
         auto base = Monomorphiser::monomorphType(sp, ty, allowInfer);
         if (const auto* basePath = base->opt_Path(); basePath && !basePath->binding.is_Opaque()) {
             return types.intern(HIRTypeData::make_Path({basePath->path.clone(), path->binding.clone()}));
@@ -7415,24 +6892,16 @@ auto CanonicalizeTraitGoal::getValue(const Span&, const HIRGenericRef& generic) 
 auto CanonicalizeTraitGoal::monomorphConstgeneric(const Span& sp, const HIRConstGeneric& val, bool allowInfer) const -> HIRConstGeneric {
     if (ivarTable_) {
         if (const auto* infer = val.opt_Infer(); infer && infer->index != ~0u) {
-            // As for type slots above, a canonical value slot already
-            // belonging to the sealed input is not a fresh response
-            // existential.
             if (frozen_ && isSolverCanonicalInfer(infer->index) && originalValueIvar(infer->index)) {
                 return val.clone();
             }
             const auto& resolved = ivarTable_->getValue(val);
             if (const auto* resolvedInfer = resolved.opt_Infer()) {
-                // Alias-input value placeholders stay rigid; a parent
-                // level's canonical value is renumbered into THIS
-                // level's slots, mirroring the type-ivar rule above.
                 if (isAliasInputInfer(resolvedInfer->index) && !isSolverCanonicalInfer(resolvedInfer->index)) {
                     return resolved.clone();
                 }
                 return canonicalValueIvar(resolvedInfer->index);
             }
-            // A bound value can still hold generics or nested params;
-            // canonicalise its content through the base walk.
             return Monomorphiser::monomorphConstgeneric(sp, resolved, allowInfer);
         }
     }
@@ -7842,8 +7311,6 @@ auto DecanonicalizeSolverInfers::monomorphType(const Span& sp, const HIRTypeData
         return ty;
     }
     if (const auto* path = ty->opt_Path(); path && path->binding.is_Opaque()) {
-        // Only names change here; the resolution is intact, so the
-        // Opaque binding survives for the parent's assembly.
         auto base = MonomorphiserNop::monomorphType(sp, ty, allowInfer);
         if (const auto* basePath = base->opt_Path(); basePath && !basePath->binding.is_Opaque()) {
             return types.intern(HIRTypeData::make_Path({basePath->path.clone(), path->binding.clone()}));
@@ -7898,10 +7365,6 @@ auto NextTraitGoalEvaluator::implExistentials(const HIRGenericParams& definition
         bucket = implExistentials_.insert(key);
     }
 
-    // One invocation-wide binder identity per immutable impl.
-    // The ordinary placeholder binding still carries each
-    // parameter's kind/index, so legacy group()/idx() invariants
-    // remain intact while equality no longer depends on a name.
     const auto scope = ++resolve_.board().id;
     ASSERT_BUG(span(), scope != 0, "solver existential scope exhausted");
 
@@ -7923,21 +7386,11 @@ auto NextTraitGoalEvaluator::implExistentials(const HIRGenericParams& definition
 auto NextTraitGoalEvaluator::goalIsConcrete(const HIRSimplePath& trait, const CanonicalGoal& canonical) const -> bool {
     bool sawGeneric = false;
     auto concrete = [&sawGeneric](const HIRTypeData* ty) {
-        // The type visitor does not walk const-generic VALUES, so
-        // a value-Infer hiding in a path's parameters (Simd<f32,
-        // {Infer}>) would read as concrete and poison the
-        // crate-lifetime cache across functions; the aggregate
-        // flags do see them.
         if (ty->flags & (HIRTypeData::HAS_TYPE_INFER | HIRTypeData::HAS_DEFERRED_CONST | HIRTypeData::HAS_UNEVALUATED_CONST)) {
             return false;
         }
         return !visitTyWith(ty, [&sawGeneric](const HIRTypeData* inner) {
             if (const auto* generic = inner->opt_Generic()) {
-                // A rigid user generic in a bound-free env is
-                // answered structurally (blanket impls only), so
-                // the answer transfers between functions.  A
-                // candidate-match placeholder does not: its
-                // answers run under forced-ambiguity rules.
                 if (generic->group() == GENERICPlaceholder) {
                     return true;
                 }
@@ -7967,9 +7420,6 @@ auto NextTraitGoalEvaluator::goalIsConcrete(const HIRSimplePath& trait, const Ca
         }
     }
     if (sawGeneric && (trait == resolve_.langSized() || trait == resolve_.langMetaSized() || trait == resolve_.langPointeeSized())) {
-        // Sized-family answers on a rigid generic read the
-        // parameter's ?Sized declaration -- context the
-        // empty-bounds gate does not cover.
         return false;
     }
     return canonical.associated.empty();
@@ -7988,10 +7438,6 @@ auto NextTraitGoalEvaluator::crateCache() const -> NextSolverCrateCache& {
 }
 
 auto NextTraitGoalEvaluator::canonicalizeGoal(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, CanonicalizeTraitGoal& canonicalizer) const -> CanonicalGoal {
-    // Const inference variables resolve through the table inside
-    // the canonicalizer: bound values enter the key by value and
-    // unresolved ones become canonical value slots, exactly like
-    // type variables.
     auto canonicalParams = canonicalizer.monomorphPathParams(span(), params, true);
     const auto canonicalType = canonicalizer.monomorphType(span(), type, true);
     CanonicalGoal result(::std::move(canonicalParams), canonicalType);
@@ -8221,12 +7667,6 @@ auto NextTraitGoalEvaluator::normalizeGoalInput(HIRTypeRef input) const -> HIRTy
     const auto* path = input->opt_Path();
     const auto* projection = path ? path->path.data.opt_UfcsKnown() : nullptr;
     auto output = resolve_.expandAssociatedTypes(span(), input);
-    // A ParamEnv predicate can prove the trait without defining
-    // the associated value.  During a re-entrant canonical query
-    // that non-answer may be represented by a fresh infer.  A
-    // projection over a rigid generic must stay a projection so
-    // its declaration bounds and the caller ParamEnv remain
-    // available when candidate obligations are revalidated.
     if (projection && projection->type->is_Generic() && output->is_Infer()) {
         return input;
     }
@@ -8387,7 +7827,6 @@ auto NextTraitGoalEvaluator::orphanVisitResolvedType(const HIRTypeData* type, Or
     }
 
     if (const auto* borrow = type->opt_Borrow()) {
-        // References are fundamental even though raw pointers are not.
         return orphanVisitType(borrow->inner, perspective);
     }
 
@@ -8407,8 +7846,6 @@ auto NextTraitGoalEvaluator::orphanVisitResolvedType(const HIRTypeData* type, Or
         return perspective == OrphanPerspective::Remote ? OrphanVisit::LocalKey : OrphanVisit::Uncovered;
     }
 
-    // Primitive, tuple, array, slice, raw-pointer, function, opaque,
-    // and foreign rigid types are non-local and cover their contents.
     return OrphanVisit::NonLocal;
 }
 
@@ -8456,8 +7893,6 @@ auto NextTraitGoalEvaluator::traitRefIsKnowable(const HIRSimplePath& trait, cons
 }
 
 auto NextTraitGoalEvaluator::hashMix(size_t state, size_t value) -> size_t {
-    // boost::hash_combine's avalanche step.  Equality never relies on
-    // this fingerprint: hash collisions are resolved by goal_matches.
     return state ^ (value + 0x9e3779b97f4a7c15ULL + (state << 6) + (state >> 2));
 }
 
@@ -8675,10 +8110,6 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
         return result;
     }
 
-    // Slot extraction is a read-only derivation of the canonical
-    // answer.  Use a private table so fresh probe variables do not
-    // advance the caller table's mutation generation and evict the
-    // response we are about to cache.
     HMTypeInferrence table(crate.types);
 
     for (size_t i = 0; i < canonicalizer.typeSlotCount(); i++) {
@@ -8775,12 +8206,6 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
 
     Unifier unifier(span(), table, nullptr, true);
     bool responseMismatch = false;
-    // Ordinary unification treats unresolved projections as
-    // opaque. Response extraction has a narrower job: matching
-    // projection constructors expose which input slot an
-    // existential response variable came from. Walk those equal
-    // nominal/projection shells so the relation survives in the
-    // explicit slot assignment.
     auto unifyInstantiatedType = [&](this auto&& self, const HIRTypeData* left, const HIRTypeData* right) -> void {
         if (responseMismatch) {
             return;
@@ -8947,10 +8372,6 @@ auto NextTraitGoalEvaluator::extractSlotValues(const CanonicalGoal& goal, const 
         unifyValue(goal.params.values[i], responseParams.values[i]);
     }
     if (responseMismatch) {
-        // Some proven environment/builtin responses intentionally
-        // keep an existential placeholder where the canonical
-        // input has a literal-class variable.  They prove the
-        // predicate but contribute no slot constraint.
         for (size_t i = 0; i < canonicalizer.typeSlotCount(); i++) {
             result.types.push_back(canonicalizer.canonicalTypeSlot(i));
         }
@@ -9148,9 +8569,6 @@ auto NextTraitGoalEvaluator::canonicalGoalIsRigid(const CanonicalGoal& canonical
             if (inner->is_Infer()) {
                 return true;
             }
-            // Canonical placeholders are position-normalised
-            // per evaluation: identical keys can name different
-            // tentative variables across evaluations.
             if (const auto* generic = inner->opt_Generic(); generic && generic->group() == GENERICPlaceholder) {
                 return true;
             }
@@ -9234,11 +8652,6 @@ auto NextTraitGoalEvaluator::paramEnvCandidateIsNonGlobal(const Candidate& candi
         }
         return false;
     };
-    // An alias bound -- a predicate whose self is a rigid
-    // projection -- is not a where-clause at all: rustc keeps
-    // alias-bound candidates preferred over impls regardless of
-    // globalness (the ATB `Output: Into<u8>` on an opaque's
-    // associated chain must win over the blanket Into impl).
     {
         const auto* implSelf = resolve_.resolveType(candidate.impl.getImplType(crate.types));
         if (const auto* selfPath = implSelf->opt_Path(); selfPath && selfPath->binding.is_Opaque()) {
@@ -9292,10 +8705,6 @@ auto NextTraitGoalEvaluator::relateAssembledHead(const HIRPathParams& goalParams
         unsigned probeIndex;
     };
 
-    // A higher-ranked ParamEnv predicate is instantiated for this
-    // probe exactly like an impl's existential parameters.  This
-    // class only performs that instantiation; all matching is done
-    // below by the common Unifier relation.
     struct InstantiateHrtb final: public MonomorphiserNop {
         HMTypeInferrence& table_;
 
@@ -9416,10 +8825,6 @@ auto NextTraitGoalEvaluator::relateAssembledHead(const HIRPathParams& goalParams
     }
 
     if (hasHrtb) {
-        // Candidate storage outlives the probe snapshot. Resolve
-        // every bound HRTB variable now; an unconstrained one is
-        // restored to its stable binder spelling, never leaked as
-        // a dead inference-table index.
         struct MaterializeHrtb final: public MonomorphiserNop {
             const HMTypeInferrence& table_;
             const Vector<HrtbTypeBinding>& typeBindings_;
@@ -9486,14 +8891,9 @@ auto NextTraitGoalEvaluator::relateAssembledHead(const HIRPathParams& goalParams
         impl = ImplRef(mv$(stableType), mv$(stableParams), mv$(stableAssoc), impl.boundConstness());
     }
 
-    // Use the stable candidate spelling for response effects. In
-    // the HRTB case `impl` was materialised before rollback.
     const auto stableCandidateType = impl.getImplType(crate.types);
     const auto stableCandidateParams = impl.getTraitParams(crate.types);
 
-    // These are the selected head's inference effects.  Record
-    // the relation inputs themselves rather than reconstructing
-    // them later from a fuzzy callback result.
     if (goalType != stableCandidateType) {
         headEqualities.push_back(SolverTypeEquality{goalType, stableCandidateType});
     }
@@ -9538,10 +8938,6 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
     if (relation == Unifier::Outcome::Mismatch) {
         return Certainty::NoSolution;
     }
-    // Self commonly fixes every impl const parameter.  Rebuild
-    // the trait arguments only after those bindings exist so a
-    // concrete expression such as min(2, 3) is evaluated before
-    // it is related to the goal.
     auto resolvedInferenceParams = inferenceParams.clone();
     for (auto& type : resolvedInferenceParams.types) {
         type = resolve_.ivars.getType(type);
@@ -9571,10 +8967,6 @@ auto NextTraitGoalEvaluator::unifyImplHead(const HIRGenericParams& implParamsDef
         }
     }
 
-    // Candidate storage outlives this inference snapshot.  Resolve
-    // every bound existential now and represent the still-free
-    // ones with solver-owned tagged variables; no string identity
-    // and no inference-table index is allowed to escape rollback.
     const auto& stableExistentials = implExistentials(implParamsDef);
 
     struct MaterializeCandidate final: public MonomorphiserNop {
@@ -9689,13 +9081,6 @@ auto NextTraitGoalEvaluator::assembleAliasBoundCandidates(size_t frameIndex, con
         const auto& boundDefinition = crate.getTraitByPath(span(), bound.path.path);
         resolve_.findNamedTraitInTrait(span(), trait, params, boundDefinition, bound.path.path, bound.path.params, type, [&](const HIRTraitPath& parent) {
             auto response = parent.clone();
-            // An equality can be written through a subtrait even
-            // though the item is declared by this parent trait:
-            // `Int<Unsigned = Self>` carries a `MinInt::Unsigned`
-            // equality.  The enumerated parent path contains the
-            // inherited declaration but not those use-site
-            // equalities, so project the matching entries onto the
-            // candidate that will answer NormalizesTo.
             for (const auto& associated : bound.typeBounds) {
                 if (associated.second.sourceTrait.path != trait || resolve_.comparePp(span(), associated.second.sourceTrait.params, response.path.params) == HIRCompare::Unequal) {
                     continue;
@@ -9710,13 +9095,6 @@ auto NextTraitGoalEvaluator::assembleAliasBoundCandidates(size_t frameIndex, con
 }
 
 auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, bool includeMagicCandidates) -> void {
-    // A rigid projection self only matches environment-class
-    // candidates: bounds on the associated type's declaration
-    // (alias bounds) surface through the legacy collector, but
-    // they are the same preference class as ParamEnv predicates.
-    // Mislabelling them lets the non-global-ParamEnv shadow drop
-    // `CastFrom<u16>`-style alias bounds and commit the one
-    // declared directly, guiding inference to the wrong type.
     const auto* selfPath = resolve_.resolveType(type)->opt_Path();
     const bool selfIsRigidProjection = selfPath && selfPath->binding.is_Opaque();
     auto collect = [&](CandidateSource source) {
@@ -9748,10 +9126,6 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
         };
     };
 
-    // Candidate source is semantically significant: a non-global
-    // ParamEnv predicate shadows builtin and impl candidates in the
-    // next solver.  The legacy lookup flattened these sources into
-    // the same bounded ImplRef, so collect each source independently.
     if (includeMagicCandidates) {
         resolve_.assembleMagicCandidates(span(), trait, params, type, collect(CandidateSource::Builtin));
     }
@@ -9762,12 +9136,7 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
     const auto& resolvedType = resolve_.resolveType(type);
     const auto& traitDef = crate.getTraitByPath(span(), trait);
     if (!traitDef.isMarker) {
-        // Assemble impl heads without evaluating their where-clauses.
-        // Those nested goals belong exclusively to evaluate_candidate.
         crate.findTraitImpls(trait, resolvedType, resolve_.ivars.callbackResolveInfer(), [&](const HIRTraitImpl& impl) {
-            // A reservation impl only reserves coherence space for a
-            // possible future implementation. Outside coherence it
-            // is not a candidate and must never provide an item.
             if (impl.isReservation) {
                 return false;
             }
@@ -9782,9 +9151,6 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
             return false;
         });
     } else {
-        // Explicit positive and negative auto-trait impls are
-        // candidates with polarity.  Only their heads are matched
-        // here; their bounds are nested goals evaluated below.
         crate.findAutoTraitImpls(trait, resolvedType, resolve_.ivars.callbackResolveInfer(), [&](const HIRMarkerImpl& impl) {
             HIRPathParams implParams;
             bool headNormalizationAmbiguity = false;
@@ -9800,11 +9166,6 @@ auto NextTraitGoalEvaluator::assembleCandidates(size_t frameIndex, const HIRSimp
             return false;
         });
 
-        // The structural auto candidate is evaluated recursively in
-        // evaluate_candidate, after explicit polarity is known.  A
-        // non-builtin query deliberately keeps only declared impls
-        // and ParamEnv candidates; re-adding this candidate there
-        // makes typeIsCopy/typeIsClone ask themselves recursively.
         if (includeMagicCandidates) {
             const auto structuralRelation = resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(params) ? Certainty::Ambiguous : Certainty::Proven;
             pushCandidate(frameIndex, ImplRef(resolvedType, params.clone(), HIRTraitPath::assocListT()), structuralRelation == Certainty::Proven, structuralRelation, nullptr, {}, true, CandidateSource::Builtin);
@@ -10046,10 +9407,6 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
     for (const auto& requirement : associated) {
         auto candidateOutput = useCandidateResponse ? candidate.impl.getType(crate.types, requirement.first.c_str(), requirement.second.atyParams) : HIRTypeRef();
         if (!useCandidateResponse) {
-            // An impl parameter can occur only in a nested projection
-            // equality (for example `I: Iterator<Item = &'a T>`).
-            // Ask the solver for that projection's actual response so
-            // `T` is bound to the response, not to the alias syntax.
             auto nestedCallback = makeCallable<SolverResponseCb>([&](SolverResponse response) {
                 if (response.certainty != Certainty::Proven || !response.hasImpl || !response.impl || response.impl->ambiguousIdentity) {
                     return false;
@@ -10068,17 +9425,6 @@ auto NextTraitGoalEvaluator::bindCandidatePlaceholders(Candidate& candidate, con
             candidateOutput = makeAssociatedProjection(nestedType, requirement.second.sourceTrait, requirement.first, requirement.second.atyParams);
         }
         if (!useCandidateResponse && !typeHasUfcsUnknown(candidateOutput)) {
-            // rustc normalises a nested projection response before it
-            // is unified with the outer candidate.  In particular,
-            // `<&mut I as Iterator>::Item` first becomes
-            // `<I as Iterator>::Item` and then the ParamEnv equality
-            // `&T`; matching the unnormalised alias against
-            // `&placeholder` only reports a fuzzy relation and loses
-            // the constraint.  A candidate's own response is not a
-            // nested solver response: during Resolve UFCS Outer either
-            // form can still legally contain a local UfcsUnknown, and
-            // such a response must remain deferred until that pass
-            // resolves its trait path.
             candidateOutput = resolve_.expandAssociatedTypes(span(), ::std::move(candidateOutput));
         }
         const auto* candidatePattern = useCandidateResponse ? candidateOutput : requirement.second.type;
@@ -10139,11 +9485,6 @@ auto NextTraitGoalEvaluator::unifyProbe(const HIRTypeData* left, const HIRTypeDa
         return Certainty::Proven;
     }
 
-    // Candidate evaluation must be a pure probe until a typed
-    // response can carry its bindings back to the caller.  Run
-    // the real unifier on the inference table, observe whether
-    // proving the equality needed a binding, then restore the
-    // exact input state in every case.
     const auto snapshot = resolve_.ivars.snapshot();
     Unifier unifier(span(), resolve_.ivars, &resolve_);
     const auto outcome = unifier.unify(left, right);
@@ -10233,9 +9574,6 @@ auto NextTraitGoalEvaluator::relateTypes(Candidate& candidate, const HIRTypeData
         return Certainty::NoSolution;
     }
 
-    // The transaction above proved this relation, including any
-    // caller-ivar bindings.  Preserve it as response data before
-    // rollback; only the selected candidate may apply it.
     candidate.relationEqualities.push_back(SolverTypeEquality{left, right});
     if (outcome == Unifier::Outcome::Proven) {
         return Certainty::Proven;
@@ -10248,12 +9586,6 @@ auto NextTraitGoalEvaluator::relateTypes(Candidate& candidate, const HIRTypeData
             return infer && isSolverCanonicalInfer(infer->index);
         };
         if (isSolverExistential(equality.left) || isSolverExistential(equality.right)) {
-            // Canonical slots are the existential inputs/outputs
-            // of this solver query.  Equating one with a selected
-            // candidate value is a proven response effect, not
-            // structural uncertainty.  Ordinary placeholders and
-            // alias-input infer nodes remain rigid and therefore
-            // ambiguous here.
             continue;
         }
 
@@ -10370,9 +9702,6 @@ auto NextTraitGoalEvaluator::matchAssociatedTypes(const HIRSimplePath& trait, Ca
     for (const auto& requirement : *associated) {
         const auto& aty = requirement.second;
         if (!impl.data.is_TraitImpl() && aty.atyParams.hasParams()) {
-            // Bounded candidates currently store non-GAT projections.
-            // They remain a valid but non-guiding response instead of
-            // being rejected or calling ImplRef's non-GAT assertion.
             result = Certainty::Ambiguous;
             continue;
         }
@@ -10394,24 +9723,13 @@ auto NextTraitGoalEvaluator::matchAssociatedTypes(const HIRSimplePath& trait, Ca
                 result = Certainty::Ambiguous;
                 continue;
             }
-            // A ParamEnv predicate without an explicit equality still
-            // has a canonical projection response.  This is what lets
-            // `T: Trait` prove a nested `T: Trait<Assoc = U>` while
-            // constraining U to `<T as Trait>::Assoc`.
             output = makeAssociatedProjection(impl, aty.sourceTrait, requirement.first, aty.atyParams);
         }
-        // The projection response may contain the very caller-owned
-        // inference variable from the requested equality. That is an
-        // exact response, not an ambiguous comparison of two ivars.
         if (containsDefiningOpaque(output) || containsDefiningOpaque(aty.type)) {
             continue;
         }
         const auto relation = this->relateTypes(candidate, output, aty.type);
         if (relation == Certainty::NoSolution) {
-            // `!` coerces into any requirement: a diverging
-            // closure's Output does not reject the candidate, the
-            // caller's coercion machinery settles it (rustc seeds
-            // the closure signature from the expectation instead).
             if (resolve_.ivars.getType(output)->is_Diverge()) {
                 result = Certainty::Ambiguous;
                 continue;
@@ -10544,10 +9862,6 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
             return Certainty::NoSolution;
         }
     }
-    // Assembly exactness is a ranking fact, not proof.  Only the
-    // unifier relation decides whether the head is proven.  An
-    // ambiguous-identity builtin is explicitly non-committal even
-    // when its response happens to repeat the goal verbatim.
     auto result = candidate->impl.isAmbiguousIdentity() ? Certainty::Ambiguous : candidate->headRelation;
 
     for (const auto& equality : candidate->headEqualities) {
@@ -10603,11 +9917,6 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         return result;
     }
 
-    // An impl parameter without a `?Sized` relaxation carries an
-    // implicit `Sized` requirement.  For a specialising impl this
-    // is often the only distinguishing predicate (`Box<I>` vs
-    // `Box<I: ?Sized>`), so skipping it keeps a dead candidate
-    // alive and blocks the unique general impl.
     {
         const HIRPathParams* boundParams = markerImpl ? &candidate->markerImplParams : &traitImpl->implParams;
         for (size_t i = 0; i < implParamsDef->types.size() && i < boundParams->types.size(); i++) {
@@ -10618,11 +9927,6 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
             if (bound == HIRTypeRef()) {
                 continue;
             }
-            // A tentative impl placeholder is a parameter the
-            // nested goals have not inferred yet; its sizedness
-            // is checked through whatever it resolves to, not
-            // here (a placeholder always reads as fuzzy and
-            // would wrongly downgrade the candidate).
             if (typeHasCandidatePlaceholder(bound)) {
                 continue;
             }
@@ -10659,11 +9963,6 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
         }
     };
 
-    // Associated equalities are inference constraints for the
-    // candidate's own parameters, not ordinary ordered
-    // obligations.  Collect them from every nested predicate
-    // first, so `Extend<B>` does not stay ambiguous merely
-    // because a later `Iterator<Item = (B, A)>` is what fixes B.
     for (const auto& bound : implParamsDef->bounds) {
         const auto* traitBound = bound.opt_TraitBound();
         if (!traitBound || traitBound->trait.typeBounds.empty()) {
@@ -10690,11 +9989,6 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
             // goals cannot relocate this parent slot.
             monomorphTraitBound(*be, nestedType, nestedTrait, nestedParams, nestedAssociated);
 
-            // An impl parameter may occur only in an associated-type
-            // equality of a nested goal.  Canonical solvers infer that
-            // parameter from the projection response of the nested
-            // goal; preserve the same response in our impl parameters
-            // before evaluating the goal itself.
             const auto binding = bindCandidatePlaceholders(*candidate, nestedType, nestedAssociated);
             if (binding == CandidateBindingResult::Mismatch) {
                 return Certainty::NoSolution;
@@ -10704,11 +9998,6 @@ auto NextTraitGoalEvaluator::evaluateCandidate(size_t frameIndex, size_t candida
                 monomorphTraitBound(*be, nestedType, nestedTrait, nestedParams, nestedAssociated);
             }
 
-            // The certainty-only table is the fast path for the vast
-            // majority of nested obligations and also validates all
-            // associated-type constraints. Only an ambiguous goal
-            // whose response can still bind this candidate needs the
-            // more expensive canonical response assembly.
             auto nested = solveGoal(nestedTrait, nestedParams, nestedType, &nestedAssociated);
             if (nested == Certainty::NoSolution) {
                 return Certainty::NoSolution;
@@ -10767,15 +10056,8 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     }
     auto goalType = type;
     auto goalParams = params.clone();
-    // Resolve const inference variables up front: assembly and
-    // parameter binding must see the bound value, or a nested
-    // enumeration invents one (core's swap_bytes bound N=1 for a
-    // goal whose lane count had already resolved to 2).
     for (auto& value : goalParams.values) {
         if (const auto* infer = value.opt_Infer(); infer && infer->index != ~0u) {
-            // The guarded overload keeps reserved-range indexes
-            // (a nested goal in canonical space carries canonical
-            // value slots) rigid instead of asserting.
             const auto& resolved = resolve_.ivars.getValue(value);
             if (!resolved.is_Infer()) {
                 value = resolved.clone();
@@ -10785,11 +10067,6 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     if (goalHasUnassignedInfer(goalParams, goalType, associated)) {
         return Certainty::Ambiguous;
     }
-    // Nested obligations are formed directly from monomorphised impl
-    // bounds.  Their Self type can therefore still be a projection,
-    // e.g. `<Option::IntoIter<T> as Iterator>::Item: IntoIterator`.
-    // Candidate assembly operates on the normalized goal input, just
-    // as it already does for trait arguments.
     goalType = normalizeGoalInput(goalType);
     for (auto& param : goalParams.types) {
         param = normalizeGoalInput(::std::move(param));
@@ -10797,18 +10074,10 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
     if (goalHasUnassignedInfer(goalParams, goalType, associated)) {
         return Certainty::Ambiguous;
     }
-    // rustc structurally normalises Self before candidate assembly.
-    // An unresolved projection over a type variable normalises to an
-    // inference variable and therefore forces ambiguity; treating the
-    // projection syntax as rigid lets an unrelated fuzzy ParamEnv
-    // predicate constrain its output.
     if (selfIsUnresolvedProjectionOverIvar(goalType)) {
         return Certainty::Ambiguous;
     }
     const auto& resolvedType = resolve_.resolveType(goalType);
-    // Candidate assembly must not use an unconstrained `Self` type to
-    // guide inference.  A concrete associated-type equality does
-    // constrain the goal, however, and may uniquely determine Self.
     bool associatedConstrainsSelf = false;
     if (associated) {
         for (const auto& entry : *associated) {
@@ -10837,8 +10106,6 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
         }
     }
     if (findActiveGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated)) {
-        // Productive recursive traits prove their provisional goal;
-        // ordinary trait cycles remain ambiguous.
         cycleHits_++;
         return crate.getTraitByPath(span(), trait).isCoinductive ? Certainty::Proven : Certainty::Ambiguous;
     }
@@ -10855,8 +10122,6 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
         if (crateCacheable && rigidKey && cycleHits_ == cycleHitsBefore) {
             crateCache().insert(hash, trait, canonical.params.clone(), canonical.type, certainty);
         }
-        // Provisional results computed under a goal cycle depend on
-        // the cycle head and must not outlive this evaluation.
         return cacheGoal(hash, trait, canonical.params, canonical.type, canonicalAssociated, certainty, rigidKey && cycleHits_ == cycleHitsBefore);
     };
 
@@ -10877,9 +10142,6 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
         }
     };
 
-    // Assembly and evaluation run against the canonical goal, so
-    // candidate sets and certainties are functions of the cache
-    // key rather than of caller variable identity.
     assembleCandidates(frameIndex, trait, canonical.params, canonical.type);
 
     bool sawAmbiguous = false;
@@ -10916,21 +10178,8 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
         }
         sawAmbiguous |= autoBuiltinResult == Certainty::Ambiguous;
     }
-    // Zero viable candidates: heads are selected by the self
-    // CONSTRUCTOR, so a concrete constructor stays NoSolution no
-    // matter what its arguments or the trait parameters resolve
-    // to ([?i; 3]: ExactSizeIterator).  A bare-ivar self can
-    // still match anything, and a rigid projection self is not a
-    // constructor -- inference elsewhere in the goal can still
-    // unlock an environment candidate for it.
     const auto* selfPath = resolvedType->opt_Path();
     const bool selfIsAlias = selfPath && (selfPath->binding.is_Opaque() || selfPath->binding.is_Unbound());
-    // A return-position opaque SELF with zero candidates lacks
-    // the goal trait in its declared bounds: its trait repertoire
-    // is exactly those bounds, so the answer is a rigid
-    // NoSolution -- forced ambiguity here re-evaluates the same
-    // dead blanket exponentially (issue-64848's
-    // `F: FnOnce() -> T` against `impl AssociatedConstant`).
     const auto* selfErased = resolvedType->opt_ErasedType();
     const bool selfIsRigidOpaque = selfErased && selfErased->inner.is_Fcn();
     bool paramsHoldOpaque = !selfIsRigidOpaque && containsDefiningOpaque(resolvedType);
@@ -10945,9 +10194,6 @@ auto NextTraitGoalEvaluator::solveGoal(const HIRSimplePath& trait, const HIRPath
 }
 
 auto NextTraitGoalEvaluator::literalClassCanMatch(const HIRSimplePath& trait, const HIRPathParams& params, HIRInferClass tyClass) const -> bool {
-    // Auto/marker traits have no impl heads for primitives: they
-    // are proven structurally, and every primitive satisfies the
-    // structural probe.
     if (crate.getTraitByPath(span(), trait).isMarker) {
         return true;
     }
@@ -10985,14 +10231,6 @@ auto NextTraitGoalEvaluator::containsDefiningOpaque(const HIRTypeData* ty) const
         if (!erased) {
             return false;
         }
-        // A return-position opaque outside its defining function
-        // is rigid like any nominal type (its repertoire is its
-        // declared bounds); treating every Fcn-origin opaque as
-        // "may still be defined" held goals ambiguous forever
-        // (example-calendar) or re-evaluated dead blankets
-        // exponentially (issue-64848).  Inside the defining
-        // function (its own return opaques, registered at
-        // typecheck start) the conservative treatment stays.
         if (const auto* fcn = erased->inner.opt_Fcn()) {
             return resolve_.isDefiningFcnOrigin(fcn->origin);
         }
@@ -11026,18 +10264,11 @@ auto NextTraitGoalEvaluator::matchRootAssociated(const HIRSimplePath& trait, Can
     if (!assocType) {
         return Certainty::Proven;
     }
-    // A defining-scope opaque in the response is an OUTPUT of
-    // alias-relate (the requirement defines its hidden type), not
-    // an input that can reject an otherwise valid candidate.
     if (containsDefiningOpaque(output) || containsDefiningOpaque(assocType)) {
         return Certainty::Proven;
     }
     const auto relation = this->relateTypes(candidate, assocType, output);
     if (relation == Certainty::NoSolution) {
-        // `!` coerces into any requirement: a diverging closure's
-        // Output does not reject the candidate, the caller's
-        // coercion machinery settles it (rustc seeds the closure
-        // signature from the expectation instead).
         if (resolve_.ivars.getType(output)->is_Diverge()) {
             return Certainty::Ambiguous;
         }
@@ -11177,9 +10408,6 @@ auto NextTraitGoalEvaluator::responsesEqual(const ImplRef& left, const ImplRef& 
         if (lhs == HIRTypeRef() || rhs == HIRTypeRef()) {
             return lhs == rhs;
         }
-        // ASTType* identity is structural equality after interning.
-        // Avoid recursively normalising and re-interning the common
-        // case where both canonical responses already share a type.
         if (lhs == rhs) {
             return true;
         }
@@ -11196,14 +10424,6 @@ auto NextTraitGoalEvaluator::responsesEqual(const ImplRef& left, const ImplRef& 
         if (lhs.types.size() != rhs.types.size() || lhs.values.size() != rhs.values.size()) {
             return false;
         }
-        // Ordinary regions are deliberately erased when a type is
-        // stored in an HM inference variable, and trait selection
-        // defers their constraints to lifetime inference.  Thus a
-        // ParamEnv proof for `Projection<'a>` and the same declared
-        // GAT bound seen through `Projection<'#omitted>` are one
-        // canonical solver response.  Higher-ranked leak checking is
-        // performed while evaluating the candidate bounds above; it
-        // must not be reintroduced here as response identity.
         for (size_t i = 0; i < lhs.types.size(); i++) {
             if (!typesEqualAfterNormalization(lhs.types[i], rhs.types[i])) {
                 return false;
@@ -11238,10 +10458,6 @@ auto NextTraitGoalEvaluator::responsesEqual(const ImplRef& left, const ImplRef& 
     }
     const auto leftValue = left.getType(crate.types, assocName, params);
     const auto rightValue = right.getType(crate.types, assocName, params);
-    // A bare environment predicate has no opinion on the value: the
-    // same where-clause reaches assembly twice (cached ParamEnv and
-    // the implied-declaration walk), once with its equality and once
-    // without.  That is a refinement, not a conflicting response.
     if (!left.data.is_TraitImpl() && !right.data.is_TraitImpl() && (leftValue == HIRTypeRef()) != (rightValue == HIRTypeRef())) {
         return true;
     }
@@ -11270,35 +10486,19 @@ auto NextTraitGoalEvaluator::evaluateCertainty(const Span& callSpan, const HIRSi
         ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked between evaluations");
         ASSERT_BUG(callSpan, activeGoalIndex.empty(), "next-solver active goal index leaked between evaluations");
         ASSERT_BUG(callSpan, frameDepth == 0, "next-solver candidate frames leaked between evaluations");
-        // Persistent entries key on generic-parameter names; a
-        // switched generic context (Typecheck Outer walks impls on
-        // one resolver) changes what those names mean.
         if (envGeneration_ != resolve_.eatCacheGeneration) {
             envGeneration_ = resolve_.eatCacheGeneration;
-            // A switched generic context renames what generic
-            // bindings mean (M:0 of one function equals M:0 of
-            // another); nothing keyed on them may survive.
             for (auto* goal : goalCache) {
                 goal->persistent = false;
             }
             ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
             solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
             clearGoalCache();
-        }
-        // The non-persistent slice keys on canonical inference
-        // variables: it stays valid until the table (or the
-        // defining-opaque registrations) actually mutates.
-        else if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
+        } else if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
             ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
             solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
             clearGoalCache();
         }
-        // Responses stay warm alongside certainties.  The goal
-        // key is the complete canonical input (type AND const
-        // slots), so an equal key implies the current query's
-        // canonicalizer maps every slot of the cached response to
-        // its own variables, and existential placeholders are
-        // instantiated fresh per replay.
         span_ = &callSpan;
     }
 
@@ -11328,8 +10528,6 @@ auto NextTraitGoalEvaluator::evaluateCertainty(const Span& callSpan, const HIRSi
 }
 
 auto NextTraitGoalEvaluator::evaluateOverlap(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right) -> bool {
-    // The probe is a pure function of the impl pair (impls are
-    // immutable after conversion), so cache it by identity.
     const auto key = splitMix64(reinterpret_cast<uintptr_t>(&left)) ^ splitMix64(~reinterpret_cast<uintptr_t>(&right));
     auto* bucket = overlapCache.find(key);
     if (bucket) {
@@ -11366,9 +10564,6 @@ auto NextTraitGoalEvaluator::evaluateOverlapUncached(const Span& callSpan, const
         span_ = nullptr;
     };
 
-    // Instantiate the first header with fresh inference variables, then
-    // match the second header against it.  This is a unification of two
-    // independently generic impls, not a one-way syntactic ordering.
     auto leftParams = resolve_.makeFreshImplParams(left.params);
     auto leftMonomorph = MonomorphStatePtr(crate.types, nullptr, &leftParams, nullptr);
     auto goalType = leftMonomorph.monomorphType(callSpan, left.type, true);
@@ -11430,35 +10625,19 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked between evaluations");
         ASSERT_BUG(callSpan, activeGoalIndex.empty(), "next-solver active goal index leaked between evaluations");
         ASSERT_BUG(callSpan, frameDepth == 0, "next-solver candidate frames leaked between evaluations");
-        // Persistent entries key on generic-parameter names; a
-        // switched generic context (Typecheck Outer walks impls on
-        // one resolver) changes what those names mean.
         if (envGeneration_ != resolve_.eatCacheGeneration) {
             envGeneration_ = resolve_.eatCacheGeneration;
-            // A switched generic context renames what generic
-            // bindings mean (M:0 of one function equals M:0 of
-            // another); nothing keyed on them may survive.
             for (auto* goal : goalCache) {
                 goal->persistent = false;
             }
             ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
             solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
             clearGoalCache();
-        }
-        // The non-persistent slice keys on canonical inference
-        // variables: it stays valid until the table (or the
-        // defining-opaque registrations) actually mutates.
-        else if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
+        } else if (ivarGenerationSeen_ != resolve_.ivars.mutationGeneration || solverEnvGenerationSeen_ != resolve_.solverEnvGeneration) {
             ivarGenerationSeen_ = resolve_.ivars.mutationGeneration;
             solverEnvGenerationSeen_ = resolve_.solverEnvGeneration;
             clearGoalCache();
         }
-        // Responses stay warm alongside certainties.  The goal
-        // key is the complete canonical input (type AND const
-        // slots), so an equal key implies the current query's
-        // canonicalizer maps every slot of the cached response to
-        // its own variables, and existential placeholders are
-        // instantiated fresh per replay.
         span_ = &callSpan;
     }
 
@@ -11478,15 +10657,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
 
     auto goalType = type;
     auto goalParams = params.clone();
-    // Resolve const inference variables up front: assembly and
-    // parameter binding must see the bound value, or a nested
-    // enumeration invents one (core's swap_bytes bound N=1 for a
-    // goal whose lane count had already resolved to 2).
     for (auto& value : goalParams.values) {
         if (const auto* infer = value.opt_Infer(); infer && infer->index != ~0u) {
-            // The guarded overload keeps reserved-range indexes
-            // (a nested goal in canonical space carries canonical
-            // value slots) rigid instead of asserting.
             const auto& resolved = resolve_.ivars.getValue(value);
             if (!resolved.is_Infer()) {
                 value = resolved.clone();
@@ -11522,13 +10694,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         return emitForcedAmbiguity();
     }
     const auto& resolvedType = resolve_.resolveType(goalType);
-    // Match rustc's forced-ambiguity response for a genuinely
-    // unconstrained `Self` type.  A known associated output is an
-    // input constraint and can legitimately select a unique
-    // response.  This holds for exporting callers too: assembling
-    // every impl of the trait against a bare variable was a
-    // full-crate enumeration on each probe (coretests/num timed
-    // out on it).
     const bool associatedConstrainsSelf = assocName && assocName[0] && assocType && !typeHasUnknown(assocType);
     if (const auto* infer = resolvedType->opt_Infer()) {
         if (!infer->isLit() && !associatedConstrainsSelf && !hasSelfCoercionGoal) {
@@ -11540,10 +10705,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     }
     CanonicalizeTraitGoal canonicalizer(crate.types, &resolve_.ivars);
     const auto canonical = canonicalizeGoal(goalParams, resolvedType, nullptr, canonicalizer);
-    // The associated output is not part of the response cache key,
-    // but its placeholders (and canonical variables) are still
-    // inputs of this query.  Canonicalise it too so evaluation and
-    // response instantiation see one consistent space.
     HIRTypeRef canonicalAssocTypeStorage;
     const HIRTypeData* canonicalAssocType = nullptr;
     if (assocType) {
@@ -11590,21 +10751,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
         return callback.visit(::std::move(callerResponse));
     };
-    // Extended callers use an explicit empty associated-item name
-    // when they need the canonical trait response itself. Cache that
-    // completed response, not just its certainty: otherwise every
-    // repeated nested obligation rebuilds the entire candidate graph.
-    // Since step B the goal's inference variables are canonical
-    // slots shared by the key, the assembly, and the cached
-    // response; replay maps each slot back to the CURRENT query's
-    // variable through the query's own canonicalizer.  Const
-    // inference variables canonicalise into value slots the same
-    // way.  A response that pulls in variables beyond the goal's
-    // slots is rejected by the slot-count check in emitResponse.
-    // Coercion goals contain caller-side endpoints that are not
-    // part of the canonical trait key. Cache the underlying trait
-    // certainties as usual, but rebuild and filter the typed
-    // response for each such query.
     const bool cacheableResponse = assocName && !assocName[0] && !excludedImpl && !hasCoercionGoals && !query.operatorGoal;
     const bool crateCacheableResponse = cacheableResponse && crateCacheUsable() && goalIsConcrete(trait, canonical);
     if (cacheableResponse) {
@@ -11622,11 +10768,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     const auto appendAssociatedEquality = [&](auto& response, const HIRTypeData* required, HIRTypeRef output) {
         response.equalities.push_back(SolverTypeEquality{required, output});
 
-        // Preserve the unifier's leaf relations as response data.
-        // `Context::equateTypes` treats projections as
-        // non-injective and may therefore leave a nested const
-        // slot untouched even though this selected response has
-        // already established the exact projection application.
         const auto snapshot = resolve_.ivars.snapshot();
         Unifier unifier(span(), resolve_.ivars, &resolve_);
         const auto outcome = unifier.unify(required, output);
@@ -11719,12 +10860,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         };
         appendStructuralValues(appendStructuralValues, required, output);
 
-        // Associated types are not injective in general, so the
-        // caller's ordinary type equality deliberately does not
-        // infer projection inputs.  Once the solver has selected
-        // a response, however, two occurrences of the exact same
-        // symbolic projection denote the same application and
-        // their Self/type/const inputs are direct response effects.
         const auto* requiredPath = required->opt_Path();
         const auto* outputPath = output->opt_Path();
         const auto* left = requiredPath ? requiredPath->path.data.opt_UfcsKnown() : nullptr;
@@ -11820,19 +10955,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
     };
 
-    // Filled by the distinct-responses branch.  Candidate heads
-    // stay local to this evaluation; only their common slot
-    // assignments and aggregate query facts may escape.
     auto emitResponse = [&](ImplRef response, Certainty certainty, const Candidate* responseCandidate = nullptr) {
-        // A response can hold live inference variables beyond the
-        // goal's slots (an environment bound pulled a caller
-        // variable into an impl parameter).  Those pass through
-        // the frozen canonicalizer raw and make the response
-        // uncacheable: the goal key does not capture which caller
-        // variable the environment linked in, and the table can
-        // mutate between write and replay even inside one
-        // outermost evaluation (replaying then imports a binding
-        // the current goal never established).
         canonicalizer.freeze();
         auto canonicalResponse = monomorphImplRef(response, canonicalizer);
         SolverResponse solverResponse;
@@ -11844,14 +10967,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             classifyOperatorImpl(solverResponse.operatorSummary, canonicalResponse);
         }
         if (solverResponse.impl->ambiguousIdentity) {
-            // The identity is the unresolved input goal, not one
-            // candidate response. Normalising that goal can expose
-            // a ParamEnv projection and make slot extraction look
-            // like a real assignment; replaying it would let an
-            // unselected environment candidate guide inference.
-            // Start from literal identity. The distinct-candidate
-            // intersection below replaces only assignments shared
-            // by every viable response.
             for (size_t i = 0; i < solverResponse.slots.types.size(); i++) {
                 solverResponse.slots.types[i] = solverResponse.slots.typeInputs[i];
             }
@@ -11921,11 +11036,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
                 candidateSlots.push_back(extractSlotValues(canonical, candidateImpl, canonicalizer, candidateCertainty));
             }
 
-            // Distinct impl heads are still allowed to constrain
-            // an input when every viable response assigns that
-            // slot identically. Publish that intersection on the
-            // ambiguous identity response; consumers must not
-            // recover it by choosing among candidate heads.
             const auto& first = candidateSlots.front();
             for (size_t slot = 0; slot < solverResponse.slots.types.size(); slot++) {
                 if (slot >= first.types.size()) {
@@ -12004,9 +11114,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         }
     };
 
-    // Assembly and evaluation run against the canonical goal, so
-    // candidate sets and certainties are functions of the cache
-    // key rather than of caller variable identity.
     assembleCandidates(frameIndex, trait, canonical.params, canonical.type, includeRootMagicCandidates);
     auto& frame = *frames[frameIndex];
     const size_t candidateCount = frame.candidates.size();
@@ -12018,11 +11125,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     if (candidateAssocType) {
         if (const auto* erased = candidateAssocType->opt_ErasedType()) {
             if (const auto* alias = erased->inner.opt_Alias(); alias && resolve_.isOpaqueAliasDefiningScope(*alias->inner)) {
-                // A defining opaque is an output of alias-relate, not
-                // an input that can reject an otherwise valid impl.
-                // Return the projection response to the caller, which
-                // then equates it with this opaque and records its
-                // hidden type.
                 candidateAssocType = nullptr;
             }
         }
@@ -12030,10 +11132,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     HIRTraitPath::assocListT rootAssociated;
     if (assocName && assocName[0] && candidateAssocType && !typeHasUnknown(candidateAssocType)) {
         const HIRPathParams noAssocParams;
-        // The requirement projects through the trait that DECLARES
-        // the item: `Output` on an `FnMut` goal is declared on
-        // `FnOnce`, and only the declaring trait's projection folds
-        // through the elaborated ParamEnv equality.
         auto sourceTrait = HIRGenericPath(trait, canonical.params.clone());
         HIRGenericPath declaringTrait;
         if (resolve_.traitContainsType(span(), sourceTrait, crate.getTraitByPath(span(), trait), assocName, declaringTrait)) {
@@ -12125,9 +11223,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
         }
 
-        // Keep the Pareto frontier across all input relations.  A
-        // head is dominated only when another endpoint is better
-        // on at least one edge and no worse on every other edge.
         for (size_t i = 0; i < related.size(); i++) {
             for (size_t j = 0; j < related.size(); j++) {
                 if (i == j) {
@@ -12159,29 +11254,8 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
     }
 
     if (frame.viable.empty()) {
-        // solve_goal keeps an obligation ambiguous while inference
-        // still occurs in its inputs.  The response-producing path
-        // must preserve the same result: nested candidate evaluation
-        // calls it specifically to recover constraints from an
-        // ambiguous goal.  Returning false here would turn e.g.
-        // `<_ as IntoIterator>::IntoIter: Iterator` into NoSolution
-        // and incorrectly discard an enclosing `Zip` candidate.
-        //
-        // Only inference at the *root* of the self type warrants
-        // that: heads are selected by the self CONSTRUCTOR, so a
-        // concrete constructor with zero head matches stays
-        // NoSolution no matter what its arguments resolve to
-        // (`[?i; 3]: ExactSizeIterator` -- no impl has an array
-        // self; keeping it ambiguous lets the `&mut I` blanket
-        // shadow the inherent slice `len`).  A bare-ivar self can
-        // still match anything, and a rigid projection self is
-        // not a constructor -- inference elsewhere in the goal
-        // can still unlock an environment candidate for it.
         const auto* noViableSelfPath = resolvedType->opt_Path();
         const bool noViableSelfIsAlias = noViableSelfPath && (noViableSelfPath->binding.is_Opaque() || noViableSelfPath->binding.is_Unbound());
-        // Same repertoire rule as solve_goal's zero-candidate
-        // branch: a return-position opaque self with no matching
-        // head is rigid NoSolution, not ambiguity.
         const auto* noViableSelfErased = resolvedType->opt_ErasedType();
         const bool noViableSelfRigidOpaque = noViableSelfErased && noViableSelfErased->inner.is_Fcn();
         bool noViableOpaque = !noViableSelfRigidOpaque && containsDefiningOpaque(resolvedType);
@@ -12194,19 +11268,7 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         return false;
     }
 
-    // rustc prefers all ParamEnv responses when any applicable
-    // non-global where-bound can answer this goal (dev-guide,
-    // candidate preference): normalisation does not consider
-    // impls when the trait goal is proven via ParamEnv, so a bare
-    // `U: Trait` bound keeps `Trait::Assoc` rigid -- verified
-    // against rustc -Znext-solver on the TryFrom/TryInto blanket
-    // pair.
     const bool hasNonGlobalParamEnv = ::std::any_of(frame.viable.begin(), frame.viable.end(), [&](const Candidate* candidate) {
-        // ParamEnv preference applies only after the complete
-        // input relation proves that environment head. A fuzzy
-        // where-bound whose Self would have to be chosen through
-        // an unresolved call-site coercion is still merely one
-        // candidate and must not discard concrete impl heads.
         return paramEnvCandidateIsNonGlobal(*candidate) && candidate->coercionsProven;
     });
     if (hasNonGlobalParamEnv) {
@@ -12223,8 +11285,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         );
     }
 
-    // A proven builtin or alias-bound candidate shadows impl
-    // candidates. ParamEnv candidates use the globalness rule below.
     bool hasPreferredNonImpl = false;
     for (const auto* candidate : frame.viable) {
         hasPreferredNonImpl |= candidate->source != CandidateSource::ParamEnv && isEnvironmentOrBuiltin(candidate->impl) && candidate->certainty == Certainty::Proven;
@@ -12263,13 +11323,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         );
     }
 
-    // A definite environment head wins over other environment
-    // predicates that only match by binding caller inference.
-    // Associated declarations commonly carry several instances
-    // of the same trait (`ISet2: From<ISet1> + From<u8>`): the
-    // exact `From<u8>` predicate must prove that goal, while a
-    // call with an unknown argument must keep both heads until
-    // the argument type is known.
     const bool hasExactEnvironment = ::std::any_of(frame.viable.begin(), frame.viable.end(), [&](const Candidate* candidate) {
         return isEnvironmentOrBuiltin(candidate->impl) && candidate->headExact && candidate->certainty == Certainty::Proven;
     });
@@ -12287,7 +11340,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         );
     }
 
-    // Apply specialization only after nested goals have been probed.
     for (auto* candidate : frame.viable) {
         candidate->discarded = false;
         candidate->specializationItemSource = nullptr;
@@ -12310,22 +11362,12 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
             auto& left = frame.viable[i]->impl;
             auto& right = frame.viable[j]->impl;
-            // Specialization only distinguishes different canonical
-            // responses.  If both candidates constrain the caller in
-            // exactly the same way, merge their certainties instead;
-            // a proven route must not be discarded behind an
-            // ambiguous, cyclic route to the same response.
             if (responsesEqual(left, right, assocName, canonicalAssocParams, valueName)) {
                 continue;
             }
             if (!left.data.is_TraitImpl() || !right.data.is_TraitImpl()) {
                 continue;
             }
-            // evaluate_overlap is itself the recursive overlap query.
-            // Re-entering either overlap implementation here makes a
-            // coinductive pair recurse without a solver cycle head.
-            // Keeping both responses is conservative: ambiguity is
-            // already sufficient to report that the impls may overlap.
             if (coherenceMode || !resolve_.implsOverlap(span(), left, right)) {
                 continue;
             }
@@ -12390,10 +11432,6 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
             }
         }
         if (!selected) {
-            // The trait head is known, but its call-site relation
-            // is not.  Do not leak that head's slots while the
-            // relation can still fail; ordinary solver ambiguity
-            // will be revisited after inference changes.
             return emitForcedAmbiguity();
         }
         // Among equal responses, prefer the one that actually
@@ -12450,20 +11488,11 @@ auto NextTraitGoalEvaluator::evaluateTyped(const Span& callSpan, const HIRSimple
         if (valueName && selected->impl.data.is_TraitImpl()) {
             responseSource = specializationValueSource(selected, valueName);
             if (!responseSource) {
-                // The selected specialization chain has no impl
-                // body for this item.  The caller may still use a
-                // trait-provided default, but there is no impl
-                // provider to publish.
                 return false;
             }
         }
         auto selectedResponse = monomorphImplRef(responseSource->impl, MonomorphiserNop(crate.types));
         if (certainty != Certainty::Proven) {
-            // A unique but conditional ParamEnv/builtin response
-            // still has a canonical projection value.  Materialise
-            // it so the associated equality is returned as a typed
-            // effect; the consumer must not reconstruct it from
-            // ImplRef just because certainty is ambiguous.
             return emitResponse(materializeRootAssociated(::std::move(selectedResponse), trait, assocName, canonicalAssocParams), Certainty::Ambiguous, selected);
         }
         return emitResponse(materializeRootAssociated(::std::move(selectedResponse), trait, assocName, canonicalAssocParams), Certainty::Proven, selected);
@@ -12492,10 +11521,6 @@ auto NextTraitGoalEvaluator::evaluateNormalizesTo(const Span& callSpan, const No
         BUG(callSpan, "Cannot find associated type " << projection->item << " anywhere in trait " << projection->trait);
     }
 
-    // The destination is a solver-protocol variable, not caller
-    // inference state. Canonicalisation still records it as an
-    // ordinary response slot, while an unresolved projection can
-    // now be retried without growing the HM table on every pass.
     const auto outputSlot = crate.types.infer(HIR_INFER_SOLVER_NORMALIZES_TO_OUTPUT, HIRInferClass::None);
     auto adapter = makeCallable<SolverResponseCb>([&](SolverResponse response) {
         HIRTypeRef output = nullptr;
@@ -12511,32 +11536,14 @@ auto NextTraitGoalEvaluator::evaluateNormalizesTo(const Span& callSpan, const No
             }
             retainedEqualities.push_back(::std::move(equality));
         }
-        // Unbound/Opaque is resolution state, not part of an
-        // alias's semantic identity.  A solver response that only
-        // changes those bindings is the original projection, not
-        // a normalised output; publishing it makes the static
-        // walker recurse forever while toggling child bindings.
         if (output && output->equalsIgnoringRegions(goal.projection)) {
             output = nullptr;
         }
-        // A bare ParamEnv predicate can prove the trait without
-        // defining the requested associated value.  In that case
-        // the response carries only the protocol destination back
-        // as its own value.  This is not a normalization result:
-        // replacing the projection with that auxiliary ivar loses
-        // the projection's declared bounds (for example
-        // `I::IntoIter: Iterator<Item = I::Item>`).
         if (output == outputSlot) {
             output = nullptr;
         }
         response.equalities = ::std::move(retainedEqualities);
 
-        // The fresh destination belongs to the NormalizesTo
-        // protocol, not to the consumer's inference state.  Keep
-        // the selected value separately and strip the auxiliary
-        // identity slot before applying the remaining effects;
-        // otherwise Context::equateTypes would recursively try to
-        // normalise the value while this goal is still active.
         SolverSlotValues retainedSlots;
         for (size_t i = 0; i < response.slots.typeInputs.size(); i++) {
             if (response.slots.typeInputs[i] == outputSlot) {

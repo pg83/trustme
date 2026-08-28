@@ -31,13 +31,11 @@ HIRSerialiseWriter::~HIRSerialiseWriter() {
 }
 
 void HIRSerialiseWriter::open(const ::std::string& filename) {
-    // 1. Sort strings by frequency
     ::std::vector<::std::pair<RcString, unsigned>> sorted;
     sorted.reserve(istringCache.size());
     for (const auto& e : istringCache) {
         sorted.push_back(e);
     }
-    // 2. Write out string table
     ::std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
         return a.second > b.second;
     });
@@ -45,7 +43,6 @@ void HIRSerialiseWriter::open(const ::std::string& filename) {
     objnameCache.clear();
 
     inner = new HIRSerialiseWriterInner(filename);
-    // 3. Reset m_istring_cache to use the same value
     this->writeCount(sorted.size());
     for (size_t i = 0; i < sorted.size(); i++) {
         const auto& s = sorted[i].first;
@@ -61,16 +58,13 @@ void HIRSerialiseWriter::write(const void* buf, size_t len) {
     if (inner) {
         inner->write(buf, len);
     } else {
-        // No-op, pre caching
     }
 }
 
 void HIRSerialiseWriter::writeString(const RcString& v) {
     if (inner) {
-        // Emit ID from the cache
         this->writeCount(istringCache.at(v));
     } else {
-        // Find/add in cache
         istringCache.insert(::std::make_pair(v, 0)).first->second += 1;
     }
 }
@@ -79,7 +73,6 @@ HIRSerialiseWriterInner::HIRSerialiseWriterInner(const ::std::string& filename)
     : backing(filename, ::std::ios_base::out | ::std::ios_base::binary)
     , zstream()
     , buffer(16 * 1024)
-//m_buffer( 4*1024 )
 {
     zstream.zalloc = Z_NULL;
     zstream.zfree = Z_NULL;
@@ -95,11 +88,9 @@ HIRSerialiseWriterInner::HIRSerialiseWriterInner(const ::std::string& filename)
     zstream.next_out = buffer.data();
 }
 
-HIRSerialiseWriterInner::~HIRSerialiseWriterInner()
-{
+HIRSerialiseWriterInner::~HIRSerialiseWriterInner() {
     assert(zstream.avail_in == 0);
 
-    // Complete the compression
     int ret;
     do {
         ret = deflate(&zstream, Z_FINISH);
@@ -125,11 +116,9 @@ void HIRSerialiseWriterInner::write(const void* buf, size_t len) {
 
     size_t lastAvailIn = zstream.avail_in;
 
-    // While there's data to compress
     while (zstream.avail_in > 0) {
         assert(zstream.avail_out != 0);
 
-        // Compress the data
         int ret = deflate(&zstream, Z_NO_FLUSH);
         if (ret == Z_STREAM_ERROR) {
             throw ::std::runtime_error("zlib deflate stream error");
@@ -139,8 +128,6 @@ void HIRSerialiseWriterInner::write(const void* buf, size_t len) {
         lastAvailIn = zstream.avail_in;
         byteInCount += usedThisTime;
 
-        // If the entire input wasn't consumed, then it was likely due to a lack of output space
-        // - Flush the output buffer to the file
         if (zstream.avail_in > 0) {
             size_t bytes = buffer.size() - zstream.avail_out;
             backing.write(reinterpret_cast<char*>(buffer.data()), bytes);
@@ -151,7 +138,6 @@ void HIRSerialiseWriterInner::write(const void* buf, size_t len) {
         }
     }
 
-    // Flush stream contents if the output buffer is full.
     while (zstream.avail_out == 0) {
         size_t bytes = buffer.size() - zstream.avail_out;
         backing.write(reinterpret_cast<char*>(buffer.data()), bytes);
@@ -167,7 +153,6 @@ void HIRSerialiseWriterInner::write(const void* buf, size_t len) {
     }
 }
 
-// --------------------------------------------------------------------
 struct HIRSerialiseReaderInner {
     ::std::ifstream backing;
     z_stream zstream;
@@ -275,13 +260,11 @@ size_t HIRSerialiseReaderInner::read(void* buf, size_t len) {
     zstream.avail_out = len;
     zstream.next_out = reinterpret_cast<unsigned char*>(buf);
     do {
-        // Reset input buffer if empty
         if (zstream.avail_in == 0) {
             backing.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
             zstream.avail_in = backing.gcount();
             if (zstream.avail_in == 0) {
                 byteOutCount += len - zstream.avail_out;
-                //::std::cerr << "Out of bytes, " << m_zstream.avail_out << " needed" << ::std::endl;
                 return len - zstream.avail_out;
             }
             zstream.next_in = const_cast<unsigned char*>(buffer.data());
@@ -324,7 +307,6 @@ void HIRSerialiseWriter::writeU64(u64 v) {
     this->write(buf, 8);
 }
 
-// Variable-length encoded u64 (for array sizes)
 void HIRSerialiseWriter::writeU64c(u64 v) {
     if (v < (1 << 7)) {
         writeU8(static_cast<u8>(v));
@@ -351,7 +333,6 @@ void HIRSerialiseWriter::writeU64c(u64 v) {
 }
 
 void HIRSerialiseWriter::writeI64c(i64 v) {
-    // Convert from 2's completement
     bool sign = (v < 0);
     u64 va = (v < 0 ? -v : v);
     va <<= 1;
@@ -365,7 +346,6 @@ void HIRSerialiseWriter::writeU128(U128 v) {
 }
 
 void HIRSerialiseWriter::writeDouble(double v) {
-    // - Just raw-writes the double
     this->write(&v, sizeof v);
 }
 
@@ -410,7 +390,6 @@ void HIRSerialiseWriter::writeBool(bool v) {
     writeU8(v ? 0xFF : 0x00);
 }
 
-// Core protocol
 void HIRSerialiseWriter::rawWriteUint(u64 val) {
     if (val < 0xC0) {
         writeU8(static_cast<u8>(val));
@@ -505,7 +484,6 @@ U128 HIRSerialiseReader::readU128() {
     return U128(lo, hi);
 }
 
-// Variable-length encoded u64 (for array sizes)
 u64 HIRSerialiseReader::readU64c() {
     auto v = readU8();
     if (v < (1 << 7)) {
@@ -599,7 +577,6 @@ bool HIRSerialiseReader::readBool() {
     }
 }
 
-// Core protocol
 u64 HIRSerialiseReader::rawReadUint() {
     auto v = readU8();
     assert(v <= 0xC0 + 8);
@@ -662,12 +639,10 @@ HIRSerialiseReader::CloseOnDrop HIRSerialiseReader::openObject(const char* name)
         abort();
     }
     auto key = rawReadUint();
-    //std::cout << key << " = " << "..." << std::endl;
     if (key == objnameCache.size()) {
         objnameCache.push_back(rawReadBytesStdstring());
     }
     assert(key < objnameCache.size());
-    //std::cout << key << " = " << m_objname_cache[key] << std::endl;
     if (objnameCache[key] != name) {
         std::cerr << "Expecting OpenNamed(" << name << "), got OpenNamed(" << objnameCache[key] << ")" << std::endl;
         abort();

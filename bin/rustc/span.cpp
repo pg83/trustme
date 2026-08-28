@@ -164,8 +164,8 @@ void SpanInnerMacro::fmt(::std::ostream& os) const {
 }
 
 Span::Span()
-    //: m_ptr(&s_empty_span)
-    : ptr(nullptr) {
+    : ptr(nullptr)
+{
 }
 
 Span::Span(Span&& x)

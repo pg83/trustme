@@ -12,7 +12,6 @@
 namespace {
 
     const HIRGenericParams& getParamsForItem(const Span& sp, const HIRCrate& crate, const HIRSimplePath& path, HIRVisitor::PathContext pc, const HIRGenericParams& emptyParams) {
-        // Support for enum variants
         if (path.components().size() > 1) {
             const auto& pitem = crate.getTypeitemByPath(sp, path, false, true);
             if (pitem.is_Enum()) {
@@ -218,8 +217,6 @@ auto Visitor::pushModTraits(const HIRModule& mod) -> ModTraitsGuard {
 
 auto Visitor::traitBoundSatisfied(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* type, const HIRTraitPath& trait) -> bool {
     return resolve.findImpl(sp, trait.path.path, &trait.path.params, type, [](const auto&, SolverCertainty certainty) {
-        // A possible impl is not proof that a generic signature is
-        // well formed; an in-scope bound or a concrete impl is exact.
         return certainty == SolverCertainty::Proven;
     });
 }
@@ -243,7 +240,6 @@ auto Visitor::checkParameters(const Span& sp, const HIRSimplePath& usedPath, Pat
             ERROR(sp, E0000, "Unspecified parameter with no default - " << paramDef.fmtArgs() << " with " << paramVals);
         }
 
-        // Replace and expand
         paramVals.types.push_back(ms.monomorphType(sp, tyDef.defaultValue));
     }
 
@@ -267,15 +263,8 @@ auto Visitor::checkParameters(const Span& sp, const HIRSimplePath& usedPath, Pat
                 const auto& e = bound.as_TraitBound();
                 const auto* boundedParam = e.type->opt_Generic();
                 if (boundedParam && boundedParam->isSelf() && e.trait.path.path == usedPath) {
-                    // Every trait carries a synthetic `Self: Trait`
-                    // bound so its items can be resolved. The trait
-                    // path being formed is itself that evidence.
                     break;
                 }
-                // This pass has a complete parameter mapping for type
-                // constructors. Function and trait paths can contain
-                // method-level or associated-type evidence that is
-                // resolved by their later specialised checks.
                 if (!checkingFunctionSignature || pc != PathContext::TYPE || !boundedParam || boundedParam->group() != 0) {
                     break;
                 }
@@ -498,7 +487,6 @@ auto Visitor::locateTraitItemInBounds(const Span& sp, HIRVisitor::PathContext pc
                 }
             }
         }
-        // -
     }
     return false;
 }
@@ -532,7 +520,6 @@ auto Visitor::locateInTraitAndSet(const Span& sp, HIRVisitor::PathContext pc, co
         pd = getUfcsKnown(mv$(pd.as_UfcsUnknown()), makeGenericPath(traitPath.path, trait), trait);
         return true;
     }
-    // Search all supertraits
     for (const auto& pt : trait.allParentTraits) {
         if (locateItemInTrait(pc, *pt.traitPtr, pd)) {
             pd = getUfcsKnown(mv$(pd.as_UfcsUnknown()), makeGenericPath(traitPath.path, trait), trait);
@@ -560,7 +547,6 @@ auto Visitor::locateInTraitImplAndSet(HIRVisitor::PathContext pc, const HIRGener
         return this->setFromImpl(traitPath, trait, pd);
     }
 
-    // Search supertraits (recursively)
     for (const auto& pt : trait.allParentTraits) {
         if (this->locateItemInTrait(pc, *pt.traitPtr, pd)) {
             // TODO: Monomorphise params?
@@ -595,7 +581,6 @@ auto Visitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathC
     e.type = this->visitType(e.type);
     this->visitPathParams(e.params);
 
-    // Search for matching impls in current generic blocks
     if (resolve_.itemGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *resolve_.itemGenericsPtr(), p.data)) {
         return;
     }
@@ -609,22 +594,18 @@ auto Visitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathC
         if (te->name == "Self" && currentTrait) {
             auto traitPath = this->getCurrentTraitGp();
             if (this->locateInTraitAndSet(sp, pc, traitPath, *currentTrait, p.data)) {
-                // Success!
                 return;
             }
         }
         ERROR(sp, E0000, "Failed to find impl with '" << e.item << "' for " << e.type);
         return;
     } else {
-        // 1. Search for applicable inherent methods (COMES FIRST!)
         if (this->crate.findTypeImpls(e.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
-            // Search for item in this block
             switch (pc) {
                 case HIRVisitor::PathContext::VALUE:
                     if (impl.methods.find(e.item) == impl.methods.end()) {
                         return false;
                     }
-                    // Found it, just keep going (don't care about details here)
                     break;
                 case HIRVisitor::PathContext::TRAIT:
                     return false;
@@ -641,7 +622,6 @@ auto Visitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathC
             p.data = mv$(newData);
             return;
         }
-        // 2. Search all impls of in-scope traits for this method on this type
         for (const auto& traitInfo : traits) {
             const auto& trait = *traitInfo.second;
 
@@ -673,12 +653,10 @@ auto Visitor::visitPathUfcsUnknown(const Span& sp, HIRPath& p, HIRVisitor::PathC
         }
     }
 
-    // Couldn't find it
     ERROR(sp, E0000, "Failed to find impl with '" << e.item << "' for " << e.type << " (in " << p << ")");
 }
 
 auto Visitor::visitExpr(HIRExprPtr& exp) -> void {
-    // No-op
 }
 
 auto Visitor::visitPath(HIRPath& p, HIRVisitor::PathContext pc) -> void {
@@ -724,10 +702,6 @@ auto Visitor::visitParams(HIRGenericParams& params) -> void {
                 this->visitTraitPath(e.trait);
                 selfTypes.pop_back();
 
-                // A trivial bound has no dependency on this item's
-                // parameters and must hold at the declaration. Keep
-                // the lowering-time classification: lifetimes are
-                // erased and `Self` is replaced before this pass.
                 if (checkingTypeDeclarationParams && !crate.featureEnabled("trivial_bounds") && e.isTrivial) {
                     StaticTraitResolve bareResolve(resolve_.board());
                     if (!traitBoundSatisfied(Span(), bareResolve, e.type, e.trait)) {
@@ -794,7 +768,6 @@ auto Visitor::visitEnum(HIRItemPath p, HIREnum& item) -> void {
 }
 
 auto Visitor::visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) -> void {
-    // Push `Self = <Self as CurTrait>::Type` for processing defaults in the bounds.
     auto pathAty = HIRPath(crate.types.self(), this->getCurrentTraitGp(), p.getName());
     auto tyAty = crate.types.path(mv$(pathAty), HIRTypePathBinding::make_Opaque({}));
     selfTypes.push_back(tyAty);
@@ -805,7 +778,6 @@ auto Visitor::visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) -> voi
 }
 
 auto Visitor::visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) -> void {
-    // Ignore type aliases, they don't have to typecheck.
 }
 
 auto Visitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) -> void {
@@ -822,7 +794,6 @@ auto Visitor::visitTypeImpl(HIRTypeImpl& impl) -> void {
     auto _ = resolve_.setImplGenerics(impl.type, impl.params);
     selfTypes.push_back(impl.type);
 
-    // Pre-visit so lifetime elision can work
     {
         curParams = &impl.params;
         curParamsLevel = 0;
@@ -841,7 +812,6 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
     auto _ = resolve_.setImplGenerics(impl.type, impl.params);
     selfTypes.push_back(impl.type);
 
-    // Pre-visit so lifetime elision can work
     {
         curParams = &impl.params;
         curParamsLevel = 0;
@@ -881,26 +851,13 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
                 }
             };
 
-            // Check signature
-            // - Includes fixing incorrectly elided lifetimes
-            // ```
-            // trait Foo<T> {
-            // }
-            // impl Foo<&Bar> for Baz {
-            //   fn foo(&self, bar: &Bar) { }
-            // }
-
             std::vector<std::string> failures;
-            // -- Generics
             if (implFcn.params.types.size() != traitFcn.params.types.size()) {
                 failures.push_back(FMT("Mismatched type param count (expected " << traitFcn.params.types.size() << ", got " << implFcn.params.types.size() << ")"));
             }
-            // Different logic for lifetimes, only want to check un-elided lifetimes
-            // - Well, elided lifetimes can overlap non-elided ones (as long as they're identical)
             if (implFcn.params.values.size() != traitFcn.params.values.size()) {
                 failures.push_back(FMT("Mismatched const param count (expected " << traitFcn.params.values.size() << ", got " << implFcn.params.values.size() << ")"));
             }
-            // -- Arguments
             if (implFcn.args.size() != traitFcn.args.size()) {
                 failures.push_back(FMT("Mismatched argument count (expected " << traitFcn.args.size() << ", got " << implFcn.args.size() << ")"));
             }
@@ -921,9 +878,6 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
                 }
             }
 
-            // Handle `implTrait` in returns
-            // - Would need to re-create `exp_ret_ty` to keep the `impl Trait`, OR keep a non-erased/expanded copy of the type
-            // > The difference tends to be in lifetimes, so match the two types and update lifetimes?
             struct MCB: public HIRMatchGenerics {
                 ::std::map<RcString, const HIRTypeData*> mapping;
                 ::std::map<unsigned int, const HIRTypeData*> rpitMapping;
@@ -942,8 +896,6 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
                         }
                         return HIRCompare::Equal;
                     }
-                    // If the LHS is an ATY that starts with `erased#` then just accept it?
-                    // - Also record the mapping
                     if (const auto* tyP = tyL->opt_Path()) {
                         if (const auto* pathP = tyP->path.data.opt_UfcsKnown()) {
                             if (pathP->item.compare(0, strlen(ATY_PREFIX_ERASED), ATY_PREFIX_ERASED) == 0) {
@@ -994,8 +946,6 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
                 }
                 return false;
             }));
-
-            //}
 
             if (!failures.empty()) {
                 ERROR(
@@ -1058,8 +1008,6 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
             }
             const auto& implConst = e.second.data;
             const auto& traitConst = vi.as_Constant();
-
-            // Check type
         }
         for (const auto& e : impl.statics) {
             const auto& vi = trait.values.at(e.first);
@@ -1068,14 +1016,10 @@ auto Visitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl)
             }
             const auto& implStatic = e.second.data;
             const auto& traitStatic = vi.as_Static();
-
-            // Check type
         }
         for (const auto& e : trait.types) {
             const auto& traitType = trait.types.at(e.first);
             const auto& implType = e.second;
-
-            // Check that the bounds fit
         }
     }
 }
@@ -1084,7 +1028,6 @@ auto Visitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& imp
     auto _ = resolve_.setImplGenerics(impl.type, impl.params);
     selfTypes.push_back(impl.type);
 
-    // Pre-visit so lifetime elision can work
     {
         curParams = &impl.params;
         curParamsLevel = 0;
@@ -1105,15 +1048,11 @@ auto Visitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     }
 
     auto _ = resolve_.setItemGenerics(item.params);
-    // NOTE: Superfluous... except that it makes the params valid for the return type.
     visitParams(item.params);
 
     fcnPtr = &item;
     checkingFunctionSignature = true;
 
-    // Visit arguments
-    // - Used to convert `impl Trait` in argument position into generics
-    // - Done first so the path in return-position `impl Trait` is valid
     curParams = &item.params;
     curParamsLevel = 1;
     for (auto& arg : item.args) {
@@ -1121,7 +1060,6 @@ auto Visitor::visitFunction(HIRItemPath p, HIRFunction& item) -> void {
     }
     curParams = nullptr;
 
-    // Visit return type (populates path for `impl Trait` in return position
     fcnPath = &p;
     fcnErasedCount = 0;
     {

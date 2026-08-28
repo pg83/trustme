@@ -39,7 +39,6 @@ MonomorphStatePtr::MonomorphStatePtr(HIRTypeInterner& types, const HIRTypeData* 
     , selfTy(selfTy)
     , ppImpl(paramsI)
     , ppMethod(paramsM)
-    //, pp_placeholder(params_p)
     , ppHrb(paramsH)
 {
 }

@@ -29,7 +29,6 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
         }
 
         static void addTraitsFromMod(TypeckModuleState& ms, const HIRModule& mod, const Span& sp) {
-            // In-scope traits.
             ms.traits.clear();
             for (const auto& tp : mod.traits) {
                 const auto& trait = ms.crate.getTraitByPath(sp, tp);
@@ -39,10 +38,8 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
     };
 
     if (ip.parent->trait && ip.parent->ty) {
-        // Trait impl
         TODO(sp, "prepare_from_path - Trait impl " << ip);
     } else if (ip.parent->trait) {
-        // Trait definition
         const auto& trait = crate.getTraitByPath(sp, *ip.parent->trait);
         const auto& item = trait.values.at(ip.name);
         switch (item.tag()) {
@@ -62,10 +59,8 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
             }
         }
     } else if (ip.parent->ty) {
-        // Inherent impl
         TODO(sp, "prepare_from_path - Type impl " << ip);
     } else {
-        // Namespace path
         const auto& mod = H::getModForIp(crate, *ip.parent);
         H::addTraitsFromMod(*this, mod, sp);
         const auto& item = mod.valueItems.at(ip.name)->ent;
@@ -109,7 +104,6 @@ namespace {
 
         void visitModule(HIRItemPath p, HIRModule& mod) override;
 
-        // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
         void visitExpr(HIRExprPtr& exp) override;
 
         void visitTrait(HIRItemPath p, HIRTrait& item) override;
@@ -124,9 +118,6 @@ namespace {
 
         void visitGlobalAssembly(HIRGlobalAssembly& item) override;
 
-        // ------
-        // Code-containing items
-        // ------
         void visitFunction(HIRItemPath p, HIRFunction& item) override;
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override;
@@ -179,7 +170,6 @@ TypeckModuleState::NullOnDrop<const HIRGenericParams> TypeckModuleState::setItem
 void TypeckModuleState::pushTraits(HIRItemPath p, const HIRModule& mod) {
     auto sp = Span();
     modPaths.push_back(p.getSimplePath());
-    // - Push a NULL entry to prevent parent module import lists being searched
     traits.push_back(::std::make_pair(nullptr, nullptr));
     for (const auto& traitPath : mod.traits) {
         traits.push_back(::std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));

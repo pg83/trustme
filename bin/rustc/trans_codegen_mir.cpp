@@ -202,7 +202,6 @@ namespace {
                     break;
                 case MIRLValue::Wrapper::TAG_Field: {
                     decltype(w.as_Field()) fieldIndex = w.as_Field();
-                    // Add a space to prevent accidental float literals
                     if (prevWasNum) {
                         os << " ";
                     }
@@ -436,7 +435,6 @@ auto CodeGeneratorMonoMir::finalise(const TransOptions& opt, CodegenOutput outTy
             of << "}\n";
         }
 
-        // Bind `panic_impl` lang item to the item tagged with `panic_implementation`.
         const auto& panicImplPath = crate.getLangItemPathOpt("trustme-panic_implementation");
         if (panicImplPath != HIRSimplePath()) {
             of << "fn panic_impl#(usize): u32 = \"panic_impl\":\"Rust\" {\n";
@@ -456,7 +454,6 @@ auto CodeGeneratorMonoMir::finalise(const TransOptions& opt, CodegenOutput outTy
     of.flush();
     of.close();
 
-    // The requested output is a completion marker; MonoMIR is stored in the sibling `.mir` file.
     {
         ::std::ofstream of(outfilePath);
         if (!of.good()) {
@@ -534,7 +531,6 @@ auto CodeGeneratorMonoMir::metadataType(const HIRTypeData* ty) const -> Metadata
                                     return metadataType(monomorph(se.back().ty));
                                 }
                             }
-                            //MIR_TODO(*m_mir_res, "Determine DST type when ::Possible - " << ty);
                             return MetadataType::None;
                         }
                         case HIRStructMarkings::DstType::Slice:
@@ -598,7 +594,6 @@ auto CodeGeneratorMonoMir::emitStruct(const Span& sp, const HIRGenericPath& p, c
         }
     };
 
-    // Generate the drop glue (and determine if there is any)
     bool hasDropGlue = resolve_.typeNeedsDropGlue(sp, ty);
 
     const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
@@ -629,7 +624,6 @@ auto CodeGeneratorMonoMir::emitConstructorEnum(const Span& sp, const HIRGenericP
     auto enumPath = varPath.clone();
     enumPath.path.popComponent();
 
-    // Create constructor function
     const auto& varTy = item.data.as_Data().at(varIdx).type;
     const auto& e = varTy->as_Path().binding.as_Struct()->data.as_Tuple();
     of << "/* " << varPath << " */\n";
@@ -661,7 +655,6 @@ auto CodeGeneratorMonoMir::emitConstructorStruct(const Span& sp, const HIRGeneri
     auto monomorph = [&](const auto& x) {
         return resolve_.monomorphExpandOpt(sp, tmp, x, ms);
     };
-    // Create constructor function
     const auto& e = item.data.as_Tuple();
     of << "/* " << p << " */\n";
     of << "fn " << fmt(p) << "(";
@@ -722,7 +715,6 @@ auto CodeGeneratorMonoMir::emitEnum(const Span& sp, const HIRGenericPath& p, con
 
     HIRTypeRef ty = crate.types.path(p.clone(), &item);
 
-    // Generate the drop glue (and determine if there is any)
     bool hasDropGlue = resolve_.typeNeedsDropGlue(sp, ty);
     auto dropGluePath = HIRPath(ty, "#drop_glue");
 
@@ -765,7 +757,6 @@ auto CodeGeneratorMonoMir::emitEnum(const Span& sp, const HIRGenericPath& p, con
                 } else {
                     emitValue(e.field, U128(e.tagValue(i)));
                 }
-                // - Data field number (optional)
                 if (!item.isValue()) {
                     of << " =" << i;
                 }
@@ -779,9 +770,7 @@ auto CodeGeneratorMonoMir::emitEnum(const Span& sp, const HIRGenericPath& p, con
             of << "\t@[" << e.field.index << ", " << e.field.subFields << "] = {\n";
             for (size_t idx = 0; idx < e.values.size(); idx++) {
                 of << "\t\t";
-                // - Tag value
                 emitValue(e.field, e.values[idx]);
-                // - Data field number (optional)
                 if (!item.isValue()) {
                     of << " =" << idx;
                 }
@@ -871,7 +860,6 @@ auto CodeGeneratorMonoMir::emitFunctionExt(const HIRPath& p, const HIRFunction& 
     MIRTypeResolve topMirRes{sp, resolve_, pathCallback, HIRTypeRef(), {}, emptyFcn};
     mirRes = &topMirRes;
 
-    // If the function is a C external, emit as such
     if (item.linkage.name != "") {
         HIRTypeRef retTypeTmp;
         const auto& retType = monomorphiseFcnReturn(retTypeTmp, item, params);
@@ -905,7 +893,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
     MIRTypeResolve localMirRes{sp, resolve_, pathCallback, retType, argTypes, *code};
     mirRes = &localMirRes;
 
-    // - Signature
     of << "/* " << p << " */\n";
     of << "fn " << fmt(p) << "(";
     for (unsigned int i = 0; i < item.args.size(); i++) {
@@ -919,7 +906,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
         of << " = \"" << item.linkage.name << "\":\"" << item.abi << "\"";
     }
     of << " {\n";
-    // - Locals
     for (unsigned int i = 0; i < code->locals.size(); i++) {
         of << "\tlet var" << i << ": " << fmt(code->locals[i]) << ";\n";
     }
@@ -1467,7 +1453,6 @@ auto CodeGeneratorMonoMir::monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunct
     });
 
     if (hasErased || monomorphiseTypeNeeded(item.returnType)) {
-        // If there's an erased type, make a copy with the erased type expanded
         if (hasErased) {
             tmp = cloneTyWith(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
                 if (const auto* te = x->opt_ErasedType()) {
