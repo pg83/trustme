@@ -990,6 +990,32 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_next_solver_legacy_api",
+    inputs=[
+        "$(S)/tst/unit/test_next_solver_legacy_api.py",
+        "$(S)/bin/rustc/hir_typeck_helpers.h",
+        "$(S)/bin/rustc/hir_typeck_helpers.cpp",
+        *TIMEOUT_INPUT,
+    ],
+    outputs=["$(B)/tst/unit/next_solver_legacy_api.stamp"],
+    cmd=[
+        [
+            *TEST_TIMEOUT,
+            "python3",
+            "$(S)/tst/unit/test_next_solver_legacy_api.py",
+            "-v",
+        ],
+        [
+            *TEST_TIMEOUT,
+            "sh",
+            "-c",
+            "> $(B)/tst/unit/next_solver_legacy_api.stamp",
+        ],
+    ],
+    descr="UT",
+    color="green",
+))
+unit_tests.append(command(
     name="unit_rust_lib_import",
     inputs=[
         "$(S)/tst/rust_lib/import.py",

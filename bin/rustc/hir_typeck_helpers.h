@@ -507,8 +507,8 @@ struct TraitPathCb final: TraitPathCallback {
     }
 };
 
-struct TraitImplCallback {
-    virtual bool visit(ImplRef impl, HIRCompare cmp) = 0;
+struct AssembledImplCallback {
+    virtual bool visit(ImplRef impl, SolverCertainty certainty = SolverCertainty::Proven) = 0;
 };
 
 struct SolverResponseCallback {
@@ -548,18 +548,18 @@ struct NormalizesToCb final: NormalizesToCallback {
 };
 
 template <typename F>
-struct TraitImplCb final: TraitImplCallback {
+struct AssembledImplCb final: AssembledImplCallback {
     F f;
 
-    explicit TraitImplCb(F f)
+    explicit AssembledImplCb(F f)
         : f(f)
     {
     }
 
-    bool visit(ImplRef impl, HIRCompare cmp) override {
+    bool visit(ImplRef impl, SolverCertainty certainty) override {
         // ImplRef is a move-only solver response; the callable itself is still
         // stored by an ordinary copy.
-        return f(mv$(impl), cmp);
+        return f(mv$(impl), certainty);
     }
 };
 
@@ -742,26 +742,26 @@ public:
 private:
     friend class NextTraitGoalEvaluator;
 
-    bool assembleMagicCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
-    bool assembleTypeCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
-    bool assembleOtherCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
-    bool assembleParamEnvCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitImplCallback& callback) const;
+    bool assembleMagicCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, AssembledImplCallback& callback) const;
+    bool assembleTypeCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, AssembledImplCallback& callback) const;
+    bool assembleOtherCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, AssembledImplCallback& callback) const;
+    bool assembleParamEnvCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, AssembledImplCallback& callback) const;
 
     template <typename F>
     bool assembleMagicCandidates(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
-        TraitImplCb<F> cb(f);
+        AssembledImplCb<F> cb(f);
         return assembleMagicCandidatesCb(sp, trait, params, type, cb);
     }
 
     template <typename F>
     bool assembleOtherCandidates(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
-        TraitImplCb<F> cb(f);
+        AssembledImplCb<F> cb(f);
         return assembleOtherCandidatesCb(sp, trait, params, type, cb);
     }
 
     template <typename F>
     bool assembleParamEnvCandidates(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, F f) const {
-        TraitImplCb<F> cb(f);
+        AssembledImplCb<F> cb(f);
         return assembleParamEnvCandidatesCb(sp, trait, params, type, cb);
     }
 
