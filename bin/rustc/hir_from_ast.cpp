@@ -3343,34 +3343,14 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                     }
                 }
 
-                auto hirImpl = std::make_unique<HIRTraitImpl>(HIRTraitImpl{
-                    mv$(params),
-                    mv$(traitArgs),
-                    mv$(type),
-
-                    mv$(methods),
-                    mv$(constants),
-                    {},
-                    mv$(types),
-
-                    modPath
-                });
+                auto hirImpl = std::make_unique<HIRTraitImpl>(HIRTraitImpl{mv$(params), mv$(traitArgs), mv$(type), mv$(methods), mv$(constants), {}, mv$(types), modPath});
                 hirImpl->isConst = impl.def().isConst();
                 hirImpl->isReservation = i->attrs.has("rustc_reservation_impl");
                 hirCrate.traitImpls[mv$(traitName)].generic.push_back(mv$(hirImpl));
             } else if (impl.def().type()->data.is_None()) {
             } else {
                 auto type = LowerHIRType(impl.def().type());
-                hirCrate.markerImpls[mv$(traitName)].generic.push_back(box$(
-                    HIRMarkerImpl{
-                        mv$(params),
-                        mv$(traitArgs),
-                        true,
-                        mv$(type),
-
-                        modPath
-                    }
-                ));
+                hirCrate.markerImpls[mv$(traitName)].generic.push_back(box$(HIRMarkerImpl{mv$(params), mv$(traitArgs), true, mv$(type), modPath}));
             }
         } else {
             auto type = LowerHIRType(impl.def().type());
@@ -3425,17 +3405,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 }
             }
 
-            hirCrate.typeImpls.generic.push_back(box$(
-                HIRTypeImpl{
-                    mv$(params),
-                    mv$(type),
-                    mv$(methods),
-                    mv$(constants),
-                    mv$(types),
-
-                    modPath
-                }
-            ));
+            hirCrate.typeImpls.generic.push_back(box$(HIRTypeImpl{mv$(params), mv$(type), mv$(methods), mv$(constants), mv$(types), modPath}));
         }
     }
     for (const auto& i : astMod.items) {
@@ -3450,16 +3420,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
         auto traitName = mv$(trait.path);
         auto traitArgs = mv$(trait.params);
 
-        hirCrate.markerImpls[mv$(traitName)].generic.push_back(box$(
-            HIRMarkerImpl{
-                mv$(params),
-                mv$(traitArgs),
-                false,
-                mv$(type),
-
-                modPath
-            }
-        ));
+        hirCrate.markerImpls[mv$(traitName)].generic.push_back(box$(HIRMarkerImpl{mv$(params), mv$(traitArgs), false, mv$(type), modPath}));
     }
 }
 

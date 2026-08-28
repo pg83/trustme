@@ -2464,7 +2464,6 @@ auto CConcatIdentsExpander::expand(const Span& sp, const WireBoard& wb, const AS
 
         GET_CHECK_TOK(tok, lex, TOK_IDENT);
         rv += tok.ident().name.c_str();
-
     } while (GET_TOK(tok, lex) == TOK_COMMA);
     if (tok.type() != TOK_EOF) {
         parseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});

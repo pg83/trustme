@@ -2477,7 +2477,6 @@ namespace {
             auto ty = ParseType(lex);
 
             variants.push_back(ASTStructItem(mv$(itemAttrs), mv$(vis), mv$(name), mv$(ty), {}));
-
         } while (GET_TOK(tok, lex) == TOK_COMMA);
         CHECK_TOK(tok, TOK_BRACE_CLOSE);
 
@@ -3535,7 +3534,6 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, std::shared_ptr<ASTMo
         rv->setAttrs(mv$(itemAttrs));
     } else if (itemAttrs.items.size() > 0) {
         // TODO: Is this an error? - Attributes on a expression that didn't yeild a node.
-
     } else {
     }
     return rv;
@@ -5298,9 +5296,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 auto tr = ParseTraitDef(lex, metaItems, ParseGenericParamsOpt(lex));
                 tr.setIsMarker();
                 itemData = ASTItem(std::move(tr));
-            }
-
-            else if (tok.ident().name == "default" && (lex.lookahead(0) == TOK_RWORD_IMPL || (lex.lookahead(0) == TOK_RWORD_UNSAFE && lex.lookahead(1) == TOK_RWORD_IMPL))) {
+            } else if (tok.ident().name == "default" && (lex.lookahead(0) == TOK_RWORD_IMPL || (lex.lookahead(0) == TOK_RWORD_UNSAFE && lex.lookahead(1) == TOK_RWORD_IMPL))) {
                 const bool implIsUnsafe = lex.getTokenIf(TOK_RWORD_UNSAFE);
                 GET_CHECK_TOK(tok, lex, TOK_RWORD_IMPL);
                 auto impl = ParseImpl(lex, metaItems, implIsUnsafe, /*isDefault=*/true);

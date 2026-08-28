@@ -590,7 +590,6 @@ namespace {
         Or,
         Xor
     };
-
 }
 
 std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorC(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile) { // escape: existing factory interface exposed by declaration reordering
@@ -3052,7 +3051,6 @@ auto CodeGeneratorC::emitFunctionExt(const HIRPath& p, const HIRFunction& item, 
             of << "\tu32 lo, hi;\n";
             of << "\t__asm__ __volatile__ (\"xgetbv\" : \"=a\" (lo), \"=d\" (hi) : \"c\" (arg0) );\n";
             of << "\treturn lo | ((u64)hi << 32);\n";
-
         } else if (item.linkage.name == "llvm.x86.sse2.pause") {
             of << "\t__asm__ __volatile__ (\"pause\");\n";
 
@@ -4236,7 +4234,6 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
             emitLvalue(e.slot);
             of << ".DATA[" << (e.bitIndex / 8) << "] &= ~(1 << " << (e.bitIndex % 8) << ");";
             of << " }\n";
-
         } break;
             break;
         case MIRStatement::TAG_LoadDropFlag: {
@@ -4245,7 +4242,6 @@ auto CodeGeneratorC::emitStatement(const MIRTypeResolve& localMirRes, const MIRS
             emitLvalue(e.slot);
             of << ".DATA[" << (e.bitIndex / 8) << "] & (1 << " << (e.bitIndex % 8) << ")) != 0)";
             of << ";\n";
-
         } break;
         case MIRStatement::TAG_Asm:
             this->emitAsmGcc(localMirRes, stmt.as_Asm(), indentLevel);
@@ -7493,7 +7489,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                     emitParam(e.args.at(0));
                     of << ")";
                     emitEnumPath(repr, ve.field);
-
                 } break;
                     break;
                 case TypeReprVariantMode::TAG_Linear: {
@@ -7527,7 +7522,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                     } else {
                         emitTag();
                     }
-
                 } break;
                     break;
                 case TypeReprVariantMode::TAG_NonZero: {
@@ -7539,13 +7533,11 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
                     of << " ";
                     of << (ve.zeroVariant ? "==" : "!=");
                     of << " 0";
-
                 } break;
             }
         }
     } else if (name == "unreachable") {
         of << "__builtin_unreachable()";
-
     } else if (name == "assume") {
     } else if (name == "likely" || name == "unlikely") {
         emitLvalue(e.retVal);
@@ -7580,9 +7572,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             of << ", &";
             emitLvalue(e.retVal);
             of << "._0)";
-        } else
-
-        {
+        } else {
             emitLvalue(e.retVal);
             of << "._1 = __builtin_add_overflow";
             of << "(";
@@ -8633,7 +8623,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             emitAtomicCast();
             emitParam(e.args.at(0));
             of << ", " << getAtomicTyGcc(ordering) << ")";
-
         } else if (name == "atomic_store" || name.compare(0, 7 + 5 + 1, "atomic_store_") == 0) {
             auto ordering = getAtomicOrdering(name, 7 + 5 + 1);
             of << "__atomic_store_n(";
@@ -8642,7 +8631,6 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             of << ", ";
             emitParam(e.args.at(1));
             of << ", " << getAtomicTyGcc(ordering) << ")";
-
         } else if (name == "atomic_cxchg_acq_failrelaxed") {
             emitAtomicCxchg(e, Ordering::Acquire, Ordering::Relaxed, false);
         } else if (name == "atomic_cxchg_acqrel_failrelaxed") {
@@ -8687,11 +8675,9 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             of << ", ";
             emitParam(e.args.at(1));
             of << ", " << getAtomicTyGcc(ordering) << ")";
-
         } else if (name == "atomic_fence" || name.compare(0, 7 + 6, "atomic_fence_") == 0) {
             auto ordering = getAtomicOrdering(name, 7 + 6);
             of << "__atomic_thread_fence(" << getAtomicTyGcc(ordering) << ")";
-
         } else if (name == "atomic_singlethreadfence" || name.compare(0, 7 + 18, "atomic_singlethreadfence_") == 0) {
             // TODO: Does this matter?
         } else {
@@ -9228,9 +9214,7 @@ auto CodeGeneratorC::emitIntrinsicCall(const RcString& name, const HIRPathParams
             emitParam(e.args.at(2));
             of << ")[i]";
             of << ")";
-        }
-
-        else {
+        } else {
             // TODO: Platform intrinsics
             of << "assert(!\"TODO: Platform intrinsic \\\"" << name << "\\\"\")";
         }

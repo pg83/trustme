@@ -285,7 +285,6 @@ size_t HIRSerialiseReader::Inner::read(void* buf, size_t len) {
             default:
                 break;
         }
-
     } while (zstream.avail_out > 0);
     byteOutCount += len;
 

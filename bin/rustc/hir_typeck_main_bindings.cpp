@@ -10,7 +10,6 @@
 #include <algorithm>
 
 namespace {
-
     struct Visitor: public HIRVisitor {
         HIRCrate& crate;
         StaticTraitResolve resolve_;

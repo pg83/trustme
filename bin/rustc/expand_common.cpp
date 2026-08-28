@@ -1698,7 +1698,6 @@ namespace {
                     const auto& macInv = i->data.as_MacroInv();
                     newRootItems.push_back(box$(*i));
                     i->data = ASTItem();
-
                 } else if (i->data.is_Macro()) {
                     // TODO: `#[macro_export] macro foo { ... }` DOESN'T move the item to the root
 
@@ -1732,7 +1731,6 @@ namespace {
                     if (ttl.get()) {
                         assert(ttl.get());
                         ParseModRootItemsInto(mod, idx, *ttl);
-
                     } else {
                     }
                     mod.items[idx]->data.as_MacroInv() = mv$(miOwned);

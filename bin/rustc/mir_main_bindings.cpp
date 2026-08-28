@@ -8,7 +8,6 @@
 #include <iomanip>
 
 namespace {
-
     struct MirDumper {
         std::ostream& os;
         unsigned int indentLevel;

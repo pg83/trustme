@@ -17,7 +17,6 @@
 #include <algorithm>
 
 namespace {
-
     template <typename T>
     struct Fmt {
         const WireBoard& wb;
@@ -262,20 +261,17 @@ namespace {
                     }
                     os << "." << fieldIndex;
                     wasNum = true;
-
                 } break;
                     break;
                 case MIRLValue::Wrapper::TAG_Index: {
                     decltype(w.as_Index()) e = w.as_Index();
                     os << "[" << fmt(x.wb, MIRLValue::newLocal(e)) << "]";
-
                 } break;
                     break;
                 case MIRLValue::Wrapper::TAG_Downcast: {
                     decltype(w.as_Downcast()) variantIndex = w.as_Downcast();
                     os << "@" << variantIndex;
                     wasNum = true;
-
                 } break;
             }
         }
@@ -297,7 +293,6 @@ namespace {
             case MIRConstant::TAG_Int: {
                 auto& v = e.as_Int();
                 os << (v.v < 0 ? "" : "+") << v.v << " " << v.t;
-
             } break;
                 break;
             case MIRConstant::TAG_Uint: {
@@ -314,7 +309,6 @@ namespace {
                 u64 frac = vi & ((1ull << 52) - 1);
                 os << (sign ? "-" : "+") << "0x1." << std::setw(52 / 4) << std::setfill('0') << std::hex << frac << std::dec << "p" << (exp - 1023);
                 os << " " << v.t;
-
             } break;
                 break;
             case MIRConstant::TAG_ItemAddr: {
@@ -323,12 +317,10 @@ namespace {
                 if (v.offset != U128(0)) {
                     os << " + " << v.offset;
                 }
-
             } break;
                 break;
             case MIRConstant::TAG_Const: {
                 BUG(Span(), "Stray named constant in MIR after cleanup - " << e);
-
             } break;
             default:
                 os << e;
@@ -359,7 +351,6 @@ namespace {
                         break;
                 }
                 os << fmt(x.wb, e.val);
-
             } break;
                 break;
             case MIRParam::TAG_Constant: {
@@ -369,7 +360,6 @@ namespace {
         }
         return os;
     }
-
 }
 
 std::unique_ptr<CodeGenerator> TransCodegenGetGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const std::string& outfile) {
@@ -763,7 +753,6 @@ auto CodeGeneratorMonoMir::emitEnum(const Span& sp, const HIRGenericPath& p, con
                 of << ",\n";
             }
             of << "\t\t}\n";
-
         } break;
         case TypeReprVariantMode::TAG_Values: {
             auto& e = repr->variants.as_Values();
@@ -777,7 +766,6 @@ auto CodeGeneratorMonoMir::emitEnum(const Span& sp, const HIRGenericPath& p, con
                 of << ",\n";
             }
             of << "\t}\n";
-
         } break;
         case TypeReprVariantMode::TAG_NonZero: {
             auto& e = repr->variants.as_NonZero();
@@ -955,7 +943,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                                     break;
                             }
                             of << fmt(e.val);
-
                         } break;
                             break;
                         case MIRRValue::TAG_Cast: {
@@ -1029,7 +1016,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                                     break;
                             }
                             of << " " << fmt(e.valR);
-
                         } break;
                             break;
                         case MIRRValue::TAG_UniOp: {
@@ -1044,7 +1030,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                                     break;
                             }
                             of << " " << fmt(e.val);
-
                         } break;
                             break;
                         case MIRRValue::TAG_DstMeta: {
@@ -1074,7 +1059,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                                 of << fmt(v) << ", ";
                             }
                             of << "}";
-
                         } break;
                             break;
                         case MIRRValue::TAG_Array: {
@@ -1084,7 +1068,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                                 of << fmt(v) << ", ";
                             }
                             of << "]";
-
                         } break;
                             break;
                         case MIRRValue::TAG_Tuple: {
@@ -1094,7 +1077,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                                 of << fmt(v) << ", ";
                             }
                             of << ")";
-
                         } break;
                             break;
                         case MIRRValue::TAG_Struct: {
@@ -1104,10 +1086,8 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                                 of << fmt(v) << ", ";
                             }
                             of << "}: " << fmt(e.path);
-
                         } break;
                     }
-
                 } break;
                     break;
                 case MIRStatement::TAG_SetDropFlag: {
@@ -1118,19 +1098,16 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                     } else {
                         of << (se.newVal ? "" : "!") << "df" << se.other;
                     }
-
                 } break;
                     break;
                 case MIRStatement::TAG_LoadDropFlag: {
                     auto& se = stmt.as_LoadDropFlag();
                     of << "LOADFLAG df" << se.idx << " = " << fmt(se.slot) << " BIT " << se.bitIndex;
-
                 } break;
                     break;
                 case MIRStatement::TAG_SaveDropFlag: {
                     auto& se = stmt.as_SaveDropFlag();
                     of << "SAVEFLAG " << fmt(se.slot) << " BIT " << se.bitIndex << " = df" << se.idx;
-
                 } break;
                     break;
                 case MIRStatement::TAG_Asm: {
@@ -1149,7 +1126,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                         of << "\"" << v << "\", ";
                     }
                     of << ":" << se.flags << "]";
-
                 } break;
                     break;
                 case MIRStatement::TAG_Asm2: {
@@ -1197,12 +1173,10 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                     of << ", ";
                     se.options.fmt(of);
                     of << ")";
-
                 } break;
                     break;
                 case MIRStatement::TAG_ScopeEnd: {
                     break;
-
                 } break;
             }
             of << ";\n";
@@ -1264,7 +1238,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                     }
                 }
                 of << "\n";
-
             } break;
                 break;
             case MIRTerminator::TAG_Goto: {
@@ -1282,7 +1255,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                 of << "SWITCH " << fmt(e.val) << " { ";
                 of << e.targets;
                 of << " }\n";
-
             } break;
                 break;
             case MIRTerminator::TAG_SwitchValue: {
@@ -1323,7 +1295,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                             }
                             of << "\" = " << e.targets[i] << ",";
                         }
-
                     } break;
                         break;
                     case MIRSwitchValues::TAG_Unsigned: {
@@ -1345,7 +1316,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
 
                 of << "_ = " << e.defTarget;
                 of << " }\n";
-
             } break;
                 break;
             case MIRTerminator::TAG_Drop: {
@@ -1358,7 +1328,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                     of << " IF df" << e.flagIdx;
                 }
                 of << " goto " << e.target << " unwind " << e.unwind.tagStr() << "\n";
-
             } break;
                 break;
             case MIRTerminator::TAG_Call: {
@@ -1384,7 +1353,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                             }
                             of << ">";
                         }
-
                     } break;
                         break;
                     case MIRCallTarget::TAG_Value: {
@@ -1402,7 +1370,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                     of << fmt(a) << ", ";
                 }
                 of << ") goto " << e.retBlock << " unwind " << e.unwind.tagStr() << "\n";
-
             } break;
                 break;
             case MIRTerminator::TAG_TailCall: {
@@ -1430,7 +1397,6 @@ auto CodeGeneratorMonoMir::emitFunctionCode(const HIRPath& p, const HIRFunction&
                     of << fmt(arg) << ", ";
                 }
                 of << ")\n";
-
             } break;
         }
         of << "\t}\n";

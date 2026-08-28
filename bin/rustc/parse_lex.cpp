@@ -767,7 +767,6 @@ Token Lexer::getTokenInt() {
                         this->ungetc();
                     }
                     return Token::makeFloat(fval, numType);
-
                 } else if (issym(ch)) {
                     std::string suffix;
                     while (issym(ch)) {

@@ -1196,7 +1196,6 @@ namespace {
                         return true;
                     }
                 }
-
             } break;
                 break;
             case HIRTypeData::TAG_Array: {
@@ -1205,7 +1204,6 @@ namespace {
                     outPath.subFields.push_back(TypeRepr::FieldPath::ARRAY_ELEMENT);
                     return true;
                 }
-
             } break;
                 break;
             case HIRTypeData::TAG_Path: {
@@ -1239,7 +1237,6 @@ namespace {
                         }
                         return true;
                     }
-
                 } else if (te.binding.is_Enum()) {
                     const TypeRepr* repr = TargetGetTypeRepr(sp, resolve, ty);
                     if (!repr) {
@@ -1254,14 +1251,12 @@ namespace {
                         }
                     }
                 }
-
             } break;
                 break;
             case HIRTypeData::TAG_Borrow: {
                 // TODO: Only return a single-pointer size
                 outPath.size = TargetGetPointerBits() / 8;
                 return true;
-
             } break;
                 break;
             case HIRTypeData::TAG_Function: {
@@ -1277,7 +1272,6 @@ namespace {
                 if (getPatternValidRanges(te, outPath.size, ranges) && ranges.front().first != 0) {
                     return true;
                 }
-
             } break;
             default:
                 break;
@@ -1333,7 +1327,6 @@ namespace {
                         }
                     }
                 }
-
             } break;
             case HIRTypeData::TAG_Array: {
                 auto& te = (*ty).as_Array();
@@ -1341,7 +1334,6 @@ namespace {
                     outPath.subFields.push_back(TypeRepr::FieldPath::ARRAY_ELEMENT);
                     return true;
                 }
-
             } break;
             case HIRTypeData::TAG_Path: {
                 auto& te = (*ty).as_Path();
@@ -1519,7 +1511,6 @@ namespace {
                         }
                     }
                 }
-
             } break;
                 break;
             case HIRTypeData::TAG_Primitive: {
@@ -1542,7 +1533,6 @@ namespace {
                     default:
                         break;
                 }
-
             } break;
             case HIRTypeData::TAG_Pattern: {
                 auto& te = (*ty).as_Pattern();
@@ -1573,7 +1563,6 @@ namespace {
                     return true;
                 }
                 return false;
-
             } break;
             case HIRTypeData::TAG_Borrow: {
                 if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
@@ -1581,7 +1570,6 @@ namespace {
                     nicheStart = 0;
                     return true;
                 }
-
             } break;
             case HIRTypeData::TAG_Function: {
                 if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
@@ -1981,7 +1969,6 @@ namespace {
                         }
                     }
                 }
-
             } break;
                 break;
             case HIREnumClass::TAG_Value: {
@@ -2038,7 +2025,6 @@ namespace {
                     }
                     rv.variants = TypeRepr::VariantMode::make_Values({{0, static_cast<u8>(rv.size), {}}, std::move(vals)});
                 }
-
             } break;
         }
 

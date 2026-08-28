@@ -1432,51 +1432,29 @@ namespace {
             }
             handler->cb(sp, crate, name, path);
             return;
-        }
-
-        else if (name == "alloc_layout") {
+        } else if (name == "alloc_layout") {
         } else if (name == "panic_info") {
         } else if (name == "panic_location") {
         } else if (name == "manually_drop") {
-        }
-
-        else if (name == "arc") {
+        } else if (name == "arc") {
         } else if (name == "rc") {
-        }
-
-        else if (name == "maybe_uninit") {
-        }
-
-        else if (name == "unpin") {
+        } else if (name == "maybe_uninit") {
+        } else if (name == "unpin") {
         } else if (name == "pin") {
         } else if (name == "future_trait") {
         } else if (name == "from_generator") {
         } else if (name == "get_context") {
-        }
-
-        else if (name == "va_list") {
-        }
-
-        else if (name == "receiver") {
+        } else if (name == "va_list") {
+        } else if (name == "receiver") {
         } else if (name == "dispatch_from_dyn") {
-        }
-
-        else if (name == "generator") {
+        } else if (name == "generator") {
         } else if (name == "generator_state") {
-        }
-
-        else if (name == "Try") {
+        } else if (name == "Try") {
             realName = "try";
-        }
-
-        else if (name == "msvc_try_filter") {
-        }
-
-        else if (name == "panic_impl") {
+        } else if (name == "msvc_try_filter") {
+        } else if (name == "panic_impl") {
         } else if (name == "oom") {
-        }
-
-        else if (name == "panic") {
+        } else if (name == "panic") {
         } else if (name == "panic_bounds_check") {
         } else if (name == "panic_fmt") {
             item.as_Function().markings.linkName = "rust_begin_unwind";
@@ -1490,9 +1468,7 @@ namespace {
         } else if (name == "box_free") {
         } else if (name == "owned_box") {
         } else if (name == "start") {
-        }
-
-        else if (name == "eh_personality") {
+        } else if (name == "eh_personality") {
         } else if (name == "i128_add") {
         } else if (name == "i128_addo") {
         } else if (name == "u128_add") {
@@ -1517,9 +1493,7 @@ namespace {
         } else if (name == "i128_shro") {
         } else if (name == "u128_shr") {
         } else if (name == "u128_shro") {
-        }
-
-        else {
+        } else {
             ERROR(sp, E0000, "Unknown language item '" << name << "'");
         }
 
@@ -2031,7 +2005,6 @@ auto CHandlerRepr::handle(const Span& sp, const ASTAttribute& mi, const WireBoar
             } else if (reprType == "Rust") {
             } else if (reprType == "no_niche") {
                 // TODO: rust-lang/rust#68303 happens with UnsafeCell and niche optionisations
-
             } else {
                 TODO(sp, "Handle struct repr '" << reprType << "'");
             }

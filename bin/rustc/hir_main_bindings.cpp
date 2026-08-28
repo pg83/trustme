@@ -3738,28 +3738,24 @@ auto HirSerialiser::serialise(const TokenData& td) -> void {
         case TokenData::TAG_String: {
             auto& e = td.as_String();
             out.writeString(e);
-
         } break;
             break;
         case TokenData::TAG_Ident: {
             auto& e = td.as_Ident();
             serialise(e.hygiene);
             out.writeString(e.name);
-
         } break;
             break;
         case TokenData::TAG_Integer: {
             auto& e = td.as_Integer();
             out.writeTag(e.datatype);
             out.writeU128(e.intval);
-
         } break;
             break;
         case TokenData::TAG_Float: {
             auto& e = td.as_Float();
             out.writeTag(e.datatype);
             out.writeFloatValue(e.floatval);
-
         } break;
             break;
         case TokenData::TAG_Fragment: {

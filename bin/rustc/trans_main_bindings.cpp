@@ -434,7 +434,6 @@ namespace {
         BindTranslationNominals visitor(crate);
         visitor.visitPath(path, HIRVisitor::PathContext::VALUE);
     }
-
 }
 
 struct MIRFunction::MIREnumCache {
@@ -598,7 +597,6 @@ static void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool
                     TransEnumerateValItem(state, vi2, isVisible, callback);
                 }
             }
-
         } break;
             break;
         case HIRValueItem::TAG_StructConstant: {
@@ -617,7 +615,6 @@ static void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool
                 }
                 TransEnumerateFillFromLiteral(state, e.valueRes, TransParams(state.crate.types));
             }
-
         } break;
             break;
         case HIRValueItem::TAG_Static: {
@@ -641,7 +638,6 @@ static void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool
 
                 state.rv.roots.push_back(getPath.get());
             }
-
         } break;
             break;
         case HIRValueItem::TAG_Function: {
@@ -676,7 +672,6 @@ static void TransEnumerateValItem(EnumState& state, const HIRValueItem& vi, bool
             if (e.saveCode) {
                 TransEnumerateGenericFunctionItems(state, sp, e, MonomorphStatePtr(state.crate.types), !e.params.bounds.empty());
             }
-
         } break;
     }
 }

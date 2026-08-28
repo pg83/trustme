@@ -246,7 +246,6 @@ auto Mangler::fmtName(const char* const s) -> void {
         if (isalnum(static_cast<unsigned char>(*p))) {
         } else if (*p == '_') {
         } else if (*p == '#' || *p == '-') { // HACK: Treat '-' and '#' as the same in encoding
-
             // HACK: Only treat the last one as special, previous ones are replaced by underscores
             hashPos = p;
         } else {

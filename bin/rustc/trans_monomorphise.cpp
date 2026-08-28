@@ -143,13 +143,11 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
                 case MIRStatement::TAG_SaveDropFlag: {
                     auto& e = stmt.as_SaveDropFlag();
                     statements.push_back(MIRStatement::make_SaveDropFlag({e.slot.clone(), e.bitIndex, e.idx}));
-
                 } break;
                     break;
                 case MIRStatement::TAG_LoadDropFlag: {
                     auto& e = stmt.as_LoadDropFlag();
                     statements.push_back(MIRStatement::make_LoadDropFlag({e.idx, e.slot.clone(), e.bitIndex}));
-
                 } break;
                 default:
                     statements.push_back(c.cloneStmt(stmt));

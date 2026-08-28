@@ -2088,9 +2088,7 @@ namespace {
                     nodePtr = NEWNODE(dst, span, Cast, mv$(nodePtr), dst);
                 }
                 return CoerceResult::Custom;
-            }
-
-            else if (const auto* dep = dst->opt_Infer()) {
+            } else if (const auto* dep = dst->opt_Infer()) {
                 if (contextMut) {
                     contextMut->possibleEquateIvar(sp, dep->index, src, Context::PossibleTypeSource::UnsizeFrom);
                 }
@@ -2120,9 +2118,7 @@ namespace {
                     nodePtr = NEWNODE(dst, span, Cast, mv$(nodePtr), dst);
                 }
                 return CoerceResult::Custom;
-            }
-
-            else if (const auto* dep = dst->opt_Infer()) {
+            } else if (const auto* dep = dst->opt_Infer()) {
                 if (contextMut) {
                     contextMut->possibleEquateIvar(sp, dep->index, src, Context::PossibleTypeSource::UnsizeFrom);
                 }
@@ -4183,9 +4179,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
             // TODO: Should ! end up in an ivar?
             if (lT->is_Diverge() && rT->is_Diverge()) {
                 return;
-            }
-
-            else if (rT->is_Diverge()) {
+            } else if (rT->is_Diverge()) {
                 if (const auto* rE = ri->opt_Infer()) {
                     this->ivars.setIvarTo(rE->index, lT);
                 }
@@ -6333,21 +6327,7 @@ void Context::equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSi
         }
         return false;
     });
-    this->linkAssoc.push_back(
-        Associated{
-            this->nextRuleIdx++,
-            sp,
-            ruleLeftTy,
-
-            trait.clone(),
-            mv$(ruleParams),
-            ruleImplTy,
-            ruleName,
-            mv$(ruleAtyPp),
-            isOp,
-            operatorKind
-        }
-    );
+    this->linkAssoc.push_back(Associated{this->nextRuleIdx++, sp, ruleLeftTy, trait.clone(), mv$(ruleParams), ruleImplTy, ruleName, mv$(ruleAtyPp), isOp, operatorKind});
     this->indexAssociated(this->linkAssoc.size() - 1);
     this->ivars.markChange();
 }

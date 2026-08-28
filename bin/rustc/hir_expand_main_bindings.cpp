@@ -3535,7 +3535,6 @@ auto ClosureExprVisitorExtract::visit(HIRExprNodeClosure& node) -> void {
                 argsSplit.push_back(std::make_pair(mv$(argsPat.data.as_Tuple().subPatterns[i]), mv$(argsTy->as_Tuple()[i])));
             }
             out.implsType.push_back(box$(H::makeFnfree(resolve_.hirCrate().types, mv$(params), mv$(closureType), mv$(argsSplit), mv$(retType), std::move(bodyCode))));
-
         } break;
         case HIRExprNodeClosure::Class::Shared: {
             const auto& langFn = resolve_.hirCrate().getLangItemPath(node.span(), "fn");

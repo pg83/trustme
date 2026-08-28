@@ -1053,9 +1053,7 @@ HIRExprNodeCallMethod::HIRExprNodeCallMethod(Span sp, HIRExprNodeP val, RcString
     , fallbackMethod(mv$(fallbackMethod))
     , params(mv$(params))
     , args(mv$(args))
-    ,
-
-    methodPath(HIRSimplePath("", {}))
+    , methodPath(HIRSimplePath("", {}))
 {
     if (this->fallbackMethod == "") {
         this->fallbackMethod = this->method;

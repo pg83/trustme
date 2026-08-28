@@ -5042,7 +5042,6 @@ namespace {
 
                         changed = true;
                     }
-
                 } break;
                     break;
                 case MIRTerminator::TAG_If: {
@@ -5058,7 +5057,6 @@ namespace {
                             changed = true;
                         }
                     }
-
                 } break;
                     break;
                 case MIRTerminator::TAG_Call: {
@@ -5066,7 +5064,6 @@ namespace {
                     for (auto& a : te.args) {
                         checkParam(a);
                     }
-
                 } break;
                 default:
                     break;
@@ -6921,9 +6918,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         auto tgtLvalue = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
                         e.fcn = mv$(tgtLvalue);
                     }
-                }
-
-                else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_Function()) {
+                } else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_Function()) {
                     const auto& pe = path.data.as_UfcsKnown();
                     const auto& fcnTy = pe.type->as_Function();
                     if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
@@ -7004,9 +6999,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     })) {
                         e.fcn = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
                     }
-                }
-
-                else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_Function()) {
+                } else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_Function()) {
                     const auto& pe = path.data.as_UfcsKnown();
                     const auto& fcnTy = pe.type->as_Function();
                     if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {
@@ -7020,9 +7013,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         }
                         e.fcn = pe.trait.path == resolve.langFnOnce() ? mv$(fcnLvalue) : MIRLValue::newDeref(mv$(fcnLvalue));
                     }
-                }
-
-                else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_NamedFunction()) {
+                } else if (path.data.is_UfcsKnown() && path.data.as_UfcsKnown().type->is_NamedFunction()) {
                     const auto& pe = path.data.as_UfcsKnown();
                     const auto& fcnTy = pe.type->as_NamedFunction();
                     if (pe.trait.path == resolve.langFn() || pe.trait.path == resolve.langFnMut() || pe.trait.path == resolve.langFnOnce()) {

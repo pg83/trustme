@@ -4517,7 +4517,6 @@ void MatchGenGrouped::genForSlice(tRulesSubset armRules, size_t ofs, MIRBasicBlo
                     // TODO: If the condition fails, this should re-try the match on other rules that could have worked.
 
                     // TODO: What if there's multiple patterns on this condition?
-
                 } else {
                     return;
                 }
@@ -9028,7 +9027,6 @@ auto ExprVisitorConv::visit(HIRExprNodeMatch& node) -> void {
 
         auto res = builder.getResult(sp);
         builder.setResult(sp, mv$(res));
-
     } else {
     }
 }

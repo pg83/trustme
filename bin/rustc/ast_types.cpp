@@ -395,7 +395,6 @@ void ASTType::print(std::ostream& os, bool isDebug /*=false*/) const {
             if (!ent.info.rettype->isUnit()) {
                 os << " -> " << *ent.info.rettype;
             }
-
         } break;
             _(Tuple, os << "( "; for (const auto& it : ent.innerTypes) {
                 it->print(os, isDebug);
@@ -410,7 +409,6 @@ void ASTType::print(std::ostream& os, bool isDebug /*=false*/) const {
             }
             os << (ent.isMut ? "mut " : "");
             ent.inner->print(os, isDebug);
-
         } break;
             _(Pointer, os << "*" << (ent.isMut ? "mut " : "const "); ent.inner->print(os, isDebug);)
             _(Array, os << "["; ent.inner->print(os, isDebug); os << "; "; if (ent.size.get()) { os << *ent.size; } else { os << "_"; } os << "]";)

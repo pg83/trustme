@@ -157,9 +157,7 @@ namespace {
                 , lv(lv)
                 , blockOffsets(blockOffsets)
                 , lifetimes(vl)
-                ,
-
-                visitedStatements(lifetimes.stmtBitmap.size())
+                , visitedStatements(lifetimes.stmtBitmap.size())
             {
                 HIRTypeRef tmp;
                 isCopy = mirRes.resolve.typeIsCopy(localMirRes.sp, mirRes.getLvalueType(tmp, lv));

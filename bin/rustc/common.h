@@ -304,7 +304,6 @@ inline Join<T> join(const char* sep, const std::vector<T> v) {
 }
 
 namespace std {
-
     inline std::ostream& operator<<(std::ostream& os, char8_t v) {
         return os << static_cast<char>(v);
     }
@@ -394,7 +393,6 @@ namespace std {
         }
         return os;
     }
-
 }
 
 class FmtEscaped {
