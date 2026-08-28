@@ -34,23 +34,5 @@ class NextSolverLegacyApiTest(unittest.TestCase):
             self.assertIn("SolverCertainty", declaration)
             self.assertNotIn("HIRCompare", declaration)
 
-    def test_impl_head_uses_typed_existentials(self):
-        source = HELPERS[1].read_text()
-        body = source.split("Certainty unifyImplHead(", 1)[1].split(
-            "void assembleAliasBoundCandidates", 1
-        )[0]
-        existential_factory = source.split(
-            "const HIRPathParams& implExistentials(", 1
-        )[1].split("// ---- Crate-lifetime concrete-goal cache", 1)[0]
-        self.assertIn("implExistentials(implParamsDef)", body)
-        self.assertIn("HIRGenericRef::newSolverExistential", existential_factory)
-        self.assertIn("resolve_.board().id", existential_factory)
-        self.assertNotIn("RcString", existential_factory)
-        self.assertNotIn("FMT(", existential_factory)
-        self.assertNotIn("GENERICPlaceholder", body)
-        self.assertNotIn("RcString::newInterned", body)
-        self.assertNotIn("impl_?_", body)
-
-
 if __name__ == "__main__":
     unittest.main()

@@ -616,6 +616,11 @@ private:
 
     mutable stl::ObjPool::Ref eatCachePool;
     mutable stl::IntMap<EatCacheEntry> eatCache;
+    struct ImplExistentials {
+        const HIRGenericParams* definition;
+        HIRPathParams params;
+    };
+    mutable stl::IntMap<ThinVector<ImplExistentials>> implExistentials_;
     mutable u64 eatCacheGeneration = 0;
     friend class NextTraitGoalEvaluator;
     mutable bool normalizingBoundType = false;
@@ -741,6 +746,22 @@ public:
     /// both sets of where-clauses in an isolated inference context.
     bool implsOverlap(const Span& sp, const ImplRef& left, const ImplRef& right) const;
 
+    /// Instantiate an inherent impl's existential parameters as real inference
+    /// variables and relate its declared Self type to the receiver.  Callers
+    /// probing more than one impl must wrap this in an inference snapshot.
+    Unifier::Outcome relateInherentImplHeader(
+        const Span& sp,
+        const HIRTypeImpl& impl,
+        const HIRTypeData* receiver,
+        HIRPathParams& implParams
+    ) const;
+    SolverCertainty evaluateInherentImpl(
+        const Span& sp,
+        const HIRTypeImpl& impl,
+        const HIRTypeData* receiver,
+        HIRPathParams& implParams
+    ) const;
+
     /// Locate a named trait in the provied trait (either itself or as a parent trait)
     bool findNamedTraitInTraitCb(const Span& sp, const HIRSimplePath& des, const HIRPathParams& params, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* selfType, TraitPathCallback& callback) const;
 
@@ -776,25 +797,14 @@ private:
     }
 
     HIRPathParams makeFreshImplParams(const HIRGenericParams& params) const;
+    const HIRPathParams& implExistentials(const Span& sp, const HIRGenericParams& definition) const;
+    HIRPathParams materializeImplParams(const Span& sp, const HIRGenericParams& definition, const HIRPathParams& inferenceParams) const;
     SolverCertainty solveNonBuiltinTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRTypeData* type) const;
     HIRCompare typeIsSizedBuiltin(const Span& sp, const HIRTypeData* type) const;
     HIRCompare typeIsCopyBuiltin(const Span& sp, const HIRTypeData* type) const;
     SolverCertainty evaluateCoercionGoal(const Span& sp, const SolverCoercionConstraint& constraint, const HIRTypeData* input, ThinVector<SolverTypeEquality>* equalities = nullptr) const;
     Ordering compareCoercionEndpoints(const Span& sp, const SolverCoercionConstraint& constraint, const HIRTypeData* left, const HIRTypeData* right) const;
-
-    HIRCompare fticCheckParams(
-        const Span& sp,
-        const HIRSimplePath& trait,
-        const HIRPathParams* params,
-        const HIRTypeData* type,
-        const HIRGenericParams& implParamsDef,
-        const HIRPathParams& implTraitArgs,
-        const HIRTypeData* implTy,
-        /*Out->*/ HIRPathParams& outImplParams,
-        bool evaluateBounds = true,
-        bool commitDefiningOpaque = false,
-        SolverResponse* effects = nullptr
-    ) const;
+    SolverCertainty evaluateInherentImplBounds(const Span& sp, const HIRTypeImpl& impl, const HIRPathParams& implParams) const;
 
 public:
     enum class AutoderefBorrow {

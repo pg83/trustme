@@ -10228,49 +10228,6 @@ namespace {
 bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache) __attribute__((warn_unused_result));
 bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPath& path, HIRExprCallCache& cache, const HIRFunction*& fcnPtr);
 
-Unifier::Outcome relateInherentImplHeader(
-    Context& context,
-    const Span& sp,
-    const HIRTypeImpl& impl,
-    const HIRTypeData* receiver,
-    HIRPathParams& implParams
-) {
-    ASSERT_BUG(sp, implParams.types.size() <= impl.params.types.size(),
-        "Too many inherent impl type parameters");
-    implParams.types.reserve(impl.params.types.size());
-    while (implParams.types.size() < impl.params.types.size()) {
-        implParams.types.push_back(context.ivars.newIvarTr());
-    }
-    for (auto& type : implParams.types) {
-        if (const auto* infer = type->opt_Infer(); infer && infer->index == ~0u) {
-            type = context.ivars.newIvarTr(infer->tyClass);
-        }
-    }
-
-    ASSERT_BUG(sp, implParams.values.size() <= impl.params.values.size(),
-        "Too many inherent impl const parameters");
-    implParams.values.reserve(impl.params.values.size());
-    while (implParams.values.size() < impl.params.values.size()) {
-        implParams.values.push_back(HIRConstGeneric::make_Infer({context.ivars.newIvarVal()}));
-    }
-    for (auto& value : implParams.values) {
-        if (const auto* infer = value.opt_Infer(); infer && infer->index == ~0u) {
-            value = HIRConstGeneric::make_Infer({context.ivars.newIvarVal()});
-        }
-    }
-
-    auto monomorph = MonomorphStatePtr(
-        context.crate.types, receiver, &implParams, nullptr
-    );
-    monomorph.setConstevalState(context.resolve.board(), HIRItemPath(""));
-    const auto candidate = monomorph.monomorphType(sp, impl.type, true);
-    Unifier relation(sp, context.ivars, &context.resolve, {
-        .bindRigidValues = true,
-        .relateProjectionInputs = true,
-    });
-    return relation.unify(receiver, candidate);
-}
-
 bool inherentImplMatchesReceiver(
     Context& context,
     const Span& sp,
@@ -10283,7 +10240,7 @@ bool inherentImplMatchesReceiver(
     };
 
     HIRPathParams implParams;
-    return relateInherentImplHeader(context, sp, impl, receiver, implParams)
+    return context.resolve.relateInherentImplHeader(sp, impl, receiver, implParams)
         != Unifier::Outcome::Mismatch;
 }
 
@@ -10624,7 +10581,7 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
     // type/const parameter is represented by a real inference variable.
     auto& implParams = e.implParams;
     ASSERT_BUG(sp,
-        relateInherentImplHeader(context, sp, *implPtr, lookupType, implParams)
+        context.resolve.relateInherentImplHeader(sp, *implPtr, lookupType, implParams)
             != Unifier::Outcome::Mismatch,
         "Selected inherent impl no longer matches " << lookupType);
 
@@ -12527,7 +12484,7 @@ public:
 
                     auto& implParams = e.implParams;
                     ASSERT_BUG(sp,
-                        relateInherentImplHeader(this->context, sp, *implPtr, lookupType, implParams)
+                        this->context.resolve.relateInherentImplHeader(sp, *implPtr, lookupType, implParams)
                             != Unifier::Outcome::Mismatch,
                         "Selected inherent value impl no longer matches " << lookupType);
 
