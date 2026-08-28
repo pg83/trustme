@@ -2337,18 +2337,18 @@ ItemAddress::ItemAddress(std::unique_ptr<HIRPath> p, U128 offset)
 {
 }
 
-MIREnumCachePtr::MIREnumCachePtr(const MIREnumCache* p)
+MIRFunction::MIREnumCachePtr::MIREnumCachePtr(const MIREnumCache* p)
     : p(p)
 {
 }
 
-MIREnumCachePtr::MIREnumCachePtr(MIREnumCachePtr&& x)
+MIRFunction::MIREnumCachePtr::MIREnumCachePtr(MIREnumCachePtr&& x)
     : p(x.p)
 {
     x.p = nullptr;
 }
 
-MIREnumCachePtr& MIREnumCachePtr::operator=(MIREnumCachePtr&& x) {
+MIRFunction::MIREnumCachePtr& MIRFunction::MIREnumCachePtr::operator=(MIREnumCachePtr&& x) {
     this->~MIREnumCachePtr();
     p = x.p;
     x.p = nullptr;

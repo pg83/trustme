@@ -14,13 +14,14 @@ class ExpandRegistry;
 class LangItems;
 struct Settings;
 struct TargetSpec;
-class TargetLayoutContext;
-class MirOperationsContext;
-class CtfeContext;
-class ManglingContext;
 struct NextSolverCrateCache;
 
 struct WireBoard {
+    struct TargetLayoutContext;
+    struct MirOperationsContext;
+    struct CtfeContext;
+    struct ManglingContext;
+
     explicit WireBoard(stl::ObjPool* pool);
 
     stl::ObjPool* pool = nullptr;

@@ -993,6 +993,14 @@ Token::Token(enum eTokenType t, Data d, Position p)
 {
 }
 
+Token Token::fromSerialised(enum eTokenType type, TokenData data) {
+    return Token(type, std::move(data), {});
+}
+
+auto Token::rawData() const -> const TokenData& {
+    return data_;
+}
+
 Token& Token::operator=(Token&& t) {
     if (this == &t) {
         return *this;

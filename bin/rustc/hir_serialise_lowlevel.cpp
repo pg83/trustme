@@ -8,7 +8,7 @@
 #include <string.h>
 #include <algorithm>
 
-struct HIRSerialiseWriterInner {
+struct HIRSerialiseWriter::Inner {
     std::ofstream backing;
     z_stream zstream;
     std::vector<unsigned char> buffer;
@@ -16,12 +16,12 @@ struct HIRSerialiseWriterInner {
     unsigned int byteOutCount = 0;
     unsigned int byteInCount = 0;
 
-    HIRSerialiseWriterInner(const std::string& filename);
-    ~HIRSerialiseWriterInner();
+    Inner(const std::string& filename);
+    ~Inner();
     void write(const void* buf, size_t len);
 };
 
-struct HIRSerialiseReaderInner {
+struct HIRSerialiseReader::Inner {
     std::ifstream backing;
     z_stream zstream;
     std::vector<unsigned char> buffer;
@@ -29,8 +29,8 @@ struct HIRSerialiseReaderInner {
     unsigned int byteOutCount = 0;
     unsigned int byteInCount = 0;
 
-    HIRSerialiseReaderInner(const std::string& filename);
-    ~HIRSerialiseReaderInner();
+    Inner(const std::string& filename);
+    ~Inner();
     size_t read(void* buf, size_t len);
 };
 
@@ -55,7 +55,7 @@ void HIRSerialiseWriter::open(const std::string& filename) {
 
     objnameCache.clear();
 
-    inner = new HIRSerialiseWriterInner(filename);
+    inner = new Inner(filename);
     this->writeCount(sorted.size());
     for (size_t i = 0; i < sorted.size(); i++) {
         const auto& s = sorted[i].first;
@@ -82,7 +82,7 @@ void HIRSerialiseWriter::writeString(const RcString& v) {
     }
 }
 
-HIRSerialiseWriterInner::HIRSerialiseWriterInner(const std::string& filename)
+HIRSerialiseWriter::Inner::Inner(const std::string& filename)
     : backing(filename, std::ios_base::out | std::ios_base::binary)
     , zstream()
     , buffer(16 * 1024)
@@ -101,7 +101,7 @@ HIRSerialiseWriterInner::HIRSerialiseWriterInner(const std::string& filename)
     zstream.next_out = buffer.data();
 }
 
-HIRSerialiseWriterInner::~HIRSerialiseWriterInner() {
+HIRSerialiseWriter::Inner::~Inner() {
     assert(zstream.avail_in == 0);
 
     int ret;
@@ -123,7 +123,7 @@ HIRSerialiseWriterInner::~HIRSerialiseWriterInner() {
     deflateEnd(&zstream);
 }
 
-void HIRSerialiseWriterInner::write(const void* buf, size_t len) {
+void HIRSerialiseWriter::Inner::write(const void* buf, size_t len) {
     zstream.avail_in = len;
     zstream.next_in = reinterpret_cast<unsigned char*>(const_cast<void*>(buf));
 
@@ -166,13 +166,13 @@ void HIRSerialiseWriterInner::write(const void* buf, size_t len) {
     }
 }
 
-HIRSerialiseReadBuffer::HIRSerialiseReadBuffer(size_t cap)
+HIRSerialiseReader::Buffer::Buffer(size_t cap)
     : ofs(0)
 {
     backing.reserve(cap);
 }
 
-size_t HIRSerialiseReadBuffer::read(void* dst, size_t len) {
+size_t HIRSerialiseReader::Buffer::read(void* dst, size_t len) {
     size_t rem = backing.size() - ofs;
     if (rem >= len) {
         memcpy(dst, backing.data() + ofs, len);
@@ -185,7 +185,7 @@ size_t HIRSerialiseReadBuffer::read(void* dst, size_t len) {
     }
 }
 
-void HIRSerialiseReadBuffer::populate(HIRSerialiseReaderInner& is) {
+void HIRSerialiseReader::Buffer::populate(Inner& is) {
     backing.resize(backing.capacity(), 0);
     auto len = is.read(backing.data(), backing.size());
     backing.resize(len);
@@ -193,7 +193,7 @@ void HIRSerialiseReadBuffer::populate(HIRSerialiseReaderInner& is) {
 }
 
 HIRSerialiseReader::HIRSerialiseReader(const std::string& filename)
-    : inner(new HIRSerialiseReaderInner(filename))
+    : inner(new Inner(filename))
     , buffer(1024)
     , pos(0)
 {
@@ -231,7 +231,7 @@ void HIRSerialiseReader::read(void* buf, size_t len) {
     pos += len;
 }
 
-HIRSerialiseReaderInner::HIRSerialiseReaderInner(const std::string& filename)
+HIRSerialiseReader::Inner::Inner(const std::string& filename)
     : backing(filename, std::ios_base::in | std::ios_base::binary)
     , zstream()
     , buffer(16 * 1024)
@@ -252,11 +252,11 @@ HIRSerialiseReaderInner::HIRSerialiseReaderInner(const std::string& filename)
     zstream.avail_in = 0;
 }
 
-HIRSerialiseReaderInner::~HIRSerialiseReaderInner() {
+HIRSerialiseReader::Inner::~Inner() {
     inflateEnd(&zstream);
 }
 
-size_t HIRSerialiseReaderInner::read(void* buf, size_t len) {
+size_t HIRSerialiseReader::Inner::read(void* buf, size_t len) {
     zstream.avail_out = len;
     zstream.next_out = reinterpret_cast<unsigned char*>(buf);
     do {

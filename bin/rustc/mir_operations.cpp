@@ -25,13 +25,17 @@
 
 using namespace stl;
 
-struct MirOperationsContext {
+struct WireBoard::MirOperationsContext {
     const RcString vtableName = RcString::newInterned("vtable#");
     std::vector<bool> visitedBlocks;
     std::vector<MIRBasicBlockId> pendingBlocks;
     std::vector<std::vector<unsigned>> blockPredecessors;
     bool visitingBlocks = false;
 };
+
+namespace {
+    using MirOperationsContext = WireBoard::MirOperationsContext;
+}
 
 namespace {
     struct MirMutator {
@@ -167,8 +171,8 @@ namespace {
     };
 }
 
-MirOperationsContext* MIRCreateOperationsContext(ObjPool& pool) {
-    return pool.make<MirOperationsContext>();
+void MIRCreateOperationsContext(WireBoard& wb, ObjPool& pool) {
+    wb.mirOperations = pool.make<MirOperationsContext>();
 }
 
 namespace {
@@ -7408,7 +7412,7 @@ void MIROptimiseCrateInlining(const WireBoard& wb, const HIRCrate& crate, TransL
             } else if (hirFcn.code) {
                 auto& mir = hirFcn.code.getMirOrErrorMut(Span());
                 bool didOpt = MIROptimiseInline(resolve, ip, mir, hirFcn.args, hirFcn.returnType, list, optLevel);
-                mir.transEnumState = MIREnumCachePtr();
+                mir.transEnumState = MIRFunction::MIREnumCachePtr();
                 didInlineOnPass |= didOpt;
 
                 MIRCleanup(resolve, ip, mir, hirFcn.args, hirFcn.returnType);

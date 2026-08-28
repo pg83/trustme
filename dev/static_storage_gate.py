@@ -32,10 +32,10 @@ ALLOWED_IMMUTABLE = frozenset((
     # Embedded source emitted by the C backend.
     ("trans_codegen_c.cpp.o", "_ZL17CODEGEN_C_PRELUDE", "r"),
     # Parser and core-type lookup tables.
-    ("ast_types.cpp.o", "_ZL9CORETYPES", "d"),
-    ("parse_lex.cpp.o", "_ZL8TOKENMAP", "d"),
-    ("parse_lex.cpp.o", "_ZL11RWORDS_2015", "d"),
-    ("parse_lex.cpp.o", "_ZL11RWORDS_2018", "d"),
+    ("ast_types.cpp.o", "_ZN12_GLOBAL__N_19CORETYPESE", "d"),
+    ("parse_lex.cpp.o", "_ZN12_GLOBAL__N_18TOKENMAPE", "d"),
+    ("parse_lex.cpp.o", "_ZN12_GLOBAL__N_111RWORDS_2015E", "d"),
+    ("parse_lex.cpp.o", "_ZN12_GLOBAL__N_111RWORDS_2018E", "d"),
     # Allocator ABI metadata.
     ("trans_allocator.cpp.o", "ALLOCATOR_METHODS", "D"),
     ("trans_allocator.cpp.o", "_ZL28ALLOCATOR_METHODS_ARGS_alloc", "r"),
@@ -54,14 +54,11 @@ ALLOWED_IMMUTABLE = frozenset((
      "_ZZN12_GLOBAL__N_123TypeRestrictiveOrdering14getOrderingPtrERK4SpanRK7"
      "ContextPK11HIRTypeDataS9_RbbE11tagOrdering", "r"),
     ("hir_typeck_helpers.cpp.o",
-     "_ZZNK22NextTraitGoalEvaluator20literalClassCanMatchERK13HIRSimplePathRK"
-     "13HIRPathParams13HIRInferClassE8intPrims", "V"),
+     "_ZZNK15TraitResolution22NextTraitGoalEvaluator20literalClassCanMatchERK"
+     "13HIRSimplePathRK13HIRPathParams13HIRInferClassE8intPrims", "r"),
     ("hir_typeck_helpers.cpp.o",
-     "_ZZNK22NextTraitGoalEvaluator20literalClassCanMatchERK13HIRSimplePathRK"
-     "13HIRPathParams13HIRInferClassE10floatPrims", "V"),
-    ("trans_mangling.cpp.o", "_ZZN7Mangler7fmtNameEPKcE3HEX", "V"),
-    ("trans_mangling.cpp.o",
-     "_ZZN12_GLOBAL__N_112mangleFinishERN3stl13StringBuilderEE3HEX", "r"),
+     "_ZZNK15TraitResolution22NextTraitGoalEvaluator20literalClassCanMatchERK"
+     "13HIRSimplePathRK13HIRPathParams13HIRInferClassE10floatPrims", "r"),
 ))
 
 # Temporary migration exceptions. These are mutable and must disappear once

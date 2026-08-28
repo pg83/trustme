@@ -8,18 +8,17 @@ struct WireBoard;
 #include "hir_typeck_static.h"
 #include <std/mem/obj_pool.h>
 
-class MIREvalAllocationPtr;
-class MIREvalAllocation;
-class MIREvalCallStackEntry;
 class MIRLValue;
 class MIRStatement;
 class MIRTerminator;
 class MIRTypeResolve;
-class CtfeContext;
-
-CtfeContext* CtfeCreateContext(stl::ObjPool& pool);
+void CtfeCreateContext(WireBoard& wb, stl::ObjPool& pool);
 
 struct HIREvaluator {
+    struct MIREvalAllocationPtr;
+    struct MIREvalAllocation;
+    struct MIREvalCallStackEntry;
+
     class Newval {
     public:
         virtual HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) = 0;

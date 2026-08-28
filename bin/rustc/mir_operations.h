@@ -7,8 +7,8 @@ namespace stl {
     class ObjPool;
 }
 
-class MirOperationsContext;
-MirOperationsContext* MIRCreateOperationsContext(stl::ObjPool& pool);
+struct WireBoard;
+void MIRCreateOperationsContext(WireBoard& wb, stl::ObjPool& pool);
 
 extern void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType);
 

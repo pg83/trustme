@@ -26,7 +26,7 @@ using namespace stl;
 
 namespace {}
 
-struct CfgState {
+struct Settings::CfgState {
     ObjPool* pool;
     std::multimap<std::string, std::string> values;
     std::map<std::string, CfgValueCallback*> valueFcns;
@@ -34,6 +34,10 @@ struct CfgState {
 
     explicit CfgState(ObjPool& pool);
 };
+
+namespace {
+    using CfgState = Settings::CfgState;
+}
 
 namespace {
     struct CCfgExpander: public ExpandProcMacro {

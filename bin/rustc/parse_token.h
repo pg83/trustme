@@ -49,9 +49,6 @@ class InterpolatedFragment;
 #include "parse_token_tu.h"
 
 class Token {
-    friend class HirSerialiser;
-    friend class HirDeserialiser;
-
     using Data = TokenData;
 
     enum eTokenType type_;
@@ -89,6 +86,10 @@ public:
     enum eTokenType type() const {
         return type_;
     }
+
+    static Token fromSerialised(enum eTokenType type, TokenData data);
+
+    const TokenData& rawData() const;
 
     bool hasData() const {
         return !data_.is_None();

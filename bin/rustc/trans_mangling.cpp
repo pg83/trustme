@@ -21,7 +21,7 @@
 
 using namespace stl;
 
-struct ManglingContext {
+struct WireBoard::ManglingContext {
     StringBuilder buffer;
     Vector<RcString> names;
     IntMap<RcString> ordinaryTypeCache;
@@ -29,6 +29,10 @@ struct ManglingContext {
 
     explicit ManglingContext(ObjPool& pool);
 };
+
+namespace {
+    using ManglingContext = WireBoard::ManglingContext;
+}
 
 namespace {
     enum class LifetimeIdentityMode {
@@ -69,8 +73,8 @@ namespace {
     };
 }
 
-ManglingContext* TransCreateManglingContext(ObjPool& pool) {
-    return pool.make<ManglingContext>(pool);
+void TransCreateManglingContext(WireBoard& wb, ObjPool& pool) {
+    wb.mangling = pool.make<ManglingContext>(pool);
 }
 
 namespace {

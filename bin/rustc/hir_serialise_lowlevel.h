@@ -10,11 +10,10 @@
 #include <assert.h>
 #include <stddef.h>
 
-class HIRSerialiseWriterInner;
-class HIRSerialiseReaderInner;
-
 class HIRSerialiseWriter {
-    HIRSerialiseWriterInner* inner;
+    class Inner;
+
+    Inner* inner;
     std::map<RcString, unsigned> istringCache;
     std::map<const char*, unsigned> objnameCache;
 
@@ -96,24 +95,26 @@ public:
     }
 };
 
-class HIRSerialiseReadBuffer {
-    std::vector<u8> backing;
-    unsigned int ofs;
-
-public:
-    HIRSerialiseReadBuffer(size_t size);
-
-    size_t capacity() const {
-        return backing.capacity();
-    }
-
-    size_t read(void* dst, size_t len);
-    void populate(HIRSerialiseReaderInner& is);
-};
-
 class HIRSerialiseReader {
-    HIRSerialiseReaderInner* inner;
-    HIRSerialiseReadBuffer buffer;
+    class Inner;
+
+    class Buffer {
+        std::vector<u8> backing;
+        unsigned int ofs;
+
+    public:
+        Buffer(size_t size);
+
+        size_t capacity() const {
+            return backing.capacity();
+        }
+
+        size_t read(void* dst, size_t len);
+        void populate(Inner& is);
+    };
+
+    Inner* inner;
+    Buffer buffer;
     size_t pos;
     std::vector<RcString> strings;
 

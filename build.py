@@ -837,8 +837,9 @@ rustc_ut_run = command(
     color="green",
 )
 unit_tests.append(rustc_ut_run)
+style = []
 if not system_rustc_mode:
-    unit_tests.append(command(
+    style.append(command(
         name="unit_static_storage",
         inputs=[
             "$(S)/dev/static_storage_gate.py",
@@ -860,7 +861,7 @@ COMMENT_SOURCES = [
     *build.glob("$(S)/bin/**/*.h"),
     *build.glob("$(S)/bin/**/*.cpp"),
 ]
-style = [
+style += [
     command(
         name="style_line_comments",
         inputs=[

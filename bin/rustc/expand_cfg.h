@@ -9,14 +9,13 @@
 #include <vector>
 
 struct Span;
-struct CfgState;
 
 class TokenStream;
 
 class ASTAttribute;
 class ASTAttributeList;
 
-extern CfgState* CfgCreateState(stl::ObjPool& pool);
+extern Settings::CfgState* CfgCreateState(stl::ObjPool& pool);
 
 using CfgString = std::string;
 

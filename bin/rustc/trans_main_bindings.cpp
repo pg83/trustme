@@ -171,7 +171,7 @@ namespace {
 
 }
 
-struct MIREnumCache {
+struct MIRFunction::MIREnumCache {
     Vector<const HIRPath*> paths;
     Vector<const HIRTypeData*> typeids;
     Vector<const HIRTypeData*> destructorTypes;
@@ -186,6 +186,11 @@ struct MIREnumCache {
 
     void apply(EnumState& state, const TransParams& pp) const;
 };
+
+namespace {
+    using MIREnumCache = MIRFunction::MIREnumCache;
+    using MIREnumCachePtr = MIRFunction::MIREnumCachePtr;
+}
 
 namespace {
 
@@ -1398,7 +1403,7 @@ namespace {
     }
 }
 
-MIREnumCachePtr::~MIREnumCachePtr() {
+MIRFunction::MIREnumCachePtr::~MIREnumCachePtr() {
     delete this->p;
     this->p = nullptr;
 }

@@ -209,7 +209,7 @@ namespace {
 
 }
 
-struct CtfeContext {
+struct WireBoard::CtfeContext {
     struct ActiveDiscriminant {
         const HIREnum* enm;
         size_t idx;
@@ -230,7 +230,15 @@ struct CtfeContext {
     void popDiscriminant();
 };
 
-struct MIREvalAllocation;
+namespace {
+    using CtfeContext = WireBoard::CtfeContext;
+}
+
+namespace {
+    using MIREvalAllocation = HIREvaluator::MIREvalAllocation;
+    using MIREvalAllocationPtr = HIREvaluator::MIREvalAllocationPtr;
+    using MIREvalCallStackEntry = HIREvaluator::MIREvalCallStackEntry;
+}
 
 namespace {
     struct MIREvalConstant;
@@ -262,7 +270,7 @@ namespace {
 
 }
 
-struct MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
+struct HIREvaluator::MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
     static MIREvalAllocationPtr allocate(ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty);
     static MIREvalAllocationPtr allocateScratch(ObjPool* pool, size_t size);
     static MIREvalAllocationPtr allocateHeap(ObjPool* pool, size_t size, size_t alignment);
@@ -375,7 +383,7 @@ namespace {
 
 }
 
-struct MIREvalAllocation final: public IValue {
+struct HIREvaluator::MIREvalAllocation final: public IValue {
     friend struct Embed<MIREvalAllocation>;
     friend struct MIREvalAllocationPtr;
 
@@ -550,7 +558,7 @@ namespace {
 
 }
 
-struct MIREvalCallStackEntry {
+struct HIREvaluator::MIREvalCallStackEntry {
     ObjPool* const valuePool;
     const unsigned frameIndex;
     const std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs;
@@ -650,8 +658,8 @@ namespace {
     }
 }
 
-CtfeContext* CtfeCreateContext(ObjPool& pool) {
-    return pool.make<CtfeContext>();
+void CtfeCreateContext(WireBoard& wb, ObjPool& pool) {
+    wb.ctfe = pool.make<CtfeContext>();
 }
 
 namespace {

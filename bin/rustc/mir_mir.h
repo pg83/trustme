@@ -529,35 +529,35 @@ struct MIRBasicBlock {
     bool isCleanup = false;
 };
 
-struct MIREnumCache;
-
-class MIREnumCachePtr {
-    const MIREnumCache* p;
-
-public:
-    MIREnumCachePtr(const MIREnumCache* p = nullptr);
-
-    ~MIREnumCachePtr();
-
-    MIREnumCachePtr(MIREnumCachePtr&& x);
-
-    MIREnumCachePtr& operator=(MIREnumCachePtr&& x);
-
-    operator bool() {
-        return p != nullptr;
-    }
-
-    const MIREnumCache& operator*() const {
-        return *p;
-    }
-
-    const MIREnumCache* operator->() const {
-        return p;
-    }
-};
-
 class MIRFunction {
 public:
+    struct MIREnumCache;
+
+    class MIREnumCachePtr {
+        const MIREnumCache* p;
+
+    public:
+        MIREnumCachePtr(const MIREnumCache* p = nullptr);
+
+        ~MIREnumCachePtr();
+
+        MIREnumCachePtr(MIREnumCachePtr&& x);
+
+        MIREnumCachePtr& operator=(MIREnumCachePtr&& x);
+
+        operator bool() {
+            return p != nullptr;
+        }
+
+        const MIREnumCache& operator*() const {
+            return *p;
+        }
+
+        const MIREnumCache* operator->() const {
+            return p;
+        }
+    };
+
     std::vector<HIRTypeRef> locals;
 
     std::vector<bool> dropFlags;

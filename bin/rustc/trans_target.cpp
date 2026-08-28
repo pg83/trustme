@@ -188,7 +188,7 @@ namespace {
 
 }
 
-struct TargetLayoutContext {
+struct WireBoard::TargetLayoutContext {
     struct CachedTypeRepr {
         HIRTypeRef canonical;
         std::unique_ptr<TypeRepr> repr;
@@ -198,6 +198,10 @@ struct TargetLayoutContext {
     std::unordered_map<HIRTypeRef, std::unique_ptr<TypeRepr>> unencoded;
     std::unordered_map<HIRTypeRef, const TypeRepr*> exact;
 };
+
+namespace {
+    using TargetLayoutContext = WireBoard::TargetLayoutContext;
+}
 
 namespace {
 
@@ -251,8 +255,8 @@ namespace {
 
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
 
-TargetLayoutContext* TargetCreateLayoutContext(ObjPool& pool) {
-    return pool.make<TargetLayoutContext>();
+void TargetCreateLayoutContext(WireBoard& wb, ObjPool& pool) {
+    wb.targetLayouts = pool.make<TargetLayoutContext>();
 }
 
 namespace {

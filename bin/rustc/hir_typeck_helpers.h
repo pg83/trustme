@@ -352,8 +352,6 @@ private:
     ThinVector<PendingValueEquality> pendingValues_;
 };
 
-class NextTraitGoalEvaluator;
-
 enum class SolverCoercionOp : u8 {
     Coercion,
     Unsizing,
@@ -518,6 +516,10 @@ struct UnsizeInferCallback {
 };
 
 class TraitResolution: public TraitResolveCommon {
+public:
+    struct NextTraitGoalEvaluator;
+
+private:
     const HIRSimplePath& langDeref_;
     HMTypeInferrence& ivars;
 
@@ -538,7 +540,6 @@ private:
     mutable stl::ObjPool::Ref eatCachePool;
     mutable stl::IntMap<EatCacheEntry> eatCache;
     mutable u64 eatCacheGeneration = 0;
-    friend class NextTraitGoalEvaluator;
     mutable bool normalizingBoundType = false;
 
     mutable NextTraitGoalEvaluator* nextSolver = nullptr;
@@ -655,8 +656,6 @@ public:
     }
 
 private:
-    friend class NextTraitGoalEvaluator;
-
     bool assembleMagicCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, AssembledImplCallback& callback) const;
     bool assembleTypeCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, AssembledImplCallback& callback) const;
     bool assembleOtherCandidatesCb(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, AssembledImplCallback& callback) const;

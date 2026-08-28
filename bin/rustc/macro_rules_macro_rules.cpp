@@ -137,41 +137,39 @@ namespace {
         const MacroExpansionEnt& getCurLayerEnt() const;
         const std::vector<MacroExpansionEnt>* getCurLayer() const;
     };
-}
 
-struct MacroExpander: public TokenStream {
-    Span thisSpan;
-    const RcString crateName;
-    Span invocationSpan;
-    ASTEdition invocationEdition;
+    struct MacroExpander: public TokenStream {
+        Span thisSpan;
+        const RcString crateName;
+        Span invocationSpan;
+        ASTEdition invocationEdition;
 
-    ParameterMappings mappings_;
-    MacroExpandState state;
+        ParameterMappings mappings_;
+        MacroExpandState state;
 
-    Token nextToken;
-    std::unique_ptr<TTStreamO> ttstream;
-    ASTEdition sourceEdition;
-    bool isMacroItem;
-    bool transparent;
-    Ident::Hygiene hygiene_;
-    Ident::Hygiene lastHygiene;
+        Token nextToken;
+        std::unique_ptr<TTStreamO> ttstream;
+        ASTEdition sourceEdition;
+        bool isMacroItem;
+        bool transparent;
+        Ident::Hygiene hygiene_;
+        Ident::Hygiene lastHygiene;
 
-    ObjPool& pool;
+        ObjPool& pool;
 
-    MacroExpander(const MacroExpander& x) = delete;
+        MacroExpander(const MacroExpander& x) = delete;
 
-    MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition);
+        MacroExpander(u32& id, ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition);
 
-    Position getPosition() const override;
+        Position getPosition() const override;
 
-    Span outerSpan() const override;
+        Span outerSpan() const override;
 
-    Ident::Hygiene realGetHygiene() const override;
-    ASTEdition realGetEdition() const override;
-    Token realGetToken() override;
-};
+        Ident::Hygiene realGetHygiene() const override;
+        ASTEdition realGetEdition() const override;
+        Token realGetToken() override;
+    };
 
-namespace {
     struct MacroRule {
         std::vector<MacroPatEnt> pattern;
         Span patSpan;

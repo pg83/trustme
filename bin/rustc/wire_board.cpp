@@ -13,9 +13,9 @@ using namespace stl;
 WireBoard::WireBoard(ObjPool* pool)
     : pool(pool)
     , expandRegistry(pool->make<ExpandRegistry>(pool))
-    , targetLayouts(TargetCreateLayoutContext(*pool))
-    , mirOperations(MIRCreateOperationsContext(*pool))
-    , ctfe(CtfeCreateContext(*pool))
-    , mangling(TransCreateManglingContext(*pool))
 {
+    TargetCreateLayoutContext(*this, *pool);
+    MIRCreateOperationsContext(*this, *pool);
+    CtfeCreateContext(*this, *pool);
+    TransCreateManglingContext(*this, *pool);
 }
