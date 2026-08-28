@@ -52,21 +52,20 @@ struct SolverValueEquality {
     HIRConstGeneric right;
 };
 
-struct SolverCandidateResponse {
-    const SolverImpl* impl = nullptr;
-    SolverCertainty certainty = SolverCertainty::Ambiguous;
-    SolverSlotValues slots;
-    ThinVector<SolverObligation> obligations;
-    ThinVector<SolverTypeEquality> equalities;
-    ThinVector<SolverValueEquality> valueEqualities;
+/// Aggregate facts about the complete viable set for an operator-trait goal.
+/// Type checking may use these facts to decide whether language primitive
+/// equations are valid, but never observes or chooses individual impl heads.
+struct SolverOperatorSummary {
+    bool hasSemanticImpl = false;
+    bool sawCurrentImpl = false;
+    bool currentImplHasBuiltinSignature = false;
 };
 
 /// A self-contained solver answer.  Slot values are positional with respect
 /// to the canonical input goal and can therefore be replayed into any caller
-/// with the same key.  Exported candidate `impl` values are read-only views
-/// whose response variables are correlated with that candidate's caller goal
-/// inputs; inference effects remain exclusively in slots, equalities and
-/// obligations.  A selected `impl` is already the materialised answer.
+/// with the same key.  Inference effects remain exclusively in slots,
+/// equalities and obligations.  A selected `impl` is already the materialised
+/// answer; ambiguity never exposes individual candidate heads.
 struct SolverResponse {
     SolverCertainty certainty = SolverCertainty::NoSolution;
     SolverSlotValues slots;
@@ -75,7 +74,7 @@ struct SolverResponse {
     ThinVector<SolverValueEquality> valueEqualities;
     const SolverImpl* impl = nullptr;
     bool hasImpl = false;
-    ThinVector<SolverCandidateResponse> candidates;
+    SolverOperatorSummary operatorSummary;
 };
 
 // Crate-lifetime cache of solver answers for fully concrete goals (no
@@ -421,28 +420,14 @@ struct SolverCoercionConstraint {
     bool isSelf = false;
 };
 
-/// Read-only language coercion relation used to solve a trait goal together
-/// with the call-site coercions that constrain its input parameters.  The
-/// solver owns candidate filtering and preference; the expression type
-/// checker only supplies the existing coercion graph as additional goals.
-class SolverCoercionEvaluator {
-public:
-    virtual ~SolverCoercionEvaluator() = default;
-
-    virtual SolverCertainty evaluate(
-        const Span& sp,
-        const SolverCoercionConstraint& constraint,
-        const HIRTypeData* input
-    ) const = 0;
-
-    /// Compare two viable values for the selected trait input.  Greater means
-    /// that `left` is the preferred coercion endpoint.
-    virtual Ordering compare(
-        const Span& sp,
-        const SolverCoercionConstraint& constraint,
-        const HIRTypeData* left,
-        const HIRTypeData* right
-    ) const = 0;
+/// Extra relation requested by the operator type-checking rule.  Candidate
+/// classification is performed inside the solver over its final viable set;
+/// only the aggregate summary is returned.
+struct SolverOperatorGoal {
+    TypeckPrimitiveOperator operation = TypeckPrimitiveOperator::None;
+    const char* outputName = nullptr;
+    const HIRPathParams* outputParams = nullptr;
+    const HIRTraitImpl* currentImpl = nullptr;
 };
 
 /// Options for a next-solver goal query.
@@ -461,18 +446,15 @@ struct TraitGoalQuery {
     /// Evaluate even when the inputs still hold unassigned inference
     /// variables.
     bool allowInferInputs = false;
-    /// On ambiguity between distinct responses, visit each viable candidate
-    /// head (Equal only for a definite head with proven own predicates)
-    /// before the identity response.
-    bool exportAmbiguousCandidates = false;
     /// Omit this concrete impl from root candidate selection.  This is used
     /// while checking the language-defined primitive semantics inside that
     /// same operator impl; it is part of the goal, not a caller-side filter.
     const HIRTraitImpl* excludedImpl = nullptr;
-    /// Additional call-site coercion goals over trait type inputs.  Both
-    /// fields are either null or live for the duration of the query.
+    /// Additional call-site coercion goals over trait type inputs.  These are
+    /// first-class solver relations: candidate filtering, ambiguity and
+    /// preference are all decided inside the evaluator.
     const ThinVector<SolverCoercionConstraint>* coercions = nullptr;
-    const SolverCoercionEvaluator* coercionEvaluator = nullptr;
+    const SolverOperatorGoal* operatorGoal = nullptr;
 };
 
 /// A projection-equality goal.  `output` is represented by a fresh canonical
@@ -785,6 +767,8 @@ private:
     SolverCertainty solveNonBuiltinTraitGoal(const Span& sp, const HIRSimplePath& trait, const HIRTypeData* type) const;
     HIRCompare typeIsSizedBuiltin(const Span& sp, const HIRTypeData* type) const;
     HIRCompare typeIsCopyBuiltin(const Span& sp, const HIRTypeData* type) const;
+    SolverCertainty evaluateCoercionGoal(const Span& sp, const SolverCoercionConstraint& constraint, const HIRTypeData* input, ThinVector<SolverTypeEquality>* equalities = nullptr) const;
+    Ordering compareCoercionEndpoints(const Span& sp, const SolverCoercionConstraint& constraint, const HIRTypeData* left, const HIRTypeData* right) const;
 
     HIRCompare fticCheckParams(
         const Span& sp,

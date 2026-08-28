@@ -182,7 +182,6 @@ struct Context {
     void equateTypesInner(const Span& sp, const HIRTypeData* l, const HIRTypeData* r);
 
     void applySolverResponse(const Span& sp, const SolverResponse& response);
-    void applySolverResponse(const Span& sp, const SolverCandidateResponse& response);
     void registerSolverObligation(const Span& sp, HIRTypeRef type, HIRTraitPath trait);
     void registerClosureReturnObligation(const Span& sp, const HIRExprNodeClosure* closure, HIRTypeRef expected);
     const HIRTypeData* closureReturnExpectation(const HIRExprNodeClosure* closure) const;
@@ -198,7 +197,6 @@ struct Context {
     // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
     void equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSimplePath& trait, HIRPathParams params, const HIRTypeData* implTy, const char* name, const HIRPathParams& atyPp, bool isOp = false, TypeckPrimitiveOperator operatorKind = TypeckPrimitiveOperator::None);
 
-    bool isCurrentOperatorImpl(const ImplRef& impl) const;
 
     // Equate const generics (values)
     void equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRConstGeneric& rr);

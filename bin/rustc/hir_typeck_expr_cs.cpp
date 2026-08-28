@@ -591,100 +591,33 @@ default:
                     return;
                 }
 
-                HIRTypeRef possibleIndexType;
-                HIRTypeRef possibleResType;
-                unsigned int count = 0;
-                const auto inspectImpl = [&](ImplRef impl) {
-                    possibleResType = impl.getType(context.crate.types, "Output", {});
-                    possibleIndexType = impl.getTraitTyParam(context.crate.types, 0);
-                };
-                bool rv = this->context.resolve.solveTraitGoal(node.span(), langIndex, traitPp, ty, [&](SolverResponse response) {
-                    if (response.hasImpl && response.certainty == SolverCertainty::Proven && response.impl && !response.impl->ambiguousIdentity) {
-                        inspectImpl(response.impl->legacy());
-                        count = 1;
-                        context.applySolverResponse(node.span(), response);
-                        return true;
+                bool hasResponse = false;
+                bool selected = false;
+                this->context.resolve.solveTraitGoal(node.span(), langIndex, traitPp, ty, [&](SolverResponse response) {
+                    if (!response.hasImpl || !response.impl) {
+                        return false;
                     }
-                    for (const auto& candidate : response.candidates) {
-                        if (!candidate.impl || candidate.impl->ambiguousIdentity) {
-                            continue;
-                        }
-                        count++;
-                        inspectImpl(candidate.impl->legacy());
+                    hasResponse = true;
+                    if (response.impl->ambiguousIdentity) {
+                        return false;
                     }
-                    if (count == 0 && response.hasImpl && response.impl && !response.impl->ambiguousIdentity) {
-                        count = 1;
-                        inspectImpl(response.impl->legacy());
-                    }
-                    return false;
+                    context.applySolverResponse(node.span(), response);
+                    selected = true;
+                    return true;
                 }, {
+                    .assocName = "Output",
+                    .assocType = node.resType,
                     .allowInferInputs = true,
-                    .exportAmbiguousCandidates = true,
                 });
-                if (rv) {
-                    // If a non-fuzzy impl was found, but there was no result type - then the result must be opaque
-                    if (possibleResType == HIRTypeRef()) {
-                        possibleResType = context.crate.types.path(HIRPath(ty, HIRGenericPath(langIndex, mv$(traitPp)), "Output"), HIRTypePathBinding::make_Opaque({}));
-                    }
-                    // An environment response can prove the goal while its
-                    // parameters still carry the actual index type (a fuzzy
-                    // `[T]: Index<usize>` bound answering `Index<?lit>`):
-                    // apply that constraint, or the literal falls back to i32.
-                    if (possibleIndexType != HIRTypeRef() && !typeContainsImplPlaceholder(context.crate.types, possibleIndexType)) {
-                        this->context.equateTypes(node.span(), node.cache.indexTy, possibleIndexType);
-                    }
-                    // TODO: Node's result type could be an &-ptr?
-                    this->context.equateTypes(node.span(), node.resType, possibleResType);
+                if (selected) {
                     break;
-                } else if (count == 1) {
-                    assert(possibleIndexType != HIRTypeRef());
-                    this->context.equateTypesAssoc(node.span(), node.resType, langIndex, mv$(traitPp), ty, "Output", {}, false);
-                    break;
-                } else if (count > 1) {
-                    const auto* indexInfer = this->context.getType(node.cache.indexTy)->opt_Infer();
-                    if (indexInfer && indexInfer->tyClass == HIRInferClass::Integer) {
-                        // Trait selection constrains an integer literal before its i32 fallback.
-                        // Select a concrete index type only when exactly one integer satisfies
-                        // the complete Index obligation, including candidate where-clauses.
-                        const HIRCoreType integerTypes[] = {
-                            HIRCoreType::Usize,
-                            HIRCoreType::Isize,
-                            HIRCoreType::U8,
-                            HIRCoreType::I8,
-                            HIRCoreType::U16,
-                            HIRCoreType::I16,
-                            HIRCoreType::U32,
-                            HIRCoreType::I32,
-                            HIRCoreType::U64,
-                            HIRCoreType::I64,
-                            HIRCoreType::U128,
-                            HIRCoreType::I128,
-                        };
-                        const HIRTypeData* possibleType = nullptr;
-                        for (const auto integerType : integerTypes) {
-                            const auto* candidateType = this->context.crate.types.primitive(integerType);
-                            const bool isViable = this->context.resolve.solveTraitGoal(node.span(), langIndex, HIRPathParams(candidateType), ty, [](SolverResponse response) {
-                                return response.hasImpl && response.certainty == SolverCertainty::Proven;
-                            });
-                            if (!isViable) {
-                                continue;
-                            }
-                            if (possibleType) {
-                                possibleType = nullptr;
-                                break;
-                            }
-                            possibleType = candidateType;
-                        }
-                        if (possibleType) {
-                            this->context.equateTypes(node.span(), node.cache.indexTy, possibleType);
-                            return;
-                        }
-                    }
-                    // Multiple fuzzy matches, don't keep dereferencing until we know.
+                }
+                if (hasResponse) {
+                    // Distinct responses are a real ambiguity.  In particular,
+                    // do not enumerate integer types here: only the solver may
+                    // publish constraints shared by every viable Index impl.
                     currentTy = nullptr;
                     break;
-                } else {
-                    // Either no matches, or multiple fuzzy matches
                 }
 
                 derefCount += 1;
@@ -832,41 +765,20 @@ default: {
                     fcnArgsTup = mv$(tup);
                 };
                 const bool found = this->context.resolve.solveTraitGoal(node.span(), candidate.trait, traitPp, ty, [&](SolverResponse response) {
-                    if (response.hasImpl && response.impl && !response.impl->ambiguousIdentity) {
-                        inspectImpl(response.impl->legacy());
-                        context.applySolverResponse(node.span(), response);
-                        return true;
-                    }
-                    const SolverCandidateResponse* selected = nullptr;
-                    for (const auto& possible : response.candidates) {
-                        if (!possible.impl || possible.impl->ambiguousIdentity) {
-                            continue;
-                        }
-                        if (selected) {
-                            return false;
-                        }
-                        selected = &possible;
-                    }
-                    if (!selected) {
+                    if (!response.hasImpl || !response.impl || response.impl->ambiguousIdentity) {
                         return false;
                     }
-                    inspectImpl(selected->impl->legacy());
-                    context.applySolverResponse(node.span(), *selected);
+                    inspectImpl(response.impl->legacy());
+                    context.applySolverResponse(node.span(), response);
                     return true;
                 }, {
+                    .assocName = candidate.future,
+                    .assocType = node.resType,
                     .allowInferInputs = true,
-                    .exportAmbiguousCandidates = true,
                 });
                 if (!found) {
                     continue;
                 }
-                // `CallRefFuture` is a generic associated type, but its only
-                // parameter is a lifetime -- which HIR does not carry.
-                const auto futureName = RcString::newInterned(candidate.future);
-                const auto& futureTrait = candidate.used == HIRExprNodeCallValue::TraitUsed::AsyncFnOnce
-                    ? this->context.resolve.langAsyncFnOnce()
-                    : this->context.resolve.langAsyncFnMut();
-                this->context.equateTypesAssoc(node.span(), node.resType, futureTrait, HIRPathParams(fcnArgsTup), ty, futureName.c_str(), {});
                 node.argTypes = fcnArgsTup->as_Tuple();
                 node.argTypes.push_back(node.resType);
                 node.traitUsed = candidate.used;
@@ -967,7 +879,8 @@ default: {
                     // TODO: Sometimes there's impls that just forward for wrappers, which can lead to incorrect rules
                     // e.g. `&mut _` (where `_ = Box<...>`) later will pick the FnMut impl for `&mut T: FnMut` - but Box doesn't have those forwarding impls
                     // - Maybe just keep applying auto-deref until it's no longer possible?
-                    unsigned int count = 0;
+                    bool found = false;
+                    bool ambiguous = false;
                     const auto inspectImpl = [&](ImplRef impl) {
                         auto tup = impl.getTraitTyParam(context.crate.types, 0);
                         if (!tup->is_Tuple()) {
@@ -978,39 +891,26 @@ default: {
                         fcnRet = impl.getType(context.crate.types, "Output", {});
                     };
                     this->context.resolve.solveTraitGoal(node.span(), langFnOnce, traitPp, ty, [&](SolverResponse response) {
-                        if (response.hasImpl && response.certainty == SolverCertainty::Proven && response.impl && !response.impl->ambiguousIdentity) {
-                            count = 1;
-                            inspectImpl(response.impl->legacy());
-                            context.applySolverResponse(node.span(), response);
-                            return true;
+                        if (!response.hasImpl || !response.impl) {
+                            return false;
                         }
-                        const SolverCandidateResponse* selected = nullptr;
-                        for (const auto& candidate : response.candidates) {
-                            if (!candidate.impl || candidate.impl->ambiguousIdentity) {
-                                continue;
-                            }
-                            count++;
-                            selected = &candidate;
+                        if (response.impl->ambiguousIdentity) {
+                            ambiguous = true;
+                            return false;
                         }
-                        if (count == 0 && response.hasImpl && response.impl && !response.impl->ambiguousIdentity) {
-                            count = 1;
-                            inspectImpl(response.impl->legacy());
-                            context.applySolverResponse(node.span(), response);
-                        } else if (count == 1) {
-                            inspectImpl(selected->impl->legacy());
-                            context.applySolverResponse(node.span(), *selected);
-                        }
-                        return false;
+                        inspectImpl(response.impl->legacy());
+                        context.applySolverResponse(node.span(), response);
+                        found = true;
+                        return true;
                     }, {
+                        .assocName = "Output",
+                        .assocType = node.resType,
                         .allowInferInputs = true,
-                        .exportAmbiguousCandidates = true,
                     });
-                    if (count > 1) {
+                    if (ambiguous) {
                         return;
                     }
-                    if (count == 1) {
-                        this->context.equateTypesAssoc(node.span(), node.resType, langFnOnce, HIRPathParams(fcnArgsTup), ty, "Output", {});
-
+                    if (found) {
                         // If the return type wasn't found in the impls, emit it as a UFCS
                         if (fcnRet == HIRTypeRef()) {
                             fcnRet = context.crate.types.path(
@@ -6323,57 +6223,23 @@ namespace {
 
         if (H::typeIsBounded(src)) {
 
-            ImplRef bestImpl;
-            unsigned int count = 0;
-            bool proven = false;
-            HIRTypeRef selectedDst;
+            bool selected = false;
 
             HIRPathParams pp{dst};
             context.resolve.solveTraitGoal(sp, context.resolve.langUnsize(), pp, src, [&](SolverResponse response) {
-                if (response.hasImpl && response.certainty == SolverCertainty::Proven && response.impl && !response.impl->ambiguousIdentity) {
-                    proven = true;
-                    if (contextMut) {
-                        contextMut->applySolverResponse(sp, response);
-                    }
-                    return true;
+                if (!response.hasImpl || !response.impl || response.impl->ambiguousIdentity) {
+                    return false;
                 }
-                const SolverCandidateResponse* bestResponse = nullptr;
-                for (const auto& candidate : response.candidates) {
-                    if (!candidate.impl || candidate.impl->ambiguousIdentity) {
-                        continue;
-                    }
-                    auto impl = candidate.impl->legacy();
-                    if (!context.resolve.implsOverlap(sp, impl, bestImpl)) {
-                        if (count == 0) {
-                            bestImpl = mv$(impl);
-                            bestResponse = &candidate;
-                        }
-                        count++;
-                    } else if (impl.moreSpecificThan(context.crate.types, bestImpl)) {
-                        bestImpl = mv$(impl);
-                        bestResponse = &candidate;
-                    }
+                selected = true;
+                if (contextMut) {
+                    contextMut->applySolverResponse(sp, response);
                 }
-                if (count == 1 && bestResponse) {
-                    selectedDst = bestImpl.getTraitTyParam(context.crate.types, 0);
-                    if (contextMut) {
-                        contextMut->applySolverResponse(sp, *bestResponse);
-                    }
-                }
-                return false;
+                return true;
             }, {
                 .allowInferInputs = true,
-                .exportAmbiguousCandidates = true,
             });
-            if (proven) {
+            if (selected) {
                 return CoerceResult::Unsize;
-            } else if (count == 1) {
-                if (contextMut) {
-                    contextMut->equateTypes(sp, dst, selectedDst);
-                }
-                return CoerceResult::Unsize;
-            } else {
-                // TODO: Fuzzy?
             }
         }
 
@@ -7146,15 +7012,10 @@ default:
                 };
                 const auto findExpectation = [&](const HIRSimplePath& trait) {
                     return context.resolve.solveTraitGoal(sp, trait, desiredParams, dst, [&](SolverResponse response) {
-                        for (const auto& candidate : response.candidates) {
-                            if (candidate.certainty == SolverCertainty::Proven && candidate.impl && inspectExpectation(candidate.impl->legacy())) {
-                                return true;
-                            }
-                        }
-                        return response.hasImpl && response.certainty == SolverCertainty::Proven && response.impl && inspectExpectation(response.impl->legacy());
+                        return response.hasImpl && response.certainty == SolverCertainty::Proven && response.impl
+                            && !response.impl->ambiguousIdentity && inspectExpectation(response.impl->legacy());
                     }, {
                         .allowInferInputs = true,
-                        .exportAmbiguousCandidates = true,
                     });
                 };
                 const bool asyncExpectation = findExpectation(context.resolve.langAsyncFnOnce());
@@ -7339,113 +7200,6 @@ default:
         UNREACHABLE();
     }
 
-    class ContextSolverCoercions final: public SolverCoercionEvaluator {
-        const Context& context;
-
-        const HIRTypeData* resolveKnown(const HIRTypeData* type) const {
-            const auto* infer = type->opt_Infer();
-            if (!infer || infer->index == ~0u || infer->index >= context.ivars.ivars.size()) {
-                return type;
-            }
-            return context.getType(type);
-        }
-
-        bool samePointerTarget(const HIRTypeData* left, const HIRTypeData* right) const {
-            left = resolveKnown(left);
-            right = resolveKnown(right);
-            const auto compatibleTarget = [&](const HIRTypeData* leftInner, const HIRTypeData* rightInner) {
-                return context.ivars.typesEqual(leftInner, rightInner)
-                    || leftInner->compareWithPlaceholders(
-                        Span(), rightInner, context.ivars.callbackResolveInfer()) != HIRCompare::Unequal;
-            };
-            if (const auto* leftBorrow = left->opt_Borrow()) {
-                const auto* rightBorrow = right->opt_Borrow();
-                return rightBorrow && compatibleTarget(leftBorrow->inner, rightBorrow->inner);
-            }
-            if (const auto* leftPointer = left->opt_Pointer()) {
-                const auto* rightPointer = right->opt_Pointer();
-                return rightPointer && compatibleTarget(leftPointer->inner, rightPointer->inner);
-            }
-            return false;
-        }
-
-    public:
-        explicit ContextSolverCoercions(const Context& context)
-            : context(context)
-        {
-        }
-
-        SolverCertainty evaluate(
-            const Span& sp,
-            const SolverCoercionConstraint& constraint,
-            const HIRTypeData* input
-        ) const override {
-            const auto* destination = constraint.direction == SolverCoercionConstraint::Direction::InputIsDestination ? input : constraint.other;
-            const auto* source = constraint.direction == SolverCoercionConstraint::Direction::InputIsDestination ? constraint.other : input;
-            destination = resolveKnown(destination);
-            source = resolveKnown(source);
-            if (constraint.op == SolverCoercionOp::Unsizing
-                && constraint.direction == SolverCoercionConstraint::Direction::InputIsDestination) {
-                HIRTypeRef derefStorage;
-                const auto* dereferenced = source;
-                while ((dereferenced = context.resolve.autoderef(sp, dereferenced, derefStorage))) {
-                    const auto result = checkUnsizeTys(context, sp, destination, dereferenced, nullptr);
-                    if (result == CoerceResult::Custom || result == CoerceResult::Unsize) {
-                        return SolverCertainty::Proven;
-                    }
-                    if (result == CoerceResult::Equality
-                        && destination->compareWithPlaceholders(sp, dereferenced, context.ivars.callbackResolveInfer()) == HIRCompare::Equal) {
-                        return SolverCertainty::Proven;
-                    }
-                }
-            }
-            const auto result = constraint.op == SolverCoercionOp::Coercion
-                ? checkCoerceTys(context, sp, destination, source)
-                : checkUnsizeTys(context, sp, destination, source, nullptr);
-            switch (result) {
-                case CoerceResult::Fail:
-                    return SolverCertainty::NoSolution;
-                case CoerceResult::Unknown:
-                    return SolverCertainty::Ambiguous;
-                case CoerceResult::Custom:
-                case CoerceResult::Unsize:
-                    return SolverCertainty::Proven;
-                case CoerceResult::Equality: {
-                    const auto comparison = destination->compareWithPlaceholders(sp, source, context.ivars.callbackResolveInfer());
-                    if (comparison == HIRCompare::Unequal) {
-                        return SolverCertainty::NoSolution;
-                    }
-                    return comparison == HIRCompare::Equal ? SolverCertainty::Proven : SolverCertainty::Ambiguous;
-                }
-            }
-            UNREACHABLE();
-        }
-
-        Ordering compare(
-            const Span&,
-            const SolverCoercionConstraint& constraint,
-            const HIRTypeData* left,
-            const HIRTypeData* right
-        ) const override {
-            // Coercion inference chooses the most restrictive destination: it
-            // preserves `&mut` instead of weakening to `&` when both accept
-            // the same source.  A source-side variable has no analogous safe
-            // ordering; viability can filter it, but it remains ambiguous.
-            if (constraint.direction != SolverCoercionConstraint::Direction::InputIsDestination || !samePointerTarget(left, right)) {
-                return OrdEqual;
-            }
-            left = resolveKnown(left);
-            right = resolveKnown(right);
-            if (const auto* leftBorrow = left->opt_Borrow()) {
-                return ord(static_cast<int>(leftBorrow->type), static_cast<int>(right->as_Borrow().type));
-            }
-            if (const auto* leftPointer = left->opt_Pointer()) {
-                return ord(static_cast<int>(leftPointer->type), static_cast<int>(right->as_Pointer().type));
-            }
-            return OrdEqual;
-        }
-    };
-
     enum class AssociatedCheckResult {
         Complete,
         Retry,
@@ -7553,61 +7307,6 @@ default:
             }
         };
 
-        // A trait implementation only suppresses the language primitive
-        // candidate when its signature changes the operation's semantics.
-        // Standard-library implementations such as `Shl<i32> for u64` have
-        // the same inputs and output as the primitive operation; they must
-        // still let an expected output type constrain an untyped lhs literal.
-        // A custom impl with a different rhs or Output remains an overload.
-        auto implHasBuiltinOperatorSignature = [&](const ImplRef& impl) {
-            auto implTy = impl.getImplType(context.crate.types);
-            auto implParams = impl.getTraitParams(context.crate.types);
-            implTy = context.getType(implTy);
-            for (auto& ty : implParams.types) {
-                ty = context.getType(ty);
-            }
-            // Impl probing can expose inference placeholders that belong to
-            // the candidate, not this expression.  They have no Context
-            // slot, so do not feed them to expansion/comparison below.
-            // Conservatively retain such a candidate as a semantic overload.
-            if (context.ivars.typeContainsIvars(implTy, /*only_unbound=*/true) || context.ivars.pathparamsContainIvars(implParams, /*only_unbound=*/true)) {
-                return false;
-            }
-            implTy = context.expandAssociatedTypes(sp, mv$(implTy));
-            for (auto& ty : implParams.types) {
-                ty = context.expandAssociatedTypes(sp, mv$(ty));
-            }
-
-            const bool hasBuiltinInputs = implParams.types.size() == 0 ? primitiveOperatorHasBuiltin(v.operatorKind, implTy) : implParams.types.size() == 1 && primitiveOperatorHasBuiltin(v.operatorKind, implTy, implParams.types.front());
-            if (!hasBuiltinInputs) {
-                return false;
-            }
-            if (v.name == "") {
-                return true;
-            }
-
-            auto output = impl.getType(context.crate.types, v.name.c_str(), v.atyPp);
-            if (output == HIRTypeRef()) {
-                return false;
-            }
-            if (context.ivars.typeContainsIvars(output, /*only_unbound=*/true)) {
-                return false;
-            }
-            output = context.expandAssociatedTypes(sp, context.getType(output));
-
-            auto builtinOutput = implTy;
-            if (v.operatorKind == TypeckPrimitiveOperator::Deref) {
-                if (const auto* e = implTy->opt_Pointer()) {
-                    builtinOutput = e->inner;
-                } else if (const auto* e = implTy->opt_Borrow()) {
-                    builtinOutput = e->inner;
-                } else {
-                    return false;
-                }
-            }
-            return output->compareWithPlaceholders(sp, builtinOutput, context.ivars.callbackResolveInfer()) == HIRCompare::Equal;
-        };
-
         // The operator obligation is created with a fresh RHS variable, but
         // the coercion pass may already know the expression's concrete type.
         // Use that type while probing for semantic overloads: an ambiguous
@@ -7638,36 +7337,18 @@ default:
                     probeParams.types.front() = source;
                 }
             }
-            // A semantic-overload probe inspects the typed answer's viable
-            // candidate heads: an ambiguity between u32 / NonZero<u32> must
-            // not look like a builtin-only operator.
-            const auto inspectImpl = [&](const SolverImpl* solverImpl) {
-                if (!solverImpl || solverImpl->ambiguousIdentity) {
-                    // A merged identity response says that no concrete impl
-                    // may guide inference.  It is not itself an overloaded
-                    // operator implementation.
-                    return false;
-                }
-                const auto impl = solverImpl->legacy();
-                if (context.isCurrentOperatorImpl(impl)) {
-                    sawCurrentOperatorImpl = true;
-                    currentOperatorImplHasBuiltinSignature = implHasBuiltinOperatorSignature(impl);
-                    return false;
-                }
-                if (!implHasBuiltinOperatorSignature(impl)) {
-                    hasSemanticOperatorImpl = true;
-                    return true;
-                }
-                return false;
+            const SolverOperatorGoal operatorGoal{
+                .operation = v.operatorKind,
+                .outputName = v.name.c_str(),
+                .outputParams = &v.atyPp,
+                .currentImpl = context.currentTraitImpl,
             };
             context.resolve.solveTraitGoal(sp, v.trait, probeParams, v.implTy, [&](SolverResponse response) {
-                for (const auto& candidate : response.candidates) {
-                    if (inspectImpl(candidate.impl)) {
-                        return true;
-                    }
-                }
-                return response.hasImpl && inspectImpl(response.impl);
-            }, {.assocName = "", .exportAmbiguousCandidates = true});
+                hasSemanticOperatorImpl = response.operatorSummary.hasSemanticImpl;
+                sawCurrentOperatorImpl = response.operatorSummary.sawCurrentImpl;
+                currentOperatorImplHasBuiltinSignature = response.operatorSummary.currentImplHasBuiltinSignature;
+                return response.hasImpl;
+            }, {.assocName = "", .operatorGoal = &operatorGoal});
         }
 
         // An integer literal can only become a primitive integer, and shifting
@@ -7885,8 +7566,6 @@ default:
         const bool hasSelfCoercionGoal = ::std::any_of(coercionGoals.begin(), coercionGoals.end(), [](const SolverCoercionConstraint& constraint) {
             return constraint.isSelf;
         });
-        ContextSolverCoercions coercionEvaluator(context);
-
         // A wholly diverging, unannotated closure can acquire its concrete
         // return expectation only after method projection.  Its body validly
         // coerces from `!`; keep that language rule as an explicit obligation
@@ -7918,28 +7597,10 @@ default:
             .allowInferInputs = true,
             .excludedImpl = currentOperatorUsesLanguagePrimitive() ? context.currentTraitImpl : nullptr,
             .coercions = coercionGoals.empty() ? nullptr : &coercionGoals,
-            .coercionEvaluator = coercionGoals.empty() ? nullptr : &coercionEvaluator,
         });
 
         if (hasResponse) {
             ASSERT_BUG(sp, response.hasImpl && response.impl, "trait solver returned a response without an implementation");
-            if (response.certainty == SolverCertainty::Ambiguous && !coercionGoals.empty() && !response.impl->ambiguousIdentity) {
-                const auto impl = response.impl->legacy();
-                const auto implType = impl.getImplType(context.crate.types);
-                const auto implParams = impl.getTraitParams(context.crate.types);
-                for (const auto& constraint : coercionGoals) {
-                    ASSERT_BUG(sp, constraint.isSelf || constraint.typeIndex < implParams.types.size(), "coercion-constrained trait input is out of range");
-                    const auto* input = constraint.isSelf ? implType : implParams.types[constraint.typeIndex];
-                    if (coercionEvaluator.evaluate(sp, constraint, input) == SolverCertainty::Ambiguous) {
-                        // A conditional impl head must not choose an inference
-                        // variable while its only expression/expectation edge
-                        // still relates opaque projections. Let the coercion
-                        // graph settle that variable, then retry the trait goal
-                        // with the resulting concrete head.
-                        return AssociatedCheckResult::Ambiguous;
-                    }
-                }
-            }
             if (response.certainty == SolverCertainty::Ambiguous && !hasSelfCoercionGoal) {
                 // Do not commit a merely unique candidate's shape to an open
                 // Self. A blanket `AsyncFnOnce for &mut F`, for example, can
@@ -8057,26 +7718,6 @@ const HIRTypeData* Context::closureReturnExpectation(const HIRExprNodeClosure* c
 void Context::applySolverResponse(const Span& sp, const SolverResponse& response) {
     ASSERT_BUG(sp, response.slots.typeInputs.size() == response.slots.types.size(), "solver type slot response is malformed");
     ASSERT_BUG(sp, response.slots.valueInputs.size() == response.slots.values.size(), "solver value slot response is malformed");
-    for (size_t i = 0; i < response.slots.types.size(); i++) {
-        equateTypes(sp, response.slots.typeInputs[i], response.slots.types[i]);
-    }
-    for (size_t i = 0; i < response.slots.values.size(); i++) {
-        equateValues(sp, response.slots.valueInputs[i], response.slots.values[i]);
-    }
-    for (const auto& equality : response.equalities) {
-        equateTypes(sp, equality.left, equality.right);
-    }
-    for (const auto& equality : response.valueEqualities) {
-        equateValues(sp, equality.left, equality.right);
-    }
-    for (const auto& obligation : response.obligations) {
-        registerSolverObligation(sp, obligation.type, obligation.trait.clone());
-    }
-}
-
-void Context::applySolverResponse(const Span& sp, const SolverCandidateResponse& response) {
-    ASSERT_BUG(sp, response.slots.typeInputs.size() == response.slots.types.size(), "solver candidate type slot response is malformed");
-    ASSERT_BUG(sp, response.slots.valueInputs.size() == response.slots.values.size(), "solver candidate value slot response is malformed");
     for (size_t i = 0; i < response.slots.types.size(); i++) {
         equateTypes(sp, response.slots.typeInputs[i], response.slots.types[i]);
     }
@@ -13616,11 +13257,6 @@ bool Context::fallbackUnresolvedRpitType(const Span& sp) {
 const HIRTypeData* Context::coercionHint(const HIRExprNode& node) const {
     const auto it = coercionHints.find(&node);
     return it == coercionHints.end() ? nullptr : it->second;
-}
-
-bool Context::isCurrentOperatorImpl(const ImplRef& impl) const {
-    const auto* traitImpl = impl.data.opt_TraitImpl();
-    return currentTraitImpl && traitImpl && traitImpl->impl == currentTraitImpl;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const Context::Coercion& v) {
